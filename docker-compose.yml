@@ -1,0 +1,129 @@
+# =============================================================================
+# docker-compose.yml — Stack completa: Frontend + API + PostgreSQL + MongoDB
+# COMO USAR:
+#   docker compose up --build
+# Frontend: http://localhost:3000
+# API/Swagger: http://localhost:5000
+# =============================================================================
+
+version: '3.9'
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # FRONTEND — Next.js 14
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cardgamestore_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:5000"
+      NODE_ENV: production
+    depends_on:
+      - api
+    networks:
+      - cardgame_network
+    restart: on-failure
+
+  # ---------------------------------------------------------------------------
+  # API — CardGameStore ASP.NET Core 8
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./CardGameStore
+      dockerfile: Dockerfile
+    container_name: cardgamestore_api
+    ports:
+      - "5000:5000"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5000
+      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=cardgamestore;Username=cardgame_user;Password=CardGame@2025"
+      MongoDbSettings__ConnectionString: "mongodb://mongo:27017"
+      MongoDbSettings__DatabaseName: "cardgamestore_cache"
+      JwtSettings__SecretKey: "CardGameStore_SecretKey_2025_MinLength32Chars!"
+      JwtSettings__Issuer: "http://localhost:5000"
+      JwtSettings__Audience: "CardGameStore-Frontend"
+      JwtSettings__AccessTokenExpirationMinutes: "60"
+      JwtSettings__RefreshTokenExpirationDays: "30"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    networks:
+      - cardgame_network
+    restart: on-failure
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: cardgamestore_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: cardgame_user
+      POSTGRES_PASSWORD: CardGame@2025
+      POSTGRES_DB: cardgamestore
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cardgame_user -d cardgamestore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # MongoDB 7
+  # ---------------------------------------------------------------------------
+  mongo:
+    image: mongo:7-jammy
+    container_name: cardgamestore_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # pgAdmin (opcional: docker compose --profile tools up)
+  # http://localhost:5050  |  admin@cardgame.com / admin
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: cardgamestore_pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@cardgame.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      - postgres
+    networks:
+      - cardgame_network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  mongo_data:
+
+networks:
+  cardgame_network:
+    driver: bridge

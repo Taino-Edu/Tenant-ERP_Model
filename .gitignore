@@ -76,3 +76,30 @@ appsettings.*.json
 local/
 temp/
 tmp/
+
+.fake
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+frontend/.next/
+frontend/out/
+
+# dotnet build / publish
+**/bin/
+**/obj/
+publish/
+
+# SQLite (banco de dev)
+*.db
+*.db-shm
+*.db-wal
+
+# Logs e resultados de testes locais
+*.txt
+!GUIA-DE-TESTES.txt
+PUSH-GITHUB.bat

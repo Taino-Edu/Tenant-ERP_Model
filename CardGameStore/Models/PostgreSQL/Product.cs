@@ -1,0 +1,98 @@
+// =============================================================================
+// Product.cs — Estoque fixo da loja (PostgreSQL)
+// Representa itens físicos: refrigerantes, salgadinhos, acessórios, etc.
+// Cartas de TCG NÃO entram aqui — elas usam o CardCache (MongoDB) + serviço TCG.
+// =============================================================================
+
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace CardGameStore.Models.PostgreSQL;
+
+/// <summary>
+/// Produto do estoque físico da loja.
+/// CRUD simples gerenciado pelo Admin (Maikon).
+/// </summary>
+[Table("products")]
+public class Product
+{
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    // -------------------------------------------------------------------------
+    // Identificação
+    // -------------------------------------------------------------------------
+
+    [Required, MaxLength(200)]
+    [Column("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    [Column("description")]
+    public string? Description { get; set; }
+
+    // -------------------------------------------------------------------------
+    // Categorização
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Categoria do produto.
+    /// Exemplos: "Bebida", "Salgadinho", "Acessório", "Carta Avulsa"
+    /// </summary>
+    [Required, MaxLength(100)]
+    [Column("category")]
+    public string Category { get; set; } = string.Empty;
+
+    // -------------------------------------------------------------------------
+    // Precificação e Estoque
+    // -------------------------------------------------------------------------
+
+    /// <summary>Preço de venda ao cliente (em centavos, para evitar float).</summary>
+    [Column("price_in_cents")]
+    public int PriceInCents { get; set; }
+
+    /// <summary>Quantidade atual no estoque.</summary>
+    [Column("stock_quantity")]
+    public int StockQuantity { get; set; }
+
+    /// <summary>Quantidade mínima antes de alertar o Admin sobre reposição.</summary>
+    [Column("minimum_stock")]
+    public int MinimumStock { get; set; } = 5;
+
+    // -------------------------------------------------------------------------
+    // Metadados
+    // -------------------------------------------------------------------------
+
+    /// <summary>URL da imagem do produto (pode ser local ou CDN).</summary>
+    [MaxLength(500)]
+    [Column("image_url")]
+    public string? ImageUrl { get; set; }
+
+    [Column("is_active")]
+    public bool IsActive { get; set; } = true;
+
+    [Column("created_at")]
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    [Column("updated_at")]
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    // -------------------------------------------------------------------------
+    // Propriedade calculada (não mapeada no banco)
+    // -------------------------------------------------------------------------
+
+    /// <summary>Preço em reais para exibição na interface.</summary>
+    [NotMapped]
+    public decimal PriceInReais => PriceInCents / 100m;
+
+    /// <summary>Verdadeiro se o estoque estiver abaixo do mínimo.</summary>
+    [NotMapped]
+    public bool IsLowStock => StockQuantity <= MinimumStock;
+
+    // -------------------------------------------------------------------------
+    // Navegação
+    // -------------------------------------------------------------------------
+
+    public ICollection<ComandaItem> ComandaItems { get; set; } = new List<ComandaItem>();
+}
