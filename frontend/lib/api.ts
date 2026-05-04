@@ -89,6 +89,20 @@ export interface ChampionshipParticipant {
   deckName: string | null; placement: number | null
 }
 
+export interface UserSummary {
+  id: string; name: string; email: string | null
+  cpf: string | null; whatsApp: string | null; role: string
+  pointsBalance: number; pointsExpiresAt: string | null
+  pointsExpired: boolean; isActive: boolean; createdAt: string
+}
+
+export interface UserProfile {
+  id: string; name: string; email: string | null
+  cpf: string | null; whatsApp: string | null; role: string
+  pointsBalance: number; pointsExpiresAt: string | null
+  pointsExpired: boolean; createdAt: string
+}
+
 // ── Funções de API ────────────────────────────────────────────────────────────
 
 export const authApi = {
@@ -120,6 +134,14 @@ export const productApi = {
   deactivate:  (id: string)         => api.delete(`/api/product/${id}`),
   lowStock:    ()                   => api.get<Product[]>('/api/product/low-stock'),
   adjustStock: (id: string, delta: number) => api.patch(`/api/product/${id}/stock`, { delta }),
+}
+
+export const userApi = {
+  list:      (search?: string) => api.get<UserSummary[]>('/api/user', { params: { search } }),
+  getById:   (id: string)      => api.get<UserSummary>(`/api/user/${id}`),
+  me:        ()                => api.get<UserProfile>('/api/user/me'),
+  addPoints: (id: string, points: number, reason?: string) =>
+    api.post<UserSummary>(`/api/user/${id}/points`, { points, reason }),
 }
 
 export const tcgApi = {

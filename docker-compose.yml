@@ -42,10 +42,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
-      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=cardgamestore;Username=cardgame_user;Password=CardGame@2025"
+      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_USER:-cardgame_user};Password=${POSTGRES_PASSWORD}"
       MongoDbSettings__ConnectionString: "mongodb://mongo:27017"
       MongoDbSettings__DatabaseName: "cardgamestore_cache"
-      JwtSettings__SecretKey: "CardGameStore_SecretKey_2025_MinLength32Chars!"
+      JwtSettings__SecretKey: "${JWT_SECRET}"
       JwtSettings__Issuer: "http://localhost:5000"
       JwtSettings__Audience: "CardGameStore-Frontend"
       JwtSettings__AccessTokenExpirationMinutes: "60"
@@ -68,9 +68,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: cardgame_user
-      POSTGRES_PASSWORD: CardGame@2025
-      POSTGRES_DB: cardgamestore
+      POSTGRES_USER: ${POSTGRES_USER:-cardgame_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-cardgamestore}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -111,8 +111,8 @@ services:
     ports:
       - "5050:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@cardgame.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@cardgame.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
     depends_on:
       - postgres
     networks:

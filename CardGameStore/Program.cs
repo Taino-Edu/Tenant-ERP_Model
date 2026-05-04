@@ -149,6 +149,7 @@ builder.Services.AddScoped<IAuthService,         AuthService>();
 builder.Services.AddScoped<IComandaService,      ComandaService>();
 builder.Services.AddScoped<IProductService,      ProductService>();
 builder.Services.AddScoped<IChampionshipService, ChampionshipService>();
+builder.Services.AddScoped<IUserService,         UserService>();
 builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
 builder.Services.AddSingleton<ITcgService,       TcgService>();
 

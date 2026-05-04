@@ -4,7 +4,8 @@ import { comandaApi, productApi, ComandaDto, Product } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
 import { startHub, stopHub } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
-import { ShoppingCart, Plus, Trash2, Loader2, Clock, TableProperties, Receipt, PackageOpen } from 'lucide-react'
+import { ShoppingCart, Plus, Trash2, Loader2, Clock, TableProperties, Receipt, PackageOpen, Star } from 'lucide-react'
+import Link from 'next/link'
 import clsx from 'clsx'
 
 export default function ClientePage() {
@@ -88,9 +89,15 @@ export default function ClientePage() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-gray-400" />
-            <span className="font-bold text-white">{comanda?.items.length ?? 0}</span>
+          <div className="flex items-center gap-3">
+            <Link href="/cliente/perfil" className="flex items-center gap-1.5 text-gray-400 hover:text-accent-gold transition-colors">
+              <Star className="w-4 h-4" />
+              <span className="text-xs font-medium">Pontos</span>
+            </Link>
+            <div className="flex items-center gap-1.5">
+              <ShoppingCart className="w-5 h-5 text-gray-400" />
+              <span className="font-bold text-white">{comanda?.items.length ?? 0}</span>
+            </div>
           </div>
         </div>
       </div>

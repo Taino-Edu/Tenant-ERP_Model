@@ -80,6 +80,18 @@ public class User
     public DateTime? RefreshTokenExpiry { get; set; }
 
     // -------------------------------------------------------------------------
+    // Sistema de Pontos
+    // -------------------------------------------------------------------------
+
+    /// <summary>Saldo de pontos do cliente. Pontos são adicionados pelo Admin.</summary>
+    [Column("points_balance")]
+    public int PointsBalance { get; set; } = 0;
+
+    /// <summary>Data de expiração dos pontos (30 dias após a última adição).</summary>
+    [Column("points_expires_at")]
+    public DateTime? PointsExpiresAt { get; set; }
+
+    // -------------------------------------------------------------------------
     // Auditoria
     // -------------------------------------------------------------------------
 

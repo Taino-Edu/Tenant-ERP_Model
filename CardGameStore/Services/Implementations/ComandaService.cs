@@ -101,6 +101,9 @@ public class ComandaService : IComandaService
             // Usa o nome e preço do banco — ignora o que veio do cliente
             itemName     = product.Name;
             priceInCents = product.PriceInCents;
+
+            // Decrementa o estoque imediatamente
+            product.StockQuantity -= request.Quantity;
         }
         else if (string.IsNullOrWhiteSpace(itemName))
         {
@@ -147,8 +150,18 @@ public class ComandaService : IComandaService
             var product = await _db.Products.FindAsync(request.ProductId.Value)
                 ?? throw new InvalidOperationException("Produto não encontrado.");
 
+            if (!product.IsActive)
+                throw new InvalidOperationException($"Produto '{product.Name}' está inativo.");
+
+            if (product.StockQuantity < request.Quantity)
+                throw new InvalidOperationException(
+                    $"Estoque insuficiente para '{product.Name}'. Disponível: {product.StockQuantity} un.");
+
             itemName     = product.Name;
             priceInCents = product.PriceInCents;
+
+            // Decrementa o estoque imediatamente
+            product.StockQuantity -= request.Quantity;
         }
         else if (string.IsNullOrWhiteSpace(itemName))
         {
@@ -192,6 +205,15 @@ public class ComandaService : IComandaService
             .FirstAsync(c => c.Id == comandaId);
 
         comanda.TotalInCents = Math.Max(0, comanda.TotalInCents - item.SubtotalInCents);
+
+        // Restaura o estoque do produto quando item é removido da comanda
+        if (item.ProductId.HasValue)
+        {
+            var product = await _db.Products.FindAsync(item.ProductId.Value);
+            if (product != null)
+                product.StockQuantity += item.Quantity;
+        }
+
         _db.ComandaItems.Remove(item);
 
         // Se não restar nenhum outro item, volta para status Aberta
@@ -225,9 +247,19 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
+        // Restaura o estoque de todos os itens da comanda cancelada
+        foreach (var item in comanda.Items.Where(i => i.ProductId.HasValue))
+        {
+            var product = await _db.Products.FindAsync(item.ProductId!.Value);
+            if (product != null)
+                product.StockQuantity += item.Quantity;
+        }
+
         comanda.Status   = ComandaStatus.Cancelada;
         comanda.ClosedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        _logger.LogInformation("Comanda {Id} cancelada — estoque restaurado para {Count} produto(s).",
+            comandaId, comanda.Items.Count(i => i.ProductId.HasValue));
         return await MapToDtoAsync(comanda);
     }
 
@@ -291,6 +323,9 @@ public class ComandaService : IComandaService
             if (product.StockQuantity < reqItem.Quantity)
                 throw new InvalidOperationException(
                     $"Estoque insuficiente para '{product.Name}'. Disponível: {product.StockQuantity} un., solicitado: {reqItem.Quantity}.");
+
+            // Decrementa o estoque imediatamente
+            product.StockQuantity -= reqItem.Quantity;
 
             var item = new CardGameStore.Models.PostgreSQL.ComandaItem
             {
