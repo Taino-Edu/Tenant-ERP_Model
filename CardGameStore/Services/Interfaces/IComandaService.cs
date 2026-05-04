@@ -41,4 +41,7 @@ public interface IComandaService
     /// Cria e fecha a comanda atomicamente em uma única operação.
     /// </summary>
     Task<ComandaDto> RegisterVendaAvulsaAsync(VendaAvulsaRequest request, Guid adminId);
+
+    /// <summary>Aplica pontos do cliente à comanda, abatendo do total a pagar.</summary>
+    Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points);
 }

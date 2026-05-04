@@ -360,6 +360,49 @@ public class ComandaService : IComandaService
         return await MapToDtoAsync(loaded);
     }
 
+    public async Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points)
+    {
+        var comanda = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.Id == comandaId)
+            ?? throw new InvalidOperationException("Comanda não encontrada.");
+
+        if (comanda.UserId != userId)
+            throw new InvalidOperationException("Você só pode usar pontos na sua própria comanda.");
+
+        if (comanda.Status == ComandaStatus.Fechada || comanda.Status == ComandaStatus.Cancelada)
+            throw new InvalidOperationException("Não é possível aplicar pontos em comanda encerrada.");
+
+        if (comanda.PointsApplied > 0)
+            throw new InvalidOperationException("Pontos já foram aplicados nesta comanda.");
+
+        // Valida e deduz o saldo do usuário
+        var user = await _db.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("Usuário não encontrado.");
+
+        if (user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow)
+            throw new InvalidOperationException("Seus pontos estão expirados.");
+
+        if (user.PointsBalance < points)
+            throw new InvalidOperationException(
+                $"Saldo insuficiente. Você tem {user.PointsBalance} pontos.");
+
+        // Aplica — máximo = total da comanda (não pode ficar negativo)
+        var pontosAplicados = Math.Min(points, comanda.TotalInCents);
+
+        user.PointsBalance      -= pontosAplicados;
+        user.UpdatedAt           = DateTime.UtcNow;
+        comanda.PointsApplied    = pontosAplicados;
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation(
+            "Usuário {UserId} aplicou {Points} pontos na comanda {ComandaId}.",
+            userId, pontosAplicados, comandaId);
+
+        return await MapToDtoAsync(comanda);
+    }
+
     // Helper de mapeamento Model → DTO
     private Task<ComandaDto> MapToDtoAsync(Comanda comanda)
     {
@@ -371,6 +414,7 @@ public class ComandaService : IComandaService
             TableIdentifier = comanda.TableIdentifier,
             Status          = comanda.Status.ToString(),
             TotalInReais    = comanda.TotalInReais,
+            PointsApplied   = comanda.PointsApplied,
             OpenedAt        = comanda.OpenedAt,
             Items           = comanda.Items.Select(i => new ComandaItemDto
             {

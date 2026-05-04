@@ -130,6 +130,24 @@ public class ComandaController : ControllerBase
         }
     }
 
+    /// <summary>Cliente aplica seus pontos para abater o total da comanda.</summary>
+    [HttpPost("{id:guid}/apply-points")]
+    [ProducesResponseType(typeof(ComandaDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> ApplyPoints(Guid id, [FromBody] ApplyPointsRequest request)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var result = await _service.ApplyPointsAsync(id, userId, request.Points);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
     private Guid GetUserId()
     {
         var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);

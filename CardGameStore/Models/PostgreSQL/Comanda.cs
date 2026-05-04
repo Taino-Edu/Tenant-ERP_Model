@@ -80,6 +80,10 @@ public class Comanda
     [Column("total_in_cents")]
     public int TotalInCents { get; set; }
 
+    /// <summary>Pontos usados pelo cliente para abater o total desta comanda.</summary>
+    [Column("points_applied")]
+    public int PointsApplied { get; set; } = 0;
+
     /// <summary>Observações do Admin (ex: "cliente solicitou desconto").</summary>
     [MaxLength(500)]
     [Column("notes")]

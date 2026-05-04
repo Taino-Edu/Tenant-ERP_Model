@@ -43,8 +43,16 @@ public class ComandaDto
     public string?           TableIdentifier { get; set; }
     public string            Status          { get; set; } = string.Empty;
     public decimal           TotalInReais    { get; set; }
+    public int               PointsApplied   { get; set; }
     public DateTime          OpenedAt        { get; set; }
     public List<ComandaItemDto> Items        { get; set; } = new();
+}
+
+/// <summary>Request para aplicar pontos a uma comanda.</summary>
+public class ApplyPointsRequest
+{
+    [Range(1, 100000)]
+    public int Points { get; set; }
 }
 
 public class ComandaItemDto

@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { comandaApi, productApi, ComandaDto, Product } from '@/lib/api'
+import { comandaApi, userApi, productApi, ComandaDto, Product, UserProfile } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
 import { startHub, stopHub } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
@@ -9,10 +9,12 @@ import Link from 'next/link'
 import clsx from 'clsx'
 
 export default function ClientePage() {
-  const [comanda, setComanda]   = useState<ComandaDto | null>(null)
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [adding, setAdding]     = useState<string | null>(null)
+  const [comanda, setComanda]       = useState<ComandaDto | null>(null)
+  const [products, setProducts]     = useState<Product[]>([])
+  const [profile, setProfile]       = useState<UserProfile | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [adding, setAdding]         = useState<string | null>(null)
+  const [applyingPts, setApplyingPts] = useState(false)
 
   const fetchComanda = useCallback(async () => {
     try { const { data } = await comandaApi.myComanda(); setComanda(data) }
@@ -23,6 +25,7 @@ export default function ClientePage() {
   useEffect(() => {
     fetchComanda()
     productApi.list().then(r => setProducts(r.data)).catch(() => {})
+    userApi.me().then(r => setProfile(r.data)).catch(() => {})
 
     startHub().then(hub => {
       hub.on('ComandaClosed', () => {
@@ -52,6 +55,20 @@ export default function ClientePage() {
       toast.success(`${product.name} adicionado!`, { icon: '✅' })
     } catch { toast.error('Não foi possível adicionar o item.') }
     finally { setAdding(null) }
+  }
+
+  async function applyPoints() {
+    if (!comanda || !profile || profile.pointsBalance <= 0) return
+    setApplyingPts(true)
+    try {
+      const { data } = await comandaApi.applyPoints(comanda.id, profile.pointsBalance)
+      setComanda(data)
+      setProfile(prev => prev ? { ...prev, pointsBalance: 0 } : prev)
+      toast.success(`${profile.pointsBalance} pontos aplicados! 🎉`)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao aplicar pontos.')
+    } finally { setApplyingPts(false) }
   }
 
   async function removeItem(itemId: string) {
@@ -155,6 +172,39 @@ export default function ClientePage() {
                     </span>
                   </div>
                 </div>
+              )}
+
+              {/* Pontos aplicados */}
+              {comanda.pointsApplied > 0 && (
+                <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5">
+                  <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
+                    <Star className="w-4 h-4" />
+                    Pontos aplicados
+                  </div>
+                  <span className="text-amber-400 font-bold text-sm">
+                    -{(comanda.pointsApplied / 100).toFixed(2).replace('.', ',')} pts
+                  </span>
+                </div>
+              )}
+
+              {/* Botão usar pontos */}
+              {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' &&
+               comanda.pointsApplied === 0 &&
+               profile && profile.pointsBalance > 0 && !profile.pointsExpired && (
+                <button
+                  onClick={applyPoints}
+                  disabled={applyingPts}
+                  className="w-full flex items-center justify-between bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg px-4 py-2.5 transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
+                    <Star className="w-4 h-4" />
+                    Usar {profile.pointsBalance} pontos
+                  </div>
+                  {applyingPts
+                    ? <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                    : <span className="text-xs text-amber-500">Aplicar →</span>
+                  }
+                </button>
               )}
 
               {/* Info da abertura */}

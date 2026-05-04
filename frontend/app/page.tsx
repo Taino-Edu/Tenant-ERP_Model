@@ -6,14 +6,19 @@ import { championshipApi, productApi, Championship, Product } from '@/lib/api'
 import Link from 'next/link'
 import {
   Sword, Trophy, ShoppingBag, QrCode, Star,
-  Calendar, Users, ChevronRight, Zap, Shield, Heart
+  Calendar, Users, ChevronRight, Zap, Shield, Heart,
+  X, MessageCircle, CheckCircle
 } from 'lucide-react'
+
+// WhatsApp do Maikon para confirmação de inscrições
+const MAIKON_WHATSAPP = '5511999999999' // TODO: substituir pelo número real
 
 export default function LandingPage() {
   const router = useRouter()
-  const [championships, setChampionships] = useState<Championship[]>([])
-  const [products, setProducts]           = useState<Product[]>([])
-  const [loadingData, setLoadingData]     = useState(true)
+  const [championships, setChampionships]   = useState<Championship[]>([])
+  const [products, setProducts]             = useState<Product[]>([])
+  const [loadingData, setLoadingData]       = useState(true)
+  const [registerModal, setRegisterModal]   = useState<Championship | null>(null)
 
   useEffect(() => {
     // Redireciona usuários já logados
@@ -162,7 +167,7 @@ export default function LandingPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {championships.map(c => (
-                <ChampionshipCard key={c.id} championship={c} />
+                <ChampionshipCard key={c.id} championship={c} onRegister={() => setRegisterModal(c)} />
               ))}
             </div>
           )}
@@ -236,6 +241,14 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ── Modal de inscrição ────────────────────────────────────────────── */}
+      {registerModal && (
+        <RegisterModal
+          championship={registerModal}
+          onClose={() => setRegisterModal(null)}
+        />
+      )}
+
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="border-t border-white/5 py-10 px-6">
         <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
@@ -259,7 +272,7 @@ export default function LandingPage() {
 
 // ── Sub-componentes ───────────────────────────────────────────────────────────
 
-function ChampionshipCard({ championship: c }: { championship: Championship }) {
+function ChampionshipCard({ championship: c, onRegister }: { championship: Championship; onRegister: () => void }) {
   const gameColors: Record<string, string> = {
     'Pokemon':    'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
     'Magic':      'text-blue-400   bg-blue-500/10   border-blue-500/20',
@@ -300,7 +313,98 @@ function ChampionshipCard({ championship: c }: { championship: Championship }) {
         </div>
       </div>
       <div className="mt-4 pt-4 border-t border-white/5">
-        <p className="text-xs text-gray-600">Pague na chegada · Vagas limitadas</p>
+        <button
+          onClick={onRegister}
+          className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm py-2 rounded-lg transition-colors"
+        >
+          Quero me inscrever
+        </button>
+        <p className="text-xs text-gray-600 text-center mt-2">Pague na chegada · Vagas limitadas</p>
+      </div>
+    </div>
+  )
+}
+
+function RegisterModal({ championship, onClose }: { championship: Championship; onClose: () => void }) {
+  const [name, setName]       = useState('')
+  const [phone, setPhone]     = useState('')
+  const [done, setDone]       = useState(false)
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim() || !phone.trim()) return
+
+    const msg = encodeURIComponent(
+      `Olá! Quero me inscrever no campeonato *${championship.name}*.\n` +
+      `Nome: ${name.trim()}\n` +
+      `WhatsApp: ${phone.trim()}\n` +
+      `Confirmo que pagarei na chegada (R$ ${(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}).`
+    )
+    window.open(`https://wa.me/${MAIKON_WHATSAPP}?text=${msg}`, '_blank')
+    setDone(true)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+      <div className="bg-[#16161d] border border-white/10 rounded-2xl w-full max-w-md p-6">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h3 className="font-bold text-white text-lg">Inscrição no Campeonato</h3>
+            <p className="text-gray-500 text-sm mt-0.5">{championship.name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-600 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="text-center py-6">
+            <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
+            <p className="font-bold text-white mb-1">Solicitação enviada!</p>
+            <p className="text-gray-400 text-sm">O Maikon vai confirmar sua vaga pelo WhatsApp. Pague na chegada.</p>
+            <button onClick={onClose} className="mt-5 w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium py-2.5 rounded-xl transition-colors">
+              Fechar
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-400">
+              Taxa de inscrição: <strong>R$ {(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}</strong> — pague na chegada
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">Seu nome</label>
+              <input
+                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                placeholder="Nome completo"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">Seu WhatsApp</label>
+              <input
+                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                placeholder="(11) 99999-9999"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-xl transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Confirmar pelo WhatsApp
+            </button>
+            <p className="text-xs text-gray-600 text-center">
+              Você será redirecionado para o WhatsApp do Maikon para confirmar sua vaga.
+            </p>
+          </form>
+        )}
       </div>
     </div>
   )

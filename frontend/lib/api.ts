@@ -124,6 +124,8 @@ export const comandaApi = {
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
   vendaAvulsa:  (clientName: string | null, items: { productId: string; quantity: number }[]) =>
     api.post<ComandaDto>('/api/comanda/venda-avulsa', { clientName, items }),
+  applyPoints:  (id: string, points: number) =>
+    api.post<ComandaDto>(`/api/comanda/${id}/apply-points`, { points }),
 }
 
 export const productApi = {
