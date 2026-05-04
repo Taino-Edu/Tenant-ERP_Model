@@ -26,12 +26,18 @@ public class AuthService : IAuthService
     private readonly AppDbContext          _db;
     private readonly JwtSettings           _jwt;
     private readonly ILogger<AuthService>  _logger;
+    private readonly IComandaService       _comandaService;
 
-    public AuthService(AppDbContext db, IOptions<JwtSettings> jwt, ILogger<AuthService> logger)
+    public AuthService(
+        AppDbContext db,
+        IOptions<JwtSettings> jwt,
+        ILogger<AuthService> logger,
+        IComandaService comandaService)
     {
-        _db     = db;
-        _jwt    = jwt.Value;
-        _logger = logger;
+        _db             = db;
+        _jwt            = jwt.Value;
+        _logger         = logger;
+        _comandaService = comandaService;
     }
 
     // =========================================================================
@@ -42,7 +48,9 @@ public class AuthService : IAuthService
         var user = await _db.Users
             .FirstOrDefaultAsync(u => u.Email == request.Email && u.IsActive);
 
-        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        // PasswordHash pode ser null para clientes de quick-login.
+        // Verificar null antes de chamar BCrypt.Verify evita NullReferenceException.
+        if (user == null || user.PasswordHash == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             throw new UnauthorizedAccessException("E-mail ou senha inválidos.");
 
         return await GenerateAuthResponseAsync(user);
@@ -79,7 +87,12 @@ public class AuthService : IAuthService
         }
 
         await _db.SaveChangesAsync();
-        return await GenerateAuthResponseAsync(user);
+
+        // Abre (ou reutiliza) a comanda para esta mesa/sessão
+        var comanda = await _comandaService.OpenComandaAsync(user.Id, request.TableIdentifier);
+        _logger.LogInformation("Comanda {ComandaId} associada ao quick-login de {Name}", comanda.Id, user.Name);
+
+        return await GenerateAuthResponseAsync(user, comanda.Id);
     }
 
     // =========================================================================
@@ -116,7 +129,7 @@ public class AuthService : IAuthService
     // HELPERS PRIVADOS
     // =========================================================================
 
-    private async Task<AuthResponse> GenerateAuthResponseAsync(User user)
+    private async Task<AuthResponse> GenerateAuthResponseAsync(User user, Guid? comandaId = null)
     {
         var accessToken  = GenerateJwt(user);
         var refreshToken = GenerateRefreshToken();
@@ -128,7 +141,7 @@ public class AuthService : IAuthService
         user.UpdatedAt          = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        return new AuthResponse(accessToken, refreshToken, expiresAt, user.Role, user.Name, user.Id);
+        return new AuthResponse(accessToken, refreshToken, expiresAt, user.Role, user.Name, user.Id, comandaId);
     }
 
     private string GenerateJwt(User user)

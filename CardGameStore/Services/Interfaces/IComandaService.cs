@@ -35,4 +35,10 @@ public interface IComandaService
 
     /// <summary>Lista todas as comandas abertas/em andamento para o dashboard do Admin.</summary>
     Task<IEnumerable<ComandaDto>> GetActiveCommandasForDashboardAsync();
+
+    /// <summary>
+    /// Registra uma venda avulsa no balcão (sem QR Code/login de cliente).
+    /// Cria e fecha a comanda atomicamente em uma única operação.
+    /// </summary>
+    Task<ComandaDto> RegisterVendaAvulsaAsync(VendaAvulsaRequest request, Guid adminId);
 }

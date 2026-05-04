@@ -1,11 +1,12 @@
 // =============================================================================
 // ComandaController.cs — Endpoints REST de Comandas
-// GET  /api/comanda/dashboard     → lista todas as abertas (Admin)
-// GET  /api/comanda/my            → comanda ativa do cliente logado
-// POST /api/comanda/{id}/items    → adiciona item
+// GET  /api/comanda/dashboard       → lista todas as abertas (Admin)
+// GET  /api/comanda/my              → comanda ativa do cliente logado
+// POST /api/comanda/{id}/items      → adiciona item
 // DELETE /api/comanda/{id}/items/{itemId} → remove item
-// PUT  /api/comanda/{id}/close    → fecha comanda (Admin)
-// PUT  /api/comanda/{id}/cancel   → cancela comanda (Admin)
+// PUT  /api/comanda/{id}/close      → fecha comanda (Admin)
+// PUT  /api/comanda/{id}/cancel     → cancela comanda (Admin)
+// POST /api/comanda/venda-avulsa    → venda direta no balcão (Admin)
 // =============================================================================
 
 using CardGameStore.DTOs;
@@ -98,6 +99,35 @@ public class ComandaController : ControllerBase
         var adminId = GetUserId();
         var result  = await _service.CancelComandaAsync(id, adminId);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Venda avulsa no balcão — sem QR Code ou login de cliente.
+    /// O Admin escolhe os produtos e a comanda é criada e fechada atomicamente.
+    /// </summary>
+    [HttpPost("venda-avulsa")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ComandaDto), 201)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> VendaAvulsa([FromBody] VendaAvulsaRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var adminId = GetUserId();
+            var result  = await _service.RegisterVendaAvulsaAsync(request, adminId);
+            return StatusCode(201, result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
     }
 
     private Guid GetUserId()

@@ -32,10 +32,13 @@ export default function MesaPage() {
     if (rawCpf.length !== 11) { toast.error('CPF inválido'); return }
     setStep('loading')
     try {
+      // data é AuthResponse com comandaId preenchido pelo quick-login
       const { data } = await authApi.quickLogin(name, rawCpf, whatsApp, mesa)
-      saveAuth(data.auth)
-      // Salva o ID da comanda para a próxima tela
-      document.cookie = `activeComandaId=${data.comanda.id}; path=/; max-age=86400`
+      saveAuth(data)
+      // Salva o ID da comanda ativa para a página do cliente
+      if (data.comandaId) {
+        document.cookie = `activeComandaId=${data.comandaId}; path=/; max-age=86400`
+      }
       router.push('/cliente')
     } catch (err: unknown) {
       setStep('form')

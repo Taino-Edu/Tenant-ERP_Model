@@ -58,6 +58,35 @@ public class ComandaItemDto
 }
 
 // -------------------------------------------------------------------------
+// Venda Avulsa — venda direta no balcão sem QR Code/login de cliente
+// -------------------------------------------------------------------------
+
+/// <summary>
+/// Requisição de venda avulsa feita pelo Admin diretamente no balcão.
+/// Não requer login do cliente — cria e fecha a comanda atomicamente.
+/// </summary>
+public class VendaAvulsaRequest
+{
+    /// <summary>Nome do cliente (para registro). Opcional.</summary>
+    [MaxLength(150)]
+    public string? ClientName { get; set; }
+
+    /// <summary>Lista de itens a vender.</summary>
+    [Required, MinLength(1)]
+    public List<VendaAvulsaItemRequest> Items { get; set; } = new();
+}
+
+/// <summary>Item de uma venda avulsa.</summary>
+public class VendaAvulsaItemRequest
+{
+    [Required]
+    public Guid ProductId { get; set; }
+
+    [Range(1, 999)]
+    public int Quantity { get; set; } = 1;
+}
+
+// -------------------------------------------------------------------------
 // Resultado paginado genérico
 // -------------------------------------------------------------------------
 

@@ -44,5 +44,10 @@ public record AuthResponse(
     DateTime ExpiresAt,
     string   Role,
     string   UserName,
-    Guid     UserId
+    Guid     UserId,
+    /// <summary>
+    /// ID da comanda ativa — preenchido apenas no quick-login (cliente via QR Code).
+    /// Null no login completo do Admin.
+    /// </summary>
+    Guid?    ComandaId = null
 );

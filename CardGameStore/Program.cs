@@ -27,11 +27,12 @@ builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSet
 builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDbSettings"));
 
 // ---------------------------------------------------------------------------
-// 2. BANCO RELACIONAL — SQLite (dev local) ou PostgreSQL (produção)
-// Usa SQLite quando: ambiente é Development OU não há connection string PostgreSQL configurada
+// 2. BANCO RELACIONAL — SQLite (dev local) ou PostgreSQL (produção/Docker)
+// Usa PostgreSQL sempre que a connection string estiver configurada,
+// independente do ambiente. Isso garante que o Docker sempre use PostgreSQL.
 // ---------------------------------------------------------------------------
 var pgConnStr = builder.Configuration.GetConnectionString("PostgreSQL");
-var useSqlite = builder.Environment.IsDevelopment() || string.IsNullOrWhiteSpace(pgConnStr);
+var useSqlite = string.IsNullOrWhiteSpace(pgConnStr);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
@@ -224,23 +225,29 @@ using (var scope = app.Services.CreateScope())
     {
         if (useSqlite)
         {
-            // SQLite: EnsureCreated cria o schema direto sem migrations
-            logger.LogInformation("Usando banco SQLite (modo dev/sem PostgreSQL)...");
+            logger.LogInformation("Usando banco SQLite (sem PostgreSQL configurado)...");
             await db.Database.EnsureCreatedAsync();
             logger.LogInformation("Banco SQLite pronto: cardgamestore.db");
         }
         else
         {
-            logger.LogInformation("Aplicando migrations do PostgreSQL...");
-            await db.Database.MigrateAsync();
-            logger.LogInformation("Migrations aplicadas com sucesso.");
+            // EnsureCreated cria o schema completo a partir dos modelos EF.
+            // Usado no primeiro deploy (sem arquivos de migration gerados).
+            // IMPORTANTE: EnsureCreated é idempotente — não recria se já existir.
+            // Para deploys futuros com alterações de schema, gere migrations:
+            //   dotnet ef migrations add NomeDaMigration
+            //   dotnet ef database update
+            // e substitua EnsureCreated por MigrateAsync.
+            logger.LogInformation("Inicializando banco PostgreSQL...");
+            await db.Database.EnsureCreatedAsync();
+            logger.LogInformation("Banco PostgreSQL pronto.");
         }
     }
     catch (Exception ex)
     {
         logger.LogError(ex, "Erro ao inicializar o banco. Detalhes: {Msg}", ex.Message);
-        // Em dev/SQLite, continua mesmo com erro
-        if (!useSqlite) throw;
+        // Lança em qualquer ambiente — banco inacessível = sistema não pode funcionar
+        throw;
     }
 }
 
@@ -255,9 +262,10 @@ app.UseSwaggerUI(c =>
     c.DocumentTitle = "CardGameStore — Painel do Maikon";
 });
 
-// HTTPS redirect: apenas em produção (em dev evita redirecionar http→https quebrando CORS)
-if (!app.Environment.IsDevelopment())
-    app.UseHttpsRedirection();
+// HTTPS redirect: desabilitado por padrão no Docker (o SSL deve ser gerenciado por
+// um reverse proxy externo como Nginx ou Cloudflare Tunnel, não pela aplicação).
+// Para habilitar HTTPS direto na aplicação, configure um certificado e descomente:
+// app.UseHttpsRedirection();
 app.UseCors("FrontendPolicy");
 app.UseAuthentication();
 app.UseAuthorization();

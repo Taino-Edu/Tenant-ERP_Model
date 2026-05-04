@@ -48,6 +48,7 @@ api.interceptors.response.use(
 export interface AuthResponse {
   accessToken: string; refreshToken: string; expiresAt: string
   role: string; userName: string; userId: string
+  comandaId?: string  // Preenchido apenas no quick-login (cliente via QR Code)
 }
 
 export interface ComandaDto {
@@ -93,20 +94,22 @@ export interface ChampionshipParticipant {
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/api/auth/login', { email, password }),
+  // Retorna AuthResponse com comandaId preenchido (backend retorna shape flat, não aninhado)
   quickLogin: (name: string, cpf: string, whatsApp: string, tableIdentifier?: string) =>
-    api.post<{ auth: AuthResponse; comanda: ComandaDto }>('/api/auth/quick-login',
-      { name, cpf, whatsApp, tableIdentifier }),
+    api.post<AuthResponse>('/api/auth/quick-login', { name, cpf, whatsApp, tableIdentifier }),
   logout: () => api.post('/api/auth/logout'),
 }
 
 export const comandaApi = {
-  dashboard:  () => api.get<ComandaDto[]>('/api/comanda/dashboard'),
-  myComanda:  () => api.get<ComandaDto>('/api/comanda/my'),
-  addItem:    (id: string, item: { productId?: string; cardCacheId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
+  dashboard:    () => api.get<ComandaDto[]>('/api/comanda/dashboard'),
+  myComanda:    () => api.get<ComandaDto>('/api/comanda/my'),
+  addItem:      (id: string, item: { productId?: string; cardCacheId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),
-  removeItem: (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
-  close:      (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/close`),
-  cancel:     (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
+  removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
+  close:        (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/close`),
+  cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
+  vendaAvulsa:  (clientName: string | null, items: { productId: string; quantity: number }[]) =>
+    api.post<ComandaDto>('/api/comanda/venda-avulsa', { clientName, items }),
 }
 
 export const productApi = {

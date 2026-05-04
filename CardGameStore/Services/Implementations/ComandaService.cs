@@ -24,7 +24,10 @@ public class ComandaService : IComandaService
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
     {
         // Verifica se já existe comanda aberta para este usuário
+        // CORREÇÃO: Include(User) necessário para MapToDtoAsync retornar UserName corretamente
         var existing = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
             .FirstOrDefaultAsync(c => c.UserId == userId &&
                 (c.Status == ComandaStatus.Aberta || c.Status == ComandaStatus.EmAndamento));
 
@@ -67,9 +70,7 @@ public class ComandaService : IComandaService
     public async Task<ComandaDto> AddItemAsync(Guid userId, AddItemToComandaRequest request)
     {
         if (request.Quantity <= 0)
-            throw new ArgumentException("Quantidade deve ser maior que zero.", nameof(request));
-        if (request.UnitPriceInCents < 0)
-            throw new ArgumentException("Preço não pode ser negativo.", nameof(request));
+            throw new ArgumentException("Quantidade deve ser maior que zero.");
 
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -78,15 +79,43 @@ public class ComandaService : IComandaService
                 (c.Status == ComandaStatus.Aberta || c.Status == ComandaStatus.EmAndamento))
             ?? throw new InvalidOperationException("Comanda ativa não encontrada para este usuário.");
 
+        // -----------------------------------------------------------------------
+        // SEGURANÇA: se ProductId informado, busca nome e preço REAIS do banco.
+        // Nunca confiar no preço enviado pelo cliente.
+        // -----------------------------------------------------------------------
+        string itemName     = request.ItemName;
+        int    priceInCents = request.UnitPriceInCents;
+
+        if (request.ProductId.HasValue)
+        {
+            var product = await _db.Products.FindAsync(request.ProductId.Value)
+                ?? throw new InvalidOperationException("Produto não encontrado.");
+
+            if (!product.IsActive)
+                throw new InvalidOperationException("Produto inativo e não pode ser adicionado.");
+
+            if (product.StockQuantity < request.Quantity)
+                throw new InvalidOperationException(
+                    $"Estoque insuficiente para '{product.Name}'. Disponível: {product.StockQuantity} un.");
+
+            // Usa o nome e preço do banco — ignora o que veio do cliente
+            itemName     = product.Name;
+            priceInCents = product.PriceInCents;
+        }
+        else if (string.IsNullOrWhiteSpace(itemName))
+        {
+            throw new ArgumentException("Nome do item é obrigatório para itens sem produto cadastrado.");
+        }
+
         var item = new ComandaItem
         {
             ComandaId          = comanda.Id,
             ProductId          = request.ProductId,
             CardCacheId        = request.CardCacheId,
-            ItemNameSnapshot   = request.ItemName,
-            UnitPriceInCents   = request.UnitPriceInCents,
+            ItemNameSnapshot   = itemName,
+            UnitPriceInCents   = priceInCents,
             Quantity           = request.Quantity,
-            SubtotalInCents    = request.UnitPriceInCents * request.Quantity,
+            SubtotalInCents    = priceInCents * request.Quantity,
             AddedByUserId      = userId
         };
 
@@ -101,9 +130,7 @@ public class ComandaService : IComandaService
     public async Task<ComandaDto> AdminAddItemAsync(Guid comandaId, Guid adminId, AddItemToComandaRequest request)
     {
         if (request.Quantity <= 0)
-            throw new ArgumentException("Quantidade deve ser maior que zero.", nameof(request));
-        if (request.UnitPriceInCents < 0)
-            throw new ArgumentException("Preço não pode ser negativo.", nameof(request));
+            throw new ArgumentException("Quantidade deve ser maior que zero.");
 
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -111,15 +138,32 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
+        // Admin: busca nome e preço do banco se ProductId informado
+        string itemName     = request.ItemName;
+        int    priceInCents = request.UnitPriceInCents;
+
+        if (request.ProductId.HasValue)
+        {
+            var product = await _db.Products.FindAsync(request.ProductId.Value)
+                ?? throw new InvalidOperationException("Produto não encontrado.");
+
+            itemName     = product.Name;
+            priceInCents = product.PriceInCents;
+        }
+        else if (string.IsNullOrWhiteSpace(itemName))
+        {
+            throw new ArgumentException("Nome do item é obrigatório para itens sem produto cadastrado.");
+        }
+
         var item = new ComandaItem
         {
             ComandaId          = comanda.Id,
             ProductId          = request.ProductId,
             CardCacheId        = request.CardCacheId,
-            ItemNameSnapshot   = request.ItemName,
-            UnitPriceInCents   = request.UnitPriceInCents,
+            ItemNameSnapshot   = itemName,
+            UnitPriceInCents   = priceInCents,
             Quantity           = request.Quantity,
-            SubtotalInCents    = request.UnitPriceInCents * request.Quantity,
+            SubtotalInCents    = priceInCents * request.Quantity,
             AddedByUserId      = adminId
         };
 
@@ -135,6 +179,12 @@ public class ComandaService : IComandaService
     {
         var item = await _db.ComandaItems.FindAsync(itemId)
             ?? throw new InvalidOperationException("Item não encontrado.");
+
+        // SEGURANÇA: garante que o item pertence à comanda informada.
+        // Evita que um usuário mal-intencionado delete itens de outras comandas
+        // passando um itemId válido com um comandaId diferente.
+        if (item.ComandaId != comandaId)
+            throw new InvalidOperationException("Item não pertence a esta comanda.");
 
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -194,6 +244,85 @@ public class ComandaService : IComandaService
         foreach (var c in comandas)
             dtos.Add(await MapToDtoAsync(c));
         return dtos;
+    }
+
+    // =========================================================================
+    // VENDA AVULSA — venda direta no balcão, sem login de cliente
+    // =========================================================================
+    public async Task<ComandaDto> RegisterVendaAvulsaAsync(VendaAvulsaRequest request, Guid adminId)
+    {
+        if (request.Items == null || request.Items.Count == 0)
+            throw new ArgumentException("Informe pelo menos um item para registrar a venda.");
+
+        // Cria um usuário temporário para representar o cliente do balcão.
+        // Evita quebrar a FK obrigatória de Comanda → User.
+        var clientName = string.IsNullOrWhiteSpace(request.ClientName)
+            ? "Cliente Balcão"
+            : request.ClientName.Trim();
+
+        var guestUser = new CardGameStore.Models.PostgreSQL.User
+        {
+            Name     = clientName,
+            Role     = CardGameStore.Models.PostgreSQL.UserRole.Customer,
+            IsActive = true
+        };
+        _db.Users.Add(guestUser);
+        await _db.SaveChangesAsync();
+
+        // Cria a comanda de balcão
+        var comanda = new CardGameStore.Models.PostgreSQL.Comanda
+        {
+            UserId          = guestUser.Id,
+            TableIdentifier = "Balcão",
+            Status          = CardGameStore.Models.PostgreSQL.ComandaStatus.Aberta
+        };
+        _db.Comandas.Add(comanda);
+        await _db.SaveChangesAsync();
+
+        // Adiciona cada item validando estoque
+        foreach (var reqItem in request.Items)
+        {
+            var product = await _db.Products.FindAsync(reqItem.ProductId)
+                ?? throw new InvalidOperationException($"Produto '{reqItem.ProductId}' não encontrado.");
+
+            if (!product.IsActive)
+                throw new InvalidOperationException($"Produto '{product.Name}' está inativo.");
+
+            if (product.StockQuantity < reqItem.Quantity)
+                throw new InvalidOperationException(
+                    $"Estoque insuficiente para '{product.Name}'. Disponível: {product.StockQuantity} un., solicitado: {reqItem.Quantity}.");
+
+            var item = new CardGameStore.Models.PostgreSQL.ComandaItem
+            {
+                ComandaId        = comanda.Id,
+                ProductId        = product.Id,
+                ItemNameSnapshot = product.Name,
+                UnitPriceInCents = product.PriceInCents,
+                Quantity         = reqItem.Quantity,
+                SubtotalInCents  = product.PriceInCents * reqItem.Quantity,
+                AddedByUserId    = adminId
+            };
+
+            comanda.TotalInCents += item.SubtotalInCents;
+            _db.ComandaItems.Add(item);
+        }
+
+        // Fecha a comanda imediatamente (venda concluída no ato)
+        comanda.Status   = CardGameStore.Models.PostgreSQL.ComandaStatus.Fechada;
+        comanda.ClosedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation(
+            "Venda avulsa registrada pelo admin {AdminId}: {Count} itens, total R$ {Total:F2}",
+            adminId, request.Items.Count, comanda.TotalInCents / 100m);
+
+        // Recarrega com relacionamentos para o DTO
+        var loaded = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
+            .FirstAsync(c => c.Id == comanda.Id);
+
+        return await MapToDtoAsync(loaded);
     }
 
     // Helper de mapeamento Model → DTO
