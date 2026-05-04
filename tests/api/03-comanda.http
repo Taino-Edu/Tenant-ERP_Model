@@ -1,0 +1,143 @@
+# =============================================================================
+# 03-comanda.http — Testes de Comanda
+# =============================================================================
+# Pré-requisito: adminToken + clientToken + comandaId + productId no env.json
+# Fluxo sugerido:
+#   1. Execute 01-auth.http #4 (quick-login) → obtenha clientToken + comandaId
+#   2. Execute 02-products.http #4 (criar produto) → obtenha productId
+#   3. Execute os testes abaixo em ordem
+# =============================================================================
+
+### [1] Dashboard Admin — lista comandas abertas
+GET {{baseUrl}}/api/comanda/dashboard
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [2] Minha comanda (cliente autenticado)
+GET {{baseUrl}}/api/comanda/my
+Authorization: Bearer {{clientToken}}
+
+###
+
+### [3] Minha comanda sem autenticação — deve retornar 401
+GET {{baseUrl}}/api/comanda/my
+
+###
+
+### [4] Adicionar item à comanda (como cliente)
+# @name addItem
+POST {{baseUrl}}/api/comanda/{{comandaId}}/items
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "productId": "{{productId}}",
+  "itemName": "Refrigerante Teste",
+  "unitPriceInCents": 500,
+  "quantity": 1
+}
+
+### Após este request, verifique que:
+### - O item aparece na comanda
+### - O totalInReais foi atualizado
+### - O stockQuantity do produto diminuiu 1
+
+###
+
+### [5] Adicionar item pelo Admin (adicionar item à comanda de cliente)
+POST {{baseUrl}}/api/comanda/{{comandaId}}/items
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "productId": "{{productId}}",
+  "itemName": "Refrigerante Teste",
+  "unitPriceInCents": 500,
+  "quantity": 2
+}
+
+### Verifique: deve emitir evento SignalR "ItemAddedByAdmin" no frontend do cliente
+
+###
+
+### [6] Adicionar item com produto sem estoque — deve retornar 400
+# (crie um produto com stockQuantity: 0 primeiro e use seu ID aqui)
+POST {{baseUrl}}/api/comanda/{{comandaId}}/items
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "productId": "00000000-0000-0000-0000-000000000000",
+  "itemName": "Produto Sem Estoque",
+  "unitPriceInCents": 100,
+  "quantity": 1
+}
+
+###
+
+### [7] Remover item da comanda
+# Substitua ITEM_ID pelo id retornado no addItem (#4)
+DELETE {{baseUrl}}/api/comanda/{{comandaId}}/items/COLE_ITEM_ID_AQUI
+Authorization: Bearer {{clientToken}}
+
+### Após remover: verifique que o estoque do produto foi restaurado
+
+###
+
+### [8] Aplicar pontos à comanda
+# Pré-requisito: cliente deve ter pontos (veja 05-users-points.http #3)
+POST {{baseUrl}}/api/comanda/{{comandaId}}/apply-points
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "points": 50
+}
+
+### Verifique: pointsApplied > 0 e totalInReais reduzido
+
+###
+
+### [9] Tentar aplicar pontos novamente — deve retornar 400
+POST {{baseUrl}}/api/comanda/{{comandaId}}/apply-points
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "points": 10
+}
+
+###
+
+### [10] Fechar comanda (Admin)
+PUT {{baseUrl}}/api/comanda/{{comandaId}}/close
+Authorization: Bearer {{adminToken}}
+
+### Verifique:
+### - Status muda para "Fechada"
+### - Evento SignalR "ComandaClosed" é disparado para o cliente
+### - Pontos de fidelidade são creditados ao usuário
+
+###
+
+### [11] Tentar fechar comanda já fechada — deve retornar 400
+PUT {{baseUrl}}/api/comanda/{{comandaId}}/close
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [12] Cancelar comanda — crie uma nova via quick-login antes
+# Substitua COMANDA_ID_NOVA pelo id de uma comanda aberta
+PUT {{baseUrl}}/api/comanda/COMANDA_ID_NOVA/cancel
+Authorization: Bearer {{adminToken}}
+
+### Verifique: estoque dos itens é restaurado
+
+###
+
+### [13] Fechar comanda sem ser Admin — deve retornar 403
+PUT {{baseUrl}}/api/comanda/{{comandaId}}/close
+Authorization: Bearer {{clientToken}}
+
+###

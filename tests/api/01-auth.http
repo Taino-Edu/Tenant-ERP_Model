@@ -1,0 +1,88 @@
+# =============================================================================
+# 01-auth.http — Testes de Autenticação
+# =============================================================================
+# Pré-requisito: copiar http-client.env.json para esta pasta
+# No VS Code: instale "REST Client" (Humao) e clique em "Send Request"
+# =============================================================================
+
+### [1] Login Admin — deve retornar accessToken + refreshToken
+# @name loginAdmin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+### Após "Send Request" acima, copie o accessToken para adminToken no env.json
+
+###
+
+### [2] Login Admin com senha errada — deve retornar 401
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "SenhaErrada123!"
+}
+
+###
+
+### [3] Login Admin com e-mail inexistente — deve retornar 401
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "naoexiste@teste.com",
+  "password": "SenhaErrada123!"
+}
+
+###
+
+### [4] Quick-Login de Cliente (sem mesa) — deve criar usuário + comanda
+# @name quickLogin
+POST {{baseUrl}}/api/auth/quick-login
+Content-Type: application/json
+
+{
+  "name": "Teste Automatizado",
+  "cpf": "123.456.789-00",
+  "whatsApp": "11999990001"
+}
+
+### Após "Send Request" acima, copie o accessToken para clientToken no env.json
+### e o comandaId para comandaId no env.json
+
+###
+
+### [5] Quick-Login de Cliente com mesa — deve associar tableIdentifier
+POST {{baseUrl}}/api/auth/quick-login
+Content-Type: application/json
+
+{
+  "name": "Teste Mesa 5",
+  "cpf": "111.222.333-44",
+  "whatsApp": "11999990002",
+  "tableIdentifier": "Mesa 5"
+}
+
+###
+
+### [6] Refresh Token — deve retornar novo par de tokens
+# Use o refreshToken retornado no loginAdmin (#1)
+POST {{baseUrl}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "COLE_AQUI_O_REFRESH_TOKEN"
+}
+
+###
+
+### [7] Logout — deve invalidar o refresh token
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{adminToken}}
+
+###

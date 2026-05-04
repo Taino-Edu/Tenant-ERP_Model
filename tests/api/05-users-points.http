@@ -1,0 +1,104 @@
+# =============================================================================
+# 05-users-points.http — Testes de Usuários e Sistema de Pontos
+# =============================================================================
+# Pré-requisito: adminToken + clientToken + userId no env.json
+# Para obter userId: execute #1 (listar usuários) e copie o id de um cliente
+# =============================================================================
+
+### [1] Listar todos os usuários (Admin)
+GET {{baseUrl}}/api/user
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [2] Listar usuários com busca por nome
+GET {{baseUrl}}/api/user?search=Teste
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [3] Buscar usuário por ID (Admin)
+GET {{baseUrl}}/api/user/{{userId}}
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [4] Meu perfil (cliente autenticado)
+GET {{baseUrl}}/api/user/me
+Authorization: Bearer {{clientToken}}
+
+### Verifique: retorna pointsBalance, pointsExpiresAt, pointsExpired
+
+###
+
+### [5] Meu perfil sem autenticação — deve retornar 401
+GET {{baseUrl}}/api/user/me
+
+###
+
+### [6] Adicionar pontos ao usuário (Admin)
+POST {{baseUrl}}/api/user/{{userId}}/points
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "points": 100,
+  "reason": "Participação em campeonato"
+}
+
+### Verifique:
+### - pointsBalance aumentou
+### - pointsExpiresAt = hoje + 30 dias
+
+###
+
+### [7] Adicionar pontos — soma ao saldo existente
+POST {{baseUrl}}/api/user/{{userId}}/points
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "points": 50,
+  "reason": "Compra na loja"
+}
+
+### Verifique: saldo = 150 (100 + 50), expiresAt reiniciado para +30 dias
+
+###
+
+### [8] Adicionar pontos negativos (desconto manual — Admin)
+POST {{baseUrl}}/api/user/{{userId}}/points
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "points": -30,
+  "reason": "Correção manual"
+}
+
+### Verifique: saldo = 120 (150 - 30)
+
+###
+
+### [9] Adicionar pontos sem ser Admin — deve retornar 403
+POST {{baseUrl}}/api/user/{{userId}}/points
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "points": 999,
+  "reason": "Tentativa de fraude"
+}
+
+###
+
+### [10] Listar usuários sem autenticação — deve retornar 401
+GET {{baseUrl}}/api/user
+
+###
+
+### [11] Buscar usuário inexistente — deve retornar 404
+GET {{baseUrl}}/api/user/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{adminToken}}
+
+###

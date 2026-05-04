@@ -1,0 +1,146 @@
+# =============================================================================
+# 06-venda-avulsa.http — Testes de Venda Avulsa (balcão)
+# =============================================================================
+# Pré-requisito: adminToken + productId no env.json
+# Venda avulsa = comanda criada e fechada atomicamente, sem login de cliente
+# =============================================================================
+
+### [1] Venda avulsa simples — 1 produto, sem nome de cliente
+POST {{baseUrl}}/api/comanda/venda-avulsa
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "clientName": null,
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 1
+    }
+  ]
+}
+
+### Verifique:
+### - Status 201
+### - Comanda retornada com status "Fechada"
+### - stockQuantity do produto diminuiu 1
+
+###
+
+### [2] Venda avulsa com nome de cliente
+POST {{baseUrl}}/api/comanda/venda-avulsa
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "clientName": "João da Silva",
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 2
+    }
+  ]
+}
+
+###
+
+### [3] Venda avulsa com múltiplos produtos
+# Substitua OUTRO_PRODUCT_ID pelo id de outro produto existente
+POST {{baseUrl}}/api/comanda/venda-avulsa
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "clientName": "Cliente Multi",
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 1
+    },
+    {
+      "productId": "COLE_OUTRO_PRODUCT_ID_AQUI",
+      "quantity": 3
+    }
+  ]
+}
+
+###
+
+### [4] Venda avulsa com estoque insuficiente — deve retornar 400
+POST {{baseUrl}}/api/comanda/venda-avulsa
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "clientName": null,
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 99999
+    }
+  ]
+}
+
+###
+
+### [5] Venda avulsa com produto inexistente — deve retornar 400
+POST {{baseUrl}}/api/comanda/venda-avulsa
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "clientName": null,
+  "items": [
+    {
+      "productId": "00000000-0000-0000-0000-000000000000",
+      "quantity": 1
+    }
+  ]
+}
+
+###
+
+### [6] Venda avulsa sem itens — deve retornar 400
+POST {{baseUrl}}/api/comanda/venda-avulsa
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "clientName": "Sem Itens",
+  "items": []
+}
+
+###
+
+### [7] Venda avulsa sem autenticação — deve retornar 401
+POST {{baseUrl}}/api/comanda/venda-avulsa
+Content-Type: application/json
+
+{
+  "clientName": null,
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 1
+    }
+  ]
+}
+
+###
+
+### [8] Venda avulsa sem ser Admin — deve retornar 403
+POST {{baseUrl}}/api/comanda/venda-avulsa
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "clientName": null,
+  "items": [
+    {
+      "productId": "{{productId}}",
+      "quantity": 1
+    }
+  ]
+}
+
+###

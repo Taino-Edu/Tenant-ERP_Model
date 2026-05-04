@@ -1,0 +1,104 @@
+# =============================================================================
+# 02-products.http — Testes de Produtos / Estoque
+# =============================================================================
+# Pré-requisito: adminToken preenchido no http-client.env.json
+# =============================================================================
+
+### [1] Listar todos os produtos (público)
+GET {{baseUrl}}/api/product
+
+###
+
+### [2] Listar produtos por categoria
+GET {{baseUrl}}/api/product?category=Bebida
+
+###
+
+### [3] Listar produtos com estoque baixo (Admin)
+GET {{baseUrl}}/api/product/low-stock
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [4] Criar produto — deve retornar 200 com id
+# @name createProduct
+POST {{baseUrl}}/api/product
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Refrigerante Teste",
+  "description": "Produto criado via teste automatizado",
+  "category": "Bebida",
+  "priceInCents": 500,
+  "stockQuantity": 20,
+  "minimumStock": 3,
+  "isActive": true
+}
+
+### Após "Send Request" acima, copie o id para productId no env.json
+
+###
+
+### [5] Buscar produto por ID
+GET {{baseUrl}}/api/product/{{productId}}
+
+###
+
+### [6] Atualizar produto
+PUT {{baseUrl}}/api/product/{{productId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Refrigerante Teste (Editado)",
+  "description": "Descrição atualizada",
+  "category": "Bebida",
+  "priceInCents": 600,
+  "stockQuantity": 20,
+  "minimumStock": 3,
+  "isActive": true
+}
+
+###
+
+### [7] Ajustar estoque — adicionar 10 unidades
+PATCH {{baseUrl}}/api/product/{{productId}}/stock
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "delta": 10
+}
+
+###
+
+### [8] Ajustar estoque — remover 5 unidades
+PATCH {{baseUrl}}/api/product/{{productId}}/stock
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "delta": -5
+}
+
+###
+
+### [9] Criar produto sem autenticação — deve retornar 401
+POST {{baseUrl}}/api/product
+Content-Type: application/json
+
+{
+  "name": "Produto Sem Auth",
+  "priceInCents": 100,
+  "stockQuantity": 5,
+  "isActive": true
+}
+
+###
+
+### [10] Desativar (soft-delete) produto — deve retornar 204/200
+DELETE {{baseUrl}}/api/product/{{productId}}
+Authorization: Bearer {{adminToken}}
+
+###

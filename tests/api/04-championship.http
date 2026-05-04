@@ -1,0 +1,109 @@
+# =============================================================================
+# 04-championship.http — Testes de Campeonatos
+# =============================================================================
+# Pré-requisito: adminToken + userId no env.json
+# =============================================================================
+
+### [1] Listar campeonatos (público)
+GET {{baseUrl}}/api/championship
+
+###
+
+### [2] Criar campeonato (Admin)
+# @name createChamp
+POST {{baseUrl}}/api/championship
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Campeonato Teste - Magic",
+  "game": "Magic: The Gathering",
+  "startDate": "2025-08-15T14:00:00Z",
+  "entryFeeInCents": 2000,
+  "maxParticipants": 16
+}
+
+### Após "Send Request", copie o id para championshipId no env.json
+
+###
+
+### [3] Buscar campeonato por ID
+GET {{baseUrl}}/api/championship/{{championshipId}}
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [4] Registrar participante no campeonato (Admin registra usuário)
+POST {{baseUrl}}/api/championship/{{championshipId}}/register
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "deckName": "Deck Azul Controle"
+}
+
+### Verifique: participante aparece na lista com playerNumber sequencial
+
+###
+
+### [5] Registrar o mesmo participante novamente — deve retornar 400
+POST {{baseUrl}}/api/championship/{{championshipId}}/register
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "deckName": "Outro Deck"
+}
+
+###
+
+### [6] Alterar status do campeonato para "EmAndamento"
+PUT {{baseUrl}}/api/championship/{{championshipId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "EmAndamento"
+}
+
+###
+
+### [7] Alterar status para "Encerrado"
+PUT {{baseUrl}}/api/championship/{{championshipId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "Encerrado"
+}
+
+###
+
+### [8] Criar campeonato sem autenticação — deve retornar 401
+POST {{baseUrl}}/api/championship
+Content-Type: application/json
+
+{
+  "name": "Campeonato Sem Auth",
+  "game": "Pokemon",
+  "startDate": "2025-09-01T10:00:00Z",
+  "entryFeeInCents": 1000
+}
+
+###
+
+### [9] Criar campeonato sem ser Admin — deve retornar 403
+POST {{baseUrl}}/api/championship
+Authorization: Bearer {{clientToken}}
+Content-Type: application/json
+
+{
+  "name": "Campeonato Sem Permissão",
+  "game": "Pokemon",
+  "startDate": "2025-09-01T10:00:00Z",
+  "entryFeeInCents": 1000
+}
+
+###
