@@ -11,58 +11,65 @@
   }
   * { @apply border-surface-500; }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { @apply bg-surface-800; }
+  ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { @apply bg-surface-500 rounded-full; }
 }
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-500
-           text-white font-medium rounded-lg transition-all duration-150
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-400
+           text-white font-semibold rounded-xl transition-all duration-150 shadow-lg shadow-brand-500/20
            disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-surface-600 hover:bg-surface-500
-           text-gray-200 font-medium rounded-lg border border-surface-500
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-surface-700 hover:bg-surface-500
+           text-gray-200 font-medium rounded-xl border border-surface-500
            transition-all duration-150 active:scale-95;
   }
   .btn-danger {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500
-           text-white font-medium rounded-lg transition-all duration-150 active:scale-95;
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-accent-red hover:bg-red-500
+           text-white font-semibold rounded-xl transition-all duration-150 active:scale-95;
   }
   .btn-success {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500
-           text-white font-medium rounded-lg transition-all duration-150 active:scale-95;
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-accent-green hover:opacity-90
+           text-black font-semibold rounded-xl transition-all duration-150 active:scale-95;
   }
   .card {
-    @apply bg-surface-700 border border-surface-500 rounded-xl p-5 shadow-lg;
+    @apply bg-surface-800 border border-surface-500 rounded-xl p-5 shadow-lg;
   }
   .input {
-    @apply w-full px-3 py-2 bg-surface-600 border border-surface-500 rounded-lg
+    @apply w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded-lg
            text-gray-100 placeholder-gray-500 text-sm
            focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
            transition-all duration-150;
   }
   .label {
-    @apply block text-sm font-medium text-gray-300 mb-1.5;
+    @apply block text-sm font-medium text-gray-400 mb-1.5;
   }
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold;
   }
   .badge-aberta    { @apply badge bg-blue-500/20 text-blue-400 border border-blue-500/30; }
   .badge-andamento { @apply badge bg-amber-500/20 text-amber-400 border border-amber-500/30; }
-  .badge-fechada   { @apply badge bg-emerald-500/20 text-emerald-400 border border-emerald-500/30; }
-  .badge-cancelada { @apply badge bg-red-500/20 text-red-400 border border-red-500/30; }
-  .badge-admin     { @apply badge bg-brand-500/20 text-brand-300 border border-brand-500/30; }
+  .badge-fechada   { @apply badge bg-accent-green/20 text-accent-green border border-accent-green/30; }
+  .badge-cancelada { @apply badge bg-accent-red/20 text-accent-red border border-accent-red/30; }
+  .badge-admin     { @apply badge bg-brand-500/20 text-brand-400 border border-brand-500/30; }
 
-  /* Animação de novo item no dashboard */
+  /* Página de conteúdo admin — entrada suave */
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-up { animation: slideUp 0.25s ease-out forwards; }
+
+  /* Flash de novo item no dashboard */
   @keyframes flash-new {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); }
-    50%       { box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.5); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(120, 57, 243, 0); }
+    50%       { box-shadow: 0 0 0 4px rgba(120, 57, 243, 0.5); }
   }
   .flash-new { animation: flash-new 1s ease-in-out 2; }
 
-  /* Animação de entrada suave para listas expandidas */
+  /* Fade-in suave */
   @keyframes fade-in {
     from { opacity: 0; transform: translateY(-4px); }
     to   { opacity: 1; transform: translateY(0); }

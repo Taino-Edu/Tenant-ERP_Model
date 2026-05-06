@@ -8,31 +8,31 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Paleta principal — tema dark card game
+        // Paleta alinhada com o design Maikon
         brand: {
           50:  '#f3f0ff',
           100: '#e9e3ff',
           200: '#d4cbff',
-          300: '#b4a4ff',
-          400: '#9171ff',
-          500: '#7c3aed', // Roxo principal
-          600: '#6d28d9',
-          700: '#5b21b6',
-          800: '#4c1d95',
-          900: '#3b0764',
+          300: '#BFA0FB',
+          400: '#A37BFA', // secondary
+          500: '#7839F3', // primary
+          600: '#6c2ef0', // primary darker
+          700: '#5820d0',
+          800: '#4414a8',
+          900: '#2e0b80',
         },
         surface: {
-          900: '#0f0f13', // Fundo da página
-          800: '#16161d', // Sidebar
-          700: '#1e1e28', // Cards
-          600: '#262633', // Input bg
-          500: '#32323f', // Borders
-          400: '#4a4a5a', // Muted text bg
+          900: '#121215', // Fundo da página (app bg)
+          800: '#1A1A1F', // Sidebar / cards
+          700: '#1E1E24', // Cards internos / hover
+          600: '#1E1E24', // Input bg
+          500: '#2D2D36', // Borders
+          400: '#3a3a47', // Muted bg
         },
         accent: {
-          gold:   '#f59e0b',
-          green:  '#10b981',
-          red:    '#ef4444',
+          gold:   '#FFD700',
+          green:  '#00F0A8',
+          red:    '#FF3B30',
           blue:   '#3b82f6',
           orange: '#f97316',
         }

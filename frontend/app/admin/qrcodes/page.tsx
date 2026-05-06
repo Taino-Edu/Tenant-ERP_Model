@@ -34,7 +34,7 @@ export default function QRCodesPage() {
       const url       = `${baseUrl}/mesa/${encodeURIComponent(nome)}`
       const qrDataUrl = await QRCode.toDataURL(url, {
         width: 400, margin: 2,
-        color: { dark: '#ffffff', light: '#16161d' },
+        color: { dark: '#ffffff', light: '#1A1A1F' },
         errorCorrectionLevel: 'H',
       })
       return { id: nome, nome, url, qrDataUrl }
@@ -50,7 +50,7 @@ export default function QRCodesPage() {
     const url       = `${baseUrl}/mesa/${encodeURIComponent(nome)}`
     const qrDataUrl = await QRCode.toDataURL(url, {
       width: 400, margin: 2,
-      color: { dark: '#ffffff', light: '#16161d' },
+      color: { dark: '#ffffff', light: '#1A1A1F' },
       errorCorrectionLevel: 'H',
     })
     setMesas(prev => [...prev, { id: nome, nome, url, qrDataUrl }])
@@ -81,7 +81,7 @@ export default function QRCodesPage() {
       <style>
         body { background: #1a1a1a; color: #fff; font-family: Inter, sans-serif; padding: 16px; }
         .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-        .card { background: #16161d; border: 1px solid #32323f; border-radius: 12px; padding: 16px; text-align: center; }
+        .card { background: #1A1A1F; border: 1px solid #2D2D36; border-radius: 12px; padding: 16px; text-align: center; }
         .card img { width: 140px; height: 140px; margin: 0 auto 8px; display: block; }
         .name { font-size: 14px; font-weight: 700; color: #fff; }
         .url  { font-size: 9px; color: #666; margin-top: 4px; word-break: break-all; }

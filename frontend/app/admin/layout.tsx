@@ -6,15 +6,16 @@ export const metadata: Metadata = { title: { default: 'Admin', template: '%s —
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-surface-900">
       <Sidebar />
-      <main className="flex-1 overflow-auto bg-surface-900">
+      <main className="flex-1 overflow-auto"
+            style={{ background: 'radial-gradient(circle at top right, #1A1A24, #121215)' }}>
         <Toaster
           position="top-right"
           toastOptions={{
-            style: { background: '#1e1e28', color: '#fff', border: '1px solid #32323f', fontSize: '14px' },
-            success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
-            error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+            style: { background: '#1A1A1F', color: '#fff', border: '1px solid #2D2D36', fontSize: '14px', borderRadius: '12px' },
+            success: { iconTheme: { primary: '#00F0A8', secondary: '#000' } },
+            error:   { iconTheme: { primary: '#FF3B30', secondary: '#fff' } },
           }}
         />
         {children}
