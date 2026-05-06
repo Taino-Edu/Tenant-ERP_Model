@@ -103,3 +103,6 @@ publish/
 *.txt
 !GUIA-DE-TESTES.txt
 PUSH-GITHUB.bat
+
+# Frontend de demonstracao (nao vai ao git)
+teste/
