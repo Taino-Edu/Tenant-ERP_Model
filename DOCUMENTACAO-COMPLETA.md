@@ -1,6 +1,6 @@
 # softNerd — Documentação Técnica
 
-> Referência técnica para desenvolvedores. Atualizada em 06/05/2026.
+> Referência técnica para desenvolvedores. Atualizada em 06/05/2026 — v2.1
 
 ---
 
@@ -124,7 +124,7 @@ softNerd/
 │   ├── Hubs/ComandaHub.cs           # Hub SignalR para tempo real
 │   └── Program.cs                   # Bootstrap: DI, JWT, CORS, EF, MongoDB
 │
-├── frontend/                        # Next.js 14 (App Router)
+├── frontend/                        # Next.js 14 (App Router) — sistema real
 │   ├── app/
 │   │   ├── admin/                   # Área administrativa
 │   │   │   ├── dashboard/           # Comandas ao vivo + histórico do dia
@@ -133,11 +133,20 @@ softNerd/
 │   │   │   ├── campeonatos/         # Gestão de torneios
 │   │   │   ├── cartas/              # Busca TCG
 │   │   │   ├── usuarios/            # Gestão de clientes e pontos
-│   │   │   └── qrcodes/             # Geração de QR Codes de mesa
+│   │   │   ├── anuncios/            # Banners, avisos e destaques da landing page
+│   │   │   └── qrcodes/             # Geração e impressão de QR Codes de mesa
 │   │   ├── login/                   # Login do admin
+│   │   ├── page.tsx                 # Landing page pública (campeonatos, produtos, pontos)
 │   │   └── mesa/[mesa]/             # Página do cliente (QR Code)
 │   ├── lib/api.ts                   # Axios + interceptors JWT
-│   └── components/                  # Componentes reutilizáveis
+│   └── components/                  # Componentes reutilizáveis (Sidebar responsiva)
+│
+├── teste/                           # Demo standalone Next.js (não vai ao git)
+│   ├── app/                         # Todas as telas com dados mockados
+│   │   ├── admin/                   # Painel admin completo (Dashboard, PDV, Comandas…)
+│   │   ├── comanda/                 # Visão mobile do cliente
+│   │   └── loja/                    # Landing page pública
+│   └── components/                  # Sidebar responsiva isolada
 │
 ├── tests/unit/CardGameStore.Tests/  # Testes xUnit
 │   └── Services/                    # Um arquivo por serviço
@@ -158,6 +167,30 @@ softNerd/
 | POST | `/api/auth/quick-login` | Anônimo | Login cliente via QR Code (CPF + WhatsApp + mesa). Cria usuário se não existir. Abre comanda automaticamente. Retorna JWT + `comandaId`. |
 | POST | `/api/auth/refresh` | Anônimo | Renova o access token usando o refresh token. |
 | POST | `/api/auth/logout` | JWT | Invalida o refresh token do usuário autenticado. |
+| POST | `/api/auth/forgot-password` | Anônimo | Envia email de reset de senha. Sempre retorna 204 (sem user enumeration). Token válido por 2h. |
+| POST | `/api/auth/reset-password` | Anônimo | Redefine a senha com token válido. Invalida sessões ativas (zera refresh token). |
+
+### AnnouncementController — `/api/announcement`
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/announcement/visible` | Anônimo | Lista anúncios ativos e não expirados (usados na landing page). |
+| GET | `/api/announcement` | Admin | Lista todos os anúncios incluindo inativos. |
+| POST | `/api/announcement` | Admin | Cria anúncio. Tipos: `Banner` (imagem 1200×400px), `Aviso` (texto), `Destaque` (produto). |
+| PUT | `/api/announcement/{id}` | Admin | Atualiza anúncio. |
+| DELETE | `/api/announcement/{id}` | Admin | Remove anúncio permanentemente. |
+
+**Padrão de imagens para banners:**
+- Tipo `Banner`: 1200×400 px, JPEG ou WebP, máx. 2 MB
+- Tipo `Destaque`: 800×600 px, JPEG ou WebP, máx. 1 MB
+- Campo `ImageUrl`: URL pública da imagem (hospedagem externa, ex: Cloudflare R2, Imgur, etc.)
+
+### AnalyticsController — `/api/analytics`
+
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/analytics/dashboard` | Admin | KPIs do dia: vendas hoje/ontem, variação %, ticket médio (30 dias), clientes ativos/inativos, curva horária de vendas (9h–24h), top 5 produtos, formas de pagamento. |
+| GET | `/api/analytics/clientes` | Admin | Insights por cliente: gasto total, ticket médio, nº de visitas, última visita, inatividade (+30 dias). Aceita `?apenasInativos=true`. |
 
 ### VendaAvulsaController — `/api/venda-avulsa`
 
@@ -308,7 +341,13 @@ Todas as páginas ficam em `frontend/app/admin/`. A autenticação é verificada
 | Campeonatos | `/admin/campeonatos` | Criar torneio, inscrever jogadores, mudar status, definir colocação |
 | Cartas TCG | `/admin/cartas` | Busca por nome com filtro de jogo (Pokémon/MTG), visualização de preços de mercado |
 | Usuários | `/admin/usuarios` | Lista de clientes, busca, saldo de pontos, adicionar pontos manualmente |
-| QR Codes | `/admin/qrcodes` | Gerar QR Codes de mesa para impressão |
+| Anúncios | `/admin/anuncios` | Criar/editar/desativar anúncios da landing page: Banners (1200×400px), Avisos (texto) e Destaques (produto em destaque) |
+| QR Codes | `/admin/qrcodes` | Gerar QR Codes de mesa; download individual (PNG), download em lote (ZIP), impressão com `window.open()` + `@media print` |
+
+**Landing page pública (`/`):**
+- Seções: Hero, Banners de anúncios (vindos da API), Avisos, Como funciona, Campeonatos, Produtos em destaque, Programa de pontos, CTA de cadastro
+- Modal de cadastro/login sem emojis, integrado ao `POST /api/auth/quick-login`
+- Totalmente responsiva com Navbar mobile (hamburger)
 
 **Comunicação com a API:**
 - `frontend/lib/api.ts` centraliza todas as chamadas. Axios com interceptor que injeta o JWT em todas as requisições e renova o token automaticamente ao receber 401.
@@ -365,16 +404,16 @@ Todas as páginas ficam em `frontend/app/admin/`. A autenticação é verificada
 
 - **EnsureCreatedAsync, não migrations**: mudanças de schema requerem intervenção manual (recriar o banco ou escrever SQL de alter). Migrar para `dotnet ef migrations` antes de qualquer alteração de schema em produção.
 
-- **Rate limits das APIs TCG externas**: PokemonTCG.io limita requisições anônimas (~1000/dia). Configure `TcgSettings__PokemonApiKey` para aumentar o limite. Scryfall pede um delay de 100ms entre requisições; o cliente atual não implementa este throttle.
-
-- **Sem validação de CPF**: o campo aceita qualquer string de 11 caracteres. CPFs inválidos podem ser cadastrados.
+- **Rate limit da Scryfall**: a API pede no máximo 10 req/s. O cliente atual não implementa throttle explícito; em uso intenso adicionar um `Task.Delay(100)` em `TcgApiClient.cs`. PokemonTCG.io limita anônimos a ~1 000/dia — configure `TcgSettings__PokemonApiKey` para aumentar o limite.
 
 - **Refresh token sem revogação por lista negra**: um refresh token comprometido fica válido por 30 dias. A única forma de revogar é o próprio logout (que zera o campo no banco).
 
-- **CORS permissivo**: em produção, atualizar `Program.cs` para aceitar apenas o domínio real em vez dos localhosts.
+- **CORS para produção**: atualizar `Program.cs` substituindo os `localhost` pelas URLs reais antes do deploy público.
 
-- **Secret JWT exposta no docker-compose**: o valor padrão deve ser substituído antes de qualquer deploy público. Veja o CHECKLIST-PRODUCAO.md.
+- **Secret JWT no docker-compose**: o valor padrão deve ser substituído por uma chave forte antes de qualquer deploy. Veja o CHECKLIST-PRODUCAO.md.
 
-- **Histórico de comandas limitado ao dia corrente**: `GET /api/comanda/history` filtra por `ClosedAt.Date == DateTime.UtcNow.Date`. Para acesso a dias anteriores seria necessário um novo endpoint com parâmetro de data.
+- **Histórico de comandas limitado ao dia corrente**: `GET /api/comanda/history` filtra por `ClosedAt.Date == DateTime.UtcNow.Date`. Para acesso a dias anteriores, adicionar parâmetro de data ao endpoint.
 
-- **Desconto de venda avulsa apenas em percentual fixo**: os botões da UI oferecem 0/5/10/15/20%. Não há campo de desconto em valor absoluto nem percentual personalizado.
+- **Desconto de venda avulsa apenas em percentual fixo**: os botões da UI oferecem 0/5/10/15/20%. Não há campo de valor absoluto nem percentual personalizado.
+
+- **PIX e IA analytics pendentes**: integração com gateway PIX (comanda + inscrição em campeonato) e camada de IA regressiva no dashboard são funcionalidades planejadas — os endpoints de dados já existem em `/api/analytics`.

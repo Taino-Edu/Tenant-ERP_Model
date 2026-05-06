@@ -5,162 +5,179 @@ import { isLoggedIn, isAdmin } from '@/lib/auth'
 import { championshipApi, productApi, announcementApi, Championship, Product, AnnouncementDto } from '@/lib/api'
 import Link from 'next/link'
 import {
-  Sword, Trophy, ShoppingBag, QrCode, Star,
-  Calendar, Users, ChevronRight, Zap, Shield, Heart,
-  X, MessageCircle, CheckCircle
+  Gamepad2, Trophy, ShoppingBag, QrCode, Star,
+  Calendar, Users, ChevronRight, Zap, Shield,
+  X, MessageCircle, CheckCircle, Package, ArrowRight,
+  ScanLine, CreditCard, Award
 } from 'lucide-react'
 
-// WhatsApp do Maikon para confirmação de inscrições
 const MAIKON_WHATSAPP = '5511999999999' // TODO: substituir pelo número real
 
 export default function LandingPage() {
   const router = useRouter()
-  const [championships, setChampionships]   = useState<Championship[]>([])
-  const [products,      setProducts]        = useState<Product[]>([])
-  const [announcements, setAnnouncements]   = useState<AnnouncementDto[]>([])
-  const [loadingData,   setLoadingData]     = useState(true)
-  const [registerModal, setRegisterModal]   = useState<Championship | null>(null)
+  const [championships, setChampionships] = useState<Championship[]>([])
+  const [products,      setProducts]      = useState<Product[]>([])
+  const [announcements, setAnnouncements] = useState<AnnouncementDto[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [registerModal, setRegisterModal] = useState<Championship | null>(null)
+  const [mobileMenu,    setMobileMenu]    = useState(false)
 
   useEffect(() => {
     if (isLoggedIn()) {
       router.replace(isAdmin() ? '/admin/dashboard' : '/cliente')
       return
     }
-
     Promise.allSettled([
-      championshipApi.list().then(r => setChampionships(
-        r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 3)
-      )),
-      // Exibe produtos em destaque; se não houver, mostra os 6 primeiros ativos
+      championshipApi.list().then(r =>
+        setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 3))
+      ),
       productApi.list().then(r => {
         const active   = r.data.filter(p => p.isActive && p.stockQuantity > 0)
         const featured = active.filter(p => p.isFeatured)
         setProducts(featured.length > 0 ? featured.slice(0, 6) : active.slice(0, 6))
       }),
       announcementApi.visible().then(r => setAnnouncements(r.data)),
-    ]).finally(() => setLoadingData(false))
+    ]).finally(() => setLoading(false))
   }, [router])
 
-  return (
-    <div className="min-h-screen bg-[#0a0a10] text-white">
+  const banners = announcements.filter(a => a.type === 'Banner')
+  const avisos  = announcements.filter(a => a.type === 'Aviso')
 
-      {/* ── Navbar ─────────────────────────────────────────────────────────── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#0a0a10]/90 backdrop-blur-md">
+  return (
+    <div className="min-h-screen bg-surface-900 text-gray-100">
+
+      {/* ── Navbar ─────────────────────────────────────────────────── */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-surface-900/90 backdrop-blur-md border-b border-surface-500">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-amber-500/20 border border-amber-500/40 rounded-lg flex items-center justify-center">
-              <Sword className="w-4 h-4 text-amber-400" />
-            </div>
+            <Gamepad2 className="w-6 h-6 text-brand-500" />
             <span className="font-bold text-white text-lg">softNerd</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="text-sm text-gray-400 hover:text-white transition-colors px-4 py-2"
-            >
+
+          <div className="hidden md:flex items-center gap-6 text-sm text-gray-400">
+            <a href="#campeonatos"   className="hover:text-white transition">Campeonatos</a>
+            <a href="#produtos"      className="hover:text-white transition">Produtos</a>
+            <a href="#como-funciona" className="hover:text-white transition">Como Funciona</a>
+            <a href="#pontos"        className="hover:text-white transition">Pontos</a>
+          </div>
+
+          <div className="hidden md:flex items-center gap-3">
+            <Link href="/login"
+              className="text-sm text-gray-400 hover:text-white transition px-4 py-2">
               Área Admin
             </Link>
-            <a
-              href="#campeonatos"
-              className="text-sm bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg transition-colors"
-            >
+            <a href="#campeonatos"
+              className="text-sm bg-brand-500 hover:bg-brand-400 text-white font-semibold px-4 py-2 rounded-xl transition shadow-lg shadow-brand-500/20">
               Ver Eventos
             </a>
           </div>
+
+          <button onClick={() => setMobileMenu(!mobileMenu)}
+            className="md:hidden text-gray-400 hover:text-white p-1">
+            <div className="space-y-1.5">
+              <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
+              <span className={`block w-5 h-0.5 bg-current transition-opacity ${mobileMenu ? 'opacity-0' : ''}`} />
+              <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? '-rotate-45 -translate-y-2' : ''}`} />
+            </div>
+          </button>
         </div>
+
+        {mobileMenu && (
+          <div className="md:hidden border-t border-surface-500 bg-surface-800 px-6 py-4 space-y-3">
+            {['#campeonatos','#produtos','#como-funciona','#pontos'].map((href, i) => (
+              <a key={href} href={href} onClick={() => setMobileMenu(false)}
+                className="block text-gray-400 hover:text-white text-sm py-1.5 capitalize">
+                {['Campeonatos','Produtos','Como Funciona','Pontos'][i]}
+              </a>
+            ))}
+            <div className="flex gap-2 pt-2 border-t border-surface-500">
+              <Link href="/login" className="flex-1 text-center py-2 text-sm text-gray-400 hover:text-white border border-surface-500 rounded-xl">Admin</Link>
+              <a href="#campeonatos" className="flex-1 text-center py-2 text-sm bg-brand-500 text-white font-semibold rounded-xl">Eventos</a>
+            </div>
+          </div>
+        )}
       </nav>
 
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
+      {/* ── Hero ───────────────────────────────────────────────────── */}
       <section className="pt-32 pb-24 px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-full px-4 py-1.5 text-blue-400 text-sm font-medium mb-6">
+          <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 rounded-full px-4 py-1.5 text-brand-400 text-sm font-medium mb-6">
             <Zap className="w-3.5 h-3.5" />
-            Loja de Card Games & Campeonatos
+            Loja de Card Games e Campeonatos
           </div>
           <h1 className="text-5xl md:text-7xl font-black text-white mb-6 leading-none tracking-tight">
             Sua loja de
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-amber-600"> card games</span>
+            <span className="text-brand-400"> card games</span>
             <br />favorita
           </h1>
           <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
             Produtos, campeonatos e a melhor experiência para jogadores de TCG.
-            Sente na sua mesa, escaneie o QR Code e faça seu pedido direto pelo celular.
+            Sente na mesa, escaneie o QR Code e faça seu pedido direto pelo celular.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a
-              href="#campeonatos"
-              className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-8 py-3.5 rounded-xl transition-all duration-150 active:scale-95"
-            >
+            <a href="#campeonatos"
+              className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-bold px-8 py-3.5 rounded-xl transition-all active:scale-95 shadow-lg shadow-brand-500/20">
               <Trophy className="w-5 h-5" /> Ver Campeonatos
             </a>
-            <a
-              href="#produtos"
-              className="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold px-8 py-3.5 rounded-xl transition-all duration-150 active:scale-95"
-            >
+            <a href="#produtos"
+              className="inline-flex items-center justify-center gap-2 bg-surface-800 hover:bg-surface-700 border border-surface-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-all active:scale-95">
               <ShoppingBag className="w-5 h-5" /> Ver Produtos
             </a>
           </div>
         </div>
       </section>
 
-      {/* ── Banners e Avisos ──────────────────────────────────────────────── */}
-      {announcements.length > 0 && (
-        <section className="px-6 pb-4 max-w-5xl mx-auto space-y-3">
-          {announcements.filter(a => a.type === 'Banner' && a.imageUrl).map(a => (
+      {/* ── Banners de imagem ──────────────────────────────────────── */}
+      {banners.length > 0 && (
+        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-3">
+          {banners.filter(a => a.imageUrl).map(a => (
             <a key={a.id} href={a.linkUrl ?? '#'} target={a.linkUrl ? '_blank' : undefined} rel="noreferrer"
-              className="block rounded-2xl overflow-hidden border border-white/5 hover:border-amber-500/20 transition-colors">
-              <img src={a.imageUrl!} alt={a.title} className="w-full object-cover max-h-40" />
+              className="block rounded-2xl overflow-hidden border border-surface-500 hover:border-brand-500/40 transition">
+              <img src={a.imageUrl!} alt={a.title} className="w-full object-cover max-h-[200px]" />
             </a>
           ))}
-          {announcements.filter(a => a.type === 'Aviso').map(a => (
-            <div key={a.id} className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-5 py-3 flex items-start gap-3">
-              <span className="text-amber-400 text-lg mt-0.5">📢</span>
+        </section>
+      )}
+
+      {/* ── Avisos de texto ───────────────────────────────────────── */}
+      {avisos.length > 0 && (
+        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-3">
+          {avisos.map(a => (
+            <div key={a.id} className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-5 py-4 flex items-start gap-4">
+              <div className="w-8 h-8 bg-brand-500/20 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
+                <Zap className="w-4 h-4 text-brand-400" />
+              </div>
               <div>
-                <p className="font-semibold text-amber-300 text-sm">{a.title}</p>
-                {a.body && <p className="text-amber-200/70 text-xs mt-0.5">{a.body}</p>}
+                <p className="font-semibold text-brand-300 text-sm">{a.title}</p>
+                {a.body && <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{a.body}</p>}
               </div>
             </div>
           ))}
         </section>
       )}
 
-      {/* ── Como funciona ──────────────────────────────────────────────────── */}
-      <section className="py-20 px-6 border-y border-white/5 bg-white/[0.02]">
+      {/* ── Como funciona ─────────────────────────────────────────── */}
+      <section id="como-funciona" className="py-20 px-6 border-y border-surface-500 bg-surface-800/30">
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-12 text-white">Como funciona</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="text-center mb-14">
+            <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Simples assim</p>
+            <h2 className="text-3xl font-bold text-white">Como funciona</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative">
+            {/* linha conectora desktop */}
+            <div className="hidden md:block absolute top-7 left-[12.5%] right-[12.5%] h-px bg-surface-500" />
             {[
-              {
-                icon: QrCode,
-                color: 'text-blue-400',
-                bg:    'bg-blue-500/10 border-blue-500/20',
-                step:  '1',
-                title: 'Escaneie o QR Code',
-                desc:  'Cada mesa tem um QR Code único. Escaneie com seu celular para abrir sua comanda automaticamente.',
-              },
-              {
-                icon: ShoppingBag,
-                color: 'text-amber-400',
-                bg:    'bg-amber-500/10 border-amber-500/20',
-                step:  '2',
-                title: 'Faça seu pedido',
-                desc:  'Adicione bebidas, salgadinhos e produtos direto pelo celular, sem precisar chamar o atendente.',
-              },
-              {
-                icon: Heart,
-                color: 'text-emerald-400',
-                bg:    'bg-emerald-500/10 border-emerald-500/20',
-                step:  '3',
-                title: 'Jogue e aproveite',
-                desc:  'O atendente fecha sua comanda quando você sair. Simples assim.',
-              },
-            ].map(({ icon: Icon, color, bg, step, title, desc }) => (
-              <div key={step} className="text-center">
-                <div className={`w-14 h-14 rounded-2xl border flex items-center justify-center mx-auto mb-4 ${bg}`}>
-                  <Icon className={`w-7 h-7 ${color}`} />
+              { icon: ScanLine, step: '01', title: 'Escaneie o QR Code', desc: 'Cada mesa tem um QR único. Escaneie e sua comanda abre automaticamente.' },
+              { icon: ShoppingBag, step: '02', title: 'Faça seu pedido', desc: 'Adicione bebidas, salgadinhos e produtos TCG pelo celular.' },
+              { icon: Award, step: '03', title: 'Acumule pontos', desc: 'A cada visita você acumula pontos que podem ser trocados por produtos.' },
+              { icon: Trophy, step: '04', title: 'Participe de torneios', desc: 'Inscreva-se nos campeonatos e compita com outros jogadores.' },
+            ].map(({ icon: Icon, step, title, desc }) => (
+              <div key={step} className="text-center relative">
+                <div className="w-14 h-14 bg-surface-800 border border-surface-500 rounded-2xl flex items-center justify-center mx-auto mb-4 relative z-10">
+                  <Icon className="w-6 h-6 text-brand-400" />
                 </div>
-                <div className="text-xs font-bold text-gray-600 mb-1">PASSO {step}</div>
-                <h3 className="font-bold text-white mb-2">{title}</h3>
+                <p className="text-xs font-bold text-brand-500 mb-1">{step}</p>
+                <h3 className="font-bold text-white mb-2 text-sm">{title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{desc}</p>
               </div>
             ))}
@@ -168,25 +185,25 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Campeonatos ────────────────────────────────────────────────────── */}
+      {/* ── Campeonatos ───────────────────────────────────────────── */}
       <section id="campeonatos" className="py-20 px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="flex items-center justify-between mb-10">
+          <div className="flex items-end justify-between mb-10">
             <div>
+              <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Agenda</p>
               <h2 className="text-3xl font-bold text-white">Próximos Eventos</h2>
-              <p className="text-gray-500 mt-1">Campeonatos e torneios de TCG</p>
             </div>
           </div>
 
-          {loadingData ? (
+          {loading ? (
             <div className="flex justify-center py-16">
-              <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : championships.length === 0 ? (
-            <div className="text-center py-16 border border-white/5 rounded-2xl">
-              <Trophy className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500">Nenhum campeonato agendado no momento.</p>
-              <p className="text-gray-700 text-sm mt-1">Fique atento às novidades!</p>
+            <div className="text-center py-16 border border-surface-500 rounded-2xl bg-surface-800/30">
+              <Trophy className="w-10 h-10 text-surface-500 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">Nenhum evento agendado no momento.</p>
+              <p className="text-gray-600 text-sm mt-1">Fique atento às novidades.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -198,149 +215,156 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Produtos em destaque ───────────────────────────────────────────── */}
-      <section id="produtos" className="py-20 px-6 bg-white/[0.02] border-t border-white/5">
+      {/* ── Produtos ──────────────────────────────────────────────── */}
+      <section id="produtos" className="py-20 px-6 border-t border-surface-500 bg-surface-800/20">
         <div className="max-w-5xl mx-auto">
-          <div className="mb-10">
-            <h2 className="text-3xl font-bold text-white">Produtos</h2>
-            <p className="text-gray-500 mt-1">Disponíveis na loja</p>
+          <div className="flex items-end justify-between mb-10">
+            <div>
+              <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Vitrine</p>
+              <h2 className="text-3xl font-bold text-white">Produtos em Destaque</h2>
+            </div>
           </div>
 
-          {loadingData ? (
+          {loading ? (
             <div className="flex justify-center py-16">
-              <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : products.length === 0 ? (
-            <div className="text-center py-16 border border-white/5 rounded-2xl">
-              <ShoppingBag className="w-10 h-10 text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500">Produtos em breve.</p>
+            <div className="text-center py-16 border border-surface-500 rounded-2xl bg-surface-800/30">
+              <Package className="w-10 h-10 text-surface-500 mx-auto mb-3" />
+              <p className="text-gray-500 font-medium">Produtos em breve.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {products.map(p => (
-                <ProductCard key={p.id} product={p} />
-              ))}
+              {products.map(p => <ProductCard key={p.id} product={p} />)}
             </div>
           )}
         </div>
       </section>
 
-      {/* ── Banner Pontos ──────────────────────────────────────────────────── */}
-      <section className="py-20 px-6 border-t border-white/5">
-        <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5 text-amber-400 text-sm font-medium mb-6">
-            <Star className="w-3.5 h-3.5" />
-            Programa de Pontos
-          </div>
-          <h2 className="text-4xl font-black text-white mb-4">
-            Ganhe pontos,<br />
-            <span className="text-amber-400">troque por produtos</span>
+      {/* ── Pontos ────────────────────────────────────────────────── */}
+      <section id="pontos" className="py-20 px-6 border-t border-surface-500">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Fidelidade</p>
+          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
+            Ganhe pontos a cada visita
           </h2>
-          <p className="text-gray-400 text-lg mb-8">
-            O Maikon adiciona pontos na sua conta a cada visita. Junte pontos e troque por itens na loja. Os pontos são válidos por 30 dias.
+          <p className="text-gray-400 text-lg mb-12 max-w-xl mx-auto">
+            Acumule pontos e troque por produtos na loja. Simples, sem aplicativo.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <div className="bg-white/5 border border-white/10 rounded-xl px-6 py-4 text-left">
-              <div className="flex items-center gap-2 mb-1">
-                <Shield className="w-4 h-4 text-blue-400" />
-                <span className="text-sm font-semibold text-white">Cadastro grátis</span>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+            {[
+              { icon: QrCode,       title: 'Cadastro grátis',       desc: 'Escaneie o QR e se cadastre com CPF e WhatsApp. Sem senha.' },
+              { icon: Star,         title: 'Pontos por visita',      desc: 'O admin adiciona pontos manualmente a cada compra ou visita.' },
+              { icon: ShoppingBag,  title: 'Troque por produtos',    desc: 'Use os pontos para abater o valor na comanda quando liberado.' },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="bg-surface-800 border border-surface-500 rounded-2xl p-6 text-left hover:border-brand-500/40 transition">
+                <div className="w-10 h-10 bg-brand-500/10 border border-brand-500/20 rounded-xl flex items-center justify-center mb-4">
+                  <Icon className="w-5 h-5 text-brand-400" />
+                </div>
+                <h3 className="font-bold text-white mb-1">{title}</h3>
+                <p className="text-gray-500 text-sm leading-relaxed">{desc}</p>
               </div>
-              <p className="text-xs text-gray-500">Apenas CPF + WhatsApp no QR Code</p>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl px-6 py-4 text-left">
-              <div className="flex items-center gap-2 mb-1">
-                <Star className="w-4 h-4 text-amber-400" />
-                <span className="text-sm font-semibold text-white">Pontos por visita</span>
-              </div>
-              <p className="text-xs text-gray-500">Maikon adiciona pontos manualmente</p>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-xl px-6 py-4 text-left">
-              <div className="flex items-center gap-2 mb-1">
-                <ShoppingBag className="w-4 h-4 text-emerald-400" />
-                <span className="text-sm font-semibold text-white">Troque por produtos</span>
-              </div>
-              <p className="text-xs text-gray-500">Use na comanda para abater o valor</p>
-            </div>
+            ))}
+          </div>
+
+          <div className="inline-flex items-center gap-2 bg-surface-800 border border-surface-500 rounded-xl px-5 py-3 text-sm text-gray-400">
+            <Shield className="w-4 h-4 text-brand-400 shrink-0" />
+            Pontos são válidos por 30 dias e controlados pelo administrador
           </div>
         </div>
       </section>
 
-      {/* ── Modal de inscrição ────────────────────────────────────────────── */}
-      {registerModal && (
-        <RegisterModal
-          championship={registerModal}
-          onClose={() => setRegisterModal(null)}
-        />
-      )}
-
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 py-10 px-6">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 bg-amber-500/20 border border-amber-500/40 rounded-lg flex items-center justify-center">
-              <Sword className="w-3.5 h-3.5 text-amber-400" />
-            </div>
-            <span className="font-bold text-white">softNerd</span>
-          </div>
-          <p className="text-gray-600 text-sm">
-            © {new Date().getFullYear()} softNerd. Todos os direitos reservados.
+      {/* ── CTA final ─────────────────────────────────────────────── */}
+      <section className="py-20 px-6 border-t border-surface-500">
+        <div className="max-w-3xl mx-auto bg-surface-800 border border-brand-500/20 rounded-2xl p-10 md:p-14 text-center">
+          <h2 className="text-3xl md:text-4xl font-black text-white mb-3">Pronto para jogar?</h2>
+          <p className="text-gray-400 mb-8 max-w-md mx-auto">
+            Escaneie o QR Code na mesa e comece a aproveitar a experiência softNerd.
           </p>
-          <Link href="/login" className="text-gray-600 hover:text-gray-400 text-sm transition-colors flex items-center gap-1">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <a href="#campeonatos"
+              className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-bold px-8 py-3.5 rounded-xl transition shadow-lg shadow-brand-500/20 active:scale-95">
+              <Trophy className="w-5 h-5" /> Ver Eventos
+            </a>
+            <Link href="/login"
+              className="inline-flex items-center justify-center gap-2 bg-surface-700 hover:bg-surface-600 border border-surface-500 text-white font-semibold px-8 py-3.5 rounded-xl transition active:scale-95">
+              <CreditCard className="w-5 h-5" /> Área Admin
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Footer ────────────────────────────────────────────────── */}
+      <footer className="border-t border-surface-500 py-10 px-6">
+        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+          <div className="flex items-center gap-2 font-bold text-white">
+            <Gamepad2 className="w-5 h-5 text-brand-500" />
+            softNerd
+          </div>
+          <p>© {new Date().getFullYear()} softNerd. Todos os direitos reservados.</p>
+          <Link href="/login" className="hover:text-gray-300 transition flex items-center gap-1">
             Área Admin <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
       </footer>
+
+      {registerModal && (
+        <RegisterModal championship={registerModal} onClose={() => setRegisterModal(null)} />
+      )}
     </div>
   )
 }
 
-// ── Sub-componentes ───────────────────────────────────────────────────────────
+// ── Sub-componentes ───────────────────────────────────────────────────────
 
 function ChampionshipCard({ championship: c, onRegister }: { championship: Championship; onRegister: () => void }) {
-  const gameColors: Record<string, string> = {
-    'Pokemon':    'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
-    'Magic':      'text-blue-400   bg-blue-500/10   border-blue-500/20',
-    'Yu-Gi-Oh':   'text-purple-400 bg-purple-500/10 border-purple-500/20',
-    'One Piece':  'text-red-400    bg-red-500/10    border-red-500/20',
+  const gameColor: Record<string, string> = {
+    'Pokemon':   'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    'Magic':     'bg-blue-500/10   text-blue-400   border-blue-500/20',
+    'Yu-Gi-Oh':  'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    'One Piece': 'bg-red-500/10    text-red-400    border-red-500/20',
   }
-  const colorClass = gameColors[c.game] ?? 'text-gray-400 bg-gray-500/10 border-gray-500/20'
-
   const statusLabel: Record<string, string> = {
     Planejado:   'Em breve',
-    Inscricoes:  'Inscrições Abertas',
-    EmAndamento: 'Em Andamento',
+    Inscricoes:  'Inscrições abertas',
+    EmAndamento: 'Em andamento',
   }
 
   return (
-    <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-5 hover:border-amber-500/30 transition-all duration-200 group">
+    <div className="bg-surface-800 border border-surface-500 rounded-2xl p-5 hover:border-brand-500/40 transition group flex flex-col">
       <div className="flex items-start justify-between mb-4">
-        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${colorClass}`}>
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${gameColor[c.game] ?? 'bg-surface-700 text-gray-400 border-surface-500'}`}>
           {c.game}
         </span>
-        <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full font-medium">
+        <span className="text-xs text-accent-green bg-accent-green/10 border border-accent-green/20 px-2.5 py-1 rounded-full font-medium">
           {statusLabel[c.status] ?? c.status}
         </span>
       </div>
-      <h3 className="font-bold text-white mb-3 leading-tight">{c.name}</h3>
-      <div className="space-y-1.5 text-sm text-gray-500">
+
+      <h3 className="font-bold text-white mb-3 leading-snug">{c.name}</h3>
+
+      <div className="space-y-1.5 text-sm text-gray-500 mb-4">
         <div className="flex items-center gap-1.5">
-          <Calendar className="w-3.5 h-3.5" />
+          <Calendar className="w-3.5 h-3.5 shrink-0" />
           {new Date(c.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
         </div>
         {c.maxParticipants && (
           <div className="flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5" />
+            <Users className="w-3.5 h-3.5 shrink-0" />
             Até {c.maxParticipants} participantes
           </div>
         )}
-        <div className="flex items-center gap-1.5 text-amber-400 font-semibold">
+        <div className="flex items-center gap-1.5 text-brand-400 font-semibold">
           Inscrição: R$ {(c.entryFeeInCents / 100).toFixed(2).replace('.', ',')}
         </div>
       </div>
-      <div className="mt-4 pt-4 border-t border-white/5">
+
+      <div className="mt-auto pt-4 border-t border-surface-500">
         <button
           onClick={onRegister}
-          className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm py-2 rounded-lg transition-colors"
+          className="w-full bg-brand-500 hover:bg-brand-400 text-white font-bold text-sm py-2.5 rounded-xl transition shadow-lg shadow-brand-500/20 active:scale-95"
         >
           Quero me inscrever
         </button>
@@ -350,20 +374,33 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
   )
 }
 
+function ProductCard({ product: p }: { product: Product }) {
+  return (
+    <div className="bg-surface-800 border border-surface-500 rounded-2xl p-4 hover:border-brand-500/30 transition">
+      <p className="text-xs text-gray-600 mb-1 uppercase tracking-wide">{p.category}</p>
+      <p className="text-sm font-semibold text-white leading-snug line-clamp-2 mb-3">{p.name}</p>
+      <div className="flex items-center justify-between">
+        <span className="text-brand-400 font-bold">R$ {p.priceInReais.toFixed(2).replace('.', ',')}</span>
+        <span className="text-xs text-gray-600 flex items-center gap-1">
+          <Package className="w-3 h-3" /> {p.stockQuantity} un.
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function RegisterModal({ championship, onClose }: { championship: Championship; onClose: () => void }) {
-  const [name, setName]       = useState('')
-  const [phone, setPhone]     = useState('')
-  const [done, setDone]       = useState(false)
+  const [name,  setName]  = useState('')
+  const [phone, setPhone] = useState('')
+  const [done,  setDone]  = useState(false)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim() || !phone.trim()) return
-
     const msg = encodeURIComponent(
-      `Olá! Quero me inscrever no campeonato *${championship.name}*.\n` +
-      `Nome: ${name.trim()}\n` +
-      `WhatsApp: ${phone.trim()}\n` +
-      `Confirmo que pagarei na chegada (R$ ${(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}).`
+      `Olá! Quero me inscrever no *${championship.name}*.\n` +
+      `Nome: ${name.trim()}\nWhatsApp: ${phone.trim()}\n` +
+      `Confirmo o pagamento de R$ ${(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')} na chegada.`
     )
     window.open(`https://wa.me/${MAIKON_WHATSAPP}?text=${msg}`, '_blank')
     setDone(true)
@@ -371,80 +408,58 @@ function RegisterModal({ championship, onClose }: { championship: Championship; 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-[#16161d] border border-white/10 rounded-2xl w-full max-w-md p-6">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md p-6 shadow-2xl">
         <div className="flex items-start justify-between mb-5">
           <div>
-            <h3 className="font-bold text-white text-lg">Inscrição no Campeonato</h3>
+            <h3 className="font-bold text-white text-lg">Inscrição</h3>
             <p className="text-gray-500 text-sm mt-0.5">{championship.name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-600 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {done ? (
           <div className="text-center py-6">
-            <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
+            <div className="w-14 h-14 bg-accent-green/10 border border-accent-green/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-7 h-7 text-accent-green" />
+            </div>
             <p className="font-bold text-white mb-1">Solicitação enviada!</p>
-            <p className="text-gray-400 text-sm">O Maikon vai confirmar sua vaga pelo WhatsApp. Pague na chegada.</p>
-            <button onClick={onClose} className="mt-5 w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium py-2.5 rounded-xl transition-colors">
+            <p className="text-gray-400 text-sm leading-relaxed">
+              O Maikon vai confirmar sua vaga pelo WhatsApp. Pague na chegada.
+            </p>
+            <button onClick={onClose}
+              className="mt-5 w-full btn-secondary justify-center py-2.5">
               Fechar
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-sm text-amber-400">
-              Taxa de inscrição: <strong>R$ {(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}</strong> — pague na chegada
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Seu nome</label>
-              <input
-                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                placeholder="Nome completo"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                required
-              />
+            <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3 text-sm text-brand-300">
+              Taxa de inscrição:{' '}
+              <strong>R$ {(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}</strong>
+              {' '}— pague na chegada
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">Seu WhatsApp</label>
-              <input
-                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                placeholder="(11) 99999-9999"
-                value={phone}
-                onChange={e => setPhone(e.target.value)}
-                required
-              />
+              <label className="label">Seu nome</label>
+              <input className="input" placeholder="Nome completo"
+                value={name} onChange={e => setName(e.target.value)} required />
             </div>
-
-            <button
-              type="submit"
-              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold py-3 rounded-xl transition-colors"
-            >
+            <div>
+              <label className="label">Seu WhatsApp</label>
+              <input className="input" placeholder="(11) 99999-9999"
+                value={phone} onChange={e => setPhone(e.target.value)} required />
+            </div>
+            <button type="submit"
+              className="w-full btn-primary justify-center py-3">
               <MessageCircle className="w-4 h-4" />
               Confirmar pelo WhatsApp
             </button>
             <p className="text-xs text-gray-600 text-center">
-              Você será redirecionado para o WhatsApp do Maikon para confirmar sua vaga.
+              Você será redirecionado para o WhatsApp para confirmar a vaga.
             </p>
           </form>
         )}
-      </div>
-    </div>
-  )
-}
-
-function ProductCard({ product: p }: { product: Product }) {
-  return (
-    <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-4 hover:border-amber-500/20 transition-all duration-200">
-      <p className="text-xs text-gray-600 mb-1">{p.category}</p>
-      <p className="text-sm font-semibold text-white leading-snug line-clamp-2 mb-3">{p.name}</p>
-      <div className="flex items-center justify-between">
-        <span className="text-amber-400 font-bold">
-          R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-        </span>
-        <span className="text-xs text-gray-600">{p.stockQuantity} un.</span>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 # softNerd — CardGameStore
 
-Sistema de gestão para loja de card games (TCG). Gerencia comandas de mesa via QR Code, vendas no balcão, campeonatos e estoque — tudo em uma única plataforma web.
+Sistema de gestão para loja de card games (TCG). Gerencia comandas de mesa via QR Code, vendas no balcão, campeonatos, estoque e analytics — tudo em uma única plataforma web.
 
 ---
 
@@ -8,10 +8,12 @@ Sistema de gestão para loja de card games (TCG). Gerencia comandas de mesa via 
 
 | Camada | Tecnologia |
 |---|---|
-| Backend | ASP.NET Core 8 (C#), Entity Framework Core |
-| Banco de dados | PostgreSQL 16 (produção) / SQLite (dev local) |
-| Cache TCG | MongoDB 7 |
+| Backend | ASP.NET Core 8 (C#), Entity Framework Core 8 |
+| Banco relacional | PostgreSQL 16 |
+| Banco de documentos | MongoDB 7 |
+| Autenticação | JWT HS256 + BCrypt + Refresh Token |
 | Tempo real | SignalR (WebSockets) |
+| Email | SMTP (reset de senha) |
 | Frontend | Next.js 14, TypeScript, Tailwind CSS |
 | Infra | Docker Compose |
 
@@ -32,15 +34,15 @@ cd softNerd
 ```bash
 cp .env.example .env
 ```
-Edite o arquivo `.env` e troque os valores pelos seus:
+Edite o `.env` e substitua os valores:
 ```env
 JWT_SECRET=SuaChaveSuperSecretaAqui
 POSTGRES_PASSWORD=SuaSenhaAqui
 ```
 
 ### 3. Suba os containers
-```bash
-docker compose up --build
+```powershell
+.\start.ps1
 ```
 
 | Serviço | URL |
@@ -69,25 +71,38 @@ make status    # status dos containers
 
 ## Funcionalidades
 
-### 🛒 Venda Avulsa (balcão)
-O admin seleciona produtos, informa o cliente (opcional) e registra a venda sem precisar de login do cliente.
+### Venda Avulsa (balcão)
+Admin seleciona produtos, aplica desconto opcional e registra a venda sem precisar de login do cliente. Estoque decrementado no PostgreSQL; evento gravado no MongoDB.
 - Rota admin: `/admin/venda-avulsa`
-- Endpoint: `POST /api/comanda/venda-avulsa`
+- Endpoint: `POST /api/venda-avulsa`
 
-### 📱 Mesas via QR Code
-Clientes escaneiam o QR Code da mesa, fazem login com CPF + WhatsApp, e acessam sua comanda.
+### Mesas via QR Code
+Clientes escaneiam o QR Code da mesa, fazem login com CPF + WhatsApp e acessam sua comanda pessoal.
 - Login automático cria conta se for a primeira visita
 - Comanda fica salva no servidor (cliente pode sair e voltar)
-- Só o admin fecha a comanda
+- Só o admin fecha ou cancela a comanda
+- Admin gera e imprime os QR Codes em `/admin/qrcodes` (download PNG individual, lote ZIP, impressão via `window.print`)
 
-### 🏆 Campeonatos TCG
-Admin cria campeonatos com data, jogo, taxa de inscrição e vagas. Clientes se inscrevem via landing page ou painel.
+### Campeonatos TCG
+Admin cria torneios com data, jogo, taxa e limite de vagas. Clientes se inscrevem pela landing page ou pelo painel.
 
-### ⭐ Pontos
-Admin adiciona pontos aos clientes pelo painel. Pontos têm validade de 30 dias e podem ser usados para abater o valor da comanda.
+### Programa de Pontos
+Admin adiciona ou remove pontos pelo painel (`/admin/usuarios`). Pontos têm validade de 30 dias e podem ser aplicados como desconto na comanda — a opção só fica disponível para o cliente se o admin liberar.
 
-### 🌐 Landing Page Pública
-Página inicial com campeonatos em destaque, produtos disponíveis e informações da loja — sem precisar de login.
+### Anúncios e Landing Page
+Admin gerencia banners, avisos e destaques em `/admin/anuncios`. A landing page pública exibe essas informações junto com campeonatos e produtos em destaque.
+
+- Tipo `Banner`: imagem 1200×400px, JPEG/WebP, máx. 2 MB
+- Tipo `Destaque`: imagem 800×600px, JPEG/WebP, máx. 1 MB
+- Tipo `Aviso`: texto livre com título e descrição
+
+### Analytics
+Endpoints em `/api/analytics` expõem KPIs do dia, ticket médio (30 dias), curva horária de vendas, top 5 produtos, clientes ativos/inativos e insights individuais por cliente.
+
+### Autenticação segura
+- Login admin via e-mail + senha
+- Reset de senha por e-mail (token 2h, sem user enumeration)
+- Refresh token com revogação via logout
 
 ---
 
@@ -100,20 +115,33 @@ softNerd/
 │   ├── Services/           ← Regras de negócio
 │   ├── Models/             ← Entidades do banco
 │   ├── DTOs/               ← Objetos de transferência
-│   └── Data/               ← DbContext e configurações EF
-├── frontend/               ← Next.js 14
-│   ├── app/                ← Páginas (App Router)
+│   └── Data/               ← DbContext e seed
+├── frontend/               ← Next.js 14 (sistema real)
+│   ├── app/
 │   │   ├── page.tsx        ← Landing page pública
-│   │   ├── admin/          ← Painel administrativo
-│   │   ├── cliente/        ← Área do cliente
-│   │   └── mesa/[mesa]/    ← Login via QR Code
+│   │   ├── admin/          ← Painel administrativo (sidebar responsiva)
+│   │   └── mesa/[mesa]/    ← Login e comanda via QR Code
 │   ├── components/         ← Componentes reutilizáveis
 │   └── lib/                ← API client, auth, SignalR
-├── docker-compose.yml      ← Orquestração dos containers
-├── Makefile                ← Comandos de conveniência
-├── .env.example            ← Template de variáveis de ambiente
-└── .env                    ← Variáveis reais (não vai pro Git)
+├── teste/                  ← Demo standalone com dados mockados (não sobe ao git)
+│   ├── app/admin/          ← Todas as telas do admin com recharts
+│   ├── app/comanda/        ← Visão mobile do cliente
+│   └── app/loja/           ← Landing page pública
+├── tests/unit/             ← xUnit (62 testes nos 6 serviços principais)
+├── docker-compose.yml
+└── start.ps1
 ```
+
+---
+
+## Testes
+
+```powershell
+cd tests/unit/CardGameStore.Tests
+dotnet test
+```
+
+62 testes unitários cobrindo: Auth, Comanda, VendaAvulsa, Product, User, Championship.
 
 ---
 
@@ -127,8 +155,12 @@ softNerd/
 | `POSTGRES_DB` | Nome do banco de dados |
 | `PGADMIN_EMAIL` | E-mail para acesso ao pgAdmin |
 | `PGADMIN_PASSWORD` | Senha para acesso ao pgAdmin |
+| `SMTP_HOST` | Servidor SMTP para reset de senha |
+| `SMTP_PORT` | Porta do servidor SMTP |
+| `SMTP_USER` | Usuário SMTP |
+| `SMTP_PASS` | Senha SMTP |
 
-> ⚠️ **Nunca commite o arquivo `.env` no Git.** Ele já está no `.gitignore`.
+> **Nunca commite o arquivo `.env` no Git.** Ele já está no `.gitignore`.
 
 ---
 
