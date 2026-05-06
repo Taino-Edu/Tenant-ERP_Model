@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { comandaApi, productApi, ComandaDto, Product } from '@/lib/api'
+import { comandaApi, productApi, ComandaDto, Product, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import toast from 'react-hot-toast'
 import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
-  History, Search, Loader2, TableProperties, Trash2,
+  History, Search, Loader2, TableProperties, Trash2, CreditCard,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -127,7 +127,74 @@ function AddItemModal({
 
 // ── Card de Comanda ───────────────────────────────────────────────────────────
 
-// ── Modal de confirmação genérico ─────────────────────────────────────────────
+// ── Modal: selecionar pagamento ao fechar comanda ────────────────────────────
+
+function CloseComandaModal({
+  comanda, onConfirm, onCancel,
+}: {
+  comanda:   ComandaDto
+  onConfirm: (paymentMethod: string) => void
+  onCancel:  () => void
+}) {
+  const [method, setMethod] = useState('Dinheiro')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
+      <div className="bg-surface-700 border border-surface-500 rounded-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
+        <div>
+          <h3 className="font-semibold text-white text-lg">Fechar comanda</h3>
+          <p className="text-gray-400 text-sm mt-1">
+            {comanda.userName} · <span className="text-accent-gold font-bold">{`R$ ${comanda.totalInReais.toFixed(2).replace('.', ',')}`}</span>
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Forma de pagamento</p>
+          <div className="grid grid-cols-1 gap-2">
+            {COMANDA_PAYMENT_METHODS.map(pm => (
+              <button
+                key={pm.value}
+                onClick={() => setMethod(pm.value)}
+                className={clsx(
+                  'flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all text-left',
+                  method === pm.value
+                    ? pm.value === 'Crediario'
+                      ? 'bg-amber-500/10 border-amber-500/50 text-amber-300'
+                      : 'bg-brand-600/20 border-brand-500/50 text-brand-300'
+                    : 'border-surface-500 text-gray-400 hover:border-surface-400 hover:text-gray-200'
+                )}
+              >
+                <CreditCard className="w-4 h-4 shrink-0" />
+                {pm.label}
+                {pm.value === 'Crediario' && (
+                  <span className="ml-auto text-xs text-amber-400/70 font-normal">bloqueia próxima comanda</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {method === 'Crediario' && (
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300">
+            O cliente ficará bloqueado de abrir novas comandas até quitar o crediário em 30 dias.
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onCancel} className="btn-secondary flex-1 justify-center">Voltar</button>
+          <button
+            onClick={() => onConfirm(method)}
+            className="btn-success flex-1 justify-center"
+          >
+            <CheckCircle className="w-4 h-4" /> Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal de confirmação genérico (cancelar) ──────────────────────────────────
 
 function ConfirmModal({
   title, message, confirmLabel, confirmClass, onConfirm, onCancel,
@@ -159,7 +226,7 @@ function ComandaCard({
   comanda, onClose, onCancel, onUpdate, isNew,
 }: {
   comanda: ComandaDto
-  onClose:  (id: string) => void
+  onClose:  (id: string, paymentMethod: string) => void
   onCancel: (id: string) => void
   onUpdate: (updated: ComandaDto) => void
   isNew:    boolean
@@ -167,7 +234,8 @@ function ComandaCard({
   const [expanded, setExpanded]   = useState(false)
   const [loading, setLoading]     = useState(false)
   const [addOpen, setAddOpen]     = useState(false)
-  const [confirm, setConfirm]     = useState<'close' | 'cancel' | null>(null)
+  const [closeOpen, setCloseOpen] = useState(false)
+  const [confirm, setConfirm]     = useState<'cancel' | null>(null)
   const [, forceRender]           = useState(0)
 
   // Atualiza o tempo exibido a cada minuto
@@ -183,10 +251,10 @@ function ComandaCard({
     Aberta: '● Aberta', EmAndamento: '● Em Andamento',
   }
 
-  async function handleClose() {
-    setConfirm(null)
+  async function handleClose(paymentMethod: string) {
+    setCloseOpen(false)
     setLoading(true)
-    try { await onClose(comanda.id) } finally { setLoading(false) }
+    try { await onClose(comanda.id, paymentMethod) } finally { setLoading(false) }
   }
   async function handleCancel() {
     setConfirm(null)
@@ -203,14 +271,11 @@ function ComandaCard({
           onAdded={updated => { onUpdate(updated); setAddOpen(false) }}
         />
       )}
-      {confirm === 'close' && (
-        <ConfirmModal
-          title="Fechar comanda"
-          message={`Confirma o fechamento da comanda de ${comanda.userName}? Total: ${fmt(comanda.totalInReais)}`}
-          confirmLabel="Fechar"
-          confirmClass="btn-success"
+      {closeOpen && (
+        <CloseComandaModal
+          comanda={comanda}
           onConfirm={handleClose}
-          onCancel={() => setConfirm(null)}
+          onCancel={() => setCloseOpen(false)}
         />
       )}
       {confirm === 'cancel' && (
@@ -292,7 +357,7 @@ function ComandaCard({
             <Plus className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setConfirm('close')} disabled={loading}
+            onClick={() => setCloseOpen(true)} disabled={loading}
             className="btn-success flex-1 justify-center text-sm py-1.5"
           >
             <CheckCircle className="w-4 h-4" /> Fechar
@@ -386,9 +451,10 @@ export default function DashboardPage() {
     setComandas(prev => prev.map(c => c.id === updated.id ? updated : c))
   }
 
-  async function handleClose(id: string) {
-    await comandaApi.close(id)
-    toast.success('Comanda fechada!')
+  async function handleClose(id: string, paymentMethod: string) {
+    await comandaApi.close(id, paymentMethod)
+    const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
+    toast.success(label)
     fetchComandas()
     fetchHistory()
   }

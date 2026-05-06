@@ -9,16 +9,26 @@ namespace CardGameStore.Services.Implementations;
 public class ComandaService : IComandaService
 {
     private readonly AppDbContext            _db;
+    private readonly IEmailService           _email;
     private readonly ILogger<ComandaService> _logger;
 
-    public ComandaService(AppDbContext db, ILogger<ComandaService> logger)
+    public ComandaService(AppDbContext db, IEmailService email, ILogger<ComandaService> logger)
     {
         _db     = db;
+        _email  = email;
         _logger = logger;
     }
 
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
     {
+        // Verifica se o cliente tem crediário em aberto — bloqueia abertura de nova comanda
+        var crediarioAberto = await _db.Crediarios
+            .AnyAsync(c => c.UserId == userId && c.Status == CrediariosStatus.Aberto);
+
+        if (crediarioAberto)
+            throw new InvalidOperationException(
+                "Você possui um crediário em aberto. Procure o Maikon para quitar antes de abrir uma nova comanda.");
+
         var existing = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)
@@ -170,13 +180,49 @@ public class ComandaService : IComandaService
         return MapToDto(comanda);
     }
 
-    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId)
+    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null)
     {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
+
+        // ── Crediário ─────────────────────────────────────────────────────────
+        if (paymentMethod == "Crediario")
+        {
+            // Bloqueia se o cliente já tem um crediário aberto
+            var jaTemCrediario = await _db.Crediarios
+                .AnyAsync(c => c.UserId == comanda.UserId && c.Status == CrediariosStatus.Aberto);
+
+            if (jaTemCrediario)
+                throw new InvalidOperationException(
+                    "Este cliente já possui um crediário em aberto. Quite o anterior antes de criar um novo.");
+
+            var vencimento = DateTime.UtcNow.AddDays(30);
+
+            var crediario = new Crediario
+            {
+                UserId           = comanda.UserId,
+                ComandaId        = comanda.Id,
+                ValorEmCentavos  = comanda.TotalInCents,
+                DataAbertura     = DateTime.UtcNow,
+                DataVencimento   = vencimento,
+                Status           = CrediariosStatus.Aberto,
+                AbertoPorAdminId = adminId,
+                Observacao       = observacao,
+            };
+
+            _db.Crediarios.Add(crediario);
+            _logger.LogInformation(
+                "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
+                crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
+
+            // Envia email (não bloqueia o fluxo se falhar)
+            if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
+                _ = _email.SendCrediarioAbertoAsync(
+                    comanda.User.Email, comanda.User.Name, crediario.ValorEmReais, vencimento);
+        }
 
         comanda.Status   = ComandaStatus.Fechada;
         comanda.ClosedAt = DateTime.UtcNow;

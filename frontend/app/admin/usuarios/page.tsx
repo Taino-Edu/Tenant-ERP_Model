@@ -1,23 +1,32 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { userApi, UserSummary } from '@/lib/api'
+import { userApi, crediarioApi, CrediariosDto, UserSummary } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2, CheckCircle } from 'lucide-react'
+import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2 } from 'lucide-react'
+import Link from 'next/link'
 
 export default function UsuariosPage() {
-  const [users, setUsers]       = useState<UserSummary[]>([])
-  const [search, setSearch]     = useState('')
-  const [loading, setLoading]   = useState(true)
-  const [selected, setSelected] = useState<UserSummary | null>(null)
-  const [points, setPoints]     = useState('')
-  const [reason, setReason]     = useState('')
-  const [adding, setAdding]     = useState(false)
+  const [users, setUsers]           = useState<UserSummary[]>([])
+  const [crediarios, setCrediarios] = useState<Record<string, CrediariosDto>>({})
+  const [search, setSearch]         = useState('')
+  const [loading, setLoading]       = useState(true)
+  const [selected, setSelected]     = useState<UserSummary | null>(null)
+  const [points, setPoints]         = useState('')
+  const [reason, setReason]         = useState('')
+  const [adding, setAdding]         = useState(false)
 
   const fetchUsers = useCallback(async (q?: string) => {
     setLoading(true)
     try {
-      const { data } = await userApi.list(q)
-      setUsers(data)
+      const [usersRes, credRes] = await Promise.all([
+        userApi.list(q),
+        crediarioApi.list('Aberto'),
+      ])
+      setUsers(usersRes.data)
+      // Mapeia userId → crediário aberto
+      const map: Record<string, CrediariosDto> = {}
+      for (const c of credRes.data) map[c.userId] = c
+      setCrediarios(map)
     } catch {
       toast.error('Erro ao carregar usuários')
     } finally {
@@ -109,7 +118,10 @@ export default function UsuariosPage() {
                         )}
                       </div>
                     </div>
-                    <PointsBadge user={u} />
+                    <div className="flex flex-col items-end gap-1">
+                      <PointsBadge user={u} />
+                      {crediarios[u.id] && <CreditBadge crediario={crediarios[u.id]} />}
+                    </div>
                   </div>
                 </button>
               ))}
@@ -218,5 +230,20 @@ function PointsBadge({ user }: { user: UserSummary }) {
     )
   return (
     <span className="text-xs text-gray-600">0 pts</span>
+  )
+}
+
+function CreditBadge({ crediario }: { crediario: CrediariosDto }) {
+  const label = crediario.vencido ? 'Crediário Vencido' : 'Crediário Aberto'
+  const color = crediario.vencido
+    ? 'text-red-400 bg-red-500/10 border-red-500/20'
+    : 'text-orange-400 bg-orange-500/10 border-orange-500/20'
+
+  return (
+    <Link href="/admin/crediario">
+      <span className={`flex items-center gap-1 text-xs border px-2 py-0.5 rounded-full shrink-0 ${color}`}>
+        <CreditCard className="w-3 h-3" /> {label}
+      </span>
+    </Link>
   )
 }

@@ -27,6 +27,7 @@ public class AppDbContext : DbContext
     public DbSet<Championship>            Championships            { get; set; }
     public DbSet<ChampionshipParticipant> ChampionshipParticipants { get; set; }
     public DbSet<Announcement>            Announcements            { get; set; }
+    public DbSet<Crediario>               Crediarios               { get; set; }
 
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
@@ -166,6 +167,32 @@ public class AppDbContext : DbContext
                   .HasForeignKey(p => p.ComandaId)
                   .OnDelete(DeleteBehavior.SetNull)
                   .IsRequired(false);
+        });
+
+        // =====================================================================
+        // CREDIARIO
+        // =====================================================================
+        modelBuilder.Entity<Crediario>(entity =>
+        {
+            entity.Property(c => c.Status)
+                  .HasConversion<string>();
+
+            // Um cliente só pode ter um crediário Aberto por vez (verificado no serviço)
+            entity.HasIndex(c => new { c.UserId, c.Status })
+                  .HasDatabaseName("ix_crediarios_user_status");
+
+            entity.HasIndex(c => c.Status)
+                  .HasDatabaseName("ix_crediarios_status");
+
+            entity.HasOne(c => c.User)
+                  .WithMany()
+                  .HasForeignKey(c => c.UserId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(c => c.Comanda)
+                  .WithMany()
+                  .HasForeignKey(c => c.ComandaId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
 
         // =====================================================================

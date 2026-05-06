@@ -30,8 +30,11 @@ public interface IComandaService
     /// <summary>Remove um item de uma comanda (apenas Admin ou o próprio cliente).</summary>
     Task<ComandaDto> RemoveItemAsync(Guid comandaId, Guid itemId, Guid requestingUserId);
 
-    /// <summary>Fecha a comanda (pagamento recebido).</summary>
-    Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId);
+    /// <summary>
+    /// Fecha a comanda (pagamento recebido).
+    /// Se paymentMethod == "Crediario", cria um Crediario e envia email ao cliente.
+    /// </summary>
+    Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null);
 
     /// <summary>Cancela a comanda sem cobrança.</summary>
     Task<ComandaDto> CancelComandaAsync(Guid comandaId, Guid adminId);

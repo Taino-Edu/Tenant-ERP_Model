@@ -65,6 +65,105 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, "Bem-vindo(a) ao softNerd!", body);
     }
 
+    public async Task SendCrediarioAbertoAsync(string toEmail, string toName, decimal valor, DateTime vencimento)
+    {
+        var venc = vencimento.ToLocalTime().ToString("dd/MM/yyyy");
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:500px">
+              <h2 style="color:#7839F3">softNerd — Crediário Aberto</h2>
+              <p>Olá, <strong>{toName}</strong>!</p>
+              <p>
+                Uma comanda foi registrada no seu crediário.
+                Por favor, efetue o pagamento até a data de vencimento.
+              </p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0">
+                <tr>
+                  <td style="padding:8px;color:#666">Valor</td>
+                  <td style="padding:8px;font-weight:bold;color:#111">R$ {valor:N2}</td>
+                </tr>
+                <tr style="background:#f9f9f9">
+                  <td style="padding:8px;color:#666">Vencimento</td>
+                  <td style="padding:8px;font-weight:bold;color:#dc2626">{venc}</td>
+                </tr>
+              </table>
+              <p>
+                Enquanto o crediário estiver em aberto, novas comandas ficarão bloqueadas.
+                Compareça à loja ou fale com o Maikon para quitar.
+              </p>
+              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+            </div>
+            """;
+
+        await SendAsync(toEmail, toName, $"Crediário aberto — R$ {valor:N2} vence em {venc}", body);
+    }
+
+    public async Task SendCrediarioPagoAsync(string toEmail, string toName, decimal valor)
+    {
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:500px">
+              <h2 style="color:#00F0A8">softNerd — Crediário Quitado</h2>
+              <p>Olá, <strong>{toName}</strong>!</p>
+              <p>
+                Seu crediário de <strong>R$ {valor:N2}</strong> foi quitado com sucesso.
+                Obrigado pelo pagamento!
+              </p>
+              <p>Você já pode abrir uma nova comanda normalmente.</p>
+              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+            </div>
+            """;
+
+        await SendAsync(toEmail, toName, "Crediário quitado — softNerd", body);
+    }
+
+    public async Task SendCampeonatoInscricaoAsync(string toEmail, string toName, string campeonato, DateTime data, decimal entryFee)
+    {
+        var dataFmt = data.ToLocalTime().ToString("dd/MM/yyyy 'às' HH:mm");
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:500px">
+              <h2 style="color:#7839F3">softNerd — Inscrição Confirmada</h2>
+              <p>Olá, <strong>{toName}</strong>!</p>
+              <p>Sua inscrição no campeonato abaixo foi confirmada:</p>
+              <table style="width:100%;border-collapse:collapse;margin:16px 0">
+                <tr>
+                  <td style="padding:8px;color:#666">Campeonato</td>
+                  <td style="padding:8px;font-weight:bold">{campeonato}</td>
+                </tr>
+                <tr style="background:#f9f9f9">
+                  <td style="padding:8px;color:#666">Data</td>
+                  <td style="padding:8px;font-weight:bold">{dataFmt}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px;color:#666">Taxa de Inscrição</td>
+                  <td style="padding:8px;font-weight:bold">R$ {entryFee:N2}</td>
+                </tr>
+              </table>
+              <p>Apareça na loja no dia do evento. Boa sorte!</p>
+              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+            </div>
+            """;
+
+        await SendAsync(toEmail, toName, $"Inscrição confirmada: {campeonato}", body);
+    }
+
+    public async Task SendAnuncioAsync(IEnumerable<(string email, string name)> destinatarios, string titulo, string corpo)
+    {
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:500px">
+              <h2 style="color:#7839F3">softNerd — {titulo}</h2>
+              <div style="margin:16px 0;color:#333">
+                {corpo}
+              </div>
+              <p style="color:#888;font-size:12px">
+                Você recebe este email por ser cliente softNerd.<br/>
+                Dúvidas? Fale com o Maikon no balcão.
+              </p>
+            </div>
+            """;
+
+        foreach (var (email, name) in destinatarios)
+            await SendAsync(email, name, $"softNerd — {titulo}", body);
+    }
+
     // ── Interno ───────────────────────────────────────────────────────────────
 
     private async Task SendAsync(string toEmail, string toName, string subject, string htmlBody)

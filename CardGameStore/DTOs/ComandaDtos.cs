@@ -56,6 +56,20 @@ public class ApplyPointsRequest
     public int Points { get; set; }
 }
 
+/// <summary>Body do endpoint PUT /api/comanda/{id}/close.</summary>
+public class CloseComandaRequest
+{
+    /// <summary>
+    /// Forma de pagamento. Valores aceitos:
+    /// Dinheiro | Pix | CartaoCredito | CartaoDebito | Crediario
+    /// </summary>
+    [Required]
+    public string PaymentMethod { get; set; } = "Dinheiro";
+
+    /// <summary>Observação opcional (ex: "troco de R$50,00").</summary>
+    public string? Observacao { get; set; }
+}
+
 public class ComandaItemDto
 {
     public Guid    Id                  { get; set; }

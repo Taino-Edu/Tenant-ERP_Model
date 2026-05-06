@@ -7,7 +7,7 @@ import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, Gamepad2, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu
+  Loader2, X, Menu, CreditCard,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -24,6 +24,7 @@ const sections = [
     label: 'Gestão & Loja',
     items: [
       { href: '/admin/usuarios',    label: 'Clientes',     icon: Users },
+      { href: '/admin/crediario',   label: 'Crediário',    icon: CreditCard },
       { href: '/admin/estoque',     label: 'Estoque',      icon: Package },
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone },
       { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search },

@@ -107,11 +107,20 @@ public class ComandaController : ControllerBase
     [HttpPut("{id:guid}/close")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(ComandaDto), 200)]
-    public async Task<IActionResult> Close(Guid id)
+    public async Task<IActionResult> Close(Guid id, [FromBody] CloseComandaRequest? request)
     {
-        var adminId = GetUserId();
-        var result  = await _service.CloseComandaAsync(id, adminId);
-        return Ok(result);
+        try
+        {
+            var adminId = GetUserId();
+            var method  = request?.PaymentMethod ?? "Dinheiro";
+            var obs     = request?.Observacao;
+            var result  = await _service.CloseComandaAsync(id, adminId, method, obs);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
     }
 
     /// <summary>Cancela uma comanda sem cobrança. Apenas Admin.</summary>

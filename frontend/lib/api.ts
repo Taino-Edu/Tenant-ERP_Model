@@ -169,11 +169,48 @@ export const comandaApi = {
   addItem:      (id: string, item: { productId?: string; cardCacheId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
-  close:        (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/close`),
+  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string) =>
+    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
   applyPoints:  (id: string, points: number) =>
     api.post<ComandaDto>(`/api/comanda/${id}/apply-points`, { points }),
 }
+
+// ── Crediário ─────────────────────────────────────────────────────────────────
+
+export interface CrediariosDto {
+  id: string
+  userId: string
+  userName: string
+  userEmail: string | null
+  comandaId: string
+  valorEmReais: number
+  dataAbertura: string
+  dataVencimento: string
+  dataPagamento: string | null
+  status: string        // 'Aberto' | 'Pago' | 'Vencido'
+  observacao: string | null
+  vencido: boolean
+  diasRestantes: number
+}
+
+export const crediarioApi = {
+  list:        (status?: string) =>
+    api.get<CrediariosDto[]>('/api/crediarios', { params: { status } }),
+  byUser:      (userId: string) =>
+    api.get<CrediariosDto[]>(`/api/crediarios/usuario/${userId}`),
+  meu:         () => api.get<CrediariosDto>('/api/crediarios/meu'),
+  marcarPago:  (id: string, observacao?: string) =>
+    api.put<CrediariosDto>(`/api/crediarios/${id}/pagar`, { observacao }),
+}
+
+export const COMANDA_PAYMENT_METHODS = [
+  { value: 'Dinheiro',      label: 'Dinheiro' },
+  { value: 'Pix',           label: 'Pix' },
+  { value: 'CartaoCredito', label: 'Cartão de Crédito' },
+  { value: 'CartaoDebito',  label: 'Cartão de Débito' },
+  { value: 'Crediario',     label: 'Crediário (30 dias)' },
+] as const
 
 export const vendaAvulsaApi = {
   register: (clientName: string | null, paymentMethod: string, items: { productId: string; quantity: number }[], discountPercent = 0) =>
