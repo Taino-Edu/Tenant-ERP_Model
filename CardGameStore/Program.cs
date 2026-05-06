@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using CardGameStore.Configuration;
 using CardGameStore.Data;
+using CardGameStore.HealthChecks;
 using CardGameStore.Hubs;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -199,38 +200,11 @@ builder.Services.AddHttpClient("ScryfallApi", client =>
 });
 
 // ---------------------------------------------------------------------------
-// 10. HEALTH CHECKS — Postgres + MongoDB (sem pacotes extras)
+// 10. HEALTH CHECKS — Postgres + MongoDB via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
 builder.Services.AddHealthChecks()
-    .AddCheck("postgres", async () =>
-    {
-        try
-        {
-            using var scope  = builder.Services.BuildServiceProvider().CreateScope();
-            var db           = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await db.Database.CanConnectAsync();
-            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy();
-        }
-        catch (Exception ex)
-        {
-            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy(ex.Message);
-        }
-    }, tags: ["db", "postgres"])
-    .AddCheck("mongodb", () =>
-    {
-        try
-        {
-            using var scope  = builder.Services.BuildServiceProvider().CreateScope();
-            var mongo        = scope.ServiceProvider.GetRequiredService<IMongoClient>();
-            mongo.ListDatabaseNames(); // lança se indisponível
-            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy();
-        }
-        catch (Exception ex)
-        {
-            // MongoDB é opcional — retorna Degraded, não Unhealthy
-            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Degraded(ex.Message);
-        }
-    }, tags: ["db", "mongo"]);
+    .AddCheck<DbHealthCheck>   ("postgres", tags: ["db", "postgres"])
+    .AddCheck<MongoHealthCheck>("mongodb",  tags: ["db", "mongo"]);
 
 // ---------------------------------------------------------------------------
 // 11. SERVIÇOS DE APLICAÇÃO
@@ -241,6 +215,8 @@ builder.Services.AddScoped<IProductService,      ProductService>();
 builder.Services.AddScoped<IChampionshipService, ChampionshipService>();
 builder.Services.AddScoped<IUserService,         UserService>();
 builder.Services.AddScoped<IVendaAvulsaService,  VendaAvulsaService>();
+builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
+builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
 builder.Services.AddSingleton<ITcgService,       TcgService>();
 

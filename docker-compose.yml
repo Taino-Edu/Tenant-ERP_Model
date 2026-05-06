@@ -57,6 +57,12 @@ services:
       JwtSettings__AccessTokenExpirationMinutes: "60"
       JwtSettings__RefreshTokenExpirationDays: "30"
       TcgSettings__PokemonApiKey: "${POKEMON_API_KEY:-}"
+      EmailSettings__Host:     "${EMAIL_HOST:-}"
+      EmailSettings__Port:     "${EMAIL_PORT:-587}"
+      EmailSettings__User:     "${EMAIL_USER:-}"
+      EmailSettings__Password: "${EMAIL_PASSWORD:-}"
+      EmailSettings__From:     "${EMAIL_FROM:-noreply@softnerd.com.br}"
+      EmailSettings__AppUrl:   "${APP_URL:-http://localhost:3000}"
     depends_on:
       postgres:
         condition: service_healthy

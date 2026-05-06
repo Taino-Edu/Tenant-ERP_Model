@@ -23,4 +23,13 @@ public interface IAuthService
 
     /// <summary>Invalida o RefreshToken (logout).</summary>
     Task LogoutAsync(Guid userId);
+
+    /// <summary>
+    /// Gera token de reset, persiste no banco e dispara email.
+    /// Não revela se o email existe (evita user enumeration).
+    /// </summary>
+    Task ForgotPasswordAsync(ForgotPasswordRequest request);
+
+    /// <summary>Valida o token e redefine a senha.</summary>
+    Task ResetPasswordAsync(ResetPasswordRequest request);
 }

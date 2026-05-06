@@ -26,6 +26,7 @@ public class AppDbContext : DbContext
     public DbSet<ComandaItem>             ComandaItems             { get; set; }
     public DbSet<Championship>            Championships            { get; set; }
     public DbSet<ChampionshipParticipant> ChampionshipParticipants { get; set; }
+    public DbSet<Announcement>            Announcements            { get; set; }
 
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas

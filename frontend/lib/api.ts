@@ -67,9 +67,18 @@ export interface ComandaItemDto {
 export interface Product {
   id: string; name: string; description: string | null; category: string
   priceInCents: number; stockQuantity: number; minimumStock: number
-  isActive: boolean; imageUrl: string | null; isLowStock: boolean
-  priceInReais: number
+  isActive: boolean; isFeatured: boolean; imageUrl: string | null
+  isLowStock: boolean; priceInReais: number
 }
+
+export interface AnnouncementDto {
+  id: string; title: string; body: string | null
+  imageUrl: string | null; linkUrl: string | null
+  type: string; isActive: boolean
+  expiresAt: string | null; createdAt: string
+}
+
+export const ANNOUNCEMENT_TYPES = ['Banner', 'Aviso', 'Destaque'] as const
 
 export interface CardCache {
   tcgCardId: string; name: string; game: string; setName: string | null
@@ -109,10 +118,23 @@ export interface UserProfile {
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/api/auth/login', { email, password }),
-  // Retorna AuthResponse com comandaId preenchido (backend retorna shape flat, não aninhado)
   quickLogin: (name: string, cpf: string, whatsApp: string, tableIdentifier?: string) =>
     api.post<AuthResponse>('/api/auth/quick-login', { name, cpf, whatsApp, tableIdentifier }),
-  logout: () => api.post('/api/auth/logout'),
+  logout:          () => api.post('/api/auth/logout'),
+  forgotPassword:  (email: string) =>
+    api.post('/api/auth/forgot-password', { email }),
+  resetPassword:   (token: string, newPassword: string) =>
+    api.post('/api/auth/reset-password', { token, newPassword }),
+}
+
+export const announcementApi = {
+  visible: () => api.get<AnnouncementDto[]>('/api/announcements'),
+  all:     () => api.get<AnnouncementDto[]>('/api/announcements/all'),
+  create:  (data: Omit<AnnouncementDto, 'id' | 'createdAt'>) =>
+    api.post<AnnouncementDto>('/api/announcements', data),
+  update:  (id: string, data: Partial<Omit<AnnouncementDto, 'id' | 'createdAt'>>) =>
+    api.put<AnnouncementDto>(`/api/announcements/${id}`, data),
+  delete:  (id: string) => api.delete(`/api/announcements/${id}`),
 }
 
 export interface VendaAvulsaDto {

@@ -153,6 +153,52 @@ public class AuthController : ControllerBase
     }
 
     // =========================================================================
+    // FORGOT PASSWORD — Solicitar reset por email
+    // =========================================================================
+
+    /// <summary>
+    /// Envia email com link de redefinição de senha.
+    /// Sempre retorna 204 para não revelar se o email existe.
+    /// </summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        await _authService.ForgotPasswordAsync(request);
+        return NoContent();
+    }
+
+    // =========================================================================
+    // RESET PASSWORD — Redefinir senha com token do email
+    // =========================================================================
+
+    /// <summary>
+    /// Redefine a senha usando o token recebido por email.
+    /// O token expira em 2 horas e é de uso único.
+    /// </summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            await _authService.ResetPasswordAsync(request);
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { Message = ex.Message });
+        }
+    }
+
+    // =========================================================================
     // LOGOUT — Invalidar o refresh token
     // =========================================================================
 

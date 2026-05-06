@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isLoggedIn, isAdmin } from '@/lib/auth'
-import { championshipApi, productApi, Championship, Product } from '@/lib/api'
+import { championshipApi, productApi, announcementApi, Championship, Product, AnnouncementDto } from '@/lib/api'
 import Link from 'next/link'
 import {
   Sword, Trophy, ShoppingBag, QrCode, Star,
@@ -16,25 +16,28 @@ const MAIKON_WHATSAPP = '5511999999999' // TODO: substituir pelo número real
 export default function LandingPage() {
   const router = useRouter()
   const [championships, setChampionships]   = useState<Championship[]>([])
-  const [products, setProducts]             = useState<Product[]>([])
-  const [loadingData, setLoadingData]       = useState(true)
+  const [products,      setProducts]        = useState<Product[]>([])
+  const [announcements, setAnnouncements]   = useState<AnnouncementDto[]>([])
+  const [loadingData,   setLoadingData]     = useState(true)
   const [registerModal, setRegisterModal]   = useState<Championship | null>(null)
 
   useEffect(() => {
-    // Redireciona usuários já logados
     if (isLoggedIn()) {
       router.replace(isAdmin() ? '/admin/dashboard' : '/cliente')
       return
     }
 
-    // Busca dados públicos para exibir na landing
     Promise.allSettled([
       championshipApi.list().then(r => setChampionships(
-        r.data.filter(c => c.status === 'Planejado' || c.status === 'InscricoesAbertas').slice(0, 3)
+        r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 3)
       )),
-      productApi.list().then(r => setProducts(
-        r.data.filter(p => p.isActive && p.stockQuantity > 0).slice(0, 6)
-      )),
+      // Exibe produtos em destaque; se não houver, mostra os 6 primeiros ativos
+      productApi.list().then(r => {
+        const active   = r.data.filter(p => p.isActive && p.stockQuantity > 0)
+        const featured = active.filter(p => p.isFeatured)
+        setProducts(featured.length > 0 ? featured.slice(0, 6) : active.slice(0, 6))
+      }),
+      announcementApi.visible().then(r => setAnnouncements(r.data)),
     ]).finally(() => setLoadingData(false))
   }, [router])
 
@@ -99,6 +102,27 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── Banners e Avisos ──────────────────────────────────────────────── */}
+      {announcements.length > 0 && (
+        <section className="px-6 pb-4 max-w-5xl mx-auto space-y-3">
+          {announcements.filter(a => a.type === 'Banner' && a.imageUrl).map(a => (
+            <a key={a.id} href={a.linkUrl ?? '#'} target={a.linkUrl ? '_blank' : undefined} rel="noreferrer"
+              className="block rounded-2xl overflow-hidden border border-white/5 hover:border-amber-500/20 transition-colors">
+              <img src={a.imageUrl!} alt={a.title} className="w-full object-cover max-h-40" />
+            </a>
+          ))}
+          {announcements.filter(a => a.type === 'Aviso').map(a => (
+            <div key={a.id} className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-5 py-3 flex items-start gap-3">
+              <span className="text-amber-400 text-lg mt-0.5">📢</span>
+              <div>
+                <p className="font-semibold text-amber-300 text-sm">{a.title}</p>
+                {a.body && <p className="text-amber-200/70 text-xs mt-0.5">{a.body}</p>}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* ── Como funciona ──────────────────────────────────────────────────── */}
       <section className="py-20 px-6 border-y border-white/5 bg-white/[0.02]">
@@ -282,8 +306,9 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
   const colorClass = gameColors[c.game] ?? 'text-gray-400 bg-gray-500/10 border-gray-500/20'
 
   const statusLabel: Record<string, string> = {
-    Planejado:         'Em breve',
-    InscricoesAbertas: 'Inscrições Abertas',
+    Planejado:   'Em breve',
+    Inscricoes:  'Inscrições Abertas',
+    EmAndamento: 'Em Andamento',
   }
 
   return (

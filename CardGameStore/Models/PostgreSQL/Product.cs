@@ -72,6 +72,10 @@ public class Product
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Se true, o produto aparece em destaque na landing page.</summary>
+    [Column("is_featured")]
+    public bool IsFeatured { get; set; } = false;
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

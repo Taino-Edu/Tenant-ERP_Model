@@ -80,6 +80,17 @@ public class User
     public DateTime? RefreshTokenExpiry { get; set; }
 
     // -------------------------------------------------------------------------
+    // Recuperação de senha
+    // -------------------------------------------------------------------------
+
+    /// <summary>Token de uso único para redefinição de senha (2h de validade).</summary>
+    [Column("password_reset_token")]
+    public string? PasswordResetToken { get; set; }
+
+    [Column("password_reset_token_expiry")]
+    public DateTime? PasswordResetTokenExpiry { get; set; }
+
+    // -------------------------------------------------------------------------
     // Sistema de Pontos
     // -------------------------------------------------------------------------
 

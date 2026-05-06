@@ -27,17 +27,20 @@ public class AuthService : IAuthService
     private readonly JwtSettings           _jwt;
     private readonly ILogger<AuthService>  _logger;
     private readonly IComandaService       _comandaService;
+    private readonly IEmailService         _email;
 
     public AuthService(
         AppDbContext db,
         IOptions<JwtSettings> jwt,
         ILogger<AuthService> logger,
-        IComandaService comandaService)
+        IComandaService comandaService,
+        IEmailService email)
     {
         _db             = db;
         _jwt            = jwt.Value;
         _logger         = logger;
         _comandaService = comandaService;
+        _email          = email;
     }
 
     // =========================================================================
@@ -178,5 +181,53 @@ public class AuthService : IAuthService
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomBytes);
         return Convert.ToBase64String(randomBytes);
+    }
+
+    // =========================================================================
+    // RECUPERAÇÃO DE SENHA
+    // =========================================================================
+
+    public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
+    {
+        // Sempre retorna sem erro — não revelar se email existe (evita user enumeration)
+        var user = await _db.Users
+            .FirstOrDefaultAsync(u => u.Email == request.Email.ToLowerInvariant() && u.IsActive);
+
+        if (user == null) return;
+
+        // Gera token seguro e salva com expiração de 2h
+        var tokenBytes = new byte[32];
+        using var rng  = RandomNumberGenerator.Create();
+        rng.GetBytes(tokenBytes);
+        var token = Convert.ToBase64String(tokenBytes);
+
+        user.PasswordResetToken       = token;
+        user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(2);
+        user.UpdatedAt                = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _email.SendPasswordResetAsync(user.Email!, user.Name, token);
+        _logger.LogInformation("Solicitação de reset de senha para {Email}", request.Email);
+    }
+
+    public async Task ResetPasswordAsync(ResetPasswordRequest request)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u =>
+            u.PasswordResetToken == request.Token &&
+            u.PasswordResetTokenExpiry > DateTime.UtcNow &&
+            u.IsActive);
+
+        if (user == null)
+            throw new UnauthorizedAccessException("Token inválido ou expirado.");
+
+        user.PasswordHash             = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.PasswordResetToken       = null;
+        user.PasswordResetTokenExpiry = null;
+        user.RefreshToken             = null; // invalida sessões ativas
+        user.RefreshTokenExpiry       = null;
+        user.UpdatedAt                = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        _logger.LogInformation("Senha redefinida para usuário {UserId}", user.Id);
     }
 }

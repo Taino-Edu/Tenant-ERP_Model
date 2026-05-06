@@ -6,7 +6,7 @@ import { clearAuth, getUserName } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
-  LogOut, Sword, ChevronRight, User, ShoppingBag, Users, Loader2
+  LogOut, Sword, ChevronRight, User, ShoppingBag, Users, Megaphone, Loader2
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/admin/venda-avulsa', label: 'Venda Avulsa', icon: ShoppingBag },
   { href: '/admin/usuarios',     label: 'Clientes',     icon: Users },
   { href: '/admin/estoque',      label: 'Estoque',      icon: Package },
+  { href: '/admin/anuncios',     label: 'Anúncios',     icon: Megaphone },
   { href: '/admin/cartas',       label: 'Cartas TCG',   icon: Search },
   { href: '/admin/campeonatos',  label: 'Campeonatos',  icon: Trophy },
   { href: '/admin/qrcodes',      label: 'QR Codes',     icon: QrCode },
