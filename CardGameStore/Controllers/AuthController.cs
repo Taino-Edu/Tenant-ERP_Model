@@ -11,6 +11,7 @@ using CardGameStore.DTOs;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CardGameStore.Controllers;
 
@@ -40,6 +41,7 @@ public class AuthController : ControllerBase
     /// <response code="401">Credenciais inválidas.</response>
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(AuthResponse), 200)]
     [ProducesResponseType(401)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
@@ -79,6 +81,7 @@ public class AuthController : ControllerBase
     /// <response code="400">Dados inválidos.</response>
     [HttpPost("quick-login")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(AuthResponse), 200)]
     [ProducesResponseType(400)]
     public async Task<IActionResult> QuickLogin([FromBody] QuickLoginRequest request)
@@ -124,6 +127,7 @@ public class AuthController : ControllerBase
     /// <response code="401">Refresh token inválido ou expirado.</response>
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(AuthResponse), 200)]
     [ProducesResponseType(401)]
     public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)

@@ -1,918 +1,380 @@
-# 📚 softNerd — Documentação Completa e Didática
+# softNerd — Documentação Técnica
 
-> **Para quem é este documento?**  
-> Para você que criou o projeto mas não lembra exatamente como ele funciona. Aqui você vai entender **o que é**, **como funciona**, **como rodar** e **como testar** cada parte do sistema.
-
----
-
-> ⚠️ **Atualização importante (04/05/2026):** Após análise detalhada do código, foram identificadas **lacunas críticas** de implementação. Veja a Seção 0 antes de qualquer coisa.
+> Referência técnica para desenvolvedores. Atualizada em 06/05/2026.
 
 ---
 
-## 🗺️ Índice
+## 1. Visão geral
 
-0. [Estado real do sistema — O que está feito e o que está faltando](#0-estado-real-do-sistema)
-1. [O que é esse projeto?](#1-o-que-é-esse-projeto)
-2. [Visão geral da arquitetura](#2-visão-geral-da-arquitetura)
-3. [Tecnologias utilizadas](#3-tecnologias-utilizadas)
-4. [Como rodar o projeto](#4-como-rodar-o-projeto)
-5. [Estrutura de pastas](#5-estrutura-de-pastas)
-6. [O Backend em detalhes](#6-o-backend-em-detalhes)
-7. [O Frontend em detalhes](#7-o-frontend-em-detalhes)
-8. [O banco de dados](#8-o-banco-de-dados)
-9. [Como a autenticação funciona](#9-como-a-autenticação-funciona)
-10. [Comunicação em tempo real (SignalR)](#10-comunicação-em-tempo-real-signalr)
-11. [Fluxos principais do sistema](#11-fluxos-principais-do-sistema)
-12. [Guia de testes manuais](#12-guia-de-testes-manuais)
-13. [Pontos onde o sistema pode quebrar](#13-pontos-onde-o-sistema-pode-quebrar)
-14. [Oportunidades de melhoria](#14-oportunidades-de-melhoria)
-15. [Glossário](#15-glossário)
+O **softNerd** é um sistema de gestão para loja de card games com mesas de jogos. Atende três fluxos de negócio principais:
+
+1. **Venda Avulsa** — Admin vende produtos no balcão sem exigir login do cliente. Desconto opcional, pagamento em múltiplos métodos, estoque decrementado no PostgreSQL e evento registrado no MongoDB.
+2. **Comanda de Mesa** — Cliente escaneia QR Code da mesa, faz login rápido (CPF + WhatsApp), adiciona itens ao pedido. Admin acompanha em tempo real via SignalR e fecha/cancela quando quiser.
+3. **Campeonatos TCG** — Admin cria torneios, jogadores se inscrevem, o sistema gerencia vagas, decks e colocação final.
 
 ---
 
----
+## 2. Arquitetura
 
-## 0. Estado real do sistema
+### Stack
 
-> Esta seção é a mais importante. Mostra exatamente o que foi implementado, o que está pela metade e o que não existe ainda.
-
-### As 3 partes do sistema (conforme definido)
-
-O sistema foi projetado com 3 módulos distintos:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PARTE 1 — Venda Avulsa                                                     │
-│  Venda direta de produtos SEM login do cliente.                             │
-│  Ex: cliente chega no balcão, pede uma carta, admin registra e cobra.       │
-│  Status: ❌ NÃO IMPLEMENTADO — não existe nenhum código para isso           │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PARTE 2 — Mesas (QR Code + Comanda)                                        │
-│  Cliente escaneia QR da mesa → faz login rápido (CPF+WhatsApp) →            │
-│  adiciona itens → Maikon fecha a conta.                                     │
-│  Status: 🟡 INCOMPLETO — falta o AuthController (veja abaixo)              │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PARTE 3 — Campeonatos TCG                                                  │
-│  Jogadores compram ingresso antecipado → sentam nas mesas →                 │
-│  jogam e consomem → cada um tem sua comanda → Maikon fecha.                 │
-│  Status: 🟡 INCOMPLETO — mesma dependência do AuthController               │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### 🚨 O problema mais crítico: AuthController está faltando
-
-Ao analisar o código, foi encontrado que **não existe o arquivo `AuthController.cs`**. Isso é um bloqueio grave porque sem ele, os endpoints de login não existem na API.
-
-**O que existe (está implementado):**
-
-| Arquivo | Status | O que faz |
-|---|---|---|
-| `AuthService.cs` | ✅ Completo | Toda a lógica de login, tokens, quick-login |
-| `AuthDtos.cs` | ✅ Completo | Formatos de entrada/saída (LoginRequest, QuickLoginRequest...) |
-| `IAuthService.cs` | ✅ Completo | Contrato da interface |
-| `Program.cs` | ✅ Registrado | `AddScoped<IAuthService, AuthService>()` está configurado |
-
-**O que está faltando:**
-
-| Arquivo | Status | Impacto |
-|---|---|---|
-| `AuthController.cs` | ❌ AUSENTE | Sem ele, NENHUM login funciona — 404 em tudo |
-
-**O arquivo que precisa ser criado** expõe as rotas:
-```
-POST /api/auth/login         → Login do admin (email + senha)
-POST /api/auth/quick-login   → Login do cliente (CPF + WhatsApp + mesa)
-POST /api/auth/refresh       → Renovar token expirado
-POST /api/auth/logout        → Fazer logout
-```
-
----
-
-### 🔍 Segundo problema: QuickLogin não cria a Comanda
-
-Olhando o `AuthService.cs`, o `QuickLoginAsync()` cria/recupera o usuário mas **não abre a comanda automaticamente**. O `AuthResponse` retorna: `accessToken`, `refreshToken`, `expiresAt`, `role`, `userName`, `userId` — mas **não retorna `comandaId`**.
-
-O fluxo previsto no guia de testes menciona um `comandaId` na resposta do quick-login, mas o código ainda não faz isso. A abertura da comanda precisaria acontecer dentro do `QuickLoginAsync` ou logo após.
-
----
-
-### 📊 Resumo de implementação (honesto)
-
-| Módulo | Implementado |
+| Camada | Tecnologia |
 |---|---|
-| Modelos do banco (Users, Products, Comandas...) | ✅ 100% |
-| Configuração do banco (AppDbContext) | ✅ 100% |
-| AuthService (lógica de autenticação) | ✅ 90% |
-| ProductController (CRUD de estoque) | ✅ 100% |
-| ComandaController (gestão de pedidos) | ✅ 95% |
-| ChampionshipController (campeonatos) | ✅ 90% |
-| TcgController (busca de cartas) | ✅ 80% |
-| **AuthController (endpoints de login)** | **❌ 0% — arquivo não existe** |
-| Frontend — Dashboard admin | ✅ 95% |
-| Frontend — Página da mesa (QR Code) | ✅ 85% |
-| Frontend — Estoque admin | ✅ 90% |
-| Frontend — Campeonatos admin | ✅ 85% |
-| **Venda Avulsa (sem login)** | **❌ 0% — não existe em nenhuma camada** |
-| Integração Quick-Login → abre Comanda | 🟡 50% — falta criar a comanda automaticamente |
+| Backend | ASP.NET Core 8, C# |
+| ORM | Entity Framework Core 8 (PostgreSQL) |
+| Banco relacional | PostgreSQL 16 |
+| Banco de documentos | MongoDB 7 |
+| Autenticação | JWT (HS256) + BCrypt |
+| Tempo real | SignalR (WebSocket) |
+| Frontend | Next.js 14, TypeScript, Tailwind CSS |
+| Infraestrutura | Docker + Docker Compose |
 
----
-
-## 1. O que é esse projeto?
-
-O **softNerd** é um sistema completo para gerenciar uma **loja de card games** (como Pokémon, Magic: The Gathering, Yu-Gi-Oh). Pensa assim:
-
-> Imagine uma lojinha que também tem mesas para jogar. O cliente chega, senta numa mesa, escaneia um QR Code, faz o pedido pelo celular (bebidas, salgadinhos, acessórios) e o dono vê tudo em tempo real no painel. Quando o cliente vai embora, o dono fecha a conta. O sistema ainda gerencia campeonatos e o estoque da loja.
-
-### O que o sistema faz:
-
-- **Gestão de comandas** — O cliente escaneia o QR Code da mesa, faz login rápido (CPF + WhatsApp) e adiciona itens no seu pedido. O admin vê em tempo real.
-- **Estoque (produtos)** — O admin cadastra produtos (bebidas, salgadinhos, cartas, acessórios) com preço e quantidade.
-- **Campeonatos** — O admin cria torneios, os jogadores se inscrevem. Pokémon, Magic, Yu-Gi-Oh...
-- **Busca de cartas TCG** — Integração com a API externa TCGPlayer para buscar cartas e preços.
-- **Dashboard ao vivo** — O admin vê todas as mesas abertas em tempo real, sem precisar recarregar a página.
-
----
-
-## 2. Visão geral da arquitetura
+### Diagrama ASCII
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        USUÁRIO FINAL                            │
-│                                                                 │
-│  🧑 Admin (dono da loja)          🛒 Cliente (jogador)         │
-│  Acessa: localhost:3000/admin     Acessa: localhost:3000/mesa/3 │
-└──────────────────┬──────────────────────────┬───────────────────┘
-                   │                          │
-                   ▼                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   FRONTEND — Next.js (porta 3000)               │
-│                                                                 │
-│  • Páginas React com TypeScript                                 │
-│  • Consome a API via Axios (HTTP)                               │
-│  • Recebe atualizações em tempo real via SignalR (WebSocket)    │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │ HTTP + WebSocket
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                   BACKEND — ASP.NET Core 8 (porta 5000)         │
-│                                                                 │
-│  • API REST → responde às requisições do frontend               │
-│  • Hub SignalR → empurra atualizações em tempo real             │
-│  • Autenticação JWT → valida tokens                             │
-│  • Lógica de negócio → regras da loja                           │
-└────────┬──────────────────────────────────┬─────────────────────┘
-         │                                  │
-         ▼                                  ▼
-┌─────────────────────┐       ┌─────────────────────────────────┐
-│  PostgreSQL (5432)  │       │       MongoDB (27017)           │
-│                     │       │                                 │
-│  Dados principais:  │       │  Cache de cartas TCG:           │
-│  • Usuários         │       │  • Cartas buscadas na API       │
-│  • Produtos         │       │  • Evita repetir chamadas       │
-│  • Comandas         │       │    externas desnecessárias      │
-│  • Campeonatos      │       └─────────────────────────────────┘
-└─────────────────────┘
+  Admin (Maikon)              Cliente (Jogador)
+        │                           │
+        ▼                           ▼
+  localhost:3000/admin     localhost:3000/mesa/3
+        │                           │
+        └─────────┬─────────────────┘
+                  │ HTTP + WebSocket
+                  ▼
+        ASP.NET Core 8 — porta 5000
+         ┌──────────────────────────┐
+         │  Controllers (REST API)  │
+         │  SignalR Hub (ComandaHub)│
+         │  JWT Middleware          │
+         └──────┬──────────┬────────┘
+                │          │
+         ┌──────▼──┐  ┌────▼──────────┐
+         │Postgres │  │   MongoDB      │
+         │  5432   │  │    27017       │
+         │         │  │                │
+         │ users   │  │ vendas_avulsas │
+         │ products│  │ card_cache     │
+         │ comandas│  └────────────────┘
+         │ champs. │
+         └─────────┘
 ```
 
-> 💡 **Analogia:** Pensa no backend como um garçom que anota os pedidos, o frontend como o cardápio digital na mão do cliente, o PostgreSQL como o caderninho de pedidos e o MongoDB como um bloco de rascunho para informações temporárias.
+**PostgreSQL** é a fonte da verdade para estoque. **MongoDB** armazena eventos de venda avulsa (imutáveis, estilo caixa) e cache de cartas TCG.
 
 ---
 
-## 3. Tecnologias utilizadas
+## 3. Como rodar
 
-### Backend (C# / .NET)
+### Pré-requisito
 
-| Tecnologia | O que faz no projeto |
-|---|---|
-| **ASP.NET Core 8** | Framework principal da API. Processa requisições HTTP. |
-| **Entity Framework Core** | Traduz código C# para queries SQL. Você escreve em C#, ele faz o SQL. |
-| **PostgreSQL** | Banco de dados relacional. Armazena tudo de forma permanente. |
-| **MongoDB** | Banco de dados de documentos. Guarda cache de cartas TCG. |
-| **SignalR** | Permite comunicação em tempo real via WebSocket (push de dados). |
-| **JWT (JSON Web Token)** | Sistema de autenticação sem estado. O token é uma "pulseira de acesso". |
-| **BCrypt** | Criptografia de senhas. A senha nunca é salva em texto puro. |
-| **Swagger** | Documentação automática da API. Acesse em `localhost:5000`. |
+Docker Desktop instalado e em execução.
 
-### Frontend (TypeScript / React)
-
-| Tecnologia | O que faz no projeto |
-|---|---|
-| **Next.js 14** | Framework React com roteamento de páginas automático. |
-| **TypeScript** | JavaScript com tipos. Evita bugs antes de executar. |
-| **Tailwind CSS** | Classes CSS para estilização rápida. |
-| **Axios** | Biblioteca para fazer chamadas HTTP à API. |
-| **@microsoft/signalr** | Conecta o frontend ao hub em tempo real. |
-| **react-hot-toast** | Notificações de sucesso/erro na tela. |
-| **qrcode** | Gera os QR Codes das mesas. |
-| **Lucide React** | Biblioteca de ícones. |
-
-### Infraestrutura
-
-| Tecnologia | O que faz |
-|---|---|
-| **Docker** | Empacota cada serviço (API, frontend, bancos) em containers isolados. |
-| **Docker Compose** | Orquestra todos os containers juntos com um único comando. |
-
----
-
-## 4. Como rodar o projeto
-
-### Pré-requisitos
-
-- **Docker Desktop** instalado e rodando (obrigatório!)
-- Windows 10/11
-
-### Opção 1 — Script automático (recomendado)
-
-Abra o PowerShell na pasta `softNerd` e rode:
+### Subir tudo
 
 ```powershell
+# Na raiz do repositório (pasta softNerd)
 .\start.ps1
 ```
 
-Esse script vai:
-1. Verificar se o Docker está rodando
-2. Construir as imagens do Docker
-3. Subir PostgreSQL, MongoDB, a API e o frontend
-4. Aplicar as migrações do banco automaticamente
-5. Criar o usuário admin (Maikon) automaticamente
+O script faz o build, sobe PostgreSQL + MongoDB + API + frontend, executa `EnsureCreatedAsync` e cria o usuário admin via seed.
 
-> ⏱️ **Primeira vez:** pode demorar 3-5 minutos (precisa baixar as imagens)  
-> ⏱️ **Vezes seguintes:** ~30 segundos
+- Primeira execução: ~3-5 min (download das imagens)
+- Execuções seguintes: ~30 s
 
-### Opção 2 — Batch file
+### URLs
 
-Clique duas vezes no arquivo `INICIAR-TUDO.bat`.
-
-### Verificando se está tudo rodando
-
-Depois de subir, acesse:
-
-| Endereço | O que é |
+| Serviço | URL |
 |---|---|
-| `http://localhost:3000` | Frontend (tela principal) |
-| `http://localhost:5000` | API + Swagger (documentação interativa) |
-| `http://localhost:5432` | PostgreSQL (use pgAdmin ou DBeaver) |
-| `http://localhost:27017` | MongoDB |
-| `http://localhost:5050` | pgAdmin (visualizar banco) |
+| Frontend | http://localhost:3000 |
+| API + Swagger | http://localhost:5000 |
+| PostgreSQL | localhost:5432 |
+| MongoDB | localhost:27017 |
+| pgAdmin (opcional) | http://localhost:5050 |
 
-### Credenciais padrão
+### Credenciais padrão (desenvolvimento)
 
-**Admin da API:**
-- Email: `admin@cardgamestore.com.br`
-- Senha: `SenhaForte@123`
+| Recurso | Usuário | Senha |
+|---|---|---|
+| Admin da API | admin@cardgamestore.com.br | SenhaForte@123 |
+| PostgreSQL | cardgame_user | CardGame@2025 |
+| pgAdmin | admin@cardgame.com | admin |
 
-**PostgreSQL:**
-- Usuário: `cardgame_user`
-- Senha: `CardGame@2025`
-- Banco: `cardgamestore`
-
-**pgAdmin:**
-- Email: `admin@cardgame.com`
-- Senha: `admin`
-
-### Para parar tudo
+### Parar
 
 ```powershell
-docker-compose down
-```
-
-Para parar E apagar os dados dos bancos:
-```powershell
-docker-compose down -v
+docker-compose down          # mantém os dados
+docker-compose down -v       # apaga volumes (reseta banco)
 ```
 
 ---
 
-## 5. Estrutura de pastas
+## 4. Estrutura do projeto
 
 ```
 softNerd/
+├── CardGameStore/                   # API Backend (ASP.NET Core 8)
+│   ├── Controllers/                 # Endpoints REST
+│   ├── Services/
+│   │   ├── Interfaces/              # Contratos (IAuthService, IComandaService…)
+│   │   └── Implementations/         # Lógica de negócio real
+│   ├── Models/
+│   │   ├── PostgreSQL/              # Entidades EF Core (User, Product, Comanda…)
+│   │   └── MongoDB/                 # Documentos (VendaAvulsa, CardCache)
+│   ├── DTOs/                        # Objetos de entrada/saída da API
+│   ├── Data/AppDbContext.cs         # DbContext + seed do admin
+│   ├── Hubs/ComandaHub.cs           # Hub SignalR para tempo real
+│   └── Program.cs                   # Bootstrap: DI, JWT, CORS, EF, MongoDB
 │
-├── CardGameStore/              ← API Backend (C#)
-│   ├── Controllers/            ← Endpoints da API (onde chegam as requisições)
-│   ├── Services/               ← Lógica de negócio
-│   │   ├── Interfaces/         ← "Contratos" dos serviços
-│   │   └── Implementations/    ← Código real dos serviços
-│   ├── Models/                 ← Estrutura dos dados
-│   │   ├── PostgreSQL/         ← Entidades do banco relacional
-│   │   └── MongoDB/            ← Modelos do cache
-│   ├── DTOs/                   ← Objetos de transferência (o que entra/sai da API)
-│   ├── Data/
-│   │   └── AppDbContext.cs     ← Configuração do banco de dados
-│   ├── Hubs/
-│   │   └── ComandaHub.cs       ← Hub do SignalR (tempo real)
-│   └── Program.cs              ← Configuração central (ponto de entrada)
+├── frontend/                        # Next.js 14 (App Router)
+│   ├── app/
+│   │   ├── admin/                   # Área administrativa
+│   │   │   ├── dashboard/           # Comandas ao vivo + histórico do dia
+│   │   │   ├── venda-avulsa/        # Caixa do balcão (sem login do cliente)
+│   │   │   ├── estoque/             # CRUD de produtos
+│   │   │   ├── campeonatos/         # Gestão de torneios
+│   │   │   ├── cartas/              # Busca TCG
+│   │   │   ├── usuarios/            # Gestão de clientes e pontos
+│   │   │   └── qrcodes/             # Geração de QR Codes de mesa
+│   │   ├── login/                   # Login do admin
+│   │   └── mesa/[mesa]/             # Página do cliente (QR Code)
+│   ├── lib/api.ts                   # Axios + interceptors JWT
+│   └── components/                  # Componentes reutilizáveis
 │
-├── frontend/                   ← Frontend Next.js (TypeScript)
-│   ├── app/                    ← Páginas (App Router do Next.js)
-│   │   ├── admin/              ← Área administrativa
-│   │   │   ├── dashboard/      ← Dashboard em tempo real
-│   │   │   ├── estoque/        ← Gestão de produtos
-│   │   │   ├── cartas/         ← Busca de cartas TCG
-│   │   │   ├── campeonatos/    ← Gestão de torneios
-│   │   │   └── qrcodes/        ← Geração de QR Codes
-│   │   ├── login/              ← Tela de login (admin)
-│   │   ├── cliente/            ← Visão do cliente
-│   │   └── mesa/[mesa]/        ← Página da mesa (ex: /mesa/3)
-│   ├── lib/
-│   │   ├── api.ts              ← Funções para chamar a API
-│   │   └── auth.ts             ← Funções de autenticação
-│   └── components/             ← Componentes reutilizáveis
+├── tests/unit/CardGameStore.Tests/  # Testes xUnit
+│   └── Services/                    # Um arquivo por serviço
 │
-├── docker-compose.yml          ← Orquestra todos os serviços
-├── start.ps1                   ← Script de inicialização
-└── INICIAR-TUDO.bat            ← Alternativa Windows
-```
-
-> 💡 **Dica de navegação:** Quando quiser entender uma funcionalidade, siga a cadeia:  
-> `Controller` → chama → `Service` → acessa → `DbContext` → salva no → `Banco`
-
----
-
-## 6. O Backend em detalhes
-
-### Como o .NET organiza o código
-
-O backend segue um padrão chamado **Clean Architecture** (Arquitetura Limpa). A ideia é separar responsabilidades:
-
-```
-Requisição HTTP
-      ↓
-  Controller        ← Recebe e valida os dados da requisição
-      ↓
-   Service          ← Aplica as regras de negócio
-      ↓
-  DbContext         ← Acessa o banco de dados
-      ↓
-   Banco            ← Salva/lê os dados
-```
-
-### O Program.cs — O coração da configuração
-
-O arquivo `Program.cs` é onde **tudo é configurado** antes da aplicação iniciar. Pensa nele como a "planta baixa" da API. Ele configura:
-
-1. **Qual banco usar** — SQLite (desenvolvimento local) ou PostgreSQL (Docker/produção)
-2. **MongoDB** — Opcionalmente, para cache de cartas
-3. **Autenticação JWT** — Regras de validação dos tokens
-4. **Autorização RBAC** — Políticas de acesso (Admin vs Cliente)
-5. **SignalR** — Hub de tempo real
-6. **CORS** — Quais origens podem chamar a API
-7. **Swagger** — Documentação automática
-
-### Os Controllers (endpoints)
-
-Cada controller é responsável por uma área do sistema:
-
-#### `ComandaController` — Pedidos/contas
-```
-GET    /api/comanda/dashboard    → Lista todas as comandas abertas (Admin)
-GET    /api/comanda/my           → Minha comanda ativa (Cliente)
-POST   /api/comanda/{id}/items   → Adicionar item à comanda
-DELETE /api/comanda/{id}/items/{itemId} → Remover item
-PUT    /api/comanda/{id}/close   → Fechar/pagar a conta (Admin)
-PUT    /api/comanda/{id}/cancel  → Cancelar sem cobrança (Admin)
-```
-
-#### `ProductController` — Estoque
-```
-GET    /api/product              → Listar produtos ativos
-GET    /api/product/{id}         → Buscar produto por ID
-GET    /api/product/low-stock    → Alertas de estoque baixo (Admin)
-POST   /api/product              → Criar produto (Admin)
-PUT    /api/product/{id}         → Atualizar produto (Admin)
-DELETE /api/product/{id}         → Desativar produto (Admin)
-PATCH  /api/product/{id}/stock   → Ajustar estoque (Admin)
-```
-
-#### `ChampionshipController` — Campeonatos
-```
-GET    /api/championship         → Listar campeonatos
-GET    /api/championship/{id}    → Detalhes de um campeonato
-POST   /api/championship         → Criar campeonato (Admin)
-POST   /api/championship/{id}/register → Inscrever-se (Cliente)
-PUT    /api/championship/{id}    → Atualizar campeonato (Admin)
-DELETE /api/championship/{id}    → Deletar campeonato (Admin)
-```
-
-#### `TcgController` — Cartas TCG
-```
-GET    /api/tcg/search           → Buscar cartas na API externa
-GET    /api/tcg/card/{id}        → Detalhes de carta (cache MongoDB)
-GET    /api/tcg/prices/{cardId}  → Preços atuais da carta
-```
-
-### Os Services (lógica de negócio)
-
-Os serviços contêm **as regras do negócio**. Exemplos do que eles fazem:
-
-- `AuthService` — Valida login, gera tokens JWT, lida com refresh token
-- `ComandaService` — Verifica se a comanda existe, se está aberta, atualiza o total, notifica via SignalR
-- `ProductService` — Valida se tem estoque antes de adicionar à comanda
-- `ChampionshipService` — Verifica prazo de inscrição, número máximo de participantes
-
-### Injeção de Dependência
-
-Você vai notar que os serviços são "injetados" via construtor:
-
-```csharp
-// No Controller
-public ComandaController(IComandaService comandaService, IHubContext<ComandaHub> hub)
-{
-    _comandaService = comandaService;
-    _hub = hub;
-}
-```
-
-Isso é **Dependency Injection (DI)** — em vez de criar objetos manualmente, você declara o que precisa e o framework entrega. É mais fácil de testar e manter.
-
----
-
-## 7. O Frontend em detalhes
-
-### Como o Next.js organiza as páginas
-
-O Next.js usa **App Router** — cada pasta dentro de `app/` vira uma rota. Exemplos:
-
-| Pasta | URL |
-|---|---|
-| `app/page.tsx` | `localhost:3000/` |
-| `app/login/page.tsx` | `localhost:3000/login` |
-| `app/admin/dashboard/page.tsx` | `localhost:3000/admin/dashboard` |
-| `app/mesa/[mesa]/page.tsx` | `localhost:3000/mesa/3` (dinâmico!) |
-
-O `[mesa]` entre colchetes é um parâmetro dinâmico — o número da mesa vem da URL.
-
-### O arquivo `lib/api.ts` — Como o frontend fala com a API
-
-Todas as chamadas HTTP são centralizadas aqui. Usa o Axios como cliente HTTP:
-
-```typescript
-// Exemplo simplificado de como funciona
-const api = axios.create({ baseURL: 'http://localhost:5000' })
-
-// Interceptor: adiciona o token automaticamente em toda requisição
-api.interceptors.request.use(config => {
-  const token = getToken() // pega do cookie
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-```
-
-### O Dashboard em tempo real
-
-O arquivo `app/admin/dashboard/page.tsx` é o mais complexo. Ele:
-
-1. **Carrega as comandas** via HTTP ao abrir a página
-2. **Conecta ao SignalR** para receber atualizações em tempo real
-3. **Escuta eventos** `ComandaUpdated` e `ComandaClosed`
-4. Quando recebe um evento, **atualiza a tela** sem recarregar a página
-5. Mostra **métricas** (total de mesas, faturamento aberto)
-
-```
-Admin abre o dashboard
-        ↓
-Busca comandas via GET /api/comanda/dashboard
-        ↓
-Conecta ao WebSocket /hubs/comanda
-        ↓
-[Aguarda eventos em tempo real]
-        ↓
-Cliente adiciona item na mesa 3
-        ↓
-API dispara evento "ComandaUpdated" via SignalR
-        ↓
-Dashboard recebe → atualiza a tela → mostra toast
-```
-
-### O fluxo do cliente (página da mesa)
-
-```
-Cliente chega na mesa 3
-        ↓
-Escaneia QR Code → abre localhost:3000/mesa/3
-        ↓
-Informa nome, CPF e WhatsApp
-        ↓
-POST /api/auth/quick-login → API cria conta + comanda + retorna token
-        ↓
-Cliente vê o cardápio de produtos
-        ↓
-Adiciona itens → POST /api/comanda/{id}/items
-        ↓
-Admin vê em tempo real no dashboard
+├── docker-compose.yml               # Orquestra todos os containers
+└── start.ps1                        # Script de inicialização
 ```
 
 ---
 
-## 8. O banco de dados
+## 5. Backend — Endpoints
 
-### Estrutura das tabelas (PostgreSQL)
+### AuthController — `/api/auth`
 
-```
-┌──────────────┐     ┌──────────────────┐     ┌──────────────────────────┐
-│    users     │     │     comandas      │     │      comanda_items        │
-├──────────────┤     ├──────────────────┤     ├──────────────────────────┤
-│ id (PK)      │◄────│ user_id (FK)     │◄────│ comanda_id (FK)          │
-│ name         │     │ id (PK)          │     │ id (PK)                  │
-│ email        │     │ table_identifier │     │ product_id (FK, opcional)│
-│ password_hash│     │ status           │     │ item_name                │
-│ cpf          │     │ total_in_cents   │     │ unit_price_in_cents      │
-│ whatsapp     │     │ opened_at        │     │ quantity                 │
-│ role         │     │ closed_at        │     └──────────────────────────┘
-│ is_active    │     │ championship_id  │
-└──────────────┘     └──────────────────┘
-                                │
-                                │
-┌──────────────┐     ┌──────────────────────────┐
-│  products    │     │      championships        │
-├──────────────┤     ├──────────────────────────┤
-│ id (PK)      │     │ id (PK)                  │
-│ name         │     │ name                     │
-│ category     │     │ game                     │
-│ price_in_cents│    │ start_date               │
-│ stock_qty    │     │ max_participants          │
-│ is_active    │     │ entry_fee_in_cents        │
-└──────────────┘     │ status                   │
-                     └──────────────────────────┘
-```
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| POST | `/api/auth/login` | Anônimo | Login admin (email + senha). Retorna JWT (60 min) + refresh token (30 dias). |
+| POST | `/api/auth/quick-login` | Anônimo | Login cliente via QR Code (CPF + WhatsApp + mesa). Cria usuário se não existir. Abre comanda automaticamente. Retorna JWT + `comandaId`. |
+| POST | `/api/auth/refresh` | Anônimo | Renova o access token usando o refresh token. |
+| POST | `/api/auth/logout` | JWT | Invalida o refresh token do usuário autenticado. |
 
-### Por que preços são em centavos?
+### VendaAvulsaController — `/api/venda-avulsa`
 
-Você vai notar `price_in_cents`, `total_in_cents`, etc. Isso é uma **prática recomendada** para evitar problemas com ponto flutuante. `R$ 9,99` é armazenado como `999`. Evita bugs clássicos como `0.1 + 0.2 = 0.30000000000000004`.
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| POST | `/api/venda-avulsa` | Admin | Registra venda no balcão. Decrementa estoque (PostgreSQL) e persiste evento (MongoDB). Desconto aplicado no backend. |
+| GET | `/api/venda-avulsa/recent` | Admin | Retorna as últimas N vendas avulsas (padrão 50, máximo 200). |
 
-### Status da Comanda
+### ProductController — `/api/product`
 
-```
-Aberta → EmAndamento → Fechada
-  ↓
-Cancelada
-```
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/product` | Anônimo | Lista todos os produtos ativos. Aceita `?category=` para filtrar. |
+| GET | `/api/product/{id}` | Anônimo | Busca produto por ID. |
+| GET | `/api/product/low-stock` | Admin | Lista produtos com estoque abaixo do mínimo. |
+| POST | `/api/product` | Admin | Cria novo produto. |
+| PUT | `/api/product/{id}` | Admin | Atualiza produto. |
+| DELETE | `/api/product/{id}` | Admin | Desativa produto (soft delete). |
+| PATCH | `/api/product/{id}/stock` | Admin | Ajusta estoque. `delta` positivo = entrada, negativo = saída. |
 
-- **Aberta** — Cliente fez login, comanda criada, ainda sem itens
-- **EmAndamento** — Cliente adicionou pelo menos um item
-- **Fechada** — Admin fechou e cobrou
-- **Cancelada** — Admin cancelou sem cobrar
+### ComandaController — `/api/comanda`
 
-### O seed do banco (dados iniciais)
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/comanda/dashboard` | Admin | Lista todas as comandas abertas/em andamento. |
+| GET | `/api/comanda/history` | Admin | Comandas fechadas/canceladas do dia. |
+| GET | `/api/comanda/my` | JWT | Comanda ativa do usuário autenticado. |
+| GET | `/api/comanda/{id}` | JWT | Detalhes de uma comanda específica. |
+| POST | `/api/comanda/{id}/items` | JWT | Adiciona item. Preço resolvido pelo servidor — campo `unitPriceInCents` do cliente é ignorado para produtos cadastrados. |
+| DELETE | `/api/comanda/{id}/items/{itemId}` | JWT | Remove item e restaura estoque. |
+| POST | `/api/comanda/{id}/apply-points` | JWT | Aplica pontos do cliente como desconto (uma vez por comanda). |
+| PUT | `/api/comanda/{id}/close` | Admin | Fecha a comanda (cobra). |
+| PUT | `/api/comanda/{id}/cancel` | Admin | Cancela sem cobrar. Restaura estoque de todos os itens. |
 
-No `AppDbContext.cs`, existe uma configuração de **seed** que cria o usuário admin "Maikon" automaticamente quando o banco é criado pela primeira vez:
+### ChampionshipController — `/api/championship`
 
-```csharp
-Email: "admin@cardgamestore.com.br"
-Senha: "SenhaForte@123" (armazenada com BCrypt)
-```
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/championship` | Anônimo | Lista campeonatos com status Planejado ou Inscricoes. |
+| GET | `/api/championship/{id}` | Anônimo | Detalhes de um campeonato. |
+| GET | `/api/championship/{id}/participants` | JWT | Lista participantes inscritos. |
+| POST | `/api/championship` | Admin | Cria campeonato. |
+| POST | `/api/championship/{id}/register` | JWT | Inscreve o usuário autenticado. `DeckName` opcional. |
+| PUT | `/api/championship/{id}/status` | Admin | Muda status (Planejado → Inscricoes → EmAndamento → Finalizado/Cancelado). |
+| PUT | `/api/championship/{id}/participants/{pid}/placement` | Admin | Define colocação final do participante. |
 
----
+### UserController — `/api/user`
 
-## 9. Como a autenticação funciona
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/user` | Admin | Lista clientes. Aceita `?search=` para buscar por nome/CPF/WhatsApp. |
+| GET | `/api/user/me` | JWT | Perfil completo do usuário autenticado (pontos, dados pessoais). |
+| GET | `/api/user/{id}` | Admin | Detalhes de um cliente. |
+| POST | `/api/user/{id}/points` | Admin | Adiciona pontos ao saldo do cliente. |
 
-### Login do Admin
+### TcgController — `/api/tcg`
 
-```
-1. Admin envia: { email, senha }
-      ↓
-2. API verifica se o email existe no banco
-      ↓
-3. API verifica se o hash BCrypt da senha bate
-      ↓
-4. API gera dois tokens:
-   - Access Token (JWT) — válido por 60 minutos
-   - Refresh Token — válido por 30 dias
-      ↓
-5. Frontend salva os tokens (cookies)
-      ↓
-6. Toda requisição seguinte envia: Authorization: Bearer {token}
-```
-
-### Login rápido do Cliente
-
-```
-1. Cliente envia: { nome, cpf, whatsapp, mesa }
-      ↓
-2. API verifica se CPF já existe:
-   - Sim → usa a conta existente
-   - Não → cria nova conta de Cliente
-      ↓
-3. API cria uma nova Comanda para essa mesa
-      ↓
-4. API gera um Access Token para o cliente
-      ↓
-5. Cliente usa o token para adicionar itens na comanda
-```
-
-### O que é um JWT?
-
-JWT (JSON Web Token) é um token que parece isso:
-```
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6Ik1haWtvbiIsInJvbGUiOiJBZG1pbiIsImV4cCI6MTcwMDAwMDAwMH0.SIGNATURE
-```
-
-Ele tem 3 partes separadas por `.`:
-1. **Header** — Algoritmo usado (HS256)
-2. **Payload** — Dados do usuário (id, nome, role, expiração) — **não é criptografado, só codificado em Base64**
-3. **Signature** — Assinatura que garante que o token não foi adulterado
-
-> ⚠️ **Importante:** O payload do JWT pode ser lido por qualquer um! Nunca coloque dados sensíveis como senha nele.
+| Método | Rota | Auth | Descrição |
+|---|---|---|---|
+| GET | `/api/tcg/search` | JWT | Pesquisa cartas por nome. Cache-first: consulta MongoDB antes da API externa. Parâmetros: `name`, `game`, `page`, `pageSize`. |
+| GET | `/api/tcg/cards/{tcgCardId}` | JWT | Busca carta por ID prefixado (`pokemon:` ou `mtg:`). |
+| GET | `/api/tcg/sets` | JWT | Lista sets disponíveis para um jogo. Parâmetro: `game`. |
+| POST | `/api/tcg/cards/{tcgCardId}/refresh` | Admin | Força atualização do cache de uma carta. |
+| DELETE | `/api/tcg/cards/{tcgCardId}/cache` | Admin | Remove uma carta do cache MongoDB. |
+| POST | `/api/tcg/purge-cache` | Admin | Remove todos os documentos expirados do cache. |
 
 ---
 
-## 10. Comunicação em tempo real (SignalR)
+## 6. Regras de negócio importantes
 
-### O que é SignalR?
+**Venda Avulsa**
+- É um evento de caixa, não gera usuário no sistema. O campo `ClientName` é opcional e livre.
+- Desconto calculado no backend a partir do `DiscountPercent` (0–100). O campo `TotalInReais` enviado pelo cliente é ignorado.
+- A validação de todos os itens ocorre antes de qualquer escrita (fail-fast): se um produto não existe, está inativo ou com estoque insuficiente, nenhum estoque é decrementado.
+- Estoque decrementado no PostgreSQL (`SaveChangesAsync`) antes da inserção no MongoDB. Se o MongoDB falhar após o SaveChanges, o estoque já foi decrementado mas o evento não fica registrado — o PostgreSQL é a fonte da verdade.
 
-SignalR é uma biblioteca que permite comunicação **bidirecional** entre servidor e cliente usando WebSocket. Em vez do cliente ficar perguntando "tem novidade?" a cada segundo (polling), o servidor **avisa** o cliente quando há algo novo.
+**Comanda**
+- Ciclo de vida: `Aberta` → `EmAndamento` → `Fechada` | `Cancelada`.
+- Ao cancelar, o estoque de todos os itens com `ProductId` é restaurado automaticamente.
+- Preço de itens: quando `ProductId` está presente, o serviço busca o preço atual do banco e ignora qualquer valor enviado pelo cliente (evita manipulação de preço).
+- Pontos só podem ser aplicados uma vez por comanda e antes de fechar. Pontos com `PointsExpiresAt` no passado são recusados.
+- `PointsExpiresAt` é armazenado em UTC.
 
-### Como funciona no projeto
+**Campeonatos**
+- Inscrição só é aceita quando status = `Inscricoes`.
+- Se `MaxParticipants` está definido, inscrições são recusadas quando a lista está cheia.
+- O número do jogador (`PlayerNumber`) é gerado pelo serviço.
 
-```
-ComandaHub.cs (servidor)          Dashboard (cliente)
-       │                                 │
-       │  1. Cliente conecta             │
-       │◄────────────────────────────────┤
-       │                                 │
-       │  2. API adiciona item           │
-       │     → chama _hub.Clients.All    │
-       │        .SendAsync("ComandaUpdated", dados)
-       │                                 │
-       │  3. Servidor envia evento       │
-       ├────────────────────────────────►│
-       │                                 │
-       │  4. Frontend atualiza a tela    │
-       │     sem recarregar a página     │
-```
-
-### Autenticação no SignalR
-
-Como WebSocket não suporta headers HTTP da mesma forma, o token JWT é enviado via **query string**:
-
-```
-ws://localhost:5000/hubs/comanda?access_token=eyJhbGc...
-```
-
-A API extrai esse token no `OnMessageReceived`:
-```csharp
-var accessToken = context.Request.Query["access_token"];
-if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
-    context.Token = accessToken;
-```
+**TCG — Cache de Cartas**
+- Estratégia Cache-Aside (Lazy Loading): lê MongoDB primeiro; se miss ou expirado (TTL de 7 dias), busca na API externa e salva no MongoDB.
+- IDs de cartas são prefixados: `pokemon:` para PokemonTCG.io, `mtg:` para Scryfall.
+- Pokemon → PokemonTCG.io API (`api.pokemontcg.io/v2`). MTG → Scryfall (`api.scryfall.com`). Outros jogos retornam lista vazia sem erro.
+- Um TTL index no MongoDB também expira documentos automaticamente (além do `PurgeExpiredCacheAsync` manual).
 
 ---
 
-## 11. Fluxos principais do sistema
+## 7. Testes
 
-### Fluxo completo de uma venda
+Testes unitários com xUnit + Moq + FluentAssertions. EF Core InMemory para PostgreSQL; MongoDB mockado com Moq.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 1. Admin cadastra produtos no estoque                       │
-│    POST /api/product { nome, preço, quantidade }            │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 2. Admin gera QR Codes das mesas                            │
-│    Acessa: localhost:3000/admin/qrcodes                     │
-│    Cada QR aponta para: localhost:3000/mesa/{numero}        │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 3. Cliente escaneia o QR da Mesa 3                          │
-│    Abre: localhost:3000/mesa/3                              │
-│    Informa nome, CPF, WhatsApp                              │
-│    → API cria conta + comanda + retorna token               │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 4. Cliente adiciona itens                                   │
-│    POST /api/comanda/{id}/items { produtoId, quantidade }   │
-│    → API atualiza total da comanda                          │
-│    → API dispara evento SignalR "ComandaUpdated"            │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 5. Dashboard do Admin recebe o evento em tempo real         │
-│    → Card da comanda pisca / notificação toast aparece      │
-│    → Admin vê: Mesa 3 - R$ 25,00 - 3 itens                 │
-└─────────────────────────────────────────────────────────────┘
-                           ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 6. Admin fecha a comanda                                    │
-│    PUT /api/comanda/{id}/close                              │
-│    → Status muda para "Fechada"                             │
-│    → Dashboard remove o card da mesa                        │
-└─────────────────────────────────────────────────────────────┘
-```
+| Arquivo | Testes | Cobertura |
+|---|---|---|
+| `AuthServiceTests.cs` | 7 | Login admin, quick-login (novo/existente), refresh token, logout |
+| `ChampionshipServiceTests.cs` | 10 | Criação, inscrição, limite de vagas, colocação final |
+| `ComandaServiceTests.cs` | 13 | Abrir, adicionar item (preço servidor), remover, fechar, cancelar, pontos |
+| `ProductServiceTests.cs` | 11 | CRUD, estoque baixo, ajuste de delta |
+| `UserServiceTests.cs` | 11 | Listagem, busca, adição de pontos, expiração |
+| `VendaAvulsaServiceTests.cs` | 10 | Registro com desconto, múltiplos produtos, fail-fast, GetRecent |
+| **Total** | **62** | |
 
----
-
-## 12. Guia de testes manuais
-
-### Pré-requisito: projeto rodando
+**Comando para rodar:**
 
 ```powershell
-.\start.ps1
-# Aguardar tudo subir (~30s após a primeira vez)
+cd tests/unit/CardGameStore.Tests
+dotnet test
 ```
-
-### Teste 1 — Login como Admin
-
-1. Acesse `http://localhost:5000` (Swagger)
-2. Clique em `POST /api/auth/login`
-3. Clique em "Try it out"
-4. Preencha:
-```json
-{
-  "email": "admin@cardgamestore.com.br",
-  "password": "SenhaForte@123"
-}
-```
-5. ✅ Esperado: Status 200, retorna `accessToken` e `refreshToken`
-6. ❌ Se falhar: banco pode não ter sido criado com o seed
-
-### Teste 2 — Autenticar no Swagger
-
-1. Copie o `accessToken` do Teste 1
-2. Clique no botão "Authorize 🔓" no topo do Swagger
-3. Cole: `Bearer {seu_token_aqui}`
-4. Clique "Authorize"
-5. ✅ Agora as rotas protegidas estão liberadas
-
-### Teste 3 — Criar um produto
-
-1. No Swagger: `POST /api/product`
-2. Preencha:
-```json
-{
-  "name": "Refrigerante Lata",
-  "description": "Coca-Cola 350ml",
-  "category": "Bebida",
-  "priceInCents": 500,
-  "stockQuantity": 50,
-  "minimumStock": 10
-}
-```
-3. ✅ Esperado: Status 201, produto criado com ID
-
-### Teste 4 — Simular cliente na mesa
-
-1. No Swagger: `POST /api/auth/quick-login`
-2. Preencha:
-```json
-{
-  "name": "João Gamer",
-  "cpf": "12345678901",
-  "whatsApp": "11999999999",
-  "tableIdentifier": "Mesa-3"
-}
-```
-3. ✅ Esperado: Status 200, retorna token + `comandaId`
-4. Guarde o `comandaId` para o próximo teste
-
-### Teste 5 — Adicionar item à comanda
-
-1. Use o token do cliente (Teste 4) ou troque o Authorize pelo token do cliente
-2. No Swagger: `POST /api/comanda/{id}/items`
-3. Substitua `{id}` pelo `comandaId` do Teste 4
-4. Preencha:
-```json
-{
-  "productId": "{id-do-produto-criado-no-teste-3}",
-  "quantity": 2
-}
-```
-5. ✅ Esperado: Status 200, item adicionado
-
-### Teste 6 — Ver o dashboard em tempo real
-
-1. Abra `http://localhost:3000/login`
-2. Faça login como admin
-3. Navegue até `http://localhost:3000/admin/dashboard`
-4. ✅ Esperado: Ver a comanda da "Mesa-3" com o item adicionado
-5. Faça outro Teste 5 e observe o card atualizar automaticamente
-
-### Teste 7 — Fechar a comanda
-
-1. No dashboard, clique em "Fechar" na comanda da Mesa-3
-2. ✅ Esperado: Card desaparece do dashboard
-3. No Swagger, use `GET /api/comanda/dashboard` → comanda não aparece mais
-
-### Teste 8 — Verificar estoque baixo
-
-1. Crie um produto com `stockQuantity: 3` e `minimumStock: 5`
-2. `GET /api/product/low-stock`
-3. ✅ Esperado: O produto aparece na lista de alerta
 
 ---
 
-## 13. Pontos onde o sistema pode quebrar
+## 8. Variáveis de ambiente
 
-> Esta seção é um mapa honesto das fragilidades identificadas no código. Não é crítica — é orientação para você melhorar o sistema!
+Configuradas no `docker-compose.yml` para o serviço `api`:
 
-### 🔴 Crítico — Pode causar perda de dados ou falhas graves
-
-**1. Sem validação de CPF**  
-O campo CPF aceita qualquer string de 11 caracteres. Um usuário pode se cadastrar com `00000000000` ou `12345678901` (CPF inválido). Isso pode causar colisões ou registros inválidos.
-
-**2. Secret Key JWT hardcoded nos comentários**  
-O arquivo `docker-compose.yml` contém a chave secreta JWT em texto plano: `CardGameStore_SecretKey_2025_MinLength32Chars!`. Se esse arquivo for para um repositório público, qualquer pessoa pode forjar tokens de admin.
-
-**3. Sem controle de estoque na adição à comanda**  
-Ao adicionar um produto à comanda, o sistema não desconta o estoque em tempo real. Dois clientes podem adicionar o último refrigerante ao mesmo tempo e ambos terão na comanda, mas o estoque vai ficar negativo.
-
-**4. Nenhum mecanismo de retry no SignalR**  
-Se a conexão SignalR cair, o dashboard para de receber atualizações. O código tem `onreconnected` mas não há tentativas automáticas configuradas com backoff exponencial.
-
-### 🟡 Moderado — Pode causar comportamento inesperado
-
-**5. CORS muito permissivo para produção**  
-O CORS permite `localhost:3000`, `localhost:5173` e `localhost:5000`. Em produção real, esses domínios localhost não fazem sentido — qualquer chamada de um domínio externo seria bloqueada mas o localhost ficaria aberto.
-
-**6. SQLite em desenvolvimento sem migrations**  
-O desenvolvimento usa `EnsureCreated()` em vez de migrations. Isso significa que se você mudar o schema do banco, em vez de migrar, o SQLite pode ficar desatualizado sem aviso claro.
-
-**7. MongoDB sem tratamento de erro nos serviços**  
-O try/catch para MongoDB está apenas no `Program.cs`. Se o MongoDB conectar mas falhar durante uma query, a exceção não tem tratamento nos serviços.
-
-**8. Refresh Token sem revogação**  
-Uma vez emitido, o refresh token de 30 dias não pode ser revogado (não há tabela de tokens revogados). Se um token for comprometido, ele fica válido por 30 dias.
-
-### 🟢 Baixo — Inconveniências ou melhorias de UX
-
-**9. Sem paginação nos endpoints de listagem**  
-`GET /api/product` retorna todos os produtos de uma vez. Com 10.000 produtos, isso vai ser lento.
-
-**10. O dashboard re-busca TUDO a cada evento SignalR**  
-Quando uma comanda é atualizada, o dashboard faz `fetchComandas()` que busca TODAS as comandas novamente. Com 50 mesas abertas e atualizações frequentes, isso cria muitas requisições desnecessárias.
-
-**11. Sem loading state no login do cliente**  
-A página da mesa não mostra feedback visual enquanto a requisição de login está em andamento.
-
-**12. Preços em centavos sem validação mínima**  
-Um produto pode ser criado com `priceInCents: 0` ou negativo sem erro.
+| Variável | Descrição | Valor padrão (dev) |
+|---|---|---|
+| `ConnectionStrings__PostgreSQL` | Connection string do PostgreSQL | `Host=postgres;Database=cardgamestore;Username=cardgame_user;Password=CardGame@2025` |
+| `ConnectionStrings__MongoDB` | Connection string do MongoDB | `mongodb://mongo:27017` |
+| `JwtSettings__SecretKey` | Chave de assinatura JWT (min. 32 chars) | `CardGameStore_SecretKey_2025_MinLength32Chars!` |
+| `JwtSettings__Issuer` | Issuer do JWT | `http://localhost:5000` |
+| `JwtSettings__Audience` | Audience do JWT | `http://localhost:3000` |
+| `JwtSettings__AccessTokenExpirationMinutes` | Validade do access token | `60` |
+| `JwtSettings__RefreshTokenExpirationDays` | Validade do refresh token | `30` |
+| `TcgSettings__PokemonApiKey` | Chave da PokemonTCG.io (opcional, aumenta rate limit) | _(vazio)_ |
+| `NEXT_PUBLIC_API_URL` | URL da API para o frontend | `http://localhost:5000` |
+| `ASPNETCORE_ENVIRONMENT` | Ambiente da aplicação | `Production` (em Docker) |
 
 ---
 
-## 14. Oportunidades de melhoria
+## 9. Frontend — Páginas do Admin
 
-### Segurança
+Todas as páginas ficam em `frontend/app/admin/`. A autenticação é verificada pelo layout (`admin/layout.tsx`); rotas sem token válido redirecionam para `/login`.
 
-- Implementar validação de CPF (algoritmo oficial dos dígitos verificadores)
-- Mover secrets para variáveis de ambiente reais (`.env` fora do git)
-- Adicionar rate limiting nos endpoints de login
-- Implementar revogação de refresh tokens
-- Adicionar validação de WhatsApp (formato brasileiro)
+| Página | Rota | Funcionalidades principais |
+|---|---|---|
+| Dashboard | `/admin/dashboard` | Comandas ativas em tempo real (SignalR), busca por cliente, adicionar item inline, badge de tempo colorido (verde/amarelo/vermelho), histórico do dia (tab), total consolidado |
+| Venda Avulsa | `/admin/venda-avulsa` | Catálogo com chips de categoria + busca, carrinho, desconto rápido (0/5/10/15/20%), calculador de troco (modo Dinheiro), histórico do dia (tab) |
+| Estoque | `/admin/estoque` | CRUD de produtos, ajuste de delta de estoque, alerta de estoque baixo |
+| Campeonatos | `/admin/campeonatos` | Criar torneio, inscrever jogadores, mudar status, definir colocação |
+| Cartas TCG | `/admin/cartas` | Busca por nome com filtro de jogo (Pokémon/MTG), visualização de preços de mercado |
+| Usuários | `/admin/usuarios` | Lista de clientes, busca, saldo de pontos, adicionar pontos manualmente |
+| QR Codes | `/admin/qrcodes` | Gerar QR Codes de mesa para impressão |
 
-### Performance
-
-- Adicionar paginação nos endpoints de listagem (`?page=1&limit=20`)
-- No evento SignalR, enviar apenas a comanda modificada em vez de buscar todas
-- Adicionar cache em memória para o cardápio (produtos raramente mudam)
-
-### Funcionalidades
-
-- Controle real de estoque ao adicionar à comanda (reserva temporária)
-- Histórico de comandas fechadas com filtros por data
-- Relatório de vendas diárias/mensais
-- Sistema de notificação (WhatsApp/email) quando a comanda é fechada
-- Múltiplos admins com níveis de acesso diferentes (garçom vs gerente)
-- Sistema de fila de pedidos para a cozinha/bar
-
-### Qualidade de código
-
-- Adicionar testes unitários nos Services
-- Adicionar testes de integração nos Controllers
-- Configurar CI/CD (GitHub Actions) para rodar os testes automaticamente
-- Adicionar logging estruturado (Serilog) para facilitar debug em produção
+**Comunicação com a API:**
+- `frontend/lib/api.ts` centraliza todas as chamadas. Axios com interceptor que injeta o JWT em todas as requisições e renova o token automaticamente ao receber 401.
+- `frontend/lib/signalr.ts` gerencia a conexão WebSocket com o hub `/hubs/comanda`.
 
 ---
 
-## 15. Glossário
+## 10. Requisitos Não Funcionais (RNF)
 
-| Termo | Definição no contexto do projeto |
-|---|---|
-| **Comanda** | Conta aberta de um cliente numa mesa. Equivale a um "pedido". |
-| **Mesa** | Identificador da mesa física (ex: "Mesa-3"). Vem do QR Code. |
-| **Admin** | Dono/gerente da loja. Acessa o painel de gestão. |
-| **Cliente** | Jogador que está na mesa e faz pedidos. |
-| **JWT** | Token de acesso que prova quem você é para a API. |
-| **SignalR** | Tecnologia de comunicação em tempo real (WebSocket). |
-| **Seed** | Dados iniciais inseridos no banco quando criado pela primeira vez. |
-| **Migration** | Script que altera a estrutura do banco sem perder os dados. |
-| **DTO** | Objeto que define o formato dos dados trafegados pela API. |
-| **RBAC** | Controle de acesso baseado em papel (Admin vs Cliente). |
-| **BCrypt** | Algoritmo de hash para senhas (irreversível e seguro). |
-| **CORS** | Política que define quais origens podem chamar a API. |
-| **Docker Compose** | Ferramenta que sobe todos os serviços do projeto de uma vez. |
-| **Container** | Ambiente isolado onde cada serviço roda sem interferir nos outros. |
-| **TCG** | Trading Card Game — jogos de cartas colecionáveis. |
+### 10.1 Segurança
+
+| # | Requisito | Implementação |
+|---|---|---|
+| RNF-S1 | Autenticação baseada em token | JWT HS256, access token 60 min + refresh token 30 dias |
+| RNF-S2 | Proteção de senhas | BCrypt com work factor padrão (≥12 rounds) |
+| RNF-S3 | Rate limiting em endpoints sensíveis | FixedWindow: 5 req/min por IP em `/api/auth/{login,quick-login,refresh}`; 200 req/min por IP nos demais |
+| RNF-S4 | Headers HTTP de segurança | X-Content-Type-Options, X-Frame-Options: DENY, X-XSS-Protection, Referrer-Policy, Permissions-Policy |
+| RNF-S5 | HTTPS | Gerenciado pelo reverse proxy (Nginx/Cloudflare) — sem redirect interno |
+| RNF-S6 | CORS restrito | Apenas origens explicitamente listadas; em produção substituir pelos domínios reais |
+| RNF-S7 | Separação de papéis | RBAC via políticas JWT: `AdminOnly` e `CustomerOrAdmin` |
+| RNF-S8 | Prevenção de cliques duplos | Frontend: botão de logout com `disabled` durante chamada; páginas com estado `submitting` |
+
+### 10.2 Desempenho e Disponibilidade
+
+| # | Requisito | Implementação |
+|---|---|---|
+| RNF-P1 | Timeout de requisição | 30 s padrão; 60 s para endpoints de busca TCG (`"long"`) |
+| RNF-P2 | Resiliência do banco relacional | EF Core com retry automático em falhas transitórias (`EnableRetryOnFailure: 5`) |
+| RNF-P3 | Graceful degradation do MongoDB | Se MongoDB estiver indisponível, as funcionalidades de VendaAvulsa e cache TCG ficam fora; o restante do sistema opera normalmente |
+| RNF-P4 | Tempo real com fallback | SignalR usa WebSocket com fallback automático para Long Polling |
+| RNF-P5 | Timeout de seleção de servidor MongoDB | 3 segundos — evita que a API trave aguardando um Mongo off-line |
+
+### 10.3 Manutenibilidade
+
+| # | Requisito | Implementação |
+|---|---|---|
+| RNF-M1 | Separação de responsabilidades | Controller → Service → Repository (EF Core). Regras de negócio nunca nos controllers. |
+| RNF-M2 | Tipagem estática no frontend | TypeScript estrito; DTOs espelham os contratos da API |
+| RNF-M3 | Testes unitários | xUnit + Moq; cobertura dos serviços principais (Auth, Comanda, VendaAvulsa, Product, User, Championship) |
+| RNF-M4 | Configuração por ambiente | `appsettings.json` + variáveis de ambiente / Docker secrets; sem segredos em código |
+
+### 10.4 Portabilidade
+
+| # | Requisito | Implementação |
+|---|---|---|
+| RNF-O1 | Multi-banco relacional | SQLite em dev local, PostgreSQL em produção/Docker (seleção automática por connection string) |
+| RNF-O2 | Containerização | `docker-compose.yml` com serviços api, frontend, postgres e mongo |
 
 ---
 
-*Documentação gerada em 04/05/2026 — Projeto softNerd*  
-*Versão da API: CardGameStore v1 (.NET 8) | Frontend: Next.js 14*
+## 11. Pontos de atenção
+
+- **Dupla escrita sem transação distribuída**: o decremento de estoque (PostgreSQL) e a gravação do evento (MongoDB) não estão em uma transação atômica. Se o MongoDB falhar após o `SaveChangesAsync`, o estoque fica decrementado mas sem registro de venda. Em produção, monitore os logs e considere reconciliação periódica.
+
+- **EnsureCreatedAsync, não migrations**: mudanças de schema requerem intervenção manual (recriar o banco ou escrever SQL de alter). Migrar para `dotnet ef migrations` antes de qualquer alteração de schema em produção.
+
+- **Rate limits das APIs TCG externas**: PokemonTCG.io limita requisições anônimas (~1000/dia). Configure `TcgSettings__PokemonApiKey` para aumentar o limite. Scryfall pede um delay de 100ms entre requisições; o cliente atual não implementa este throttle.
+
+- **Sem validação de CPF**: o campo aceita qualquer string de 11 caracteres. CPFs inválidos podem ser cadastrados.
+
+- **Refresh token sem revogação por lista negra**: um refresh token comprometido fica válido por 30 dias. A única forma de revogar é o próprio logout (que zera o campo no banco).
+
+- **CORS permissivo**: em produção, atualizar `Program.cs` para aceitar apenas o domínio real em vez dos localhosts.
+
+- **Secret JWT exposta no docker-compose**: o valor padrão deve ser substituído antes de qualquer deploy público. Veja o CHECKLIST-PRODUCAO.md.
+
+- **Histórico de comandas limitado ao dia corrente**: `GET /api/comanda/history` filtra por `ClosedAt.Date == DateTime.UtcNow.Date`. Para acesso a dias anteriores seria necessário um novo endpoint com parâmetro de data.
+
+- **Desconto de venda avulsa apenas em percentual fixo**: os botões da UI oferecem 0/5/10/15/20%. Não há campo de desconto em valor absoluto nem percentual personalizado.

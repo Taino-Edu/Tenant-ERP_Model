@@ -4,12 +4,14 @@
 // =============================================================================
 
 using System.Text;
+using System.Threading.RateLimiting;
 using CardGameStore.Configuration;
 using CardGameStore.Data;
 using CardGameStore.Hubs;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -18,7 +20,7 @@ using MongoDB.Driver;
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------
-// 1. CONFIGURAÇÕES — Lê seções do appsettings.json para objetos fortemente tipados
+// 1. CONFIGURAÇÕES
 // ---------------------------------------------------------------------------
 var jwtSettings   = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
 var mongoSettings = builder.Configuration.GetSection("MongoDbSettings").Get<MongoDbSettings>()!;
@@ -28,8 +30,6 @@ builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("Mo
 
 // ---------------------------------------------------------------------------
 // 2. BANCO RELACIONAL — SQLite (dev local) ou PostgreSQL (produção/Docker)
-// Usa PostgreSQL sempre que a connection string estiver configurada,
-// independente do ambiente. Isso garante que o Docker sempre use PostgreSQL.
 // ---------------------------------------------------------------------------
 var pgConnStr = builder.Configuration.GetConnectionString("PostgreSQL");
 var useSqlite = string.IsNullOrWhiteSpace(pgConnStr);
@@ -38,7 +38,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 {
     if (useSqlite)
     {
-        // SQLite — sem necessidade de servidor instalado para dev local
         var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "cardgamestore.db");
         options.UseSqlite($"Data Source={dbPath}");
     }
@@ -52,7 +51,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 
 // ---------------------------------------------------------------------------
-// 3. BANCO DE DOCUMENTOS — MongoDB (cache de cartas TCG) — opcional em dev
+// 3. BANCO DE DOCUMENTOS — MongoDB — opcional em dev
 // ---------------------------------------------------------------------------
 var mongoConStr = mongoSettings?.ConnectionString ?? "mongodb://localhost:27017";
 try
@@ -72,7 +71,7 @@ try
 }
 catch
 {
-    // MongoDB não disponível — TCG card cache não vai funcionar, mas o resto sim
+    // MongoDB indisponível — TCG cache e VendaAvulsa ficam fora, o resto funciona
 }
 
 // ---------------------------------------------------------------------------
@@ -97,10 +96,10 @@ builder.Services
             IssuerSigningKey         = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(jwtSettings.SecretKey)
             ),
-            ClockSkew                = TimeSpan.Zero
+            ClockSkew = TimeSpan.Zero
         };
 
-        // Permite que o SignalR envie o token via query string (?access_token=...)
+        // SignalR envia token via query string (?access_token=...)
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -119,42 +118,100 @@ builder.Services
 // ---------------------------------------------------------------------------
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AdminOnly",        policy => policy.RequireRole("Admin"));
-    options.AddPolicy("CustomerOrAdmin",  policy => policy.RequireRole("Admin", "Customer"));
+    options.AddPolicy("AdminOnly",       policy => policy.RequireRole("Admin"));
+    options.AddPolicy("CustomerOrAdmin", policy => policy.RequireRole("Admin", "Customer"));
 });
 
 // ---------------------------------------------------------------------------
-// 6. SIGNALR — Comunicação em tempo real (comandas → dashboard)
+// 6. RATE LIMITING — Proteção contra força bruta e abuso de API
+//
+// "auth"  → endpoints de login/refresh: 5 tentativas/minuto por IP.
+//           Bloqueia ataques de força bruta sem afetar uso normal.
+// "api"   → demais endpoints: 200 req/minuto por IP.
+//           Evita scraping e abusos de bots.
+// ---------------------------------------------------------------------------
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("auth", opt =>
+    {
+        opt.PermitLimit              = 5;
+        opt.Window                   = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder     = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit               = 0; // sem fila — rejeita imediatamente
+    });
+
+    options.AddFixedWindowLimiter("api", opt =>
+    {
+        opt.PermitLimit          = 200;
+        opt.Window               = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit           = 10;
+    });
+
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.Headers["Retry-After"] = "60";
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { Message = "Muitas requisições. Aguarde 1 minuto antes de tentar novamente." },
+            cancellationToken: token);
+    };
+});
+
+// ---------------------------------------------------------------------------
+// 7. TIMEOUT DE REQUISIÇÃO — Evita que requests lentos prendam threads
+// ---------------------------------------------------------------------------
+builder.Services.AddRequestTimeouts(options =>
+{
+    options.DefaultPolicy = new Microsoft.AspNetCore.Http.Timeouts.RequestTimeoutPolicy
+    {
+        Timeout = TimeSpan.FromSeconds(30)
+    };
+    // Endpoints com processamento mais longo (busca TCG, exportações)
+    options.AddPolicy("long", TimeSpan.FromSeconds(60));
+});
+
+// ---------------------------------------------------------------------------
+// 8. SIGNALR — Comunicação em tempo real (comandas → dashboard)
 // ---------------------------------------------------------------------------
 builder.Services.AddSignalR(options =>
 {
-    options.EnableDetailedErrors           = builder.Environment.IsDevelopment();
-    options.MaximumReceiveMessageSize      = 32 * 1024;
+    options.EnableDetailedErrors      = builder.Environment.IsDevelopment();
+    options.MaximumReceiveMessageSize = 32 * 1024;
 });
 
 // ---------------------------------------------------------------------------
-// 7. HTTP CLIENT — Para chamadas à API TCG externa
+// 9. HTTP CLIENTS — APIs TCG externas
 // ---------------------------------------------------------------------------
-builder.Services.AddHttpClient("TcgApi", client =>
+builder.Services.AddHttpClient("PokemonTcgApi", client =>
 {
-    client.BaseAddress = new Uri("https://api.tcgplayer.com/");
+    client.BaseAddress = new Uri("https://api.pokemontcg.io/");
     client.Timeout     = TimeSpan.FromSeconds(10);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+builder.Services.AddHttpClient("ScryfallApi", client =>
+{
+    client.BaseAddress = new Uri("https://api.scryfall.com/");
+    client.Timeout     = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
+});
+
 // ---------------------------------------------------------------------------
-// 8. SERVIÇOS DE APLICAÇÃO — Injeção dos serviços de domínio
+// 10. SERVIÇOS DE APLICAÇÃO
 // ---------------------------------------------------------------------------
 builder.Services.AddScoped<IAuthService,         AuthService>();
 builder.Services.AddScoped<IComandaService,      ComandaService>();
 builder.Services.AddScoped<IProductService,      ProductService>();
 builder.Services.AddScoped<IChampionshipService, ChampionshipService>();
 builder.Services.AddScoped<IUserService,         UserService>();
+builder.Services.AddScoped<IVendaAvulsaService,  VendaAvulsaService>();
 builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
 builder.Services.AddSingleton<ITcgService,       TcgService>();
 
 // ---------------------------------------------------------------------------
-// 9. CORS
+// 11. CORS
 // ---------------------------------------------------------------------------
 builder.Services.AddCors(options =>
 {
@@ -173,7 +230,7 @@ builder.Services.AddCors(options =>
 });
 
 // ---------------------------------------------------------------------------
-// 10. SWAGGER
+// 12. SWAGGER
 // ---------------------------------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -182,7 +239,7 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title       = "CardGameStore API",
         Version     = "v1",
-        Description = "API para gestão da loja de Card Games — Fase 1: Painel do Maikon"
+        Description = "API para gestão da loja de Card Games — softNerd"
     });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -210,12 +267,12 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddControllers();
 
 // ---------------------------------------------------------------------------
-// 11. BUILD
+// 13. BUILD
 // ---------------------------------------------------------------------------
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------
-// 12. BANCO DE DADOS — EnsureCreated em dev (SQLite), Migrations em produção
+// 14. BANCO DE DADOS — EnsureCreated em dev, Migrations em produção
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
@@ -226,19 +283,14 @@ using (var scope = app.Services.CreateScope())
     {
         if (useSqlite)
         {
-            logger.LogInformation("Usando banco SQLite (sem PostgreSQL configurado)...");
+            logger.LogInformation("Usando banco SQLite...");
             await db.Database.EnsureCreatedAsync();
             logger.LogInformation("Banco SQLite pronto: cardgamestore.db");
         }
         else
         {
-            // EnsureCreated cria o schema completo a partir dos modelos EF.
-            // Usado no primeiro deploy (sem arquivos de migration gerados).
-            // IMPORTANTE: EnsureCreated é idempotente — não recria se já existir.
-            // Para deploys futuros com alterações de schema, gere migrations:
-            //   dotnet ef migrations add NomeDaMigration
-            //   dotnet ef database update
-            // e substitua EnsureCreated por MigrateAsync.
+            // EnsureCreated é idempotente — não recria se já existir.
+            // Para mudanças de schema em produção: dotnet ef migrations add + MigrateAsync.
             logger.LogInformation("Inicializando banco PostgreSQL...");
             await db.Database.EnsureCreatedAsync();
             logger.LogInformation("Banco PostgreSQL pronto.");
@@ -246,36 +298,46 @@ using (var scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "Erro ao inicializar o banco. Detalhes: {Msg}", ex.Message);
-        // Lança em qualquer ambiente — banco inacessível = sistema não pode funcionar
+        logger.LogError(ex, "Erro ao inicializar o banco: {Msg}", ex.Message);
         throw;
     }
 }
 
 // ---------------------------------------------------------------------------
-// 13. MIDDLEWARE PIPELINE
+// 15. MIDDLEWARE PIPELINE
 // ---------------------------------------------------------------------------
+
+// Headers de segurança HTTP em todas as respostas
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"]        = "DENY";
+    context.Response.Headers["X-XSS-Protection"]      = "1; mode=block";
+    context.Response.Headers["Referrer-Policy"]        = "no-referrer";
+    context.Response.Headers["Permissions-Policy"]     = "camera=(), microphone=(), geolocation=()";
+    await next();
+});
+
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
-    c.RoutePrefix = string.Empty; // Swagger na raiz "/"
-    c.DocumentTitle = "CardGameStore — Painel do Maikon";
+    c.RoutePrefix  = string.Empty;
+    c.DocumentTitle = "CardGameStore — softNerd";
 });
 
-// HTTPS redirect: desabilitado por padrão no Docker (o SSL deve ser gerenciado por
-// um reverse proxy externo como Nginx ou Cloudflare Tunnel, não pela aplicação).
-// Para habilitar HTTPS direto na aplicação, configure um certificado e descomente:
-// app.UseHttpsRedirection();
+// SSL gerenciado pelo reverse proxy (Nginx/Cloudflare) — não redirecionar aqui
 app.UseCors("FrontendPolicy");
+app.UseRateLimiter();
+app.UseRequestTimeouts();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<ComandaHub>("/hubs/comanda");
 
-// Endpoint de health check simples
 app.MapGet("/health", () => new { Status = "OK", Timestamp = DateTime.UtcNow })
-   .AllowAnonymous();
+   .AllowAnonymous()
+   .DisableRateLimiting();
 
 app.Run();

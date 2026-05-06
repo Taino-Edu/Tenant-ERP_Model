@@ -1,11 +1,12 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { clearAuth, getUserName } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
-  LogOut, Sword, ChevronRight, User, ShoppingBag, Users
+  LogOut, Sword, ChevronRight, User, ShoppingBag, Users, Loader2
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -20,10 +21,13 @@ const navItems = [
 ]
 
 export default function Sidebar() {
-  const pathname = usePathname()
-  const router   = useRouter()
+  const pathname      = usePathname()
+  const router        = useRouter()
+  const [loggingOut, setLoggingOut] = useState(false)
 
   async function handleLogout() {
+    if (loggingOut) return
+    setLoggingOut(true)
     try { await authApi.logout() } catch {}
     clearAuth()
     router.push('/login')
@@ -82,8 +86,14 @@ export default function Sidebar() {
             <span className="badge-admin text-[10px]">Admin</span>
           </div>
         </div>
-        <button onClick={handleLogout} className="btn-secondary w-full justify-center text-sm py-2">
-          <LogOut className="w-4 h-4" /> Sair
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="btn-secondary w-full justify-center text-sm py-2"
+        >
+          {loggingOut
+            ? <><Loader2 className="w-4 h-4 animate-spin" /> Saindo...</>
+            : <><LogOut className="w-4 h-4" /> Sair</>}
         </button>
       </div>
     </aside>

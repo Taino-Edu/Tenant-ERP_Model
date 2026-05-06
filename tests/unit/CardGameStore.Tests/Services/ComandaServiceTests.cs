@@ -1,6 +1,6 @@
 // =============================================================================
 // ComandaServiceTests.cs — Testes unitários do ComandaService
-// Foco: lógica de estoque e pontos (partes críticas corrigidas)
+// Chama o serviço real com InMemory database (sem mocks de lógica)
 // Executar: dotnet test  (na pasta tests/unit/CardGameStore.Tests)
 // =============================================================================
 
@@ -10,7 +10,7 @@ using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CardGameStore.Tests.Services;
 
@@ -18,25 +18,26 @@ public class ComandaServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static AppDbContext CreateInMemoryDb(string dbName)
+    private static AppDbContext CreateDb(string name)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName: dbName)
+            .UseInMemoryDatabase(name)
             .Options;
         return new AppDbContext(options);
     }
 
-    private static (User user, Product product, Comanda comanda) SeedBasicData(AppDbContext db)
+    private static ComandaService CreateService(AppDbContext db) =>
+        new(db, NullLogger<ComandaService>.Instance);
+
+    private static async Task<(User user, Product product, Comanda comanda)> SeedAsync(AppDbContext db)
     {
         var user = new User
         {
-            Id            = Guid.NewGuid(),
-            Name          = "Cliente Teste",
-            PasswordHash  = "hash",
-            Role          = "Client",
-            PointsBalance = 0,
+            Id           = Guid.NewGuid(),
+            Name         = "Cliente Teste",
+            PasswordHash = "hash",
+            Role         = UserRole.Customer,
         };
-
         var product = new Product
         {
             Id            = Guid.NewGuid(),
@@ -47,189 +48,265 @@ public class ComandaServiceTests
             MinimumStock  = 2,
             IsActive      = true,
         };
-
         var comanda = new Comanda
         {
             Id     = Guid.NewGuid(),
             UserId = user.Id,
             User   = user,
-            Status = "Aberta",
+            Status = ComandaStatus.Aberta,
         };
-
         db.Users.Add(user);
         db.Products.Add(product);
         db.Comandas.Add(comanda);
-        db.SaveChanges();
-
+        await db.SaveChangesAsync();
         return (user, product, comanda);
     }
 
-    // ── Testes de Estoque ─────────────────────────────────────────────────────
+    // ── Abrir comanda ─────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task AddItem_DeveDecrementarEstoque()
+    public async Task OpenComanda_PrimeiraVez_DeveCriarNovaComanda()
     {
-        // Arrange
-        var db = CreateInMemoryDb(nameof(AddItem_DeveDecrementarEstoque));
-        var (user, product, comanda) = SeedBasicData(db);
-        var estoqueInicial = product.StockQuantity;
-
-        var hubMock = new Mock<IHubContext_Placeholder>(); // substitua pelo hub real
-        // var service = new ComandaService(db, hubMock.Object);
-
-        var request = new AddItemToComandaRequest
-        {
-            ProductId        = product.Id,
-            ItemName         = product.Name,
-            UnitPriceInCents = product.PriceInCents,
-            Quantity         = 2,
-        };
-
-        // Act — simulação direta (substitua pela chamada real ao service)
-        var prod = await db.Products.FindAsync(product.Id);
-        prod!.StockQuantity -= request.Quantity;
+        var db      = CreateDb(nameof(OpenComanda_PrimeiraVez_DeveCriarNovaComanda));
+        var service = CreateService(db);
+        var user    = new User { Id = Guid.NewGuid(), Name = "Ana", PasswordHash = "h", Role = UserRole.Customer };
+        db.Users.Add(user);
         await db.SaveChangesAsync();
 
-        // Assert
-        var prodAtualizado = await db.Products.FindAsync(product.Id);
-        prodAtualizado!.StockQuantity.Should().Be(estoqueInicial - 2);
+        var comanda = await service.OpenComandaAsync(user.Id, "Mesa-01");
+
+        comanda.Should().NotBeNull();
+        comanda.TableIdentifier.Should().Be("Mesa-01");
+        comanda.Status.Should().Be("Aberta");
     }
+
+    [Fact]
+    public async Task OpenComanda_JaExiste_DeveRetornarMesmaComanda()
+    {
+        var db      = CreateDb(nameof(OpenComanda_JaExiste_DeveRetornarMesmaComanda));
+        var service = CreateService(db);
+        var (user, _, _) = await SeedAsync(db);
+
+        var primeira  = await service.OpenComandaAsync(user.Id);
+        var segunda   = await service.OpenComandaAsync(user.Id);
+
+        segunda.Id.Should().Be(primeira.Id, "deve reutilizar a comanda ativa, não criar duplicata");
+    }
+
+    // ── Adicionar item ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AddItem_DeveDecrementarEstoqueEAtualizarTotal()
+    {
+        var db      = CreateDb(nameof(AddItem_DeveDecrementarEstoqueEAtualizarTotal));
+        var service = CreateService(db);
+        var (user, product, _) = await SeedAsync(db);
+
+        var resultado = await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity  = 2,
+        });
+
+        resultado.Items.Should().ContainSingle();
+        resultado.TotalInReais.Should().Be(10.00m); // 2 × R$ 5,00
+
+        var estoqueAtual = (await db.Products.FindAsync(product.Id))!.StockQuantity;
+        estoqueAtual.Should().Be(8); // 10 - 2
+    }
+
+    [Fact]
+    public async Task AddItem_SemEstoque_DeveLancarExcecao()
+    {
+        var db      = CreateDb(nameof(AddItem_SemEstoque_DeveLancarExcecao));
+        var service = CreateService(db);
+        var (user, product, _) = await SeedAsync(db);
+
+        product.StockQuantity = 0;
+        await db.SaveChangesAsync();
+
+        var act = async () => await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity  = 1,
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Estoque insuficiente*");
+    }
+
+    [Fact]
+    public async Task AddItem_ProdutoInativo_DeveLancarExcecao()
+    {
+        var db      = CreateDb(nameof(AddItem_ProdutoInativo_DeveLancarExcecao));
+        var service = CreateService(db);
+        var (user, product, _) = await SeedAsync(db);
+
+        product.IsActive = false;
+        await db.SaveChangesAsync();
+
+        var act = async () => await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity  = 1,
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*inativo*");
+    }
+
+    [Fact]
+    public async Task AddItem_DeveAlterarStatusParaEmAndamento()
+    {
+        var db      = CreateDb(nameof(AddItem_DeveAlterarStatusParaEmAndamento));
+        var service = CreateService(db);
+        var (user, product, _) = await SeedAsync(db);
+
+        var resultado = await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity  = 1,
+        });
+
+        resultado.Status.Should().Be("EmAndamento");
+    }
+
+    // ── Remover item ──────────────────────────────────────────────────────────
 
     [Fact]
     public async Task RemoveItem_DeveRestaurarEstoque()
     {
-        // Arrange
-        var db = CreateInMemoryDb(nameof(RemoveItem_DeveRestaurarEstoque));
-        var (user, product, comanda) = SeedBasicData(db);
+        var db      = CreateDb(nameof(RemoveItem_DeveRestaurarEstoque));
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
 
-        // Adiciona um item à comanda manualmente
-        var item = new ComandaItem
+        var comandaComItem = await service.AddItemAsync(user.Id, new AddItemToComandaRequest
         {
-            Id               = Guid.NewGuid(),
-            ComandaId        = comanda.Id,
-            ProductId        = product.Id,
-            ItemNameSnapshot = product.Name,
-            UnitPriceInCents = product.PriceInCents,
-            Quantity         = 3,
-        };
-        db.ComandaItems.Add(item);
-        product.StockQuantity -= 3;
-        await db.SaveChangesAsync();
+            ProductId = product.Id,
+            Quantity  = 3,
+        });
 
-        var estoqueAposAdd = product.StockQuantity; // 7
+        var itemId = comandaComItem.Items.First().Id;
+        var resultado = await service.RemoveItemAsync(comanda.Id, itemId, user.Id);
 
-        // Act — simula RemoveItem restorando estoque
-        var prod = await db.Products.FindAsync(product.Id);
-        prod!.StockQuantity += item.Quantity;
-        db.ComandaItems.Remove(item);
-        await db.SaveChangesAsync();
-
-        // Assert
-        var prodAtualizado = await db.Products.FindAsync(product.Id);
-        prodAtualizado!.StockQuantity.Should().Be(estoqueAposAdd + 3); // volta a 10
+        resultado.Items.Should().BeEmpty();
+        var estoqueAtual = (await db.Products.FindAsync(product.Id))!.StockQuantity;
+        estoqueAtual.Should().Be(10); // estoque restaurado
     }
+
+    [Fact]
+    public async Task RemoveItem_UltimoItem_DeveVoltarStatusParaAberta()
+    {
+        var db      = CreateDb(nameof(RemoveItem_UltimoItem_DeveVoltarStatusParaAberta));
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
+
+        var comandaComItem = await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity  = 1,
+        });
+
+        var itemId    = comandaComItem.Items.First().Id;
+        var resultado = await service.RemoveItemAsync(comanda.Id, itemId, user.Id);
+
+        resultado.Status.Should().Be("Aberta");
+    }
+
+    // ── Cancelar comanda ──────────────────────────────────────────────────────
 
     [Fact]
     public async Task CancelComanda_DeveRestaurarEstoqueDeTodosOsItens()
     {
-        // Arrange
-        var db = CreateInMemoryDb(nameof(CancelComanda_DeveRestaurarEstoqueDeTodosOsItens));
-        var (user, product, comanda) = SeedBasicData(db);
+        var db      = CreateDb(nameof(CancelComanda_DeveRestaurarEstoqueDeTodosOsItens));
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
 
-        var item1 = new ComandaItem { Id = Guid.NewGuid(), ComandaId = comanda.Id, ProductId = product.Id,
-            ItemNameSnapshot = "Ref", UnitPriceInCents = 500, Quantity = 2 };
-        var item2 = new ComandaItem { Id = Guid.NewGuid(), ComandaId = comanda.Id, ProductId = product.Id,
-            ItemNameSnapshot = "Ref", UnitPriceInCents = 500, Quantity = 3 };
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 2 });
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 3 });
 
-        db.ComandaItems.AddRange(item1, item2);
-        product.StockQuantity -= (item1.Quantity + item2.Quantity); // 5 retirados
-        await db.SaveChangesAsync();
+        var adminId = Guid.NewGuid();
+        var resultado = await service.CancelComandaAsync(comanda.Id, adminId);
 
-        // Act — simula CancelComanda
-        var itens = db.ComandaItems.Where(i => i.ComandaId == comanda.Id).ToList();
-        foreach (var i in itens)
-        {
-            var p = await db.Products.FindAsync(i.ProductId);
-            if (p != null) p.StockQuantity += i.Quantity;
-        }
-        comanda.Status = "Cancelada";
-        await db.SaveChangesAsync();
-
-        // Assert
-        var prodAtualizado = await db.Products.FindAsync(product.Id);
-        prodAtualizado!.StockQuantity.Should().Be(10); // restaurado completamente
+        resultado.Status.Should().Be("Cancelada");
+        var estoqueAtual = (await db.Products.FindAsync(product.Id))!.StockQuantity;
+        estoqueAtual.Should().Be(10); // 10 - 5 + 5 = 10 restaurado
     }
 
-    [Fact]
-    public async Task AddItem_SemEstoque_NaoDevePermitir()
-    {
-        // Arrange
-        var db = CreateInMemoryDb(nameof(AddItem_SemEstoque_NaoDevePermitir));
-        var (user, product, comanda) = SeedBasicData(db);
-        product.StockQuantity = 0;
-        await db.SaveChangesAsync();
-
-        // Act & Assert — simula a validação
-        var prod = await db.Products.FindAsync(product.Id);
-        var podeAdicionar = prod!.StockQuantity >= 1;
-
-        podeAdicionar.Should().BeFalse("produto sem estoque não deve ser adicionado");
-    }
-
-    // ── Testes de Pontos ─────────────────────────────────────────────────────
+    // ── Aplicar pontos ────────────────────────────────────────────────────────
 
     [Fact]
     public async Task ApplyPoints_DeveReduzirSaldoERegistrarNaComanda()
     {
-        // Arrange
-        var db = CreateInMemoryDb(nameof(ApplyPoints_DeveReduzirSaldoERegistrarNaComanda));
-        var (user, product, comanda) = SeedBasicData(db);
+        var db      = CreateDb(nameof(ApplyPoints_DeveReduzirSaldoERegistrarNaComanda));
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
 
         user.PointsBalance   = 100;
-        user.PointsExpiresAt = DateTime.UtcNow.AddDays(20); // válido
+        user.PointsExpiresAt = DateTime.UtcNow.AddDays(20);
         await db.SaveChangesAsync();
 
-        // Act — simula ApplyPoints
-        var u = await db.Users.FindAsync(user.Id);
-        var c = await db.Comandas.FindAsync(comanda.Id);
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 4 });
+        var resultado = await service.ApplyPointsAsync(comanda.Id, user.Id, 60);
 
-        var pontosAplicar = 60;
-        u!.PointsBalance  -= pontosAplicar;
-        c!.PointsApplied   = pontosAplicar;
-        await db.SaveChangesAsync();
-
-        // Assert
-        var uAtualizado = await db.Users.FindAsync(user.Id);
-        var cAtualizado = await db.Comandas.FindAsync(comanda.Id);
-
-        uAtualizado!.PointsBalance.Should().Be(40);
-        cAtualizado!.PointsApplied.Should().Be(60);
+        resultado.PointsApplied.Should().Be(60);
+        var saldoAtual = (await db.Users.FindAsync(user.Id))!.PointsBalance;
+        saldoAtual.Should().Be(40);
     }
 
     [Fact]
-    public void ApplyPoints_ComPontosExpirados_NaoDevePermitir()
+    public async Task ApplyPoints_ComPontosExpirados_DeveLancarExcecao()
     {
-        // Arrange
-        var user = new User
-        {
-            PointsBalance   = 100,
-            PointsExpiresAt = DateTime.UtcNow.AddDays(-1), // expirado
-        };
+        var db      = CreateDb(nameof(ApplyPoints_ComPontosExpirados_DeveLancarExcecao));
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
 
-        // Act
-        var expirou = user.PointsExpiresAt.HasValue && user.PointsExpiresAt < DateTime.UtcNow;
+        user.PointsBalance   = 100;
+        user.PointsExpiresAt = DateTime.UtcNow.AddDays(-1); // expirado
+        await db.SaveChangesAsync();
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 1 });
 
-        // Assert
-        expirou.Should().BeTrue("pontos expirados não devem ser aplicados");
+        var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*expirados*");
     }
 
     [Fact]
-    public void ApplyPoints_ComSaldoZero_NaoDevePermitir()
+    public async Task ApplyPoints_SaldoInsuficiente_DeveLancarExcecao()
     {
-        var user = new User { PointsBalance = 0 };
-        user.PointsBalance.Should().Be(0, "saldo zero não deve permitir aplicar pontos");
+        var db      = CreateDb(nameof(ApplyPoints_SaldoInsuficiente_DeveLancarExcecao));
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
+
+        user.PointsBalance   = 10;
+        user.PointsExpiresAt = DateTime.UtcNow.AddDays(30);
+        await db.SaveChangesAsync();
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 1 });
+
+        var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Saldo insuficiente*");
     }
+
+    [Fact]
+    public async Task ApplyPoints_JaAplicado_DeveLancarExcecao()
+    {
+        var db      = CreateDb(nameof(ApplyPoints_JaAplicado_DeveLancarExcecao));
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
+
+        user.PointsBalance   = 100;
+        user.PointsExpiresAt = DateTime.UtcNow.AddDays(30);
+        await db.SaveChangesAsync();
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 4 });
+
+        await service.ApplyPointsAsync(comanda.Id, user.Id, 30);
+        var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 30);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*já foram aplicados*");
+    }
+
 }
-
-/// <summary>Placeholder — remova quando integrar o hub real de SignalR.</summary>
-public interface IHubContext_Placeholder { }

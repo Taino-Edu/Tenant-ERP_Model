@@ -18,6 +18,9 @@ public interface IComandaService
     /// <summary>Retorna apenas o ID da comanda ativa (para o Hub SignalR).</summary>
     Task<Guid?> GetActiveComandaIdByUserAsync(Guid userId);
 
+    /// <summary>Retorna uma comanda específica pelo ID (Admin).</summary>
+    Task<ComandaDto?> GetByIdAsync(Guid comandaId);
+
     /// <summary>Adiciona um item à comanda do usuário e recalcula o total.</summary>
     Task<ComandaDto> AddItemAsync(Guid userId, AddItemToComandaRequest request);
 
@@ -36,11 +39,8 @@ public interface IComandaService
     /// <summary>Lista todas as comandas abertas/em andamento para o dashboard do Admin.</summary>
     Task<IEnumerable<ComandaDto>> GetActiveCommandasForDashboardAsync();
 
-    /// <summary>
-    /// Registra uma venda avulsa no balcão (sem QR Code/login de cliente).
-    /// Cria e fecha a comanda atomicamente em uma única operação.
-    /// </summary>
-    Task<ComandaDto> RegisterVendaAvulsaAsync(VendaAvulsaRequest request, Guid adminId);
+    /// <summary>Lista comandas fechadas e canceladas do dia de hoje (para histórico).</summary>
+    Task<IEnumerable<ComandaDto>> GetTodayHistoryAsync();
 
     /// <summary>Aplica pontos do cliente à comanda, abatendo do total a pagar.</summary>
     Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points);

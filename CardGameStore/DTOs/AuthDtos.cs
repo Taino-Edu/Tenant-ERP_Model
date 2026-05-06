@@ -8,6 +8,35 @@ using System.ComponentModel.DataAnnotations;
 namespace CardGameStore.DTOs;
 
 // -------------------------------------------------------------------------
+// Validação de CPF (dígitos verificadores)
+// -------------------------------------------------------------------------
+
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Parameter)]
+public sealed class ValidCpfAttribute : ValidationAttribute
+{
+    public ValidCpfAttribute() : base("CPF inválido.") { }
+
+    protected override ValidationResult? IsValid(object? value, ValidationContext ctx)
+    {
+        var cpf = (value as string)?.Trim() ?? string.Empty;
+        if (cpf.Length != 11 || !cpf.All(char.IsDigit) || cpf.Distinct().Count() == 1)
+            return new ValidationResult(ErrorMessage);
+
+        static int Digit(string s, int len)
+        {
+            var sum = s.Take(len).Select((c, i) => (c - '0') * (len + 1 - i)).Sum();
+            var rem = (sum * 10) % 11;
+            return rem == 10 ? 0 : rem;
+        }
+
+        return Digit(cpf, 9)  == (cpf[9]  - '0') &&
+               Digit(cpf, 10) == (cpf[10] - '0')
+            ? ValidationResult.Success
+            : new ValidationResult(ErrorMessage);
+    }
+}
+
+// -------------------------------------------------------------------------
 // Requests (entrada)
 // -------------------------------------------------------------------------
 
@@ -23,7 +52,7 @@ public record LoginRequest(
 /// </summary>
 public record QuickLoginRequest(
     [Required, MaxLength(150)]  string Name,
-    [Required, MaxLength(11)]   string Cpf,       // Apenas dígitos
+    [Required, ValidCpf]        string Cpf,       // Apenas dígitos, com verificação de dígito
     [Required, MaxLength(20)]   string WhatsApp,  // Formato: 5511999999999
     [MaxLength(50)]             string? TableIdentifier = null // Mesa do QR Code
 );

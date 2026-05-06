@@ -54,7 +54,8 @@ export interface AuthResponse {
 export interface ComandaDto {
   id: string; userName: string; userId: string
   tableIdentifier: string | null; status: string
-  totalInReais: number; openedAt: string
+  totalInReais: number; pointsApplied: number
+  openedAt: string; closedAt?: string
   items: ComandaItemDto[]
 }
 
@@ -114,18 +115,49 @@ export const authApi = {
   logout: () => api.post('/api/auth/logout'),
 }
 
+export interface VendaAvulsaDto {
+  id: string
+  clientName: string | null
+  paymentMethod: string
+  totalInReais: number
+  discountPercent: number
+  discountInReais: number
+  soldAt: string
+  soldByAdminName: string
+  items: {
+    productName: string
+    productCategory: string | null
+    quantity: number
+    unitPriceInReais: number
+    subtotalInReais: number
+  }[]
+}
+
+export const PAYMENT_METHODS = [
+  { value: 'Pix',           label: 'Pix' },
+  { value: 'Dinheiro',      label: 'Dinheiro' },
+  { value: 'CartaoCredito', label: 'Cartão de Crédito' },
+  { value: 'CartaoDebito',  label: 'Cartão de Débito' },
+] as const
+
 export const comandaApi = {
   dashboard:    () => api.get<ComandaDto[]>('/api/comanda/dashboard'),
+  history:      () => api.get<ComandaDto[]>('/api/comanda/history'),
   myComanda:    () => api.get<ComandaDto>('/api/comanda/my'),
   addItem:      (id: string, item: { productId?: string; cardCacheId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
   close:        (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/close`),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
-  vendaAvulsa:  (clientName: string | null, items: { productId: string; quantity: number }[]) =>
-    api.post<ComandaDto>('/api/comanda/venda-avulsa', { clientName, items }),
   applyPoints:  (id: string, points: number) =>
     api.post<ComandaDto>(`/api/comanda/${id}/apply-points`, { points }),
+}
+
+export const vendaAvulsaApi = {
+  register: (clientName: string | null, paymentMethod: string, items: { productId: string; quantity: number }[], discountPercent = 0) =>
+    api.post<VendaAvulsaDto>('/api/venda-avulsa', { clientName, paymentMethod, items, discountPercent }),
+  recent: (limit = 50) =>
+    api.get<VendaAvulsaDto[]>('/api/venda-avulsa/recent', { params: { limit } }),
 }
 
 export const productApi = {

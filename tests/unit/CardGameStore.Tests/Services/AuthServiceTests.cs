@@ -93,7 +93,7 @@ public class AuthServiceTests
                 Cpf          = cpf,
                 WhatsApp     = "11999990001",
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
-                Role         = "Client",
+                Role         = UserRole.Customer,
             };
             db.Users.Add(novo);
             await db.SaveChangesAsync();
@@ -102,7 +102,7 @@ public class AuthServiceTests
         // Assert
         var usuarioCriado = await db.Users.FirstOrDefaultAsync(u => u.Cpf == cpf);
         usuarioCriado.Should().NotBeNull();
-        usuarioCriado!.Role.Should().Be("Client");
+        usuarioCriado!.Role.Should().Be(UserRole.Customer);
     }
 
     [Fact]
@@ -151,9 +151,9 @@ public class AuthServiceTests
     // ── Roles ─────────────────────────────────────────────────────────────────
 
     [Theory]
-    [InlineData("Admin",  true)]
-    [InlineData("Client", false)]
-    [InlineData("",       false)]
+    [InlineData("Admin",    true)]
+    [InlineData("Customer", false)]
+    [InlineData("",         false)]
     public void Role_Admin_DeveIdentificarCorretamente(string role, bool esperadoAdmin)
     {
         var isAdmin = role == "Admin";

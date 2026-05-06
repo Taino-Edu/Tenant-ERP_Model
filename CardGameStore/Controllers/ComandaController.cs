@@ -1,12 +1,15 @@
 // =============================================================================
 // ComandaController.cs — Endpoints REST de Comandas
-// GET  /api/comanda/dashboard       → lista todas as abertas (Admin)
-// GET  /api/comanda/my              → comanda ativa do cliente logado
-// POST /api/comanda/{id}/items      → adiciona item
+// GET    /api/comanda/dashboard           → lista todas as abertas (Admin)
+// GET    /api/comanda/my                  → comanda ativa do cliente logado
+// GET    /api/comanda/{id}                → detalhe de uma comanda (Admin)
+// POST   /api/comanda/{id}/items          → adiciona item
 // DELETE /api/comanda/{id}/items/{itemId} → remove item
-// PUT  /api/comanda/{id}/close      → fecha comanda (Admin)
-// PUT  /api/comanda/{id}/cancel     → cancela comanda (Admin)
-// POST /api/comanda/venda-avulsa    → venda direta no balcão (Admin)
+// PUT    /api/comanda/{id}/close          → fecha comanda (Admin)
+// PUT    /api/comanda/{id}/cancel         → cancela comanda (Admin)
+// POST   /api/comanda/{id}/apply-points   → aplica pontos do cliente
+//
+// Venda avulsa de balcão → POST /api/venda-avulsa  (VendaAvulsaController)
 // =============================================================================
 
 using CardGameStore.DTOs;
@@ -37,6 +40,27 @@ public class ComandaController : ControllerBase
     {
         var comandas = await _service.GetActiveCommandasForDashboardAsync();
         return Ok(comandas);
+    }
+
+    /// <summary>Histórico do dia: comandas fechadas e canceladas hoje. Apenas Admin.</summary>
+    [HttpGet("history")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(IEnumerable<ComandaDto>), 200)]
+    public async Task<IActionResult> GetHistory()
+    {
+        var result = await _service.GetTodayHistoryAsync();
+        return Ok(result);
+    }
+
+    /// <summary>Retorna uma comanda específica pelo ID. Apenas Admin.</summary>
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ComandaDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        var comanda = await _service.GetByIdAsync(id);
+        return comanda == null ? NotFound(new { Message = "Comanda não encontrada." }) : Ok(comanda);
     }
 
     /// <summary>Retorna a comanda ativa do cliente autenticado.</summary>
@@ -99,35 +123,6 @@ public class ComandaController : ControllerBase
         var adminId = GetUserId();
         var result  = await _service.CancelComandaAsync(id, adminId);
         return Ok(result);
-    }
-
-    /// <summary>
-    /// Venda avulsa no balcão — sem QR Code ou login de cliente.
-    /// O Admin escolhe os produtos e a comanda é criada e fechada atomicamente.
-    /// </summary>
-    [HttpPost("venda-avulsa")]
-    [Authorize(Policy = "AdminOnly")]
-    [ProducesResponseType(typeof(ComandaDto), 201)]
-    [ProducesResponseType(400)]
-    public async Task<IActionResult> VendaAvulsa([FromBody] VendaAvulsaRequest request)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        try
-        {
-            var adminId = GetUserId();
-            var result  = await _service.RegisterVendaAvulsaAsync(request, adminId);
-            return StatusCode(201, result);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { Message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { Message = ex.Message });
-        }
     }
 
     /// <summary>Cliente aplica seus pontos para abater o total da comanda.</summary>

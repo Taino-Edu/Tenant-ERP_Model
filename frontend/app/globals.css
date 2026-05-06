@@ -61,4 +61,11 @@
     50%       { box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.5); }
   }
   .flash-new { animation: flash-new 1s ease-in-out 2; }
+
+  /* Animação de entrada suave para listas expandidas */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in { animation: fade-in 0.15s ease-out forwards; }
 }
