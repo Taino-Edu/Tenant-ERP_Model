@@ -199,7 +199,41 @@ builder.Services.AddHttpClient("ScryfallApi", client =>
 });
 
 // ---------------------------------------------------------------------------
-// 10. SERVIÇOS DE APLICAÇÃO
+// 10. HEALTH CHECKS — Postgres + MongoDB (sem pacotes extras)
+// ---------------------------------------------------------------------------
+builder.Services.AddHealthChecks()
+    .AddCheck("postgres", async () =>
+    {
+        try
+        {
+            using var scope  = builder.Services.BuildServiceProvider().CreateScope();
+            var db           = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Database.CanConnectAsync();
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy();
+        }
+        catch (Exception ex)
+        {
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy(ex.Message);
+        }
+    }, tags: ["db", "postgres"])
+    .AddCheck("mongodb", () =>
+    {
+        try
+        {
+            using var scope  = builder.Services.BuildServiceProvider().CreateScope();
+            var mongo        = scope.ServiceProvider.GetRequiredService<IMongoClient>();
+            mongo.ListDatabaseNames(); // lança se indisponível
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy();
+        }
+        catch (Exception ex)
+        {
+            // MongoDB é opcional — retorna Degraded, não Unhealthy
+            return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Degraded(ex.Message);
+        }
+    }, tags: ["db", "mongo"]);
+
+// ---------------------------------------------------------------------------
+// 11. SERVIÇOS DE APLICAÇÃO
 // ---------------------------------------------------------------------------
 builder.Services.AddScoped<IAuthService,         AuthService>();
 builder.Services.AddScoped<IComandaService,      ComandaService>();
@@ -336,8 +370,29 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ComandaHub>("/hubs/comanda");
 
-app.MapGet("/health", () => new { Status = "OK", Timestamp = DateTime.UtcNow })
-   .AllowAnonymous()
-   .DisableRateLimiting();
+// /health — sem autenticação, sem rate limit
+// Retorna 200 OK (todos saudáveis) ou 503 (algum Unhealthy)
+// MongoDB Degradado retorna 200 (serviço opcional)
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
+{
+    ResponseWriter = async (ctx, report) =>
+    {
+        ctx.Response.ContentType = "application/json";
+        var result = new
+        {
+            Status    = report.Status.ToString(),
+            Timestamp = DateTime.UtcNow,
+            Checks    = report.Entries.Select(e => new
+            {
+                Name    = e.Key,
+                Status  = e.Value.Status.ToString(),
+                Message = e.Value.Description,
+            })
+        };
+        await ctx.Response.WriteAsJsonAsync(result);
+    }
+})
+.AllowAnonymous()
+.DisableRateLimiting();
 
 app.Run();

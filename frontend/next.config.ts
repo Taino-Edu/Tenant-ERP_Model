@@ -1,7 +1,8 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  // Permite imagens de CDNs de TCG (Pokémon, Magic, etc.)
+  output: 'standalone',
+
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.pokemontcg.io' },
@@ -10,7 +11,10 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'product-images.tcgplayer.com' },
     ],
   },
-  // Proxy para a API em desenvolvimento (evita CORS)
+
+  // Em produção o Next.js proxy as chamadas REST para o container da API
+  // via rede Docker interna (evita expor IP/porta da API ao browser).
+  // Para SignalR/WebSocket o browser conecta diretamente via NEXT_PUBLIC_API_URL.
   async rewrites() {
     return [
       {

@@ -1,9 +1,12 @@
 # =============================================================================
 # docker-compose.yml — Stack completa: Frontend + API + PostgreSQL + MongoDB
-# COMO USAR:
-#   docker compose up --build
-# Frontend: http://localhost:3000
-# API/Swagger: http://localhost:5000
+#
+# COMO USAR (primeira vez):
+#   cp .env.example .env        # preencha as variáveis
+#   docker compose up --build -d
+#
+# Frontend:    http://<SEU_IP>:3000
+# API/Swagger: http://<SEU_IP>:5000
 # =============================================================================
 
 version: '3.9'
@@ -11,23 +14,26 @@ version: '3.9'
 services:
 
   # ---------------------------------------------------------------------------
-  # FRONTEND — Next.js 14
+  # FRONTEND — Next.js 14 (standalone)
   # ---------------------------------------------------------------------------
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # API_URL deve ser o endereço que o BROWSER vai usar para chamar a API.
+        # Em desenvolvimento: http://localhost:5000
+        # Na Oracle VM:       http://<IP_PUBLICO>:5000
+        API_URL: ${API_URL:-http://localhost:5000}
     container_name: cardgamestore_frontend
     ports:
       - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: "http://localhost:5000"
-      NODE_ENV: production
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     networks:
       - cardgame_network
-    restart: on-failure
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # API — CardGameStore ASP.NET Core 8
@@ -46,18 +52,25 @@ services:
       MongoDbSettings__ConnectionString: "mongodb://mongo:27017"
       MongoDbSettings__DatabaseName: "cardgamestore_cache"
       JwtSettings__SecretKey: "${JWT_SECRET}"
-      JwtSettings__Issuer: "http://localhost:5000"
+      JwtSettings__Issuer: "${API_URL:-http://localhost:5000}"
       JwtSettings__Audience: "CardGameStore-Frontend"
       JwtSettings__AccessTokenExpirationMinutes: "60"
       JwtSettings__RefreshTokenExpirationDays: "30"
+      TcgSettings__PokemonApiKey: "${POKEMON_API_KEY:-}"
     depends_on:
       postgres:
         condition: service_healthy
       mongo:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - cardgame_network
-    restart: on-failure
+    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # PostgreSQL 16
@@ -74,7 +87,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cardgame_user -d cardgamestore"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cardgame_user} -d ${POSTGRES_DB:-cardgamestore}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -102,8 +115,8 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # pgAdmin (opcional: docker compose --profile tools up)
-  # http://localhost:5050  |  admin@cardgame.com / admin
+  # pgAdmin — apenas com: docker compose --profile tools up
+  # http://<IP>:5050  |  email e senha definidos no .env
   # ---------------------------------------------------------------------------
   pgadmin:
     image: dpage/pgadmin4:latest

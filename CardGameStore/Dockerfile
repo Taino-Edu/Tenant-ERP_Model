@@ -1,17 +1,17 @@
 # =============================================================================
-# Dockerfile — Build multi-stage para produção e desenvolvimento
-# Stage 1: build | Stage 2: runtime mínimo
+# Dockerfile — Build multi-stage para produção
+# Stage 1: build com SDK  |  Stage 2: runtime mínimo (sem SDK)
 # =============================================================================
 
 # ---- STAGE 1: BUILD ----
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copia apenas o .csproj primeiro (cache de camadas — só rebuilda se mudar dependências)
+# Copia apenas o .csproj primeiro — camada em cache enquanto dependências não mudarem
 COPY CardGameStore.csproj .
 RUN dotnet restore
 
-# Copia o restante do código e publica
+# Copia o restante e publica em modo Release
 COPY . .
 RUN dotnet publish -c Release -o /app/publish --no-restore
 
@@ -19,16 +19,14 @@ RUN dotnet publish -c Release -o /app/publish --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
-# Copia o binário publicado do stage de build
+# curl é necessário para o healthcheck do docker-compose
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /app/publish .
 
-# Porta exposta (HTTP e HTTPS)
 EXPOSE 5000
-EXPOSE 5001
 
-# Variável para o ASP.NET Core escutar em todas as interfaces
+# ASPNETCORE_ENVIRONMENT e demais configurações vêm do docker-compose / variáveis de ambiente
 ENV ASPNETCORE_URLS=http://+:5000
-ENV ASPNETCORE_ENVIRONMENT=Development
 
-# Ponto de entrada
 ENTRYPOINT ["dotnet", "CardGameStore.dll"]
