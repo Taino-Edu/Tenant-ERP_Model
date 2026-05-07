@@ -1,143 +1,119 @@
-# 🚀 Checklist de Produção — softNerd
+# Checklist de Produção — softNerd
 
-> Use esta lista antes de colocar o sistema no ar. Marque cada item conforme for resolvendo.
-
----
-
-## ✅ Correções já aplicadas (04/05/2026)
-
-Estes bugs foram corrigidos diretamente no código:
-
-- [x] **AuthController.cs criado** — endpoints `/api/auth/login`, `/quick-login`, `/refresh`, `/logout` agora existem
-- [x] **Docker usava SQLite** — `ASPNETCORE_ENVIRONMENT` trocado para `Production`; a lógica de seleção de banco corrigida para usar PostgreSQL sempre que a connection string estiver configurada
-- [x] **Crash no MigrateAsync** — substituído por `EnsureCreated` (sem precisar de migration files)
-- [x] **Bug de segurança no preço** — `AddItemAsync` agora busca o preço real do banco, ignora o que o cliente envia
-- [x] **Bug de segurança no RemoveItem** — verificação adicionada: o item deve pertencer à comanda
-- [x] **QuickLogin não abria comanda** — `AuthService.QuickLoginAsync` agora chama `OpenComandaAsync` e retorna o `comandaId`
-- [x] **HTTPS quebrando Docker** — redirect HTTPS removido (deve ser feito por reverse proxy externo)
+> Use esta lista antes de colocar o sistema em produção para um cliente.
+> Atualizado em 07/05/2026 — v2.1
 
 ---
 
-## 🔴 Obrigatório antes de ir a produção real
+## Itens já implementados no código
+
+- [x] AuthController completo (login, quick-login, refresh, logout, forgot/reset password)
+- [x] Docker configurado para PostgreSQL em produção
+- [x] EnsureCreated no boot (sem necessidade de migrations manuais)
+- [x] Preço de itens resolvido no servidor (não confia no cliente)
+- [x] Rate limiting: 5 req/min nos endpoints de auth, 200 req/min nos demais
+- [x] Headers de segurança HTTP (X-Frame-Options, X-Content-Type-Options, etc.)
+- [x] Venda avulsa (PDV no balcão)
+- [x] Crediário com bloqueio e email automático
+- [x] Analytics: KPIs, curva horária, top produtos, insights por cliente
+- [x] Notificações por email (reset senha, crediário, campeonatos, anúncios)
+- [x] Testes unitários: 62 testes nos 6 serviços principais
+- [x] Sidebar responsiva (mobile/tablet)
+
+---
+
+## Obrigatório antes de ir a produção
 
 Sem esses itens o sistema está **vulnerável ou não vai funcionar**.
 
 ### Segurança
 
 - [ ] **Trocar o JWT Secret Key**
-  - Arquivo: `docker-compose.yml` linha `JwtSettings__SecretKey`
-  - Valor atual: `CardGameStore_SecretKey_2025_MinLength32Chars!` ← qualquer um que leu o código pode forjar tokens de admin
-  - Ação: gere uma chave aleatória com pelo menos 32 caracteres:
-    ```powershell
-    [System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
-    ```
-  - Substitua o valor no docker-compose pelo resultado
+  ```powershell
+  [System.Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+  ```
+  Substitua em `docker-compose.yml` → `JwtSettings__SecretKey`
 
 - [ ] **Trocar a senha do PostgreSQL**
-  - Atual: `CardGame@2025` (exposta no docker-compose)
-  - Ação: gere uma senha forte e atualize em:
-    - `docker-compose.yml` → `POSTGRES_PASSWORD` e `ConnectionStrings__PostgreSQL`
+  Atualize `POSTGRES_PASSWORD` e a connection string no `docker-compose.yml`
 
-- [ ] **Trocar a senha do pgAdmin**
-  - Atual: `admin` (muito fraca)
-  - Ação: atualize `PGADMIN_DEFAULT_PASSWORD` no docker-compose
+- [ ] **Trocar a senha do pgAdmin** (se usar)
+  Atualize `PGADMIN_DEFAULT_PASSWORD`
 
-- [ ] **Não comitar o docker-compose com senhas reais no Git**
-  - Crie um `docker-compose.override.yml` ou use um arquivo `.env` separado com as variáveis sensíveis
-  - Adicione `.env` ao `.gitignore`
+- [ ] **Não commitar o `.env` com senhas reais no Git**
+  O arquivo `.env` já está no `.gitignore` — nunca remova essa linha
+
+- [ ] **Trocar a senha do admin (Maikon) no primeiro login**
+  Seed cria com `SenhaForte@123` — troque imediatamente após primeiro acesso
 
 ### Infraestrutura
 
 - [ ] **Configurar domínio e HTTPS**
-  - O sistema atualmente só funciona em `localhost`
-  - Para produção real, você precisa de:
-    1. Um domínio (ex: `softnerd.com.br`)
-    2. Um servidor (VPS, cloud, etc.)
-    3. Um reverse proxy (Nginx ou Cloudflare Tunnel) que:
-       - Recebe HTTPS na porta 443
-       - Repassa para a API na porta 5000 e frontend na porta 3000
+  O sistema precisa de um reverse proxy (Nginx ou Cloudflare Tunnel) na frente:
+  ```nginx
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+  proxy_set_header Host $host;
+  ```
 
 - [ ] **Atualizar CORS para o domínio real**
-  - Arquivo: `CardGameStore/Program.cs` linhas com `.WithOrigins(...)`
-  - Adicionar o domínio real: `.WithOrigins("https://softnerd.com.br")`
+  `CardGameStore/Program.cs` → `.WithOrigins("https://seudominio.com.br")`
 
-- [ ] **Atualizar NEXT_PUBLIC_API_URL**
-  - Arquivo: `docker-compose.yml` no serviço `frontend`
-  - Trocar `http://localhost:5000` pelo endereço real da API em produção
+- [ ] **Atualizar variáveis no docker-compose**
+  - `NEXT_PUBLIC_API_URL` → URL real da API
+  - `JwtSettings__Issuer` → URL real da API
+  - `JwtSettings__Audience` → URL real do frontend
 
-- [ ] **Atualizar JwtSettings__Issuer**
-  - Arquivo: `docker-compose.yml`
-  - Trocar `http://localhost:5000` pela URL real da API
+- [ ] **Configurar email (SMTP)**
+  No `.env`:
+  ```
+  EMAIL_HOST=smtp.gmail.com
+  EMAIL_PORT=587
+  EMAIL_USER=seu@gmail.com
+  EMAIL_PASSWORD=senha-de-app-google
+  EMAIL_FROM=noreply@seudominio.com.br
+  APP_URL=https://seudominio.com.br
+  ```
+  > Gmail: ative "Senhas de app" em myaccount.google.com/security
 
-- [ ] **Configurar backups do PostgreSQL**
-  - Os dados ficam no volume Docker `postgres_data`
-  - Configure backup automático diário (ex: `pg_dump` agendado)
+- [ ] **Configurar backup automático do PostgreSQL**
+  ```powershell
+  # Backup manual
+  docker exec cardgamestore_postgres pg_dump -U cardgame_user cardgamestore > backup_$(Get-Date -Format yyyyMMdd).sql
+  ```
+  Configure backup diário automático via cron ou Task Scheduler.
 
 ---
 
-## 🟡 Importante — fazer logo após subir
-
-Esses itens não travam o lançamento, mas são necessários para operar bem.
-
-- [ ] **Trocar a senha do admin (Maikon)**
-  - O seed cria o admin com senha `SenhaForte@123`
-  - Após o primeiro login, troque por uma senha única e guarde em local seguro
-  - Ou: altere o hash BCrypt no `AppDbContext.cs` antes do primeiro `EnsureCreated`
-
-- [ ] **Monitorar os logs**
-  - O Docker tem logs acessíveis via:
-    ```powershell
-    docker logs cardgamestore_api -f
-    docker logs cardgamestore_frontend -f
-    ```
-  - Fique de olho nas primeiras horas para pegar erros inesperados
+## Importante — fazer logo após subir
 
 - [ ] **Testar o fluxo completo em produção**
-  - Login admin → criar produto → abrir QR Code → quick-login cliente → adicionar item → ver no dashboard → fechar comanda
+  Login admin → criar produto → gerar QR Code → escanear com celular → abrir comanda → adicionar item → ver no dashboard → fechar comanda
 
-- [ ] **Verificar que o SignalR funciona com o domínio real**
-  - O SignalR (WebSocket) precisa que o reverse proxy passe os headers `Upgrade: websocket` e `Connection: upgrade`
-  - No Nginx, adicione:
-    ```nginx
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    ```
+- [ ] **Verificar SignalR com domínio real**
+  O WebSocket precisa que o reverse proxy passe os headers de upgrade (ver acima)
 
----
+- [ ] **Verificar email de reset de senha**
+  Solicitar reset e confirmar recebimento antes de entregar ao cliente
 
-## 🟢 Melhorias para semanas seguintes
-
-Não bloqueiam o lançamento, mas aumentam qualidade e segurança.
-
-- [ ] Implementar **validação de CPF** (algoritmo dos dígitos verificadores)
-- [ ] Implementar **Venda Avulsa** (venda direta sem QR Code/mesa)
-- [ ] Adicionar **paginação** no `GET /api/product`
-- [ ] Implementar **rate limiting** nos endpoints de login (evitar força bruta)
-- [ ] Gerar **migration files** do EF Core para mudanças futuras de schema
-- [ ] Adicionar **testes automatizados** (ao menos nos Services)
-- [ ] Configurar **GitHub Actions** para CI/CD
+- [ ] **Verificar email de crediário**
+  Fechar uma comanda em crediário e confirmar que o cliente recebe o email
 
 ---
 
-## 📋 Sequência recomendada para subir em produção
+## Pendente de decisão / roadmap
 
-```
-1. Trocar JWT Secret (OBRIGATÓRIO)
-2. Trocar senhas do PostgreSQL e pgAdmin (OBRIGATÓRIO)
-3. Configurar servidor e domínio
-4. Atualizar CORS + NEXT_PUBLIC_API_URL + JwtSettings__Issuer com o domínio real
-5. Criar arquivo .env com as variáveis sensíveis (não commitar no Git)
-6. Subir com: docker compose up --build -d
-7. Verificar logs: docker logs cardgamestore_api
-8. Testar o fluxo completo
-9. Configurar backup automático do banco
-10. Trocar senha do admin no sistema
-```
+- [ ] **Integração PIX** — gateway a definir (Mercado Pago, PagSeguro, Asaas)
+- [ ] **IA Analytics** — análise regressiva no dashboard (endpoints de dados prontos)
+- [ ] **Permissão de uso de pontos** — toggle admin para liberar/bloquear por cliente
+- [ ] **Migrations EF Core** — substituir EnsureCreated para mudanças de schema em produção
+- [ ] **GitHub Actions CI/CD** — build e deploy automático no push para main
+- [ ] **Paginação no catálogo** — para lojas com muitos produtos
 
 ---
 
-## 🆘 Comandos úteis em produção
+## Comandos úteis em produção
 
 ```powershell
 # Subir tudo em background
@@ -153,19 +129,19 @@ docker compose restart api
 # Parar tudo (mantém os dados)
 docker compose down
 
-# Parar e apagar todos os dados (CUIDADO — irreversível!)
+# Parar e apagar tudo (IRREVERSÍVEL — apaga o banco)
 docker compose down -v
 
-# Ver status de todos os containers
+# Status dos containers
 docker compose ps
 
-# Backup manual do banco
-docker exec cardgamestore_postgres pg_dump -U cardgame_user cardgamestore > backup_$(date +%Y%m%d).sql
+# Backup do banco
+docker exec cardgamestore_postgres pg_dump -U cardgame_user cardgamestore > backup.sql
 
 # Restaurar backup
-docker exec -i cardgamestore_postgres psql -U cardgame_user cardgamestore < backup_20260504.sql
+docker exec -i cardgamestore_postgres psql -U cardgame_user cardgamestore < backup.sql
 ```
 
 ---
 
-*Gerado em 04/05/2026 — softNerd v1*
+*softNerd © 2025 — v2.1*

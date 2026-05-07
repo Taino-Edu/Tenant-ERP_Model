@@ -1,10 +1,56 @@
-# softNerd — CardGameStore
+# softNerd — Sistema de Gestão para Lojas de Card Games
 
-Sistema de gestão para loja de card games (TCG). Gerencia comandas de mesa via QR Code, vendas no balcão, campeonatos, estoque e analytics — tudo em uma única plataforma web.
+> Plataforma completa para lojas de TCG: comandas via QR Code, PDV, estoque, campeonatos, programa de pontos e analytics — tudo em uma única solução web.
 
 ---
 
-## Stack
+## Visão Geral
+
+O **softNerd** é um software de gestão desenvolvido especificamente para lojas de card games (TCG). Substitui planilhas e sistemas genéricos por uma plataforma pensada para o dia a dia do negócio: desde o cliente que escaneia o QR Code da mesa até o admin que acompanha tudo em tempo real no painel.
+
+### Para quem é
+
+- Lojas de card games com mesas de jogos (Pokémon, MTG, Yu-Gi-Oh, etc.)
+- Estabelecimentos que organizam campeonatos e eventos
+- Negócios que querem fidelizar clientes com programa de pontos
+
+---
+
+## Funcionalidades
+
+### Comanda de Mesa via QR Code
+Cada mesa tem um QR Code fixo. O cliente escaneia, faz login com CPF e WhatsApp (sem app, sem cadastro manual) e sua comanda é aberta automaticamente. O admin acompanha todas as comandas em tempo real com atualização via WebSocket.
+
+### Ponto de Venda (PDV)
+Frente de caixa para vendas no balcão sem exigir login do cliente. Catálogo com busca por categoria, desconto rápido (0–20%), calculador de troco para dinheiro e histórico do dia.
+
+### Programa de Pontos
+Clientes acumulam pontos a cada visita. O admin controla o saldo manualmente e pode permitir que o cliente use os pontos como desconto na comanda. Pontos têm validade de 30 dias.
+
+### Crediário
+Feche comandas no crediário com vencimento automático de 30 dias. O cliente recebe notificação por email e fica bloqueado de abrir novas comandas até quitar. Admin controla tudo pelo painel.
+
+### Campeonatos TCG
+Crie torneios com data, jogo, taxa de inscrição e limite de vagas. Clientes se inscrevem pela landing page. Admin gerencia participantes, status e colocação final.
+
+### Anúncios e Landing Page
+Painel para gerenciar banners, avisos e destaques que aparecem na landing page pública da loja. Suporta imagens externas (Cloudflare R2, Imgur, etc.).
+
+### Analytics
+Dashboard com KPIs do dia: faturamento vs dia anterior, ticket médio (30 dias), curva horária de vendas, top 5 produtos e análise de clientes ativos/inativos.
+
+### Busca de Cartas TCG
+Integração com PokémonTCG.io e Scryfall (MTG) com cache local em MongoDB para consultas instantâneas de preços de mercado.
+
+### QR Codes de Mesa
+Geração, download (PNG individual ou ZIP em lote) e impressão de QR Codes para todas as mesas da loja.
+
+### Notificações por Email
+Emails automáticos para: reset de senha, boas-vindas, crediário aberto/quitado, confirmação de inscrição em campeonato e divulgação de anúncios/promoções.
+
+---
+
+## Stack Tecnológica
 
 | Camada | Tecnologia |
 |---|---|
@@ -13,20 +59,21 @@ Sistema de gestão para loja de card games (TCG). Gerencia comandas de mesa via 
 | Banco de documentos | MongoDB 7 |
 | Autenticação | JWT HS256 + BCrypt + Refresh Token |
 | Tempo real | SignalR (WebSockets) |
-| Email | SMTP (reset de senha) |
+| Email | SMTP (Gmail, SendGrid, Resend) |
 | Frontend | Next.js 14, TypeScript, Tailwind CSS |
 | Infra | Docker Compose |
+| Testes | xUnit, Moq, FluentAssertions (62 testes) |
 
 ---
 
-## Como rodar
+## Como Executar
 
-### Pré-requisitos
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e rodando
+### Pré-requisito
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e rodando.
 
 ### 1. Clone o repositório
 ```bash
-git clone https://github.com/seu-usuario/softNerd.git
+git clone https://github.com/Taino-Edu/softNerd.git
 cd softNerd
 ```
 
@@ -34,11 +81,7 @@ cd softNerd
 ```bash
 cp .env.example .env
 ```
-Edite o `.env` e substitua os valores:
-```env
-JWT_SECRET=SuaChaveSuperSecretaAqui
-POSTGRES_PASSWORD=SuaSenhaAqui
-```
+Edite o arquivo `.env` com suas configurações (JWT secret, senhas do banco, SMTP).
 
 ### 3. Suba os containers
 ```powershell
@@ -47,89 +90,58 @@ POSTGRES_PASSWORD=SuaSenhaAqui
 
 | Serviço | URL |
 |---|---|
-| Frontend (Next.js) | http://localhost:3000 |
-| API (Swagger) | http://localhost:5000/swagger |
+| Frontend | http://localhost:3000 |
+| API + Swagger | http://localhost:5000/swagger |
 | pgAdmin (opcional) | http://localhost:5050 |
 
-> Para subir o pgAdmin: `docker compose --profile tools up`
+**Primeira execução:** ~3–5 min (download das imagens Docker)
+**Execuções seguintes:** ~30 segundos
+
+### Credenciais padrão (desenvolvimento)
+| Recurso | Usuário | Senha |
+|---|---|---|
+| Admin | admin@cardgamestore.com.br | SenhaForte@123 |
+| PostgreSQL | cardgame_user | CardGame@2025 |
+
+> Troque todas as senhas antes de qualquer deploy em produção. Consulte `CHECKLIST-PRODUCAO.md`.
 
 ---
 
-## Comandos úteis (Makefile)
+## Estrutura do Projeto
+
+```
+softNerd/
+├── CardGameStore/          ← API ASP.NET Core 8
+│   ├── Controllers/        ← Endpoints REST (Auth, Comanda, PDV, Analytics…)
+│   ├── Services/           ← Regras de negócio
+│   ├── Models/             ← Entidades PostgreSQL + documentos MongoDB
+│   ├── DTOs/               ← Contratos de entrada/saída da API
+│   └── Data/               ← DbContext + seed do admin
+├── frontend/               ← Next.js 14
+│   ├── app/
+│   │   ├── page.tsx        ← Landing page pública
+│   │   ├── admin/          ← Painel administrativo (sidebar responsiva)
+│   │   └── mesa/[mesa]/    ← Comanda do cliente via QR Code
+│   ├── components/         ← Componentes reutilizáveis
+│   └── lib/                ← API client, auth, SignalR
+├── tests/unit/             ← xUnit (62 testes nos serviços principais)
+├── docker-compose.yml      ← Orquestração dos containers
+├── .env.example            ← Template de variáveis de ambiente
+└── start.ps1               ← Script de inicialização
+```
+
+---
+
+## Comandos Úteis
 
 ```bash
-make up        # sobe tudo
-make down      # para os containers
+make up        # sobe todos os containers
+make down      # para os containers (mantém dados)
 make restart   # reinicia
 make logs      # logs em tempo real
 make build     # rebuild sem cache
 make clean     # apaga tudo incluindo o banco (cuidado!)
 make status    # status dos containers
-```
-
----
-
-## Funcionalidades
-
-### Venda Avulsa (balcão)
-Admin seleciona produtos, aplica desconto opcional e registra a venda sem precisar de login do cliente. Estoque decrementado no PostgreSQL; evento gravado no MongoDB.
-- Rota admin: `/admin/venda-avulsa`
-- Endpoint: `POST /api/venda-avulsa`
-
-### Mesas via QR Code
-Clientes escaneiam o QR Code da mesa, fazem login com CPF + WhatsApp e acessam sua comanda pessoal.
-- Login automático cria conta se for a primeira visita
-- Comanda fica salva no servidor (cliente pode sair e voltar)
-- Só o admin fecha ou cancela a comanda
-- Admin gera e imprime os QR Codes em `/admin/qrcodes` (download PNG individual, lote ZIP, impressão via `window.print`)
-
-### Campeonatos TCG
-Admin cria torneios com data, jogo, taxa e limite de vagas. Clientes se inscrevem pela landing page ou pelo painel.
-
-### Programa de Pontos
-Admin adiciona ou remove pontos pelo painel (`/admin/usuarios`). Pontos têm validade de 30 dias e podem ser aplicados como desconto na comanda — a opção só fica disponível para o cliente se o admin liberar.
-
-### Anúncios e Landing Page
-Admin gerencia banners, avisos e destaques em `/admin/anuncios`. A landing page pública exibe essas informações junto com campeonatos e produtos em destaque.
-
-- Tipo `Banner`: imagem 1200×400px, JPEG/WebP, máx. 2 MB
-- Tipo `Destaque`: imagem 800×600px, JPEG/WebP, máx. 1 MB
-- Tipo `Aviso`: texto livre com título e descrição
-
-### Analytics
-Endpoints em `/api/analytics` expõem KPIs do dia, ticket médio (30 dias), curva horária de vendas, top 5 produtos, clientes ativos/inativos e insights individuais por cliente.
-
-### Autenticação segura
-- Login admin via e-mail + senha
-- Reset de senha por e-mail (token 2h, sem user enumeration)
-- Refresh token com revogação via logout
-
----
-
-## Estrutura do projeto
-
-```
-softNerd/
-├── CardGameStore/          ← API ASP.NET Core 8
-│   ├── Controllers/        ← Endpoints REST
-│   ├── Services/           ← Regras de negócio
-│   ├── Models/             ← Entidades do banco
-│   ├── DTOs/               ← Objetos de transferência
-│   └── Data/               ← DbContext e seed
-├── frontend/               ← Next.js 14 (sistema real)
-│   ├── app/
-│   │   ├── page.tsx        ← Landing page pública
-│   │   ├── admin/          ← Painel administrativo (sidebar responsiva)
-│   │   └── mesa/[mesa]/    ← Login e comanda via QR Code
-│   ├── components/         ← Componentes reutilizáveis
-│   └── lib/                ← API client, auth, SignalR
-├── teste/                  ← Demo standalone com dados mockados (não sobe ao git)
-│   ├── app/admin/          ← Todas as telas do admin com recharts
-│   ├── app/comanda/        ← Visão mobile do cliente
-│   └── app/loja/           ← Landing page pública
-├── tests/unit/             ← xUnit (62 testes nos 6 serviços principais)
-├── docker-compose.yml
-└── start.ps1
 ```
 
 ---
@@ -141,39 +153,21 @@ cd tests/unit/CardGameStore.Tests
 dotnet test
 ```
 
-62 testes unitários cobrindo: Auth, Comanda, VendaAvulsa, Product, User, Championship.
+62 testes unitários cobrindo os serviços principais: Auth, Comanda, VendaAvulsa, Product, User, Championship.
 
 ---
 
-## Variáveis de ambiente
+## Deploy em Produção
 
-| Variável | Descrição |
-|---|---|
-| `JWT_SECRET` | Chave secreta para assinar tokens JWT (mín. 32 chars) |
-| `POSTGRES_USER` | Usuário do PostgreSQL |
-| `POSTGRES_PASSWORD` | Senha do PostgreSQL |
-| `POSTGRES_DB` | Nome do banco de dados |
-| `PGADMIN_EMAIL` | E-mail para acesso ao pgAdmin |
-| `PGADMIN_PASSWORD` | Senha para acesso ao pgAdmin |
-| `SMTP_HOST` | Servidor SMTP para reset de senha |
-| `SMTP_PORT` | Porta do servidor SMTP |
-| `SMTP_USER` | Usuário SMTP |
-| `SMTP_PASS` | Senha SMTP |
-
-> **Nunca commite o arquivo `.env` no Git.** Ele já está no `.gitignore`.
+Consulte [`CHECKLIST-PRODUCAO.md`](./CHECKLIST-PRODUCAO.md) para o guia completo de deploy, incluindo configuração de HTTPS, CORS, backups e troca de credenciais.
 
 ---
 
-## Autenticação
+## Licenciamento Comercial
 
-O sistema usa **JWT Bearer Tokens** com refresh automático.
+Este software é **proprietário**. O código-fonte é disponibilizado exclusivamente para avaliação técnica. A implantação em ambiente comercial requer contrato de licenciamento.
 
-| Perfil | Acesso | Login |
-|---|---|---|
-| Admin | Painel completo | E-mail + senha em `/login` |
-| Cliente | Comanda da mesa | CPF + WhatsApp via QR Code |
-
-Tokens de acesso expiram em **60 minutos**. O refresh token dura **30 dias**.
+Para contratação ou informações comerciais, consulte o arquivo [`LICENSE`](./LICENSE).
 
 ---
 
@@ -181,11 +175,9 @@ Tokens de acesso expiram em **60 minutos**. O refresh token dura **30 dias**.
 
 | Branch | Descrição |
 |---|---|
-| `main` | Código estável — pronto para produção |
-| `dev` | Desenvolvimento ativo — testar antes de mergear |
+| `main` | Código estável — testado e aprovado |
+| `dev` | Desenvolvimento ativo |
 
 ---
 
-## Licença
-
-Projeto privado — softNerd © 2025
+softNerd © 2025 — Todos os direitos reservados.
