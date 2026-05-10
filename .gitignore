@@ -106,3 +106,7 @@ PUSH-GITHUB.bat
 
 # Frontend de demonstracao (nao vai ao git)
 teste/
+
+# Claude Code (gerado automaticamente)
+.claude/
+frontend/tsconfig.tsbuildinfo
