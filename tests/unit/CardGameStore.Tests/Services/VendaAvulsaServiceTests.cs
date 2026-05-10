@@ -35,7 +35,9 @@ public class VendaAvulsaServiceTests
 
         var mockCollection = new Mock<IMongoCollection<VendaAvulsa>>();
 
-        // InsertOneAsync: capture the document in storedDocs
+        // ── InsertOneAsync ────────────────────────────────────────────────────
+        // InsertOneAsync(TDocument, InsertOneOptions?, CancellationToken) is a real
+        // IMongoCollection interface method — Moq can intercept it directly.
         mockCollection
             .Setup(c => c.InsertOneAsync(
                 It.IsAny<VendaAvulsa>(),
@@ -44,29 +46,34 @@ public class VendaAvulsaServiceTests
             .Callback<VendaAvulsa, InsertOneOptions?, CancellationToken>((doc, _, _) => storedDocs.Add(doc))
             .Returns(Task.CompletedTask);
 
-        // Find → SortByDescending → Limit → ToCursorAsync (used by ToListAsync)
+        // ── FindAsync<TResult> ────────────────────────────────────────────────
+        // In MongoDB.Driver 2.28 the fluent .Find() / .SortByDescending() / .Limit()
+        // are ALL extension methods and cannot be mocked by Moq.
+        // Strategy: let the real FindFluent (created by the extension) run its chain,
+        // and mock only FindAsync<VendaAvulsa> — the actual IMongoCollection interface
+        // method that FindFluent calls internally when ToListAsync() is invoked.
         var mockCursor = new Mock<IAsyncCursor<VendaAvulsa>>();
         mockCursor.Setup(c => c.Current).Returns(storedDocs);
         mockCursor.SetupSequence(c => c.MoveNextAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(true)
             .ReturnsAsync(false);
 
-        var mockFluent = new Mock<IFindFluent<VendaAvulsa, VendaAvulsa>>();
-        mockFluent
-            .Setup(f => f.SortByDescending(It.IsAny<System.Linq.Expressions.Expression<Func<VendaAvulsa, object>>>()))
-            .Returns(mockFluent.Object);
-        mockFluent
-            .Setup(f => f.Limit(It.IsAny<int?>()))
-            .Returns(mockFluent.Object);
-        mockFluent
-            .Setup(f => f.ToCursorAsync(It.IsAny<CancellationToken>()))
+        // Session-ful overload (called by FindFluent with session = null):
+        mockCollection
+            .Setup(c => c.FindAsync<VendaAvulsa>(
+                It.IsAny<IClientSessionHandle>(),
+                It.IsAny<FilterDefinition<VendaAvulsa>>(),
+                It.IsAny<FindOptions<VendaAvulsa, VendaAvulsa>>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(mockCursor.Object);
 
+        // Session-less overload (fallback, in case the driver uses this path):
         mockCollection
-            .Setup(c => c.Find(
+            .Setup(c => c.FindAsync<VendaAvulsa>(
                 It.IsAny<FilterDefinition<VendaAvulsa>>(),
-                It.IsAny<FindOptions>()))
-            .Returns(mockFluent.Object);
+                It.IsAny<FindOptions<VendaAvulsa, VendaAvulsa>>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockCursor.Object);
 
         var mockMongo = new Mock<IMongoDatabase>();
         mockMongo

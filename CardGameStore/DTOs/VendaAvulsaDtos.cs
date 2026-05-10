@@ -35,6 +35,7 @@ public class VendaAvulsaDto
     public string?             ClientName      { get; set; }
     public string              PaymentMethod   { get; set; } = string.Empty;
     public decimal             TotalInReais    { get; set; }
+    public int                 TotalInCents    => (int)(TotalInReais * 100);
     public DateTime            SoldAt          { get; set; }
     public string              SoldByAdminName { get; set; } = string.Empty;
     public int                 DiscountPercent { get; set; }

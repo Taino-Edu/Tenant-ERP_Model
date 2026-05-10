@@ -114,7 +114,7 @@ public class AnalyticsController : ControllerBase
         var cartao   = vendasHoje.Count(v => v.PaymentMethod is "Cartao" or "Credito" or "Debito");
         var dinheiro = vendasHoje.Count(v => v.PaymentMethod == "Dinheiro");
 
-        var comandasAbertas = await _db.Comandas.CountAsync(c => c.Status == "Aberta");
+        var comandasAbertas = await _db.Comandas.CountAsync(c => c.Status == ComandaStatus.Aberta);
 
         return Ok(new DashboardAnalyticsDto
         {

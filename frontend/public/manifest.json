@@ -1,0 +1,40 @@
+{
+  "name": "softNerd — Card Game Store",
+  "short_name": "softNerd",
+  "description": "Sistema de gestão da loja de Card Games",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121215",
+  "theme_color": "#6C3FC5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Frente de Caixa",
+      "short_name": "Caixa",
+      "url": "/admin/venda-avulsa",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/admin/dashboard",
+      "icons": [{ "src": "/icon.svg", "sizes": "any" }]
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "lang": "pt-BR"
+}

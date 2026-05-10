@@ -4,15 +4,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Tema escuro (padrão) ─────────────────────────────────────────────────── */
 @layer base {
-  :root { color-scheme: dark; }
-  body {
-    @apply bg-surface-900 text-gray-100 font-sans antialiased;
+  :root {
+    color-scheme: dark;
+    --bg-primary:   #121215;
+    --bg-card:      #1A1A1F;
+    --bg-input:     #1E1E24;
+    --bg-chip:      #1E1E24;
+    --border-color: #2D2D36;
+    --text-primary: #F3F4F6;
+    --text-muted:   #9CA3AF;
+    --text-faint:   #4B5563;
   }
-  * { @apply border-surface-500; }
+
+  /* Tema claro: ativado via class="light" no <html> */
+  html.light {
+    color-scheme: light;
+    --bg-primary:   #F5F5F7;
+    --bg-card:      #FFFFFF;
+    --bg-input:     #F0F0F5;
+    --bg-chip:      #EBEBF0;
+    --border-color: #D1D1DB;
+    --text-primary: #111118;
+    --text-muted:   #555566;
+    --text-faint:   #9090A0;
+  }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply font-sans antialiased;
+  }
+
+  * { border-color: var(--border-color); }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { @apply bg-surface-500 rounded-full; }
+  ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 9999px; }
 }
 
 @layer components {
@@ -22,10 +50,14 @@
            disabled:opacity-50 disabled:cursor-not-allowed active:scale-95;
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 px-4 py-2 bg-surface-700 hover:bg-surface-500
-           text-gray-200 font-medium rounded-xl border border-surface-500
+    @apply inline-flex items-center gap-2 px-4 py-2 font-medium rounded-xl
            transition-all duration-150 active:scale-95;
+    background-color: var(--bg-chip);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
   }
+  .btn-secondary:hover { filter: brightness(0.95); }
+
   .btn-danger {
     @apply inline-flex items-center gap-2 px-4 py-2 bg-accent-red hover:bg-red-500
            text-white font-semibold rounded-xl transition-all duration-150 active:scale-95;
@@ -34,18 +66,28 @@
     @apply inline-flex items-center gap-2 px-4 py-2 bg-accent-green hover:opacity-90
            text-black font-semibold rounded-xl transition-all duration-150 active:scale-95;
   }
+
   .card {
-    @apply bg-surface-800 border border-surface-500 rounded-xl p-5 shadow-lg;
+    @apply rounded-xl p-5 shadow-lg;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
   }
+
   .input {
-    @apply w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded-lg
-           text-gray-100 placeholder-gray-500 text-sm
+    @apply w-full px-3 py-2 rounded-lg text-sm
            focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
            transition-all duration-150;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
   }
+  .input::placeholder { color: var(--text-faint); }
+
   .label {
-    @apply block text-sm font-medium text-gray-400 mb-1.5;
+    @apply block text-sm font-medium mb-1.5;
+    color: var(--text-muted);
   }
+
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded text-xs font-bold;
   }
@@ -75,4 +117,49 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .animate-fade-in { animation: fade-in 0.15s ease-out forwards; }
+
+  /* Transição suave ao trocar tema */
+  html { transition: background-color 0.2s ease, color 0.2s ease; }
 }
+
+/* ── Overrides de tema claro para classes Tailwind fixas ──────────────────── */
+html.light {
+  /* Fundo de página */
+  .bg-surface-900 { background-color: #F5F5F7 !important; }
+  .bg-surface-800 { background-color: #FFFFFF !important; }
+  .bg-surface-700 { background-color: #F0F0F5 !important; }
+  .bg-surface-600 { background-color: #EBEBF0 !important; }
+  .bg-surface-500 { background-color: #D1D1DB !important; }
+
+  /* Bordas */
+  .border-surface-500 { border-color: #D1D1DB !important; }
+  .border-surface-400 { border-color: #C0C0CC !important; }
+
+  /* Textos */
+  .text-white     { color: #111118 !important; }
+  .text-gray-100  { color: #1a1a24 !important; }
+  .text-gray-200  { color: #2a2a38 !important; }
+  .text-gray-300  { color: #444455 !important; }
+  .text-gray-400  { color: #666677 !important; }
+  .text-gray-500  { color: #888899 !important; }
+  .text-gray-600  { color: #AAAAAA !important; }
+
+  /* Inputs e selects com bg fixo */
+  .bg-surface-700.input,
+  .input {
+    background-color: #F0F0F5 !important;
+    color: #111118 !important;
+    border-color: #D1D1DB !important;
+  }
+
+  /* Admin sidebar */
+  .bg-\[#1E1E2D\] { background-color: #EAE8FF !important; }
+
+  /* Hover states */
+  .hover\:bg-surface-700:hover { background-color: #EAEAF0 !important; }
+  .hover\:bg-surface-500:hover { background-color: #D5D5DF !important; }
+
+  /* Placeholders */
+  ::placeholder { color: #AAAAAA !important; }
+}
+

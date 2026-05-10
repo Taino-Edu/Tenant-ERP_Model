@@ -2,8 +2,9 @@
 // TcgApiClient.cs — Cliente HTTP multi-provider para APIs TCG públicas
 //
 // Roteamento por jogo:
-//   Pokemon      → https://api.pokemontcg.io/v2/   (gratuita, sem auth obrigatória)
-//   MTG / Magic  → https://api.scryfall.com/        (gratuita, sem auth)
+//   Pokemon      → https://api.pokemontcg.io/v2/          (gratuita, sem auth obrigatória)
+//   MTG / Magic  → https://api.scryfall.com/               (gratuita, sem auth)
+//   Yu-Gi-Oh!    → https://db.ygoprodeck.com/api/v7/       (gratuita, sem auth)
 //   Outros       → retorna vazio (graceful degradation)
 //
 // Para aumentar rate limits do Pokemon TCG API, defina:
@@ -62,7 +63,10 @@ public class TcgApiClient : ITcgApiClient
         if (normalized.Contains("mtg") || normalized.Contains("magic"))
             return await SearchScryfallCardsAsync(name, page, pageSize);
 
-        // Para outros jogos (Yu-Gi-Oh, One Piece, etc.) retorna vazio sem erro
+        if (normalized.Contains("yu-gi-oh") || normalized.Contains("yugioh") || normalized.Contains("yu gi oh"))
+            return await SearchYugiohCardsAsync(name, page, pageSize);
+
+        // Para outros jogos (One Piece, Dragon Ball, etc.) retorna vazio sem erro
         _logger.LogDebug("Jogo '{Game}' sem provider configurado — retornando vazio.", game);
         return new TcgApiSearchResponse();
     }
@@ -366,6 +370,97 @@ public class TcgApiClient : ITcgApiClient
                          decimal.TryParse(foil.GetString(), System.Globalization.NumberStyles.Any,
                              System.Globalization.CultureInfo.InvariantCulture, out var foilVal) ? foilVal : null,
             } : null,
+        };
+    }
+
+    // =========================================================================
+    // YGOPRODeck API (Yu-Gi-Oh!) — https://db.ygoprodeck.com/api/v7/
+    // =========================================================================
+
+    private HttpClient YugiohClient() => _factory.CreateClient("YugiohApi");
+
+    private async Task<TcgApiSearchResponse> SearchYugiohCardsAsync(string name, int page, int pageSize)
+    {
+        try
+        {
+            var q        = Uri.EscapeDataString(name);
+            var offset   = (page - 1) * pageSize;
+            var url      = $"/api/v7/cardinfo.php?fname={q}&num={pageSize}&offset={offset}";
+            var response = await YugiohClient().GetAsync(url);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+                return new TcgApiSearchResponse(); // sem resultados
+
+            response.EnsureSuccessStatusCode();
+
+            var json  = await response.Content.ReadAsStringAsync();
+            var doc   = JsonDocument.Parse(json);
+            var root  = doc.RootElement;
+
+            var cards = root.TryGetProperty("data", out var dataArr)
+                ? dataArr.EnumerateArray().Select(MapYugiohCard).ToList()
+                : new List<TcgApiCardResponse>();
+
+            var total = root.TryGetProperty("meta", out var meta) &&
+                        meta.TryGetProperty("total_rows", out var tr) ? tr.GetInt32() : cards.Count;
+
+            return new TcgApiSearchResponse
+            {
+                Cards      = cards,
+                TotalCount = total,
+                Page       = page,
+                PageSize   = pageSize,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao pesquisar cartas Yu-Gi-Oh '{Name}'", name);
+            return new TcgApiSearchResponse();
+        }
+    }
+
+    private static TcgApiCardResponse MapYugiohCard(JsonElement c)
+    {
+        // Pega a primeira imagem disponível
+        string? smallImg = null, largeImg = null;
+        if (c.TryGetProperty("card_images", out var imgs) && imgs.ValueKind == JsonValueKind.Array)
+        {
+            var first = imgs.EnumerateArray().FirstOrDefault();
+            if (first.ValueKind != JsonValueKind.Undefined)
+            {
+                smallImg = first.TryGetProperty("image_url_small", out var s) ? s.GetString() : null;
+                largeImg = first.TryGetProperty("image_url",       out var l) ? l.GetString() : null;
+            }
+        }
+
+        // Preço (card_prices[0].tcgplayer_price)
+        decimal? price = null;
+        if (c.TryGetProperty("card_prices", out var pricesArr) && pricesArr.ValueKind == JsonValueKind.Array)
+        {
+            var first = pricesArr.EnumerateArray().FirstOrDefault();
+            if (first.ValueKind != JsonValueKind.Undefined &&
+                first.TryGetProperty("tcgplayer_price", out var tp) &&
+                tp.ValueKind == JsonValueKind.String &&
+                decimal.TryParse(tp.GetString(), System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out var pVal))
+                price = pVal;
+        }
+
+        var cardId = c.TryGetProperty("id", out var id) ? id.GetInt64().ToString() : Guid.NewGuid().ToString();
+
+        return new TcgApiCardResponse
+        {
+            Id      = $"ygo:{cardId}",
+            Name    = c.TryGetProperty("name", out var nm)     ? nm.GetString()!  : string.Empty,
+            Game    = "Yu-Gi-Oh!",
+            SetName = null,
+            SetCode = null,
+            Number  = cardId,
+            Rarity  = null,
+            Type    = c.TryGetProperty("type", out var t)      ? t.GetString()    : null,
+            Subtypes = c.TryGetProperty("race", out var race)  ? new List<string> { race.GetString()! } : null,
+            Images  = new TcgCardImages { Small = smallImg, Large = largeImg },
+            Prices  = price.HasValue ? new TcgCardPricesApi { Market = price } : null,
         };
     }
 }

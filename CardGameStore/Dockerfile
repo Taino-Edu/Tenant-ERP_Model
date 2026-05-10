@@ -12,8 +12,10 @@ COPY CardGameStore.csproj .
 RUN dotnet restore
 
 # Copia o restante e publica em modo Release
+# Nota: --no-restore omitido intencionalmente — garante resolve correto de pacotes
+# mesmo quando a camada de restore está em cache com versão anterior do .csproj
 COPY . .
-RUN dotnet publish -c Release -o /app/publish --no-restore
+RUN dotnet publish -c Release -o /app/publish
 
 # ---- STAGE 2: RUNTIME ----
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime

@@ -20,7 +20,7 @@ public class VendaAvulsa
     public int TotalInCents { get; set; }
 
     /// <summary>Pix | Dinheiro | CartaoCredito | CartaoDebito</summary>
-    public string PaymentMethod { get; set; } = PaymentMethod.Pix;
+    public string PaymentMethod { get; set; } = CardGameStore.Models.MongoDB.PaymentMethod.Pix;
 
     public string? ClientName { get; set; }
 

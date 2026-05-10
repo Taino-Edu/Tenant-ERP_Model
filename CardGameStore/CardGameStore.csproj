@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CardGameStore</RootNamespace>
+    <AssemblyName>CardGameStore</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Entity Framework Core -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.10" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.10" />
+
+    <!-- Authentication / JWT -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
+
+    <!-- Swagger -->
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.8.1" />
+
+    <!-- MongoDB -->
+    <PackageReference Include="MongoDB.Driver" Version="2.28.0" />
+
+    <!-- BCrypt -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+
+    <!-- SignalR (built into ASP.NET Core, but included for clarity) -->
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.10" />
+
+    <!-- Health Checks -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="8.0.10" />
+    <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="8.0.1" />
+
+    <!-- QR Code generation -->
+    <PackageReference Include="QRCoder" Version="1.4.3" />
+  </ItemGroup>
+
+</Project>

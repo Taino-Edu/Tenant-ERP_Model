@@ -107,7 +107,10 @@ public class ComandaService : IComandaService
             AddedByUserId    = userId,
         };
 
-        comanda.Items.Add(item);
+        // _db.Add ensures EntityState.Added; navigation fixup populates comanda.Items.
+        // Using comanda.Items.Add alone causes EF to infer Modified (not Added) for
+        // entities with a pre-set client-generated GUID key.
+        _db.Add(item);
         comanda.Status        = ComandaStatus.EmAndamento;
         comanda.TotalInCents += item.SubtotalInCents;
 
@@ -140,7 +143,7 @@ public class ComandaService : IComandaService
             AddedByUserId    = adminId,
         };
 
-        comanda.Items.Add(item);
+        _db.Add(item);
         comanda.Status        = ComandaStatus.EmAndamento;
         comanda.TotalInCents += item.SubtotalInCents;
 

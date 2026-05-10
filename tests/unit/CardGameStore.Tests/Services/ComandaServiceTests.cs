@@ -8,9 +8,12 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
+using CardGameStore.Services.Interfaces;
 using FluentAssertions;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace CardGameStore.Tests.Services;
 
@@ -18,16 +21,23 @@ public class ComandaServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static AppDbContext CreateDb(string name)
+    // SQLite in-memory is used instead of EF InMemory to avoid value-converter
+    // bugs (HasConversion<string> on enums breaks InMemoryTable.Update in 8.x).
+    // Each test gets its own open SqliteConnection so the DB lives for the test duration.
+    private static AppDbContext CreateDb(string _)
     {
+        var connection = new SqliteConnection("Filename=:memory:");
+        connection.Open();
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(name)
+            .UseSqlite(connection)
             .Options;
-        return new AppDbContext(options);
+        var db = new AppDbContext(options);
+        db.Database.EnsureCreated();
+        return db;
     }
 
     private static ComandaService CreateService(AppDbContext db) =>
-        new(db, NullLogger<ComandaService>.Instance);
+        new(db, new Mock<IEmailService>().Object, NullLogger<ComandaService>.Instance);
 
     private static async Task<(User user, Product product, Comanda comanda)> SeedAsync(AppDbContext db)
     {

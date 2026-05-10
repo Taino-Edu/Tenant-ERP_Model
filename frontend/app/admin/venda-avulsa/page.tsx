@@ -6,11 +6,169 @@ import toast from 'react-hot-toast'
 import {
   ShoppingBag, Plus, Minus, Trash2, User, CheckCircle, RotateCcw,
   Loader2, Receipt, PackageOpen, Banknote, CreditCard, QrCode,
-  Tag, History, TrendingUp, Clock,
+  Tag, History, TrendingUp, Clock, FileText,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 interface CartItem { product: Product; quantity: number }
+
+// ── Geração de PDF via print window ──────────────────────────────────────────
+
+function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string) {
+  const w = window.open('', '_blank', 'width=420,height=640')
+  if (!w) { alert('Permita pop-ups para gerar o PDF'); return }
+
+  const date = new Date(receipt.soldAt).toLocaleString('pt-BR')
+  const itemsHTML = receipt.items.map(it => `
+    <tr>
+      <td>${it.quantity}× ${it.productName}</td>
+      <td align="right">R$&nbsp;${it.subtotalInReais.toFixed(2).replace('.', ',')}</td>
+    </tr>
+  `).join('')
+
+  const discountRow = receipt.discountPercent > 0 ? `
+    <tr style="color:#16a34a;">
+      <td>Desconto (${receipt.discountPercent}%)</td>
+      <td align="right">−R$&nbsp;${receipt.discountInReais.toFixed(2).replace('.', ',')}</td>
+    </tr>
+  ` : ''
+
+  w.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<title>Comprovante — softNerd</title>
+<style>
+  @page { size: 80mm auto; margin: 6mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; font-size: 11px; color: #111; padding: 8px; }
+  h1 { font-size: 15px; text-align: center; letter-spacing: 1px; }
+  .sub { text-align: center; font-size: 10px; color: #555; margin-bottom: 8px; }
+  hr { border: none; border-top: 1px dashed #999; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 2px 0; vertical-align: top; }
+  .total-row td { font-size: 14px; font-weight: bold; padding-top: 4px; }
+  .payment { font-size: 10px; color: #555; margin-top: 4px; }
+  .footer { text-align: center; font-size: 10px; color: #777; margin-top: 10px; }
+  @media print { body { padding: 0; } }
+</style>
+</head><body>
+<h1>softNerd</h1>
+<p class="sub">${date}</p>
+${receipt.clientName ? `<p class="sub">Cliente: <strong>${receipt.clientName}</strong></p>` : ''}
+<hr>
+<table>
+  ${itemsHTML}
+  ${discountRow}
+</table>
+<hr>
+<table>
+  <tr class="total-row">
+    <td>TOTAL</td>
+    <td align="right">R$&nbsp;${receipt.totalInReais.toFixed(2).replace('.', ',')}</td>
+  </tr>
+</table>
+<p class="payment">Pagamento: ${payLabel}</p>
+<hr>
+<p class="footer">Obrigado pela preferência! 🃏</p>
+<script>window.onload = function() { window.print(); }<\/script>
+</body></html>`)
+  w.document.close()
+}
+
+function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYMENT_METHODS) {
+  const w = window.open('', '_blank', 'width=700,height=900')
+  if (!w) { alert('Permita pop-ups para gerar o PDF'); return }
+
+  const today = new Date().toLocaleDateString('pt-BR')
+  const totalDia = history.reduce((s, v) => s + v.totalInReais, 0)
+
+  // Agrupar por método de pagamento
+  const byMethod = payMethods.map(m => ({
+    label: m.label,
+    total: history.filter(v => v.paymentMethod === m.value).reduce((s, v) => s + v.totalInReais, 0),
+    count: history.filter(v => v.paymentMethod === m.value).length,
+  })).filter(m => m.count > 0)
+
+  const vendasHTML = history.map(v => {
+    const payLabel = payMethods.find(m => m.value === v.paymentMethod)?.label ?? v.paymentMethod
+    const hora = new Date(v.soldAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    const itens = v.items.map(it => `${it.quantity}× ${it.productName}`).join(', ')
+    return `<tr>
+      <td>${hora}</td>
+      <td>${v.clientName ?? '—'}</td>
+      <td style="max-width:200px;font-size:10px;">${itens}</td>
+      <td>${payLabel}</td>
+      <td align="right" style="font-weight:bold;">R$&nbsp;${v.totalInReais.toFixed(2).replace('.', ',')}</td>
+    </tr>`
+  }).join('')
+
+  const byMethodHTML = byMethod.map(m => `
+    <tr>
+      <td>${m.label}</td>
+      <td align="center">${m.count} venda${m.count !== 1 ? 's' : ''}</td>
+      <td align="right">R$&nbsp;${m.total.toFixed(2).replace('.', ',')}</td>
+    </tr>`).join('')
+
+  w.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<title>Relatório Diário — softNerd</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  h2 { font-size: 14px; margin: 16px 0 6px; color: #444; border-bottom: 1px solid #ddd; padding-bottom: 4px; }
+  .meta { color: #666; font-size: 11px; margin-bottom: 16px; }
+  .cards { display: flex; gap: 12px; margin-bottom: 16px; }
+  .card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px 16px; flex: 1; }
+  .card .val { font-size: 22px; font-weight: bold; color: #6C3FC5; }
+  .card .lbl { font-size: 10px; color: #888; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f4f4f8; text-align: left; padding: 5px 8px; font-size: 11px; color: #444; }
+  td { padding: 4px 8px; border-bottom: 1px solid #f0f0f0; font-size: 11px; }
+  tr:last-child td { border-bottom: none; }
+  .total-row td { font-weight: bold; font-size: 13px; background: #f9f6ff; }
+  @media print { body { padding: 0; } }
+</style>
+</head><body>
+<h1>softNerd — Relatório Diário</h1>
+<p class="meta">Data: ${today} &nbsp;|&nbsp; Gerado em: ${new Date().toLocaleTimeString('pt-BR')}</p>
+
+<div class="cards">
+  <div class="card">
+    <div class="val">${history.length}</div>
+    <div class="lbl">Vendas realizadas</div>
+  </div>
+  <div class="card">
+    <div class="val">R$&nbsp;${totalDia.toFixed(2).replace('.', ',')}</div>
+    <div class="lbl">Total do dia</div>
+  </div>
+</div>
+
+<h2>Por Forma de Pagamento</h2>
+<table>
+  <thead><tr><th>Método</th><th>Qtd.</th><th>Total</th></tr></thead>
+  <tbody>${byMethodHTML}</tbody>
+  <tfoot>
+    <tr class="total-row">
+      <td>TOTAL GERAL</td>
+      <td align="center">${history.length}</td>
+      <td align="right">R$&nbsp;${totalDia.toFixed(2).replace('.', ',')}</td>
+    </tr>
+  </tfoot>
+</table>
+
+<h2>Detalhamento das Vendas</h2>
+<table>
+  <thead><tr><th>Hora</th><th>Cliente</th><th>Itens</th><th>Pagamento</th><th>Total</th></tr></thead>
+  <tbody>${vendasHTML}</tbody>
+</table>
+
+<script>window.onload = function() { window.print(); }<\/script>
+</body></html>`)
+  w.document.close()
+}
 
 const PAYMENT_ICONS: Record<string, React.ReactNode> = {
   Pix:           <QrCode     className="w-4 h-4" />,
@@ -28,6 +186,7 @@ export default function VendaAvulsaPage() {
   const [clientName, setClientName] = useState('')
   const [payment, setPayment]       = useState<string>(PAYMENT_METHODS[0].value)
   const [discountPct, setDiscount]  = useState(0)
+  const [discountMode, setDiscMode] = useState<'total' | 'per_item'>('total')
   const [received, setReceived]     = useState('')
   const [loading, setLoading]       = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -86,12 +245,18 @@ export default function VendaAvulsaPage() {
 
   function clearAll() {
     setCart([]); setClientName(''); setPayment(PAYMENT_METHODS[0].value)
-    setDiscount(0); setReceived(''); setReceipt(null)
+    setDiscount(0); setDiscMode('total'); setReceived(''); setReceipt(null)
   }
 
-  const subtotal       = cart.reduce((s, i) => s + i.product.priceInCents * i.quantity, 0)
-  const discountCents  = Math.round(subtotal * discountPct / 100)
-  const total          = subtotal - discountCents
+  const subtotal = cart.reduce((s, i) => s + i.product.priceInCents * i.quantity, 0)
+
+  // Cálculo de desconto: "no total" abate do subtotal final;
+  // "por item" abate de cada unidade (mas o total exibido é o mesmo — a diferença é semântica para o cupom)
+  const discountCents = discountMode === 'total'
+    ? Math.round(subtotal * discountPct / 100)
+    : cart.reduce((s, i) => s + Math.round(i.product.priceInCents * discountPct / 100) * i.quantity, 0)
+
+  const total = subtotal - discountCents
   const receivedCents  = Math.round(parseFloat(received.replace(',', '.') || '0') * 100)
   const troco          = receivedCents - total
 
@@ -125,6 +290,7 @@ export default function VendaAvulsaPage() {
       setCart([])
       setClientName('')
       setDiscount(0)
+      setDiscMode('total')
       setReceived('')
       toast.success('Venda registrada!')
     } catch (err: unknown) {
@@ -133,7 +299,7 @@ export default function VendaAvulsaPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [cart, clientName, payment, discountPct])
+  }, [cart, clientName, payment, discountPct, discountMode])
 
   const handleSubmit = useThrottle(submitRaw, 2000)
 
@@ -181,9 +347,17 @@ export default function VendaAvulsaPage() {
 
           <p className="text-xs text-gray-600">{new Date(receipt.soldAt).toLocaleString('pt-BR')}</p>
 
-          <button onClick={clearAll} className="btn-primary w-full justify-center">
-            <RotateCcw className="w-4 h-4" /> Nova Venda
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => printReceiptPDF(receipt, payLabel)}
+              className="btn-secondary flex-1 justify-center"
+            >
+              <FileText className="w-4 h-4" /> Imprimir / PDF
+            </button>
+            <button onClick={clearAll} className="btn-primary flex-1 justify-center">
+              <RotateCcw className="w-4 h-4" /> Nova Venda
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -406,7 +580,33 @@ export default function VendaAvulsaPage() {
 
             {/* Desconto + Total + Troco */}
             <div className="card space-y-3">
-              {/* Desconto */}
+              {/* Modo de desconto */}
+              <div className="flex items-center gap-1 bg-surface-800 p-1 rounded-lg">
+                <button
+                  onClick={() => setDiscMode('total')}
+                  className={clsx(
+                    'flex-1 py-1 rounded-md text-xs font-medium transition-all',
+                    discountMode === 'total'
+                      ? 'bg-brand-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  )}
+                >
+                  No total
+                </button>
+                <button
+                  onClick={() => setDiscMode('per_item')}
+                  className={clsx(
+                    'flex-1 py-1 rounded-md text-xs font-medium transition-all',
+                    discountMode === 'per_item'
+                      ? 'bg-brand-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'
+                  )}
+                >
+                  Por item
+                </button>
+              </div>
+
+              {/* Percentual de desconto */}
               <div className="flex items-center gap-2">
                 <Tag className="w-4 h-4 text-gray-500 shrink-0" />
                 <label className="text-xs text-gray-400 shrink-0">Desconto</label>
@@ -436,7 +636,9 @@ export default function VendaAvulsaPage() {
               )}
               {discountPct > 0 && (
                 <div className="flex justify-between text-sm">
-                  <span className="text-accent-green">Desconto ({discountPct}%)</span>
+                  <span className="text-accent-green">
+                    Desconto {discountPct}% {discountMode === 'per_item' ? '(por item)' : '(no total)'}
+                  </span>
                   <span className="text-accent-green font-mono">−{fmt(discountCents / 100)}</span>
                 </div>
               )}
@@ -506,7 +708,17 @@ function HistoricoTab({ history, loading }: { history: VendaAvulsaDto[]; loading
 
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
-      {/* Resumo do dia */}
+      {/* Resumo do dia + botão PDF */}
+      <div className="flex items-center justify-between gap-3">
+        {history.length > 0 && (
+          <button
+            onClick={() => printDailyReportPDF(history, PAYMENT_METHODS)}
+            className="btn-secondary text-sm flex items-center gap-2 ml-auto"
+          >
+            <FileText className="w-4 h-4" /> Exportar PDF do Dia
+          </button>
+        )}
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="card flex items-center gap-4">
           <div className="w-11 h-11 rounded-xl bg-brand-600/10 flex items-center justify-center">

@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Necessário para o Dockerfile multi-stage copiar .next/standalone
+  output: 'standalone',
+
   // Permite imagens de CDNs de TCG (Pokémon, Magic, etc.)
   images: {
     remotePatterns: [

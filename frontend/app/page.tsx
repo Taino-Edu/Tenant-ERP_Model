@@ -11,7 +11,7 @@ import {
   ScanLine, CreditCard, Award
 } from 'lucide-react'
 
-const MAIKON_WHATSAPP = '5511999999999' // TODO: substituir pelo número real
+const MAIKON_WHATSAPP = '5517997633103' // WhatsApp do Maikon
 
 export default function LandingPage() {
   const router = useRouter()
@@ -244,34 +244,59 @@ export default function LandingPage() {
 
       {/* ── Pontos ────────────────────────────────────────────────── */}
       <section id="pontos" className="py-20 px-6 border-t border-surface-500">
-        <div className="max-w-4xl mx-auto text-center">
-          <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Fidelidade</p>
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
-            Ganhe pontos a cada visita
-          </h2>
-          <p className="text-gray-400 text-lg mb-12 max-w-xl mx-auto">
-            Acumule pontos e troque por produtos na loja. Simples, sem aplicativo.
-          </p>
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Programa de Fidelidade</p>
+            <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
+              Ganhe pontos e troque por prêmios
+            </h2>
+            <p className="text-gray-400 text-lg max-w-xl mx-auto">
+              A cada compra você acumula pontos que podem ser usados como desconto na próxima visita.
+              Sem aplicativo, sem complicação.
+            </p>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+          {/* Timeline de como funciona */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
             {[
-              { icon: QrCode,       title: 'Cadastro grátis',       desc: 'Escaneie o QR e se cadastre com CPF e WhatsApp. Sem senha.' },
-              { icon: Star,         title: 'Pontos por visita',      desc: 'O admin adiciona pontos manualmente a cada compra ou visita.' },
-              { icon: ShoppingBag,  title: 'Troque por produtos',    desc: 'Use os pontos para abater o valor na comanda quando liberado.' },
-            ].map(({ icon: Icon, title, desc }) => (
-              <div key={title} className="bg-surface-800 border border-surface-500 rounded-2xl p-6 text-left hover:border-brand-500/40 transition">
-                <div className="w-10 h-10 bg-brand-500/10 border border-brand-500/20 rounded-xl flex items-center justify-center mb-4">
-                  <Icon className="w-5 h-5 text-brand-400" />
+              { step: '01', icon: QrCode,      color: 'text-brand-400',   bg: 'bg-brand-500/10 border-brand-500/20',   title: 'Cadastre-se',       desc: 'Escaneie o QR Code na loja e informe seu CPF e WhatsApp. Gratuito.' },
+              { step: '02', icon: ShoppingBag, color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20',   title: 'Compre na loja',     desc: 'A cada compra ou visita, o atendente adiciona pontos à sua conta.' },
+              { step: '03', icon: Star,         color: 'text-accent-green',bg: 'bg-accent-green/10 border-accent-green/20', title: 'Acumule pontos',  desc: 'Veja seu saldo de pontos e o histórico a qualquer momento.' },
+              { step: '04', icon: Award,        color: 'text-rose-400',   bg: 'bg-rose-500/10 border-rose-500/20',     title: 'Resgate descontos', desc: 'Troque seus pontos por desconto na comanda ou em produtos da loja.' },
+            ].map(({ step, icon: Icon, color, bg, title, desc }) => (
+              <div key={step} className="bg-surface-800 border border-surface-500 rounded-2xl p-6 relative hover:border-brand-500/30 transition group">
+                <span className="absolute top-4 right-4 text-3xl font-black text-surface-500 group-hover:text-brand-500/20 transition">{step}</span>
+                <div className={`w-10 h-10 ${bg} border rounded-xl flex items-center justify-center mb-4`}>
+                  <Icon className={`w-5 h-5 ${color}`} />
                 </div>
-                <h3 className="font-bold text-white mb-1">{title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{desc}</p>
+                <h3 className="font-bold text-white mb-1 text-sm">{title}</h3>
+                <p className="text-gray-500 text-xs leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
 
-          <div className="inline-flex items-center gap-2 bg-surface-800 border border-surface-500 rounded-xl px-5 py-3 text-sm text-gray-400">
-            <Shield className="w-4 h-4 text-brand-400 shrink-0" />
-            Pontos são válidos por 30 dias e controlados pelo administrador
+          {/* Destaque de benefícios */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-10">
+            {[
+              { label: 'Sem senha necessária', desc: 'Login só com CPF' },
+              { label: 'Pontos não expiram', desc: 'Válidos enquanto ativo' },
+              { label: '1 ponto = R$ 0,01', desc: '100 pontos = R$ 1,00 off' },
+            ].map(({ label, desc }) => (
+              <div key={label} className="flex items-center gap-3 bg-surface-800 border border-surface-500 rounded-xl px-4 py-3">
+                <CheckCircle className="w-5 h-5 text-accent-green shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-white">{label}</p>
+                  <p className="text-xs text-gray-500">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-2 bg-surface-800 border border-surface-500 rounded-xl px-5 py-3 text-sm text-gray-400">
+              <Shield className="w-4 h-4 text-brand-400 shrink-0" />
+              Dados protegidos — apenas CPF e WhatsApp para identificação
+            </div>
           </div>
         </div>
       </section>

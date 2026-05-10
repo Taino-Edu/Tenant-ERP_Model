@@ -182,7 +182,7 @@ export default function EstoquePage() {
                       <button onClick={() => handleStock(p.id, -1)} className="w-6 h-6 rounded bg-surface-600 hover:bg-red-600/30 text-gray-400 hover:text-red-400 transition-colors flex items-center justify-center text-lg leading-none">−</button>
                       <span className={p.isLowStock ? 'text-red-400 font-bold' : 'text-white'}>{p.stockQuantity}</span>
                       <button onClick={() => handleStock(p.id, +1)} className="w-6 h-6 rounded bg-surface-600 hover:bg-emerald-600/30 text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center text-lg leading-none">+</button>
-                      {p.isLowStock && <AlertTriangle className="w-3.5 h-3.5 text-red-400" title="Estoque baixo" />}
+                      {p.isLowStock && <AlertTriangle className="w-3.5 h-3.5 text-red-400" aria-label="Estoque baixo" />}
                     </div>
                   </td>
                   <td className="px-4 py-3">

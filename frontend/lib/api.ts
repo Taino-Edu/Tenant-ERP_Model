@@ -82,7 +82,7 @@ export const ANNOUNCEMENT_TYPES = ['Banner', 'Aviso', 'Destaque'] as const
 
 export interface CardCache {
   tcgCardId: string; name: string; game: string; setName: string | null
-  rarity: string | null; type: string | null; imageUrlSmall: string | null
+  number?: string | null; rarity: string | null; type: string | null; imageUrlSmall: string | null
   imageUrlLarge: string | null; marketPrices: { market: number | null; mid: number | null } | null
   cachedAt: string
 }
@@ -90,6 +90,7 @@ export interface CardCache {
 export interface Championship {
   id: string; name: string; game: string; status: string
   startDate: string; entryFeeInCents: number; maxParticipants: number | null
+  description?: string | null
   participants?: ChampionshipParticipant[]
 }
 

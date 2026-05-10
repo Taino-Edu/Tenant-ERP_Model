@@ -199,6 +199,13 @@ builder.Services.AddHttpClient("ScryfallApi", client =>
     client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
 });
 
+builder.Services.AddHttpClient("YugiohApi", client =>
+{
+    client.BaseAddress = new Uri("https://db.ygoprodeck.com/");
+    client.Timeout     = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
 // ---------------------------------------------------------------------------
 // 10. HEALTH CHECKS — Postgres + MongoDB via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
@@ -332,7 +339,7 @@ app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
-    c.RoutePrefix  = string.Empty;
+    c.RoutePrefix  = "swagger"; // UI disponível em /swagger
     c.DocumentTitle = "CardGameStore — softNerd";
 });
 
