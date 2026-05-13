@@ -63,6 +63,7 @@ services:
       EmailSettings__Password: "${EMAIL_PASSWORD:-}"
       EmailSettings__From:     "${EMAIL_FROM:-noreply@softnerd.com.br}"
       EmailSettings__AppUrl:   "${APP_URL:-http://localhost:3000}"
+      GeminiSettings__ApiKey:  "${GEMINI_API_KEY:-}"
     depends_on:
       postgres:
         condition: service_healthy

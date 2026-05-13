@@ -1,4 +1,5 @@
 import Sidebar from '@/components/admin/Sidebar'
+import AiChatWidget from '@/components/admin/AiChatWidget'
 import { Toaster } from 'react-hot-toast'
 import type { Metadata } from 'next'
 
@@ -20,6 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         />
         {children}
       </main>
+      <AiChatWidget />
     </div>
   )
 }

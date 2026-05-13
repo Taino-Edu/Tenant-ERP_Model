@@ -255,3 +255,16 @@ export const championshipApi = {
   setStatus:  (id: string, status: string) =>
     api.put(`/api/championship/${id}/status`, { status }),
 }
+
+// ── Assistente IA ─────────────────────────────────────────────────────────────
+
+export interface AiChatResponse {
+  reply:   string
+  success: boolean
+  error?:  string
+}
+
+export const aiApi = {
+  chat: (message: string) =>
+    api.post<AiChatResponse>('/api/ai/chat', { message }),
+}

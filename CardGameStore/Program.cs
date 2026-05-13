@@ -206,6 +206,13 @@ builder.Services.AddHttpClient("YugiohApi", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+// Gemini 2.0 Flash — assistente IA conversacional
+builder.Services.AddHttpClient("gemini", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
 // ---------------------------------------------------------------------------
 // 10. HEALTH CHECKS — Postgres + MongoDB via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
@@ -224,6 +231,7 @@ builder.Services.AddScoped<IUserService,         UserService>();
 builder.Services.AddScoped<IVendaAvulsaService,  VendaAvulsaService>();
 builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
+builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
 builder.Services.AddSingleton<ITcgService,       TcgService>();
 
