@@ -18,6 +18,19 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Mutex de refresh: evita múltiplas requisições simultâneas disparando vários refreshes
+// quando o token expira com várias chamadas em paralelo na mesma página.
+let refreshPromise: Promise<string> | null = null
+
+async function doRefresh(): Promise<string> {
+  const refresh = Cookies.get('refreshToken')
+  if (!refresh) throw new Error('Sem refresh token')
+  const { data } = await axios.post(`${BASE_URL}/api/auth/refresh`, { refreshToken: refresh })
+  Cookies.set('accessToken',  data.accessToken,  { expires: 1, sameSite: 'strict' })
+  Cookies.set('refreshToken', data.refreshToken, { expires: 30, sameSite: 'strict' })
+  return data.accessToken
+}
+
 // Tenta renovar o token se receber 401
 api.interceptors.response.use(
   (res) => res,
@@ -26,12 +39,12 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
-        const refresh = Cookies.get('refreshToken')
-        if (!refresh) throw new Error('Sem refresh token')
-        const { data } = await axios.post(`${BASE_URL}/api/auth/refresh`, { refreshToken: refresh })
-        Cookies.set('accessToken',  data.accessToken,  { expires: 1 })
-        Cookies.set('refreshToken', data.refreshToken, { expires: 30 })
-        original.headers.Authorization = `Bearer ${data.accessToken}`
+        // Reutiliza o mesmo promise se já há um refresh em andamento
+        if (!refreshPromise) {
+          refreshPromise = doRefresh().finally(() => { refreshPromise = null })
+        }
+        const newToken = await refreshPromise
+        original.headers.Authorization = `Bearer ${newToken}`
         return api(original)
       } catch {
         Cookies.remove('accessToken')

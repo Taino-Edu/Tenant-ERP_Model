@@ -238,16 +238,16 @@ builder.Services.AddSingleton<ITcgService,       TcgService>();
 // ---------------------------------------------------------------------------
 // 11. CORS
 // ---------------------------------------------------------------------------
+// CORS: origens lidas de config para evitar hardcoded e facilitar deploy
+var corsOrigins = (builder.Configuration["CorsSettings:AllowedOrigins"] ?? "http://localhost:3000")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://localhost:5000"
-            )
+            .WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -343,13 +343,17 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+// Swagger apenas em desenvolvimento — evita expor a estrutura da API em produção
+if (app.Environment.IsDevelopment())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
-    c.RoutePrefix  = "swagger"; // UI disponível em /swagger
-    c.DocumentTitle = "CardGameStore — softNerd";
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
+        c.RoutePrefix   = "swagger"; // UI disponível em /swagger
+        c.DocumentTitle = "CardGameStore — softNerd";
+    });
+}
 
 // SSL gerenciado pelo reverse proxy (Nginx/Cloudflare) — não redirecionar aqui
 app.UseCors("FrontendPolicy");

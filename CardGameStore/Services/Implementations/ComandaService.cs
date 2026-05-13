@@ -8,6 +8,9 @@ namespace CardGameStore.Services.Implementations;
 
 public class ComandaService : IComandaService
 {
+    // Constante para evitar magic strings sensíveis a typo/case
+    private const string PaymentCrediario = "Crediario";
+
     private readonly AppDbContext            _db;
     private readonly IEmailService           _email;
     private readonly ILogger<ComandaService> _logger;
@@ -192,7 +195,7 @@ public class ComandaService : IComandaService
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
         // ── Crediário ─────────────────────────────────────────────────────────
-        if (paymentMethod == "Crediario")
+        if (paymentMethod == PaymentCrediario)
         {
             // Bloqueia se o cliente já tem um crediário aberto
             var jaTemCrediario = await _db.Crediarios
@@ -349,6 +352,18 @@ public class ComandaService : IComandaService
             throw new InvalidOperationException(
                 $"Estoque insuficiente para '{product.Name}'. Disponível: {product.StockQuantity} un.");
 
+        // Decremento atômico: UPDATE ... WHERE stock >= qty
+        // Evita race condition em vendas simultâneas (estoque negativo)
+        var updated = await _db.Products
+            .Where(p => p.Id == product.Id && p.StockQuantity >= request.Quantity)
+            .ExecuteUpdateAsync(s => s.SetProperty(
+                p => p.StockQuantity, p => p.StockQuantity - request.Quantity));
+
+        if (updated == 0)
+            throw new InvalidOperationException(
+                $"Estoque insuficiente para '{product.Name}' (atualizado por outra venda simultânea).");
+
+        // Mantém o objeto local sincronizado para o SaveChanges final
         product.StockQuantity -= request.Quantity;
         return (product.Name, product.PriceInCents);
     }
