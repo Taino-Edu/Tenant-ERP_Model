@@ -4,10 +4,11 @@ import { useRouter } from 'next/navigation'
 import { isLoggedIn, isAdmin } from '@/lib/auth'
 import { championshipApi, productApi, announcementApi, Championship, Product, AnnouncementDto } from '@/lib/api'
 import Link from 'next/link'
+import ThemeToggle from '@/components/ThemeToggle'
 import {
   Gamepad2, Trophy, ShoppingBag, QrCode, Star,
   Calendar, Users, ChevronRight, Zap, Shield,
-  X, MessageCircle, CheckCircle, Package, ArrowRight,
+  X, MessageCircle, CheckCircle, Package,
   ScanLine, CreditCard, Award
 } from 'lucide-react'
 
@@ -44,10 +45,10 @@ export default function LandingPage() {
   const avisos  = announcements.filter(a => a.type === 'Aviso')
 
   return (
-    <div className="min-h-screen bg-surface-900 text-gray-100">
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
 
       {/* ── Navbar ─────────────────────────────────────────────────── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-surface-900/90 backdrop-blur-md border-b border-surface-500">
+      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md border-b" style={{ backgroundColor: 'color-mix(in srgb, var(--bg-primary) 90%, transparent)', borderColor: 'var(--border-color)' }}>
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Gamepad2 className="w-6 h-6 text-brand-500" />
@@ -62,6 +63,7 @@ export default function LandingPage() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
+            <ThemeToggle compact />
             <Link href="/login"
               className="text-sm text-gray-400 hover:text-white transition px-4 py-2">
               Área Admin
@@ -83,15 +85,16 @@ export default function LandingPage() {
         </div>
 
         {mobileMenu && (
-          <div className="md:hidden border-t border-surface-500 bg-surface-800 px-6 py-4 space-y-3">
+          <div className="md:hidden border-t px-6 py-4 space-y-3" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
             {['#campeonatos','#produtos','#como-funciona','#pontos'].map((href, i) => (
               <a key={href} href={href} onClick={() => setMobileMenu(false)}
-                className="block text-gray-400 hover:text-white text-sm py-1.5 capitalize">
+                className="block text-sm py-1.5 capitalize" style={{ color: 'var(--text-muted)' }}>
                 {['Campeonatos','Produtos','Como Funciona','Pontos'][i]}
               </a>
             ))}
-            <div className="flex gap-2 pt-2 border-t border-surface-500">
-              <Link href="/login" className="flex-1 text-center py-2 text-sm text-gray-400 hover:text-white border border-surface-500 rounded-xl">Admin</Link>
+            <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
+              <ThemeToggle compact />
+              <Link href="/login" className="flex-1 text-center py-2 text-sm border rounded-xl" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>Admin</Link>
               <a href="#campeonatos" className="flex-1 text-center py-2 text-sm bg-brand-500 text-white font-semibold rounded-xl">Eventos</a>
             </div>
           </div>
@@ -157,7 +160,7 @@ export default function LandingPage() {
       )}
 
       {/* ── Como funciona ─────────────────────────────────────────── */}
-      <section id="como-funciona" className="py-20 px-6 border-y border-surface-500 bg-surface-800/30">
+      <section id="como-funciona" className="py-20 px-6 border-y" style={{ borderColor: 'var(--border-color)', backgroundColor: 'color-mix(in srgb, var(--bg-card) 30%, transparent)' }}>
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-14">
             <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Simples assim</p>
@@ -216,7 +219,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Produtos ──────────────────────────────────────────────── */}
-      <section id="produtos" className="py-20 px-6 border-t border-surface-500 bg-surface-800/20">
+      <section id="produtos" className="py-20 px-6 border-t" style={{ borderColor: 'var(--border-color)', backgroundColor: 'color-mix(in srgb, var(--bg-card) 20%, transparent)' }}>
         <div className="max-w-5xl mx-auto">
           <div className="flex items-end justify-between mb-10">
             <div>
@@ -243,7 +246,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Pontos ────────────────────────────────────────────────── */}
-      <section id="pontos" className="py-20 px-6 border-t border-surface-500">
+      <section id="pontos" className="py-20 px-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
             <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Programa de Fidelidade</p>
@@ -302,8 +305,8 @@ export default function LandingPage() {
       </section>
 
       {/* ── CTA final ─────────────────────────────────────────────── */}
-      <section className="py-20 px-6 border-t border-surface-500">
-        <div className="max-w-3xl mx-auto bg-surface-800 border border-brand-500/20 rounded-2xl p-10 md:p-14 text-center">
+      <section className="py-20 px-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
+        <div className="max-w-3xl mx-auto border border-brand-500/20 rounded-2xl p-10 md:p-14 text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
           <h2 className="text-3xl md:text-4xl font-black text-white mb-3">Pronto para jogar?</h2>
           <p className="text-gray-400 mb-8 max-w-md mx-auto">
             Escaneie o QR Code na mesa e comece a aproveitar a experiência softNerd.
@@ -321,19 +324,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Footer ────────────────────────────────────────────────── */}
-      <footer className="border-t border-surface-500 py-10 px-6">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-500">
-          <div className="flex items-center gap-2 font-bold text-white">
-            <Gamepad2 className="w-5 h-5 text-brand-500" />
-            softNerd
-          </div>
-          <p>© {new Date().getFullYear()} softNerd. Todos os direitos reservados.</p>
-          <Link href="/login" className="hover:text-gray-300 transition flex items-center gap-1">
-            Área Admin <ChevronRight className="w-3 h-3" />
-          </Link>
-        </div>
-      </footer>
+      {/* O rodapé com links legais (LGPD) é renderizado pelo Footer global em app/layout.tsx */}
 
       {registerModal && (
         <RegisterModal championship={registerModal} onClose={() => setRegisterModal(null)} />

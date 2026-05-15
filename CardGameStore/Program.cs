@@ -5,6 +5,7 @@
 
 using System.Text;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using CardGameStore.Configuration;
 using CardGameStore.Data;
 using CardGameStore.HealthChecks;
@@ -346,6 +347,13 @@ using (var scope = app.Services.CreateScope())
 // 15. MIDDLEWARE PIPELINE
 // ---------------------------------------------------------------------------
 
+// ForwardedHeaders — lê X-Forwarded-For/Proto do proxy reverso (nginx/Cloudflare)
+// de forma controlada pelo runtime, eliminando leitura manual do header nos serviços
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
+
 // Headers de segurança HTTP em todas as respostas
 app.Use(async (context, next) =>
 {
@@ -370,6 +378,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // SSL gerenciado pelo reverse proxy (Nginx/Cloudflare) — não redirecionar aqui
+app.UseStaticFiles(); // serve wwwroot/uploads/* como arquivos estáticos
 app.UseCors("FrontendPolicy");
 app.UseRateLimiter();
 app.UseRequestTimeouts();

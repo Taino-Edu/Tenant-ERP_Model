@@ -291,6 +291,19 @@ export const aiApi = {
     api.post<AiChatResponse>('/api/ai/chat', { message }),
 }
 
+// ── Upload de imagem ──────────────────────────────────────────────────────────
+
+export const uploadApi = {
+  /** Envia um arquivo de imagem e retorna a URL pública gerada pelo servidor. */
+  image: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ url: string }>('/api/upload/image', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+
 // ── LGPD — Públic ─────────────────────────────────────────────────────────────
 
 export interface LgpdRequestCreate {

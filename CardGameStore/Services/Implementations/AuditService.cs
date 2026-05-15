@@ -20,15 +20,19 @@ public class AuditService : IAuditService
     private readonly AppDbContext              _db;
     private readonly IHttpContextAccessor      _httpContextAccessor;
     private readonly ILogger<AuditService>     _logger;
+    private readonly string                    _ipSalt;
 
     public AuditService(
         AppDbContext          db,
         IHttpContextAccessor  httpContextAccessor,
-        ILogger<AuditService> logger)
+        ILogger<AuditService> logger,
+        IConfiguration        configuration)
     {
         _db                  = db;
         _httpContextAccessor = httpContextAccessor;
         _logger              = logger;
+        // Salt impede ataque de dicionário sobre o hash de IP (espaço IPv4 é finito)
+        _ipSalt              = configuration["Security:IpHashSalt"] ?? "softnerd-ip-salt-dev";
     }
 
     /// <inheritdoc/>
@@ -51,13 +55,9 @@ public class AuditService : IAuditService
             var actorUserName = ctx?.User.FindFirst(ClaimTypes.Name)?.Value
                              ?? ctx?.User.FindFirst("name")?.Value;
 
-            // Obtém IP real (pode vir via header X-Forwarded-For em proxy/nginx)
+            // IP já resolvido pelo middleware UseForwardedHeaders (Program.cs)
+            // RemoteIpAddress reflete o IP real do cliente após o proxy processar X-Forwarded-For
             var ip = ctx?.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            if (ctx?.Request.Headers.TryGetValue("X-Forwarded-For", out var forwarded) == true
-                && !string.IsNullOrWhiteSpace(forwarded))
-            {
-                ip = forwarded.ToString().Split(',')[0].Trim();
-            }
 
             var log = new AuditLog
             {
@@ -89,9 +89,13 @@ public class AuditService : IAuditService
     /// Gera um hash SHA-256 do endereço IP.
     /// Isso torna o valor pseudoanônimo — não é possível recuperar o IP original.
     /// </summary>
-    private static string HashIp(string ip)
+    /// <summary>
+    /// SHA-256 com salt por aplicação.
+    /// Salt impede dicionário sobre espaço IPv4 (~4B endereços são trivialmente enumeráveis sem salt).
+    /// </summary>
+    private string HashIp(string ip)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(ip));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(_ipSalt + ip));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }

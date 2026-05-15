@@ -13,6 +13,7 @@
 
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -33,20 +34,22 @@ public class LgpdController : ControllerBase
     private readonly IEmailService  _email;
     private readonly IAuditService  _audit;
     private readonly ILogger<LgpdController> _logger;
+    private readonly string         _ipSalt;
 
-    // Email fixo do responsável pelo tratamento de dados (sem DPO nomeado ainda)
     private const string PrivacidadeEmail = "privacidade@softnerd.com.br";
 
     public LgpdController(
         AppDbContext          db,
         IEmailService         email,
         IAuditService         audit,
-        ILogger<LgpdController> logger)
+        ILogger<LgpdController> logger,
+        IConfiguration        configuration)
     {
         _db     = db;
         _email  = email;
         _audit  = audit;
         _logger = logger;
+        _ipSalt = configuration["Security:IpHashSalt"] ?? "softnerd-ip-salt-dev";
     }
 
     // =========================================================================
@@ -147,20 +150,29 @@ public class LgpdController : ControllerBase
     // =========================================================================
 
     /// <summary>
-    /// Permite ao solicitante consultar o status de sua solicitação pelo número de protocolo.
+    /// Permite ao solicitante consultar o status da sua solicitação.
+    /// Requer o número de protocolo E o e-mail usado na abertura (evita enumeração).
     /// </summary>
     [HttpGet("request/{id}")]
     [AllowAnonymous]
     [EnableRateLimiting("api")]
     [ProducesResponseType(typeof(LgpdRequestResponse), 200)]
     [ProducesResponseType(404)]
-    public async Task<IActionResult> GetRequest(string id)
+    public async Task<IActionResult> GetRequest(string id, [FromQuery] string? email)
     {
+        // Sem e-mail de confirmação: retorna 404 genérico (não revela se o protocolo existe)
+        if (string.IsNullOrWhiteSpace(email))
+            return NotFound(new { Message = "Protocolo não encontrado." });
+
         var req = await _db.LgpdRequests
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == id);
 
-        if (req == null)
+        // Valida posse: e-mail deve coincidir com o registrado na abertura
+        // Retorna 404 mesmo quando o protocolo existe mas o e-mail não bate
+        // (evita revelar que o protocolo é válido — proteção contra enumeração)
+        if (req == null || !string.Equals(req.RequesterEmail,
+                email.Trim().ToLowerInvariant(), StringComparison.Ordinal))
             return NotFound(new { Message = "Protocolo não encontrado." });
 
         return Ok(new LgpdRequestResponse
@@ -189,13 +201,8 @@ public class LgpdController : ControllerBase
     [ProducesResponseType(201)]
     public async Task<IActionResult> RecordConsent([FromBody] CookieConsentCreate dto)
     {
-        // Obtém IP real (respeita proxy reverso)
+        // IP resolvido pelo middleware UseForwardedHeaders (Program.cs)
         var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        if (HttpContext.Request.Headers.TryGetValue("X-Forwarded-For", out var forwarded)
-            && !string.IsNullOrWhiteSpace(forwarded))
-        {
-            ip = forwarded.ToString().Split(',')[0].Trim();
-        }
 
         // Extrai userId do JWT, se autenticado
         Guid? userId = null;
@@ -311,12 +318,13 @@ public class LgpdController : ControllerBase
         // Notifica o solicitante por email se a solicitação foi concluída ou negada
         if (dto.Status is "Concluido" or "Negado")
         {
+            // HtmlEncoder evita injeção de HTML malicioso no corpo do e-mail
             await _email.SendLgpdResponseAsync(
                 toEmail:     req.RequesterEmail,
                 toName:      req.RequesterName,
                 protocol:    req.Id,
                 requestType: req.RequestType,
-                response:    dto.AdminResponse
+                response:    HtmlEncoder.Default.Encode(dto.AdminResponse)
             );
         }
 
@@ -341,10 +349,10 @@ public class LgpdController : ControllerBase
 
     // ── Interno ───────────────────────────────────────────────────────────────
 
-    /// <summary>Gera hash SHA-256 do IP para pseudoanonimização.</summary>
-    private static string HashIp(string ip)
+    /// <summary>SHA-256 com salt — impede ataque de dicionário sobre espaço IPv4.</summary>
+    private string HashIp(string ip)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(ip));
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(_ipSalt + ip));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }

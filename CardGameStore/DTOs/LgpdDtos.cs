@@ -3,6 +3,7 @@
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
+using CardGameStore.Validation;
 
 namespace CardGameStore.DTOs;
 
@@ -22,6 +23,7 @@ public class LgpdRequestCreate
 
     [Required(ErrorMessage = "O CPF é obrigatório.")]
     [RegularExpression(@"^\d{11}$", ErrorMessage = "CPF deve conter exatamente 11 dígitos numéricos.")]
+    [CpfValid]
     public string RequesterCpf { get; set; } = string.Empty;
 
     /// <summary>
