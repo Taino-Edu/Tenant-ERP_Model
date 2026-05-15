@@ -1,7 +1,7 @@
 # Checklist de Produção — softNerd
 
 > Use esta lista antes de colocar o sistema em produção para um cliente.
-> Atualizado em 07/05/2026 — v2.1
+> Atualizado em 15/05/2026 — v3.0
 
 ---
 
@@ -12,13 +12,27 @@
 - [x] EnsureCreated no boot (sem necessidade de migrations manuais)
 - [x] Preço de itens resolvido no servidor (não confia no cliente)
 - [x] Rate limiting: 5 req/min nos endpoints de auth, 200 req/min nos demais
-- [x] Headers de segurança HTTP (X-Frame-Options, X-Content-Type-Options, etc.)
+- [x] Headers de segurança HTTP (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy)
 - [x] Venda avulsa (PDV no balcão)
 - [x] Crediário com bloqueio e email automático
 - [x] Analytics: KPIs, curva horária, top produtos, insights por cliente
 - [x] Notificações por email (reset senha, crediário, campeonatos, anúncios)
-- [x] Testes unitários: 62 testes nos 6 serviços principais
 - [x] Sidebar responsiva (mobile/tablet)
+- [x] HttpOnly cookies para JWT (accessToken + refreshToken, Secure em produção, SameSite=Strict)
+- [x] CPF Módulo 11 validado no backend (CpfValidAttribute)
+- [x] IP salt configurável (Security:IpHashSalt) para hash SHA-256 dos IPs no audit log
+- [x] UseForwardedHeaders middleware (resolve IP real atrás de proxy reverso)
+- [x] LGPD compliance completo: página pública /lgpd, /privacidade, /termos, cookie banner, formulário de direitos, audit log imutável com SHA-256 do IP
+- [x] Painel LGPD admin (/admin/lgpd) com resposta a solicitações e audit log
+- [x] Upload de imagens (POST /api/upload/image, JPEG/PNG/WebP, máx 5MB, validação dupla cliente+servidor)
+- [x] Tema claro/escuro (ThemeToggle em todas as páginas)
+- [x] Testes unitários: ~85 testes nos serviços principais
+- [x] Cobertura de código via coverlet (`dotnet test --collect:"XPlat Code Coverage"`)
+- [x] Yu-Gi-Oh API (ygoprodeck.com) além de Pokémon TCG e MTG (Scryfall)
+- [x] Cartas próprias (cadastro manual)
+- [x] Desconto por modo (atacado/varejo)
+- [x] PWA (auto-hide, instalável)
+- [x] Assistente IA conversacional (Gemini 2.0 Flash) no painel admin
 
 ---
 
@@ -45,6 +59,31 @@ Sem esses itens o sistema está **vulnerável ou não vai funcionar**.
 
 - [ ] **Trocar a senha do admin (Maikon) no primeiro login**
   Seed cria com `SenhaForte@123` — troque imediatamente após primeiro acesso
+
+- [ ] **Trocar SECURITY_IPHASHSALT**
+  Gerar valor forte e configurar no `.env`:
+  ```bash
+  openssl rand -base64 32
+  ```
+  Variável: `Security__IpHashSalt`
+
+- [ ] **Configurar GEMINI_API_KEY**
+  Obter em aistudio.google.com (gratuito, sem cartão) e adicionar ao `.env`:
+  ```
+  GEMINI_API_KEY=sua-chave-aqui
+  ```
+
+- [ ] **Designar DPO (Data Protection Officer)**
+  Criar email `privacidade@seudominio.com.br` e atualizar referência na página `/privacidade`
+
+- [ ] **Revisar textos legais com advogado**
+  Páginas `/privacidade` e `/termos` devem ser revisadas por advogado especializado em LGPD antes do primeiro cliente real
+
+- [ ] **Verificar cookie banner em todos os browsers**
+  Testar Chrome, Firefox e Safari mobile antes do lançamento
+
+- [ ] **Verificar cookies HttpOnly com Secure=true em produção**
+  HTTPS é obrigatório para que `Secure` funcione — confirme que o reverse proxy está passando HTTPS corretamente
 
 ### Infraestrutura
 
@@ -105,7 +144,6 @@ Sem esses itens o sistema está **vulnerável ou não vai funcionar**.
 ## Pendente de decisão / roadmap
 
 - [ ] **Integração PIX** — gateway a definir (Mercado Pago, PagSeguro, Asaas)
-- [ ] **IA Analytics** — análise regressiva no dashboard (endpoints de dados prontos)
 - [ ] **Permissão de uso de pontos** — toggle admin para liberar/bloquear por cliente
 - [ ] **Migrations EF Core** — substituir EnsureCreated para mudanças de schema em produção
 - [ ] **GitHub Actions CI/CD** — build e deploy automático no push para main
@@ -140,8 +178,11 @@ docker exec cardgamestore_postgres pg_dump -U cardgame_user cardgamestore > back
 
 # Restaurar backup
 docker exec -i cardgamestore_postgres psql -U cardgame_user cardgamestore < backup.sql
+
+# Rodar testes com cobertura
+dotnet test --collect:"XPlat Code Coverage"
 ```
 
 ---
 
-*softNerd © 2025 — v2.1*
+*softNerd © 2026 — v3.0*
