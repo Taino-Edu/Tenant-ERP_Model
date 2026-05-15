@@ -1,9 +1,11 @@
 // =============================================================================
 // UserController.cs — Endpoints de Usuários e Pontos
-// GET  /api/user            → lista clientes com pontos (Admin)
-// GET  /api/user/me         → perfil do usuário logado
-// GET  /api/user/{id}       → detalhe de um cliente (Admin)
-// POST /api/user/{id}/points → adiciona pontos (Admin)
+// GET    /api/user            → lista clientes com pontos (Admin)
+// GET    /api/user/me         → perfil do usuário logado
+// PUT    /api/user/me         → titular corrige seus próprios dados (LGPD retificação)
+// DELETE /api/user/me         → titular solicita exclusão/anonimização (LGPD Art. 18)
+// GET    /api/user/{id}       → detalhe de um cliente (Admin)
+// POST   /api/user/{id}/points → adiciona pontos (Admin)
 // =============================================================================
 
 using CardGameStore.DTOs;
@@ -45,6 +47,54 @@ public class UserController : ControllerBase
         var userId  = GetUserId();
         var profile = await _service.GetProfileAsync(userId);
         return profile == null ? NotFound() : Ok(profile);
+    }
+
+    /// <summary>
+    /// Permite ao titular corrigir seus próprios dados pessoais.
+    /// LGPD — Direito de retificação (Art. 18, IV).
+    /// </summary>
+    [HttpPut("me")]
+    [Authorize(Policy = "CustomerOrAdmin")]
+    [ProducesResponseType(typeof(UserProfileDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> UpdateMe([FromBody] UpdateMeRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var userId = GetUserId();
+            var result = await _service.UpdateMeAsync(userId, request);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Anonimiza os dados do titular (exclusão lógica).
+    /// O registro é mantido para preservar o histórico de comandas e crediários,
+    /// mas todos os dados pessoais identificáveis são removidos.
+    /// LGPD — Direito de exclusão (Art. 18, VI).
+    /// </summary>
+    [HttpDelete("me")]
+    [Authorize(Policy = "CustomerOrAdmin")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> DeleteMe()
+    {
+        try
+        {
+            var userId = GetUserId();
+            await _service.AnonimizarAsync(userId);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
     }
 
     /// <summary>Detalhes de um cliente específico (Admin).</summary>

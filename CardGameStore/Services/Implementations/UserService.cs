@@ -108,6 +108,54 @@ public class UserService : IUserService
         await _db.SaveChangesAsync();
     }
 
+    // ── LGPD — Direitos do titular ────────────────────────────────────────────
+
+    public async Task<UserProfileDto> UpdateMeAsync(Guid userId, UpdateMeRequest request)
+    {
+        var user = await _db.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("Usuário não encontrado.");
+
+        // Atualiza apenas os campos fornecidos pelo titular
+        if (!string.IsNullOrWhiteSpace(request.Name))
+            user.Name = request.Name.Trim();
+
+        if (request.Email is not null)
+            user.Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim().ToLowerInvariant();
+
+        if (request.WhatsApp is not null)
+            user.WhatsApp = string.IsNullOrWhiteSpace(request.WhatsApp) ? null : request.WhatsApp.Trim();
+
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Titular {UserId} atualizou seus dados pessoais (LGPD retificação).", userId);
+
+        return (await GetProfileAsync(userId))!;
+    }
+
+    public async Task AnonimizarAsync(Guid userId)
+    {
+        var user = await _db.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("Usuário não encontrado.");
+
+        // Anonimização LGPD — dados pessoais substituídos por valores neutros.
+        // O registro é mantido para preservar integridade referencial com comandas e crediários.
+        user.Name      = "Usuário Removido";
+        user.Email     = null;
+        user.Cpf       = null;
+        user.WhatsApp  = null;
+        user.IsActive  = false;
+        user.DeletedAt = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.UtcNow;
+        // Invalida tokens de sessão ativos
+        user.RefreshToken       = null;
+        user.RefreshTokenExpiry = null;
+
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Titular {UserId} anonimizado via LGPD (direito de exclusão).", userId);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static bool IsExpired(User user) =>

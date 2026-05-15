@@ -4,17 +4,78 @@ import { useParams, useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
 import toast, { Toaster } from 'react-hot-toast'
-import { Smartphone, User, Hash, MessageCircle, Loader2, Sword, TableProperties } from 'lucide-react'
+import { Smartphone, User, Hash, MessageCircle, Loader2, Sword, TableProperties, X, Shield } from 'lucide-react'
 
+// =============================================================================
+// Modal de Política de Privacidade (LGPD — Art. 9 — direito à informação)
+// =============================================================================
+function PrivacyModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+      <div className="relative w-full max-w-md bg-surface-800 border border-surface-700 rounded-2xl shadow-xl max-h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-surface-700">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-brand-400" />
+            <h2 className="text-white font-semibold">Política de Privacidade</h2>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4 overflow-y-auto text-sm text-gray-300 space-y-3">
+          <p><strong className="text-white">softNerd — Política de Privacidade</strong></p>
+          <p>
+            Em conformidade com a Lei Geral de Proteção de Dados Pessoais (LGPD — Lei nº 13.709/2018),
+            informamos como tratamos seus dados pessoais.
+          </p>
+          <p><strong className="text-white">Dados coletados:</strong> Nome completo, CPF e número de WhatsApp.</p>
+          <p>
+            <strong className="text-white">Finalidade:</strong> Identificação do cliente para abertura de comanda
+            na loja softNerd e registro de pontos de fidelidade.
+          </p>
+          <p>
+            <strong className="text-white">Base legal:</strong> Consentimento do titular (Art. 7º, I da LGPD).
+          </p>
+          <p>
+            <strong className="text-white">Seus direitos:</strong> Você pode solicitar acesso, correção ou
+            exclusão dos seus dados a qualquer momento pelo painel do cliente ou pelo WhatsApp da loja.
+          </p>
+          <p>
+            <strong className="text-white">Compartilhamento:</strong> Seus dados não são vendidos nem
+            compartilhados com terceiros. São usados exclusivamente para operação interna da loja.
+          </p>
+          <p>
+            <strong className="text-white">Retenção:</strong> Os dados são mantidos pelo período necessário
+            à prestação dos serviços e obrigações legais. Você pode solicitar a exclusão a qualquer momento.
+          </p>
+          <p className="text-gray-500 text-xs">
+            Responsável: softNerd — Loja de Card Games. Dúvidas? Fale conosco pelo WhatsApp da loja.
+          </p>
+        </div>
+        <div className="p-4 border-t border-surface-700">
+          <button onClick={onClose} className="btn-primary w-full justify-center">
+            Entendi
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Página de Quick-Login por QR Code
+// =============================================================================
 export default function MesaPage() {
   const params  = useParams()
   const router  = useRouter()
   const mesa    = decodeURIComponent(params.mesa as string)
 
-  const [step, setStep]       = useState<'form' | 'loading'>('form')
-  const [name, setName]       = useState('')
-  const [cpf, setCpf]         = useState('')
-  const [whatsApp, setWhatsApp] = useState('')
+  const [step, setStep]             = useState<'form' | 'loading'>('form')
+  const [name, setName]             = useState('')
+  const [cpf, setCpf]               = useState('')
+  const [whatsApp, setWhatsApp]     = useState('')
+  const [consent, setConsent]       = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
 
   function formatCpf(v: string) {
     return v.replace(/\D/g, '').slice(0, 11)
@@ -28,6 +89,10 @@ export default function MesaPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!consent) {
+      toast.error('Você precisa aceitar a Política de Privacidade para continuar.')
+      return
+    }
     const rawCpf = cpf.replace(/\D/g, '')
     if (rawCpf.length !== 11) { toast.error('CPF inválido'); return }
     setStep('loading')
@@ -49,6 +114,8 @@ export default function MesaPage() {
   return (
     <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4">
       <Toaster position="top-right" toastOptions={{ style: { background: '#1e1e28', color: '#fff', border: '1px solid #32323f' }}} />
+
+      {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-32 -right-32 w-64 h-64 bg-brand-600/10 rounded-full blur-3xl" />
@@ -112,14 +179,43 @@ export default function MesaPage() {
               <p className="text-xs text-gray-600 mt-1">DDD + número, sem espaços</p>
             </div>
 
-            <button type="submit" className="btn-primary w-full justify-center py-3 text-base mt-2">
+            {/* Consentimento LGPD — obrigatório para submeter o formulário */}
+            <div className="flex items-start gap-3 p-3 bg-surface-800/50 border border-surface-700 rounded-lg">
+              <input
+                id="consent"
+                type="checkbox"
+                checked={consent}
+                onChange={e => setConsent(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-surface-600 text-brand-500 cursor-pointer flex-shrink-0"
+              />
+              <label htmlFor="consent" className="text-xs text-gray-400 leading-relaxed cursor-pointer">
+                Li e aceito a{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacy(true)}
+                  className="text-brand-400 underline hover:text-brand-300 transition-colors"
+                >
+                  Política de Privacidade
+                </button>
+                {' '}e autorizo o uso dos meus dados (nome, CPF e WhatsApp) para identificação na loja softNerd.{' '}
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacy(true)}
+                  className="text-gray-500 hover:text-gray-400 transition-colors text-xs"
+                >
+                  (ver política)
+                </button>
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!consent}
+              className="btn-primary w-full justify-center py-3 text-base mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <Smartphone className="w-5 h-5" />
               Abrir Minha Comanda
             </button>
-
-            <p className="text-center text-xs text-gray-600">
-              Seus dados são usados apenas para identificação na loja.
-            </p>
           </form>
         )}
       </div>

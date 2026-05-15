@@ -100,6 +100,9 @@ public class GeminiChatService : IAiChatService
 
     // ── Contexto ──────────────────────────────────────────────────────────────
 
+    // LGPD: Os dados de clientes enviados ao Gemini são anonimizados.
+    // Nomes reais são substituídos por "Cliente #N" antes de serem transmitidos
+    // à API externa do Google, preservando apenas dados financeiros necessários.
     private async Task<string> BuildContextAsync()
     {
         var agora      = DateTime.UtcNow;
@@ -159,7 +162,7 @@ public class GeminiChatService : IAiChatService
             .Select(p => new { p.Name, p.StockQuantity, p.MinimumStock })
             .ToListAsync();
 
-        // ── Monta JSON de contexto ────────────────────────────────────────────
+        // ── Monta JSON de contexto (com anonimização LGPD) ────────────────────
         var ctx = new
         {
             dataHora          = agora.ToString("dd/MM/yyyy HH:mm") + " (UTC)",
@@ -170,9 +173,11 @@ public class GeminiChatService : IAiChatService
             clientesAtivos30dias = clientesAtivos,
             clientesInativos30dias = Math.Max(0, totalClientes - clientesAtivos),
             topProdutos30dias = topProdutos.Select(p => $"{p.Nome} ({p.Qtd} un)"),
-            crediarios = crediarios.Select(c => new
+            // LGPD: nomes reais substituídos por "Cliente #N" — não enviamos
+            // dados pessoais identificáveis à API do Google Gemini.
+            crediarios = crediarios.Select((c, index) => new
             {
-                cliente    = c.Name,
+                cliente    = $"Cliente #{index + 1}",
                 valor      = $"R$ {c.Valor:N2}",
                 vencimento = c.DataVencimento.ToString("dd/MM/yyyy"),
                 vencido    = c.DataVencimento < agora,

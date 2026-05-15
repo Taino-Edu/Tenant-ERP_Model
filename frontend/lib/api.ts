@@ -1,34 +1,30 @@
 // =============================================================================
 // lib/api.ts — Cliente HTTP centralizado (axios + interceptors JWT)
+//
+// Segurança: os tokens JWT são armazenados como cookies HttpOnly pelo backend.
+// O browser envia esses cookies automaticamente — não há manipulação manual
+// de tokens no frontend, evitando exposição via JavaScript (proteção XSS).
 // =============================================================================
 import axios from 'axios'
-import Cookies from 'js-cookie'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
-})
-
-// Injeta o token JWT em todas as requisições
-api.interceptors.request.use((config) => {
-  const token = Cookies.get('accessToken')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
+  // withCredentials garante que o browser envie os cookies HttpOnly
+  // (accessToken, refreshToken) em todas as requisições cross-origin.
+  withCredentials: true,
 })
 
 // Mutex de refresh: evita múltiplas requisições simultâneas disparando vários refreshes
 // quando o token expira com várias chamadas em paralelo na mesma página.
-let refreshPromise: Promise<string> | null = null
+let refreshPromise: Promise<void> | null = null
 
-async function doRefresh(): Promise<string> {
-  const refresh = Cookies.get('refreshToken')
-  if (!refresh) throw new Error('Sem refresh token')
-  const { data } = await axios.post(`${BASE_URL}/api/auth/refresh`, { refreshToken: refresh })
-  Cookies.set('accessToken',  data.accessToken,  { expires: 1, sameSite: 'strict' })
-  Cookies.set('refreshToken', data.refreshToken, { expires: 30, sameSite: 'strict' })
-  return data.accessToken
+async function doRefresh(): Promise<void> {
+  // O refreshToken é enviado automaticamente via cookie HttpOnly (withCredentials).
+  // O backend lê o cookie e retorna novos cookies — sem manipulação manual de tokens.
+  await axios.post(`${BASE_URL}/api/auth/refresh`, {}, { withCredentials: true })
 }
 
 // Tenta renovar o token se receber 401
@@ -43,13 +39,14 @@ api.interceptors.response.use(
         if (!refreshPromise) {
           refreshPromise = doRefresh().finally(() => { refreshPromise = null })
         }
-        const newToken = await refreshPromise
-        original.headers.Authorization = `Bearer ${newToken}`
+        await refreshPromise
+        // Re-tenta a requisição original — o novo accessToken já está no cookie
         return api(original)
       } catch {
-        Cookies.remove('accessToken')
-        Cookies.remove('refreshToken')
-        window.location.href = '/login'
+        // Refresh falhou — redireciona para login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login'
+        }
       }
     }
     return Promise.reject(error)
@@ -59,7 +56,10 @@ api.interceptors.response.use(
 // ── Tipagens ──────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
-  accessToken: string; refreshToken: string; expiresAt: string
+  // accessToken e refreshToken são opcionais pois o backend os envia como
+  // cookies HttpOnly. O JSON de resposta os inclui para compatibilidade, mas
+  // o frontend não deve armazená-los — o browser gerencia os cookies.
+  accessToken?: string; refreshToken?: string; expiresAt: string
   role: string; userName: string; userId: string
   comandaId?: string  // Preenchido apenas no quick-login (cliente via QR Code)
 }
@@ -243,12 +243,21 @@ export const productApi = {
   adjustStock: (id: string, delta: number) => api.patch(`/api/product/${id}/stock`, { delta }),
 }
 
+export interface UpdateMeRequest {
+  name?: string
+  email?: string
+  whatsApp?: string
+}
+
 export const userApi = {
   list:      (search?: string) => api.get<UserSummary[]>('/api/user', { params: { search } }),
   getById:   (id: string)      => api.get<UserSummary>(`/api/user/${id}`),
   me:        ()                => api.get<UserProfile>('/api/user/me'),
   addPoints: (id: string, points: number, reason?: string) =>
     api.post<UserSummary>(`/api/user/${id}/points`, { points, reason }),
+  // LGPD — Direitos do titular
+  updateMe:  (data: UpdateMeRequest) => api.put<UserProfile>('/api/user/me', data),
+  deleteMe:  ()                      => api.delete('/api/user/me'),
 }
 
 export const tcgApi = {

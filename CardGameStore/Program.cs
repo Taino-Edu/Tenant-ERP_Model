@@ -100,15 +100,25 @@ builder.Services
             ClockSkew = TimeSpan.Zero
         };
 
-        // SignalR envia token via query string (?access_token=...)
+        // Cookie HttpOnly tem prioridade; SignalR usa query string para hubs
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
             {
+                // 1. Cookie HttpOnly (prioridade máxima — seguro contra XSS)
+                var cookieToken = context.Request.Cookies["accessToken"];
+                if (!string.IsNullOrEmpty(cookieToken))
+                {
+                    context.Token = cookieToken;
+                    return Task.CompletedTask;
+                }
+
+                // 2. SignalR envia token via query string (?access_token=...)
                 var accessToken = context.Request.Query["access_token"];
                 var path        = context.HttpContext.Request.Path;
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
                     context.Token = accessToken;
+
                 return Task.CompletedTask;
             }
         };

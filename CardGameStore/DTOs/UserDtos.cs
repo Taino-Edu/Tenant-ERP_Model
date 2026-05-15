@@ -47,3 +47,20 @@ public class AddPointsRequest
     [MaxLength(255)]
     public string? Reason { get; set; }  // Motivo (opcional, ex: "Campeonato de Pokémon")
 }
+
+/// <summary>
+/// Request para o titular corrigir seus próprios dados (LGPD — direito de retificação).
+/// Todos os campos são opcionais: apenas os campos fornecidos são atualizados.
+/// </summary>
+public class UpdateMeRequest
+{
+    [MaxLength(150)]
+    public string? Name { get; set; }
+
+    [EmailAddress]
+    [MaxLength(255)]
+    public string? Email { get; set; }
+
+    [MaxLength(20)]
+    public string? WhatsApp { get; set; }
+}
