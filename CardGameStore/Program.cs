@@ -245,6 +245,10 @@ builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
 builder.Services.AddSingleton<ITcgService,       TcgService>();
 
+// LGPD — Auditoria e privacidade
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuditService, AuditService>();
+
 // ---------------------------------------------------------------------------
 // 11. CORS
 // ---------------------------------------------------------------------------

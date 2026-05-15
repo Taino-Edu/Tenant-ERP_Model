@@ -21,11 +21,13 @@ namespace CardGameStore.Controllers;
 [Produces("application/json")]
 public class UserController : ControllerBase
 {
-    private readonly IUserService _service;
+    private readonly IUserService  _service;
+    private readonly IAuditService _audit;
 
-    public UserController(IUserService service)
+    public UserController(IUserService service, IAuditService audit)
     {
         _service = service;
+        _audit   = audit;
     }
 
     /// <summary>Lista todos os clientes ativos. Admin pode buscar por nome/CPF/WhatsApp.</summary>
@@ -66,6 +68,10 @@ public class UserController : ControllerBase
         {
             var userId = GetUserId();
             var result = await _service.UpdateMeAsync(userId, request);
+
+            // Audit log — LGPD: retificação de dados pelo titular
+            await _audit.LogAsync("Editou", "User", userId.ToString(), httpContext: HttpContext);
+
             return Ok(result);
         }
         catch (InvalidOperationException ex)
@@ -88,6 +94,11 @@ public class UserController : ControllerBase
         try
         {
             var userId = GetUserId();
+
+            // Audit log ANTES da anonimização — depois o userId ainda existe no banco
+            await _audit.LogAsync("Exclusao", "User", userId.ToString(),
+                details: "{\"motivo\":\"SolicitacaoTitular\"}", httpContext: HttpContext);
+
             await _service.AnonimizarAsync(userId);
             return NoContent();
         }
@@ -105,7 +116,13 @@ public class UserController : ControllerBase
     public async Task<IActionResult> GetById(Guid id)
     {
         var user = await _service.GetByIdAsync(id);
-        return user == null ? NotFound(new { Message = "Usuário não encontrado." }) : Ok(user);
+        if (user == null)
+            return NotFound(new { Message = "Usuário não encontrado." });
+
+        // Audit log — Admin visualizando dados pessoais de cliente (LGPD rastreabilidade)
+        await _audit.LogAsync("Visualizou", "User", id.ToString(), httpContext: HttpContext);
+
+        return Ok(user);
     }
 
     /// <summary>Adiciona pontos ao saldo de um cliente (Admin).</summary>

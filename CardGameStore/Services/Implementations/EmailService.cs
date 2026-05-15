@@ -164,6 +164,93 @@ public class EmailService : IEmailService
             await SendAsync(email, name, $"softNerd — {titulo}", body);
     }
 
+    // ── LGPD ──────────────────────────────────────────────────────────────────
+
+    public async Task SendLgpdConfirmationAsync(
+        string   toEmail,
+        string   toName,
+        string   protocol,
+        string   requestType,
+        DateTime deadline)
+    {
+        var prazo = deadline.ToLocalTime().ToString("dd/MM/yyyy");
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:560px;color:#222">
+              <h2 style="color:#7839F3">softNerd — Solicitação LGPD Recebida</h2>
+              <p>Olá, <strong>{toName}</strong>!</p>
+              <p>
+                Sua solicitação de <strong>{requestType}</strong> de dados pessoais foi recebida
+                com sucesso pela <strong>softNerd</strong>.
+              </p>
+              <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
+                <tr style="background:#f5f0ff">
+                  <td style="padding:10px 14px;color:#555;width:40%">Número de Protocolo</td>
+                  <td style="padding:10px 14px;font-weight:bold;font-family:monospace">{protocol}</td>
+                </tr>
+                <tr>
+                  <td style="padding:10px 14px;color:#555">Tipo de Solicitação</td>
+                  <td style="padding:10px 14px;font-weight:bold">{requestType}</td>
+                </tr>
+                <tr style="background:#f5f0ff">
+                  <td style="padding:10px 14px;color:#555">Prazo de Resposta</td>
+                  <td style="padding:10px 14px;font-weight:bold;color:#dc2626">{prazo}</td>
+                </tr>
+              </table>
+              <p>
+                Nos termos da Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018, Art. 18 § 5°),
+                sua solicitação será respondida em até <strong>15 dias corridos</strong>.
+              </p>
+              <p>
+                Guarde seu número de protocolo para acompanhar o andamento em:
+                <br/>
+                <a href="https://softnerd.com.br/lgpd" style="color:#7839F3">softnerd.com.br/lgpd</a>
+              </p>
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+              <p style="color:#888;font-size:12px">
+                Dúvidas? Entre em contato: <a href="mailto:privacidade@softnerd.com.br">privacidade@softnerd.com.br</a><br/>
+                softNerd — São José do Rio Preto, SP
+              </p>
+            </div>
+            """;
+
+        await SendAsync(toEmail, toName, $"Solicitação LGPD recebida — Protocolo {protocol}", body);
+    }
+
+    public async Task SendLgpdResponseAsync(
+        string toEmail,
+        string toName,
+        string protocol,
+        string requestType,
+        string response)
+    {
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:560px;color:#222">
+              <h2 style="color:#7839F3">softNerd — Resposta à sua Solicitação LGPD</h2>
+              <p>Olá, <strong>{toName}</strong>!</p>
+              <p>
+                Sua solicitação de <strong>{requestType}</strong> (Protocolo: <code>{protocol}</code>)
+                foi analisada e respondida pela <strong>softNerd</strong>.
+              </p>
+              <div style="background:#f5f0ff;border-left:4px solid #7839F3;padding:16px;margin:20px 0;border-radius:4px">
+                <p style="margin:0;font-weight:bold;color:#555;font-size:13px;margin-bottom:8px">RESPOSTA DA SOFTNERD:</p>
+                <p style="margin:0;white-space:pre-wrap">{response}</p>
+              </div>
+              <p>
+                Caso não esteja satisfeito(a) com a resposta, você tem o direito de apresentar
+                reclamação à Autoridade Nacional de Proteção de Dados (ANPD) através do portal:
+                <a href="https://www.gov.br/anpd" style="color:#7839F3">www.gov.br/anpd</a>
+              </p>
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+              <p style="color:#888;font-size:12px">
+                Dúvidas? Entre em contato: <a href="mailto:privacidade@softnerd.com.br">privacidade@softnerd.com.br</a><br/>
+                softNerd — São José do Rio Preto, SP
+              </p>
+            </div>
+            """;
+
+        await SendAsync(toEmail, toName, $"Resposta à sua solicitação LGPD — Protocolo {protocol}", body);
+    }
+
     // ── Interno ───────────────────────────────────────────────────────────────
 
     private async Task SendAsync(string toEmail, string toName, string subject, string htmlBody)

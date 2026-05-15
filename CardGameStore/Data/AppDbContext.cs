@@ -29,6 +29,11 @@ public class AppDbContext : DbContext
     public DbSet<Announcement>            Announcements            { get; set; }
     public DbSet<Crediario>               Crediarios               { get; set; }
 
+    // ── LGPD — Compliance e privacidade ──────────────────────────────────────
+    public DbSet<LgpdRequest>   LgpdRequests   { get; set; }
+    public DbSet<CookieConsent> CookieConsents { get; set; }
+    public DbSet<AuditLog>      AuditLogs      { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------
@@ -193,6 +198,60 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(c => c.ComandaId)
                   .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // =====================================================================
+        // LGPD REQUEST
+        // =====================================================================
+        modelBuilder.Entity<LgpdRequest>(entity =>
+        {
+            // Busca por status (lista de requisições abertas)
+            entity.HasIndex(r => r.Status)
+                  .HasDatabaseName("ix_lgpd_requests_status");
+
+            // Busca por email do solicitante
+            entity.HasIndex(r => r.RequesterEmail)
+                  .HasDatabaseName("ix_lgpd_requests_email");
+
+            // Relacionamento opcional com User (CPF pode não existir no cadastro)
+            entity.HasOne(r => r.User)
+                  .WithMany()
+                  .HasForeignKey(r => r.UserId)
+                  .OnDelete(DeleteBehavior.SetNull)
+                  .IsRequired(false);
+        });
+
+        // =====================================================================
+        // COOKIE CONSENT
+        // =====================================================================
+        modelBuilder.Entity<CookieConsent>(entity =>
+        {
+            entity.HasIndex(c => c.ConsentAt)
+                  .HasDatabaseName("ix_cookie_consents_consent_at");
+
+            entity.HasOne(c => c.User)
+                  .WithMany()
+                  .HasForeignKey(c => c.UserId)
+                  .OnDelete(DeleteBehavior.SetNull)
+                  .IsRequired(false);
+        });
+
+        // =====================================================================
+        // AUDIT LOG
+        // =====================================================================
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            // Busca por entidade afetada
+            entity.HasIndex(a => new { a.EntityType, a.EntityId })
+                  .HasDatabaseName("ix_audit_logs_entity");
+
+            // Busca por ator
+            entity.HasIndex(a => a.ActorUserId)
+                  .HasDatabaseName("ix_audit_logs_actor");
+
+            // Ordenação por data (query mais frequente)
+            entity.HasIndex(a => a.CreatedAt)
+                  .HasDatabaseName("ix_audit_logs_created_at");
         });
 
         // =====================================================================
