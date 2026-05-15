@@ -1,9 +1,10 @@
-// =============================================================================
+﻿// =============================================================================
 // termos/page.tsx — Termos de Uso da softNerd
 // São José do Rio Preto, SP — Foro: Comarca de São José do Rio Preto
 // =============================================================================
 
 import Link from 'next/link'
+import ThemeToggle from '@/components/ThemeToggle'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function TermosPage() {
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen" style={{ backgroundColor: "var(--bg-primary)", color: "var(--text-primary)" }}>
       {/* Cabeçalho */}
       <header className="bg-[#1a0a2e] text-white py-6 px-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
@@ -21,28 +22,28 @@ export default function TermosPage() {
             <span className="text-[#7839F3]">soft</span>
             <span>Nerd</span>
           </Link>
-          <span className="text-sm text-gray-400">São José do Rio Preto, SP</span>
+          <div className="flex items-center gap-4"><span className="text-sm text-gray-400 hidden sm:block">São José do Rio Preto, SP</span><ThemeToggle compact /></div>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-12">
         {/* Título */}
-        <div className="mb-10 border-b pb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Termos de Uso</h1>
-          <p className="text-sm text-gray-500">
+        <div className="mb-10 pb-6" style={{ borderBottom: "1px solid var(--border-color)" }}>
+          <h1 className="text-3xl font-bold mb-2">Termos de Uso</h1>
+          <p className="text-sm" style={{ color: "var(--text-faint)" }}>
             Última atualização: <strong>Maio de 2026</strong> — Versão 1.0
           </p>
-          <p className="mt-3 text-gray-600 leading-relaxed">
+          <p className="mt-3 leading-relaxed" style={{ color: "var(--text-muted)" }}>
             Ao utilizar o sistema digital da <strong>softNerd</strong>, você concorda com os presentes
             Termos de Uso. Leia com atenção antes de prosseguir.
           </p>
         </div>
 
-        <div className="space-y-10 text-gray-700 leading-relaxed">
+        <div className="space-y-10 leading-relaxed" style={{ color: "var(--text-muted)" }}>
 
           {/* 1. Serviços */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">1. Serviços Oferecidos</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>1. Serviços Oferecidos</h2>
             <p>
               A <strong>softNerd</strong> é uma loja física de card games localizada em São José do Rio Preto, SP.
               Nosso sistema digital oferece:
@@ -59,7 +60,7 @@ export default function TermosPage() {
 
           {/* 2. Cadastro */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">2. Cadastro e Conta</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>2. Cadastro e Conta</h2>
             <p>
               O cadastro é realizado presencialmente na loja via QR Code ou pelo administrador do sistema.
               Ao se cadastrar, você declara que as informações fornecidas (nome, CPF, WhatsApp) são verídicas.
@@ -77,7 +78,7 @@ export default function TermosPage() {
 
           {/* 3. Crediário */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">3. Crediário</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>3. Crediário</h2>
             <p>
               O crediário é uma linha de crédito oferecida pela softNerd a clientes cadastrados, sujeita
               à análise e aprovação.
@@ -93,7 +94,7 @@ export default function TermosPage() {
 
           {/* 4. Comandas */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">4. Comandas</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>4. Comandas</h2>
             <p>
               A comanda é o registro digital dos itens consumidos na loja durante uma visita.
               O cliente é responsável pelos itens registrados em sua comanda.
@@ -106,7 +107,7 @@ export default function TermosPage() {
 
           {/* 5. Campeonatos */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">5. Campeonatos</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>5. Campeonatos</h2>
             <p>
               A participação em campeonatos sujeita-se às regras específicas de cada evento,
               divulgadas com antecedência.
@@ -121,7 +122,7 @@ export default function TermosPage() {
 
           {/* 6. Propriedade intelectual */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">6. Propriedade Intelectual</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>6. Propriedade Intelectual</h2>
             <p>
               Os nomes, logotipos e conteúdos de jogos de cartas (Pokémon, Magic: The Gathering, Yu-Gi-Oh!
               e outros) são propriedade de seus respectivos detentores de direitos. A softNerd não reivindica
@@ -136,7 +137,7 @@ export default function TermosPage() {
 
           {/* 7. Limitação de responsabilidade */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">7. Limitação de Responsabilidade</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>7. Limitação de Responsabilidade</h2>
             <p>
               A softNerd não se responsabiliza por:
             </p>
@@ -150,7 +151,7 @@ export default function TermosPage() {
 
           {/* 8. CDC */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">8. Direitos do Consumidor (CDC)</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>8. Direitos do Consumidor (CDC)</h2>
             <p>
               Estes Termos não afastam ou limitam os direitos previstos no{' '}
               <strong>Código de Defesa do Consumidor (Lei n° 8.078/1990)</strong>. Em caso de reclamação,
@@ -168,7 +169,7 @@ export default function TermosPage() {
 
           {/* 9. Foro */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">9. Foro e Legislação Aplicável</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>9. Foro e Legislação Aplicável</h2>
             <p>
               Estes Termos são regidos pelas leis da República Federativa do Brasil. Para dirimir
               quaisquer controvérsias decorrentes deste instrumento, fica eleito o foro da{' '}
@@ -179,7 +180,7 @@ export default function TermosPage() {
 
           {/* 10. Contato */}
           <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-3">10. Contato</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: "var(--text-primary)" }}>10. Contato</h2>
             <p>
               Para dúvidas, sugestões ou reclamações sobre estes Termos de Uso:
             </p>
@@ -195,7 +196,7 @@ export default function TermosPage() {
         </div>
 
         {/* Links */}
-        <div className="mt-12 pt-6 border-t flex flex-wrap gap-4 text-sm text-[#7839F3]">
+        <div className="mt-12 pt-6 flex flex-wrap gap-4 text-sm text-[#7839F3]">
           <Link href="/privacidade" className="underline">Política de Privacidade</Link>
           <Link href="/lgpd" className="underline">Exercer meus Direitos (LGPD)</Link>
           <a href="mailto:privacidade@softnerd.com.br" className="underline">
@@ -206,3 +207,4 @@ export default function TermosPage() {
     </div>
   )
 }
+

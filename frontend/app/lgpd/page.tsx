@@ -1,10 +1,11 @@
-'use client'
+﻿'use client'
 // =============================================================================
 // lgpd/page.tsx — Página pública de exercício de direitos LGPD
 // Permite ao titular abrir solicitações e consultar protocolos.
 // =============================================================================
 
 import Link from 'next/link'
+import ThemeToggle from '@/components/ThemeToggle'
 import { useState } from 'react'
 import { Shield, Search, ChevronDown } from 'lucide-react'
 
@@ -115,7 +116,7 @@ export default function LgpdPage() {
             <span className="text-[#7839F3]">soft</span>
             <span>Nerd</span>
           </Link>
-          <span className="text-sm text-gray-400">Privacidade &amp; LGPD</span>
+          <div className="flex items-center gap-4"><span className="text-sm text-gray-400 hidden sm:block">Privacidade &amp; LGPD</span><ThemeToggle compact /></div>
         </div>
       </header>
 
@@ -340,3 +341,4 @@ export default function LgpdPage() {
     </div>
   )
 }
+
