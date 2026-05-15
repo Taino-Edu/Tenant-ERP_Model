@@ -50,9 +50,10 @@ export default function LgpdPage() {
   const [formError, setFormError] = useState<string | null>(null)
 
   // ── Estado da consulta ────────────────────────────────────────────────────
-  const [consultaId,     setConsultaId]     = useState('')
-  const [consultaResult, setConsultaResult] = useState<StatusConsulta | null>(null)
-  const [consultaError,  setConsultaError]  = useState<string | null>(null)
+  const [consultaId,      setConsultaId]      = useState('')
+  const [consultaEmail,   setConsultaEmail]   = useState('')   // obrigatório para evitar enumeração
+  const [consultaResult,  setConsultaResult]  = useState<StatusConsulta | null>(null)
+  const [consultaError,   setConsultaError]   = useState<string | null>(null)
   const [consultaLoading, setConsultaLoading] = useState(false)
 
   // ── Submit do formulário ──────────────────────────────────────────────────
@@ -86,15 +87,17 @@ export default function LgpdPage() {
   }
 
   // ── Consulta de protocolo ─────────────────────────────────────────────────
+  // O backend exige e-mail de confirmação para evitar enumeração de protocolos
   async function handleConsulta(e: React.FormEvent) {
     e.preventDefault()
     setConsultaError(null)
     setConsultaResult(null)
-    if (!consultaId.trim()) return
+    if (!consultaId.trim() || !consultaEmail.trim()) return
 
     setConsultaLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/lgpd/request/${consultaId.trim()}`)
+      const params = new URLSearchParams({ email: consultaEmail.trim() })
+      const res = await fetch(`${API_BASE}/api/lgpd/request/${consultaId.trim()}?${params}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Protocolo não encontrado.')
       setConsultaResult(data)
@@ -265,21 +268,33 @@ export default function LgpdPage() {
             <h2 className="text-lg font-bold">Consultar Protocolo Existente</h2>
           </div>
 
-          <form onSubmit={handleConsulta} className="flex gap-2 mb-4">
+          <form onSubmit={handleConsulta} className="space-y-2 mb-4">
             <input
               type="text"
               value={consultaId}
               onChange={e => setConsultaId(e.target.value)}
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3] font-mono"
-              placeholder="Cole aqui o número do protocolo..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3] font-mono"
+              placeholder="Número do protocolo (ex: abc123-...)"
+              required
             />
-            <button
-              type="submit"
-              disabled={consultaLoading}
-              className="bg-[#7839F3] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#6C3FC5] disabled:opacity-50 transition-colors"
-            >
-              {consultaLoading ? '...' : 'Consultar'}
-            </button>
+            {/* E-mail obrigatório: confirma posse do protocolo, evita enumeração */}
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={consultaEmail}
+                onChange={e => setConsultaEmail(e.target.value)}
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3]"
+                placeholder="E-mail usado na solicitação"
+                required
+              />
+              <button
+                type="submit"
+                disabled={consultaLoading}
+                className="bg-[#7839F3] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#6C3FC5] disabled:opacity-50 transition-colors"
+              >
+                {consultaLoading ? '...' : 'Consultar'}
+              </button>
+            </div>
           </form>
 
           {consultaError && (

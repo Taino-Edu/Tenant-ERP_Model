@@ -25,12 +25,18 @@ public class AuthController : ControllerBase
     private readonly IAuthService            _authService;
     private readonly ILogger<AuthController> _logger;
     private readonly JwtSettings             _jwt;
+    private readonly IWebHostEnvironment     _env;
 
-    public AuthController(IAuthService authService, ILogger<AuthController> logger, IOptions<JwtSettings> jwt)
+    public AuthController(
+        IAuthService        authService,
+        ILogger<AuthController> logger,
+        IOptions<JwtSettings>   jwt,
+        IWebHostEnvironment     env)
     {
         _authService = authService;
         _logger      = logger;
         _jwt         = jwt.Value;
+        _env         = env;
     }
 
     // =========================================================================
@@ -46,7 +52,7 @@ public class AuthController : ControllerBase
         var cookieOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure   = false,        // true em produção (HTTPS)
+            Secure   = !_env.IsDevelopment(), // false só em dev local; true em produção (HTTPS)
             SameSite = SameSiteMode.Strict,
             Path     = "/",
         };

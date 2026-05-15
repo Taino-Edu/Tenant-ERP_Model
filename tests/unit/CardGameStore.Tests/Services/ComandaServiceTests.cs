@@ -319,4 +319,68 @@ public class ComandaServiceTests
             .WithMessage("*já foram aplicados*");
     }
 
+    // ── PaymentCrediario e controle de estoque ────────────────────────────────
+
+    [Fact]
+    public async Task AddItem_EstoqueExatamenteZero_DeveLancarExcecao()
+    {
+        // Verifica que a constante PaymentCrediario ("Crediario") não afetou
+        // a validação de estoque — estoque 0 sempre deve ser rejeitado
+        var db      = CreateDb(nameof(AddItem_EstoqueExatamenteZero_DeveLancarExcecao));
+        var service = CreateService(db);
+        var (user, product, _) = await SeedAsync(db);
+
+        // Produto com estoque 0
+        product.StockQuantity = 0;
+        await db.SaveChangesAsync();
+
+        var act = async () => await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity  = 1,
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Estoque insuficiente*");
+    }
+
+    [Fact]
+    public async Task AddItem_QuantidadeMaiorQueEstoque_DeveLancarExcecao()
+    {
+        // Tenta adicionar quantidade superior ao estoque disponível
+        var db      = CreateDb(nameof(AddItem_QuantidadeMaiorQueEstoque_DeveLancarExcecao));
+        var service = CreateService(db);
+        var (user, product, _) = await SeedAsync(db);
+
+        // Estoque = 10 (do SeedAsync); tenta adicionar 11
+        var act = async () => await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity  = 11,
+        });
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Estoque insuficiente*");
+    }
+
+    [Fact]
+    public async Task AddItem_EstoqueExato_DeveAdicionarEZerarEstoque()
+    {
+        // Adiciona exatamente o estoque disponível — deve funcionar (estoque vai a 0)
+        var db      = CreateDb(nameof(AddItem_EstoqueExato_DeveAdicionarEZerarEstoque));
+        var service = CreateService(db);
+        var (user, product, _) = await SeedAsync(db);
+
+        // Estoque inicial = 10
+        var resultado = await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity  = 10,
+        });
+
+        resultado.Items.Should().ContainSingle();
+        var estoqueAtual = (await db.Products.FindAsync(product.Id))!.StockQuantity;
+        estoqueAtual.Should().Be(0, "todo o estoque foi consumido atomicamente");
+    }
+
 }

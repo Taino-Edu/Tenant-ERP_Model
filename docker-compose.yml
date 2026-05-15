@@ -65,6 +65,7 @@ services:
       EmailSettings__AppUrl:   "${APP_URL:-http://localhost:3000}"
       GeminiSettings__ApiKey:  "${GEMINI_API_KEY:-}"
       CorsSettings__AllowedOrigins: "${APP_URL:-http://localhost:3000}"
+      Security__IpHashSalt:    "${SECURITY_IPHASHSALT:-softnerd-dev-salt}"
     depends_on:
       postgres:
         condition: service_healthy

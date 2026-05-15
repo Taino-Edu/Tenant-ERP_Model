@@ -4,6 +4,7 @@ import { announcementApi, AnnouncementDto, ANNOUNCEMENT_TYPES } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, Eye, EyeOff, Megaphone, Edit2, Loader2 } from 'lucide-react'
 import clsx from 'clsx'
+import ImageUpload from '@/components/admin/ImageUpload'
 
 const TYPE_LABELS: Record<string, string> = {
   Banner:   '🖼 Banner',
@@ -84,9 +85,11 @@ function AnnouncementForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="label">URL da imagem</label>
-          <input className="input" placeholder="https://..." value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
-          <p className="text-xs text-gray-500 mt-1">Banner: 1200×400px · Aviso: 600×300px</p>
+          <ImageUpload
+            label="Imagem (Banner: 1200×400px · Aviso: 600×300px)"
+            currentUrl={imageUrl || null}
+            onUpload={url => setImageUrl(url)}
+          />
         </div>
         <div>
           <label className="label">Link de destino (opcional)</label>

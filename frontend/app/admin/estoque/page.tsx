@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { productApi, Product } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check } from 'lucide-react'
+import ImageUpload from '@/components/admin/ImageUpload'
 
 const CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
 
@@ -68,6 +69,13 @@ function ProductModal({
           <div>
             <label className="label">Descrição</label>
             <input className="input" value={form.description ?? ''} onChange={e => set('description', e.target.value)} placeholder="Opcional" />
+          </div>
+          <div>
+            <ImageUpload
+              label="Imagem do produto"
+              currentUrl={form.imageUrl ?? null}
+              onUpload={url => set('imageUrl', url || null)}
+            />
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
