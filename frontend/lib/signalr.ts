@@ -2,7 +2,6 @@
 // lib/signalr.ts — Cliente SignalR para atualizações em tempo real
 // =============================================================================
 import * as signalR from '@microsoft/signalr'
-import Cookies from 'js-cookie'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -12,9 +11,11 @@ export function getComandaHub(): signalR.HubConnection {
   if (!connection) {
     connection = new signalR.HubConnectionBuilder()
       .withUrl(`${BASE_URL}/hubs/comanda`, {
-        accessTokenFactory: () => Cookies.get('accessToken') || '',
-        transport: signalR.HttpTransportType.WebSockets |
-                   signalR.HttpTransportType.ServerSentEvents |
+        // accessTokenFactory removido: token agora é HttpOnly cookie,
+        // invisível ao JS. O backend lê via OnMessageReceived (Program.cs).
+        // withCredentials envia o cookie automaticamente em SSE/LongPolling.
+        withCredentials: true,
+        transport: signalR.HttpTransportType.ServerSentEvents |
                    signalR.HttpTransportType.LongPolling,
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
