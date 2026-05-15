@@ -3,9 +3,17 @@
 # =============================================================================
 # Pré-requisito: copiar http-client.env.json para esta pasta
 # No VS Code: instale "REST Client" (Humao) e clique em "Send Request"
+#
+# COOKIES HttpOnly — Segurança JWT
+# O backend emite accessToken e refreshToken como cookies HttpOnly (Secure em prod).
+# O REST Client não armazena cookies entre requests como um browser faz.
+# Para testar endpoints protegidos em sequência, copie o valor do Set-Cookie
+# da resposta de login e cole manualmente no header Cookie dos requests seguintes.
+# Em produção e no frontend Next.js, os cookies são enviados automaticamente
+# pelo browser com withCredentials: true.
 # =============================================================================
 
-### [1] Login Admin — deve retornar accessToken + refreshToken
+### [1] Login Admin — deve retornar Set-Cookie: accessToken + refreshToken (HttpOnly)
 # @name loginAdmin
 POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
@@ -70,8 +78,16 @@ Content-Type: application/json
 
 ###
 
-### [6] Refresh Token — deve retornar novo par de tokens
-# Use o refreshToken retornado no loginAdmin (#1)
+### [6] Refresh Token via cookie (produção/browser)
+# Em browser com withCredentials:true o refreshToken é enviado automaticamente via cookie.
+# O REST Client precisa simular o cookie copiado da resposta do login [1].
+# Copie o valor de "Set-Cookie: refreshToken=..." e cole abaixo:
+POST {{baseUrl}}/api/auth/refresh
+Cookie: refreshToken=COLE_AQUI_O_REFRESH_TOKEN
+
+###
+
+### [6b] Refresh Token via body (compatibilidade legada)
 POST {{baseUrl}}/api/auth/refresh
 Content-Type: application/json
 
@@ -81,8 +97,9 @@ Content-Type: application/json
 
 ###
 
-### [7] Logout — deve invalidar o refresh token
+### [7] Logout — invalida refresh token e limpa cookies HttpOnly
+# Copie o cookie accessToken da resposta do login [1]
 POST {{baseUrl}}/api/auth/logout
-Authorization: Bearer {{adminToken}}
+Cookie: accessToken=COLE_AQUI_O_ACCESS_TOKEN
 
 ###
