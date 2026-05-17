@@ -57,14 +57,22 @@ public class AuthController : ControllerBase
             Path     = "/",
         };
 
-        Response.Cookies.Append("accessToken", accessToken, cookieOptions with
+        Response.Cookies.Append("accessToken", accessToken, new CookieOptions
         {
-            MaxAge = TimeSpan.FromMinutes(_jwt.AccessTokenExpirationMinutes)
+            HttpOnly = cookieOptions.HttpOnly,
+            Secure   = cookieOptions.Secure,
+            SameSite = cookieOptions.SameSite,
+            Path     = cookieOptions.Path,
+            MaxAge   = TimeSpan.FromMinutes(_jwt.AccessTokenExpirationMinutes)
         });
 
-        Response.Cookies.Append("refreshToken", refreshToken, cookieOptions with
+        Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
         {
-            MaxAge = TimeSpan.FromDays(_jwt.RefreshTokenExpirationDays)
+            HttpOnly = cookieOptions.HttpOnly,
+            Secure   = cookieOptions.Secure,
+            SameSite = cookieOptions.SameSite,
+            Path     = cookieOptions.Path,
+            MaxAge   = TimeSpan.FromDays(_jwt.RefreshTokenExpirationDays)
         });
     }
 
