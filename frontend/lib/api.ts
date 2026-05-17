@@ -1,22 +1,31 @@
 // =============================================================================
 // lib/api.ts — Cliente HTTP centralizado (axios + interceptors JWT)
+//
+// Segurança: os tokens JWT são armazenados como cookies HttpOnly pelo backend.
+// O browser envia esses cookies automaticamente — não há manipulação manual
+// de tokens no frontend, evitando exposição via JavaScript (proteção XSS).
 // =============================================================================
 import axios from 'axios'
-import Cookies from 'js-cookie'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 export const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  // withCredentials garante que o browser envie os cookies HttpOnly
+  // (accessToken, refreshToken) em todas as requisições cross-origin.
+  withCredentials: true,
 })
 
-// Injeta o token JWT em todas as requisições
-api.interceptors.request.use((config) => {
-  const token = Cookies.get('accessToken')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+// Mutex de refresh: evita múltiplas requisições simultâneas disparando vários refreshes
+// quando o token expira com várias chamadas em paralelo na mesma página.
+let refreshPromise: Promise<void> | null = null
+
+async function doRefresh(): Promise<void> {
+  // O refreshToken é enviado automaticamente via cookie HttpOnly (withCredentials).
+  // O backend lê o cookie e retorna novos cookies — sem manipulação manual de tokens.
+  await axios.post(`${BASE_URL}/api/auth/refresh`, {}, { withCredentials: true })
+}
 
 // Tenta renovar o token se receber 401
 api.interceptors.response.use(
@@ -26,17 +35,18 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
-        const refresh = Cookies.get('refreshToken')
-        if (!refresh) throw new Error('Sem refresh token')
-        const { data } = await axios.post(`${BASE_URL}/api/auth/refresh`, { refreshToken: refresh })
-        Cookies.set('accessToken',  data.accessToken,  { expires: 1 })
-        Cookies.set('refreshToken', data.refreshToken, { expires: 30 })
-        original.headers.Authorization = `Bearer ${data.accessToken}`
+        // Reutiliza o mesmo promise se já há um refresh em andamento
+        if (!refreshPromise) {
+          refreshPromise = doRefresh().finally(() => { refreshPromise = null })
+        }
+        await refreshPromise
+        // Re-tenta a requisição original — o novo accessToken já está no cookie
         return api(original)
       } catch {
-        Cookies.remove('accessToken')
-        Cookies.remove('refreshToken')
-        window.location.href = '/login'
+        // Refresh falhou — redireciona para login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/login'
+        }
       }
     }
     return Promise.reject(error)
@@ -46,7 +56,10 @@ api.interceptors.response.use(
 // ── Tipagens ──────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
-  accessToken: string; refreshToken: string; expiresAt: string
+  // accessToken e refreshToken são opcionais pois o backend os envia como
+  // cookies HttpOnly. O JSON de resposta os inclui para compatibilidade, mas
+  // o frontend não deve armazená-los — o browser gerencia os cookies.
+  accessToken?: string; refreshToken?: string; expiresAt: string
   role: string; userName: string; userId: string
   comandaId?: string  // Preenchido apenas no quick-login (cliente via QR Code)
 }
@@ -230,12 +243,20 @@ export const productApi = {
   adjustStock: (id: string, delta: number) => api.patch(`/api/product/${id}/stock`, { delta }),
 }
 
+export interface UpdateMeRequest {
+  name?: string
+  email?: string
+  whatsApp?: string
+}
+
 export const userApi = {
   list:      (search?: string) => api.get<UserSummary[]>('/api/user', { params: { search } }),
   getById:   (id: string)      => api.get<UserSummary>(`/api/user/${id}`),
   me:        ()                => api.get<UserProfile>('/api/user/me'),
   addPoints: (id: string, points: number, reason?: string) =>
     api.post<UserSummary>(`/api/user/${id}/points`, { points, reason }),
+  updateMe:  (data: UpdateMeRequest) => api.put<UserProfile>('/api/user/me', data),
+  deleteMe:  ()                      => api.delete('/api/user/me'),
 }
 
 export const tcgApi = {
@@ -254,4 +275,79 @@ export const championshipApi = {
     api.post(`/api/championship/${id}/register`, { userId, deckName }),
   setStatus:  (id: string, status: string) =>
     api.put(`/api/championship/${id}/status`, { status }),
+}
+
+// ── Assistente IA ─────────────────────────────────────────────────────────────
+
+export interface AiChatResponse {
+  reply:   string
+  success: boolean
+  error?:  string
+}
+
+export const aiApi = {
+  chat: (message: string) =>
+    api.post<AiChatResponse>('/api/ai/chat', { message }),
+}
+
+// ── Upload de imagem ──────────────────────────────────────────────────────────
+
+export const uploadApi = {
+  image: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return api.post<{ url: string }>('/api/upload/image', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+
+// ── LGPD — Público ────────────────────────────────────────────────────────────
+
+export interface LgpdRequestCreate {
+  requesterName:  string
+  requesterEmail: string
+  requesterCpf:   string
+  requestType:    string
+  description?:   string
+}
+
+export interface LgpdRequestDto {
+  id:            string
+  requesterName: string
+  requesterEmail:string
+  requesterCpf:  string
+  requestType:   string
+  description:   string | null
+  status:        string
+  adminResponse: string | null
+  createdAt:     string
+  deadline:      string
+  respondedAt:   string | null
+  isOverdue:     boolean
+  isUrgent:      boolean
+}
+
+export const lgpdApi = {
+  submitRequest: (data: LgpdRequestCreate) =>
+    api.post<{ protocol: string; deadline: string; message: string }>('/api/lgpd/request', data),
+  getRequest: (id: string) =>
+    api.get<{
+      id: string; requestType: string; status: string
+      adminResponse: string | null; createdAt: string
+      deadline: string; respondedAt: string | null
+    }>(`/api/lgpd/request/${id}`),
+  recordConsent: (accepted: boolean) =>
+    api.post('/api/lgpd/consent', { accepted }),
+}
+
+// ── LGPD — Admin ──────────────────────────────────────────────────────────────
+
+export const lgpdAdminApi = {
+  listRequests: (status?: string) =>
+    api.get<LgpdRequestDto[]>('/api/lgpd/requests', { params: status ? { status } : undefined }),
+  respond: (id: string, data: { status: string; adminResponse: string }) =>
+    api.put<LgpdRequestDto>(`/api/lgpd/requests/${id}/respond`, data),
+  listAudit: (page = 1, pageSize = 50) =>
+    api.get('/api/audit', { params: { page, pageSize } }),
 }

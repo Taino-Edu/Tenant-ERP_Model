@@ -29,6 +29,11 @@ public class AppDbContext : DbContext
     public DbSet<Announcement>            Announcements            { get; set; }
     public DbSet<Crediario>               Crediarios               { get; set; }
 
+    // ── LGPD — Compliance e privacidade ──────────────────────────────────────
+    public DbSet<LgpdRequest>   LgpdRequests   { get; set; }
+    public DbSet<CookieConsent> CookieConsents { get; set; }
+    public DbSet<AuditLog>      AuditLogs      { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------
@@ -42,19 +47,16 @@ public class AppDbContext : DbContext
         // =====================================================================
         modelBuilder.Entity<User>(entity =>
         {
-            // Índice único no e-mail (quando preenchido)
             entity.HasIndex(u => u.Email)
                   .IsUnique()
                   .HasFilter("email IS NOT NULL")
                   .HasDatabaseName("ix_users_email");
 
-            // Índice único no CPF (quando preenchido)
             entity.HasIndex(u => u.Cpf)
                   .IsUnique()
                   .HasFilter("cpf IS NOT NULL")
                   .HasDatabaseName("ix_users_cpf");
 
-            // Índice no WhatsApp para consultas de login rápido
             entity.HasIndex(u => u.WhatsApp)
                   .HasDatabaseName("ix_users_whatsapp");
         });
@@ -76,29 +78,23 @@ public class AppDbContext : DbContext
         // =====================================================================
         modelBuilder.Entity<Comanda>(entity =>
         {
-            // Converte o enum ComandaStatus para string no banco (legibilidade)
             entity.Property(c => c.Status)
                   .HasConversion<string>();
 
-            // Índice para buscar comandas abertas de um usuário (query frequente)
             entity.HasIndex(c => new { c.UserId, c.Status })
                   .HasDatabaseName("ix_comandas_user_status");
 
-            // Índice para o dashboard do Admin (todas as abertas/em andamento)
             entity.HasIndex(c => c.Status)
                   .HasDatabaseName("ix_comandas_status");
 
-            // Índice para vincular a campeonatos
             entity.HasIndex(c => c.ChampionshipId)
                   .HasDatabaseName("ix_comandas_championship");
 
-            // Relacionamento: uma Comanda pertence a um User
             entity.HasOne(c => c.User)
                   .WithMany(u => u.Comandas)
                   .HasForeignKey(c => c.UserId)
-                  .OnDelete(DeleteBehavior.Restrict); // Não apaga comanda ao deletar usuário
+                  .OnDelete(DeleteBehavior.Restrict);
 
-            // Relacionamento: uma Comanda pode estar num Campeonato
             entity.HasOne(c => c.Championship)
                   .WithMany(ch => ch.Comandas)
                   .HasForeignKey(c => c.ChampionshipId)
@@ -111,14 +107,13 @@ public class AppDbContext : DbContext
         // =====================================================================
         modelBuilder.Entity<ComandaItem>(entity =>
         {
-            // Índice para carregar todos os itens de uma comanda
             entity.HasIndex(i => i.ComandaId)
                   .HasDatabaseName("ix_comanda_items_comanda");
 
             entity.HasOne(i => i.Comanda)
                   .WithMany(c => c.Items)
                   .HasForeignKey(i => i.ComandaId)
-                  .OnDelete(DeleteBehavior.Cascade); // Remove itens ao remover comanda
+                  .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasOne(i => i.Product)
                   .WithMany(p => p.ComandaItems)
@@ -147,7 +142,6 @@ public class AppDbContext : DbContext
         // =====================================================================
         modelBuilder.Entity<ChampionshipParticipant>(entity =>
         {
-            // Garante que um usuário só se inscreve uma vez por campeonato
             entity.HasIndex(p => new { p.ChampionshipId, p.UserId })
                   .IsUnique()
                   .HasDatabaseName("ix_championship_participants_unique");
@@ -177,7 +171,6 @@ public class AppDbContext : DbContext
             entity.Property(c => c.Status)
                   .HasConversion<string>();
 
-            // Um cliente só pode ter um crediário Aberto por vez (verificado no serviço)
             entity.HasIndex(c => new { c.UserId, c.Status })
                   .HasDatabaseName("ix_crediarios_user_status");
 
@@ -196,16 +189,61 @@ public class AppDbContext : DbContext
         });
 
         // =====================================================================
-        // SEED — Dados iniciais (usuário Admin do Maikon)
+        // LGPD REQUEST
         // =====================================================================
-        // ATENÇÃO: Em produção, substitua o hash pelo hash real gerado via BCrypt.
-        // Exemplo: BCrypt.Net.BCrypt.HashPassword("SenhaForte@123")
+        modelBuilder.Entity<LgpdRequest>(entity =>
+        {
+            entity.HasIndex(r => r.Status)
+                  .HasDatabaseName("ix_lgpd_requests_status");
+
+            entity.HasIndex(r => r.RequesterEmail)
+                  .HasDatabaseName("ix_lgpd_requests_email");
+
+            entity.HasOne(r => r.User)
+                  .WithMany()
+                  .HasForeignKey(r => r.UserId)
+                  .OnDelete(DeleteBehavior.SetNull)
+                  .IsRequired(false);
+        });
+
+        // =====================================================================
+        // COOKIE CONSENT
+        // =====================================================================
+        modelBuilder.Entity<CookieConsent>(entity =>
+        {
+            entity.HasIndex(c => c.ConsentAt)
+                  .HasDatabaseName("ix_cookie_consents_consent_at");
+
+            entity.HasOne(c => c.User)
+                  .WithMany()
+                  .HasForeignKey(c => c.UserId)
+                  .OnDelete(DeleteBehavior.SetNull)
+                  .IsRequired(false);
+        });
+
+        // =====================================================================
+        // AUDIT LOG
+        // =====================================================================
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasIndex(a => new { a.EntityType, a.EntityId })
+                  .HasDatabaseName("ix_audit_logs_entity");
+
+            entity.HasIndex(a => a.ActorUserId)
+                  .HasDatabaseName("ix_audit_logs_actor");
+
+            entity.HasIndex(a => a.CreatedAt)
+                  .HasDatabaseName("ix_audit_logs_created_at");
+        });
+
+        // =====================================================================
+        // SEED — Admin do Maikon
+        // =====================================================================
         modelBuilder.Entity<User>().HasData(new User
         {
             Id           = Guid.Parse("00000000-0000-0000-0000-000000000001"),
             Name         = "Maikon",
             Email        = "admin@cardgamestore.com.br",
-            // Hash BCrypt da senha: SenhaForte@123  (gerado com rounds=12)
             PasswordHash = "$2b$12$2FtwJhHP3JiQZjXb.f19B.ulmS5t2jdIQbKAPhPYP22AT.0ptsVPC",
             Role         = UserRole.Admin,
             IsActive     = true,

@@ -5,6 +5,7 @@
 
 using System.Text;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using CardGameStore.Configuration;
 using CardGameStore.Data;
 using CardGameStore.HealthChecks;
@@ -100,15 +101,25 @@ builder.Services
             ClockSkew = TimeSpan.Zero
         };
 
-        // SignalR envia token via query string (?access_token=...)
+        // Cookie HttpOnly tem prioridade; SignalR usa query string para hubs
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
             {
+                // 1. Cookie HttpOnly (prioridade máxima — seguro contra XSS)
+                var cookieToken = context.Request.Cookies["accessToken"];
+                if (!string.IsNullOrEmpty(cookieToken))
+                {
+                    context.Token = cookieToken;
+                    return Task.CompletedTask;
+                }
+
+                // 2. SignalR envia token via query string (?access_token=...)
                 var accessToken = context.Request.Query["access_token"];
                 var path        = context.HttpContext.Request.Path;
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
                     context.Token = accessToken;
+
                 return Task.CompletedTask;
             }
         };
@@ -182,7 +193,7 @@ builder.Services.AddSignalR(options =>
 });
 
 // ---------------------------------------------------------------------------
-// 9. HTTP CLIENTS — APIs TCG externas
+// 9. HTTP CLIENTS — APIs externas
 // ---------------------------------------------------------------------------
 builder.Services.AddHttpClient("PokemonTcgApi", client =>
 {
@@ -206,6 +217,13 @@ builder.Services.AddHttpClient("YugiohApi", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+// Gemini 2.0 Flash — assistente IA conversacional
+builder.Services.AddHttpClient("gemini", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
 // ---------------------------------------------------------------------------
 // 10. HEALTH CHECKS — Postgres + MongoDB via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
@@ -224,22 +242,26 @@ builder.Services.AddScoped<IUserService,         UserService>();
 builder.Services.AddScoped<IVendaAvulsaService,  VendaAvulsaService>();
 builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
+builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
 builder.Services.AddSingleton<ITcgService,       TcgService>();
 
+// LGPD — Auditoria e privacidade
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<IAuditService, AuditService>();
+
 // ---------------------------------------------------------------------------
-// 11. CORS
+// 12. CORS — origens lidas de config para facilitar deploy sem rebuild
 // ---------------------------------------------------------------------------
+var corsOrigins = (builder.Configuration["CorsSettings:AllowedOrigins"] ?? "http://localhost:3000")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:3000",
-                "http://localhost:5173",
-                "http://localhost:5000"
-            )
+            .WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -247,7 +269,7 @@ builder.Services.AddCors(options =>
 });
 
 // ---------------------------------------------------------------------------
-// 12. SWAGGER
+// 13. SWAGGER
 // ---------------------------------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -284,12 +306,12 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddControllers();
 
 // ---------------------------------------------------------------------------
-// 13. BUILD
+// 14. BUILD
 // ---------------------------------------------------------------------------
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------
-// 14. BANCO DE DADOS — EnsureCreated em dev, Migrations em produção
+// 15. BANCO DE DADOS — EnsureCreated em dev, Migrations em produção
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
@@ -306,8 +328,6 @@ using (var scope = app.Services.CreateScope())
         }
         else
         {
-            // EnsureCreated é idempotente — não recria se já existir.
-            // Para mudanças de schema em produção: dotnet ef migrations add + MigrateAsync.
             logger.LogInformation("Inicializando banco PostgreSQL...");
             await db.Database.EnsureCreatedAsync();
             logger.LogInformation("Banco PostgreSQL pronto.");
@@ -321,8 +341,14 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ---------------------------------------------------------------------------
-// 15. MIDDLEWARE PIPELINE
+// 16. MIDDLEWARE PIPELINE
 // ---------------------------------------------------------------------------
+
+// ForwardedHeaders — lê X-Forwarded-For/Proto do proxy reverso (nginx/Cloudflare)
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+});
 
 // Headers de segurança HTTP em todas as respostas
 app.Use(async (context, next) =>
@@ -335,15 +361,19 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+// Swagger apenas em desenvolvimento — evita expor a estrutura da API em produção
+if (app.Environment.IsDevelopment())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
-    c.RoutePrefix  = "swagger"; // UI disponível em /swagger
-    c.DocumentTitle = "CardGameStore — softNerd";
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
+        c.RoutePrefix   = "swagger";
+        c.DocumentTitle = "CardGameStore — softNerd";
+    });
+}
 
-// SSL gerenciado pelo reverse proxy (Nginx/Cloudflare) — não redirecionar aqui
+app.UseStaticFiles(); // serve wwwroot/uploads/* como arquivos estáticos
 app.UseCors("FrontendPolicy");
 app.UseRateLimiter();
 app.UseRequestTimeouts();
@@ -354,8 +384,6 @@ app.MapControllers();
 app.MapHub<ComandaHub>("/hubs/comanda");
 
 // /health — sem autenticação, sem rate limit
-// Retorna 200 OK (todos saudáveis) ou 503 (algum Unhealthy)
-// MongoDB Degradado retorna 200 (serviço opcional)
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     ResponseWriter = async (ctx, report) =>

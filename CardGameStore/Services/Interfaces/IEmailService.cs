@@ -31,4 +31,14 @@ public interface IEmailService
 
     /// <summary>Envia anúncio/promoção para uma lista de destinatários.</summary>
     Task SendAnuncioAsync(IEnumerable<(string email, string name)> destinatarios, string titulo, string corpo);
+
+    // ── LGPD ──────────────────────────────────────────────────────────────────
+
+    /// <summary>Confirma ao solicitante o recebimento da solicitação LGPD com protocolo e prazo.</summary>
+    Task SendLgpdConfirmationAsync(string toEmail, string toName, string protocol,
+                                   string requestType, DateTime deadline);
+
+    /// <summary>Envia ao solicitante a resposta formal do responsável pelo tratamento de dados.</summary>
+    Task SendLgpdResponseAsync(string toEmail, string toName, string protocol,
+                                string requestType, string response);
 }
