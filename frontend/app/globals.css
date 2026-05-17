@@ -120,6 +120,11 @@
 
   /* Transição suave ao trocar tema */
   html { transition: background-color 0.2s ease, color 0.2s ease; }
+
+  /* Fundo do painel admin com gradiente que usa variável de tema */
+  .admin-main {
+    background: radial-gradient(circle at top right, var(--bg-card), var(--bg-primary));
+  }
 }
 
 /* ── Overrides de tema claro para classes Tailwind fixas ──────────────────── */
