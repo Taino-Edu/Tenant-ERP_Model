@@ -1,9 +1,11 @@
 // =============================================================================
 // UserController.cs — Endpoints de Usuários e Pontos
-// GET  /api/user            → lista clientes com pontos (Admin)
-// GET  /api/user/me         → perfil do usuário logado
-// GET  /api/user/{id}       → detalhe de um cliente (Admin)
-// POST /api/user/{id}/points → adiciona pontos (Admin)
+// GET    /api/user            → lista clientes com pontos (Admin)
+// GET    /api/user/me         → perfil do usuário logado
+// PUT    /api/user/me         → titular corrige seus próprios dados (LGPD retificação)
+// DELETE /api/user/me         → titular solicita exclusão/anonimização (LGPD Art. 18)
+// GET    /api/user/{id}       → detalhe de um cliente (Admin)
+// POST   /api/user/{id}/points → adiciona pontos (Admin)
 // =============================================================================
 
 using CardGameStore.DTOs;
@@ -19,11 +21,13 @@ namespace CardGameStore.Controllers;
 [Produces("application/json")]
 public class UserController : ControllerBase
 {
-    private readonly IUserService _service;
+    private readonly IUserService  _service;
+    private readonly IAuditService _audit;
 
-    public UserController(IUserService service)
+    public UserController(IUserService service, IAuditService audit)
     {
         _service = service;
+        _audit   = audit;
     }
 
     /// <summary>Lista todos os clientes ativos. Admin pode buscar por nome/CPF/WhatsApp.</summary>
@@ -47,6 +51,63 @@ public class UserController : ControllerBase
         return profile == null ? NotFound() : Ok(profile);
     }
 
+    /// <summary>
+    /// Permite ao titular corrigir seus próprios dados pessoais.
+    /// LGPD — Direito de retificação (Art. 18, IV).
+    /// </summary>
+    [HttpPut("me")]
+    [Authorize(Policy = "CustomerOrAdmin")]
+    [ProducesResponseType(typeof(UserProfileDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> UpdateMe([FromBody] UpdateMeRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var userId = GetUserId();
+            var result = await _service.UpdateMeAsync(userId, request);
+
+            // Audit log — LGPD: retificação de dados pelo titular
+            await _audit.LogAsync("Editou", "User", userId.ToString(), httpContext: HttpContext);
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Anonimiza os dados do titular (exclusão lógica).
+    /// O registro é mantido para preservar o histórico de comandas e crediários,
+    /// mas todos os dados pessoais identificáveis são removidos.
+    /// LGPD — Direito de exclusão (Art. 18, VI).
+    /// </summary>
+    [HttpDelete("me")]
+    [Authorize(Policy = "CustomerOrAdmin")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> DeleteMe()
+    {
+        try
+        {
+            var userId = GetUserId();
+
+            // Audit log ANTES da anonimização — depois o userId ainda existe no banco
+            await _audit.LogAsync("Exclusao", "User", userId.ToString(),
+                details: "{\"motivo\":\"SolicitacaoTitular\"}", httpContext: HttpContext);
+
+            await _service.AnonimizarAsync(userId);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+    }
+
     /// <summary>Detalhes de um cliente específico (Admin).</summary>
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
@@ -55,7 +116,13 @@ public class UserController : ControllerBase
     public async Task<IActionResult> GetById(Guid id)
     {
         var user = await _service.GetByIdAsync(id);
-        return user == null ? NotFound(new { Message = "Usuário não encontrado." }) : Ok(user);
+        if (user == null)
+            return NotFound(new { Message = "Usuário não encontrado." });
+
+        // Audit log — Admin visualizando dados pessoais de cliente (LGPD rastreabilidade)
+        await _audit.LogAsync("Visualizou", "User", id.ToString(), httpContext: HttpContext);
+
+        return Ok(user);
     }
 
     /// <summary>Adiciona pontos ao saldo de um cliente (Admin).</summary>

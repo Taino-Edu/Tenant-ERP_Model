@@ -12,6 +12,8 @@ using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
+using CardGameStore.Configuration;
 
 namespace CardGameStore.Controllers;
 
@@ -20,13 +22,65 @@ namespace CardGameStore.Controllers;
 [Produces("application/json")]
 public class AuthController : ControllerBase
 {
-    private readonly IAuthService          _authService;
+    private readonly IAuthService            _authService;
     private readonly ILogger<AuthController> _logger;
+    private readonly JwtSettings             _jwt;
+    private readonly IWebHostEnvironment     _env;
 
-    public AuthController(IAuthService authService, ILogger<AuthController> logger)
+    public AuthController(
+        IAuthService        authService,
+        ILogger<AuthController> logger,
+        IOptions<JwtSettings>   jwt,
+        IWebHostEnvironment     env)
     {
         _authService = authService;
         _logger      = logger;
+        _jwt         = jwt.Value;
+        _env         = env;
+    }
+
+    // =========================================================================
+    // HELPERS — Cookies HttpOnly (LGPD / Segurança)
+    // =========================================================================
+
+    /// <summary>
+    /// Grava accessToken e refreshToken como cookies HttpOnly,
+    /// impedindo acesso via JavaScript (proteção contra XSS).
+    /// </summary>
+    private void SetAuthCookies(string accessToken, string refreshToken)
+    {
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure   = !_env.IsDevelopment(), // false só em dev local; true em produção (HTTPS)
+            SameSite = SameSiteMode.Strict,
+            Path     = "/",
+        };
+
+        Response.Cookies.Append("accessToken", accessToken, new CookieOptions
+        {
+            HttpOnly = cookieOptions.HttpOnly,
+            Secure   = cookieOptions.Secure,
+            SameSite = cookieOptions.SameSite,
+            Path     = cookieOptions.Path,
+            MaxAge   = TimeSpan.FromMinutes(_jwt.AccessTokenExpirationMinutes)
+        });
+
+        Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
+        {
+            HttpOnly = cookieOptions.HttpOnly,
+            Secure   = cookieOptions.Secure,
+            SameSite = cookieOptions.SameSite,
+            Path     = cookieOptions.Path,
+            MaxAge   = TimeSpan.FromDays(_jwt.RefreshTokenExpirationDays)
+        });
+    }
+
+    /// <summary>Remove os cookies de autenticação no logout.</summary>
+    private void ClearAuthCookies()
+    {
+        Response.Cookies.Delete("accessToken");
+        Response.Cookies.Delete("refreshToken");
     }
 
     // =========================================================================
@@ -53,6 +107,7 @@ public class AuthController : ControllerBase
         {
             var response = await _authService.LoginAsync(request);
             _logger.LogInformation("Login bem-sucedido para {Email}", request.Email);
+            SetAuthCookies(response.AccessToken, response.RefreshToken);
             return Ok(response);
         }
         catch (UnauthorizedAccessException ex)
@@ -92,9 +147,11 @@ public class AuthController : ControllerBase
         try
         {
             var response = await _authService.QuickLoginAsync(request);
+            // LGPD: CPF removido do log — apenas nome e mesa são necessários para auditoria
             _logger.LogInformation(
-                "Quick-login realizado: {Name} | CPF: {Cpf} | Mesa: {Table} | Comanda: {ComandaId}",
-                request.Name, request.Cpf, request.TableIdentifier, response.ComandaId);
+                "Quick-login realizado: {Name} | Mesa: {Table} | Comanda: {ComandaId}",
+                request.Name, request.TableIdentifier, response.ComandaId);
+            SetAuthCookies(response.AccessToken, response.RefreshToken);
             return Ok(response);
         }
         catch (ArgumentException ex)
@@ -130,19 +187,27 @@ public class AuthController : ControllerBase
     [EnableRateLimiting("auth")]
     [ProducesResponseType(typeof(AuthResponse), 200)]
     [ProducesResponseType(401)]
-    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest? request)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+        // Cookie HttpOnly tem prioridade; fallback para o body (compatibilidade)
+        var refreshToken = Request.Cookies["refreshToken"]
+                           ?? request?.RefreshToken;
+
+        if (string.IsNullOrEmpty(refreshToken))
+            return Unauthorized(new { Message = "Refresh token não encontrado." });
 
         try
         {
-            var response = await _authService.RefreshTokenAsync(request);
+            var tokenRequest = new RefreshTokenRequest(refreshToken);
+            var response = await _authService.RefreshTokenAsync(tokenRequest);
+            // Renova os cookies com os novos tokens
+            SetAuthCookies(response.AccessToken, response.RefreshToken);
             return Ok(response);
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning("Refresh token inválido ou expirado: {Msg}", ex.Message);
+            ClearAuthCookies();
             return Unauthorized(new { Message = "Refresh token inválido ou expirado. Faça login novamente." });
         }
         catch (Exception ex)
@@ -217,6 +282,7 @@ public class AuthController : ControllerBase
             return Unauthorized();
 
         await _authService.LogoutAsync(userId);
+        ClearAuthCookies();
         _logger.LogInformation("Logout realizado para usuário {UserId}", userId);
         return NoContent();
     }

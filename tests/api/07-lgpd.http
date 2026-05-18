@@ -1,0 +1,130 @@
+# =============================================================================
+# 07-lgpd.http — Testes dos endpoints LGPD (Art. 18 da Lei 13.709/2018)
+# =============================================================================
+# Pré-requisito: servidor rodando em {{baseUrl}} (ver http-client.env.json)
+# No VS Code: instale "REST Client" (Humao) e clique em "Send Request"
+# =============================================================================
+
+### ── LGPD — Exercício de Direitos ─────────────────────────────────────────────
+
+### [1] Submeter solicitação de acesso (público — sem autenticação)
+# @name lgpdRequest
+POST {{baseUrl}}/api/lgpd/request
+Content-Type: application/json
+
+{
+  "requesterName": "João da Silva",
+  "requesterEmail": "joao@teste.com",
+  "requesterCpf": "52998224725",
+  "requestType": "Acesso",
+  "description": "Gostaria de saber quais dados a loja tem sobre mim."
+}
+
+###
+
+### [2] Consultar status pelo número de protocolo (público — sem autenticação)
+# Substitua PROTOCOLO pelo valor retornado na requisição [1]
+# O e-mail é obrigatório para evitar enumeração de protocolos (segurança LGPD)
+GET {{baseUrl}}/api/lgpd/request/{{lgpdProtocol}}?email=joao@teste.com
+
+###
+
+### [3] Solicitar retificação de dados pessoais (público)
+POST {{baseUrl}}/api/lgpd/request
+Content-Type: application/json
+
+{
+  "requesterName": "Maria Souza",
+  "requesterEmail": "maria@teste.com",
+  "requesterCpf": "11144477735",
+  "requestType": "Retificacao",
+  "description": "Meu número de WhatsApp está incorreto no cadastro."
+}
+
+###
+
+### [4] Solicitar exclusão/anonimização (direito ao esquecimento)
+POST {{baseUrl}}/api/lgpd/request
+Content-Type: application/json
+
+{
+  "requesterName": "Carlos Lima",
+  "requesterEmail": "carlos@teste.com",
+  "requesterCpf": "11111111111",
+  "requestType": "Exclusao",
+  "description": "Solicito a exclusão de todos os meus dados pessoais."
+}
+
+###
+
+### [5] Registrar consentimento de cookies (público)
+POST {{baseUrl}}/api/lgpd/consent
+Content-Type: application/json
+
+{
+  "accepted": true
+}
+
+###
+
+### [6] Registrar recusa de cookies (público)
+POST {{baseUrl}}/api/lgpd/consent
+Content-Type: application/json
+
+{
+  "accepted": false
+}
+
+###
+
+### [7] Listar todas as solicitações abertas (admin)
+# Requer: adminToken preenchido no http-client.env.json
+GET {{baseUrl}}/api/lgpd/requests
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [8] Filtrar solicitações por status (admin)
+# Status válidos: Recebido | EmAnalise | Concluido | Negado
+GET {{baseUrl}}/api/lgpd/requests?status=Recebido
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [9] Responder a uma solicitação (admin)
+# lgpdProtocol = valor retornado na requisição [1], salvo no env.json
+PUT {{baseUrl}}/api/lgpd/requests/{{lgpdProtocol}}/respond
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "Concluido",
+  "adminResponse": "Seus dados foram verificados. Você possui: nome, CPF e histórico de comandas."
+}
+
+###
+
+### [10] Responder com status EmAnalise (admin)
+PUT {{baseUrl}}/api/lgpd/requests/{{lgpdProtocol}}/respond
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "EmAnalise",
+  "adminResponse": "Sua solicitação está sendo analisada. Retornaremos em até 15 dias úteis."
+}
+
+###
+
+### [11] Requisição com CPF inválido — deve retornar 400
+POST {{baseUrl}}/api/lgpd/request
+Content-Type: application/json
+
+{
+  "requesterName": "Teste Inválido",
+  "requesterEmail": "invalido@teste.com",
+  "requesterCpf": "00000000000",
+  "requestType": "Acesso"
+}
+
+###

@@ -79,7 +79,8 @@ public class AuthService : IAuthService
                 IsActive  = true
             };
             _db.Users.Add(user);
-            _logger.LogInformation("Novo cliente criado via QR Code: {Name} | CPF: {Cpf}", request.Name, request.Cpf);
+            // LGPD: CPF não é logado — dado sensível do titular
+            _logger.LogInformation("Novo cliente criado via QR Code: {Name}", request.Name);
         }
         else
         {

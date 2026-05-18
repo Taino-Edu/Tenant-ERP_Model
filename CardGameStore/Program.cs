@@ -253,6 +253,7 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 // ---------------------------------------------------------------------------
 // 12. CORS — origens lidas de config para facilitar deploy sem rebuild
 // ---------------------------------------------------------------------------
+// CORS: origens lidas de config para evitar hardcoded e facilitar deploy
 var corsOrigins = (builder.Configuration["CorsSettings:AllowedOrigins"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -345,6 +346,7 @@ using (var scope = app.Services.CreateScope())
 // ---------------------------------------------------------------------------
 
 // ForwardedHeaders — lê X-Forwarded-For/Proto do proxy reverso (nginx/Cloudflare)
+// de forma controlada pelo runtime, eliminando leitura manual do header nos serviços
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
@@ -368,11 +370,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
-        c.RoutePrefix   = "swagger";
+        c.RoutePrefix   = "swagger"; // UI disponível em /swagger
         c.DocumentTitle = "CardGameStore — softNerd";
     });
 }
 
+// SSL gerenciado pelo reverse proxy (Nginx/Cloudflare) — não redirecionar aqui
 app.UseStaticFiles(); // serve wwwroot/uploads/* como arquivos estáticos
 app.UseCors("FrontendPolicy");
 app.UseRateLimiter();

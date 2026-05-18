@@ -193,12 +193,15 @@ public class AppDbContext : DbContext
         // =====================================================================
         modelBuilder.Entity<LgpdRequest>(entity =>
         {
+            // Busca por status (lista de requisições abertas)
             entity.HasIndex(r => r.Status)
                   .HasDatabaseName("ix_lgpd_requests_status");
 
+            // Busca por email do solicitante
             entity.HasIndex(r => r.RequesterEmail)
                   .HasDatabaseName("ix_lgpd_requests_email");
 
+            // Relacionamento opcional com User (CPF pode não existir no cadastro)
             entity.HasOne(r => r.User)
                   .WithMany()
                   .HasForeignKey(r => r.UserId)
@@ -226,18 +229,21 @@ public class AppDbContext : DbContext
         // =====================================================================
         modelBuilder.Entity<AuditLog>(entity =>
         {
+            // Busca por entidade afetada
             entity.HasIndex(a => new { a.EntityType, a.EntityId })
                   .HasDatabaseName("ix_audit_logs_entity");
 
+            // Busca por ator
             entity.HasIndex(a => a.ActorUserId)
                   .HasDatabaseName("ix_audit_logs_actor");
 
+            // Ordenação por data (query mais frequente)
             entity.HasIndex(a => a.CreatedAt)
                   .HasDatabaseName("ix_audit_logs_created_at");
         });
 
         // =====================================================================
-        // SEED — Admin do Maikon
+        // SEED — Dados iniciais (usuário Admin do Maikon)
         // =====================================================================
         modelBuilder.Entity<User>().HasData(new User
         {

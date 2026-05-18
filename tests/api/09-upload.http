@@ -1,0 +1,70 @@
+# =============================================================================
+# 09-upload.http — Testes de Upload de Imagem
+# POST /api/upload/image  →  salva em wwwroot/uploads/ e retorna URL pública
+# =============================================================================
+# Pré-requisito: adminToken preenchido no http-client.env.json
+# No VS Code: instale "REST Client" (Humao) e clique em "Send Request"
+#
+# ATENÇÃO: envio de multipart/form-data via REST Client exige arquivo local.
+# Substitua @imagePath pelo caminho de uma imagem JPEG/PNG/WebP no seu sistema.
+# =============================================================================
+
+### ── Upload de Imagem ────────────────────────────────────────────────────────
+
+@imagePath = /tmp/test-image.jpg
+
+### [1] Upload bem-sucedido (admin) — deve retornar 200 com { "url": "/uploads/..." }
+POST {{baseUrl}}/api/upload/image
+Authorization: Bearer {{adminToken}}
+Content-Type: multipart/form-data; boundary=--boundary
+
+----boundary
+Content-Disposition: form-data; name="file"; filename="test-image.jpg"
+Content-Type: image/jpeg
+
+< {{imagePath}}
+----boundary--
+
+###
+
+### [2] Upload sem autenticação — deve retornar 401
+POST {{baseUrl}}/api/upload/image
+Content-Type: multipart/form-data; boundary=--boundary
+
+----boundary
+Content-Disposition: form-data; name="file"; filename="test-image.jpg"
+Content-Type: image/jpeg
+
+< {{imagePath}}
+----boundary--
+
+###
+
+### [3] Upload com token de cliente — deve retornar 403
+POST {{baseUrl}}/api/upload/image
+Authorization: Bearer {{clientToken}}
+Content-Type: multipart/form-data; boundary=--boundary
+
+----boundary
+Content-Disposition: form-data; name="file"; filename="test-image.jpg"
+Content-Type: image/jpeg
+
+< {{imagePath}}
+----boundary--
+
+###
+
+### [4] Upload sem arquivo — deve retornar 400 "Nenhum arquivo enviado"
+POST {{baseUrl}}/api/upload/image
+Authorization: Bearer {{adminToken}}
+Content-Type: multipart/form-data; boundary=--boundary
+
+----boundary--
+
+###
+
+### [5] Verificar que a URL retornada serve o arquivo estático
+# Substitua IMAGE_FILENAME pelo nome retornado no request [1]
+GET {{baseUrl}}/uploads/IMAGE_FILENAME
+
+###

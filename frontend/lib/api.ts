@@ -255,6 +255,7 @@ export const userApi = {
   me:        ()                => api.get<UserProfile>('/api/user/me'),
   addPoints: (id: string, points: number, reason?: string) =>
     api.post<UserSummary>(`/api/user/${id}/points`, { points, reason }),
+  // LGPD — Direitos do titular
   updateMe:  (data: UpdateMeRequest) => api.put<UserProfile>('/api/user/me', data),
   deleteMe:  ()                      => api.delete('/api/user/me'),
 }
@@ -293,6 +294,7 @@ export const aiApi = {
 // ── Upload de imagem ──────────────────────────────────────────────────────────
 
 export const uploadApi = {
+  /** Envia um arquivo de imagem e retorna a URL pública gerada pelo servidor. */
   image: (file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -329,14 +331,19 @@ export interface LgpdRequestDto {
 }
 
 export const lgpdApi = {
+  /** Abre uma solicitação de exercício de direitos LGPD (público, sem auth). */
   submitRequest: (data: LgpdRequestCreate) =>
     api.post<{ protocol: string; deadline: string; message: string }>('/api/lgpd/request', data),
+
+  /** Consulta o status de uma solicitação pelo número de protocolo. */
   getRequest: (id: string) =>
     api.get<{
       id: string; requestType: string; status: string
       adminResponse: string | null; createdAt: string
       deadline: string; respondedAt: string | null
     }>(`/api/lgpd/request/${id}`),
+
+  /** Registra consentimento ou recusa de cookies. */
   recordConsent: (accepted: boolean) =>
     api.post('/api/lgpd/consent', { accepted }),
 }
@@ -344,10 +351,15 @@ export const lgpdApi = {
 // ── LGPD — Admin ──────────────────────────────────────────────────────────────
 
 export const lgpdAdminApi = {
+  /** Lista todas as solicitações LGPD, com filtro opcional por status. */
   listRequests: (status?: string) =>
     api.get<LgpdRequestDto[]>('/api/lgpd/requests', { params: status ? { status } : undefined }),
+
+  /** Responde formalmente a uma solicitação LGPD. */
   respond: (id: string, data: { status: string; adminResponse: string }) =>
     api.put<LgpdRequestDto>(`/api/lgpd/requests/${id}/respond`, data),
+
+  /** Lista audit logs paginados. */
   listAudit: (page = 1, pageSize = 50) =>
     api.get('/api/audit', { params: { page, pageSize } }),
 }

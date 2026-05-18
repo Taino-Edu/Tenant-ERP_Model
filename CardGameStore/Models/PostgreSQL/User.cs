@@ -116,6 +116,24 @@ public class User
     public bool IsActive { get; set; } = true;
 
     // -------------------------------------------------------------------------
+    // LGPD — Ciclo de vida e consentimento
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Data em que o titular foi anonimizado (exclusão lógica por LGPD).
+    /// Null enquanto a conta está ativa.
+    /// </summary>
+    [Column("deleted_at")]
+    public DateTime? DeletedAt { get; set; }
+
+    /// <summary>
+    /// Data em que o titular deu consentimento explícito ao uso de seus dados.
+    /// Registrado no primeiro quick-login com checkbox de consentimento marcado.
+    /// </summary>
+    [Column("consent_at")]
+    public DateTime? ConsentAt { get; set; }
+
+    // -------------------------------------------------------------------------
     // Navegação (relacionamentos)
     // -------------------------------------------------------------------------
 

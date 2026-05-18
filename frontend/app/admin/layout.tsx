@@ -1,4 +1,5 @@
 import Sidebar from '@/components/admin/Sidebar'
+import AiChatWidget from '@/components/admin/AiChatWidget'
 import { Toaster } from 'react-hot-toast'
 import type { Metadata } from 'next'
 
@@ -8,8 +9,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex min-h-screen bg-surface-900">
       <Sidebar />
-      <main className="flex-1 overflow-auto pt-14 md:pt-0"
-            style={{ background: 'radial-gradient(circle at top right, #1A1A24, #121215)' }}>
+      <main className="flex-1 overflow-auto pt-14 md:pt-0 admin-main">
         <Toaster
           position="top-right"
           toastOptions={{
@@ -20,6 +20,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         />
         {children}
       </main>
+      <AiChatWidget />
     </div>
   )
 }

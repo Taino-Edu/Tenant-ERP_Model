@@ -34,11 +34,15 @@ public interface IEmailService
 
     // ── LGPD ──────────────────────────────────────────────────────────────────
 
-    /// <summary>Confirma ao solicitante o recebimento da solicitação LGPD com protocolo e prazo.</summary>
+    /// <summary>
+    /// Confirma ao solicitante o recebimento da solicitação LGPD com número de protocolo e prazo.
+    /// </summary>
     Task SendLgpdConfirmationAsync(string toEmail, string toName, string protocol,
                                    string requestType, DateTime deadline);
 
-    /// <summary>Envia ao solicitante a resposta formal do responsável pelo tratamento de dados.</summary>
+    /// <summary>
+    /// Envia ao solicitante a resposta formal do responsável pelo tratamento de dados.
+    /// </summary>
     Task SendLgpdResponseAsync(string toEmail, string toName, string protocol,
                                 string requestType, string response);
 }

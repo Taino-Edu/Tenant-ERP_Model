@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
+import CookieBanner from '@/components/CookieBanner'
+import Footer from '@/components/Footer'
 
 export const viewport: Viewport = {
   themeColor: '#6C3FC5',
@@ -61,6 +63,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
         {children}
+        {/* Rodapé com links legais (LGPD) — não aparece no painel admin */}
+        <Footer />
+        {/* Banner de consentimento de cookies (LGPD Art. 8°) */}
+        <CookieBanner />
         {/* Botão flutuante de instalação PWA — aparece quando o Chrome suporta */}
         <PWAInstallButton />
       </body>

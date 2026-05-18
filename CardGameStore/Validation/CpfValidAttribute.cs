@@ -29,6 +29,9 @@ public class CpfValidAttribute : ValidationAttribute
         return ValidationResult.Success;
     }
 
+    /// <summary>
+    /// Implementação do algoritmo oficial de CPF (Receita Federal).
+    /// </summary>
     public static bool ValidarCpf(string cpf)
     {
         if (string.IsNullOrWhiteSpace(cpf) || cpf.Length != 11)
@@ -37,9 +40,11 @@ public class CpfValidAttribute : ValidationAttribute
         if (!cpf.All(char.IsAsciiDigit))
             return false;
 
+        // Rejeita sequências com todos os dígitos iguais (ex: 000.000.000-00)
         if (cpf.Distinct().Count() == 1)
             return false;
 
+        // ── Primeiro dígito verificador ───────────────────────────────────────
         int soma = 0;
         for (int i = 0; i < 9; i++)
             soma += (cpf[i] - '0') * (10 - i);
@@ -50,6 +55,7 @@ public class CpfValidAttribute : ValidationAttribute
         if (cpf[9] - '0' != d1)
             return false;
 
+        // ── Segundo dígito verificador ────────────────────────────────────────
         soma = 0;
         for (int i = 0; i < 10; i++)
             soma += (cpf[i] - '0') * (11 - i);
