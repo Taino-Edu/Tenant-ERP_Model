@@ -55,26 +55,28 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // ---------------------------------------------------------------------------
 // 3. BANCO DE DOCUMENTOS — MongoDB — opcional em dev
 // ---------------------------------------------------------------------------
-var mongoConStr = mongoSettings?.ConnectionString ?? "mongodb://localhost:27017";
-try
+var mongoConStr = mongoSettings?.ConnectionString;
+if (string.IsNullOrWhiteSpace(mongoConStr))
 {
-    builder.Services.AddSingleton<IMongoClient>(_ =>
-    {
-        var settings = MongoClientSettings.FromConnectionString(mongoConStr);
-        settings.ServerSelectionTimeout = TimeSpan.FromSeconds(3);
-        return new MongoClient(settings);
-    });
+    var startupLogger = builder.Services.BuildServiceProvider()
+        .GetRequiredService<ILogger<Program>>();
+    startupLogger.LogWarning("MongoDB: ConnectionString não configurada — TCG cache e VendaAvulsa podem não funcionar.");
+    mongoConStr = "mongodb://localhost:27017";
+}
 
-    builder.Services.AddSingleton(sp =>
-    {
-        var client = sp.GetRequiredService<IMongoClient>();
-        return client.GetDatabase(mongoSettings?.DatabaseName ?? "cardgamestore_cache");
-    });
-}
-catch
+// Registro sempre ocorre — o MongoDB driver só conecta na primeira query (lazy connection).
+builder.Services.AddSingleton<IMongoClient>(_ =>
 {
-    // MongoDB indisponível — TCG cache e VendaAvulsa ficam fora, o resto funciona
-}
+    var settings = MongoClientSettings.FromConnectionString(mongoConStr);
+    settings.ServerSelectionTimeout = TimeSpan.FromSeconds(3);
+    return new MongoClient(settings);
+});
+
+builder.Services.AddSingleton(sp =>
+{
+    var client = sp.GetRequiredService<IMongoClient>();
+    return client.GetDatabase(mongoSettings?.DatabaseName ?? "cardgamestore_cache");
+});
 
 // ---------------------------------------------------------------------------
 // 4. AUTENTICAÇÃO — JWT Bearer Token

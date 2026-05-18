@@ -43,8 +43,8 @@ api.interceptors.response.use(
         // Re-tenta a requisição original — o novo accessToken já está no cookie
         return api(original)
       } catch {
-        // Refresh falhou — redireciona para login
-        if (typeof window !== 'undefined') {
+        // Refresh falhou — redireciona para login (guarda contra loop de redirect)
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           window.location.href = '/login'
         }
       }

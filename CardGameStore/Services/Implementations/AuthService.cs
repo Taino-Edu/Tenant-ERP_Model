@@ -90,7 +90,16 @@ public class AuthService : IAuthService
             user.UpdatedAt = DateTime.UtcNow;
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // CPF duplicado por requisição concorrente — busca o usuário já criado
+            user = await _db.Users.FirstOrDefaultAsync(u => u.Cpf == request.Cpf && u.IsActive);
+            if (user == null) throw;
+        }
 
         // Abre (ou reutiliza) a comanda para esta mesa/sessão
         var comanda = await _comandaService.OpenComandaAsync(user.Id, request.TableIdentifier);
@@ -194,7 +203,11 @@ public class AuthService : IAuthService
         var user = await _db.Users
             .FirstOrDefaultAsync(u => u.Email == request.Email.ToLowerInvariant() && u.IsActive);
 
-        if (user == null) return;
+        if (user == null)
+        {
+            await Task.Delay(Random.Shared.Next(200, 500)); // timing equalization
+            return;
+        }
 
         // Gera token seguro e salva com expiração de 2h
         var tokenBytes = new byte[32];
