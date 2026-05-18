@@ -1,6 +1,5 @@
 // =============================================================================
-// AuthService.cs — Stub da implementação de Autenticação
-// TODO: Implementar na Fase 1.B
+// AuthService.cs — Implementação de Autenticação
 // =============================================================================
 using CardGameStore.Configuration;
 using CardGameStore.Data;

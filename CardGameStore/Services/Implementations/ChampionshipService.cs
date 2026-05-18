@@ -1,6 +1,5 @@
 // =============================================================================
-// ChampionshipService.cs — Stub da implementação de Campeonatos
-// TODO: Implementar completamente na Fase 2
+// ChampionshipService.cs — Implementação de Campeonatos
 // =============================================================================
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;

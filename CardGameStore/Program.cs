@@ -3,6 +3,7 @@
 // Padrão: Minimal API (.NET 8+), sem Startup.cs separado
 // =============================================================================
 
+using System.Net;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -331,8 +332,8 @@ using (var scope = app.Services.CreateScope())
         }
         else
         {
-            logger.LogInformation("Inicializando banco PostgreSQL...");
-            await db.Database.EnsureCreatedAsync();
+            logger.LogInformation("Inicializando banco PostgreSQL — aplicando migrations...");
+            await db.Database.MigrateAsync();
             logger.LogInformation("Banco PostgreSQL pronto.");
         }
     }
@@ -349,10 +350,16 @@ using (var scope = app.Services.CreateScope())
 
 // ForwardedHeaders — lê X-Forwarded-For/Proto do proxy reverso (nginx/Cloudflare)
 // de forma controlada pelo runtime, eliminando leitura manual do header nos serviços
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+var forwardedOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-});
+};
+// Aceita proxy da rede Docker interna (172.16.0.0/12) e loopback
+forwardedOptions.KnownNetworks.Add(new IPNetwork(IPAddress.Parse("172.16.0.0"), 12));
+forwardedOptions.KnownNetworks.Add(new IPNetwork(IPAddress.Parse("10.0.0.0"), 8));
+forwardedOptions.KnownProxies.Add(IPAddress.Loopback);
+forwardedOptions.KnownProxies.Add(IPAddress.IPv6Loopback);
+app.UseForwardedHeaders(forwardedOptions);
 
 // Headers de segurança HTTP em todas as respostas
 app.Use(async (context, next) =>

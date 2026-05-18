@@ -111,7 +111,7 @@ public class AnalyticsController : ControllerBase
 
         // ── Formas de pagamento (vendas avulsas hoje) ─────────────────────────
         var pix      = vendasHoje.Count(v => v.PaymentMethod == "Pix");
-        var cartao   = vendasHoje.Count(v => v.PaymentMethod is "Cartao" or "Credito" or "Debito");
+        var cartao   = vendasHoje.Count(v => v.PaymentMethod is "CartaoCredito" or "CartaoDebito");
         var dinheiro = vendasHoje.Count(v => v.PaymentMethod == "Dinheiro");
 
         var comandasAbertas = await _db.Comandas.CountAsync(c => c.Status == ComandaStatus.Aberta);
