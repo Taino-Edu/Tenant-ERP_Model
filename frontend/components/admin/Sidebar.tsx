@@ -35,7 +35,7 @@ const sections = [
   {
     label: 'Compliance',
     items: [
-      { href: '/admin/lgpd', label: 'LGPD', icon: Shield },
+      { href: '/admin/lgpd', label: 'LGPD & Auditoria', icon: Shield },
     ],
   },
 ]

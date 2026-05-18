@@ -274,7 +274,7 @@ public class EmailService : IEmailService
         try
         {
             var port   = int.TryParse(portStr, out var p) ? p : 587;
-            var client = new SmtpClient(host, port)
+            using var client = new SmtpClient(host, port)
             {
                 Credentials       = new NetworkCredential(user, password),
                 EnableSsl         = true,

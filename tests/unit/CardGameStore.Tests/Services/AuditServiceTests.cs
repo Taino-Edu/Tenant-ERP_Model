@@ -5,12 +5,15 @@
 // =============================================================================
 
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -20,6 +23,9 @@ public class AuditServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    /// <summary>Salt padrão usado nos testes — deve bater com o IConfiguration mockado.</summary>
+    private const string TestSalt = "test-salt";
+
     private static AppDbContext CreateDb(string name)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -28,10 +34,27 @@ public class AuditServiceTests
         return new AppDbContext(options);
     }
 
-    private static AuditService CreateService(AppDbContext db, IHttpContextAccessor? accessor = null)
+    /// <summary>
+    /// Cria AuditService com IConfiguration mockado contendo o salt de teste.
+    /// </summary>
+    private static AuditService CreateService(
+        AppDbContext         db,
+        IHttpContextAccessor? accessor = null,
+        string               salt     = TestSalt)
     {
         accessor ??= new Mock<IHttpContextAccessor>().Object;
-        return new AuditService(db, accessor, NullLogger<AuditService>.Instance);
+
+        var configMock = new Mock<IConfiguration>();
+        configMock.Setup(c => c["Security:IpHashSalt"]).Returns(salt);
+
+        return new AuditService(db, accessor, NullLogger<AuditService>.Instance, configMock.Object);
+    }
+
+    /// <summary>Reproduz o algoritmo de hash do AuditService (SHA-256 com salt).</summary>
+    private static string ComputeHash(string ip, string salt = TestSalt)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(salt + ip));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
     /// <summary>
@@ -252,9 +275,8 @@ public class AuditServiceTests
         await service.LogAsync("Acao", "Tipo", null, null, explicitContextMock.Object);
 
         // Assert — hash deve corresponder ao IP do contexto explícito (9.9.9.9)
-        var ipExplicito = System.Security.Cryptography.SHA256.HashData(
-            System.Text.Encoding.UTF8.GetBytes("9.9.9.9"));
-        var hashEsperado = Convert.ToHexString(ipExplicito).ToLowerInvariant();
+        // O AuditService aplica SHA-256(salt + ip), então o hash esperado deve incluir o salt.
+        var hashEsperado = ComputeHash("9.9.9.9");
 
         var log = await db.AuditLogs.FirstOrDefaultAsync();
         log!.IpHash.Should().Be(hashEsperado,

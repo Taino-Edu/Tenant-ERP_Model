@@ -24,7 +24,8 @@ Content-Type: application/json
 
 ### [2] Consultar status pelo número de protocolo (público — sem autenticação)
 # Substitua PROTOCOLO pelo valor retornado na requisição [1]
-GET {{baseUrl}}/api/lgpd/request/PROTOCOLO
+# O e-mail é obrigatório para evitar enumeração de protocolos (segurança LGPD)
+GET {{baseUrl}}/api/lgpd/request/{{lgpdProtocol}}?email=joao@teste.com
 
 ###
 
@@ -35,7 +36,7 @@ Content-Type: application/json
 {
   "requesterName": "Maria Souza",
   "requesterEmail": "maria@teste.com",
-  "requesterCpf": "01234567890",
+  "requesterCpf": "11144477735",
   "requestType": "Retificacao",
   "description": "Meu número de WhatsApp está incorreto no cadastro."
 }
@@ -84,14 +85,15 @@ Authorization: Bearer {{adminToken}}
 ###
 
 ### [8] Filtrar solicitações por status (admin)
-GET {{baseUrl}}/api/lgpd/requests?status=Aberto
+# Status válidos: Recebido | EmAnalise | Concluido | Negado
+GET {{baseUrl}}/api/lgpd/requests?status=Recebido
 Authorization: Bearer {{adminToken}}
 
 ###
 
 ### [9] Responder a uma solicitação (admin)
-# Substitua PROTOCOLO pelo valor retornado na requisição [1]
-PUT {{baseUrl}}/api/lgpd/requests/PROTOCOLO/respond
+# lgpdProtocol = valor retornado na requisição [1], salvo no env.json
+PUT {{baseUrl}}/api/lgpd/requests/{{lgpdProtocol}}/respond
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
@@ -103,7 +105,7 @@ Content-Type: application/json
 ###
 
 ### [10] Responder com status EmAnalise (admin)
-PUT {{baseUrl}}/api/lgpd/requests/PROTOCOLO/respond
+PUT {{baseUrl}}/api/lgpd/requests/{{lgpdProtocol}}/respond
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 

@@ -109,4 +109,13 @@ teste/
 
 # Claude Code (gerado automaticamente)
 .claude/
+.claire/
 frontend/tsconfig.tsbuildinfo
+
+# Artefatos de worktree e scripts temporários
+*-ef?????.sln
+*-ef?????.sln.*
+instalar-dependencias.ps1
+
+# package-lock na raiz (o real fica em frontend/)
+/package-lock.json

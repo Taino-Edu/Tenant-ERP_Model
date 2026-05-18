@@ -47,7 +47,14 @@ public class VendaAvulsaService : IVendaAvulsaService
         foreach (var reqItem in request.Items)
         {
             var product = products.First(p => p.Id == reqItem.ProductId);
-            product.StockQuantity -= reqItem.Quantity;
+
+            // Decremento atômico via ExecuteUpdateAsync — evita race condition em vendas simultâneas
+            var updated = await _db.Products
+                .Where(p => p.Id == product.Id && p.StockQuantity >= reqItem.Quantity)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    p => p.StockQuantity, p => p.StockQuantity - reqItem.Quantity));
+            if (updated == 0)
+                throw new InvalidOperationException($"Estoque insuficiente para '{product.Name}' (venda simultânea detectada).");
 
             var subtotal = product.PriceInCents * reqItem.Quantity;
             total += subtotal;
@@ -62,8 +69,6 @@ public class VendaAvulsaService : IVendaAvulsaService
                 SubtotalInCents  = subtotal,
             });
         }
-
-        await _db.SaveChangesAsync(); // atômico — ou tudo ou nada no PG
 
         var discountInCents = (int)Math.Round(total * request.DiscountPercent / 100.0);
         var finalTotal = total - discountInCents;

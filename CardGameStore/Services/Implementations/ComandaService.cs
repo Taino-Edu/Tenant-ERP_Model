@@ -14,12 +14,14 @@ public class ComandaService : IComandaService
     private readonly AppDbContext            _db;
     private readonly IEmailService           _email;
     private readonly ILogger<ComandaService> _logger;
+    private readonly IServiceScopeFactory    _scopeFactory;
 
-    public ComandaService(AppDbContext db, IEmailService email, ILogger<ComandaService> logger)
+    public ComandaService(AppDbContext db, IEmailService email, ILogger<ComandaService> logger, IServiceScopeFactory scopeFactory)
     {
-        _db     = db;
-        _email  = email;
-        _logger = logger;
+        _db           = db;
+        _email        = email;
+        _logger       = logger;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
@@ -172,9 +174,18 @@ public class ComandaService : IComandaService
 
         if (item.ProductId.HasValue)
         {
-            var product = await _db.Products.FindAsync(item.ProductId.Value);
-            if (product != null)
-                product.StockQuantity += item.Quantity;
+            await _db.Products
+                .Where(p => p.Id == item.ProductId.Value)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    p => p.StockQuantity, p => p.StockQuantity + item.Quantity));
+        }
+
+        // Ajusta pontos aplicados se o total ficou menor que o desconto
+        if (comanda.PointsApplied > comanda.TotalInCents)
+        {
+            var excess = comanda.PointsApplied - comanda.TotalInCents;
+            comanda.PointsApplied = comanda.TotalInCents;
+            comanda.User!.PointsBalance += excess;
         }
 
         _db.ComandaItems.Remove(item);
@@ -224,10 +235,20 @@ public class ComandaService : IComandaService
                 "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
                 crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
 
-            // Envia email (não bloqueia o fluxo se falhar)
+            // Envia email em background com escopo próprio (evita uso de Scoped service após dispose)
             if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
-                _ = _email.SendCrediarioAbertoAsync(
-                    comanda.User.Email, comanda.User.Name, crediario.ValorEmReais, vencimento);
+            {
+                var emailAddr  = comanda.User.Email;
+                var userName   = comanda.User.Name;
+                var valorReais = crediario.ValorEmReais;
+                var venc       = vencimento;
+                _ = Task.Run(async () =>
+                {
+                    using var scope        = _scopeFactory.CreateScope();
+                    var emailService       = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                    await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
+                });
+            }
         }
 
         comanda.Status   = ComandaStatus.Fechada;
@@ -246,9 +267,10 @@ public class ComandaService : IComandaService
 
         foreach (var item in comanda.Items.Where(i => i.ProductId.HasValue))
         {
-            var product = await _db.Products.FindAsync(item.ProductId!.Value);
-            if (product != null)
-                product.StockQuantity += item.Quantity;
+            await _db.Products
+                .Where(p => p.Id == item.ProductId!.Value)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    p => p.StockQuantity, p => p.StockQuantity + item.Quantity));
         }
 
         comanda.Status   = ComandaStatus.Cancelada;

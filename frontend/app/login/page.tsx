@@ -8,8 +8,8 @@ import { KeyRound, Mail, Loader2, Sword } from 'lucide-react'
 
 export default function LoginPage() {
   const router  = useRouter()
-  const [email, setEmail]     = useState('admin@cardgamestore.com.br')
-  const [password, setPassword] = useState('SenhaForte@123')
+  const [email, setEmail]     = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {

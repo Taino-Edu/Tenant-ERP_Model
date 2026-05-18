@@ -3,6 +3,7 @@
 // Padrão: Minimal API (.NET 8+), sem Startup.cs separado
 // =============================================================================
 
+using System.Net;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -55,26 +56,28 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // ---------------------------------------------------------------------------
 // 3. BANCO DE DOCUMENTOS — MongoDB — opcional em dev
 // ---------------------------------------------------------------------------
-var mongoConStr = mongoSettings?.ConnectionString ?? "mongodb://localhost:27017";
-try
+var mongoConStr = mongoSettings?.ConnectionString;
+if (string.IsNullOrWhiteSpace(mongoConStr))
 {
-    builder.Services.AddSingleton<IMongoClient>(_ =>
-    {
-        var settings = MongoClientSettings.FromConnectionString(mongoConStr);
-        settings.ServerSelectionTimeout = TimeSpan.FromSeconds(3);
-        return new MongoClient(settings);
-    });
+    var startupLogger = builder.Services.BuildServiceProvider()
+        .GetRequiredService<ILogger<Program>>();
+    startupLogger.LogWarning("MongoDB: ConnectionString não configurada — TCG cache e VendaAvulsa podem não funcionar.");
+    mongoConStr = "mongodb://localhost:27017";
+}
 
-    builder.Services.AddSingleton(sp =>
-    {
-        var client = sp.GetRequiredService<IMongoClient>();
-        return client.GetDatabase(mongoSettings?.DatabaseName ?? "cardgamestore_cache");
-    });
-}
-catch
+// Registro sempre ocorre — o MongoDB driver só conecta na primeira query (lazy connection).
+builder.Services.AddSingleton<IMongoClient>(_ =>
 {
-    // MongoDB indisponível — TCG cache e VendaAvulsa ficam fora, o resto funciona
-}
+    var settings = MongoClientSettings.FromConnectionString(mongoConStr);
+    settings.ServerSelectionTimeout = TimeSpan.FromSeconds(3);
+    return new MongoClient(settings);
+});
+
+builder.Services.AddSingleton(sp =>
+{
+    var client = sp.GetRequiredService<IMongoClient>();
+    return client.GetDatabase(mongoSettings?.DatabaseName ?? "cardgamestore_cache");
+});
 
 // ---------------------------------------------------------------------------
 // 4. AUTENTICAÇÃO — JWT Bearer Token
@@ -193,7 +196,7 @@ builder.Services.AddSignalR(options =>
 });
 
 // ---------------------------------------------------------------------------
-// 9. HTTP CLIENTS — APIs TCG externas
+// 9. HTTP CLIENTS — APIs externas
 // ---------------------------------------------------------------------------
 builder.Services.AddHttpClient("PokemonTcgApi", client =>
 {
@@ -251,7 +254,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditService, AuditService>();
 
 // ---------------------------------------------------------------------------
-// 11. CORS
+// 12. CORS — origens lidas de config para facilitar deploy sem rebuild
 // ---------------------------------------------------------------------------
 // CORS: origens lidas de config para evitar hardcoded e facilitar deploy
 var corsOrigins = (builder.Configuration["CorsSettings:AllowedOrigins"] ?? "http://localhost:3000")
@@ -270,7 +273,7 @@ builder.Services.AddCors(options =>
 });
 
 // ---------------------------------------------------------------------------
-// 12. SWAGGER
+// 13. SWAGGER
 // ---------------------------------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -307,12 +310,12 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddControllers();
 
 // ---------------------------------------------------------------------------
-// 13. BUILD
+// 14. BUILD
 // ---------------------------------------------------------------------------
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------
-// 14. BANCO DE DADOS — EnsureCreated em dev, Migrations em produção
+// 15. BANCO DE DADOS — EnsureCreated em dev, Migrations em produção
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
@@ -329,10 +332,8 @@ using (var scope = app.Services.CreateScope())
         }
         else
         {
-            // EnsureCreated é idempotente — não recria se já existir.
-            // Para mudanças de schema em produção: dotnet ef migrations add + MigrateAsync.
-            logger.LogInformation("Inicializando banco PostgreSQL...");
-            await db.Database.EnsureCreatedAsync();
+            logger.LogInformation("Inicializando banco PostgreSQL — aplicando migrations...");
+            await db.Database.MigrateAsync();
             logger.LogInformation("Banco PostgreSQL pronto.");
         }
     }
@@ -344,15 +345,21 @@ using (var scope = app.Services.CreateScope())
 }
 
 // ---------------------------------------------------------------------------
-// 15. MIDDLEWARE PIPELINE
+// 16. MIDDLEWARE PIPELINE
 // ---------------------------------------------------------------------------
 
 // ForwardedHeaders — lê X-Forwarded-For/Proto do proxy reverso (nginx/Cloudflare)
 // de forma controlada pelo runtime, eliminando leitura manual do header nos serviços
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+var forwardedOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-});
+};
+// Aceita proxy da rede Docker interna (172.16.0.0/12) e loopback
+forwardedOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("172.16.0.0"), 12));
+forwardedOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("10.0.0.0"), 8));
+forwardedOptions.KnownProxies.Add(IPAddress.Loopback);
+forwardedOptions.KnownProxies.Add(IPAddress.IPv6Loopback);
+app.UseForwardedHeaders(forwardedOptions);
 
 // Headers de segurança HTTP em todas as respostas
 app.Use(async (context, next) =>
@@ -389,8 +396,6 @@ app.MapControllers();
 app.MapHub<ComandaHub>("/hubs/comanda");
 
 // /health — sem autenticação, sem rate limit
-// Retorna 200 OK (todos saudáveis) ou 503 (algum Unhealthy)
-// MongoDB Degradado retorna 200 (serviço opcional)
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
 {
     ResponseWriter = async (ctx, report) =>

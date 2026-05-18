@@ -338,10 +338,10 @@ export default function LgpdAdminPage() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
                               {req.isOverdue && (
-                                <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" title="Prazo vencido" />
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" aria-label="Prazo vencido" />
                               )}
                               {!req.isOverdue && req.isUrgent && (
-                                <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0" title="Prazo urgente" />
+                                <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0" aria-label="Prazo urgente" />
                               )}
                               <span className="font-mono text-xs text-gray-400 max-w-[100px] truncate">
                                 {req.id}

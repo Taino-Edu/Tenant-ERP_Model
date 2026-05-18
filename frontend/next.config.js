@@ -10,14 +10,24 @@ const nextConfig = {
       { protocol: 'https', hostname: 'cards.scryfall.io' },
       { protocol: 'https', hostname: '**.apitcg.com' },
       { protocol: 'https', hostname: 'product-images.tcgplayer.com' },
+      // Imagens de upload local (dev) e Oracle Cloud (produção)
+      { protocol: 'http',  hostname: 'localhost' },
+      { protocol: 'http',  hostname: '*.**.**.***' }, // qualquer IP público
     ],
   },
   // Proxy para a API em desenvolvimento (evita CORS)
   async rewrites() {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
     return [
       {
         source: '/api/backend/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/:path*`,
+        destination: `${apiUrl}/api/:path*`,
+      },
+      // Proxy de imagens: /uploads/xxx → API:5000/uploads/xxx
+      // (imagens salvas no servidor da API, não no frontend)
+      {
+        source: '/uploads/:path*',
+        destination: `${apiUrl}/uploads/:path*`,
       },
     ]
   },

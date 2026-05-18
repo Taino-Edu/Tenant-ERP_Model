@@ -57,15 +57,17 @@ services:
       JwtSettings__AccessTokenExpirationMinutes: "60"
       JwtSettings__RefreshTokenExpirationDays: "30"
       TcgSettings__PokemonApiKey: "${POKEMON_API_KEY:-}"
+      GeminiSettings__ApiKey:  "${GEMINI_API_KEY:-}"
+      CorsSettings__AllowedOrigins: "${APP_URL:-http://localhost:3000}"
+      Security__IpHashSalt:    "${SECURITY_IPHASHSALT:-softnerd-dev-salt}"
       EmailSettings__Host:     "${EMAIL_HOST:-}"
       EmailSettings__Port:     "${EMAIL_PORT:-587}"
       EmailSettings__User:     "${EMAIL_USER:-}"
       EmailSettings__Password: "${EMAIL_PASSWORD:-}"
       EmailSettings__From:     "${EMAIL_FROM:-noreply@softnerd.com.br}"
       EmailSettings__AppUrl:   "${APP_URL:-http://localhost:3000}"
-      GeminiSettings__ApiKey:  "${GEMINI_API_KEY:-}"
-      CorsSettings__AllowedOrigins: "${APP_URL:-http://localhost:3000}"
-      Security__IpHashSalt:    "${SECURITY_IPHASHSALT:-softnerd-dev-salt}"
+    volumes:
+      - api_uploads:/app/wwwroot/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -145,6 +147,7 @@ services:
 volumes:
   postgres_data:
   mongo_data:
+  api_uploads:
 
 networks:
   cardgame_network:

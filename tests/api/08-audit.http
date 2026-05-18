@@ -1,0 +1,43 @@
+# =============================================================================
+# 08-audit.http — Testes do Audit Log (LGPD — rastreabilidade de ações admin)
+# =============================================================================
+# Pré-requisito: adminToken preenchido no http-client.env.json
+# No VS Code: instale "REST Client" (Humao) e clique em "Send Request"
+# =============================================================================
+
+### ── Audit Log — apenas Admin ───────────────────────────────────────────────
+
+### [1] Listar primeiros 20 registros de audit log
+GET {{baseUrl}}/api/lgpd/audit
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [2] Audit log paginado (página 2, 10 por página)
+GET {{baseUrl}}/api/lgpd/audit?page=2&pageSize=10
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [3] Filtrar audit log por tipo de entidade
+GET {{baseUrl}}/api/lgpd/audit?entityType=LgpdRequest
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [4] Filtrar audit log por ação específica
+GET {{baseUrl}}/api/lgpd/audit?action=Responded
+Authorization: Bearer {{adminToken}}
+
+###
+
+### [5] Audit log sem autenticação — deve retornar 401
+GET {{baseUrl}}/api/lgpd/audit
+
+###
+
+### [6] Audit log com token de cliente — deve retornar 403
+GET {{baseUrl}}/api/lgpd/audit
+Authorization: Bearer {{clientToken}}
+
+###

@@ -1,6 +1,5 @@
 // =============================================================================
-// ProductService.cs — Stub da implementação de Produtos (estoque físico)
-// TODO: Implementar completamente na Fase 1.B
+// ProductService.cs — Implementação de Produtos (estoque físico)
 // =============================================================================
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 // =============================================================================
 // lgpd/page.tsx — Página pública de exercício de direitos LGPD
 // Permite ao titular abrir solicitações e consultar protocolos.
@@ -356,4 +356,3 @@ export default function LgpdPage() {
     </div>
   )
 }
-
