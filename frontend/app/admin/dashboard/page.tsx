@@ -7,7 +7,7 @@ import toast from 'react-hot-toast'
 import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
-  History, Search, Loader2, TableProperties, Trash2, CreditCard,
+  History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -34,10 +34,12 @@ function AddItemModal({
   onClose: () => void
   onAdded: (updated: ComandaDto) => void
 }) {
-  const [products, setProducts]   = useState<Product[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [adding, setAdding]       = useState<string | null>(null)
-  const [search, setSearch]       = useState('')
+  const [products, setProducts]     = useState<Product[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [adding, setAdding]         = useState<string | null>(null)
+  const [search, setSearch]         = useState('')
+  const [barcodeVal, setBarcodeVal] = useState('')
+  const [scanning, setScanning]     = useState(false)
 
   useEffect(() => {
     productApi.list()
@@ -50,10 +52,10 @@ function AddItemModal({
     setAdding(product.id)
     try {
       const { data } = await comandaApi.addItem(comandaId, {
-        productId:       product.id,
-        itemName:        product.name,
+        productId:        product.id,
+        itemName:         product.name,
         unitPriceInCents: product.priceInCents,
-        quantity:        1,
+        quantity:         1,
       })
       onAdded(data)
       toast.success(`${product.name} adicionado!`)
@@ -65,6 +67,23 @@ function AddItemModal({
     }
   }
 
+  // Scan de código de barras → busca produto e já adiciona na comanda
+  async function handleBarcodeScan(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== 'Enter' || !barcodeVal.trim()) return
+    e.preventDefault()
+    setScanning(true)
+    try {
+      const { data: product } = await productApi.getByBarcode(barcodeVal.trim())
+      setBarcodeVal('')
+      await handleAdd(product)
+    } catch {
+      toast.error('Produto não encontrado para este código de barras')
+      setBarcodeVal('')
+    } finally {
+      setScanning(false)
+    }
+  }
+
   const filtered = products.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     p.category.toLowerCase().includes(search.toLowerCase())
@@ -72,20 +91,41 @@ function AddItemModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface-700 border border-surface-500 rounded-2xl w-full max-w-md max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-surface-700 border border-surface-500 rounded-2xl w-full max-w-md max-h-[75vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-surface-500">
           <h3 className="font-semibold text-white">Adicionar produto à comanda</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
             <XCircle className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Scan de código de barras */}
+        <div className="px-3 pt-3 pb-2 border-b border-surface-500">
+          <div className="relative">
+            <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
+            <input
+              autoFocus
+              className="input pl-9 pr-9 text-sm border-brand-500/40 focus:border-brand-500"
+              placeholder="Escaneie o código de barras..."
+              value={barcodeVal}
+              onChange={e => setBarcodeVal(e.target.value)}
+              onKeyDown={handleBarcodeScan}
+              inputMode="none"
+            />
+            {scanning
+              ? <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 animate-spin" />
+              : <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-600 font-mono">Enter</span>
+            }
+          </div>
+        </div>
+
+        {/* Busca por nome */}
         <div className="p-3 border-b border-surface-500">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
-              autoFocus
               className="input pl-9 text-sm"
-              placeholder="Buscar produto..."
+              placeholder="Ou busque por nome..."
               value={search}
               onChange={e => setSearch(e.target.value)}
             />

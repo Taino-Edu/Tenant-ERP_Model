@@ -21,16 +21,17 @@ function ProductModal({
   const set = (k: keyof Product, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
   async function handleBarcodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    // Leitores USB enviam Enter após o código — vamos buscar automaticamente
+    // Leitores USB enviam Enter após o código — tenta buscar produto existente
     if (e.key === 'Enter' && form.barcode) {
       e.preventDefault()
       setBarcodeScanning(true)
       try {
         const { data } = await productApi.getByBarcode(form.barcode)
-        setForm(data) // preenche o form com o produto encontrado
-        toast.success('Produto encontrado pelo código de barras!')
+        setForm(data) // preenche o form com o produto encontrado (edição rápida)
+        toast.success('Produto encontrado! Editando...')
       } catch {
-        toast.error('Nenhum produto com esse código de barras')
+        // Produto não existe — é um produto novo, apenas mantém o código
+        toast.success('Código registrado. Preencha os dados do produto.')
       } finally {
         setBarcodeScanning(false)
       }
