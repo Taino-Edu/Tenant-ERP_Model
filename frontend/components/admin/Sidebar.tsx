@@ -57,12 +57,12 @@ function NavItems({ pathname, onClose }: { pathname: string; onClose?: () => voi
                 href={href}
                 onClick={onClose}
                 className={clsx(
-                  'flex items-center gap-4 w-full px-4 py-3 rounded-xl font-medium text-sm transition-all duration-150 group',
-                  active ? 'bg-[#1E1E2D] text-brand-500' : 'text-gray-500 hover:bg-surface-700 hover:text-white'
+                  'flex items-center gap-4 w-full px-4 py-3 rounded-xl font-medium text-sm transition-all duration-150 group nav-item',
+                  active ? 'nav-item-active' : 'text-gray-500 hover:bg-surface-700 hover:text-white'
                 )}
               >
                 <Icon className={clsx('w-5 h-5 shrink-0', active ? 'text-brand-500' : 'text-gray-500 group-hover:text-gray-300')} />
-                <span className={clsx('flex-1', active && 'text-white font-semibold')}>{itemLabel}</span>
+                <span className={clsx('flex-1 nav-item-label', active && 'font-semibold')}>{itemLabel}</span>
                 {badge && (
                   <span className="text-[10px] bg-accent-green/20 text-accent-green border border-accent-green/30 px-1.5 py-0.5 rounded-full font-bold animate-pulse-slow">
                     {badge}

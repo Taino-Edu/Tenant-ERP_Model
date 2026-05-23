@@ -121,6 +121,18 @@
   /* Transição suave ao trocar tema */
   html { transition: background-color 0.2s ease, color 0.2s ease; }
 
+  /* Nav sidebar — item ativo adaptado ao tema */
+  .nav-item-active {
+    background-color: rgba(108, 63, 197, 0.15);
+    color: #7839F3;
+  }
+  .nav-item-label { color: inherit; }
+  html.light .nav-item-active {
+    background-color: #EDE9FF;
+    color: #5B21B6;
+  }
+  html.light .nav-item-active .nav-item-label { color: #5B21B6; }
+
   /* Fundo do painel admin com gradiente que usa variável de tema */
   .admin-main {
     background: radial-gradient(circle at top right, var(--bg-card), var(--bg-primary));

@@ -10,24 +10,29 @@ interface BeforeInstallPromptEvent extends Event {
 export default function PWAInstallButton() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [installed, setInstalled]           = useState(false)
-  const [visible, setVisible]               = useState(false)   // controla fade-in/out
-  const [dismissed, setDismissed]           = useState(false)
+  const [visible, setVisible]               = useState(false)
+  // Persiste a recusa no localStorage — não volta a aparecer até o usuário limpar
+  const [dismissed, setDismissed]           = useState(() => {
+    try { return localStorage.getItem('pwa-dismissed') === '1' } catch { return false }
+  })
 
   useEffect(() => {
+    // Já instalado como PWA — não mostra
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setInstalled(true)
       return
     }
+    // Usuário já recusou antes — não mostra
+    if (localStorage.getItem('pwa-dismissed') === '1') return
 
     const handler = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e as BeforeInstallPromptEvent)
       setVisible(true)
 
-      // Auto-oculta após 8 segundos com fade-out
-      const timer = setTimeout(() => setVisible(false), 8000)
-      // Limpa o prompt depois do fade (300ms de transição)
-      const cleanup = setTimeout(() => setDeferredPrompt(null), 8350)
+      // Auto-oculta após 12 segundos
+      const timer   = setTimeout(() => setVisible(false), 12000)
+      const cleanup = setTimeout(() => setDeferredPrompt(null), 12350)
       return () => { clearTimeout(timer); clearTimeout(cleanup) }
     }
 
@@ -49,7 +54,10 @@ export default function PWAInstallButton() {
 
   function handleDismiss() {
     setVisible(false)
-    setTimeout(() => setDismissed(true), 350)
+    setTimeout(() => {
+      setDismissed(true)
+      try { localStorage.setItem('pwa-dismissed', '1') } catch {}
+    }, 350)
   }
 
   return (
