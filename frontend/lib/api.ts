@@ -104,8 +104,9 @@ export interface CardCache {
 
 export interface Championship {
   id: string; name: string; game: string; status: string
-  startDate: string; entryFeeInCents: number; maxParticipants: number | null
-  description?: string | null
+  startDate: string; entryFeeInCents: number; entryFeeInReais: number; maxParticipants: number | null
+  description?: string | null; participantCount?: number
+  registrationDeadline?: string | null; endDate?: string | null
   participants?: ChampionshipParticipant[]
 }
 
