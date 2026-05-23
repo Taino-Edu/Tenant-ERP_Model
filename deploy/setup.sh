@@ -141,17 +141,17 @@ fi
 # 6. Build das imagens Docker (na própria máquina)
 # =============================================================================
 step 6 "Buildando imagens Docker (pode demorar ~5 min na primeira vez)..."
-cd "$APP_DIR"
-docker compose -f deploy/docker-compose.prod.yml build --no-cache
+# Copia env para a pasta deploy ANTES do build
+cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
+
+cd "$APP_DIR/deploy"
+docker compose -f docker-compose.prod.yml build --no-cache
 ok "Imagens buildadas com sucesso"
 
 # =============================================================================
 # 7. Subir os containers
 # =============================================================================
 step 7 "Iniciando containers..."
-# Copia env para a pasta deploy (docker-compose lê o .env da mesma pasta)
-cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
-
 cd "$APP_DIR/deploy"
 docker compose -f docker-compose.prod.yml up -d
 
