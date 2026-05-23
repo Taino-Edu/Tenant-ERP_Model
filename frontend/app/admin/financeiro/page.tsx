@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { analyticsApi, FinanceiroDto } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { TrendingUp, TrendingDown, DollarSign, AlertCircle, RefreshCw } from 'lucide-react'
+import { TrendingUp, TrendingDown, DollarSign, AlertCircle, RefreshCw, Printer } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -137,14 +137,24 @@ export default function FinanceiroPage() {
           <h1 className="text-2xl font-bold text-white">Controle Financeiro</h1>
           <p className="text-gray-400 text-sm mt-0.5">Receita, custo e margem do período</p>
         </div>
-        <button
-          onClick={() => load(inicio, fim)}
-          disabled={loading}
-          className="btn-secondary text-sm"
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          Atualizar
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => window.print()}
+            disabled={loading || !data}
+            className="btn-secondary text-sm print:hidden"
+          >
+            <Printer className="w-4 h-4" />
+            Exportar PDF
+          </button>
+          <button
+            onClick={() => load(inicio, fim)}
+            disabled={loading}
+            className="btn-secondary text-sm print:hidden"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Filtros de período */}

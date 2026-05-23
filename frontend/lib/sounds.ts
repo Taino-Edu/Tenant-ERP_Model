@@ -2,9 +2,19 @@
 // sounds.ts — Sons do sistema via Web Audio API (sem arquivos externos)
 // =============================================================================
 
+// Reutiliza um único AudioContext (browsers limitam a quantidade)
+let _ctx: AudioContext | null = null
+
 function getAudioContext(): AudioContext | null {
   try {
-    return new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    if (!_ctx || _ctx.state === 'closed') {
+      _ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+    }
+    // Resume se estava suspenso (política de autoplay do browser)
+    if (_ctx.state === 'suspended') {
+      _ctx.resume()
+    }
+    return _ctx
   } catch {
     return null
   }

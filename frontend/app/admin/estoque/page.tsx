@@ -43,8 +43,9 @@ function ProductModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto">
-      <div className="card w-full max-w-md animate-bounce-in my-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overflow-y-auto">
+      <div className="flex min-h-full items-center justify-center p-4">
+      <div className="card w-full max-w-md animate-bounce-in">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-white">{form.id ? 'Editar Produto' : 'Novo Produto'}</h2>
           <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
@@ -145,6 +146,7 @@ function ProductModal({
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   )

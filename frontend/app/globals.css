@@ -180,3 +180,36 @@ html.light {
   ::placeholder { color: #AAAAAA !important; }
 }
 
+/* ── Impressão / Exportar PDF ──────────────────────────────────────────────── */
+@media print {
+  /* Esconde tudo exceto o conteúdo principal */
+  nav, aside, header,
+  [data-sidebar], [class*="Sidebar"],
+  .print\:hidden { display: none !important; }
+
+  body { background: white !important; color: black !important; }
+
+  /* Cards viram blocos simples com borda */
+  .card {
+    background: white !important;
+    border: 1px solid #ddd !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  /* Textos legíveis no papel */
+  .text-white, .text-gray-300, .text-gray-400 { color: #111 !important; }
+  .text-emerald-400 { color: #059669 !important; }
+  .text-red-400     { color: #dc2626 !important; }
+  .text-brand-400   { color: #7c3aed !important; }
+  .text-accent-gold { color: #b45309 !important; }
+
+  /* Tabelas */
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ddd; padding: 6px 10px; color: #111 !important; }
+  thead { background: #f3f4f6 !important; }
+
+  /* Força conteúdo financeiro a ocupar página toda */
+  main, [class*="p-6"] { padding: 0 !important; }
+}
+
