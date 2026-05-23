@@ -65,11 +65,12 @@ function ProductModal({
     )}
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
-      <div className="card w-full max-w-md animate-bounce-in">
-        <div className="flex items-center justify-between mb-6">
+      <div className="w-full max-w-md bg-surface-800 border border-surface-600 rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-600 shrink-0">
           <h2 className="text-lg font-bold text-white">{form.id ? 'Editar Produto' : 'Novo Produto'}</h2>
-          <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-600 text-gray-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
         </div>
+        <div className="overflow-y-auto flex-1 px-6 py-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="label">Código de barras</label>
@@ -176,6 +177,7 @@ function ProductModal({
             </button>
           </div>
         </form>
+        </div>
       </div>
       </div>
     </div>
