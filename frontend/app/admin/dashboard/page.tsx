@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { comandaApi, productApi, ComandaDto, Product, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
+import { playGoalSound } from '@/lib/sounds'
 import toast from 'react-hot-toast'
 import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
@@ -387,10 +388,18 @@ export default function DashboardPage() {
   const [newIds, setNewIds]       = useState<Set<string>>(new Set())
   const [search, setSearch]       = useState('')
   const prevCountRef              = useRef(0)
+  const knownIdsRef               = useRef<Set<string>>(new Set())
 
   const fetchComandas = useCallback(async () => {
     try {
       const { data } = await comandaApi.dashboard()
+      // Detecta novas comandas e toca o som de gol
+      data.forEach(c => {
+        if (!knownIdsRef.current.has(c.id) && knownIdsRef.current.size > 0) {
+          playGoalSound()
+        }
+        knownIdsRef.current.add(c.id)
+      })
       setComandas(data)
     } catch {
       toast.error('Erro ao carregar comandas')
