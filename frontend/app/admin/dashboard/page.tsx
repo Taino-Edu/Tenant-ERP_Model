@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { comandaApi, productApi, ComandaDto, Product, COMANDA_PAYMENT_METHODS } from '@/lib/api'
+import { comandaApi, productApi, analyticsApi, ComandaDto, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto } from '@/lib/api'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
 import CameraScanner from '@/components/CameraScanner'
@@ -9,10 +9,57 @@ import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
   History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode, Camera,
+  AlertTriangle, DollarSign, BarChart2,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
+
+// ── Mini gráfico de barras (últimos 7 dias) ───────────────────────────────────
+function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
+  const [hovered, setHovered] = useState<number | null>(null)
+  if (!dias || dias.length === 0) return null
+  const maxVal = Math.max(...dias.map(d => d.receita), 1)
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+          <BarChart2 className="w-4 h-4 text-brand-400" /> Receita — últimos 7 dias
+        </h3>
+        <a href="/admin/financeiro" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
+          Ver relatório completo →
+        </a>
+      </div>
+      <div className="flex items-end gap-1.5 h-24">
+        {dias.map((d, i) => {
+          const pct = (d.receita / maxVal) * 100
+          return (
+            <div
+              key={d.dia}
+              className="flex-1 flex flex-col items-center gap-1 group cursor-pointer"
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+            >
+              {hovered === i && (
+                <div className="absolute -top-8 bg-surface-700 border border-surface-500 rounded px-2 py-1 text-xs text-white whitespace-nowrap z-10 pointer-events-none">
+                  {d.dia.slice(5)}: {fmt(d.receita)}
+                </div>
+              )}
+              <div className="w-full flex flex-col justify-end relative" style={{ height: '72px' }}>
+                <div
+                  className={`w-full rounded-t transition-all ${hovered === i ? 'bg-brand-400' : 'bg-brand-600'}`}
+                  style={{ height: `${Math.max(4, pct * 0.72)}px` }}
+                />
+              </div>
+              <span className="text-[9px] text-gray-600">{d.dia.slice(8)}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 function elapsedLabel(openedAt: string) {
   const mins = Math.floor((Date.now() - new Date(openedAt).getTime()) / 60000)
@@ -449,6 +496,9 @@ export default function DashboardPage() {
   const [connected, setConnected] = useState(false)
   const [newIds, setNewIds]       = useState<Set<string>>(new Set())
   const [search, setSearch]       = useState('')
+  const [fin7d, setFin7d]         = useState<FinanceiroDto | null>(null)
+  const [finHoje, setFinHoje]     = useState<FinanceiroDto | null>(null)
+  const [lowStock, setLowStock]   = useState(0)
   const prevCountRef              = useRef(0)
   const knownIdsRef               = useRef<Set<string>>(new Set())
 
@@ -480,6 +530,17 @@ export default function DashboardPage() {
     } finally {
       setHistLoad(false)
     }
+  }, [])
+
+  // Carrega dados financeiros e estoque baixo
+  useEffect(() => {
+    const hoje = new Date().toISOString().split('T')[0]
+    const ini7 = new Date(); ini7.setDate(ini7.getDate() - 6)
+    const ini7s = ini7.toISOString().split('T')[0]
+
+    analyticsApi.financeiro(hoje, hoje).then(r => setFinHoje(r.data)).catch(() => {})
+    analyticsApi.financeiro(ini7s, hoje).then(r => setFin7d(r.data)).catch(() => {})
+    productApi.list().then(r => setLowStock(r.data.filter(p => p.isLowStock).length)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -567,13 +628,13 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Métricas */}
+      {/* Métricas ao vivo */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Comandas Ativas',     value: comandas.length,     icon: Users,       color: 'text-brand-400',  bg: 'bg-brand-600/10'  },
-          { label: 'Em Andamento',         value: emAndamento,         icon: TrendingUp,  color: 'text-amber-400',  bg: 'bg-amber-500/10'  },
-          { label: 'Em Aberto',            value: fmt(totalAberto),    icon: Clock,       color: 'text-red-400',    bg: 'bg-red-500/10'    },
-          { label: 'Fechado Hoje',         value: fmt(totalFechado),   icon: Banknote,    color: 'text-accent-gold',bg: 'bg-amber-500/10'  },
+          { label: 'Comandas Ativas',  value: String(comandas.length),  icon: Users,          color: 'text-brand-400',   bg: 'bg-brand-600/10'   },
+          { label: 'Em Aberto',        value: fmt(totalAberto),          icon: Clock,          color: 'text-red-400',     bg: 'bg-red-500/10'     },
+          { label: 'Receita Hoje',     value: finHoje ? fmt(finHoje.receita) : '—', icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+          { label: 'Estoque Baixo',    value: String(lowStock),          icon: AlertTriangle,  color: lowStock > 0 ? 'text-red-400' : 'text-gray-400', bg: lowStock > 0 ? 'bg-red-500/10' : 'bg-surface-600' },
         ].map(m => (
           <div key={m.label} className="card flex items-center gap-3 py-3">
             <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', m.bg)}>
@@ -586,6 +647,28 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* KPIs financeiros hoje */}
+      {finHoje && finHoje.receita > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Fechado Hoje',  value: fmt(totalFechado),      icon: Banknote,   color: 'text-accent-gold' },
+            { label: 'Custo Hoje',    value: fmt(finHoje.custo),      icon: TrendingUp, color: 'text-red-400'     },
+            { label: 'Margem Hoje',   value: fmt(finHoje.margem),     icon: TrendingUp, color: finHoje.margem >= 0 ? 'text-emerald-400' : 'text-red-400' },
+          ].map(m => (
+            <div key={m.label} className="card flex items-center gap-3 py-2.5">
+              <m.icon className={clsx('w-4 h-4 shrink-0', m.color)} />
+              <div className="min-w-0">
+                <p className={clsx('text-base font-bold font-mono truncate', m.color)}>{m.value}</p>
+                <p className="text-xs text-gray-500">{m.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Gráfico 7 dias */}
+      {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
 
       {/* Tabs */}
       <div className="flex items-center justify-between flex-wrap gap-3">
