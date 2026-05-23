@@ -253,6 +253,23 @@ public class ComandaService : IComandaService
 
         comanda.Status   = ComandaStatus.Fechada;
         comanda.ClosedAt = DateTime.UtcNow;
+
+        // ── Pontos de fidelidade ──────────────────────────────────────────────
+        // Regra: 1 ponto por R$1 gasto (após desconto de pontos aplicados)
+        if (comanda.User != null && paymentMethod != PaymentCrediario)
+        {
+            var valorPago   = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+            var pontosGanhos = valorPago / 100; // 1 ponto por real
+            if (pontosGanhos > 0)
+            {
+                comanda.User.PointsBalance  += pontosGanhos;
+                comanda.User.PointsExpiresAt = DateTime.UtcNow.AddYears(1);
+                _logger.LogInformation(
+                    "Usuário {UserId} ganhou {Pontos} pontos na comanda {ComandaId}.",
+                    comanda.UserId, pontosGanhos, comandaId);
+            }
+        }
+
         await _db.SaveChangesAsync();
         return MapToDto(comanda);
     }
