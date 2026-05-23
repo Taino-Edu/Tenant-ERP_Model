@@ -335,6 +335,24 @@ using (var scope = app.Services.CreateScope())
             logger.LogInformation("Inicializando banco PostgreSQL — aplicando migrations...");
             await db.Database.MigrateAsync();
             logger.LogInformation("Banco PostgreSQL pronto.");
+
+            // Seed: cria o admin se não existir (evita InsertData no migration com Guid/SQLite)
+            if (!db.Users.Any(u => u.Email == "admin@cardgamestore.com.br"))
+            {
+                db.Users.Add(new CardGameStore.Models.PostgreSQL.User
+                {
+                    Id           = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                    Name         = "Maikon",
+                    Email        = "admin@cardgamestore.com.br",
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("SenhaForte@123"),
+                    Role         = CardGameStore.Models.PostgreSQL.UserRole.Admin,
+                    IsActive     = true,
+                    CreatedAt    = DateTime.UtcNow,
+                    UpdatedAt    = DateTime.UtcNow
+                });
+                await db.SaveChangesAsync();
+                logger.LogInformation("Usuário admin criado com sucesso.");
+            }
         }
     }
     catch (Exception ex)

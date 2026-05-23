@@ -307,11 +307,6 @@ namespace CardGameStore.Data.Migrations
                         onDelete: ReferentialAction.Restrict);
                 });
 
-            migrationBuilder.InsertData(
-                table: "users",
-                columns: new[] { "id", "consent_at", "cpf", "created_at", "deleted_at", "email", "is_active", "name", "password_hash", "password_reset_token", "password_reset_token_expiry", "points_balance", "points_expires_at", "refresh_token", "refresh_token_expiry", "role", "updated_at", "whatsapp" },
-                values: new object[] { new Guid("00000000-0000-0000-0000-000000000001"), null, null, new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "admin@cardgamestore.com.br", true, "Maikon", "$2b$12$2FtwJhHP3JiQZjXb.f19B.ulmS5t2jdIQbKAPhPYP22AT.0ptsVPC", null, null, 0, null, null, null, "Admin", new DateTime(2025, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null });
-
             migrationBuilder.CreateIndex(
                 name: "ix_audit_logs_actor",
                 table: "audit_logs",
