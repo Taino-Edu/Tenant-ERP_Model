@@ -28,6 +28,11 @@ public class Product
     [Column("name")]
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Código de barras (EAN-13, QR, etc.) — opcional, para leitura via scanner.</summary>
+    [MaxLength(100)]
+    [Column("barcode")]
+    public string? Barcode { get; set; }
+
     [MaxLength(500)]
     [Column("description")]
     public string? Description { get; set; }

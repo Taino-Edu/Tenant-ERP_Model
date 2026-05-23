@@ -2,21 +2,40 @@
 import { useEffect, useState } from 'react'
 import { productApi, Product } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 
-const CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
+const DEFAULT_CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
 
 function ProductModal({
-  product, onClose, onSave
+  product, onClose, onSave, categories,
 }: {
   product: Partial<Product> | null
   onClose: () => void
   onSave:  (p: Partial<Product>) => Promise<void>
+  categories: string[]
 }) {
-  const [form, setForm]   = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0, costPriceInCents: 0 })
-  const [saving, setSaving] = useState(false)
+  const [form, setForm]      = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0, costPriceInCents: 0 })
+  const [saving, setSaving]  = useState(false)
+  const [barcodeScanning, setBarcodeScanning] = useState(false)
   const set = (k: keyof Product, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleBarcodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Leitores USB enviam Enter após o código — vamos buscar automaticamente
+    if (e.key === 'Enter' && form.barcode) {
+      e.preventDefault()
+      setBarcodeScanning(true)
+      try {
+        const { data } = await productApi.getByBarcode(form.barcode)
+        setForm(data) // preenche o form com o produto encontrado
+        toast.success('Produto encontrado pelo código de barras!')
+      } catch {
+        toast.error('Nenhum produto com esse código de barras')
+      } finally {
+        setBarcodeScanning(false)
+      }
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
@@ -32,15 +51,35 @@ function ProductModal({
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <label className="label">Código de barras</label>
+            <div className="relative">
+              <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                className="input pl-9 pr-9"
+                value={form.barcode ?? ''}
+                onChange={e => set('barcode', e.target.value || null)}
+                onKeyDown={handleBarcodeKeyDown}
+                placeholder="Escaneie ou digite — Enter para buscar"
+              />
+              {barcodeScanning && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 animate-spin" />}
+            </div>
+            <p className="text-xs text-gray-600 mt-1">Conecte um leitor USB e escaneie para auto-preencher</p>
+          </div>
+          <div>
             <label className="label">Nome *</label>
             <input className="input" required value={form.name ?? ''} onChange={e => set('name', e.target.value)} placeholder="Ex: Coca-Cola Lata 350ml" />
           </div>
           <div>
             <label className="label">Categoria *</label>
-            <select className="input" required value={form.category ?? ''} onChange={e => set('category', e.target.value)}>
-              <option value="">Selecione...</option>
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <input
+              className="input" required list="cat-list"
+              value={form.category ?? ''}
+              onChange={e => set('category', e.target.value)}
+              placeholder="Selecione ou digite nova categoria"
+            />
+            <datalist id="cat-list">
+              {categories.map(c => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -118,6 +157,12 @@ export default function EstoquePage() {
   const [modal, setModal]       = useState<Partial<Product> | null | undefined>(undefined) // undefined = fechado
   const [catFilter, setCatFilter] = useState('')
 
+  // Categorias dinâmicas: padrões + as que já existem nos produtos
+  const categories = Array.from(new Set([
+    ...DEFAULT_CATEGORIES,
+    ...products.map(p => p.category).filter(Boolean),
+  ])).sort()
+
   const fetch = async () => {
     setLoading(true)
     try { const { data } = await productApi.list(); setProducts(data) }
@@ -154,7 +199,7 @@ export default function EstoquePage() {
   return (
     <div className="p-6 space-y-6">
       {modal !== undefined && (
-        <ProductModal product={modal} onClose={() => setModal(undefined)} onSave={handleSave} />
+        <ProductModal product={modal} onClose={() => setModal(undefined)} onSave={handleSave} categories={categories} />
       )}
 
       {/* Header */}
@@ -176,7 +221,7 @@ export default function EstoquePage() {
         </div>
         <select className="input sm:w-48" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
           <option value="">Todas as categorias</option>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          {categories.map(c => <option key={c}>{c}</option>)}
         </select>
       </div>
 
