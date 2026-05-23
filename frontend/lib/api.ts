@@ -364,3 +364,37 @@ export const lgpdAdminApi = {
   listAudit: (page = 1, pageSize = 50) =>
     api.get('/api/audit', { params: { page, pageSize } }),
 }
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export interface DiaFinanceiroDto {
+  dia: string
+  receita: number
+  custo: number
+}
+
+export interface TopProductFinDto {
+  nome: string
+  qtd: number
+  receita: number
+  custo: number
+  margem: number
+}
+
+export interface FinanceiroDto {
+  receita: number
+  custo: number
+  margem: number
+  margemPercent: number
+  crediarios: number
+  diaDia: DiaFinanceiroDto[]
+  topProdutos: TopProductFinDto[]
+}
+
+export const analyticsApi = {
+  dashboard: () => api.get('/api/analytics/dashboard'),
+  clientes:  (apenasInativos = false) =>
+    api.get('/api/analytics/clientes', { params: { apenasInativos } }),
+  financeiro: (inicio?: string, fim?: string) =>
+    api.get<FinanceiroDto>('/api/analytics/financeiro', { params: { inicio, fim } }),
+}
