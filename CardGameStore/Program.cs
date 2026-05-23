@@ -324,35 +324,29 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        if (useSqlite)
-        {
-            logger.LogInformation("Usando banco SQLite...");
-            await db.Database.EnsureCreatedAsync();
-            logger.LogInformation("Banco SQLite pronto: cardgamestore.db");
-        }
-        else
-        {
-            logger.LogInformation("Inicializando banco PostgreSQL — aplicando migrations...");
-            await db.Database.MigrateAsync();
-            logger.LogInformation("Banco PostgreSQL pronto.");
+        // EnsureCreated usa o provider correto (SQLite em dev, Npgsql em prod)
+        // e cria as tabelas com os tipos nativos de cada banco.
+        // Migrations virão numa próxima fase quando o schema estiver estável.
+        logger.LogInformation("Inicializando banco de dados...");
+        await db.Database.EnsureCreatedAsync();
+        logger.LogInformation("Banco pronto.");
 
-            // Seed: cria o admin se não existir (evita InsertData no migration com Guid/SQLite)
-            if (!db.Users.Any(u => u.Email == "admin@cardgamestore.com.br"))
+        // Seed: cria o admin se não existir
+        if (!db.Users.Any(u => u.Email == "admin@cardgamestore.com.br"))
+        {
+            db.Users.Add(new CardGameStore.Models.PostgreSQL.User
             {
-                db.Users.Add(new CardGameStore.Models.PostgreSQL.User
-                {
-                    Id           = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                    Name         = "Maikon",
-                    Email        = "admin@cardgamestore.com.br",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("SenhaForte@123"),
-                    Role         = CardGameStore.Models.PostgreSQL.UserRole.Admin,
-                    IsActive     = true,
-                    CreatedAt    = DateTime.UtcNow,
-                    UpdatedAt    = DateTime.UtcNow
-                });
-                await db.SaveChangesAsync();
-                logger.LogInformation("Usuário admin criado com sucesso.");
-            }
+                Id           = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                Name         = "Maikon",
+                Email        = "admin@cardgamestore.com.br",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("SenhaForte@123"),
+                Role         = CardGameStore.Models.PostgreSQL.UserRole.Admin,
+                IsActive     = true,
+                CreatedAt    = DateTime.UtcNow,
+                UpdatedAt    = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Usuário admin criado com sucesso.");
         }
     }
     catch (Exception ex)
