@@ -6,6 +6,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Camera, X, Zap, AlertCircle, Loader2 } from 'lucide-react'
 
+// ── Declaração de tipo para BarcodeDetector (não incluso no lib TypeScript padrão)
+interface BarcodeDetectorResult { rawValue: string; format: string }
+interface BarcodeDetectorType {
+  detect(source: HTMLVideoElement | HTMLImageElement | ImageBitmap): Promise<BarcodeDetectorResult[]>
+}
+interface BarcodeDetectorConstructor {
+  new(options?: { formats: string[] }): BarcodeDetectorType
+  getSupportedFormats(): Promise<string[]>
+}
+declare const BarcodeDetector: BarcodeDetectorConstructor
+
 interface Props {
   onDetected: (barcode: string) => void
   onClose:    () => void
@@ -18,7 +29,7 @@ export default function CameraScanner({ onDetected, onClose }: Props) {
   const videoRef    = useRef<HTMLVideoElement>(null)
   const streamRef   = useRef<MediaStream | null>(null)
   const rafRef      = useRef<number>(0)
-  const detectorRef = useRef<BarcodeDetector | null>(null)
+  const detectorRef = useRef<BarcodeDetectorType | null>(null)
 
   const [error,      setError]      = useState<string | null>(null)
   const [supported,  setSupported]  = useState(true)
@@ -37,11 +48,11 @@ export default function CameraScanner({ onDetected, onClose }: Props) {
 
     try {
       // Verifica formatos suportados
-      const supported = await (window as unknown as { BarcodeDetector: { getSupportedFormats(): Promise<string[]> } }).BarcodeDetector.getSupportedFormats()
-      const formats   = FORMATS.filter(f => supported.includes(f))
+      const supportedFmts = await BarcodeDetector.getSupportedFormats()
+      const formats       = FORMATS.filter(f => supportedFmts.includes(f))
       if (formats.length === 0) { setSupported(false); return }
 
-      detectorRef.current = new (window as unknown as { BarcodeDetector: new(opts: object) => BarcodeDetector }).BarcodeDetector({ formats })
+      detectorRef.current = new BarcodeDetector({ formats })
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
