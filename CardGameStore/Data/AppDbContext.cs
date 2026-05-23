@@ -242,19 +242,5 @@ public class AppDbContext : DbContext
                   .HasDatabaseName("ix_audit_logs_created_at");
         });
 
-        // =====================================================================
-        // SEED — Dados iniciais (usuário Admin do Maikon)
-        // =====================================================================
-        modelBuilder.Entity<User>().HasData(new User
-        {
-            Id           = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-            Name         = "Maikon",
-            Email        = "admin@cardgamestore.com.br",
-            PasswordHash = "$2b$12$2FtwJhHP3JiQZjXb.f19B.ulmS5t2jdIQbKAPhPYP22AT.0ptsVPC",
-            Role         = UserRole.Admin,
-            IsActive     = true,
-            CreatedAt    = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            UpdatedAt    = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-        });
     }
 }
