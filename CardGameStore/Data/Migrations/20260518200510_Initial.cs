@@ -21,7 +21,7 @@ namespace CardGameStore.Data.Migrations
                     image_url = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
                     link_url = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
                     type = table.Column<int>(type: "INTEGER", nullable: false),
-                    is_active = table.Column<bool>(type: "INTEGER", nullable: false),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
                     expires_at = table.Column<DateTime>(type: "TEXT", nullable: true),
                     created_at = table.Column<DateTime>(type: "TEXT", nullable: false),
                     updated_at = table.Column<DateTime>(type: "TEXT", nullable: false),
@@ -85,8 +85,8 @@ namespace CardGameStore.Data.Migrations
                     stock_quantity = table.Column<int>(type: "INTEGER", nullable: false),
                     minimum_stock = table.Column<int>(type: "INTEGER", nullable: false),
                     image_url = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    is_active = table.Column<bool>(type: "INTEGER", nullable: false),
-                    is_featured = table.Column<bool>(type: "INTEGER", nullable: false),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
+                    is_featured = table.Column<bool>(type: "boolean", nullable: false),
                     created_at = table.Column<DateTime>(type: "TEXT", nullable: false),
                     updated_at = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
@@ -114,7 +114,7 @@ namespace CardGameStore.Data.Migrations
                     points_expires_at = table.Column<DateTime>(type: "TEXT", nullable: true),
                     created_at = table.Column<DateTime>(type: "TEXT", nullable: false),
                     updated_at = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    is_active = table.Column<bool>(type: "INTEGER", nullable: false),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
                     deleted_at = table.Column<DateTime>(type: "TEXT", nullable: true),
                     consent_at = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
@@ -163,7 +163,7 @@ namespace CardGameStore.Data.Migrations
                     user_id = table.Column<Guid>(type: "TEXT", nullable: true),
                     ip_hash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     user_agent = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    accepted = table.Column<bool>(type: "INTEGER", nullable: false),
+                    accepted = table.Column<bool>(type: "boolean", nullable: false),
                     policy_version = table.Column<string>(type: "TEXT", maxLength: 10, nullable: false),
                     consent_at = table.Column<DateTime>(type: "TEXT", nullable: false)
                 },
