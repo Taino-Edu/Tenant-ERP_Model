@@ -57,6 +57,7 @@ export default function LandingPage() {
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm text-gray-400">
+            <a href="#calendario"    className="hover:text-white transition">Calendário</a>
             <a href="#campeonatos"   className="hover:text-white transition">Campeonatos</a>
             <a href="#produtos"      className="hover:text-white transition">Produtos</a>
             <a href="#como-funciona" className="hover:text-white transition">Como Funciona</a>
@@ -87,10 +88,10 @@ export default function LandingPage() {
 
         {mobileMenu && (
           <div className="md:hidden border-t px-6 py-4 space-y-3" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
-            {['#campeonatos','#produtos','#como-funciona','#pontos'].map((href, i) => (
+            {['#calendario','#campeonatos','#produtos','#como-funciona','#pontos'].map((href, i) => (
               <a key={href} href={href} onClick={() => setMobileMenu(false)}
                 className="block text-sm py-1.5 capitalize" style={{ color: 'var(--text-muted)' }}>
-                {['Campeonatos','Produtos','Como Funciona','Pontos'][i]}
+                {['Calendário','Campeonatos','Produtos','Como Funciona','Pontos'][i]}
               </a>
             ))}
             <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
@@ -190,11 +191,24 @@ export default function LandingPage() {
       </section>
 
       {/* ── Campeonatos ───────────────────────────────────────────── */}
+      {/* ── Calendário de Eventos ─────────────────────────────────── */}
+      <section id="calendario" className="py-20 px-6 border-t" style={{ borderColor: 'var(--border-color)', backgroundColor: 'color-mix(in srgb, var(--bg-card) 30%, transparent)' }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-10">
+            <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Agenda</p>
+            <h2 className="text-3xl font-bold text-white">Calendário de Eventos</h2>
+            <p className="text-gray-400 mt-2">Veja os próximos campeonatos e marque na agenda</p>
+          </div>
+          <EventCalendar championships={championships} />
+        </div>
+      </section>
+
+      {/* ── Campeonatos ────────────────────────────────────────────── */}
       <section id="campeonatos" className="py-20 px-6">
         <div className="max-w-5xl mx-auto">
           <div className="flex items-end justify-between mb-10">
             <div>
-              <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Agenda</p>
+              <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Torneios</p>
               <h2 className="text-3xl font-bold text-white">Próximos Eventos</h2>
             </div>
           </div>
@@ -333,6 +347,128 @@ export default function LandingPage() {
       {registerModal && (
         <RegisterModal championship={registerModal} onClose={() => setRegisterModal(null)} />
       )}
+    </div>
+  )
+}
+
+// ── Calendário de eventos ─────────────────────────────────────────────────
+
+function EventCalendar({ championships }: { championships: Championship[] }) {
+  const today    = new Date()
+  const year     = today.getFullYear()
+  const month    = today.getMonth()
+
+  const monthName = today.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  const firstDay  = new Date(year, month, 1).getDay() // 0=Dom
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+
+  // Dias com evento
+  const eventDays = new Set(
+    championships
+      .map(c => new Date(c.startDate))
+      .filter(d => d.getFullYear() === year && d.getMonth() === month)
+      .map(d => d.getDate())
+  )
+
+  // Evento do dia clicado
+  const getEvent = (day: number) =>
+    championships.find(c => {
+      const d = new Date(c.startDate)
+      return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day
+    })
+
+  const cells = []
+  for (let i = 0; i < firstDay; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+  if (championships.length === 0) {
+    return (
+      <div className="text-center py-12 rounded-2xl border" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
+        <Calendar className="w-10 h-10 mx-auto mb-3 text-gray-500" />
+        <p className="text-gray-500">Nenhum evento agendado para este mês.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col md:flex-row gap-6 items-start">
+      {/* Calendário */}
+      <div className="rounded-2xl border p-5 w-full md:w-80 shrink-0" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
+        <p className="text-center font-bold capitalize mb-4" style={{ color: 'var(--text-primary)' }}>{monthName}</p>
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {weekDays.map(d => (
+            <div key={d} className="text-center text-[10px] font-semibold text-gray-500 uppercase">{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {cells.map((day, i) => {
+            if (!day) return <div key={i} />
+            const hasEvent = eventDays.has(day)
+            const isToday  = day === today.getDate()
+            return (
+              <div
+                key={i}
+                className={`aspect-square flex items-center justify-center rounded-lg text-xs font-medium relative transition-all
+                  ${hasEvent ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30 cursor-pointer hover:bg-brand-400' : ''}
+                  ${isToday && !hasEvent ? 'border-2 border-brand-500/50' : ''}
+                  ${!hasEvent ? 'text-gray-400' : ''}
+                `}
+                style={!hasEvent ? { color: 'var(--text-muted)' } : {}}
+                title={hasEvent ? getEvent(day)?.name : undefined}
+              >
+                {day}
+                {hasEvent && <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full" />}
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex items-center gap-2 mt-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+          <span className="w-3 h-3 rounded bg-brand-500 shrink-0" />
+          <span>Evento marcado</span>
+        </div>
+      </div>
+
+      {/* Lista de próximos eventos */}
+      <div className="flex-1 space-y-3">
+        {championships.map(c => {
+          const d = new Date(c.startDate)
+          const isPast = d < today
+          return (
+            <div key={c.id} className="flex items-start gap-4 rounded-xl p-4 border transition-all hover:border-brand-500/30"
+              style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
+              {/* Data */}
+              <div className={`shrink-0 w-14 text-center rounded-xl py-2 ${isPast ? 'bg-gray-500/10' : 'bg-brand-500/10'}`}>
+                <p className={`text-xl font-black leading-none ${isPast ? 'text-gray-500' : 'text-brand-400'}`}>
+                  {d.getDate().toString().padStart(2, '0')}
+                </p>
+                <p className={`text-[10px] uppercase font-bold ${isPast ? 'text-gray-600' : 'text-brand-500/70'}`}>
+                  {d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}
+                </p>
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  {c.game} · {d.toLocaleDateString('pt-BR', { weekday: 'long' })}
+                  {c.maxParticipants && ` · Até ${c.maxParticipants} jogadores`}
+                </p>
+                {c.entryFeeInReais > 0 && (
+                  <p className="text-xs text-emerald-500 font-semibold mt-1">Taxa: R$ {c.entryFeeInReais.toFixed(2).replace('.', ',')}</p>
+                )}
+              </div>
+              {/* Status badge */}
+              <div className="shrink-0">
+                {c.status === 'Inscricoes' && !isPast
+                  ? <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-full font-bold">Inscrições abertas</span>
+                  : <span className="text-[10px] bg-gray-500/10 text-gray-500 border border-gray-500/20 px-2 py-1 rounded-full font-bold">{c.status === 'Planejado' ? 'Em breve' : c.status}</span>
+                }
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

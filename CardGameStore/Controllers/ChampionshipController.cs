@@ -131,6 +131,9 @@ public class ChampionshipController : ControllerBase
         if (ch.Status != ChampionshipStatus.Inscricoes)
             return BadRequest(new { Message = "As inscrições para este campeonato não estão abertas." });
 
+        if (ch.RegistrationDeadline.HasValue && ch.RegistrationDeadline.Value < DateTime.UtcNow)
+            return BadRequest(new { Message = "O prazo de inscrição para este campeonato já encerrou." });
+
         if (ch.MaxParticipants.HasValue && ch.Participants.Count >= ch.MaxParticipants.Value)
             return BadRequest(new { Message = "O campeonato atingiu o número máximo de participantes." });
 
