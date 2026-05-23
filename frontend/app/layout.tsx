@@ -36,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Aplica o tema salvo antes do primeiro render para evitar flash */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light')}catch(e){}})();`
+            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.remove('light')}else{document.documentElement.classList.add('light');if(!t)localStorage.setItem('theme','light')}}catch(e){document.documentElement.classList.add('light')}})();`
           }}
         />
       </head>

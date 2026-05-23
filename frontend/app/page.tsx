@@ -21,6 +21,7 @@ export default function LandingPage() {
   const [announcements, setAnnouncements] = useState<AnnouncementDto[]>([])
   const [loading,       setLoading]       = useState(true)
   const [registerModal, setRegisterModal] = useState<Championship | null>(null)
+  const [productModal,  setProductModal]  = useState<Product | null>(null)
   const [mobileMenu,    setMobileMenu]    = useState(false)
 
   useEffect(() => {
@@ -239,7 +240,7 @@ export default function LandingPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {products.map(p => <ProductCard key={p.id} product={p} />)}
+              {products.map(p => <ProductCard key={p.id} product={p} onClick={() => setProductModal(p)} />)}
             </div>
           )}
         </div>
@@ -326,6 +327,9 @@ export default function LandingPage() {
 
       {/* O rodapé com links legais (LGPD) é renderizado pelo Footer global em app/layout.tsx */}
 
+      {productModal && (
+        <ProductModal product={productModal} onClose={() => setProductModal(null)} />
+      )}
       {registerModal && (
         <RegisterModal championship={registerModal} onClose={() => setRegisterModal(null)} />
       )}
@@ -390,16 +394,72 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
   )
 }
 
-function ProductCard({ product: p }: { product: Product }) {
+function ProductCard({ product: p, onClick }: { product: Product; onClick: () => void }) {
   return (
-    <div className="bg-surface-800 border border-surface-500 rounded-2xl p-4 hover:border-brand-500/30 transition">
-      <p className="text-xs text-gray-600 mb-1 uppercase tracking-wide">{p.category}</p>
-      <p className="text-sm font-semibold text-white leading-snug line-clamp-2 mb-3">{p.name}</p>
+    <div
+      onClick={onClick}
+      className="bg-surface-800 border border-surface-500 rounded-2xl p-4 hover:border-brand-500/50 hover:shadow-lg cursor-pointer transition-all group"
+    >
+      {p.imageUrl && (
+        <div className="w-full aspect-square rounded-xl overflow-hidden mb-3 bg-surface-700">
+          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        </div>
+      )}
+      <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">{p.category}</p>
+      <p className="text-sm font-semibold leading-snug line-clamp-2 mb-3" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
       <div className="flex items-center justify-between">
         <span className="text-brand-400 font-bold">R$ {p.priceInReais.toFixed(2).replace('.', ',')}</span>
-        <span className="text-xs text-gray-600 flex items-center gap-1">
+        <span className="text-xs text-gray-500 flex items-center gap-1">
           <Package className="w-3 h-3" /> {p.stockQuantity} un.
         </span>
+      </div>
+    </div>
+  )
+}
+
+function ProductModal({ product: p, onClose }: { product: Product; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative w-full max-w-md rounded-2xl shadow-2xl border border-surface-500 overflow-hidden"
+        style={{ background: 'var(--bg-surface)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-surface-700 hover:bg-surface-600 transition">
+          <X className="w-4 h-4 text-gray-400" />
+        </button>
+
+        {p.imageUrl ? (
+          <div className="w-full aspect-video bg-surface-700">
+            <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <div className="w-full aspect-video bg-surface-700 flex items-center justify-center">
+            <Package className="w-12 h-12 text-surface-500" />
+          </div>
+        )}
+
+        <div className="p-5">
+          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{p.category}</p>
+          <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text-primary)' }}>{p.name}</h3>
+          {p.description && (
+            <p className="text-sm text-gray-400 mb-4 leading-relaxed">{p.description}</p>
+          )}
+          <div className="flex items-center justify-between pt-3 border-t border-surface-600">
+            <span className="text-2xl font-bold text-brand-400">
+              R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+            </span>
+            <span className="text-sm text-gray-500 flex items-center gap-1">
+              <Package className="w-4 h-4" /> {p.stockQuantity} em estoque
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   )
