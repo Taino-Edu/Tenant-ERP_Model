@@ -65,6 +65,7 @@ public class UserService : IUserService
             PointsBalance   = GetEffectivePoints(user),
             PointsExpiresAt = user.PointsExpiresAt,
             PointsExpired   = IsExpired(user),
+            BalanceInCents  = user.BalanceInCents,
             CreatedAt       = user.CreatedAt,
         };
     }
@@ -106,6 +107,27 @@ public class UserService : IUserService
         user.PointsBalance -= points;
         user.UpdatedAt      = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+    }
+
+    public async Task<UserSummaryDto> AdjustBalanceAsync(Guid userId, AdjustBalanceRequest request, Guid adminId)
+    {
+        var user = await _db.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("Usuário não encontrado.");
+
+        var novoSaldo = user.BalanceInCents + request.AmountInCents;
+        if (novoSaldo < 0)
+            throw new InvalidOperationException(
+                $"Saldo insuficiente. Disponível: R$ {user.BalanceInCents / 100m:N2}, débito solicitado: R$ {Math.Abs(request.AmountInCents) / 100m:N2}.");
+
+        user.BalanceInCents = novoSaldo;
+        user.UpdatedAt      = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Admin {AdminId} ajustou saldo do usuário {UserId}: {Amount} centavos. Motivo: {Reason}. Novo saldo: {Saldo} centavos.",
+            adminId, userId, request.AmountInCents, request.Reason ?? "não informado", novoSaldo);
+
+        return MapToSummary(user);
     }
 
     // ── LGPD — Direitos do titular ────────────────────────────────────────────
@@ -175,6 +197,7 @@ public class UserService : IUserService
         PointsBalance   = IsExpired(user) ? 0 : user.PointsBalance,
         PointsExpiresAt = user.PointsExpiresAt,
         PointsExpired   = IsExpired(user),
+        BalanceInCents  = user.BalanceInCents,
         IsActive        = user.IsActive,
         CreatedAt       = user.CreatedAt,
     };

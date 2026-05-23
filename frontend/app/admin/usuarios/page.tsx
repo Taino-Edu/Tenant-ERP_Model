@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { userApi, crediarioApi, CrediariosDto, UserSummary } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2 } from 'lucide-react'
+import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus } from 'lucide-react'
 import Link from 'next/link'
 
 export default function UsuariosPage() {
@@ -14,6 +14,9 @@ export default function UsuariosPage() {
   const [points, setPoints]         = useState('')
   const [reason, setReason]         = useState('')
   const [adding, setAdding]         = useState(false)
+  const [balanceAmount, setBalanceAmount] = useState('')
+  const [balanceReason, setBalanceReason] = useState('')
+  const [adjustingBalance, setAdjustingBalance] = useState(false)
 
   const fetchUsers = useCallback(async (q?: string) => {
     setLoading(true)
@@ -56,6 +59,27 @@ export default function UsuariosPage() {
       toast.error('Erro ao adicionar pontos')
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function handleAdjustBalance(isCredit: boolean) {
+    if (!selected || !balanceAmount || Number(balanceAmount) <= 0) return
+    setAdjustingBalance(true)
+    try {
+      const cents = Math.round(Number(balanceAmount) * 100) * (isCredit ? 1 : -1)
+      const { data } = await userApi.adjustBalance(selected.id, cents, balanceReason || undefined)
+      toast.success(isCredit
+        ? `R$ ${Number(balanceAmount).toFixed(2)} creditado para ${selected.name}!`
+        : `R$ ${Number(balanceAmount).toFixed(2)} debitado de ${selected.name}!`)
+      setUsers(prev => prev.map(u => u.id === data.id ? data : u))
+      setSelected(data)
+      setBalanceAmount('')
+      setBalanceReason('')
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao ajustar saldo')
+    } finally {
+      setAdjustingBalance(false)
     }
   }
 
@@ -120,6 +144,11 @@ export default function UsuariosPage() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <PointsBadge user={u} />
+                      {u.balanceInCents > 0 && (
+                        <span className="flex items-center gap-1 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shrink-0 font-bold">
+                          <Wallet className="w-3 h-3" /> R$ {(u.balanceInCents / 100).toFixed(2).replace('.', ',')}
+                        </span>
+                      )}
                       {crediarios[u.id] && <CreditBadge crediario={crediarios[u.id]} />}
                     </div>
                   </div>
@@ -134,7 +163,7 @@ export default function UsuariosPage() {
           {!selected ? (
             <div className="card h-full flex flex-col items-center justify-center text-gray-600 gap-3">
               <Star className="w-10 h-10" />
-              <p className="text-sm text-center">Selecione um cliente<br />para gerenciar os pontos</p>
+              <p className="text-sm text-center">Selecione um cliente<br />para gerenciar pontos e saldo</p>
             </div>
           ) : (
             <div className="card space-y-5">
@@ -206,6 +235,58 @@ export default function UsuariosPage() {
                 <p className="text-xs text-gray-600 text-center">
                   A validade é renovada para 30 dias após cada adição
                 </p>
+              </div>
+
+              {/* Saldo monetário */}
+              <div className="space-y-3 border-t border-surface-500 pt-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-white flex items-center gap-1.5">
+                    <Wallet className="w-4 h-4 text-emerald-400" /> Saldo em Loja
+                  </p>
+                  <span className="text-lg font-bold text-emerald-400">
+                    R$ {((selected.balanceInCents ?? 0) / 100).toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+                <div>
+                  <label className="label text-xs">Valor (R$)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="Ex: 20,00"
+                    min={0.01}
+                    step={0.01}
+                    value={balanceAmount}
+                    onChange={e => setBalanceAmount(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="label text-xs">Motivo (opcional)</label>
+                  <input
+                    className="input"
+                    placeholder="Ex: Recarga de saldo"
+                    value={balanceReason}
+                    onChange={e => setBalanceReason(e.target.value)}
+                    maxLength={255}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleAdjustBalance(true)}
+                    disabled={!balanceAmount || Number(balanceAmount) <= 0 || adjustingBalance}
+                    className="btn-primary justify-center text-sm py-2 disabled:opacity-50"
+                  >
+                    {adjustingBalance ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    Creditar
+                  </button>
+                  <button
+                    onClick={() => handleAdjustBalance(false)}
+                    disabled={!balanceAmount || Number(balanceAmount) <= 0 || adjustingBalance || (selected.balanceInCents ?? 0) <= 0}
+                    className="btn-secondary justify-center text-sm py-2 disabled:opacity-50 hover:border-red-500/40 hover:text-red-400"
+                  >
+                    {adjustingBalance ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Minus className="w-3.5 h-3.5" />}
+                    Debitar
+                  </button>
+                </div>
               </div>
             </div>
           )}

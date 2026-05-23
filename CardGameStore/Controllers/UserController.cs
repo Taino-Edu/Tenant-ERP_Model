@@ -148,6 +148,32 @@ public class UserController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Ajusta o saldo monetário de um cliente (Admin).
+    /// Positivo = crédito (recarga), negativo = débito (uso).
+    /// </summary>
+    [HttpPost("{id:guid}/balance")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(UserSummaryDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> AdjustBalance(Guid id, [FromBody] AdjustBalanceRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var adminId = GetUserId();
+            var result  = await _service.AdjustBalanceAsync(id, request, adminId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
     private Guid GetUserId()
     {
         var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);

@@ -23,6 +23,13 @@ public interface IUserService
     /// <summary>Deduz pontos do saldo do usuário (usado ao resgatar na comanda).</summary>
     Task DeductPointsAsync(Guid userId, int points);
 
+    /// <summary>
+    /// Ajusta o saldo monetário do cliente.
+    /// Positivo = crédito (recarga). Negativo = débito (uso/desconto na comanda).
+    /// Lança InvalidOperationException se o débito ultrapassar o saldo disponível.
+    /// </summary>
+    Task<UserSummaryDto> AdjustBalanceAsync(Guid userId, AdjustBalanceRequest request, Guid adminId);
+
     // ── LGPD — Direitos do titular ────────────────────────────────────────────
 
     /// <summary>

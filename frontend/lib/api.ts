@@ -119,14 +119,14 @@ export interface UserSummary {
   id: string; name: string; email: string | null
   cpf: string | null; whatsApp: string | null; role: string
   pointsBalance: number; pointsExpiresAt: string | null
-  pointsExpired: boolean; isActive: boolean; createdAt: string
+  pointsExpired: boolean; balanceInCents: number; isActive: boolean; createdAt: string
 }
 
 export interface UserProfile {
   id: string; name: string; email: string | null
   cpf: string | null; whatsApp: string | null; role: string
   pointsBalance: number; pointsExpiresAt: string | null
-  pointsExpired: boolean; createdAt: string
+  pointsExpired: boolean; balanceInCents: number; createdAt: string
 }
 
 // ── Funções de API ────────────────────────────────────────────────────────────
@@ -258,6 +258,8 @@ export const userApi = {
   me:        ()                => api.get<UserProfile>('/api/user/me'),
   addPoints: (id: string, points: number, reason?: string) =>
     api.post<UserSummary>(`/api/user/${id}/points`, { points, reason }),
+  adjustBalance: (id: string, amountInCents: number, reason?: string) =>
+    api.post<UserSummary>(`/api/user/${id}/balance`, { amountInCents, reason }),
   // LGPD — Direitos do titular
   updateMe:  (data: UpdateMeRequest) => api.put<UserProfile>('/api/user/me', data),
   deleteMe:  ()                      => api.delete('/api/user/me'),

@@ -103,6 +103,21 @@ public class User
     public DateTime? PointsExpiresAt { get; set; }
 
     // -------------------------------------------------------------------------
+    // Sistema de Saldo Monetário
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Saldo monetário em centavos (crédito na loja, separado dos pontos).
+    /// Pode ser carregado pelo Admin e usado no fechamento de comandas.
+    /// </summary>
+    [Column("balance_in_cents")]
+    public int BalanceInCents { get; set; } = 0;
+
+    /// <summary>Saldo em reais para exibição.</summary>
+    [NotMapped]
+    public decimal BalanceInReais => BalanceInCents / 100m;
+
+    // -------------------------------------------------------------------------
     // Auditoria
     // -------------------------------------------------------------------------
 
