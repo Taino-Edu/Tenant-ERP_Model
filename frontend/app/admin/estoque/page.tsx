@@ -14,7 +14,7 @@ function ProductModal({
   onClose: () => void
   onSave:  (p: Partial<Product>) => Promise<void>
 }) {
-  const [form, setForm]   = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0 })
+  const [form, setForm]   = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0, costPriceInCents: 0 })
   const [saving, setSaving] = useState(false)
   const set = (k: keyof Product, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
@@ -44,13 +44,34 @@ function ProductModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Preço (R$) *</label>
-              <input className="input" type="number" min="0" step="0.01" required
-                value={(form.priceInCents ?? 0) / 100}
-                onChange={e => set('priceInCents', Math.round(parseFloat(e.target.value) * 100))}
+              <label className="label">Preço de custo (R$)</label>
+              <input className="input" type="number" min="0" step="0.01"
+                value={(form.costPriceInCents ?? 0) / 100}
+                onChange={e => set('costPriceInCents', Math.round(parseFloat(e.target.value || '0') * 100))}
                 placeholder="0,00"
               />
             </div>
+            <div>
+              <label className="label">Preço de venda (R$) *</label>
+              <input className="input" type="number" min="0" step="0.01" required
+                value={(form.priceInCents ?? 0) / 100}
+                onChange={e => set('priceInCents', Math.round(parseFloat(e.target.value || '0') * 100))}
+                placeholder="0,00"
+              />
+            </div>
+          </div>
+          {(form.costPriceInCents ?? 0) > 0 && (form.priceInCents ?? 0) > 0 && (() => {
+            const cost  = (form.costPriceInCents ?? 0) / 100
+            const price = (form.priceInCents ?? 0) / 100
+            const margin = price - cost
+            const pct    = ((margin / cost) * 100).toFixed(1)
+            return (
+              <div className="rounded-lg bg-surface-700/60 px-4 py-2 text-sm flex gap-4 flex-wrap">
+                <span className="text-gray-400">Margem: <span className={margin >= 0 ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>R$ {margin.toFixed(2).replace('.', ',')} ({pct}%)</span></span>
+              </div>
+            )
+          })()}
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Estoque *</label>
               <input className="input" type="number" min="0" required
@@ -58,13 +79,13 @@ function ProductModal({
                 onChange={e => set('stockQuantity', parseInt(e.target.value))}
               />
             </div>
-          </div>
-          <div>
-            <label className="label">Estoque mínimo</label>
-            <input className="input" type="number" min="0"
-              value={form.minimumStock ?? 5}
-              onChange={e => set('minimumStock', parseInt(e.target.value))}
-            />
+            <div>
+              <label className="label">Estoque mínimo</label>
+              <input className="input" type="number" min="0"
+                value={form.minimumStock ?? 5}
+                onChange={e => set('minimumStock', parseInt(e.target.value))}
+              />
+            </div>
           </div>
           <div>
             <label className="label">Descrição</label>
@@ -167,7 +188,7 @@ export default function EstoquePage() {
           <table className="w-full text-sm">
             <thead className="bg-surface-800 border-b border-surface-500">
               <tr className="text-left">
-                {['Produto', 'Categoria', 'Preço', 'Estoque', 'Ações'].map(h => (
+                {['Produto', 'Categoria', 'Custo', 'Venda', 'Margem', 'Estoque', 'Ações'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -182,8 +203,19 @@ export default function EstoquePage() {
                   <td className="px-4 py-3">
                     <span className="badge bg-surface-600 text-gray-300 border-surface-500">{p.category}</span>
                   </td>
+                  <td className="px-4 py-3 font-mono text-gray-400 text-xs">
+                    {p.costPriceInCents > 0 ? `R$ ${p.costPriceInReais.toFixed(2).replace('.', ',')}` : '—'}
+                  </td>
                   <td className="px-4 py-3 font-mono text-accent-gold font-semibold">
                     R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {p.costPriceInCents > 0
+                      ? <span className={p.marginInReais >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                          {p.marginPercent.toFixed(1)}%
+                        </span>
+                      : <span className="text-gray-600">—</span>
+                    }
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">

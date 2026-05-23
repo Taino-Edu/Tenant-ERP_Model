@@ -79,9 +79,10 @@ export interface ComandaItemDto {
 
 export interface Product {
   id: string; name: string; description: string | null; category: string
-  priceInCents: number; stockQuantity: number; minimumStock: number
+  priceInCents: number; costPriceInCents: number; stockQuantity: number; minimumStock: number
   isActive: boolean; isFeatured: boolean; imageUrl: string | null
-  isLowStock: boolean; priceInReais: number
+  isLowStock: boolean; priceInReais: number; costPriceInReais: number
+  marginInReais: number; marginPercent: number
 }
 
 export interface AnnouncementDto {

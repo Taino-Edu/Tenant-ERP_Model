@@ -48,6 +48,10 @@ public class Product
     // Precificação e Estoque
     // -------------------------------------------------------------------------
 
+    /// <summary>Preço de custo/aquisição (em centavos). Visível só para o admin — para controle de margem.</summary>
+    [Column("cost_price_in_cents")]
+    public int CostPriceInCents { get; set; } = 0;
+
     /// <summary>Preço de venda ao cliente (em centavos, para evitar float).</summary>
     [Column("price_in_cents")]
     public int PriceInCents { get; set; }
@@ -89,6 +93,20 @@ public class Product
     /// <summary>Preço em reais para exibição na interface.</summary>
     [NotMapped]
     public decimal PriceInReais => PriceInCents / 100m;
+
+    /// <summary>Preço de custo em reais.</summary>
+    [NotMapped]
+    public decimal CostPriceInReais => CostPriceInCents / 100m;
+
+    /// <summary>Margem de lucro em reais.</summary>
+    [NotMapped]
+    public decimal MarginInReais => PriceInReais - CostPriceInReais;
+
+    /// <summary>Margem percentual.</summary>
+    [NotMapped]
+    public decimal MarginPercent => CostPriceInCents > 0
+        ? Math.Round((MarginInReais / CostPriceInReais) * 100, 1)
+        : 0;
 
     /// <summary>Verdadeiro se o estoque estiver abaixo do mínimo.</summary>
     [NotMapped]
