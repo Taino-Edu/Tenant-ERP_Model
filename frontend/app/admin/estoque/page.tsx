@@ -2,21 +2,40 @@
 import { useEffect, useState } from 'react'
 import { productApi, Product } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 
-const CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
+const DEFAULT_CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
 
 function ProductModal({
-  product, onClose, onSave
+  product, onClose, onSave, categories,
 }: {
   product: Partial<Product> | null
   onClose: () => void
   onSave:  (p: Partial<Product>) => Promise<void>
+  categories: string[]
 }) {
-  const [form, setForm]   = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0 })
-  const [saving, setSaving] = useState(false)
+  const [form, setForm]      = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0, costPriceInCents: 0 })
+  const [saving, setSaving]  = useState(false)
+  const [barcodeScanning, setBarcodeScanning] = useState(false)
   const set = (k: keyof Product, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleBarcodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Leitores USB enviam Enter após o código — vamos buscar automaticamente
+    if (e.key === 'Enter' && form.barcode) {
+      e.preventDefault()
+      setBarcodeScanning(true)
+      try {
+        const { data } = await productApi.getByBarcode(form.barcode)
+        setForm(data) // preenche o form com o produto encontrado
+        toast.success('Produto encontrado pelo código de barras!')
+      } catch {
+        toast.error('Nenhum produto com esse código de barras')
+      } finally {
+        setBarcodeScanning(false)
+      }
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
@@ -32,25 +51,66 @@ function ProductModal({
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <label className="label">Código de barras</label>
+            <div className="relative">
+              <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                className="input pl-9 pr-9"
+                value={form.barcode ?? ''}
+                onChange={e => set('barcode', e.target.value || null)}
+                onKeyDown={handleBarcodeKeyDown}
+                placeholder="Escaneie ou digite — Enter para buscar"
+              />
+              {barcodeScanning && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 animate-spin" />}
+            </div>
+            <p className="text-xs text-gray-600 mt-1">Conecte um leitor USB e escaneie para auto-preencher</p>
+          </div>
+          <div>
             <label className="label">Nome *</label>
             <input className="input" required value={form.name ?? ''} onChange={e => set('name', e.target.value)} placeholder="Ex: Coca-Cola Lata 350ml" />
           </div>
           <div>
             <label className="label">Categoria *</label>
-            <select className="input" required value={form.category ?? ''} onChange={e => set('category', e.target.value)}>
-              <option value="">Selecione...</option>
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-            </select>
+            <input
+              className="input" required list="cat-list"
+              value={form.category ?? ''}
+              onChange={e => set('category', e.target.value)}
+              placeholder="Selecione ou digite nova categoria"
+            />
+            <datalist id="cat-list">
+              {categories.map(c => <option key={c} value={c} />)}
+            </datalist>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Preço (R$) *</label>
-              <input className="input" type="number" min="0" step="0.01" required
-                value={(form.priceInCents ?? 0) / 100}
-                onChange={e => set('priceInCents', Math.round(parseFloat(e.target.value) * 100))}
+              <label className="label">Preço de custo (R$)</label>
+              <input className="input" type="number" min="0" step="0.01"
+                value={(form.costPriceInCents ?? 0) / 100}
+                onChange={e => set('costPriceInCents', Math.round(parseFloat(e.target.value || '0') * 100))}
                 placeholder="0,00"
               />
             </div>
+            <div>
+              <label className="label">Preço de venda (R$) *</label>
+              <input className="input" type="number" min="0" step="0.01" required
+                value={(form.priceInCents ?? 0) / 100}
+                onChange={e => set('priceInCents', Math.round(parseFloat(e.target.value || '0') * 100))}
+                placeholder="0,00"
+              />
+            </div>
+          </div>
+          {(form.costPriceInCents ?? 0) > 0 && (form.priceInCents ?? 0) > 0 && (() => {
+            const cost  = (form.costPriceInCents ?? 0) / 100
+            const price = (form.priceInCents ?? 0) / 100
+            const margin = price - cost
+            const pct    = ((margin / cost) * 100).toFixed(1)
+            return (
+              <div className="rounded-lg bg-surface-700/60 px-4 py-2 text-sm flex gap-4 flex-wrap">
+                <span className="text-gray-400">Margem: <span className={margin >= 0 ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>R$ {margin.toFixed(2).replace('.', ',')} ({pct}%)</span></span>
+              </div>
+            )
+          })()}
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Estoque *</label>
               <input className="input" type="number" min="0" required
@@ -58,13 +118,13 @@ function ProductModal({
                 onChange={e => set('stockQuantity', parseInt(e.target.value))}
               />
             </div>
-          </div>
-          <div>
-            <label className="label">Estoque mínimo</label>
-            <input className="input" type="number" min="0"
-              value={form.minimumStock ?? 5}
-              onChange={e => set('minimumStock', parseInt(e.target.value))}
-            />
+            <div>
+              <label className="label">Estoque mínimo</label>
+              <input className="input" type="number" min="0"
+                value={form.minimumStock ?? 5}
+                onChange={e => set('minimumStock', parseInt(e.target.value))}
+              />
+            </div>
           </div>
           <div>
             <label className="label">Descrição</label>
@@ -96,6 +156,12 @@ export default function EstoquePage() {
   const [search, setSearch]     = useState('')
   const [modal, setModal]       = useState<Partial<Product> | null | undefined>(undefined) // undefined = fechado
   const [catFilter, setCatFilter] = useState('')
+
+  // Categorias dinâmicas: padrões + as que já existem nos produtos
+  const categories = Array.from(new Set([
+    ...DEFAULT_CATEGORIES,
+    ...products.map(p => p.category).filter(Boolean),
+  ])).sort()
 
   const fetch = async () => {
     setLoading(true)
@@ -133,7 +199,7 @@ export default function EstoquePage() {
   return (
     <div className="p-6 space-y-6">
       {modal !== undefined && (
-        <ProductModal product={modal} onClose={() => setModal(undefined)} onSave={handleSave} />
+        <ProductModal product={modal} onClose={() => setModal(undefined)} onSave={handleSave} categories={categories} />
       )}
 
       {/* Header */}
@@ -155,7 +221,7 @@ export default function EstoquePage() {
         </div>
         <select className="input sm:w-48" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
           <option value="">Todas as categorias</option>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          {categories.map(c => <option key={c}>{c}</option>)}
         </select>
       </div>
 
@@ -167,7 +233,7 @@ export default function EstoquePage() {
           <table className="w-full text-sm">
             <thead className="bg-surface-800 border-b border-surface-500">
               <tr className="text-left">
-                {['Produto', 'Categoria', 'Preço', 'Estoque', 'Ações'].map(h => (
+                {['Produto', 'Categoria', 'Custo', 'Venda', 'Margem', 'Estoque', 'Ações'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -182,8 +248,19 @@ export default function EstoquePage() {
                   <td className="px-4 py-3">
                     <span className="badge bg-surface-600 text-gray-300 border-surface-500">{p.category}</span>
                   </td>
+                  <td className="px-4 py-3 font-mono text-gray-400 text-xs">
+                    {p.costPriceInCents > 0 ? `R$ ${p.costPriceInReais.toFixed(2).replace('.', ',')}` : '—'}
+                  </td>
                   <td className="px-4 py-3 font-mono text-accent-gold font-semibold">
                     R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs">
+                    {p.costPriceInCents > 0
+                      ? <span className={p.marginInReais >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+                          {p.marginPercent.toFixed(1)}%
+                        </span>
+                      : <span className="text-gray-600">—</span>
+                    }
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">

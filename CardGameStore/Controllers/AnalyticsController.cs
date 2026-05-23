@@ -188,4 +188,114 @@ public class AnalyticsController : ControllerBase
 
         return Ok(insights);
     }
+
+    // -------------------------------------------------------------------------
+    // GET /api/analytics/financeiro?inicio=2025-01-01&fim=2025-01-31
+    // Controle financeiro: receita, custo e margem no período filtrado
+    // -------------------------------------------------------------------------
+    [HttpGet("financeiro")]
+    public async Task<ActionResult<FinanceiroDto>> GetFinanceiro(
+        [FromQuery] DateTime? inicio,
+        [FromQuery] DateTime? fim)
+    {
+        var agora = DateTime.UtcNow;
+        var ini   = (inicio ?? new DateTime(agora.Year, agora.Month, 1, 0, 0, 0, DateTimeKind.Utc)).ToUniversalTime();
+        var end   = (fim    ?? agora).ToUniversalTime().Date.AddDays(1).AddTicks(-1); // inclusive
+
+        // ── Receita de comandas no período ────────────────────────────────────
+        var receitaComandas = await _db.Comandas
+            .Where(c => c.ClosedAt >= ini && c.ClosedAt <= end && c.Status == ComandaStatus.Fechada)
+            .SumAsync(c => (decimal)c.TotalInCents) / 100m;
+
+        // ── Receita de vendas avulsas (MongoDB) ───────────────────────────────
+        var todasVendas    = (await _vendas.GetRecentAsync(2000)).ToList();
+        var receitaAvulsa  = todasVendas
+            .Where(v => v.SoldAt >= ini && v.SoldAt <= end)
+            .Sum(v => (decimal)v.TotalInCents) / 100m;
+
+        var receita = receitaComandas + receitaAvulsa;
+
+        // ── Custo (itens de comanda com ProductId no período) ─────────────────
+        var itens = await _db.ComandaItems
+            .Include(i => i.Product)
+            .Include(i => i.Comanda)
+            .Where(i => i.Comanda != null
+                     && i.Comanda.ClosedAt >= ini
+                     && i.Comanda.ClosedAt <= end
+                     && i.Comanda.Status == ComandaStatus.Fechada
+                     && i.ProductId != null
+                     && i.Product != null)
+            .ToListAsync();
+
+        var custo = itens
+            .Sum(i => (decimal)i.Product!.CostPriceInCents * i.Quantity) / 100m;
+
+        var margem       = receita - custo;
+        var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
+
+        // ── Crediários em aberto ──────────────────────────────────────────────
+        var crediarios = await _db.Crediarios
+            .Where(c => c.Status == CrediariosStatus.Aberto)
+            .SumAsync(c => (decimal)c.ValorEmCentavos) / 100m;
+
+        // ── Breakdown dia a dia ───────────────────────────────────────────────
+        var dias = (int)(end.Date - ini.Date).TotalDays + 1;
+        var diaDia = new List<DiaFinanceiroDto>();
+
+        for (var d = 0; d < dias; d++)
+        {
+            var dIni = ini.Date.AddDays(d);
+            var dFim = dIni.AddDays(1).AddTicks(-1);
+
+            var rComanda = await _db.Comandas
+                .Where(c => c.ClosedAt >= dIni && c.ClosedAt <= dFim && c.Status == ComandaStatus.Fechada)
+                .SumAsync(c => (decimal)c.TotalInCents) / 100m;
+
+            var rAvulsa = todasVendas
+                .Where(v => v.SoldAt >= dIni && v.SoldAt <= dFim)
+                .Sum(v => (decimal)v.TotalInCents) / 100m;
+
+            var cDia = itens
+                .Where(i => i.Comanda!.ClosedAt >= dIni && i.Comanda.ClosedAt <= dFim)
+                .Sum(i => (decimal)i.Product!.CostPriceInCents * i.Quantity) / 100m;
+
+            diaDia.Add(new DiaFinanceiroDto
+            {
+                Dia     = dIni.ToString("dd/MM"),
+                Receita = Math.Round(rComanda + rAvulsa, 2),
+                Custo   = Math.Round(cDia, 2),
+            });
+        }
+
+        // ── Top produtos com margem ───────────────────────────────────────────
+        var topProdutos = itens
+            .GroupBy(i => i.ItemNameSnapshot)
+            .Select(g =>
+            {
+                var r = g.Sum(i => (decimal)i.UnitPriceInCents * i.Quantity) / 100m;
+                var c = g.Sum(i => (decimal)i.Product!.CostPriceInCents * i.Quantity) / 100m;
+                return new TopProductFinDto
+                {
+                    Nome    = g.Key,
+                    Qtd     = g.Sum(i => i.Quantity),
+                    Receita = Math.Round(r, 2),
+                    Custo   = Math.Round(c, 2),
+                    Margem  = Math.Round(r - c, 2),
+                };
+            })
+            .OrderByDescending(t => t.Receita)
+            .Take(10)
+            .ToList();
+
+        return Ok(new FinanceiroDto
+        {
+            Receita       = Math.Round(receita, 2),
+            Custo         = Math.Round(custo, 2),
+            Margem        = Math.Round(margem, 2),
+            MargemPercent = margemPercent,
+            Crediarios    = Math.Round(crediarios, 2),
+            DiaDia        = diaDia,
+            TopProdutos   = topProdutos,
+        });
+    }
 }

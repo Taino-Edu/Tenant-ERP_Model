@@ -22,6 +22,9 @@ public class ProductService : IProductService
     public async Task<Product?> GetByIdAsync(Guid id) =>
         await _db.Products.FindAsync(id);
 
+    public async Task<Product?> GetByBarcodeAsync(string barcode) =>
+        await _db.Products.FirstOrDefaultAsync(p => p.IsActive && p.Barcode == barcode);
+
     public async Task<Product> CreateAsync(Product product)
     {
         _db.Products.Add(product);

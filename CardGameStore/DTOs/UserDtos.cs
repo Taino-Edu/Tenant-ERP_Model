@@ -18,6 +18,7 @@ public class UserSummaryDto
     public int      PointsBalance   { get; set; }
     public DateTime? PointsExpiresAt { get; set; }
     public bool     PointsExpired   { get; set; }
+    public int      BalanceInCents  { get; set; }
     public bool     IsActive        { get; set; }
     public DateTime CreatedAt       { get; set; }
 }
@@ -34,7 +35,19 @@ public class UserProfileDto
     public int       PointsBalance   { get; set; }
     public DateTime? PointsExpiresAt { get; set; }
     public bool      PointsExpired   { get; set; }
+    public int       BalanceInCents  { get; set; }
     public DateTime  CreatedAt       { get; set; }
+}
+
+/// <summary>Request para ajustar saldo monetário de um usuário (Admin).</summary>
+public class AdjustBalanceRequest
+{
+    /// <summary>Valor em centavos. Positivo = crédito (recarga), negativo = débito (uso).</summary>
+    [Required]
+    public int AmountInCents { get; set; }
+
+    [MaxLength(255)]
+    public string? Reason { get; set; }
 }
 
 /// <summary>Request para adicionar pontos a um usuário (Admin).</summary>

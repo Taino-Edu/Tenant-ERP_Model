@@ -60,3 +60,32 @@ public class ClienteInsightDto
     public bool    Inativo30    { get; set; }  // sem visita nos últimos 30 dias
     public int     Pontos       { get; set; }
 }
+
+// ── Financeiro ────────────────────────────────────────────────────────────────
+
+public class FinanceiroDto
+{
+    public decimal Receita        { get; set; } // vendas do período (R$)
+    public decimal Custo          { get; set; } // custo dos produtos vendidos (R$)
+    public decimal Margem         { get; set; } // receita - custo
+    public decimal MargemPercent  { get; set; } // (margem / custo) * 100
+    public decimal Crediarios     { get; set; } // total em aberto nos crediários (R$)
+    public List<DiaFinanceiroDto> DiaDia { get; set; } = new();
+    public List<TopProductFinDto> TopProdutos { get; set; } = new();
+}
+
+public class DiaFinanceiroDto
+{
+    public string  Dia     { get; set; } = string.Empty; // "dd/MM"
+    public decimal Receita { get; set; }
+    public decimal Custo   { get; set; }
+}
+
+public class TopProductFinDto
+{
+    public string  Nome    { get; set; } = string.Empty;
+    public int     Qtd     { get; set; }
+    public decimal Receita { get; set; }
+    public decimal Custo   { get; set; }
+    public decimal Margem  { get; set; }
+}

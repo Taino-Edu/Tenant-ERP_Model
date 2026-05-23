@@ -12,6 +12,7 @@ public interface IProductService
     Task<IEnumerable<Product>> GetAllActiveAsync();
     Task<IEnumerable<Product>> GetByCategoryAsync(string category);
     Task<Product?>             GetByIdAsync(Guid id);
+    Task<Product?>             GetByBarcodeAsync(string barcode);
     Task<Product>              CreateAsync(Product product);
     Task<Product>              UpdateAsync(Product product);
     Task                       DeactivateAsync(Guid id);

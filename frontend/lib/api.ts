@@ -79,9 +79,11 @@ export interface ComandaItemDto {
 
 export interface Product {
   id: string; name: string; description: string | null; category: string
-  priceInCents: number; stockQuantity: number; minimumStock: number
+  barcode: string | null
+  priceInCents: number; costPriceInCents: number; stockQuantity: number; minimumStock: number
   isActive: boolean; isFeatured: boolean; imageUrl: string | null
-  isLowStock: boolean; priceInReais: number
+  isLowStock: boolean; priceInReais: number; costPriceInReais: number
+  marginInReais: number; marginPercent: number
 }
 
 export interface AnnouncementDto {
@@ -117,14 +119,14 @@ export interface UserSummary {
   id: string; name: string; email: string | null
   cpf: string | null; whatsApp: string | null; role: string
   pointsBalance: number; pointsExpiresAt: string | null
-  pointsExpired: boolean; isActive: boolean; createdAt: string
+  pointsExpired: boolean; balanceInCents: number; isActive: boolean; createdAt: string
 }
 
 export interface UserProfile {
   id: string; name: string; email: string | null
   cpf: string | null; whatsApp: string | null; role: string
   pointsBalance: number; pointsExpiresAt: string | null
-  pointsExpired: boolean; createdAt: string
+  pointsExpired: boolean; balanceInCents: number; createdAt: string
 }
 
 // ── Funções de API ────────────────────────────────────────────────────────────
@@ -236,6 +238,7 @@ export const vendaAvulsaApi = {
 export const productApi = {
   list:        (category?: string) => api.get<Product[]>('/api/product', { params: { category } }),
   get:         (id: string)         => api.get<Product>(`/api/product/${id}`),
+  getByBarcode:(barcode: string)    => api.get<Product>(`/api/product/barcode/${encodeURIComponent(barcode)}`),
   create:      (p: Partial<Product>) => api.post<Product>('/api/product', p),
   update:      (id: string, p: Partial<Product>) => api.put<Product>(`/api/product/${id}`, p),
   deactivate:  (id: string)         => api.delete(`/api/product/${id}`),
@@ -255,6 +258,8 @@ export const userApi = {
   me:        ()                => api.get<UserProfile>('/api/user/me'),
   addPoints: (id: string, points: number, reason?: string) =>
     api.post<UserSummary>(`/api/user/${id}/points`, { points, reason }),
+  adjustBalance: (id: string, amountInCents: number, reason?: string) =>
+    api.post<UserSummary>(`/api/user/${id}/balance`, { amountInCents, reason }),
   // LGPD — Direitos do titular
   updateMe:  (data: UpdateMeRequest) => api.put<UserProfile>('/api/user/me', data),
   deleteMe:  ()                      => api.delete('/api/user/me'),
@@ -362,4 +367,38 @@ export const lgpdAdminApi = {
   /** Lista audit logs paginados. */
   listAudit: (page = 1, pageSize = 50) =>
     api.get('/api/audit', { params: { page, pageSize } }),
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export interface DiaFinanceiroDto {
+  dia: string
+  receita: number
+  custo: number
+}
+
+export interface TopProductFinDto {
+  nome: string
+  qtd: number
+  receita: number
+  custo: number
+  margem: number
+}
+
+export interface FinanceiroDto {
+  receita: number
+  custo: number
+  margem: number
+  margemPercent: number
+  crediarios: number
+  diaDia: DiaFinanceiroDto[]
+  topProdutos: TopProductFinDto[]
+}
+
+export const analyticsApi = {
+  dashboard: () => api.get('/api/analytics/dashboard'),
+  clientes:  (apenasInativos = false) =>
+    api.get('/api/analytics/clientes', { params: { apenasInativos } }),
+  financeiro: (inicio?: string, fim?: string) =>
+    api.get<FinanceiroDto>('/api/analytics/financeiro', { params: { inicio, fim } }),
 }
