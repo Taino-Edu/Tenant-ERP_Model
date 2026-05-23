@@ -180,6 +180,13 @@ html.light {
   ::placeholder { color: #AAAAAA !important; }
 }
 
+/* ── Animação scan de câmera ───────────────────────────────────────────────── */
+@keyframes scan-line {
+  0%, 100% { top: 4px; }
+  50%       { top: calc(100% - 4px); }
+}
+.animate-scan-line { animation: scan-line 2s ease-in-out infinite; position: absolute; }
+
 /* ── Impressão / Exportar PDF ──────────────────────────────────────────────── */
 @media print {
   /* Esconde tudo exceto o conteúdo principal */

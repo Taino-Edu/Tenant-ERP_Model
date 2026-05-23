@@ -2,8 +2,9 @@
 import { useEffect, useState } from 'react'
 import { productApi, Product } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
+import CameraScanner from '@/components/CameraScanner'
 
 const DEFAULT_CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
 
@@ -15,10 +16,24 @@ function ProductModal({
   onSave:  (p: Partial<Product>) => Promise<void>
   categories: string[]
 }) {
-  const [form, setForm]      = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0, costPriceInCents: 0 })
-  const [saving, setSaving]  = useState(false)
+  const [form, setForm]         = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0, costPriceInCents: 0 })
+  const [saving, setSaving]     = useState(false)
   const [barcodeScanning, setBarcodeScanning] = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
   const set = (k: keyof Product, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleCameraDetected(code: string) {
+    setCameraOpen(false)
+    set('barcode', code)
+    // Tenta buscar produto existente com esse código
+    try {
+      const { data } = await productApi.getByBarcode(code)
+      setForm(data)
+      toast.success('Produto encontrado! Editando...')
+    } catch {
+      toast.success('Código registrado: ' + code)
+    }
+  }
 
   async function handleBarcodeKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     // Leitores USB enviam Enter após o código — tenta buscar produto existente
@@ -44,6 +59,10 @@ function ProductModal({
   }
 
   return (
+    <>
+    {cameraOpen && (
+      <CameraScanner onDetected={handleCameraDetected} onClose={() => setCameraOpen(false)} />
+    )}
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 overflow-y-auto">
       <div className="flex min-h-full items-center justify-center p-4">
       <div className="card w-full max-w-md animate-bounce-in">
@@ -54,7 +73,8 @@ function ProductModal({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="label">Código de barras</label>
-            <div className="relative">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
               <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 className="input pl-9 pr-9"
@@ -64,8 +84,17 @@ function ProductModal({
                 placeholder="Escaneie ou digite — Enter para buscar"
               />
               {barcodeScanning && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 animate-spin" />}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCameraOpen(true)}
+                className="shrink-0 px-3 rounded-lg bg-surface-700 hover:bg-brand-600/20 border border-surface-600 hover:border-brand-500/40 text-gray-400 hover:text-brand-400 transition-colors"
+                title="Usar câmera"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
             </div>
-            <p className="text-xs text-gray-600 mt-1">Conecte um leitor USB e escaneie para auto-preencher</p>
+            <p className="text-xs text-gray-600 mt-1">USB: escaneie + Enter • Celular: botão de câmera</p>
           </div>
           <div>
             <label className="label">Nome *</label>
@@ -150,6 +179,7 @@ function ProductModal({
       </div>
       </div>
     </div>
+    </>
   )
 }
 
@@ -194,6 +224,28 @@ export default function EstoquePage() {
     catch { toast.error('Erro ao desativar') }
   }
 
+  function exportCsv() {
+    const rows = [
+      ['Nome', 'Categoria', 'Código de Barras', 'Preço Custo (R$)', 'Preço Venda (R$)', 'Margem (%)', 'Estoque', 'Estoque Mínimo'],
+      ...products.map(p => [
+        p.name,
+        p.category,
+        p.barcode ?? '',
+        (p.costPriceInCents / 100).toFixed(2),
+        (p.priceInCents / 100).toFixed(2),
+        p.costPriceInCents > 0 ? p.marginPercent.toFixed(1) : '',
+        p.stockQuantity,
+        p.minimumStock ?? 5,
+      ])
+    ]
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = `estoque_${new Date().toISOString().slice(0,10)}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }
+
   async function handleStock(id: string, delta: number) {
     try { await productApi.adjustStock(id, delta); fetch() }
     catch { toast.error('Estoque insuficiente') }
@@ -211,9 +263,14 @@ export default function EstoquePage() {
           <h1 className="text-2xl font-bold text-white">Estoque</h1>
           <p className="text-gray-400 text-sm mt-0.5">{products.length} produtos cadastrados</p>
         </div>
-        <button onClick={() => setModal(null)} className="btn-primary">
-          <Plus className="w-4 h-4" /> Novo Produto
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportCsv} className="btn-secondary" title="Exportar CSV">
+            <Download className="w-4 h-4" /> CSV
+          </button>
+          <button onClick={() => setModal(null)} className="btn-primary">
+            <Plus className="w-4 h-4" /> Novo Produto
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}

@@ -3,11 +3,12 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { comandaApi, productApi, ComandaDto, Product, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
+import CameraScanner from '@/components/CameraScanner'
 import toast from 'react-hot-toast'
 import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
-  History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode,
+  History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode, Camera,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -40,6 +41,7 @@ function AddItemModal({
   const [search, setSearch]         = useState('')
   const [barcodeVal, setBarcodeVal] = useState('')
   const [scanning, setScanning]     = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
 
   useEffect(() => {
     productApi.list()
@@ -71,13 +73,17 @@ function AddItemModal({
   async function handleBarcodeScan(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key !== 'Enter' || !barcodeVal.trim()) return
     e.preventDefault()
+    await addByBarcode(barcodeVal.trim())
+  }
+
+  async function addByBarcode(code: string) {
     setScanning(true)
     try {
-      const { data: product } = await productApi.getByBarcode(barcodeVal.trim())
+      const { data: product } = await productApi.getByBarcode(code)
       setBarcodeVal('')
       await handleAdd(product)
     } catch {
-      toast.error('Produto não encontrado para este código de barras')
+      toast.error('Produto não encontrado para este código')
       setBarcodeVal('')
     } finally {
       setScanning(false)
@@ -90,6 +96,13 @@ function AddItemModal({
   )
 
   return (
+    <>
+    {cameraOpen && (
+      <CameraScanner
+        onDetected={code => { setCameraOpen(false); addByBarcode(code) }}
+        onClose={() => setCameraOpen(false)}
+      />
+    )}
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-surface-700 border border-surface-500 rounded-2xl w-full max-w-md max-h-[75vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 border-b border-surface-500">
@@ -101,21 +114,29 @@ function AddItemModal({
 
         {/* Scan de código de barras */}
         <div className="px-3 pt-3 pb-2 border-b border-surface-500">
-          <div className="relative">
-            <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
-            <input
-              autoFocus
-              className="input pl-9 pr-9 text-sm border-brand-500/40 focus:border-brand-500"
-              placeholder="Escaneie o código de barras..."
-              value={barcodeVal}
-              onChange={e => setBarcodeVal(e.target.value)}
-              onKeyDown={handleBarcodeScan}
-              inputMode="none"
-            />
-            {scanning
-              ? <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 animate-spin" />
-              : <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-600 font-mono">Enter</span>
-            }
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <ScanBarcode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400" />
+              <input
+                autoFocus
+                className="input pl-9 pr-9 text-sm border-brand-500/40 focus:border-brand-500"
+                placeholder="Escaneie o código de barras..."
+                value={barcodeVal}
+                onChange={e => setBarcodeVal(e.target.value)}
+                onKeyDown={handleBarcodeScan}
+              />
+              {scanning
+                ? <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-400 animate-spin" />
+                : <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-600 font-mono">Enter</span>
+              }
+            </div>
+            <button
+              onClick={() => setCameraOpen(true)}
+              className="shrink-0 px-3 rounded-lg bg-surface-600 hover:bg-brand-600/20 border border-surface-500 hover:border-brand-500/40 text-gray-400 hover:text-brand-400 transition-colors"
+              title="Usar câmera"
+            >
+              <Camera className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -163,6 +184,7 @@ function AddItemModal({
         </div>
       </div>
     </div>
+    </>
   )
 }
 

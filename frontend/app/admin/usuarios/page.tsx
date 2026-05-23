@@ -50,7 +50,7 @@ export default function UsuariosPage() {
     setAdding(true)
     try {
       const { data } = await userApi.addPoints(selected.id, Number(points), reason || undefined)
-      toast.success(`${points} pontos adicionados para ${selected.name}!`)
+      toast.success(`${points} pontos Maikon adicionados para ${selected.name}!`)
       setUsers(prev => prev.map(u => u.id === data.id ? data : u))
       setSelected(data)
       setPoints('')
@@ -88,9 +88,9 @@ export default function UsuariosPage() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Users className="w-6 h-6 text-brand-400" /> Clientes & Pontos
+          <Users className="w-6 h-6 text-brand-400" /> Clientes & Cashback
         </h1>
-        <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes e adicione pontos às contas</p>
+        <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes, pontos Maikon e cashback</p>
       </div>
 
       <div className="flex gap-6 h-[calc(100vh-180px)]">
@@ -163,7 +163,7 @@ export default function UsuariosPage() {
           {!selected ? (
             <div className="card h-full flex flex-col items-center justify-center text-gray-600 gap-3">
               <Star className="w-10 h-10" />
-              <p className="text-sm text-center">Selecione um cliente<br />para gerenciar pontos e saldo</p>
+              <p className="text-sm text-center">Selecione um cliente<br />para gerenciar pontos Maikon e cashback</p>
             </div>
           ) : (
             <div className="card space-y-5">
@@ -175,9 +175,9 @@ export default function UsuariosPage() {
                 {selected.whatsApp && <p className="text-xs text-gray-500">WhatsApp: {selected.whatsApp}</p>}
               </div>
 
-              {/* Saldo atual */}
+              {/* Pontos Maikon */}
               <div className="bg-surface-800 rounded-xl p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">Saldo atual</p>
+                <p className="text-xs text-gray-500 mb-1">Pontos Maikon</p>
                 <p className="text-4xl font-black text-accent-gold">{selected.pointsBalance}</p>
                 <p className="text-xs text-gray-500 mt-0.5">pontos</p>
 
@@ -194,13 +194,13 @@ export default function UsuariosPage() {
                   </div>
                 )}
                 {selected.pointsBalance === 0 && !selected.pointsExpiresAt && (
-                  <p className="text-xs text-gray-600 mt-2">Sem pontos cadastrados</p>
+                  <p className="text-xs text-gray-600 mt-2">Sem pontos Maikon cadastrados</p>
                 )}
               </div>
 
-              {/* Adicionar pontos */}
+              {/* Adicionar Pontos Maikon */}
               <div className="space-y-3">
-                <p className="text-sm font-semibold text-white">Adicionar pontos</p>
+                <p className="text-sm font-semibold text-white">Adicionar Pontos Maikon</p>
                 <div>
                   <label className="label text-xs">Quantidade de pontos</label>
                   <input
@@ -229,19 +229,19 @@ export default function UsuariosPage() {
                 >
                   {adding
                     ? <><Loader2 className="w-4 h-4 animate-spin" /> Adicionando...</>
-                    : <><Plus className="w-4 h-4" /> Adicionar Pontos</>
+                    : <><Plus className="w-4 h-4" /> Adicionar Pontos Maikon</>
                   }
                 </button>
                 <p className="text-xs text-gray-600 text-center">
-                  A validade é renovada para 30 dias após cada adição
+                  Validade renovada para 30 dias após cada adição
                 </p>
               </div>
 
-              {/* Saldo monetário */}
+              {/* Cashback */}
               <div className="space-y-3 border-t border-surface-500 pt-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-white flex items-center gap-1.5">
-                    <Wallet className="w-4 h-4 text-emerald-400" /> Saldo em Loja
+                    <Wallet className="w-4 h-4 text-emerald-400" /> Cashback
                   </p>
                   <span className="text-lg font-bold text-emerald-400">
                     R$ {((selected.balanceInCents ?? 0) / 100).toFixed(2).replace('.', ',')}
@@ -306,11 +306,11 @@ function PointsBadge({ user }: { user: UserSummary }) {
   if (user.pointsBalance > 0)
     return (
       <span className="flex items-center gap-1 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full shrink-0 font-bold">
-        <Star className="w-3 h-3" /> {user.pointsBalance} pts
+        <Star className="w-3 h-3" /> {user.pointsBalance} pts Maikon
       </span>
     )
   return (
-    <span className="text-xs text-gray-600">0 pts</span>
+    <span className="text-xs text-gray-600">0 pts Maikon</span>
   )
 }
 
