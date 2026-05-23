@@ -1,0 +1,153 @@
+# =============================================================================
+# docker-compose.prod.yml — Produção SantuárioNerd (Hostinger KVM 1)
+#
+# COMO USAR (primeira vez):
+#   cd /opt/santuarionerd
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Atualizar código:
+#   git pull && docker compose -f docker-compose.prod.yml build && docker compose -f docker-compose.prod.yml up -d
+#
+# Acesso público: https://santuarionerd.tech  (Cloudflare → porta 80)
+# =============================================================================
+
+version: '3.9'
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # NGINX — Único serviço exposto ao mundo (porta 80)
+  # Recebe HTTPS do Cloudflare e roteia para frontend e API
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: santuarionerd_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - api_uploads:/var/www/uploads:ro
+    depends_on:
+      - frontend
+      - api
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # FRONTEND — Next.js 14
+  # NEXT_PUBLIC_API_URL é baked no build (URL que o browser usa para a API)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        API_URL: https://santuarionerd.tech
+    image: santuarionerd_frontend:latest
+    container_name: santuarionerd_frontend
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # API — ASP.NET Core 8
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./CardGameStore
+      dockerfile: Dockerfile
+    image: santuarionerd_api:latest
+    container_name: santuarionerd_api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      # Banco de dados
+      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_USER:-cardgame_user};Password=${POSTGRES_PASSWORD}"
+      MongoDbSettings__ConnectionString: "mongodb://mongo:27017"
+      MongoDbSettings__DatabaseName: "cardgamestore_cache"
+      # JWT
+      JwtSettings__SecretKey: "${JWT_SECRET}"
+      JwtSettings__Issuer: "https://santuarionerd.tech"
+      JwtSettings__Audience: "CardGameStore-Frontend"
+      JwtSettings__AccessTokenExpirationMinutes: "60"
+      JwtSettings__RefreshTokenExpirationDays: "30"
+      # E-mail (Resend)
+      SmtpSettings__Host: "${SMTP_HOST:-smtp.resend.com}"
+      SmtpSettings__Port: "${SMTP_PORT:-587}"
+      SmtpSettings__Username: "${SMTP_USERNAME:-resend}"
+      SmtpSettings__Password: "${SMTP_PASSWORD}"
+      SmtpSettings__FromEmail: "${SMTP_FROM_EMAIL:-noreply@santuarionerd.tech}"
+      SmtpSettings__FromName: "${SMTP_FROM_NAME:-Santuário Nerd}"
+      # Integrações
+      GeminiSettings__ApiKey: "${GEMINI_API_KEY}"
+      TcgSettings__PokemonApiKey: "${POKEMON_API_KEY:-}"
+      # Segurança — HTTPS via Cloudflare, cookies Secure=true
+      COOKIE_SECURE: "true"
+      CorsSettings__AllowedOrigins: "https://santuarionerd.tech,https://www.santuarionerd.tech"
+      Security__IpHashSalt: "${IP_HASH_SALT}"
+    volumes:
+      - api_uploads:/app/wwwroot/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # POSTGRESQL — Banco relacional (comandas, usuários, etc.)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: santuarionerd_postgres
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-cardgamestore}
+      POSTGRES_USER:     ${POSTGRES_USER:-cardgame_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cardgame_user} -d ${POSTGRES_DB:-cardgamestore}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # MONGODB — Cache de cartas TCG (Pokémon, MTG, etc.)
+  # ---------------------------------------------------------------------------
+  mongo:
+    image: mongo:7-jammy
+    container_name: santuarionerd_mongo
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+
+# -----------------------------------------------------------------------------
+# Volumes persistentes (dados sobrevivem a reinicios e redeploys)
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+  mongo_data:
+  api_uploads:
+
+# -----------------------------------------------------------------------------
+# Rede interna Docker (containers se falam pelo nome do serviço)
+# -----------------------------------------------------------------------------
+networks:
+  cardgame_network:
+    driver: bridge
