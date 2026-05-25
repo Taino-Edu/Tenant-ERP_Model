@@ -269,8 +269,10 @@ export default function VendaAvulsaPage() {
 
   const filtered = products.filter(p => {
     const matchCat    = !catFilter || p.category === catFilter
-    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-                        p.category.toLowerCase().includes(search.toLowerCase())
+    const q           = search.toLowerCase()
+    const matchSearch = p.name.toLowerCase().includes(q) ||
+                        p.category.toLowerCase().includes(q) ||
+                        (p.barcode != null && p.barcode.includes(search))
     return matchCat && matchSearch
   })
 
@@ -407,9 +409,15 @@ export default function VendaAvulsaPage() {
           <div className="flex-1 flex flex-col min-w-0 gap-3">
             <input
               className="input"
-              placeholder="Buscar produto ou categoria..."
+              placeholder="Buscar produto, categoria ou código de barras..."
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && filtered.length === 1) {
+                  addToCart(filtered[0])
+                  setSearch('')
+                }
+              }}
             />
 
             {/* Chips de categoria */}
