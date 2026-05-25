@@ -536,9 +536,23 @@ export default function DashboardPage() {
     fetchHistory()
   }
 
-  const totalAberto   = comandas.reduce((s, c) => s + c.totalInReais, 0)
-  const emAndamento   = comandas.filter(c => c.status === 'EmAndamento').length
-  const totalFechado  = history.filter(c => c.status === 'Fechada').reduce((s, c) => s + c.totalInReais, 0)
+  const totalAberto  = comandas.reduce((s, c) => s + c.totalInReais, 0)
+  const emAndamento  = comandas.filter(c => c.status === 'EmAndamento').length
+  const fechadas     = history.filter(c => c.status === 'Fechada')
+  const totalFechado = fechadas.reduce((s, c) => s + c.totalInReais, 0)
+
+  const paymentBreakdown = [
+    { key: 'Dinheiro',      label: 'Dinheiro',  color: 'text-accent-green' },
+    { key: 'Pix',           label: 'Pix',        color: 'text-brand-400' },
+    { key: 'CartaoCredito', label: 'Crédito',    color: 'text-amber-400' },
+    { key: 'CartaoDebito',  label: 'Débito',     color: 'text-blue-400' },
+    { key: 'Crediario',     label: 'Crediário',  color: 'text-red-400' },
+  ].map(pm => ({
+    ...pm,
+    total: fechadas
+      .filter(c => c.paymentMethod === pm.key)
+      .reduce((s, c) => s + c.totalInReais, 0),
+  })).filter(pm => pm.total > 0)
 
   const filtered = comandas.filter(c =>
     !search || c.userName.toLowerCase().includes(search.toLowerCase())
@@ -586,6 +600,25 @@ export default function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Breakdown por pagamento — só aparece quando há histórico */}
+      {tab === 'historico' && paymentBreakdown.length > 0 && (
+        <div className="card">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Fechamento por forma de pagamento</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {paymentBreakdown.map(pm => (
+              <div key={pm.key} className="bg-surface-800 rounded-xl p-3 text-center">
+                <p className={`text-lg font-bold ${pm.color}`}>{fmt(pm.total)}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{pm.label}</p>
+              </div>
+            ))}
+            <div className="bg-surface-800 rounded-xl p-3 text-center border border-surface-500">
+              <p className="text-lg font-bold text-accent-gold">{fmt(totalFechado)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Total</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center justify-between flex-wrap gap-3">

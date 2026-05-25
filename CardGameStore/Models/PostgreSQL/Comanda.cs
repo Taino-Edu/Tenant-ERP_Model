@@ -59,6 +59,11 @@ public class Comanda
     [Column("closed_at")]
     public DateTime? ClosedAt { get; set; }
 
+    /// <summary>Forma de pagamento usada no fechamento (Dinheiro, Pix, CartaoCredito, CartaoDebito, Crediario).</summary>
+    [MaxLength(30)]
+    [Column("payment_method")]
+    public string? PaymentMethod { get; set; }
+
     // -------------------------------------------------------------------------
     // Campeonato (opcional) — comanda pode estar vinculada a um torneio
     // -------------------------------------------------------------------------

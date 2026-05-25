@@ -69,6 +69,7 @@ export interface ComandaDto {
   tableIdentifier: string | null; status: string
   totalInReais: number; pointsApplied: number
   openedAt: string; closedAt?: string
+  paymentMethod: string | null
   items: ComandaItemDto[]
 }
 
@@ -142,15 +143,23 @@ export interface UserProfile {
 
 // ── Funções de API ────────────────────────────────────────────────────────────
 
+export interface CpfLookupResponse { name: string; hasPassword: boolean }
+
 export const authApi = {
   login: (email: string, password: string) =>
     api.post<AuthResponse>('/api/auth/login', { email, password }),
+  clientLogin: (email: string, password: string) =>
+    api.post<AuthResponse>('/api/auth/client-login', { email, password }),
+  cpfLookup: (cpf: string) =>
+    api.post<CpfLookupResponse>('/api/auth/cpf-lookup', { cpf }),
+  setupAccount: (cpf: string, email: string, password: string) =>
+    api.post<AuthResponse>('/api/auth/setup-account', { cpf, email, password }),
   quickLogin: (name: string, cpf: string, whatsApp: string, tableIdentifier?: string) =>
     api.post<AuthResponse>('/api/auth/quick-login', { name, cpf, whatsApp, tableIdentifier }),
-  logout:          () => api.post('/api/auth/logout'),
-  forgotPassword:  (email: string) =>
+  logout:         () => api.post('/api/auth/logout'),
+  forgotPassword: (email: string) =>
     api.post('/api/auth/forgot-password', { email }),
-  resetPassword:   (token: string, newPassword: string) =>
+  resetPassword:  (token: string, newPassword: string) =>
     api.post('/api/auth/reset-password', { token, newPassword }),
 }
 

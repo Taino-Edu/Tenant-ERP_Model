@@ -224,6 +224,55 @@ public class AuthController : ControllerBase
     }
 
     // =========================================================================
+    // ACESSO DO CLIENTE PELO SITE
+    // =========================================================================
+
+    [HttpPost("cpf-lookup")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> CpfLookup([FromBody] CpfLookupRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            var result = await _authService.LookupByCpfAsync(request.Cpf);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+    }
+
+    [HttpPost("setup-account")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> SetupAccount([FromBody] SetupAccountRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            var response = await _authService.SetupAccountAsync(request);
+            SetAuthCookies(response.AccessToken, response.RefreshToken);
+            return Ok(response);
+        }
+        catch (KeyNotFoundException ex)    { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
+    }
+
+    [HttpPost("client-login")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> ClientLogin([FromBody] ClientLoginRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            var response = await _authService.ClientLoginAsync(request);
+            SetAuthCookies(response.AccessToken, response.RefreshToken);
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException) { return Unauthorized(new { Message = "E-mail ou senha inválidos." }); }
+    }
+
+    // =========================================================================
     // FORGOT PASSWORD — Solicitar reset por email
     // =========================================================================
 

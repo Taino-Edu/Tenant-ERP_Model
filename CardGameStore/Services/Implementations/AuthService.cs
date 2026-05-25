@@ -193,6 +193,49 @@ public class AuthService : IAuthService
     }
 
     // =========================================================================
+    // ACESSO DO CLIENTE PELO SITE
+    // =========================================================================
+
+    public async Task<CpfLookupResponse> LookupByCpfAsync(string cpf)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Cpf == cpf && u.IsActive);
+        if (user == null)
+            throw new KeyNotFoundException("CPF não encontrado. Acesse a loja e escaneie o QR Code para criar sua conta.");
+
+        return new CpfLookupResponse(user.Name, user.PasswordHash != null);
+    }
+
+    public async Task<AuthResponse> SetupAccountAsync(SetupAccountRequest request)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Cpf == request.Cpf && u.IsActive);
+        if (user == null)
+            throw new KeyNotFoundException("CPF não encontrado.");
+
+        var emailInUse = await _db.Users.AnyAsync(u => u.Email == request.Email.ToLowerInvariant() && u.Id != user.Id);
+        if (emailInUse)
+            throw new InvalidOperationException("Este e-mail já está em uso por outra conta.");
+
+        user.Email        = request.Email.ToLowerInvariant();
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        user.UpdatedAt    = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Conta ativada para cliente {Name}", user.Name);
+        return await GenerateAuthResponseAsync(user);
+    }
+
+    public async Task<AuthResponse> ClientLoginAsync(ClientLoginRequest request)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(
+            u => u.Email == request.Email.ToLowerInvariant() && u.IsActive && u.Role == UserRole.Customer);
+
+        if (user == null || user.PasswordHash == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            throw new UnauthorizedAccessException("E-mail ou senha inválidos.");
+
+        return await GenerateAuthResponseAsync(user);
+    }
+
+    // =========================================================================
     // RECUPERAÇÃO DE SENHA
     // =========================================================================
 

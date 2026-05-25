@@ -32,4 +32,13 @@ public interface IAuthService
 
     /// <summary>Valida o token e redefine a senha.</summary>
     Task ResetPasswordAsync(ResetPasswordRequest request);
+
+    /// <summary>Busca cliente por CPF — retorna nome e se já tem senha.</summary>
+    Task<CpfLookupResponse> LookupByCpfAsync(string cpf);
+
+    /// <summary>Ativa conta de cliente existente: define email + senha.</summary>
+    Task<AuthResponse> SetupAccountAsync(SetupAccountRequest request);
+
+    /// <summary>Login de cliente pelo site (email + senha).</summary>
+    Task<AuthResponse> ClientLoginAsync(ClientLoginRequest request);
 }
