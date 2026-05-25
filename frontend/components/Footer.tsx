@@ -19,7 +19,7 @@ export default function Footer() {
         <p className="text-gray-500">
           © {new Date().getFullYear()}{' '}
           <span className="text-white font-medium">Santuário Nerd</span>{' '}
-          — Todos os direitos reservados. São José do Rio Preto, SP.
+          — Todos os direitos reservados. José Bonifácio, SP.
         </p>
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 justify-center">
           <Link href="/privacidade" className="hover:text-white transition-colors">
@@ -35,10 +35,10 @@ export default function Footer() {
           </Link>
           <span className="text-gray-600 hidden sm:inline">|</span>
           <a
-            href="mailto:privacidade@santuarionerd.tech"
+            href="mailto:contato@santuarionerd.com.br"
             className="hover:text-white transition-colors"
           >
-            privacidade@santuarionerd.tech
+            contato@santuarionerd.com.br
           </a>
         </nav>
       </div>

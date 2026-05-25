@@ -67,60 +67,49 @@ export default function CookieBanner() {
       role="dialog"
       aria-label="Aviso de cookies"
     >
-      <div className="max-w-5xl mx-auto px-5 py-4 flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        {/* Ícone decorativo */}
-        <div className="hidden sm:flex w-9 h-9 rounded-full bg-brand-500/20 border border-brand-500/50 items-center justify-center shrink-0">
-          <span className="text-base">🍪</span>
-        </div>
+      <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+        {/* Ícone */}
+        <span className="text-lg shrink-0">🍪</span>
 
         {/* Texto */}
-        <div className="flex-1 text-sm leading-relaxed text-white">
+        <p className="flex-1 text-sm leading-snug text-white">
           {rejected ? (
-            <p className="text-yellow-300 font-medium">
-              Você recusou os cookies. Algumas funcionalidades (como login e comandas)
-              podem não funcionar corretamente sem cookies essenciais.
-            </p>
+            <span className="text-yellow-300 font-medium">
+              Cookies recusados. Login e comandas podem não funcionar sem cookies essenciais.
+            </span>
           ) : (
-            <p>
-              Usamos <strong>cookies essenciais</strong> para funcionamento do sistema
-              e identificação do usuário. Ao continuar, você concorda com nossa{' '}
-              <Link
-                href="/privacidade"
-                className="underline text-brand-400 hover:text-brand-300 transition-colors font-medium"
-              >
+            <>
+              Usamos <strong>cookies essenciais</strong> para autenticação.{' '}
+              <Link href="/privacidade" className="underline text-brand-400 hover:text-brand-300 transition-colors">
                 Política de Privacidade
               </Link>
-              .
-            </p>
+            </>
           )}
-        </div>
+        </p>
 
         {/* Botões */}
-        {!rejected && (
-          <div className="flex items-center gap-3 shrink-0">
+        {!rejected ? (
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleReject}
-              className="px-4 py-2 text-sm font-medium border border-gray-300 text-gray-100 rounded-lg hover:bg-white/15 transition-all duration-150"
+              className="px-3 py-1.5 text-xs font-medium border border-gray-400 text-gray-200 rounded-lg hover:bg-white/10 transition-colors"
             >
               Recusar
             </button>
             <button
               onClick={handleAccept}
-              className="px-5 py-2 text-sm font-bold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+              className="px-4 py-1.5 text-xs font-bold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
             >
               Aceitar
             </button>
           </div>
-        )}
-
-        {/* Fechar (quando rejeitado) */}
-        {rejected && (
+        ) : (
           <button
             onClick={() => setVisible(false)}
-            className="shrink-0 text-gray-200 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/15"
+            className="shrink-0 text-gray-300 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
             aria-label="Fechar"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         )}
       </div>
