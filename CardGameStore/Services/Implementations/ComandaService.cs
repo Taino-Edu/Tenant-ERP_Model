@@ -26,14 +26,6 @@ public class ComandaService : IComandaService
 
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
     {
-        // Verifica se o cliente tem crediário em aberto — bloqueia abertura de nova comanda
-        var crediarioAberto = await _db.Crediarios
-            .AnyAsync(c => c.UserId == userId && c.Status == CrediariosStatus.Aberto);
-
-        if (crediarioAberto)
-            throw new InvalidOperationException(
-                "Você possui um crediário em aberto. Procure o Maikon para quitar antes de abrir uma nova comanda.");
-
         var existing = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)

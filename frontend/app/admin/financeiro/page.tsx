@@ -89,40 +89,57 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
 
           {/* Barras */}
           {dias.map((d, i) => {
-            const x       = PAD.left + (chartW / dias.length) * i + (chartW / dias.length - barW) / 2
-            const recH    = Math.max(2, (d.receita / maxVal) * chartH)
+            const slotW   = chartW / dias.length
+            const x       = PAD.left + slotW * i + (slotW - barW) / 2
+            const recH    = (d.receita / maxVal) * chartH          // sem Math.max — 0 fica 0
             const custoH  = d.custo > 0 ? Math.min((d.custo / maxVal) * chartH, recH) : 0
             const margemH = recH - custoH
+            const hasData = recH > 0
 
             return (
               <g
                 key={d.dia}
-                onMouseEnter={e => setTooltip({ x: e.clientX, y: e.clientY, d })}
-                onMouseLeave={() => setTooltip(null)}
-                className="cursor-pointer"
+                onMouseEnter={hasData ? e => setTooltip({ x: e.clientX, y: e.clientY, d }) : undefined}
+                onMouseLeave={hasData ? () => setTooltip(null) : undefined}
+                className={hasData ? 'cursor-pointer' : ''}
               >
-                {/* Custo */}
-                {custoH > 0 && (
+                {/* Linha de base sutil para dias sem receita */}
+                {!hasData && (
+                  <rect
+                    x={x + barW * 0.2} y={PAD.top + chartH - 1}
+                    width={barW * 0.6} height={1}
+                    fill="#32323f"
+                  />
+                )}
+
+                {/* Custo (parte de baixo da barra) */}
+                {hasData && custoH > 0 && (
                   <rect
                     x={x} y={PAD.top + chartH - recH}
                     width={barW} height={custoH}
-                    fill="rgba(239,68,68,0.4)" rx="2"
+                    fill="rgba(239,68,68,0.5)" rx="2"
                   />
                 )}
-                {/* Margem */}
-                <rect
-                  x={x} y={PAD.top + chartH - recH}
-                  width={barW} height={margemH}
-                  fill="#7839F3" rx="2"
-                  style={{ transition: 'opacity 0.1s' }}
-                />
-                {/* Label dia */}
-                <text
-                  x={x + barW / 2} y={H - 4}
-                  textAnchor="middle" fontSize="8" fill="#6b7280"
-                >
-                  {d.dia.slice(5)}
-                </text>
+                {/* Margem (parte de cima da barra) */}
+                {hasData && (
+                  <rect
+                    x={x} y={PAD.top + chartH - recH + custoH}
+                    width={barW} height={margemH}
+                    fill="#7839F3" rx="2"
+                    style={{ transition: 'opacity 0.1s' }}
+                  />
+                )}
+
+                {/* Label dia — mostra só dias com data fechada ou início/fim do período */}
+                {(hasData || i === 0 || i === dias.length - 1 || i % Math.ceil(dias.length / 8) === 0) && (
+                  <text
+                    x={x + barW / 2} y={H - 4}
+                    textAnchor="middle" fontSize="8"
+                    fill={hasData ? '#9ca3af' : '#4b5563'}
+                  >
+                    {d.dia.slice(5)}
+                  </text>
+                )}
               </g>
             )
           })}
