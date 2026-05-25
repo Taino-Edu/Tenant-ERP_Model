@@ -157,7 +157,13 @@ export default function Sidebar() {
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="flex items-center justify-between px-6 py-6 shrink-0">
-          <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-11" />
+          <div className="flex items-center gap-3">
+            <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
+            <div>
+              <p className="font-bold text-white text-sm leading-tight">Santuário Nerd</p>
+              <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
+            </div>
+          </div>
           <button onClick={() => setMobileOpen(false)} className="text-gray-500 hover:text-white">
             <X className="w-5 h-5" />
           </button>
@@ -168,8 +174,12 @@ export default function Sidebar() {
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-[260px] min-h-screen bg-surface-900 border-r border-surface-500 flex-col shrink-0">
-        <div className="px-6 py-7 shrink-0">
-          <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-11" />
+        <div className="px-6 py-7 shrink-0 flex items-center gap-3">
+          <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
+          <div>
+            <p className="font-bold text-white text-sm leading-tight">Santuário Nerd</p>
+            <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
+          </div>
         </div>
         <NavItems pathname={pathname} />
         {footer}
