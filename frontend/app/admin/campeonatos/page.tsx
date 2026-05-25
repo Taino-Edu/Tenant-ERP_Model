@@ -126,7 +126,7 @@ function AddParticipantModal({ championshipId, onClose, onAdded }: {
       const filtered = data
         .filter(u => u.name.toLowerCase().includes(q.toLowerCase()) || u.cpf?.includes(q))
         .slice(0, 8)
-        .map(u => ({ id: u.id, name: u.name, cpf: u.cpf }))
+        .map(u => ({ id: u.id, name: u.name, cpf: u.cpf ?? undefined }))
       setResults(filtered)
     } catch {
       toast.error('Erro ao buscar clientes')
