@@ -71,6 +71,11 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(p => p.IsActive)
                   .HasDatabaseName("ix_products_is_active");
+
+            entity.HasIndex(p => p.Barcode)
+                  .IsUnique()
+                  .HasFilter("barcode IS NOT NULL")
+                  .HasDatabaseName("ix_products_barcode");
         });
 
         // =====================================================================

@@ -79,6 +79,7 @@ export interface ComandaItemDto {
 
 export interface Product {
   id: string; name: string; description: string | null; category: string
+  barcode: string | null
   priceInCents: number; stockQuantity: number; minimumStock: number
   isActive: boolean; isFeatured: boolean; imageUrl: string | null
   isLowStock: boolean; priceInReais: number
@@ -236,6 +237,7 @@ export const vendaAvulsaApi = {
 export const productApi = {
   list:        (category?: string) => api.get<Product[]>('/api/product', { params: { category } }),
   get:         (id: string)         => api.get<Product>(`/api/product/${id}`),
+  getByBarcode:(code: string)       => api.get<Product>(`/api/product/barcode/${encodeURIComponent(code)}`),
   create:      (p: Partial<Product>) => api.post<Product>('/api/product', p),
   update:      (id: string, p: Partial<Product>) => api.put<Product>(`/api/product/${id}`, p),
   deactivate:  (id: string)         => api.delete(`/api/product/${id}`),

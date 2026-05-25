@@ -1,8 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { productApi, Product } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, Barcode, ScanLine } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 
 const CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
@@ -14,8 +14,9 @@ function ProductModal({
   onClose: () => void
   onSave:  (p: Partial<Product>) => Promise<void>
 }) {
-  const [form, setForm]   = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0 })
+  const [form, setForm]     = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0 })
   const [saving, setSaving] = useState(false)
+  const barcodeRef          = useRef<HTMLInputElement>(null)
   const set = (k: keyof Product, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
   async function handleSubmit(e: React.FormEvent) {
@@ -25,7 +26,7 @@ function ProductModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-md animate-bounce-in">
+      <div className="card w-full max-w-md animate-bounce-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-white">{form.id ? 'Editar Produto' : 'Novo Produto'}</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300"><X className="w-5 h-5" /></button>
@@ -42,6 +43,25 @@ function ProductModal({
               {CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
+
+          {/* Código de barras */}
+          <div>
+            <label className="label flex items-center gap-1.5">
+              <Barcode className="w-3.5 h-3.5" /> Código de Barras
+            </label>
+            <div className="relative">
+              <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                ref={barcodeRef}
+                className="input pl-9 font-mono"
+                value={form.barcode ?? ''}
+                onChange={e => set('barcode', e.target.value || null)}
+                placeholder="Clique aqui e escaneie ou digite o código"
+              />
+            </div>
+            <p className="text-xs text-gray-600 mt-1">Use um leitor USB ou digite manualmente. Deixe vazio se não tiver.</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Preço (R$) *</label>
@@ -167,7 +187,7 @@ export default function EstoquePage() {
           <table className="w-full text-sm">
             <thead className="bg-surface-800 border-b border-surface-500">
               <tr className="text-left">
-                {['Produto', 'Categoria', 'Preço', 'Estoque', 'Ações'].map(h => (
+                {['Produto', 'Categoria', 'Cód. Barras', 'Preço', 'Estoque', 'Ações'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -181,6 +201,9 @@ export default function EstoquePage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="badge bg-surface-600 text-gray-300 border-surface-500">{p.category}</span>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-400">
+                    {p.barcode ?? <span className="text-gray-600">—</span>}
                   </td>
                   <td className="px-4 py-3 font-mono text-accent-gold font-semibold">
                     R$ {p.priceInReais.toFixed(2).replace('.', ',')}

@@ -46,6 +46,9 @@ public class ProductService : IProductService
     public async Task<IEnumerable<Product>> GetLowStockAsync() =>
         await _db.Products.Where(p => p.IsActive && p.StockQuantity <= p.MinimumStock).ToListAsync();
 
+    public async Task<Product?> GetByBarcodeAsync(string barcode) =>
+        await _db.Products.FirstOrDefaultAsync(p => p.IsActive && p.Barcode == barcode);
+
     public async Task<bool> AdjustStockAsync(Guid id, int quantityDelta)
     {
         var product = await _db.Products.FindAsync(id);
