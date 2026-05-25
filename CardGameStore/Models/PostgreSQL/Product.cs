@@ -38,7 +38,7 @@ public class Product
     public string? Description { get; set; }
 
     // -------------------------------------------------------------------------
-    // Categorização
+    // Categorização e identificação física
     // -------------------------------------------------------------------------
 
     /// <summary>
@@ -48,6 +48,11 @@ public class Product
     [Required, MaxLength(100)]
     [Column("category")]
     public string Category { get; set; } = string.Empty;
+
+    /// <summary>Código de barras EAN-8, EAN-13 ou qualquer padrão 1D.</summary>
+    [MaxLength(50)]
+    [Column("barcode")]
+    public string? Barcode { get; set; }
 
     // -------------------------------------------------------------------------
     // Precificação e Estoque

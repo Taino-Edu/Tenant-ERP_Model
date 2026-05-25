@@ -62,6 +62,30 @@ public record RefreshTokenRequest(
     [Required] string RefreshToken
 );
 
+/// <summary>Busca cliente por CPF — primeiro acesso pelo site.</summary>
+public record CpfLookupRequest(
+    [Required, ValidCpf] string Cpf
+);
+
+/// <summary>Ativa a conta de um cliente existente (CPF + email + senha).</summary>
+public record SetupAccountRequest(
+    [Required, ValidCpf]        string Cpf,
+    [Required, EmailAddress]    string Email,
+    [Required, MinLength(8)]    string Password
+);
+
+/// <summary>Login de cliente pelo site (email + senha).</summary>
+public record ClientLoginRequest(
+    [Required, EmailAddress]    string Email,
+    [Required]                  string Password
+);
+
+/// <summary>Resposta da busca por CPF.</summary>
+public record CpfLookupResponse(
+    string Name,
+    bool   HasPassword
+);
+
 /// <summary>Solicita envio de email para redefinição de senha.</summary>
 public record ForgotPasswordRequest(
     [Required, EmailAddress] string Email

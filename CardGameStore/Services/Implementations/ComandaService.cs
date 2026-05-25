@@ -251,8 +251,9 @@ public class ComandaService : IComandaService
             }
         }
 
-        comanda.Status   = ComandaStatus.Fechada;
-        comanda.ClosedAt = DateTime.UtcNow;
+        comanda.Status        = ComandaStatus.Fechada;
+        comanda.ClosedAt      = DateTime.UtcNow;
+        comanda.PaymentMethod = paymentMethod;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
         // Regra: 1 ponto por R$1 gasto (após desconto de pontos aplicados)
@@ -418,6 +419,7 @@ public class ComandaService : IComandaService
         PointsApplied   = comanda.PointsApplied,
         OpenedAt        = comanda.OpenedAt,
         ClosedAt        = comanda.ClosedAt,
+        PaymentMethod   = comanda.PaymentMethod,
         Items           = comanda.Items.Select(i => new ComandaItemDto
         {
             Id               = i.Id,

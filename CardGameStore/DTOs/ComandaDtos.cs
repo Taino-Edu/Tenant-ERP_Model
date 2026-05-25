@@ -46,6 +46,7 @@ public class ComandaDto
     public int               PointsApplied   { get; set; }
     public DateTime          OpenedAt        { get; set; }
     public DateTime?         ClosedAt        { get; set; }
+    public string?           PaymentMethod   { get; set; }
     public List<ComandaItemDto> Items        { get; set; } = new();
 }
 

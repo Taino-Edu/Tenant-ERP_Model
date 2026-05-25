@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
 
     public DbSet<User>                    Users                    { get; set; }
     public DbSet<Product>                 Products                 { get; set; }
+    public DbSet<ProductCategory>         ProductCategories        { get; set; }
     public DbSet<Comanda>                 Comandas                 { get; set; }
     public DbSet<ComandaItem>             ComandaItems             { get; set; }
     public DbSet<Championship>            Championships            { get; set; }
@@ -64,6 +65,13 @@ public class AppDbContext : DbContext
         // =====================================================================
         // PRODUCT
         // =====================================================================
+        modelBuilder.Entity<ProductCategory>(entity =>
+        {
+            entity.HasIndex(c => c.Name)
+                  .IsUnique()
+                  .HasDatabaseName("ix_product_categories_name");
+        });
+
         modelBuilder.Entity<Product>(entity =>
         {
             entity.HasIndex(p => p.Category)
@@ -71,6 +79,11 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(p => p.IsActive)
                   .HasDatabaseName("ix_products_is_active");
+
+            entity.HasIndex(p => p.Barcode)
+                  .IsUnique()
+                  .HasFilter("barcode IS NOT NULL")
+                  .HasDatabaseName("ix_products_barcode");
         });
 
         // =====================================================================

@@ -50,6 +50,17 @@ public class ProductController : ControllerBase
         return product == null ? NotFound() : Ok(product);
     }
 
+    /// <summary>Busca produto por código de barras. Acessível por todos autenticados.</summary>
+    [HttpGet("barcode/{code}")]
+    [Authorize]
+    [ProducesResponseType(typeof(Product), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetByBarcode(string code)
+    {
+        var product = await _service.GetByBarcodeAsync(code);
+        return product == null ? NotFound(new { Message = "Produto não encontrado para este código de barras." }) : Ok(product);
+    }
+
     /// <summary>Produtos com estoque abaixo do mínimo. Apenas Admin.</summary>
     [HttpGet("low-stock")]
     [Authorize(Policy = "AdminOnly")]

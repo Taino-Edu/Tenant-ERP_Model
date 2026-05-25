@@ -557,6 +557,11 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("barcode");
+
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -614,6 +619,11 @@ namespace CardGameStore.Data.Migrations
 
                     b.HasIndex("IsActive")
                         .HasDatabaseName("ix_products_is_active");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique()
+                        .HasFilter("barcode IS NOT NULL")
+                        .HasDatabaseName("ix_products_barcode");
 
                     b.ToTable("products");
                 });

@@ -1,20 +1,18 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { productApi, Product } from '@/lib/api'
+import { useEffect, useRef, useState } from 'react'
+import { productApi, categoryApi, Product, ProductCategory } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 import CameraScanner from '@/components/CameraScanner'
 
-const DEFAULT_CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
-
 function ProductModal({
-  product, onClose, onSave, categories,
+  product, categories, onClose, onSave,
 }: {
-  product: Partial<Product> | null
-  onClose: () => void
-  onSave:  (p: Partial<Product>) => Promise<void>
-  categories: string[]
+  product:    Partial<Product> | null
+  categories: ProductCategory[]
+  onClose:    () => void
+  onSave:     (p: Partial<Product>) => Promise<void>
 }) {
   const [form, setForm]         = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0, costPriceInCents: 0 })
   const [saving, setSaving]     = useState(false)
@@ -103,16 +101,14 @@ function ProductModal({
           </div>
           <div>
             <label className="label">Categoria *</label>
-            <input
-              className="input" required list="cat-list"
-              value={form.category ?? ''}
-              onChange={e => set('category', e.target.value)}
-              placeholder="Selecione ou digite nova categoria"
-            />
-            <datalist id="cat-list">
-              {categories.map(c => <option key={c} value={c} />)}
-            </datalist>
+            <select className="input" required value={form.category ?? ''} onChange={e => set('category', e.target.value)}>
+              <option value="">Selecione...</option>
+              {categories.filter(c => c.isActive).map(c => (
+                <option key={c.id} value={c.name}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</option>
+              ))}
+            </select>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Preço de custo (R$)</label>
@@ -186,22 +182,20 @@ function ProductModal({
 }
 
 export default function EstoquePage() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [search, setSearch]     = useState('')
-  const [modal, setModal]       = useState<Partial<Product> | null | undefined>(undefined) // undefined = fechado
-  const [catFilter, setCatFilter] = useState('')
-
-  // Categorias dinâmicas: padrões + as que já existem nos produtos
-  const categories = Array.from(new Set([
-    ...DEFAULT_CATEGORIES,
-    ...products.map(p => p.category).filter(Boolean),
-  ])).sort()
+  const [products, setProducts]     = useState<Product[]>([])
+  const [categories, setCategories] = useState<ProductCategory[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [search, setSearch]         = useState('')
+  const [modal, setModal]           = useState<Partial<Product> | null | undefined>(undefined)
+  const [catFilter, setCatFilter]   = useState('')
 
   const fetch = async () => {
     setLoading(true)
-    try { const { data } = await productApi.list(); setProducts(data) }
-    catch { toast.error('Erro ao carregar produtos') }
+    try {
+      const [prodRes, catRes] = await Promise.all([productApi.list(), categoryApi.list()])
+      setProducts(prodRes.data)
+      setCategories(catRes.data)
+    } catch { toast.error('Erro ao carregar produtos') }
     finally { setLoading(false) }
   }
   useEffect(() => { fetch() }, [])
@@ -256,7 +250,7 @@ export default function EstoquePage() {
   return (
     <div className="p-6 space-y-6">
       {modal !== undefined && (
-        <ProductModal product={modal} onClose={() => setModal(undefined)} onSave={handleSave} categories={categories} />
+        <ProductModal product={modal} categories={categories} onClose={() => setModal(undefined)} onSave={handleSave} />
       )}
 
       {/* Header */}
@@ -283,7 +277,7 @@ export default function EstoquePage() {
         </div>
         <select className="input sm:w-48" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
           <option value="">Todas as categorias</option>
-          {categories.map(c => <option key={c}>{c}</option>)}
+          {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
       </div>
 
@@ -295,7 +289,7 @@ export default function EstoquePage() {
           <table className="w-full text-sm">
             <thead className="bg-surface-800 border-b border-surface-500">
               <tr className="text-left">
-                {['Produto', 'Categoria', 'Custo', 'Venda', 'Margem', 'Estoque', 'Ações'].map(h => (
+                {['Produto', 'Categoria', 'Cód. Barras', 'Custo', 'Venda', 'Margem', 'Estoque', 'Ações'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -309,6 +303,9 @@ export default function EstoquePage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="badge bg-surface-600 text-gray-300 border-surface-500">{p.category}</span>
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-400">
+                    {p.barcode ?? <span className="text-gray-600">—</span>}
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-400 text-xs">
                     {p.costPriceInCents > 0 ? `R$ ${p.costPriceInReais.toFixed(2).replace('.', ',')}` : '—'}

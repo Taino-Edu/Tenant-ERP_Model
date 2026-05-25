@@ -66,9 +66,9 @@ export default function LandingPage() {
 
           <div className="hidden md:flex items-center gap-3">
             <ThemeToggle compact />
-            <Link href="/login"
+            <Link href="/entrar"
               className="text-sm text-gray-400 hover:text-white transition px-4 py-2">
-              Área Admin
+              Minha Conta
             </Link>
             <a href="#campeonatos"
               className="text-sm bg-brand-500 hover:bg-brand-400 text-white font-semibold px-4 py-2 rounded-xl transition shadow-lg shadow-brand-500/20">
@@ -96,7 +96,7 @@ export default function LandingPage() {
             ))}
             <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
               <ThemeToggle compact />
-              <Link href="/login" className="flex-1 text-center py-2 text-sm border rounded-xl" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>Admin</Link>
+              <Link href="/entrar" className="flex-1 text-center py-2 text-sm border rounded-xl" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>Minha Conta</Link>
               <a href="#campeonatos" className="flex-1 text-center py-2 text-sm bg-brand-500 text-white font-semibold rounded-xl">Eventos</a>
             </div>
           </div>
