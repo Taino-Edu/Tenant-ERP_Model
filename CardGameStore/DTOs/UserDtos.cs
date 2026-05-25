@@ -77,3 +77,35 @@ public class UpdateMeRequest
     [MaxLength(20)]
     public string? WhatsApp { get; set; }
 }
+
+/// <summary>Request para o Admin criar uma conta de cliente.</summary>
+public class AdminCreateUserRequest
+{
+    [Required]
+    [MaxLength(150)]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(11)]
+    public string? Cpf { get; set; }
+
+    [MaxLength(20)]
+    public string? WhatsApp { get; set; }
+
+    [EmailAddress]
+    [MaxLength(255)]
+    public string? Email { get; set; }
+
+    /// <summary>Senha inicial (opcional). Se não informada, o cliente precisará de "esqueci minha senha".</summary>
+    [MinLength(8)]
+    [MaxLength(100)]
+    public string? Password { get; set; }
+}
+
+/// <summary>Request para o Admin redefinir a senha de um cliente.</summary>
+public class AdminResetPasswordRequest
+{
+    [Required]
+    [MinLength(8)]
+    [MaxLength(100)]
+    public string NewPassword { get; set; } = string.Empty;
+}

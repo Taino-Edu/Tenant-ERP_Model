@@ -178,6 +178,71 @@ public class UserService : IUserService
         _logger.LogInformation("Titular {UserId} anonimizado via LGPD (direito de exclusão).", userId);
     }
 
+    // ── Admin ─────────────────────────────────────────────────────────────────
+
+    public async Task<UserSummaryDto> AdminCreateUserAsync(AdminCreateUserRequest request, Guid adminId)
+    {
+        // Valida duplicidade de CPF
+        if (!string.IsNullOrWhiteSpace(request.Cpf))
+        {
+            var cpfLimpo = request.Cpf.Trim();
+            var existe = await _db.Users.AnyAsync(u => u.Cpf == cpfLimpo);
+            if (existe)
+                throw new InvalidOperationException($"Já existe um cadastro com o CPF {cpfLimpo}.");
+        }
+
+        // Valida duplicidade de e-mail
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+            var existe = await _db.Users.AnyAsync(u => u.Email == email);
+            if (existe)
+                throw new InvalidOperationException($"Já existe um cadastro com o e-mail {request.Email}.");
+        }
+
+        var user = new User
+        {
+            Name      = request.Name.Trim(),
+            Cpf       = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim(),
+            WhatsApp  = string.IsNullOrWhiteSpace(request.WhatsApp) ? null : request.WhatsApp.Trim(),
+            Email     = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim().ToLowerInvariant(),
+            Role      = UserRole.Customer,
+            IsActive  = true,
+            ConsentAt = DateTime.UtcNow,
+        };
+
+        if (!string.IsNullOrWhiteSpace(request.Password))
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
+
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Admin {AdminId} criou conta para o cliente {UserId} ({Name}).",
+            adminId, user.Id, user.Name);
+
+        return MapToSummary(user);
+    }
+
+    public async Task AdminResetPasswordAsync(Guid userId, AdminResetPasswordRequest request, Guid adminId)
+    {
+        var user = await _db.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("Usuário não encontrado.");
+
+        user.PasswordHash           = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, workFactor: 12);
+        user.RefreshToken           = null;
+        user.RefreshTokenExpiry     = null;
+        user.PasswordResetToken     = null;
+        user.PasswordResetTokenExpiry = null;
+        user.UpdatedAt              = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Admin {AdminId} redefiniu a senha do usuário {UserId} ({Name}).",
+            adminId, userId, user.Name);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static bool IsExpired(User user) =>

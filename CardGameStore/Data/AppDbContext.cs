@@ -29,6 +29,7 @@ public class AppDbContext : DbContext
     public DbSet<ChampionshipParticipant> ChampionshipParticipants { get; set; }
     public DbSet<Announcement>            Announcements            { get; set; }
     public DbSet<Crediario>               Crediarios               { get; set; }
+    public DbSet<PagamentoCrediario>      PagamentosCrediario      { get; set; }
 
     // ── LGPD — Compliance e privacidade ──────────────────────────────────────
     public DbSet<LgpdRequest>   LgpdRequests   { get; set; }
@@ -199,6 +200,23 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(c => c.ComandaId)
                   .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasMany(c => c.Pagamentos)
+                  .WithOne(p => p.Crediario)
+                  .HasForeignKey(p => p.CrediarioId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // =====================================================================
+        // PAGAMENTO CREDIARIO
+        // =====================================================================
+        modelBuilder.Entity<PagamentoCrediario>(entity =>
+        {
+            entity.HasIndex(p => p.CrediarioId)
+                  .HasDatabaseName("ix_pagamentos_crediario_crediario");
+
+            entity.HasIndex(p => p.CreatedAt)
+                  .HasDatabaseName("ix_pagamentos_crediario_created_at");
         });
 
         // =====================================================================

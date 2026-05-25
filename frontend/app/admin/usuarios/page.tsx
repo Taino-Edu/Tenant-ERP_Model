@@ -2,8 +2,137 @@
 import { useEffect, useState, useCallback } from 'react'
 import { userApi, crediarioApi, CrediariosDto, UserSummary } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus } from 'lucide-react'
+import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X } from 'lucide-react'
 import Link from 'next/link'
+
+// ── Modal: Novo Cliente ───────────────────────────────────────────────────────
+function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (u: UserSummary) => void }) {
+  const [nome, setNome]       = useState('')
+  const [cpf, setCpf]         = useState('')
+  const [whats, setWhats]     = useState('')
+  const [email, setEmail]     = useState('')
+  const [senha, setSenha]     = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nome.trim()) { toast.error('Nome é obrigatório'); return }
+    setLoading(true)
+    try {
+      const { data } = await userApi.adminCreate({
+        name: nome.trim(),
+        cpf: cpf.trim() || undefined,
+        whatsApp: whats.trim() || undefined,
+        email: email.trim() || undefined,
+        password: senha || undefined,
+      })
+      toast.success(`Cliente ${data.name} criado com sucesso!`)
+      onSuccess(data)
+      onClose()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao criar cliente')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+          <h2 className="font-bold text-white text-lg flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-brand-400" /> Novo Cliente
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          <div>
+            <label className="label">Nome completo *</label>
+            <input className="input" placeholder="João da Silva" value={nome} onChange={e => setNome(e.target.value)} required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">CPF</label>
+              <input className="input" placeholder="12345678901" value={cpf} onChange={e => setCpf(e.target.value)} maxLength={11} />
+            </div>
+            <div>
+              <label className="label">WhatsApp</label>
+              <input className="input" placeholder="5517999999999" value={whats} onChange={e => setWhats(e.target.value)} maxLength={20} />
+            </div>
+          </div>
+          <div>
+            <label className="label">E-mail</label>
+            <input type="email" className="input" placeholder="joao@email.com" value={email} onChange={e => setEmail(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Senha inicial (opcional)</label>
+            <input type="password" className="input" placeholder="Mínimo 8 caracteres" value={senha} onChange={e => setSenha(e.target.value)} minLength={8} />
+            <p className="text-xs text-gray-600 mt-1">Se não informada, o cliente precisará redefinir via e-mail.</p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando...</> : <><UserPlus className="w-4 h-4" /> Criar Cliente</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal: Redefinir Senha ────────────────────────────────────────────────────
+function RedefinirSenhaModal({ user, onClose }: { user: UserSummary; onClose: () => void }) {
+  const [senha, setSenha]     = useState('')
+  const [confirma, setConfirma] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (senha.length < 8) { toast.error('Mínimo 8 caracteres'); return }
+    if (senha !== confirma) { toast.error('As senhas não coincidem'); return }
+    setLoading(true)
+    try {
+      await userApi.adminResetPassword(user.id, senha)
+      toast.success(`Senha de ${user.name} redefinida!`)
+      onClose()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao redefinir senha')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+          <h2 className="font-bold text-white text-lg flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-brand-400" /> Redefinir Senha
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          <p className="text-sm text-gray-400">Definindo nova senha para <strong className="text-white">{user.name}</strong>.</p>
+          <div>
+            <label className="label">Nova senha</label>
+            <input type="password" className="input" placeholder="Mínimo 8 caracteres" value={senha} onChange={e => setSenha(e.target.value)} required minLength={8} />
+          </div>
+          <div>
+            <label className="label">Confirmar senha</label>
+            <input type="password" className="input" placeholder="Repita a senha" value={confirma} onChange={e => setConfirma(e.target.value)} required minLength={8} />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><KeyRound className="w-4 h-4" /> Redefinir</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 export default function UsuariosPage() {
   const [users, setUsers]           = useState<UserSummary[]>([])
@@ -17,6 +146,8 @@ export default function UsuariosPage() {
   const [balanceAmount, setBalanceAmount] = useState('')
   const [balanceReason, setBalanceReason] = useState('')
   const [adjustingBalance, setAdjustingBalance] = useState(false)
+  const [showNovoCliente, setShowNovoCliente] = useState(false)
+  const [showRedefinirSenha, setShowRedefinirSenha] = useState(false)
 
   const fetchUsers = useCallback(async (q?: string) => {
     setLoading(true)
@@ -85,12 +216,34 @@ export default function UsuariosPage() {
 
   return (
     <div className="p-6 h-full">
+      {/* Modals */}
+      {showNovoCliente && (
+        <NovoClienteModal
+          onClose={() => setShowNovoCliente(false)}
+          onSuccess={u => setUsers(prev => [u, ...prev])}
+        />
+      )}
+      {showRedefinirSenha && selected && (
+        <RedefinirSenhaModal
+          user={selected}
+          onClose={() => setShowRedefinirSenha(false)}
+        />
+      )}
+
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <Users className="w-6 h-6 text-brand-400" /> Clientes & Cashback
-        </h1>
-        <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes, pontos Maikon e cashback</p>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Users className="w-6 h-6 text-brand-400" /> Clientes & Cashback
+          </h1>
+          <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes, pontos Maikon e cashback</p>
+        </div>
+        <button
+          onClick={() => setShowNovoCliente(true)}
+          className="btn-primary whitespace-nowrap"
+        >
+          <UserPlus className="w-4 h-4" /> Novo Cliente
+        </button>
       </div>
 
       <div className="flex gap-6 h-[calc(100vh-180px)]">
@@ -173,6 +326,13 @@ export default function UsuariosPage() {
                 <p className="font-bold text-white text-lg">{selected.name}</p>
                 {selected.cpf && <p className="text-xs text-gray-500">CPF: {selected.cpf}</p>}
                 {selected.whatsApp && <p className="text-xs text-gray-500">WhatsApp: {selected.whatsApp}</p>}
+                {selected.email && <p className="text-xs text-gray-500">{selected.email}</p>}
+                <button
+                  onClick={() => setShowRedefinirSenha(true)}
+                  className="btn-secondary mt-2 text-xs py-1.5 px-3 w-full justify-center"
+                >
+                  <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
+                </button>
               </div>
 
               {/* Pontos Maikon */}

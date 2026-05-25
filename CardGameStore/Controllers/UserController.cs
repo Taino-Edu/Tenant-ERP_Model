@@ -1,11 +1,14 @@
 // =============================================================================
 // UserController.cs — Endpoints de Usuários e Pontos
-// GET    /api/user            → lista clientes com pontos (Admin)
-// GET    /api/user/me         → perfil do usuário logado
-// PUT    /api/user/me         → titular corrige seus próprios dados (LGPD retificação)
-// DELETE /api/user/me         → titular solicita exclusão/anonimização (LGPD Art. 18)
-// GET    /api/user/{id}       → detalhe de um cliente (Admin)
-// POST   /api/user/{id}/points → adiciona pontos (Admin)
+// GET    /api/user                  → lista clientes (Admin)
+// POST   /api/user                  → Admin cria conta de cliente
+// GET    /api/user/me               → perfil do usuário logado
+// PUT    /api/user/me               → titular corrige seus dados (LGPD retificação)
+// DELETE /api/user/me               → titular solicita exclusão/anonimização (LGPD Art. 18)
+// GET    /api/user/{id}             → detalhe de um cliente (Admin)
+// POST   /api/user/{id}/points      → adiciona pontos (Admin)
+// POST   /api/user/{id}/balance     → ajusta saldo (Admin)
+// PUT    /api/user/{id}/reset-password → Admin redefine senha do cliente
 // =============================================================================
 
 using CardGameStore.DTOs;
@@ -38,6 +41,29 @@ public class UserController : ControllerBase
     {
         var users = await _service.GetAllAsync(search);
         return Ok(users);
+    }
+
+    /// <summary>Admin cria diretamente uma conta de cliente.</summary>
+    [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(UserSummaryDto), 201)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> AdminCreate([FromBody] AdminCreateUserRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var adminId = GetUserId();
+            var result  = await _service.AdminCreateUserAsync(request, adminId);
+            await _audit.LogAsync("CriouCliente", "User", result.Id.ToString(), httpContext: HttpContext);
+            return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
     }
 
     /// <summary>Perfil completo do usuário logado (pontos, dados pessoais).</summary>
@@ -171,6 +197,30 @@ public class UserController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>Admin redefine a senha de um cliente (sem e-mail, imediato).</summary>
+    [HttpPut("{id:guid}/reset-password")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> AdminResetPassword(Guid id, [FromBody] AdminResetPasswordRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        try
+        {
+            var adminId = GetUserId();
+            await _service.AdminResetPasswordAsync(id, request, adminId);
+            await _audit.LogAsync("RedefinirSenha", "User", id.ToString(), httpContext: HttpContext);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { Message = ex.Message });
         }
     }
 

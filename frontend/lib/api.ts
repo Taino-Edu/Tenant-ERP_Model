@@ -216,6 +216,14 @@ export const comandaApi = {
 
 // ── Crediário ─────────────────────────────────────────────────────────────────
 
+export interface PagamentoCrediarioDto {
+  id: string
+  valorEmReais: number
+  formaPagamento: string
+  observacao: string | null
+  createdAt: string
+}
+
 export interface CrediariosDto {
   id: string
   userId: string
@@ -223,6 +231,8 @@ export interface CrediariosDto {
   userEmail: string | null
   comandaId: string
   valorEmReais: number
+  valorPagoEmReais: number
+  saldoRestanteEmReais: number
   dataAbertura: string
   dataVencimento: string
   dataPagamento: string | null
@@ -230,7 +240,15 @@ export interface CrediariosDto {
   observacao: string | null
   vencido: boolean
   diasRestantes: number
+  pagamentos: PagamentoCrediarioDto[]
 }
+
+export const FORMAS_PAGAMENTO_CREDIARIO = [
+  { value: 'Dinheiro',      label: 'Dinheiro' },
+  { value: 'Pix',           label: 'Pix' },
+  { value: 'CartaoCredito', label: 'Cartão de Crédito' },
+  { value: 'CartaoDebito',  label: 'Cartão de Débito' },
+] as const
 
 export const crediarioApi = {
   list:        (status?: string) =>
@@ -240,6 +258,8 @@ export const crediarioApi = {
   meu:         () => api.get<CrediariosDto>('/api/crediarios/meu'),
   marcarPago:  (id: string, observacao?: string) =>
     api.put<CrediariosDto>(`/api/crediarios/${id}/pagar`, { observacao }),
+  registrarPagamento: (id: string, valorEmCentavos: number, formaPagamento: string, observacao?: string) =>
+    api.post<CrediariosDto>(`/api/crediarios/${id}/pagamento`, { valorEmCentavos, formaPagamento, observacao }),
 }
 
 export const COMANDA_PAYMENT_METHODS = [
@@ -274,6 +294,14 @@ export interface UpdateMeRequest {
   whatsApp?: string
 }
 
+export interface AdminCreateUserRequest {
+  name: string
+  cpf?: string
+  whatsApp?: string
+  email?: string
+  password?: string
+}
+
 export const userApi = {
   list:      (search?: string) => api.get<UserSummary[]>('/api/user', { params: { search } }),
   getById:   (id: string)      => api.get<UserSummary>(`/api/user/${id}`),
@@ -282,6 +310,11 @@ export const userApi = {
     api.post<UserSummary>(`/api/user/${id}/points`, { points, reason }),
   adjustBalance: (id: string, amountInCents: number, reason?: string) =>
     api.post<UserSummary>(`/api/user/${id}/balance`, { amountInCents, reason }),
+  // Admin: criar conta e redefinir senha
+  adminCreate: (data: AdminCreateUserRequest) =>
+    api.post<UserSummary>('/api/user', data),
+  adminResetPassword: (id: string, newPassword: string) =>
+    api.put(`/api/user/${id}/reset-password`, { newPassword }),
   // LGPD — Direitos do titular
   updateMe:  (data: UpdateMeRequest) => api.put<UserProfile>('/api/user/me', data),
   deleteMe:  ()                      => api.delete('/api/user/me'),

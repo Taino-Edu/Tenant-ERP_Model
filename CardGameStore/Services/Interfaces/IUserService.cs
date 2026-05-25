@@ -45,4 +45,12 @@ public interface IUserService
     /// Direito de exclusão conforme Art. 18, VI da LGPD.
     /// </summary>
     Task AnonimizarAsync(Guid userId);
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+
+    /// <summary>Admin cria diretamente uma conta de cliente.</summary>
+    Task<UserSummaryDto> AdminCreateUserAsync(AdminCreateUserRequest request, Guid adminId);
+
+    /// <summary>Admin redefine a senha de um cliente (sem e-mail de confirmação).</summary>
+    Task AdminResetPasswordAsync(Guid userId, AdminResetPasswordRequest request, Guid adminId);
 }

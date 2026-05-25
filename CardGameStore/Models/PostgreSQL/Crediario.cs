@@ -36,9 +36,13 @@ public class Crediario
 
     // ── Valor e datas ─────────────────────────────────────────────────────────
 
-    /// <summary>Valor a ser pago, em centavos (copiado do total da comanda).</summary>
+    /// <summary>Valor total a ser pago, em centavos (copiado do total da comanda).</summary>
     [Column("valor_em_centavos")]
     public int ValorEmCentavos { get; set; }
+
+    /// <summary>Soma de todos os pagamentos parciais registrados, em centavos.</summary>
+    [Column("valor_pago_em_centavos")]
+    public int ValorPagoEmCentavos { get; set; } = 0;
 
     [Column("data_abertura")]
     public DateTime DataAbertura { get; set; } = DateTime.UtcNow;
@@ -71,10 +75,23 @@ public class Crediario
     [Column("pago_por_admin_id")]
     public Guid? PagoPorAdminId { get; set; }
 
+    // ── Pagamentos parciais ───────────────────────────────────────────────────
+
+    public ICollection<PagamentoCrediario> Pagamentos { get; set; } = new List<PagamentoCrediario>();
+
     // ── Calculado ─────────────────────────────────────────────────────────────
 
     [NotMapped]
     public decimal ValorEmReais => ValorEmCentavos / 100m;
+
+    [NotMapped]
+    public decimal ValorPagoEmReais => ValorPagoEmCentavos / 100m;
+
+    [NotMapped]
+    public int SaldoRestanteEmCentavos => Math.Max(0, ValorEmCentavos - ValorPagoEmCentavos);
+
+    [NotMapped]
+    public decimal SaldoRestanteEmReais => SaldoRestanteEmCentavos / 100m;
 
     /// <summary>True se está Aberto e já passou do vencimento.</summary>
     [NotMapped]

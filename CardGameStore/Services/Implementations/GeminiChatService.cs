@@ -20,7 +20,7 @@ namespace CardGameStore.Services.Implementations;
 public class GeminiChatService : IAiChatService
 {
     private const string GEMINI_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 
     private readonly AppDbContext              _db;
     private readonly IVendaAvulsaService       _vendas;
@@ -194,7 +194,7 @@ public class GeminiChatService : IAiChatService
     }
 
     private static string BuildPrompt(string userMessage, string contextJson) => $"""
-        Você é um assistente de gestão da loja softNerd, especializada em card games (TCG).
+        Você é um assistente de gestão da Santuário Nerd, loja especializada em card games (TCG).
         Responda em português brasileiro, de forma direta e objetiva — máximo 3 parágrafos curtos.
         Use linguagem simples, sem jargões técnicos.
         Não invente dados: use APENAS os dados fornecidos abaixo.
