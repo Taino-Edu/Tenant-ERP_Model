@@ -79,4 +79,12 @@ public class ChampionshipService : IChampionshipService
         var p = await _db.ChampionshipParticipants.FindAsync(participantId);
         if (p != null) { p.Placement = placement; await _db.SaveChangesAsync(); }
     }
+
+    public async Task RemoveParticipantAsync(Guid participantId)
+    {
+        var p = await _db.ChampionshipParticipants.FindAsync(participantId)
+            ?? throw new InvalidOperationException("Participante não encontrado.");
+        _db.ChampionshipParticipants.Remove(p);
+        await _db.SaveChangesAsync();
+    }
 }

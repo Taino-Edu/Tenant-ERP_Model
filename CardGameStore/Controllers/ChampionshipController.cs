@@ -160,6 +160,71 @@ public class ChampionshipController : ControllerBase
     }
 
     // -------------------------------------------------------------------------
+    // INSCRIÇÃO MANUAL — Admin adiciona/remove participante
+    // -------------------------------------------------------------------------
+
+    /// <summary>Admin inscreve qualquer usuário em um campeonato.</summary>
+    [HttpPost("{id:guid}/admin-register")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ParticipantDto), 201)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> AdminRegister(Guid id, [FromBody] AdminRegisterRequest request)
+    {
+        var ch = await _service.GetByIdAsync(id);
+        if (ch == null)
+            return NotFound(new { Message = "Campeonato não encontrado." });
+
+        if (ch.MaxParticipants.HasValue && ch.Participants.Count >= ch.MaxParticipants.Value)
+            return BadRequest(new { Message = "O campeonato atingiu o número máximo de participantes." });
+
+        ChampionshipParticipant participant;
+        try
+        {
+            participant = await _service.RegisterParticipantAsync(id, request.UserId, request.DeckName);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+
+        _logger.LogInformation("Admin inscreveu usuário {UserId} no campeonato {ChampionshipId}", request.UserId, id);
+
+        // Busca o nome do usuário para retornar no DTO
+        var user = await _service.GetParticipantsAsync(id);
+        var registered = user.FirstOrDefault(p => p.UserId == request.UserId);
+
+        return StatusCode(201, new ParticipantDto
+        {
+            Id           = participant.Id,
+            UserId       = participant.UserId,
+            UserName     = registered?.User?.Name ?? string.Empty,
+            PlayerNumber = participant.PlayerNumber,
+            DeckName     = participant.DeckName,
+            RegisteredAt = participant.RegisteredAt
+        });
+    }
+
+    /// <summary>Admin remove participante de um campeonato.</summary>
+    [HttpDelete("{id:guid}/participants/{participantId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> RemoveParticipant(Guid id, Guid participantId)
+    {
+        try
+        {
+            await _service.RemoveParticipantAsync(participantId);
+            _logger.LogInformation("Participante {ParticipantId} removido do campeonato {Id}", participantId, id);
+            return Ok(new { Message = "Participante removido." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // ATUALIZAÇÃO DE STATUS — apenas Admin
     // -------------------------------------------------------------------------
 
@@ -290,6 +355,14 @@ public class CreateChampionshipRequest
 
 /// <summary>Request para alterar status do campeonato.</summary>
 public record UpdateStatusRequest(string Status);
+
+/// <summary>Request para o admin inscrever um usuário específico.</summary>
+public class AdminRegisterRequest
+{
+    [System.ComponentModel.DataAnnotations.Required]
+    public Guid UserId { get; init; }
+    public string? DeckName { get; init; }
+}
 
 /// <summary>Request para inscrição em campeonato (deck é opcional).</summary>
 public record RegisterChampionshipRequest(string? DeckName);

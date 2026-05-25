@@ -18,4 +18,5 @@ public interface IChampionshipService
     Task                            LinkComandaToParticipantAsync(Guid participantId, Guid comandaId);
     Task<IEnumerable<ChampionshipParticipant>> GetParticipantsAsync(Guid championshipId);
     Task                            SetPlacementAsync(Guid participantId, int placement);
+    Task                            RemoveParticipantAsync(Guid participantId);
 }

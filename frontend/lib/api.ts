@@ -328,14 +328,32 @@ export const tcgApi = {
   sets:    (game: string) => api.get('/api/tcg/sets', { params: { game } }),
 }
 
+export interface ChampionshipParticipant {
+  id: string
+  userId: string
+  userName: string
+  playerNumber: number
+  deckName?: string
+  placement?: number
+  registeredAt: string
+}
+
 export const championshipApi = {
-  list:       () => api.get<Championship[]>('/api/championship'),
-  get:        (id: string) => api.get<Championship>(`/api/championship/${id}`),
-  create:     (c: Partial<Championship>) => api.post<Championship>('/api/championship', c),
-  register:   (id: string, userId: string, deckName?: string) =>
+  list:             () => api.get<Championship[]>('/api/championship'),
+  get:              (id: string) => api.get<Championship>(`/api/championship/${id}`),
+  create:           (c: Partial<Championship>) => api.post<Championship>('/api/championship', c),
+  register:         (id: string, userId: string, deckName?: string) =>
     api.post(`/api/championship/${id}/register`, { userId, deckName }),
-  setStatus:  (id: string, status: string) =>
+  adminRegister:    (id: string, userId: string, deckName?: string) =>
+    api.post<ChampionshipParticipant>(`/api/championship/${id}/admin-register`, { userId, deckName }),
+  participants:     (id: string) =>
+    api.get<ChampionshipParticipant[]>(`/api/championship/${id}/participants`),
+  removeParticipant:(id: string, participantId: string) =>
+    api.delete(`/api/championship/${id}/participants/${participantId}`),
+  setStatus:        (id: string, status: string) =>
     api.put(`/api/championship/${id}/status`, { status }),
+  setPlacement:     (id: string, participantId: string, placement: number) =>
+    api.put(`/api/championship/${id}/participants/${participantId}/placement`, { placement }),
 }
 
 // ── Assistente IA ─────────────────────────────────────────────────────────────

@@ -1,24 +1,38 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { championshipApi, Championship } from '@/lib/api'
+import { useEffect, useState, useCallback } from 'react'
+import { championshipApi, userApi, Championship, ChampionshipParticipant } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Trophy, Plus, Users, CalendarDays, Swords, X, Check, Loader2 } from 'lucide-react'
+import {
+  Trophy, Plus, Users, Swords, X, Check, Loader2,
+  ChevronDown, ChevronUp, UserPlus, Trash2, Medal,
+} from 'lucide-react'
 import clsx from 'clsx'
 
+// ── Constantes ────────────────────────────────────────────────────────────────
 const STATUS_LABELS: Record<string, string> = {
   Planejado: '📋 Planejado', Inscricoes: '📝 Inscrições',
-  EmAndamento: '⚔️ Em Andamento', Finalizado: '🏆 Finalizado', Cancelado: '❌ Cancelado'
+  EmAndamento: '⚔️ Em Andamento', Finalizado: '🏆 Finalizado', Cancelado: '❌ Cancelado',
 }
 const STATUS_CLASSES: Record<string, string> = {
-  Planejado: 'badge bg-blue-500/10 text-blue-400 border-blue-500/20',
-  Inscricoes: 'badge bg-brand-500/10 text-brand-300 border-brand-500/20',
+  Planejado:   'badge bg-blue-500/10 text-blue-400 border-blue-500/20',
+  Inscricoes:  'badge bg-brand-500/10 text-brand-300 border-brand-500/20',
   EmAndamento: 'badge bg-amber-500/10 text-amber-400 border-amber-500/20',
-  Finalizado: 'badge bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-  Cancelado: 'badge bg-red-500/10 text-red-400 border-red-500/20',
+  Finalizado:  'badge bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  Cancelado:   'badge bg-red-500/10 text-red-400 border-red-500/20',
 }
 const GAMES = ['Pokemon', 'Magic: The Gathering', 'Yu-Gi-Oh!', 'One Piece TCG', 'Dragon Ball Super']
+const NEXT_STATUS: Record<string, string[]> = {
+  Planejado: ['Inscricoes', 'Cancelado'],
+  Inscricoes: ['EmAndamento', 'Cancelado'],
+  EmAndamento: ['Finalizado', 'Cancelado'],
+  Finalizado: [], Cancelado: [],
+}
 
-function NewChampionshipModal({ onClose, onSave }: { onClose: () => void; onSave: (c: Partial<Championship>) => Promise<void> }) {
+// ── Modal: Novo Campeonato ────────────────────────────────────────────────────
+function NewChampionshipModal({ onClose, onSave }: {
+  onClose: () => void
+  onSave: (c: Partial<Championship>) => Promise<void>
+}) {
   const [form, setForm] = useState<Partial<Championship>>({ game: 'Pokemon', entryFeeInCents: 0 })
   const [saving, setSaving] = useState(false)
   const set = (k: keyof Championship, v: unknown) => setForm(f => ({ ...f, [k]: v }))
@@ -32,13 +46,17 @@ function NewChampionshipModal({ onClose, onSave }: { onClose: () => void; onSave
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="card w-full max-w-lg animate-bounce-in">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-bold text-white flex items-center gap-2"><Trophy className="w-5 h-5 text-accent-gold" /> Novo Campeonato</h2>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-accent-gold" /> Novo Campeonato
+          </h2>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-300" /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <div>
             <label className="label">Nome do Campeonato *</label>
-            <input className="input" required value={form.name ?? ''} onChange={e => set('name', e.target.value)} placeholder="Ex: Torneio Pokémon — Abril 2025" />
+            <input className="input" required value={form.name ?? ''}
+              onChange={e => set('name', e.target.value)}
+              placeholder="Ex: Torneio Pokémon — Junho 2025" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -51,28 +69,26 @@ function NewChampionshipModal({ onClose, onSave }: { onClose: () => void; onSave
               <label className="label">Taxa de inscrição (R$)</label>
               <input className="input" type="number" min="0" step="0.01"
                 value={(form.entryFeeInCents ?? 0) / 100}
-                onChange={e => set('entryFeeInCents', Math.round(parseFloat(e.target.value) * 100))}
-              />
+                onChange={e => set('entryFeeInCents', Math.round(parseFloat(e.target.value) * 100))} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Data / Hora *</label>
               <input className="input" type="datetime-local" required
-                onChange={e => set('startDate', new Date(e.target.value).toISOString())}
-              />
+                onChange={e => set('startDate', new Date(e.target.value).toISOString())} />
             </div>
             <div>
               <label className="label">Máx. participantes</label>
               <input className="input" type="number" min="2" placeholder="Sem limite"
-                onChange={e => set('maxParticipants', e.target.value ? parseInt(e.target.value) : null)}
-              />
+                onChange={e => set('maxParticipants', e.target.value ? parseInt(e.target.value) : null)} />
             </div>
           </div>
           <div>
-            <label className="label">Descrição</label>
-            <textarea className="input resize-none h-20" placeholder="Regras, formato, premiação..." value={form.description ?? ''}
-              onChange={e => set('description', e.target.value)} />
+            <label className="label">Descrição / Regras</label>
+            <textarea className="input resize-none h-20"
+              placeholder="Formato, premiação, regras especiais..."
+              value={form.description ?? ''} onChange={e => set('description', e.target.value)} />
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
@@ -87,44 +103,358 @@ function NewChampionshipModal({ onClose, onSave }: { onClose: () => void; onSave
   )
 }
 
+// ── Modal: Adicionar Participante ─────────────────────────────────────────────
+function AddParticipantModal({ championshipId, onClose, onAdded }: {
+  championshipId: string
+  onClose: () => void
+  onAdded: () => void
+}) {
+  const [search, setSearch]     = useState('')
+  const [results, setResults]   = useState<{ id: string; name: string; cpf?: string }[]>([])
+  const [selected, setSelected] = useState<{ id: string; name: string } | null>(null)
+  const [deckName, setDeckName] = useState('')
+  const [saving, setSaving]     = useState(false)
+  const [searching, setSearching] = useState(false)
+
+  async function handleSearch(q: string) {
+    setSearch(q)
+    setSelected(null)
+    if (q.length < 2) { setResults([]); return }
+    setSearching(true)
+    try {
+      const { data } = await userApi.list()
+      const filtered = data
+        .filter(u => u.name.toLowerCase().includes(q.toLowerCase()) || u.cpf?.includes(q))
+        .slice(0, 8)
+        .map(u => ({ id: u.id, name: u.name, cpf: u.cpf }))
+      setResults(filtered)
+    } catch {
+      toast.error('Erro ao buscar clientes')
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  async function handleAdd() {
+    if (!selected) return
+    setSaving(true)
+    try {
+      await championshipApi.adminRegister(championshipId, selected.id, deckName || undefined)
+      toast.success(`${selected.name} inscrito com sucesso!`)
+      onAdded()
+      onClose()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao inscrever participante')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-md animate-bounce-in">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-brand-400" /> Adicionar Participante
+          </h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-300" /></button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Busca de cliente */}
+          <div>
+            <label className="label">Buscar cliente</label>
+            <input
+              className="input"
+              placeholder="Nome ou CPF..."
+              value={search}
+              onChange={e => handleSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          {/* Resultados */}
+          {searching && (
+            <div className="flex justify-center py-2">
+              <Loader2 className="w-5 h-5 animate-spin text-brand-400" />
+            </div>
+          )}
+          {results.length > 0 && !selected && (
+            <div className="border border-surface-500 rounded-xl overflow-hidden divide-y divide-surface-500">
+              {results.map(u => (
+                <button
+                  key={u.id}
+                  onClick={() => { setSelected(u); setSearch(u.name); setResults([]) }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-surface-700 transition-colors text-left"
+                >
+                  <div className="w-7 h-7 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0">
+                    <span className="text-brand-400 text-xs font-bold">{u.name[0]}</span>
+                  </div>
+                  <div>
+                    <p className="text-white font-medium">{u.name}</p>
+                    {u.cpf && <p className="text-gray-500 text-xs">{u.cpf}</p>}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Cliente selecionado */}
+          {selected && (
+            <div className="flex items-center gap-3 bg-brand-500/10 border border-brand-500/30 rounded-xl px-4 py-3">
+              <div className="w-8 h-8 rounded-full bg-brand-500/30 flex items-center justify-center shrink-0">
+                <span className="text-brand-300 text-sm font-bold">{selected.name[0]}</span>
+              </div>
+              <p className="text-white font-medium flex-1">{selected.name}</p>
+              <button onClick={() => { setSelected(null); setSearch('') }} className="text-gray-500 hover:text-gray-300">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Nome do deck (opcional) */}
+          <div>
+            <label className="label">Nome do Deck <span className="text-gray-600">(opcional)</span></label>
+            <input className="input" placeholder="Ex: Charizard ex, Mewtwo..."
+              value={deckName} onChange={e => setDeckName(e.target.value)} />
+          </div>
+
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button
+              onClick={handleAdd}
+              disabled={!selected || saving}
+              className="btn-primary flex-1 justify-center"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+              Inscrever
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Card do Campeonato ────────────────────────────────────────────────────────
+function ChampionshipCard({
+  c, onStatusChange, onParticipantChange,
+}: {
+  c: Championship
+  onStatusChange: (id: string, status: string) => void
+  onParticipantChange: () => void
+}) {
+  const [expanded, setExpanded]         = useState(false)
+  const [participants, setParticipants] = useState<ChampionshipParticipant[]>([])
+  const [loadingP, setLoadingP]         = useState(false)
+  const [showAdd, setShowAdd]           = useState(false)
+
+  const loadParticipants = useCallback(async () => {
+    setLoadingP(true)
+    try {
+      const { data } = await championshipApi.participants(c.id)
+      setParticipants(data)
+    } catch {
+      toast.error('Erro ao carregar participantes')
+    } finally {
+      setLoadingP(false)
+    }
+  }, [c.id])
+
+  async function toggleExpand() {
+    if (!expanded) await loadParticipants()
+    setExpanded(v => !v)
+  }
+
+  async function handleRemove(p: ChampionshipParticipant) {
+    if (!confirm(`Remover ${p.userName} do campeonato?`)) return
+    try {
+      await championshipApi.removeParticipant(c.id, p.id)
+      toast.success(`${p.userName} removido`)
+      loadParticipants()
+      onParticipantChange()
+    } catch {
+      toast.error('Erro ao remover participante')
+    }
+  }
+
+  const canAddParticipants = c.status === 'Inscricoes' || c.status === 'EmAndamento'
+
+  return (
+    <>
+      {showAdd && (
+        <AddParticipantModal
+          championshipId={c.id}
+          onClose={() => setShowAdd(false)}
+          onAdded={() => { loadParticipants(); onParticipantChange() }}
+        />
+      )}
+
+      <div className="card space-y-4">
+        {/* Cabeçalho */}
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className={STATUS_CLASSES[c.status] ?? 'badge'}>{STATUS_LABELS[c.status]}</span>
+            </div>
+            <h3 className="font-bold text-white">{c.name}</h3>
+            <p className="text-sm text-gray-400 flex items-center gap-1.5 mt-1">
+              <Swords className="w-3.5 h-3.5" />{c.game}
+            </p>
+          </div>
+        </div>
+
+        {/* Infos */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="bg-surface-800 rounded-lg p-2.5">
+            <p className="text-xs text-gray-500">Data</p>
+            <p className="text-white font-medium">
+              {new Date(c.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </p>
+          </div>
+          <div className="bg-surface-800 rounded-lg p-2.5">
+            <p className="text-xs text-gray-500">Inscrição</p>
+            <p className={clsx('font-medium', c.entryFeeInCents === 0 ? 'text-accent-green' : 'text-accent-gold')}>
+              {c.entryFeeInCents === 0 ? 'Grátis' : `R$ ${(c.entryFeeInCents / 100).toFixed(2)}`}
+            </p>
+          </div>
+        </div>
+
+        {/* Participantes header */}
+        <div className="flex items-center justify-between pt-1 border-t border-surface-500">
+          <button
+            onClick={toggleExpand}
+            className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            <Users className="w-4 h-4" />
+            <span className="font-medium">
+              {c.participantCount} participante{c.participantCount !== 1 ? 's' : ''}
+              {c.maxParticipants ? ` / ${c.maxParticipants}` : ''}
+            </span>
+            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {canAddParticipants && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-brand-400 hover:text-brand-300 transition-colors"
+            >
+              <UserPlus className="w-3.5 h-3.5" /> Adicionar
+            </button>
+          )}
+        </div>
+
+        {/* Lista de participantes */}
+        {expanded && (
+          <div className="space-y-1.5">
+            {loadingP ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-5 h-5 animate-spin text-brand-400" />
+              </div>
+            ) : participants.length === 0 ? (
+              <p className="text-center text-sm text-gray-600 py-4">Nenhum inscrito ainda</p>
+            ) : (
+              participants.map(p => (
+                <div key={p.id} className="flex items-center gap-3 bg-surface-800 rounded-lg px-3 py-2">
+                  <span className="text-xs font-mono text-gray-500 w-5 text-right shrink-0">#{p.playerNumber}</span>
+                  <div className="w-7 h-7 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0">
+                    <span className="text-brand-400 text-xs font-bold">{p.userName?.[0] ?? '?'}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{p.userName}</p>
+                    {p.deckName && <p className="text-xs text-gray-500 truncate">{p.deckName}</p>}
+                  </div>
+                  {p.placement && (
+                    <span className="text-xs font-bold text-accent-gold flex items-center gap-1">
+                      <Medal className="w-3.5 h-3.5" />{p.placement}º
+                    </span>
+                  )}
+                  {(c.status === 'Inscricoes' || c.status === 'EmAndamento') && (
+                    <button
+                      onClick={() => handleRemove(p)}
+                      className="text-gray-600 hover:text-red-400 transition-colors ml-1 shrink-0"
+                      title="Remover"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Botões de status */}
+        {NEXT_STATUS[c.status]?.length > 0 && (
+          <div className="flex gap-2 pt-1">
+            {NEXT_STATUS[c.status].map(next => (
+              <button
+                key={next}
+                onClick={() => onStatusChange(c.id, next)}
+                className={clsx(
+                  'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors',
+                  next === 'Cancelado'
+                    ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/20'
+                    : 'bg-brand-600/20 text-brand-300 hover:bg-brand-600/30 border border-brand-500/20'
+                )}
+              >
+                → {STATUS_LABELS[next]}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ── Página principal ──────────────────────────────────────────────────────────
 export default function CampeonatosPage() {
   const [championships, setChampionships] = useState<Championship[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
+  const [loading, setLoading]             = useState(true)
+  const [showModal, setShowModal]         = useState(false)
 
-  const fetch = async () => {
+  const load = async () => {
     setLoading(true)
     try { const { data } = await championshipApi.list(); setChampionships(data) }
     catch { toast.error('Erro ao carregar campeonatos') }
     finally { setLoading(false) }
   }
-  useEffect(() => { fetch() }, [])
+
+  useEffect(() => { load() }, [])
 
   async function handleSave(form: Partial<Championship>) {
-    try { await championshipApi.create(form); toast.success('Campeonato criado!'); setShowModal(false); fetch() }
-    catch { toast.error('Erro ao criar campeonato') }
+    try {
+      await championshipApi.create(form)
+      toast.success('Campeonato criado!')
+      setShowModal(false)
+      load()
+    } catch {
+      toast.error('Erro ao criar campeonato')
+    }
   }
 
-  async function updateStatus(id: string, status: string) {
-    try { await championshipApi.setStatus(id, status); fetch() }
+  async function handleStatusChange(id: string, status: string) {
+    try { await championshipApi.setStatus(id, status); load() }
     catch { toast.error('Erro ao atualizar status') }
   }
 
-  const nextStatuses: Record<string, string[]> = {
-    Planejado: ['Inscricoes', 'Cancelado'],
-    Inscricoes: ['EmAndamento', 'Cancelado'],
-    EmAndamento: ['Finalizado', 'Cancelado'],
-    Finalizado: [], Cancelado: [],
-  }
+  // Agrupa por status
+  const ativos    = championships.filter(c => ['Inscricoes', 'EmAndamento'].includes(c.status))
+  const planejados = championships.filter(c => c.status === 'Planejado')
+  const finalizados = championships.filter(c => ['Finalizado', 'Cancelado'].includes(c.status))
 
   return (
     <div className="p-6 space-y-6">
       {showModal && <NewChampionshipModal onClose={() => setShowModal(false)} onSave={handleSave} />}
 
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Campeonatos</h1>
-          <p className="text-gray-400 text-sm mt-0.5">{championships.length} torneio{championships.length !== 1 ? 's' : ''} registrado{championships.length !== 1 ? 's' : ''}</p>
+          <p className="text-gray-400 text-sm mt-0.5">
+            {championships.length} torneio{championships.length !== 1 ? 's' : ''} registrado{championships.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn-primary">
           <Plus className="w-4 h-4" /> Novo Campeonato
@@ -132,70 +462,61 @@ export default function CampeonatosPage() {
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        </div>
       ) : championships.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Trophy className="w-12 h-12 text-gray-600 mb-3" />
           <p className="text-gray-400 font-medium">Nenhum campeonato ainda</p>
-          <button onClick={() => setShowModal(true)} className="btn-primary mt-4"><Plus className="w-4 h-4" /> Criar primeiro campeonato</button>
+          <button onClick={() => setShowModal(true)} className="btn-primary mt-4">
+            <Plus className="w-4 h-4" /> Criar primeiro campeonato
+          </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {championships.map(c => (
-            <div key={c.id} className="card space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={STATUS_CLASSES[c.status] ?? 'badge'}>{STATUS_LABELS[c.status]}</span>
-                  </div>
-                  <h3 className="font-bold text-white">{c.name}</h3>
-                  <p className="text-sm text-gray-400 flex items-center gap-1.5 mt-1">
-                    <Swords className="w-3.5 h-3.5" />{c.game}
-                  </p>
-                </div>
+        <div className="space-y-8">
+          {/* Ativos */}
+          {ativos.length > 0 && (
+            <div>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Ativos</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {ativos.map(c => (
+                  <ChampionshipCard key={c.id} c={c}
+                    onStatusChange={handleStatusChange}
+                    onParticipantChange={load}
+                  />
+                ))}
               </div>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-surface-800 rounded-lg p-2.5">
-                  <p className="text-xs text-gray-500">Data</p>
-                  <p className="text-white font-medium">
-                    {new Date(c.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </p>
-                </div>
-                <div className="bg-surface-800 rounded-lg p-2.5">
-                  <p className="text-xs text-gray-500">Inscrição</p>
-                  <p className={clsx('font-medium', c.entryFeeInCents === 0 ? 'text-accent-green' : 'text-accent-gold')}>
-                    {c.entryFeeInCents === 0 ? 'Grátis' : `R$ ${(c.entryFeeInCents/100).toFixed(2)}`}
-                  </p>
-                </div>
-              </div>
-
-              {c.maxParticipants && (
-                <div className="flex items-center gap-2 text-sm text-gray-400">
-                  <Users className="w-4 h-4" />
-                  <span>Máx. {c.maxParticipants} participantes</span>
-                </div>
-              )}
-
-              {/* Botões de transição de status */}
-              {nextStatuses[c.status]?.length > 0 && (
-                <div className="flex gap-2 pt-1">
-                  {nextStatuses[c.status].map(next => (
-                    <button
-                      key={next}
-                      onClick={() => updateStatus(c.id, next)}
-                      className={clsx('text-xs px-3 py-1.5 rounded-lg font-medium transition-colors',
-                        next === 'Cancelado' ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/20'
-                                            : 'bg-brand-600/20 text-brand-300 hover:bg-brand-600/30 border border-brand-500/20'
-                      )}
-                    >
-                      → {STATUS_LABELS[next]}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
-          ))}
+          )}
+          {/* Planejados */}
+          {planejados.length > 0 && (
+            <div>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Planejados</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {planejados.map(c => (
+                  <ChampionshipCard key={c.id} c={c}
+                    onStatusChange={handleStatusChange}
+                    onParticipantChange={load}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Finalizados */}
+          {finalizados.length > 0 && (
+            <div>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Histórico</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {finalizados.map(c => (
+                  <ChampionshipCard key={c.id} c={c}
+                    onStatusChange={handleStatusChange}
+                    onParticipantChange={load}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
