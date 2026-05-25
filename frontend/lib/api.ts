@@ -85,6 +85,18 @@ export interface Product {
   isLowStock: boolean; priceInReais: number
 }
 
+export interface ProductCategory {
+  id: string; name: string; emoji: string | null
+  displayOrder: number; isActive: boolean; createdAt: string
+}
+
+export const categoryApi = {
+  list:   ()                          => api.get<ProductCategory[]>('/api/category'),
+  create: (c: Partial<ProductCategory>) => api.post<ProductCategory>('/api/category', c),
+  update: (id: string, c: Partial<ProductCategory>) => api.put<ProductCategory>(`/api/category/${id}`, c),
+  delete: (id: string)                => api.delete(`/api/category/${id}`),
+}
+
 export interface AnnouncementDto {
   id: string; title: string; body: string | null
   imageUrl: string | null; linkUrl: string | null

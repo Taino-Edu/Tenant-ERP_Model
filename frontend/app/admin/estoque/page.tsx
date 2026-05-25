@@ -1,18 +1,17 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { productApi, Product } from '@/lib/api'
+import { productApi, categoryApi, Product, ProductCategory } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, Barcode, ScanLine } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 
-const CATEGORIES = ['Bebida', 'Salgadinho', 'Acessório', 'Carta Avulsa', 'Deck Pronto', 'Sleeves', 'Outro']
-
 function ProductModal({
-  product, onClose, onSave
+  product, categories, onClose, onSave
 }: {
-  product: Partial<Product> | null
-  onClose: () => void
-  onSave:  (p: Partial<Product>) => Promise<void>
+  product:    Partial<Product> | null
+  categories: ProductCategory[]
+  onClose:    () => void
+  onSave:     (p: Partial<Product>) => Promise<void>
 }) {
   const [form, setForm]     = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0 })
   const [saving, setSaving] = useState(false)
@@ -40,7 +39,9 @@ function ProductModal({
             <label className="label">Categoria *</label>
             <select className="input" required value={form.category ?? ''} onChange={e => set('category', e.target.value)}>
               <option value="">Selecione...</option>
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              {categories.filter(c => c.isActive).map(c => (
+                <option key={c.id} value={c.name}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</option>
+              ))}
             </select>
           </div>
 
@@ -111,16 +112,20 @@ function ProductModal({
 }
 
 export default function EstoquePage() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [search, setSearch]     = useState('')
-  const [modal, setModal]       = useState<Partial<Product> | null | undefined>(undefined) // undefined = fechado
-  const [catFilter, setCatFilter] = useState('')
+  const [products, setProducts]     = useState<Product[]>([])
+  const [categories, setCategories] = useState<ProductCategory[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [search, setSearch]         = useState('')
+  const [modal, setModal]           = useState<Partial<Product> | null | undefined>(undefined)
+  const [catFilter, setCatFilter]   = useState('')
 
   const fetch = async () => {
     setLoading(true)
-    try { const { data } = await productApi.list(); setProducts(data) }
-    catch { toast.error('Erro ao carregar produtos') }
+    try {
+      const [prodRes, catRes] = await Promise.all([productApi.list(), categoryApi.list()])
+      setProducts(prodRes.data)
+      setCategories(catRes.data)
+    } catch { toast.error('Erro ao carregar produtos') }
     finally { setLoading(false) }
   }
   useEffect(() => { fetch() }, [])
@@ -153,7 +158,7 @@ export default function EstoquePage() {
   return (
     <div className="p-6 space-y-6">
       {modal !== undefined && (
-        <ProductModal product={modal} onClose={() => setModal(undefined)} onSave={handleSave} />
+        <ProductModal product={modal} categories={categories} onClose={() => setModal(undefined)} onSave={handleSave} />
       )}
 
       {/* Header */}
@@ -175,7 +180,7 @@ export default function EstoquePage() {
         </div>
         <select className="input sm:w-48" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
           <option value="">Todas as categorias</option>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
       </div>
 

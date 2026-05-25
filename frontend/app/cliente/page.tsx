@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { comandaApi, userApi, productApi, ComandaDto, Product, UserProfile } from '@/lib/api'
+import { comandaApi, userApi, productApi, categoryApi, ComandaDto, Product, ProductCategory, UserProfile } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
 import { startHub, stopHub } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
@@ -9,11 +9,12 @@ import Link from 'next/link'
 import clsx from 'clsx'
 
 export default function ClientePage() {
-  const [comanda, setComanda]       = useState<ComandaDto | null>(null)
-  const [products, setProducts]     = useState<Product[]>([])
-  const [profile, setProfile]       = useState<UserProfile | null>(null)
-  const [loading, setLoading]       = useState(true)
-  const [adding, setAdding]         = useState<string | null>(null)
+  const [comanda, setComanda]         = useState<ComandaDto | null>(null)
+  const [products, setProducts]       = useState<Product[]>([])
+  const [categories, setCategories]   = useState<ProductCategory[]>([])
+  const [profile, setProfile]         = useState<UserProfile | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [adding, setAdding]           = useState<string | null>(null)
   const [applyingPts, setApplyingPts] = useState(false)
 
   const fetchComanda = useCallback(async () => {
@@ -25,6 +26,7 @@ export default function ClientePage() {
   useEffect(() => {
     fetchComanda()
     productApi.list().then(r => setProducts(r.data)).catch(() => {})
+    categoryApi.list().then(r => setCategories(r.data)).catch(() => {})
     userApi.me().then(r => setProfile(r.data)).catch(() => {})
 
     startHub().then(hub => {
@@ -232,7 +234,7 @@ export default function ClientePage() {
                       )}
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <span className="text-2xl">{getCategoryEmoji(p.category)}</span>
+                        <span className="text-2xl">{getCategoryEmoji(p.category, categories)}</span>
                         {adding === p.id
                           ? <Loader2 className="w-4 h-4 animate-spin text-brand-400 shrink-0" />
                           : <Plus className="w-4 h-4 text-gray-500 group-hover:text-brand-400 shrink-0" />
@@ -257,10 +259,7 @@ export default function ClientePage() {
   )
 }
 
-function getCategoryEmoji(cat: string): string {
-  const map: Record<string, string> = {
-    'Bebida': '🥤', 'Salgadinho': '🍿', 'Acessório': '🎮',
-    'Carta Avulsa': '🃏', 'Deck Pronto': '🗂️', 'Sleeves': '🧤', 'Outro': '📦',
-  }
-  return map[cat] ?? '📦'
+function getCategoryEmoji(cat: string, categories: ProductCategory[]): string {
+  const found = categories.find(c => c.name === cat)
+  return found?.emoji ?? '📦'
 }
