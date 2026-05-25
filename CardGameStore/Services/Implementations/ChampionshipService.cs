@@ -25,8 +25,32 @@ public class ChampionshipService : IChampionshipService
 
     public async Task<IEnumerable<Championship>> GetUpcomingAsync() =>
         await _db.Championships
+            .Include(c => c.Participants)
             .Where(c => c.Status == ChampionshipStatus.Planejado || c.Status == ChampionshipStatus.Inscricoes)
             .OrderBy(c => c.StartDate).ToListAsync();
+
+    public async Task<IEnumerable<Championship>> GetAllAsync(string? search = null)
+    {
+        var query = _db.Championships.Include(c => c.Participants).AsQueryable();
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(c => c.Name.ToLower().Contains(search.ToLower()) ||
+                                     c.Game.ToLower().Contains(search.ToLower()));
+        return await query.OrderByDescending(c => c.StartDate).ToListAsync();
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        var ch = await _db.Championships.Include(c => c.Participants).FirstOrDefaultAsync(c => c.Id == id)
+            ?? throw new InvalidOperationException("Campeonato não encontrado.");
+
+        if (ch.Status != ChampionshipStatus.Finalizado && ch.Status != ChampionshipStatus.Cancelado)
+            throw new InvalidOperationException("Só é possível excluir campeonatos Finalizados ou Cancelados.");
+
+        // Remove participantes antes de remover o campeonato
+        _db.ChampionshipParticipants.RemoveRange(ch.Participants);
+        _db.Championships.Remove(ch);
+        await _db.SaveChangesAsync();
+    }
 
     public async Task<Championship> UpdateStatusAsync(Guid id, ChampionshipStatus newStatus)
     {

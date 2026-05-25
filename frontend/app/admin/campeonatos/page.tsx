@@ -4,7 +4,7 @@ import { championshipApi, userApi, Championship, ChampionshipParticipant } from 
 import toast from 'react-hot-toast'
 import {
   Trophy, Plus, Users, Swords, X, Check, Loader2,
-  ChevronDown, ChevronUp, UserPlus, Trash2, Medal,
+  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -239,11 +239,12 @@ function AddParticipantModal({ championshipId, onClose, onAdded }: {
 
 // ── Card do Campeonato ────────────────────────────────────────────────────────
 function ChampionshipCard({
-  c, onStatusChange, onParticipantChange,
+  c, onStatusChange, onParticipantChange, onDelete,
 }: {
   c: Championship
   onStatusChange: (id: string, status: string) => void
   onParticipantChange: () => void
+  onDelete?: (id: string) => void
 }) {
   const [expanded, setExpanded]         = useState(false)
   const [participants, setParticipants] = useState<ChampionshipParticipant[]>([])
@@ -279,7 +280,8 @@ function ChampionshipCard({
     }
   }
 
-  const canAddParticipants = c.status === 'Inscricoes' || c.status === 'EmAndamento'
+  const canAddParticipants  = c.status === 'Inscricoes' || c.status === 'EmAndamento'
+  const canDelete           = c.status === 'Finalizado' || c.status === 'Cancelado'
 
   return (
     <>
@@ -384,25 +386,31 @@ function ChampionshipCard({
           </div>
         )}
 
-        {/* Botões de status */}
-        {NEXT_STATUS[c.status]?.length > 0 && (
-          <div className="flex gap-2 pt-1">
-            {NEXT_STATUS[c.status].map(next => (
-              <button
-                key={next}
-                onClick={() => onStatusChange(c.id, next)}
-                className={clsx(
-                  'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors',
-                  next === 'Cancelado'
-                    ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/20'
-                    : 'bg-brand-600/20 text-brand-300 hover:bg-brand-600/30 border border-brand-500/20'
-                )}
-              >
-                → {STATUS_LABELS[next]}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Botões de status + delete */}
+        <div className="flex items-center gap-2 pt-1 flex-wrap">
+          {NEXT_STATUS[c.status]?.map(next => (
+            <button
+              key={next}
+              onClick={() => onStatusChange(c.id, next)}
+              className={clsx(
+                'text-xs px-3 py-1.5 rounded-lg font-medium transition-colors',
+                next === 'Cancelado'
+                  ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30 border border-red-500/20'
+                  : 'bg-brand-600/20 text-brand-300 hover:bg-brand-600/30 border border-brand-500/20'
+              )}
+            >
+              → {STATUS_LABELS[next]}
+            </button>
+          ))}
+          {canDelete && onDelete && (
+            <button
+              onClick={() => onDelete(c.id)}
+              className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium bg-red-600/20 text-red-400 hover:bg-red-600/40 border border-red-500/20 transition-colors flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Apagar
+            </button>
+          )}
+        </div>
       </div>
     </>
   )
@@ -413,52 +421,82 @@ export default function CampeonatosPage() {
   const [championships, setChampionships] = useState<Championship[]>([])
   const [loading, setLoading]             = useState(true)
   const [showModal, setShowModal]         = useState(false)
+  const [search, setSearch]               = useState('')
 
-  const load = async () => {
+  const load = useCallback(async (q?: string) => {
     setLoading(true)
-    try { const { data } = await championshipApi.list(); setChampionships(data) }
+    try { const { data } = await championshipApi.listAll(q); setChampionships(data) }
     catch { toast.error('Erro ao carregar campeonatos') }
     finally { setLoading(false) }
-  }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
+
+  // Debounce na busca
+  useEffect(() => {
+    const t = setTimeout(() => load(search || undefined), 350)
+    return () => clearTimeout(t)
+  }, [search, load])
 
   async function handleSave(form: Partial<Championship>) {
     try {
       await championshipApi.create(form)
       toast.success('Campeonato criado!')
       setShowModal(false)
-      load()
+      load(search || undefined)
     } catch {
       toast.error('Erro ao criar campeonato')
     }
   }
 
   async function handleStatusChange(id: string, status: string) {
-    try { await championshipApi.setStatus(id, status); load() }
+    try { await championshipApi.setStatus(id, status); load(search || undefined) }
     catch { toast.error('Erro ao atualizar status') }
   }
 
+  async function handleDelete(id: string) {
+    const c = championships.find(x => x.id === id)
+    if (!confirm(`Apagar "${c?.name}" permanentemente? Esta ação não pode ser desfeita.`)) return
+    try {
+      await championshipApi.delete(id)
+      toast.success('Campeonato apagado')
+      load(search || undefined)
+    } catch {
+      toast.error('Erro ao apagar campeonato')
+    }
+  }
+
   // Agrupa por status
-  const ativos    = championships.filter(c => ['Inscricoes', 'EmAndamento'].includes(c.status))
+  const ativos     = championships.filter(c => ['Inscricoes', 'EmAndamento'].includes(c.status))
   const planejados = championships.filter(c => c.status === 'Planejado')
-  const finalizados = championships.filter(c => ['Finalizado', 'Cancelado'].includes(c.status))
+  const historico  = championships.filter(c => ['Finalizado', 'Cancelado'].includes(c.status))
 
   return (
     <div className="p-6 space-y-6">
       {showModal && <NewChampionshipModal onClose={() => setShowModal(false)} onSave={handleSave} />}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Campeonatos</h1>
           <p className="text-gray-400 text-sm mt-0.5">
-            {championships.length} torneio{championships.length !== 1 ? 's' : ''} registrado{championships.length !== 1 ? 's' : ''}
+            {championships.length} torneio{championships.length !== 1 ? 's' : ''} encontrado{championships.length !== 1 ? 's' : ''}
           </p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn-primary">
           <Plus className="w-4 h-4" /> Novo Campeonato
         </button>
+      </div>
+
+      {/* Barra de busca */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+        <input
+          className="input pl-9 w-full max-w-sm"
+          placeholder="Buscar por nome ou jogo..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
       </div>
 
       {loading ? (
@@ -468,54 +506,58 @@ export default function CampeonatosPage() {
       ) : championships.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Trophy className="w-12 h-12 text-gray-600 mb-3" />
-          <p className="text-gray-400 font-medium">Nenhum campeonato ainda</p>
-          <button onClick={() => setShowModal(true)} className="btn-primary mt-4">
-            <Plus className="w-4 h-4" /> Criar primeiro campeonato
-          </button>
+          <p className="text-gray-400 font-medium">
+            {search ? 'Nenhum campeonato encontrado para essa busca' : 'Nenhum campeonato ainda'}
+          </p>
+          {!search && (
+            <button onClick={() => setShowModal(true)} className="btn-primary mt-4">
+              <Plus className="w-4 h-4" /> Criar primeiro campeonato
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-8">
-          {/* Ativos */}
           {ativos.length > 0 && (
-            <div>
-              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Ativos</h2>
+            <section>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">⚔️ Ativos</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {ativos.map(c => (
                   <ChampionshipCard key={c.id} c={c}
                     onStatusChange={handleStatusChange}
-                    onParticipantChange={load}
+                    onParticipantChange={() => load(search || undefined)}
                   />
                 ))}
               </div>
-            </div>
+            </section>
           )}
-          {/* Planejados */}
+
           {planejados.length > 0 && (
-            <div>
-              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Planejados</h2>
+            <section>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">📋 Planejados</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {planejados.map(c => (
                   <ChampionshipCard key={c.id} c={c}
                     onStatusChange={handleStatusChange}
-                    onParticipantChange={load}
+                    onParticipantChange={() => load(search || undefined)}
                   />
                 ))}
               </div>
-            </div>
+            </section>
           )}
-          {/* Finalizados */}
-          {finalizados.length > 0 && (
-            <div>
-              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Histórico</h2>
+
+          {historico.length > 0 && (
+            <section>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">🏆 Histórico</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {finalizados.map(c => (
+                {historico.map(c => (
                   <ChampionshipCard key={c.id} c={c}
                     onStatusChange={handleStatusChange}
-                    onParticipantChange={load}
+                    onParticipantChange={() => load(search || undefined)}
+                    onDelete={handleDelete}
                   />
                 ))}
               </div>
-            </div>
+            </section>
           )}
         </div>
       )}

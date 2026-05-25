@@ -340,8 +340,10 @@ export interface ChampionshipParticipant {
 
 export const championshipApi = {
   list:             () => api.get<Championship[]>('/api/championship'),
+  listAll:          (search?: string) => api.get<Championship[]>('/api/championship/admin/all', { params: search ? { search } : {} }),
   get:              (id: string) => api.get<Championship>(`/api/championship/${id}`),
   create:           (c: Partial<Championship>) => api.post<Championship>('/api/championship', c),
+  delete:           (id: string) => api.delete(`/api/championship/${id}`),
   register:         (id: string, userId: string, deckName?: string) =>
     api.post(`/api/championship/${id}/register`, { userId, deckName }),
   adminRegister:    (id: string, userId: string, deckName?: string) =>

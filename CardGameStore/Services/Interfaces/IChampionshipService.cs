@@ -12,7 +12,9 @@ public interface IChampionshipService
     Task<Championship>              CreateAsync(Championship championship);
     Task<Championship?>             GetByIdAsync(Guid id);
     Task<IEnumerable<Championship>> GetUpcomingAsync();
+    Task<IEnumerable<Championship>> GetAllAsync(string? search = null);
     Task<Championship>              UpdateStatusAsync(Guid id, ChampionshipStatus newStatus);
+    Task                            DeleteAsync(Guid id);
 
     Task<ChampionshipParticipant>   RegisterParticipantAsync(Guid championshipId, Guid userId, string? deckName = null);
     Task                            LinkComandaToParticipantAsync(Guid participantId, Guid comandaId);

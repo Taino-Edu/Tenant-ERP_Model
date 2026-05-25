@@ -34,7 +34,7 @@ public class ChampionshipController : ControllerBase
     // LEITURA — acessível por qualquer pessoa autenticada (ou anônima para listagem)
     // -------------------------------------------------------------------------
 
-    /// <summary>Lista campeonatos planejados e com inscrições abertas.</summary>
+    /// <summary>Lista campeonatos planejados e com inscrições abertas (público).</summary>
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<ChampionshipDto>), 200)]
@@ -42,6 +42,36 @@ public class ChampionshipController : ControllerBase
     {
         var list = await _service.GetUpcomingAsync();
         return Ok(list.Select(ToDto));
+    }
+
+    /// <summary>Lista TODOS os campeonatos incluindo finalizados (Admin).</summary>
+    [HttpGet("admin/all")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(IEnumerable<ChampionshipDto>), 200)]
+    public async Task<IActionResult> GetAllAdmin([FromQuery] string? search = null)
+    {
+        var list = await _service.GetAllAsync(search);
+        return Ok(list.Select(ToDto));
+    }
+
+    /// <summary>Exclui um campeonato (Admin). Só permite excluir Finalizados ou Cancelados.</summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        try
+        {
+            await _service.DeleteAsync(id);
+            _logger.LogInformation("Campeonato {Id} excluído pelo admin", id);
+            return Ok(new { Message = "Campeonato excluído." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
     }
 
     /// <summary>Busca um campeonato pelo ID com lista de participantes.</summary>
