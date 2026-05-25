@@ -28,11 +28,6 @@ public class Product
     [Column("name")]
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>Código de barras (EAN-13, QR, etc.) — opcional, para leitura via scanner.</summary>
-    [MaxLength(100)]
-    [Column("barcode")]
-    public string? Barcode { get; set; }
-
     [MaxLength(500)]
     [Column("description")]
     public string? Description { get; set; }
@@ -49,8 +44,8 @@ public class Product
     [Column("category")]
     public string Category { get; set; } = string.Empty;
 
-    /// <summary>Código de barras EAN-8, EAN-13 ou qualquer padrão 1D.</summary>
-    [MaxLength(50)]
+    /// <summary>Código de barras (EAN-8, EAN-13, QR etc.) — opcional, leitura via scanner USB ou câmera.</summary>
+    [MaxLength(100)]
     [Column("barcode")]
     public string? Barcode { get; set; }
 
