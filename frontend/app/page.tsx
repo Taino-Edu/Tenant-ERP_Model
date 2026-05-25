@@ -6,7 +6,7 @@ import { championshipApi, productApi, announcementApi, Championship, Product, An
 import Link from 'next/link'
 import ThemeToggle from '@/components/ThemeToggle'
 import {
-  Gamepad2, Trophy, ShoppingBag, QrCode, Star,
+  Trophy, ShoppingBag, QrCode, Star,
   Calendar, Users, ChevronRight, Zap, Shield,
   X, MessageCircle, CheckCircle, Package,
   ScanLine, CreditCard, Award
@@ -52,7 +52,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md border-b" style={{ backgroundColor: 'color-mix(in srgb, var(--bg-primary) 90%, transparent)', borderColor: 'var(--border-color)' }}>
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <Gamepad2 className="w-6 h-6 text-brand-500" />
+            <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-9 w-9 object-contain" />
             <span className="font-bold text-white text-lg">Santuário Nerd</span>
           </div>
 
