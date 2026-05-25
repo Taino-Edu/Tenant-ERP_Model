@@ -124,9 +124,8 @@ export interface Championship {
 }
 
 export interface ChampionshipParticipant {
-  id: string; userId: string; playerNumber: number
-  user: { name: string; email: string | null }
-  deckName: string | null; placement: number | null
+  id: string; userId: string; userName: string; playerNumber: number
+  deckName?: string | null; placement?: number | null; registeredAt: string
 }
 
 export interface UserSummary {
@@ -328,15 +327,6 @@ export const tcgApi = {
   sets:    (game: string) => api.get('/api/tcg/sets', { params: { game } }),
 }
 
-export interface ChampionshipParticipant {
-  id: string
-  userId: string
-  userName: string
-  playerNumber: number
-  deckName?: string
-  placement?: number
-  registeredAt: string
-}
 
 export const championshipApi = {
   list:             () => api.get<Championship[]>('/api/championship'),
