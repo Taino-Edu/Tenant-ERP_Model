@@ -1,8 +1,16 @@
 import type { Metadata, Viewport } from 'next'
+import { Modak } from 'next/font/google'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
+
+const modak = Modak({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-modak',
+  display: 'swap',
+})
 
 export const viewport: Viewport = {
   themeColor: '#42B6EE',
@@ -15,8 +23,11 @@ export const metadata: Metadata = {
   description: 'Sistema de gestão da loja de Card Games',
   manifest: '/manifest.json',
   icons: {
-    icon: '/icon.svg',
-    apple: '/icon.svg',
+    icon: [
+      { url: '/logo-santuario.png', type: 'image/png' },
+    ],
+    apple: '/logo-santuario.png',
+    shortcut: '/logo-santuario.png',
   },
   appleWebApp: {
     capable: true,
@@ -40,7 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body>
+      <body className={modak.variable}>
         {/* Script VLibras — Acessibilidade (atributos customizados via spread para evitar erro TS) */}
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <div {...({ vw: 'true' } as any)} className="enabled">
