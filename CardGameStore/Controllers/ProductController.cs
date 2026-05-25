@@ -69,17 +69,6 @@ public class ProductController : ControllerBase
         return Ok(await _service.GetLowStockAsync());
     }
 
-    /// <summary>Busca produto por código de barras.</summary>
-    [HttpGet("barcode/{barcode}")]
-    [Authorize(Policy = "AdminOnly")]
-    [ProducesResponseType(typeof(Product), 200)]
-    [ProducesResponseType(404)]
-    public async Task<IActionResult> GetByBarcode(string barcode)
-    {
-        var product = await _service.GetByBarcodeAsync(barcode);
-        return product == null ? NotFound() : Ok(product);
-    }
-
     /// <summary>Cria um novo produto. Apenas Admin.</summary>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]

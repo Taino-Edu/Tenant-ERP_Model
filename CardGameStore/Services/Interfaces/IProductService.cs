@@ -18,5 +18,4 @@ public interface IProductService
     Task                       DeactivateAsync(Guid id);
     Task<IEnumerable<Product>> GetLowStockAsync();
     Task<bool>                 AdjustStockAsync(Guid id, int quantityDelta); // Positivo = entrada, negativo = saída
-    Task<Product?>             GetByBarcodeAsync(string barcode);
 }
