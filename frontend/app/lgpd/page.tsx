@@ -116,8 +116,8 @@ export default function LgpdPage() {
       <header className="bg-[#1a0a2e] text-white py-6 px-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2 text-2xl font-bold">
-            <span className="text-[#7839F3]">soft</span>
-            <span>Nerd</span>
+            <span className="text-[#42B6EE]">Santuário</span>
+            <span> Nerd</span>
           </Link>
           <div className="flex items-center gap-4"><span className="text-sm text-gray-400 hidden sm:block">Privacidade &amp; LGPD</span><ThemeToggle compact /></div>
         </div>
@@ -339,7 +339,7 @@ export default function LgpdPage() {
               </div>
               {consultaResult.adminResponse && (
                 <div className="bg-gray-50 rounded-lg p-3 mt-2">
-                  <p className="text-xs text-gray-400 mb-1">Resposta da softNerd:</p>
+                  <p className="text-xs text-gray-400 mb-1">Resposta da Santuário Nerd:</p>
                   <p className="text-sm text-gray-700 whitespace-pre-wrap">{consultaResult.adminResponse}</p>
                 </div>
               )}

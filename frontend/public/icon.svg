@@ -1,12 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="18" fill="#6C3FC5"/>
-  <!-- Carta traseira (verde) -->
-  <rect x="38" y="28" width="30" height="42" rx="5" fill="#00F0A8" opacity="0.95"/>
-  <!-- Carta frente (branca) -->
-  <rect x="22" y="22" width="30" height="42" rx="5" fill="#ffffff"/>
-  <!-- Listras decorativas na carta branca -->
-  <rect x="26" y="30" width="22" height="3" rx="1.5" fill="#E8E0F0"/>
-  <rect x="26" y="36" width="16" height="3" rx="1.5" fill="#E8E0F0"/>
-  <!-- Símbolo S na carta branca -->
-  <text x="37" y="58" font-family="Arial,sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#6C3FC5">S</text>
+  <rect width="100" height="100" rx="20" fill="#42B6EE"/>
+  <text x="50" y="52" font-family="Arial Black,Arial,sans-serif" font-size="38" font-weight="900" text-anchor="middle" fill="#FFE646">SN</text>
+  <text x="50" y="72" font-family="Arial,sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#ffffff" letter-spacing="2">NERD</text>
 </svg>

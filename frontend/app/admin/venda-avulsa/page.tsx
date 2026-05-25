@@ -36,7 +36,7 @@ function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string) {
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
-<title>Comprovante — softNerd</title>
+<title>Comprovante — Santuário Nerd</title>
 <style>
   @page { size: 80mm auto; margin: 6mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -52,7 +52,7 @@ function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string) {
   @media print { body { padding: 0; } }
 </style>
 </head><body>
-<h1>softNerd</h1>
+<h1>Santuário Nerd</h1>
 <p class="sub">${date}</p>
 ${receipt.clientName ? `<p class="sub">Cliente: <strong>${receipt.clientName}</strong></p>` : ''}
 <hr>
@@ -112,7 +112,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
-<title>Relatório Diário — softNerd</title>
+<title>Relatório Diário — Santuário Nerd</title>
 <style>
   @page { size: A4; margin: 15mm; }
   * { box-sizing: border-box; }
@@ -132,7 +132,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   @media print { body { padding: 0; } }
 </style>
 </head><body>
-<h1>softNerd — Relatório Diário</h1>
+<h1>Santuário Nerd — Relatório Diário</h1>
 <p class="meta">Data: ${today} &nbsp;|&nbsp; Gerado em: ${new Date().toLocaleTimeString('pt-BR')}</p>
 
 <div class="cards">

@@ -53,7 +53,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Gamepad2 className="w-6 h-6 text-brand-500" />
-            <span className="font-bold text-white text-lg">softNerd</span>
+            <span className="font-bold text-white text-lg">Santuário Nerd</span>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm text-gray-400">
@@ -324,7 +324,7 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto border border-brand-500/20 rounded-2xl p-10 md:p-14 text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
           <h2 className="text-3xl md:text-4xl font-black text-white mb-3">Pronto para jogar?</h2>
           <p className="text-gray-400 mb-8 max-w-md mx-auto">
-            Escaneie o QR Code na mesa e comece a aproveitar a experiência softNerd.
+            Escaneie o QR Code na mesa e comece a aproveitar a experiência Santuário Nerd.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <a href="#campeonatos"

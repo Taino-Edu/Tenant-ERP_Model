@@ -18,7 +18,7 @@ export default function Footer() {
       <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
         <p className="text-gray-500">
           © {new Date().getFullYear()}{' '}
-          <span className="text-white font-medium">softNerd</span>{' '}
+          <span className="text-white font-medium">Santuário Nerd</span>{' '}
           — Todos os direitos reservados. São José do Rio Preto, SP.
         </p>
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 justify-center">
@@ -35,10 +35,10 @@ export default function Footer() {
           </Link>
           <span className="text-gray-600 hidden sm:inline">|</span>
           <a
-            href="mailto:privacidade@softnerd.com.br"
+            href="mailto:privacidade@santuarionerd.tech"
             className="hover:text-white transition-colors"
           >
-            privacidade@softnerd.com.br
+            privacidade@santuarionerd.tech
           </a>
         </nav>
       </div>

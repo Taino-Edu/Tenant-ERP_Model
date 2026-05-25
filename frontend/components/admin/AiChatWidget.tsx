@@ -97,7 +97,7 @@ export default function AiChatWidget() {
                style={{ background: '#1A1A24', borderBottom: '1px solid #2D2D36' }}>
             <div className="flex items-center gap-2">
               <BrainCircuit size={18} className="text-violet-400" />
-              <span className="text-sm font-semibold text-white">Assistente softNerd</span>
+              <span className="text-sm font-semibold text-white">Assistente Santuário Nerd</span>
             </div>
             <button
               onClick={() => setOpen(false)}

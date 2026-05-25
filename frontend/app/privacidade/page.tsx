@@ -1,5 +1,5 @@
 // =============================================================================
-// privacidade/page.tsx — Política de Privacidade da softNerd
+// privacidade/page.tsx — Política de Privacidade da Santuário Nerd
 // Conforme LGPD (Lei 13.709/2018) — São José do Rio Preto, SP
 // Versão 1.1 — tema claro/escuro + seção de IA expandida
 // =============================================================================
@@ -9,8 +9,8 @@ import type { Metadata } from 'next'
 import ThemeToggle from '@/components/ThemeToggle'
 
 export const metadata: Metadata = {
-  title: 'Política de Privacidade — softNerd',
-  description: 'Saiba como a softNerd coleta, usa e protege seus dados pessoais em conformidade com a LGPD.',
+  title: 'Política de Privacidade — Santuário Nerd',
+  description: 'Saiba como a Santuário Nerd coleta, usa e protege seus dados pessoais em conformidade com a LGPD.',
 }
 
 export default function PrivacidadePage() {
@@ -21,7 +21,7 @@ export default function PrivacidadePage() {
       <header className="bg-[#1a0a2e] text-white py-5 px-4">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center gap-1 text-2xl font-bold">
-            <span className="text-[#7839F3]">soft</span><span>Nerd</span>
+            <span className="text-[#42B6EE]">Santuário</span><span> Nerd</span>
           </Link>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-400 hidden sm:block">São José do Rio Preto, SP</span>
@@ -39,7 +39,7 @@ export default function PrivacidadePage() {
             Última atualização: <strong>Maio de 2026</strong> — Versão 1.1
           </p>
           <p className="mt-3 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-            Esta Política descreve como a <strong>softNerd</strong> coleta, utiliza, armazena e protege
+            Esta Política descreve como a <strong>Santuário Nerd</strong> coleta, utiliza, armazena e protege
             seus dados pessoais, em conformidade com a{' '}
             <strong>Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018)</strong>.
           </p>
@@ -51,15 +51,15 @@ export default function PrivacidadePage() {
           <section>
             <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>1. Quem Somos</h2>
             <p>
-              A <strong>softNerd</strong> é uma loja de card games em <strong>São José do Rio Preto, SP</strong>.
+              A <strong>Santuário Nerd</strong> é uma loja de card games em <strong>São José do Rio Preto, SP</strong>.
               Operamos um sistema digital de comandas, campeonatos, crediário e programa de pontos para nossos clientes.
             </p>
             <p className="mt-2">
               <strong>Controlador dos dados:</strong><br />
-              softNerd — São José do Rio Preto, SP<br />
+              Santuário Nerd — São José do Rio Preto, SP<br />
               E-mail:{' '}
-              <a href="mailto:privacidade@softnerd.com.br" className="text-[#7839F3] underline">
-                privacidade@softnerd.com.br
+              <a href="mailto:privacidade@santuarionerd.tech" className="text-[#7839F3] underline">
+                privacidade@santuarionerd.tech
               </a>
             </p>
           </section>
@@ -182,11 +182,11 @@ export default function PrivacidadePage() {
             <p className="mt-3">
               Acesse{' '}
               <Link href="/lgpd" className="text-[#7839F3] underline font-medium">
-                softnerd.com.br/lgpd
+                santuarionerd.tech/lgpd
               </Link>
               {' '}para exercer seus direitos ou envie e-mail para{' '}
-              <a href="mailto:privacidade@softnerd.com.br" className="text-[#7839F3] underline">
-                privacidade@softnerd.com.br
+              <a href="mailto:privacidade@santuarionerd.tech" className="text-[#7839F3] underline">
+                privacidade@santuarionerd.tech
               </a>.
               Respondemos em até <strong>15 dias corridos</strong> (Art. 18 § 5º).
             </p>
@@ -240,10 +240,10 @@ export default function PrivacidadePage() {
             <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>11. Contato e Reclamações</h2>
             <p>
               <strong>E-mail:</strong>{' '}
-              <a href="mailto:privacidade@softnerd.com.br" className="text-[#7839F3] underline">
-                privacidade@softnerd.com.br
+              <a href="mailto:privacidade@santuarionerd.tech" className="text-[#7839F3] underline">
+                privacidade@santuarionerd.tech
               </a><br />
-              <strong>Endereço:</strong> softNerd — São José do Rio Preto, SP
+              <strong>Endereço:</strong> Santuário Nerd — São José do Rio Preto, SP
             </p>
             <p className="mt-2">
               Insatisfeito com nossa resposta? Registre reclamação na{' '}
@@ -271,8 +271,8 @@ export default function PrivacidadePage() {
              style={{ borderTop: '1px solid var(--border-color)' }}>
           <Link href="/termos" className="underline">Termos de Uso</Link>
           <Link href="/lgpd" className="underline">Exercer meus Direitos (LGPD)</Link>
-          <a href="mailto:privacidade@softnerd.com.br" className="underline">
-            privacidade@softnerd.com.br
+          <a href="mailto:privacidade@santuarionerd.tech" className="underline">
+            privacidade@santuarionerd.tech
           </a>
         </div>
       </main>

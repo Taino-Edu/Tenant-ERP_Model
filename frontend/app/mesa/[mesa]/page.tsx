@@ -35,7 +35,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="p-4 overflow-y-auto text-sm text-gray-300 space-y-3">
-          <p><strong className="text-white">softNerd — Política de Privacidade</strong></p>
+          <p><strong className="text-white">Santuário Nerd — Política de Privacidade</strong></p>
           <p>
             Em conformidade com a Lei Geral de Proteção de Dados Pessoais (LGPD — Lei nº 13.709/2018),
             informamos como tratamos seus dados pessoais.
@@ -43,7 +43,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
           <p><strong className="text-white">Dados coletados:</strong> Nome completo, CPF e número de WhatsApp.</p>
           <p>
             <strong className="text-white">Finalidade:</strong> Identificação do cliente para abertura de comanda
-            na loja softNerd e registro de pontos de fidelidade.
+            na loja Santuário Nerd e registro de pontos de fidelidade.
           </p>
           <p>
             <strong className="text-white">Base legal:</strong> Consentimento do titular (Art. 7º, I da LGPD).
@@ -61,7 +61,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
             à prestação dos serviços e obrigações legais. Você pode solicitar a exclusão a qualquer momento.
           </p>
           <p className="text-gray-500 text-xs">
-            Responsável: softNerd — Loja de Card Games. Dúvidas? Fale conosco pelo WhatsApp da loja.
+            Responsável: Santuário Nerd — Loja de Card Games. Dúvidas? Fale conosco pelo WhatsApp da loja.
           </p>
         </div>
         <div className="p-4 border-t border-surface-700">
@@ -178,7 +178,7 @@ export default function MesaPage() {
       <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-600/20 border border-brand-500/30 rounded-2xl mb-4">
         <Sword className="w-7 h-7 text-brand-400" />
       </div>
-      <h1 className="text-2xl font-bold text-white">softNerd</h1>
+      <h1 className="text-2xl font-bold text-white">Santuário Nerd</h1>
       <div className="flex items-center justify-center gap-2 mt-2 text-sm text-brand-300">
         <TableProperties className="w-4 h-4" />
         <span className="font-medium">{mesa}</span>
@@ -317,7 +317,7 @@ export default function MesaPage() {
                 >
                   Política de Privacidade
                 </button>
-                {' '}e autorizo o uso dos meus dados (nome, CPF e WhatsApp) para identificação na loja softNerd.{' '}
+                {' '}e autorizo o uso dos meus dados (nome, CPF e WhatsApp) para identificação na loja Santuário Nerd.{' '}
                 <button
                   type="button"
                   onClick={() => setShowPrivacy(true)}

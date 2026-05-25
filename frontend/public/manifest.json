@@ -1,11 +1,11 @@
 {
-  "name": "softNerd — Card Game Store",
-  "short_name": "softNerd",
+  "name": "Santuário Nerd",
+  "short_name": "Santuário Nerd",
   "description": "Sistema de gestão da loja de Card Games",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#121215",
-  "theme_color": "#6C3FC5",
+  "theme_color": "#42B6EE",
   "orientation": "portrait-primary",
   "icons": [
     {

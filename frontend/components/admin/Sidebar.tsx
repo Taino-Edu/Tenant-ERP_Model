@@ -6,7 +6,7 @@ import { clearAuth, getUserName } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
-  LogOut, Gamepad2, User, ShoppingBag, Users, Megaphone,
+  LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -134,10 +134,9 @@ export default function Sidebar() {
     <>
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-30 flex items-center justify-between bg-surface-800 border-b border-surface-500 px-4 py-3">
-        <div className="flex items-center gap-2 font-bold text-lg">
-          <Gamepad2 className="w-6 h-6 text-brand-500" />
-          <span className="text-white">softNerd</span>
-          <span className="text-xs text-brand-400">Admin</span>
+        <div className="flex items-center gap-2">
+          <img src="/logo-sidebar.svg" alt="Santuário Nerd" className="h-9" />
+          <span className="text-xs text-brand-400 font-bold">Admin</span>
         </div>
         <button onClick={() => setMobileOpen(true)} className="text-gray-400 hover:text-white p-1">
           <Menu className="w-6 h-6" />
@@ -158,10 +157,7 @@ export default function Sidebar() {
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="flex items-center justify-between px-6 py-6 shrink-0">
-          <div className="flex items-center gap-3 font-bold text-2xl">
-            <Gamepad2 className="w-7 h-7 text-brand-500" />
-            <span className="text-white">softNerd</span>
-          </div>
+          <img src="/logo-sidebar.svg" alt="Santuário Nerd" className="h-11" />
           <button onClick={() => setMobileOpen(false)} className="text-gray-500 hover:text-white">
             <X className="w-5 h-5" />
           </button>
@@ -173,10 +169,7 @@ export default function Sidebar() {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-[260px] min-h-screen bg-surface-900 border-r border-surface-500 flex-col shrink-0">
         <div className="px-6 py-7 shrink-0">
-          <div className="flex items-center gap-3 font-bold text-2xl">
-            <Gamepad2 className="w-7 h-7 text-brand-500" />
-            <span className="text-white">softNerd</span>
-          </div>
+          <img src="/logo-sidebar.svg" alt="Santuário Nerd" className="h-11" />
         </div>
         <NavItems pathname={pathname} />
         {footer}

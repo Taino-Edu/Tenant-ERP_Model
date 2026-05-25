@@ -5,13 +5,13 @@ import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
 
 export const viewport: Viewport = {
-  themeColor: '#6C3FC5',
+  themeColor: '#42B6EE',
   width: 'device-width',
   initialScale: 1,
 }
 
 export const metadata: Metadata = {
-  title: { default: 'softNerd', template: '%s — softNerd' },
+  title: { default: 'Santuário Nerd', template: '%s — Santuário Nerd' },
   description: 'Sistema de gestão da loja de Card Games',
   manifest: '/manifest.json',
   icons: {
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'softNerd',
+    title: 'Santuário Nerd',
   },
 }
 
