@@ -93,8 +93,9 @@ public class ComandaController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Remove um item de uma comanda (Admin ou próprio cliente).</summary>
+    /// <summary>Remove um item de uma comanda. Apenas Admin.</summary>
     [HttpDelete("{id:guid}/items/{itemId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(ComandaDto), 200)]
     public async Task<IActionResult> RemoveItem(Guid id, Guid itemId)
     {

@@ -159,11 +159,6 @@ export default function ClientePage() {
                         <span className="font-mono text-accent-gold text-sm font-semibold">
                           R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}
                         </span>
-                        {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
-                          <button onClick={() => removeItem(item.id)} className="p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-red-400 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
                       </div>
                     </div>
                   ))}
