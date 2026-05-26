@@ -200,46 +200,58 @@ public class ComandaService : IComandaService
         // ── Crediário ─────────────────────────────────────────────────────────
         if (paymentMethod == PaymentCrediario)
         {
-            // Bloqueia se o cliente já tem um crediário aberto
-            var jaTemCrediario = await _db.Crediarios
-                .AnyAsync(c => c.UserId == comanda.UserId && c.Status == CrediariosStatus.Aberto);
-
-            if (jaTemCrediario)
-                throw new InvalidOperationException(
-                    "Este cliente já possui um crediário em aberto. Quite o anterior antes de criar um novo.");
+            var crediarioExistente = await _db.Crediarios
+                .FirstOrDefaultAsync(c => c.UserId == comanda.UserId && c.Status == CrediariosStatus.Aberto);
 
             var vencimento = DateTime.UtcNow.AddDays(30);
 
-            var crediario = new Crediario
+            if (crediarioExistente != null)
             {
-                UserId           = comanda.UserId,
-                ComandaId        = comanda.Id,
-                ValorEmCentavos  = comanda.TotalInCents,
-                DataAbertura     = DateTime.UtcNow,
-                DataVencimento   = vencimento,
-                Status           = CrediariosStatus.Aberto,
-                AbertoPorAdminId = adminId,
-                Observacao       = observacao,
-            };
+                // Acumula no crediário já aberto (cliente com conta corrente/aba)
+                crediarioExistente.ValorEmCentavos += comanda.TotalInCents;
+                crediarioExistente.DataVencimento   = vencimento;
+                if (!string.IsNullOrWhiteSpace(observacao))
+                    crediarioExistente.Observacao = observacao;
 
-            _db.Crediarios.Add(crediario);
-            _logger.LogInformation(
-                "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
-                crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
-
-            // Envia email em background com escopo próprio (evita uso de Scoped service após dispose)
-            if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
+                _logger.LogInformation(
+                    "Comanda {ComandaId} acumulada no crediário {CredId} do usuário {UserId} — novo total R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
+                    comandaId, crediarioExistente.Id, comanda.UserId,
+                    crediarioExistente.ValorEmCentavos / 100m, vencimento);
+            }
+            else
             {
-                var emailAddr  = comanda.User.Email;
-                var userName   = comanda.User.Name;
-                var valorReais = crediario.ValorEmReais;
-                var venc       = vencimento;
-                _ = Task.Run(async () =>
+                // Cria novo crediário
+                var crediario = new Crediario
                 {
-                    using var scope        = _scopeFactory.CreateScope();
-                    var emailService       = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                    await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
-                });
+                    UserId           = comanda.UserId,
+                    ComandaId        = comanda.Id,
+                    ValorEmCentavos  = comanda.TotalInCents,
+                    DataAbertura     = DateTime.UtcNow,
+                    DataVencimento   = vencimento,
+                    Status           = CrediariosStatus.Aberto,
+                    AbertoPorAdminId = adminId,
+                    Observacao       = observacao,
+                };
+
+                _db.Crediarios.Add(crediario);
+                _logger.LogInformation(
+                    "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
+                    crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
+
+                // Envia email em background com escopo próprio (evita uso de Scoped service após dispose)
+                if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
+                {
+                    var emailAddr  = comanda.User.Email;
+                    var userName   = comanda.User.Name;
+                    var valorReais = crediario.ValorEmReais;
+                    var venc       = vencimento;
+                    _ = Task.Run(async () =>
+                    {
+                        using var scope        = _scopeFactory.CreateScope();
+                        var emailService       = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                        await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
+                    });
+                }
             }
         }
 

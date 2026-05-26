@@ -195,6 +195,7 @@ export default function VendaAvulsaPage() {
   const [loading, setLoading]       = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [receipt, setReceipt]       = useState<VendaAvulsaDto | null>(null)
+  const [showPayModal, setShowPayModal] = useState(false)
   const [search, setSearch]         = useState('')
   const [catFilter, setCat]         = useState<string | null>(null)
   const [history, setHistory]       = useState<VendaAvulsaDto[]>([])
@@ -272,6 +273,7 @@ export default function VendaAvulsaPage() {
     setCart([]); setClientName(''); setClientSearch(''); setClientResults([])
     setPayment(PAYMENT_METHODS[0].value)
     setDiscount(0); setDiscMode('total'); setReceived(''); setReceipt(null)
+    setShowPayModal(false)
   }
 
   const subtotal = cart.reduce((s, i) => s + i.product.priceInCents * i.quantity, 0)
@@ -314,6 +316,7 @@ export default function VendaAvulsaPage() {
         cart.map(i => ({ productId: i.product.id, quantity: i.quantity })),
         discountPct,
       )
+      setShowPayModal(false)
       setReceipt(data)
       setCart([])
       setClientName('')
@@ -327,9 +330,16 @@ export default function VendaAvulsaPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [cart, clientName, payment, discountPct, discountMode])
+  }, [cart, clientName, payment, discountPct])
 
   const handleSubmit = useThrottle(submitRaw, 2000)
+
+  // Abre o modal de pagamento (ou avisa se o carrinho estiver vazio)
+  function openPayModal() {
+    if (cart.length === 0) { toast.error('Adicione pelo menos um produto.'); return }
+    setReceived('')
+    setShowPayModal(true)
+  }
 
   // ── Comprovante ───────────────────────────────────────────────────────────
 
@@ -520,66 +530,44 @@ export default function VendaAvulsaPage() {
           {/* Carrinho */}
           <div className="w-80 flex flex-col gap-3 shrink-0">
 
-            {/* Cliente + pagamento */}
-            <div className="card space-y-3">
-              <div>
-                <label className="label text-xs">Cliente (opcional)</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 z-10" />
-                  <input
-                    className="input pl-9 text-sm"
-                    placeholder="Buscar por nome ou deixar em branco"
-                    value={clientSearch}
-                    onChange={e => { setClientSearch(e.target.value); setClientName(e.target.value); setClientDropdown(true) }}
-                    onFocus={() => setClientDropdown(true)}
-                    onBlur={() => setTimeout(() => setClientDropdown(false), 150)}
-                    maxLength={100}
-                  />
-                  {clientLoading && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 animate-spin" />
-                  )}
-                  {/* Dropdown de clientes */}
-                  {clientDropdown && clientResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-surface-700 border border-surface-500 rounded-xl shadow-2xl overflow-hidden">
-                      {clientResults.map(u => (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onMouseDown={() => selectClient(u)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-surface-600 transition-colors text-left"
-                        >
-                          <div className="w-7 h-7 rounded-full bg-brand-600/20 flex items-center justify-center shrink-0">
-                            <User className="w-3.5 h-3.5 text-brand-400" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-medium text-white truncate">{u.name}</p>
-                            {u.cpf && <p className="text-[10px] text-gray-500">{u.cpf}</p>}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="label text-xs">Forma de pagamento</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {PAYMENT_METHODS.map(m => (
-                    <button
-                      key={m.value}
-                      onClick={() => { setPayment(m.value); setReceived('') }}
-                      className={clsx(
-                        'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all',
-                        payment === m.value
-                          ? 'bg-brand-600/20 border-brand-500/60 text-brand-300'
-                          : 'bg-surface-800 border-surface-500 text-gray-400 hover:border-surface-400'
-                      )}
-                    >
-                      {PAYMENT_ICONS[m.value]} {m.label}
-                    </button>
-                  ))}
-                </div>
+            {/* Cliente */}
+            <div className="card">
+              <label className="label text-xs">Cliente (opcional)</label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 z-10" />
+                <input
+                  className="input pl-9 text-sm"
+                  placeholder="Buscar por nome ou deixar em branco"
+                  value={clientSearch}
+                  onChange={e => { setClientSearch(e.target.value); setClientName(e.target.value); setClientDropdown(true) }}
+                  onFocus={() => setClientDropdown(true)}
+                  onBlur={() => setTimeout(() => setClientDropdown(false), 150)}
+                  maxLength={100}
+                />
+                {clientLoading && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 animate-spin" />
+                )}
+                {/* Dropdown de clientes */}
+                {clientDropdown && clientResults.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-surface-700 border border-surface-500 rounded-xl shadow-2xl overflow-hidden">
+                    {clientResults.map(u => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onMouseDown={() => selectClient(u)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-surface-600 transition-colors text-left"
+                      >
+                        <div className="w-7 h-7 rounded-full bg-brand-600/20 flex items-center justify-center shrink-0">
+                          <User className="w-3.5 h-3.5 text-brand-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-white truncate">{u.name}</p>
+                          {u.cpf && <p className="text-[10px] text-gray-500">{u.cpf}</p>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -708,44 +696,97 @@ export default function VendaAvulsaPage() {
                 <span className="text-2xl font-bold text-accent-gold">{fmt(total / 100)}</span>
               </div>
 
-              {/* Troco (só aparece no modo Dinheiro) */}
-              {payment === 'Dinheiro' && (
-                <div className="border-t border-surface-500 pt-3 space-y-2">
-                  <label className="text-xs text-gray-400 flex items-center gap-1">
-                    <Banknote className="w-3.5 h-3.5" /> Valor recebido (R$)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="input text-sm"
-                    placeholder="0,00"
-                    value={received}
-                    onChange={e => setReceived(e.target.value)}
-                  />
-                  {received && receivedCents >= 0 && (
-                    <div className={clsx(
-                      'flex justify-between text-sm font-semibold rounded-lg px-3 py-2',
-                      troco >= 0 ? 'bg-accent-green/10 text-accent-green' : 'bg-red-500/10 text-red-400'
-                    )}>
-                      <span>{troco >= 0 ? 'Troco' : 'Falta'}</span>
-                      <span className="font-mono">{fmt(Math.abs(troco) / 100)}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
               <button
-                onClick={handleSubmit}
-                disabled={cart.length === 0 || submitting}
+                onClick={openPayModal}
+                disabled={cart.length === 0}
                 className="btn-success w-full justify-center py-3 text-base disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {submitting
-                  ? <><Loader2 className="w-5 h-5 animate-spin" /> Registrando...</>
-                  : <><CheckCircle className="w-5 h-5" /> Registrar Venda</>
-                }
+                <CheckCircle className="w-5 h-5" /> Finalizar Venda
               </button>
             </div>
+
+            {/* ── Modal de pagamento ──────────────────────────────────────────── */}
+            {showPayModal && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+                onClick={e => { if (e.target === e.currentTarget) setShowPayModal(false) }}
+              >
+                <div className="bg-surface-800 border border-surface-500 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5">
+                  <h3 className="text-lg font-bold text-white">Forma de Pagamento</h3>
+
+                  {/* Resumo do total */}
+                  <div className="bg-surface-900 rounded-xl px-4 py-3 flex justify-between items-center">
+                    <span className="text-gray-400 text-sm">Total a pagar</span>
+                    <span className="text-2xl font-black text-accent-gold">{fmt(total / 100)}</span>
+                  </div>
+
+                  {/* Opções de pagamento */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {PAYMENT_METHODS.map(m => (
+                      <button
+                        key={m.value}
+                        onClick={() => { setPayment(m.value); setReceived('') }}
+                        className={clsx(
+                          'flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-medium border transition-all',
+                          payment === m.value
+                            ? 'bg-brand-600/30 border-brand-500 text-brand-200'
+                            : 'bg-surface-900 border-surface-600 text-gray-400 hover:border-surface-400'
+                        )}
+                      >
+                        {PAYMENT_ICONS[m.value]} {m.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Troco (só Dinheiro) */}
+                  {payment === 'Dinheiro' && (
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-400 flex items-center gap-1">
+                        <Banknote className="w-3.5 h-3.5" /> Valor recebido (R$)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="input text-sm"
+                        placeholder="0,00"
+                        value={received}
+                        onChange={e => setReceived(e.target.value)}
+                        autoFocus
+                      />
+                      {received && receivedCents >= 0 && (
+                        <div className={clsx(
+                          'flex justify-between text-sm font-semibold rounded-lg px-3 py-2',
+                          troco >= 0 ? 'bg-accent-green/10 text-accent-green' : 'bg-red-500/10 text-red-400'
+                        )}>
+                          <span>{troco >= 0 ? 'Troco' : 'Falta'}</span>
+                          <span className="font-mono">{fmt(Math.abs(troco) / 100)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => setShowPayModal(false)}
+                      className="btn-secondary flex-1 justify-center"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSubmit}
+                      disabled={submitting}
+                      className="btn-success flex-1 justify-center disabled:opacity-50"
+                    >
+                      {submitting
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Registrando...</>
+                        : <><CheckCircle className="w-4 h-4" /> Confirmar</>
+                      }
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
