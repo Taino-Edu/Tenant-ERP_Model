@@ -659,17 +659,27 @@ export default function DashboardPage() {
   }
 
   async function handleClose(id: string, paymentMethod: string) {
-    await comandaApi.close(id, paymentMethod)
-    const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
-    toast.success(label)
-    fetchComandas()
-    fetchHistory(histData)
+    try {
+      await comandaApi.close(id, paymentMethod)
+      const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
+      toast.success(label)
+      fetchComandas()
+      fetchHistory(histData)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao fechar comanda.')
+    }
   }
   async function handleCancel(id: string) {
-    await comandaApi.cancel(id)
-    toast.success('Comanda cancelada.')
-    fetchComandas()
-    fetchHistory(histData)
+    try {
+      await comandaApi.cancel(id)
+      toast.success('Comanda cancelada.')
+      fetchComandas()
+      fetchHistory(histData)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao cancelar comanda.')
+    }
   }
 
   const totalAberto  = comandas.reduce((s, c) => s + c.totalInReais, 0)
