@@ -267,6 +267,29 @@ public class AnalyticsController : ControllerBase
             });
         }
 
+        // ── Breakdown por forma de pagamento ─────────────────────────────────
+        // Comandas fechadas no período
+        var comandasPeriodo = await _db.Comandas
+            .Where(c => c.ClosedAt >= ini && c.ClosedAt <= end && c.Status == ComandaStatus.Fechada)
+            .Select(c => new { c.PaymentMethod, c.TotalInCents })
+            .ToListAsync();
+
+        // Agrupa comandas + avulsas por forma
+        var todasFormas = comandasPeriodo
+            .Select(c => (Forma: c.PaymentMethod ?? "Outros", Centavos: c.TotalInCents))
+            .Concat(todasVendas
+                .Where(v => v.SoldAt >= ini && v.SoldAt <= end)
+                .Select(v => (Forma: v.PaymentMethod, Centavos: v.TotalInCents)))
+            .GroupBy(x => x.Forma)
+            .Select(g => new FormaPagamentoTotalDto
+            {
+                Forma      = g.Key,
+                Total      = Math.Round(g.Sum(x => (decimal)x.Centavos) / 100m, 2),
+                Quantidade = g.Count(),
+            })
+            .OrderByDescending(f => f.Total)
+            .ToList();
+
         // ── Top produtos com margem ───────────────────────────────────────────
         var topProdutos = itens
             .GroupBy(i => i.ItemNameSnapshot)
@@ -296,8 +319,9 @@ public class AnalyticsController : ControllerBase
             Margem          = Math.Round(margem, 2),
             MargemPercent   = margemPercent,
             Crediarios      = Math.Round(crediarios, 2),
-            DiaDia          = diaDia,
-            TopProdutos     = topProdutos,
+            DiaDia             = diaDia,
+            TopProdutos        = topProdutos,
+            PagamentosPorForma = todasFormas,
         });
     }
 }

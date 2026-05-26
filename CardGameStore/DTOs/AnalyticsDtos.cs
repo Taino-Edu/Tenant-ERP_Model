@@ -72,8 +72,9 @@ public class FinanceiroDto
     public decimal Margem           { get; set; } // receita - custo
     public decimal MargemPercent    { get; set; } // (margem / custo) * 100
     public decimal Crediarios       { get; set; } // total em aberto nos crediários (R$)
-    public List<DiaFinanceiroDto> DiaDia { get; set; } = new();
-    public List<TopProductFinDto> TopProdutos { get; set; } = new();
+    public List<DiaFinanceiroDto>      DiaDia           { get; set; } = new();
+    public List<TopProductFinDto>      TopProdutos      { get; set; } = new();
+    public List<FormaPagamentoTotalDto> PagamentosPorForma { get; set; } = new();
 }
 
 public class DiaFinanceiroDto
@@ -90,4 +91,11 @@ public class TopProductFinDto
     public decimal Receita { get; set; }
     public decimal Custo   { get; set; }
     public decimal Margem  { get; set; }
+}
+
+public class FormaPagamentoTotalDto
+{
+    public string  Forma      { get; set; } = string.Empty;
+    public decimal Total      { get; set; }
+    public int     Quantidade { get; set; }
 }

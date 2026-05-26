@@ -450,6 +450,12 @@ export interface TopProductFinDto {
   margem: number
 }
 
+export interface FormaPagamentoTotalDto {
+  forma: string
+  total: number
+  quantidade: number
+}
+
 export interface FinanceiroDto {
   receita: number
   receitaComandas: number
@@ -460,6 +466,7 @@ export interface FinanceiroDto {
   crediarios: number
   diaDia: DiaFinanceiroDto[]
   topProdutos: TopProductFinDto[]
+  pagamentosPorForma: FormaPagamentoTotalDto[]
 }
 
 export const analyticsApi = {
