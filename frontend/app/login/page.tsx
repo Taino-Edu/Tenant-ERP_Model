@@ -4,13 +4,14 @@ import { useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
 import toast, { Toaster } from 'react-hot-toast'
-import { KeyRound, Mail, Loader2 } from 'lucide-react'
+import { KeyRound, Mail, Loader2, Eye, EyeOff } from 'lucide-react'
 
 export default function LoginPage() {
   const router  = useRouter()
-  const [email, setEmail]     = useState('')
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
+  const [showPass, setShowPass] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -66,11 +67,20 @@ export default function LoginPage() {
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
-                type="password" required value={password}
+                type={showPass ? 'text' : 'password'} required value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="input pl-9"
+                className="input pl-9 pr-10"
                 placeholder="••••••••"
               />
+              <button
+                type="button"
+                onClick={() => setShowPass(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                tabIndex={-1}
+                aria-label={showPass ? 'Ocultar senha' : 'Mostrar senha'}
+              >
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-2.5 text-base">

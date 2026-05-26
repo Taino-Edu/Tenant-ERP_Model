@@ -198,7 +198,7 @@ public class CrediariosController : ControllerBase
         {
             _logger.LogInformation(
                 "Crediário {Id}: pagamento parcial de R$ {Valor:N2} registrado pelo admin {AdminId}. Saldo restante: R$ {Saldo:N2}",
-                id, adminId, request.ValorEmCentavos / 100m, crediario.SaldoRestanteEmReais);
+                id, request.ValorEmCentavos / 100m, adminId, crediario.SaldoRestanteEmReais);
         }
 
         await _db.SaveChangesAsync();
