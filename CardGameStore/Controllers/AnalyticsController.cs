@@ -233,10 +233,10 @@ public class AnalyticsController : ControllerBase
         var margem       = receita - custo;
         var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
 
-        // ── Crediários em aberto ──────────────────────────────────────────────
+        // ── Crediários em aberto (saldo real = total - já pago) ──────────────
         var crediarios = await _db.Crediarios
             .Where(c => c.Status == CrediariosStatus.Aberto)
-            .SumAsync(c => (decimal)c.ValorEmCentavos) / 100m;
+            .SumAsync(c => (decimal)(c.ValorEmCentavos - c.ValorPagoEmCentavos)) / 100m;
 
         // ── Breakdown dia a dia ───────────────────────────────────────────────
         var dias = (int)(end.Date - ini.Date).TotalDays + 1;
