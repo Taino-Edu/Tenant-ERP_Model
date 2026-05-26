@@ -197,7 +197,13 @@ export const PAYMENT_METHODS = [
   { value: 'Dinheiro',      label: 'Dinheiro' },
   { value: 'CartaoCredito', label: 'Cartão de Crédito' },
   { value: 'CartaoDebito',  label: 'Cartão de Débito' },
+  { value: 'Crediario',     label: 'Crediário' },
+  { value: 'Pontos',        label: 'Pontos' },
+  { value: 'Cashback',      label: 'Cashback' },
 ] as const
+
+// Métodos que requerem cliente cadastrado selecionado
+export const PAYMENT_NEEDS_USER = ['Crediario', 'Pontos', 'Cashback'] as const
 
 export const comandaApi = {
   dashboard:    () => api.get<ComandaDto[]>('/api/comanda/dashboard'),
@@ -276,11 +282,19 @@ export const COMANDA_PAYMENT_METHODS = [
   { value: 'CartaoCredito', label: 'Cartão de Crédito' },
   { value: 'CartaoDebito',  label: 'Cartão de Débito' },
   { value: 'Crediario',     label: 'Crediário (30 dias)' },
+  { value: 'Pontos',        label: 'Pontos de Fidelidade' },
+  { value: 'Cashback',      label: 'Cashback (Saldo)' },
 ] as const
 
 export const vendaAvulsaApi = {
-  register: (clientName: string | null, paymentMethod: string, items: { productId: string; quantity: number }[], discountPercent = 0) =>
-    api.post<VendaAvulsaDto>('/api/venda-avulsa', { clientName, paymentMethod, items, discountPercent }),
+  register: (
+    clientName: string | null,
+    paymentMethod: string,
+    items: { productId: string; quantity: number }[],
+    discountPercent = 0,
+    userId?: string,   // necessário para Crediario, Pontos, Cashback
+  ) =>
+    api.post<VendaAvulsaDto>('/api/venda-avulsa', { clientName, paymentMethod, items, discountPercent, userId }),
   recent: (limit = 50) =>
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/recent', { params: { limit } }),
 }

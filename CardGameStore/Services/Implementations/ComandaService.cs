@@ -8,8 +8,10 @@ namespace CardGameStore.Services.Implementations;
 
 public class ComandaService : IComandaService
 {
-    // Constante para evitar magic strings sensíveis a typo/case
+    // Constantes para evitar magic strings sensíveis a typo/case
     private const string PaymentCrediario = "Crediario";
+    private const string PaymentPontos    = "Pontos";
+    private const string PaymentCashback  = "Cashback";
 
     private readonly AppDbContext            _db;
     private readonly IEmailService           _email;
@@ -255,13 +257,53 @@ public class ComandaService : IComandaService
             }
         }
 
+        // ── Pontos como pagamento ─────────────────────────────────────────────
+        if (paymentMethod == PaymentPontos)
+        {
+            if (comanda.User == null)
+                throw new InvalidOperationException("Usuário não encontrado.");
+
+            var totalRestante = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+            if (comanda.User.PointsBalance < totalRestante)
+                throw new InvalidOperationException(
+                    $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, faltam {totalRestante} pts.");
+
+            comanda.User.PointsBalance -= totalRestante;
+            comanda.PointsApplied       = comanda.TotalInCents; // comanda totalmente coberta
+            comanda.User.UpdatedAt      = DateTime.UtcNow;
+            _logger.LogInformation(
+                "Comanda {Id} quitada com {Pts} pontos do usuário {UserId}. Saldo restante: {Saldo}",
+                comandaId, totalRestante, comanda.UserId, comanda.User.PointsBalance);
+        }
+
+        // ── Cashback como pagamento ───────────────────────────────────────────
+        if (paymentMethod == PaymentCashback)
+        {
+            if (comanda.User == null)
+                throw new InvalidOperationException("Usuário não encontrado.");
+
+            var totalRestante = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+            if (comanda.User.BalanceInCents < totalRestante)
+                throw new InvalidOperationException(
+                    $"Saldo insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, falta R$ {totalRestante / 100m:N2}.");
+
+            comanda.User.BalanceInCents -= totalRestante;
+            comanda.User.UpdatedAt       = DateTime.UtcNow;
+            _logger.LogInformation(
+                "Comanda {Id} quitada com R$ {Valor:N2} de cashback do usuário {UserId}. Saldo restante: R$ {Saldo:N2}",
+                comandaId, totalRestante / 100m, comanda.UserId, comanda.User.BalanceInCents / 100m);
+        }
+
         comanda.Status        = ComandaStatus.Fechada;
         comanda.ClosedAt      = DateTime.UtcNow;
         comanda.PaymentMethod = paymentMethod;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
         // Regra: 1 ponto por R$1 gasto (após desconto de pontos aplicados)
-        if (comanda.User != null && paymentMethod != PaymentCrediario)
+        // Não acumula pontos quando o próprio pagamento é via pontos ou cashback
+        if (comanda.User != null && paymentMethod != PaymentCrediario
+                                 && paymentMethod != PaymentPontos
+                                 && paymentMethod != PaymentCashback)
         {
             var valorPago   = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
             var pontosGanhos = valorPago / 100; // 1 ponto por real

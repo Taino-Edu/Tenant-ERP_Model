@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, Product, VendaAvulsaDto, UserSummary } from '@/lib/api'
+import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, Product, VendaAvulsaDto, UserSummary } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import toast from 'react-hot-toast'
 import {
   ShoppingBag, Plus, Minus, Trash2, User, CheckCircle, RotateCcw,
   Loader2, Receipt, PackageOpen, Banknote, CreditCard, QrCode,
-  Tag, History, TrendingUp, Clock, FileText,
+  Tag, History, TrendingUp, Clock, FileText, AlertCircle, Star, Wallet,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -175,6 +175,9 @@ const PAYMENT_ICONS: Record<string, React.ReactNode> = {
   Dinheiro:      <Banknote   className="w-4 h-4" />,
   CartaoCredito: <CreditCard className="w-4 h-4" />,
   CartaoDebito:  <CreditCard className="w-4 h-4" />,
+  Crediario:     <FileText   className="w-4 h-4" />,
+  Pontos:        <Star       className="w-4 h-4" />,
+  Cashback:      <Wallet     className="w-4 h-4" />,
 }
 
 const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
@@ -184,6 +187,7 @@ export default function VendaAvulsaPage() {
   const [products, setProducts]     = useState<Product[]>([])
   const [cart, setCart]             = useState<CartItem[]>([])
   const [clientName, setClientName]         = useState('')
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [clientSearch, setClientSearch]     = useState('')
   const [clientResults, setClientResults]   = useState<UserSummary[]>([])
   const [clientDropdown, setClientDropdown] = useState(false)
@@ -236,6 +240,7 @@ export default function VendaAvulsaPage() {
 
   function selectClient(u: UserSummary) {
     setClientName(u.name)
+    setSelectedUserId(u.id)
     setClientSearch(u.name)
     setClientResults([])
     setClientDropdown(false)
@@ -270,7 +275,7 @@ export default function VendaAvulsaPage() {
   }
 
   function clearAll() {
-    setCart([]); setClientName(''); setClientSearch(''); setClientResults([])
+    setCart([]); setClientName(''); setSelectedUserId(null); setClientSearch(''); setClientResults([])
     setPayment(PAYMENT_METHODS[0].value)
     setDiscount(0); setDiscMode('total'); setReceived(''); setReceipt(null)
     setShowPayModal(false)
@@ -306,6 +311,8 @@ export default function VendaAvulsaPage() {
 
   // ── Registrar venda ───────────────────────────────────────────────────────
 
+  const needsUser = (PAYMENT_NEEDS_USER as readonly string[]).includes(payment)
+
   const submitRaw = useCallback(async () => {
     if (cart.length === 0) { toast.error('Adicione pelo menos um produto.'); return }
     setSubmitting(true)
@@ -315,11 +322,13 @@ export default function VendaAvulsaPage() {
         payment,
         cart.map(i => ({ productId: i.product.id, quantity: i.quantity })),
         discountPct,
+        selectedUserId ?? undefined,
       )
       setShowPayModal(false)
       setReceipt(data)
       setCart([])
       setClientName('')
+      setSelectedUserId(null)
       setDiscount(0)
       setDiscMode('total')
       setReceived('')
@@ -330,7 +339,7 @@ export default function VendaAvulsaPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [cart, clientName, payment, discountPct])
+  }, [cart, clientName, payment, discountPct, selectedUserId])
 
   const handleSubmit = useThrottle(submitRaw, 2000)
 
@@ -539,7 +548,7 @@ export default function VendaAvulsaPage() {
                   className="input pl-9 text-sm"
                   placeholder="Buscar por nome ou deixar em branco"
                   value={clientSearch}
-                  onChange={e => { setClientSearch(e.target.value); setClientName(e.target.value); setClientDropdown(true) }}
+                  onChange={e => { setClientSearch(e.target.value); setClientName(e.target.value); setSelectedUserId(null); setClientDropdown(true) }}
                   onFocus={() => setClientDropdown(true)}
                   onBlur={() => setTimeout(() => setClientDropdown(false), 150)}
                   maxLength={100}
@@ -720,7 +729,7 @@ export default function VendaAvulsaPage() {
                     <span className="text-2xl font-black text-accent-gold">{fmt(total / 100)}</span>
                   </div>
 
-                  {/* Opções de pagamento */}
+                  {/* Opções de pagamento — linha 1: Pix, Dinheiro, Crédito, Débito */}
                   <div className="grid grid-cols-2 gap-2">
                     {PAYMENT_METHODS.map(m => (
                       <button
@@ -737,6 +746,17 @@ export default function VendaAvulsaPage() {
                       </button>
                     ))}
                   </div>
+
+                  {/* Aviso: métodos que precisam de cliente cadastrado */}
+                  {needsUser && !selectedUserId && (
+                    <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2.5 text-xs text-amber-400">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        <strong>{payment === 'Crediario' ? 'Crediário' : payment}</strong> exige um cliente cadastrado.
+                        Selecione o cliente no campo acima antes de finalizar.
+                      </span>
+                    </div>
+                  )}
 
                   {/* Troco (só Dinheiro) */}
                   {payment === 'Dinheiro' && (
@@ -775,8 +795,8 @@ export default function VendaAvulsaPage() {
                     </button>
                     <button
                       onClick={handleSubmit}
-                      disabled={submitting}
-                      className="btn-success flex-1 justify-center disabled:opacity-50"
+                      disabled={submitting || (needsUser && !selectedUserId)}
+                      className="btn-success flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {submitting
                         ? <><Loader2 className="w-4 h-4 animate-spin" /> Registrando...</>

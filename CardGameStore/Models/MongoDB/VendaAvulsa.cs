@@ -60,7 +60,10 @@ public static class PaymentMethod
     public const string Dinheiro      = "Dinheiro";
     public const string CartaoCredito = "CartaoCredito";
     public const string CartaoDebito  = "CartaoDebito";
+    public const string Crediario     = "Crediario";
+    public const string Pontos        = "Pontos";
+    public const string Cashback      = "Cashback";
 
-    public static readonly string[] All = [Pix, Dinheiro, CartaoCredito, CartaoDebito];
+    public static readonly string[] All = [Pix, Dinheiro, CartaoCredito, CartaoDebito, Crediario, Pontos, Cashback];
     public static bool IsValid(string? method) => All.Contains(method);
 }

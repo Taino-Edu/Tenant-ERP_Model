@@ -8,6 +8,11 @@ public class VendaAvulsaRequest
     [MaxLength(150)]
     public string? ClientName { get; set; }
 
+    /// <summary>
+    /// ID do cliente cadastrado. Obrigatório para Crediario, Pontos e Cashback.
+    /// </summary>
+    public Guid? UserId { get; set; }
+
     [Required]
     public string PaymentMethod { get; set; } = Models.MongoDB.PaymentMethod.Pix;
 

@@ -1,6 +1,7 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.MongoDB;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
@@ -92,6 +93,79 @@ public class VendaAvulsaService : IVendaAvulsaService
         _logger.LogInformation(
             "Venda avulsa {Id} registrada por {Admin}: {Count} item(ns), R$ {Total:F2} (desconto {Disc}%), {Payment}",
             venda.Id, adminName, vendaItems.Count, finalTotal / 100m, request.DiscountPercent, request.PaymentMethod);
+
+        // ── Pós-venda: operações que dependem de cliente cadastrado ──────────────
+        var pm = request.PaymentMethod;
+        if (pm is PaymentMethod.Crediario or PaymentMethod.Pontos or PaymentMethod.Cashback)
+        {
+            if (!request.UserId.HasValue)
+                throw new InvalidOperationException(
+                    "Crediário, Pontos e Cashback exigem um cliente cadastrado selecionado.");
+
+            var userId = request.UserId.Value;
+            var user   = await _db.Users.FindAsync(userId)
+                ?? throw new InvalidOperationException("Cliente não encontrado.");
+
+            if (pm == PaymentMethod.Crediario)
+            {
+                var crediarioExistente = await _db.Crediarios
+                    .FirstOrDefaultAsync(c => c.UserId == userId && c.Status == CrediariosStatus.Aberto);
+                var vencimento = DateTime.UtcNow.AddDays(30);
+
+                if (crediarioExistente != null)
+                {
+                    crediarioExistente.ValorEmCentavos += finalTotal;
+                    crediarioExistente.DataVencimento   = vencimento;
+                    _logger.LogInformation(
+                        "Venda avulsa acumulada no crediário {CredId} do usuário {UserId} — novo total R$ {Valor:N2}",
+                        crediarioExistente.Id, userId, crediarioExistente.ValorEmCentavos / 100m);
+                }
+                else
+                {
+                    var crediario = new Crediario
+                    {
+                        UserId          = userId,
+                        ComandaId       = null,
+                        ValorEmCentavos = finalTotal,
+                        DataAbertura    = DateTime.UtcNow,
+                        DataVencimento  = vencimento,
+                        Status          = CrediariosStatus.Aberto,
+                        AbertoPorAdminId = adminId,
+                        Observacao       = "Venda avulsa no balcão",
+                    };
+                    _db.Crediarios.Add(crediario);
+                    _logger.LogInformation(
+                        "Crediário {CredId} criado para usuário {UserId} via venda avulsa — R$ {Valor:N2}",
+                        crediario.Id, userId, finalTotal / 100m);
+                }
+            }
+            else if (pm == PaymentMethod.Pontos)
+            {
+                if (user.PointsBalance < finalTotal)
+                    throw new InvalidOperationException(
+                        $"Saldo de pontos insuficiente. Cliente tem {user.PointsBalance} pts, venda custa {finalTotal} pts.");
+
+                user.PointsBalance -= finalTotal;
+                user.UpdatedAt      = DateTime.UtcNow;
+                _logger.LogInformation(
+                    "Usuário {UserId} usou {Pts} pontos em venda avulsa. Saldo restante: {Saldo}",
+                    userId, finalTotal, user.PointsBalance);
+            }
+            else if (pm == PaymentMethod.Cashback)
+            {
+                if (user.BalanceInCents < finalTotal)
+                    throw new InvalidOperationException(
+                        $"Saldo insuficiente. Cliente tem R$ {user.BalanceInCents / 100m:N2}, venda custa R$ {finalTotal / 100m:N2}.");
+
+                user.BalanceInCents -= finalTotal;
+                user.UpdatedAt       = DateTime.UtcNow;
+                _logger.LogInformation(
+                    "Usuário {UserId} usou R$ {Valor:N2} de cashback em venda avulsa. Saldo restante: R$ {Saldo:N2}",
+                    userId, finalTotal / 100m, user.BalanceInCents / 100m);
+            }
+
+            await _db.SaveChangesAsync();
+        }
 
         return MapToDto(venda);
     }
