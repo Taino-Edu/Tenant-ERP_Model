@@ -737,8 +737,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* KPIs financeiros hoje */}
-      {finHoje && finHoje.receita > 0 && (
+      {/* KPIs financeiros hoje — sempre visíveis quando finHoje carregou */}
+      {finHoje && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {(() => {
             const totalTx = (finHoje.pagamentosPorForma ?? []).reduce((s, f) => s + f.quantidade, 0)
@@ -765,17 +765,19 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
 
-        {/* Ranking de clientes */}
-        {ranking.length > 0 && (
-          <div className="card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-accent-gold" /> Top Clientes
-              </h3>
-              <a href="/admin/usuarios" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
-                Ver todos →
-              </a>
-            </div>
+        {/* Ranking de clientes — sempre visível */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-accent-gold" /> Top Clientes
+            </h3>
+            <a href="/admin/usuarios" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
+              Ver todos →
+            </a>
+          </div>
+          {ranking.length === 0 ? (
+            <p className="text-xs text-gray-500 py-4 text-center">Nenhuma compra registrada ainda</p>
+          ) : (
             <div className="space-y-2">
               {ranking.map((c, i) => {
                 const medalColor = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-600'
@@ -827,8 +829,8 @@ export default function DashboardPage() {
                 )
               })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Breakdown por pagamento — só aparece quando há histórico */}
