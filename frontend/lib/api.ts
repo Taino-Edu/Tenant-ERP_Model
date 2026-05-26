@@ -445,6 +445,18 @@ export const lgpdAdminApi = {
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 
+export interface ClienteInsightDto {
+  userId: string
+  nome: string
+  email: string | null
+  gastoTotal: number
+  ticketMedio: number
+  numVisitas: number
+  ultimaVisita: string | null
+  inativo30: boolean
+  pontos: number
+}
+
 export interface DiaFinanceiroDto {
   dia: string
   receita: number
@@ -489,7 +501,7 @@ export interface FinanceiroDto {
 export const analyticsApi = {
   dashboard: () => api.get('/api/analytics/dashboard'),
   clientes:  (apenasInativos = false) =>
-    api.get('/api/analytics/clientes', { params: { apenasInativos } }),
+    api.get<ClienteInsightDto[]>('/api/analytics/clientes', { params: { apenasInativos } }),
   financeiro: (inicio?: string, fim?: string) =>
     api.get<FinanceiroDto>('/api/analytics/financeiro', { params: { inicio, fim } }),
 }

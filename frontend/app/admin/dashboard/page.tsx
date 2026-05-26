@@ -1,15 +1,16 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { comandaApi, productApi, analyticsApi, ComandaDto, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto } from '@/lib/api'
+import { comandaApi, productApi, analyticsApi, ComandaDto, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto } from '@/lib/api'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
+import { tocarSom, notificarBrowser, pedirPermissaoNotificacao, incrementBadge, clearBadge } from '@/lib/notificacoes'
 import CameraScanner from '@/components/CameraScanner'
 import toast from 'react-hot-toast'
 import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
   History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode, Camera,
-  AlertTriangle, DollarSign, BarChart2,
+  AlertTriangle, DollarSign, BarChart2, Trophy, Medal, Star,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -542,6 +543,7 @@ export default function DashboardPage() {
   const [fin7d, setFin7d]         = useState<FinanceiroDto | null>(null)
   const [finHoje, setFinHoje]     = useState<FinanceiroDto | null>(null)
   const [lowStock, setLowStock]   = useState(0)
+  const [ranking, setRanking]     = useState<ClienteInsightDto[]>([])
   const prevCountRef              = useRef(0)
   const knownIdsRef               = useRef<Set<string>>(new Set())
 
@@ -584,11 +586,14 @@ export default function DashboardPage() {
     analyticsApi.financeiro(hoje, hoje).then(r => setFinHoje(r.data)).catch(() => {})
     analyticsApi.financeiro(ini7s, hoje).then(r => setFin7d(r.data)).catch(() => {})
     productApi.list().then(r => setLowStock(r.data.filter(p => p.isLowStock).length)).catch(() => {})
+    analyticsApi.clientes().then(r => setRanking(r.data.slice(0, 5))).catch(() => {})
   }, [])
 
   useEffect(() => {
     fetchComandas()
     let hub: Awaited<ReturnType<typeof startHub>>
+
+    pedirPermissaoNotificacao()
 
     startHub().then(h => {
       hub = h
@@ -598,18 +603,29 @@ export default function DashboardPage() {
         setNewIds(s => new Set(s).add(event.comandaId))
         setTimeout(() => setNewIds(s => { const n = new Set(s); n.delete(event.comandaId); return n }), 3000)
         fetchComandas()
+        tocarSom('nova')
+        incrementBadge()
+        notificarBrowser('Nova atividade — Santuário Nerd', `${event.userName}: +${event.lastItemAdded ?? 'item'}`)
         toast(`📋 ${event.userName}: +${event.lastItemAdded ?? 'item'}`, {
           icon: '🃏',
           style: { background: '#1A1A1F', color: '#fff', border: '1px solid #7839F3', borderRadius: '12px' }
         })
       })
 
-      hub.on('ComandaClosed', () => { fetchComandas(); fetchHistory(histData) })
+      hub.on('ComandaClosed', () => {
+        fetchComandas()
+        fetchHistory(histData)
+        tocarSom('fechada')
+      })
       hub.onclose(() => setConnected(false))
       hub.onreconnected(() => { setConnected(true); fetchComandas() })
     }).catch(() => setConnected(false))
 
-    return () => { stopHub() }
+    // Limpa badge quando admin foca na aba
+    const onFocus = () => clearBadge()
+    window.addEventListener('focus', onFocus)
+
+    return () => { stopHub(); window.removeEventListener('focus', onFocus) }
   }, [fetchComandas, fetchHistory])
 
   useEffect(() => {
@@ -707,12 +723,17 @@ export default function DashboardPage() {
 
       {/* KPIs financeiros hoje */}
       {finHoje && finHoje.receita > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Fechado Hoje',  value: fmt(totalFechado),      icon: Banknote,   color: 'text-accent-gold' },
-            { label: 'Custo Hoje',    value: fmt(finHoje.custo),      icon: TrendingUp, color: 'text-red-400'     },
-            { label: 'Margem Hoje',   value: fmt(finHoje.margem),     icon: TrendingUp, color: finHoje.margem >= 0 ? 'text-emerald-400' : 'text-red-400' },
-          ].map(m => (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {(() => {
+            const totalTx = finHoje.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0)
+            const ticketMedio = totalTx > 0 ? finHoje.receita / totalTx : 0
+            return [
+              { label: 'Fechado Hoje',   value: fmt(totalFechado),  icon: Banknote,   color: 'text-accent-gold' },
+              { label: 'Custo Hoje',     value: fmt(finHoje.custo),  icon: TrendingUp, color: 'text-red-400'     },
+              { label: 'Margem Hoje',    value: fmt(finHoje.margem), icon: TrendingUp, color: finHoje.margem >= 0 ? 'text-emerald-400' : 'text-red-400' },
+              { label: 'Ticket Médio',   value: fmt(ticketMedio),    icon: CreditCard, color: 'text-brand-400'   },
+            ]
+          })().map(m => (
             <div key={m.label} className="card flex items-center gap-3 py-2.5">
               <m.icon className={clsx('w-4 h-4 shrink-0', m.color)} />
               <div className="min-w-0">
@@ -724,8 +745,43 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Gráfico 7 dias */}
-      {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
+      {/* Gráfico 7 dias + Ranking lado a lado em telas grandes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
+
+        {/* Ranking de clientes */}
+        {ranking.length > 0 && (
+          <div className="card">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-accent-gold" /> Top Clientes
+              </h3>
+              <a href="/admin/usuarios" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
+                Ver todos →
+              </a>
+            </div>
+            <div className="space-y-2">
+              {ranking.map((c, i) => {
+                const medalColor = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-600'
+                const MedalIcon  = i === 0 ? Star : i <= 2 ? Medal : Trophy
+                return (
+                  <div key={c.userId} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors">
+                    <MedalIcon className={clsx('w-4 h-4 shrink-0', medalColor)} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{c.nome}</p>
+                      <p className="text-xs text-gray-500">{c.numVisitas} visita{c.numVisitas !== 1 ? 's' : ''} · ticket médio {fmt(c.ticketMedio)}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-accent-gold font-mono">{fmt(c.gastoTotal)}</p>
+                      {c.inativo30 && <p className="text-[10px] text-amber-500">inativo</p>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Breakdown por pagamento — só aparece quando há histórico */}
       {tab === 'historico' && paymentBreakdown.length > 0 && (

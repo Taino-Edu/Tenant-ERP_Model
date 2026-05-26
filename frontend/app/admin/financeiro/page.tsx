@@ -400,11 +400,18 @@ export default function FinanceiroPage() {
       ) : d ? (
         <>
           {/* KPIs */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard label="Receita total"      value={fmt(d.receita)}          sub={`${d.diaDia.length} dias`}                      color="green"  icon={TrendingUp}   />
-            <KpiCard label="Custo estimado"     value={fmt(d.custo)}            sub="Preço de custo dos itens"                       color="red"    icon={ShoppingBag}  />
-            <KpiCard label="Margem bruta"       value={fmt(d.margem)}           sub={`${d.margemPercent.toFixed(1)}% sobre receita`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} />
-            <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}       sub="A receber"                                      color="yellow" icon={AlertCircle}  />
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            {(() => {
+              const totalTx = d.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0)
+              const ticketMedio = totalTx > 0 ? d.receita / totalTx : 0
+              return (<>
+                <KpiCard label="Receita total"      value={fmt(d.receita)}          sub={`${d.diaDia.length} dias`}                      color="green"  icon={TrendingUp}   />
+                <KpiCard label="Custo estimado"     value={fmt(d.custo)}            sub="Preço de custo dos itens"                       color="red"    icon={ShoppingBag}  />
+                <KpiCard label="Margem bruta"       value={fmt(d.margem)}           sub={`${d.margemPercent.toFixed(1)}% sobre receita`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} />
+                <KpiCard label="Ticket médio"       value={fmt(ticketMedio)}        sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  color="brand"  icon={CreditCard}   />
+                <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}       sub="A receber"                                      color="yellow" icon={AlertCircle}  />
+              </>)
+            })()}
           </div>
 
           {/* Breakdown Comandas vs Avulsas */}

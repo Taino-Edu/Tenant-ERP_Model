@@ -1,35 +1,43 @@
 // =============================================================================
-// lib/relatorio.ts — Gerador de relatório PDF do Controle Financeiro
-// Usa jsPDF + jspdf-autotable para gerar PDF vetorial limpo (não screenshot)
+// lib/relatorio.ts — Relatório Financeiro PDF estilo Bling
+// Fundo branco, tipografia limpa, imprime sem gastar tinta
 // =============================================================================
 
 import { FinanceiroDto } from './api'
 
-// jsPDF tem problema com SSR — só importa no browser
 async function getJsPDF() {
   const { default: jsPDF } = await import('jspdf')
   await import('jspdf-autotable')
   return jsPDF
 }
 
-// ── Paleta de cores ───────────────────────────────────────────────────────────
-const PURPLE    = [88,  56,  250] as [number, number, number]
-const DARK      = [18,  18,  26]  as [number, number, number]
-const GRAY_DARK = [60,  60,  80]  as [number, number, number]
-const GRAY_MID  = [120, 120, 140] as [number, number, number]
-const WHITE     = [255, 255, 255] as [number, number, number]
-const GREEN     = [34,  197, 94]  as [number, number, number]
-const AMBER     = [245, 158, 11]  as [number, number, number]
-const RED       = [239, 68,  68]  as [number, number, number]
+// ── Paleta ────────────────────────────────────────────────────────────────────
+const BLACK   = [20,  20,  20]  as [number, number, number]
+const GRAY    = [100, 100, 100] as [number, number, number]
+const LGRAY   = [180, 180, 180] as [number, number, number]
+const BGROW   = [248, 248, 248] as [number, number, number]
+const WHITE   = [255, 255, 255] as [number, number, number]
+const ACCENT  = [79,  70,  229] as [number, number, number]  // indigo — toque de cor sutil
+const GREEN   = [22,  163, 74]  as [number, number, number]
+const RED     = [220, 38,  38]  as [number, number, number]
+const AMBER   = [180, 120, 0]   as [number, number, number]
+
+const PW = 210
+const ML = 14
+const MR = 14
+const CW = PW - ML - MR
 
 function fmt(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
 }
-
-function fmtData(iso: string) {
+function fmtDt(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
   })
+}
+function fmtDate(iso: string) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 
 const FORMA_LABEL: Record<string, string> = {
@@ -38,6 +46,33 @@ const FORMA_LABEL: Record<string, string> = {
   CartaoCredito: 'Cartão de Crédito',
   CartaoDebito:  'Cartão de Débito',
   Crediario:     'Crediário',
+}
+
+// ── Helpers de desenho ────────────────────────────────────────────────────────
+
+function hRule(doc: any, y: number, color = LGRAY, lw = 0.3) {
+  doc.setDrawColor(...color)
+  doc.setLineWidth(lw)
+  doc.line(ML, y, PW - MR, y)
+}
+
+function sectionHeader(doc: any, title: string, y: number): number {
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(...ACCENT)
+  doc.text(title.toUpperCase(), ML, y)
+  hRule(doc, y + 1.5, ACCENT, 0.4)
+  return y + 6
+}
+
+function addPage(doc: any) {
+  doc.addPage()
+  return 16
+}
+
+function checkPageBreak(doc: any, y: number, needed = 30): number {
+  if (y + needed > 278) return addPage(doc)
+  return y
 }
 
 // ── Função principal ──────────────────────────────────────────────────────────
@@ -49,217 +84,221 @@ export async function gerarRelatorioPDF(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any
 
-  const PW = 210  // largura A4
-  const ML = 14   // margem esquerda
-  const MR = 14   // margem direita
-  const CW = PW - ML - MR  // largura útil
   let y = 0
 
-  // ── Cabeçalho roxo ─────────────────────────────────────────────────────────
-  doc.setFillColor(...PURPLE)
-  doc.rect(0, 0, PW, 38, 'F')
+  // ── Cabeçalho ─────────────────────────────────────────────────────────────
+  // Linha colorida no topo
+  doc.setFillColor(...ACCENT)
+  doc.rect(0, 0, PW, 1.5, 'F')
 
-  doc.setTextColor(...WHITE)
-  doc.setFontSize(20)
+  // Nome da empresa
+  doc.setTextColor(...BLACK)
+  doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
-  doc.text('Santuário Nerd', ML, 16)
+  doc.text('Santuário Nerd', ML, 14)
 
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'normal')
-  doc.text('Controle Financeiro — Relatório de Período', ML, 24)
-
-  // Período no canto direito
-  const iniStr = new Date(periodo.inicio + 'T00:00:00').toLocaleDateString('pt-BR')
-  const fimStr = new Date(periodo.fim   + 'T00:00:00').toLocaleDateString('pt-BR')
-  const periodoStr = iniStr === fimStr ? iniStr : `${iniStr} a ${fimStr}`
+  // Subtítulo
   doc.setFontSize(9)
-  doc.setTextColor(200, 190, 255)
-  doc.text(periodoStr, PW - MR, 16, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...GRAY)
+  doc.text('Controle Financeiro', ML, 20)
 
+  // Período + data de geração (canto direito)
+  const iniStr = fmtDate(periodo.inicio)
+  const fimStr = fmtDate(periodo.fim)
+  const periodoStr = iniStr === fimStr ? iniStr : `${iniStr} a ${fimStr}`
   const geradoEm = new Date().toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
   })
-  doc.text(`Gerado em ${geradoEm}`, PW - MR, 22, { align: 'right' })
 
-  y = 46
+  doc.setFontSize(8)
+  doc.setTextColor(...GRAY)
+  doc.text(`Período: ${periodoStr}`, PW - MR, 12, { align: 'right' })
+  doc.text(`Gerado em: ${geradoEm}`, PW - MR, 17, { align: 'right' })
 
-  // ── KPIs principais ────────────────────────────────────────────────────────
+  hRule(doc, 24, LGRAY, 0.5)
+  y = 30
+
+  // ── KPIs em 4 boxes ────────────────────────────────────────────────────────
   const kpis = [
-    { label: 'Receita Total',     value: fmt(d.receita),      color: WHITE },
-    { label: 'Custo Estimado',    value: fmt(d.custo),        color: AMBER },
-    { label: 'Margem Bruta',      value: fmt(d.margem),       color: d.margem >= 0 ? GREEN : RED },
-    { label: 'Crediários Abertos',value: fmt(d.crediarios),   color: AMBER },
+    { label: 'Receita Total',      value: fmt(d.receita),    color: BLACK },
+    { label: 'Custo Estimado',     value: fmt(d.custo),      color: AMBER },
+    { label: 'Margem Bruta',       value: fmt(d.margem),     color: d.margem >= 0 ? GREEN : RED },
+    { label: 'Crediários Abertos', value: fmt(d.crediarios), color: d.crediarios > 0 ? RED : GREEN },
   ]
 
-  const kpiW = CW / kpis.length
+  const boxW = CW / 4
   kpis.forEach((k, i) => {
-    const x = ML + i * kpiW
-    doc.setFillColor(...DARK)
-    doc.roundedRect(x, y, kpiW - 3, 22, 2, 2, 'F')
-
-    doc.setTextColor(...(k.color as [number, number, number]))
-    doc.setFontSize(12)
-    doc.setFont('helvetica', 'bold')
-    doc.text(k.value, x + (kpiW - 3) / 2, y + 10, { align: 'center' })
-
-    doc.setTextColor(...GRAY_MID)
+    const x = ML + i * boxW
+    // Borda sutil
+    doc.setDrawColor(...LGRAY)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(x, y, boxW - 2, 18, 1, 1, 'S')
+    // Label
     doc.setFontSize(7)
     doc.setFont('helvetica', 'normal')
-    doc.text(k.label, x + (kpiW - 3) / 2, y + 17, { align: 'center' })
+    doc.setTextColor(...GRAY)
+    doc.text(k.label, x + (boxW - 2) / 2, y + 5.5, { align: 'center' })
+    // Valor
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...k.color)
+    doc.text(k.value, x + (boxW - 2) / 2, y + 13, { align: 'center' })
   })
 
-  y += 28
+  y += 24
 
   // ── Origem da Receita ──────────────────────────────────────────────────────
-  const pctComanda = d.receita > 0 ? (d.receitaComandas / d.receita * 100).toFixed(1) : '0.0'
-  const pctAvulsa  = d.receita > 0 ? (d.receitaAvulsa  / d.receita * 100).toFixed(1) : '0.0'
+  y = sectionHeader(doc, 'Origem da Receita', y)
 
-  sectionTitle(doc, 'Origem da Receita', y, ML)
-  y += 7
+  const pctC = d.receita > 0 ? (d.receitaComandas / d.receita * 100).toFixed(1) : '0.0'
+  const pctA = d.receita > 0 ? (d.receitaAvulsa   / d.receita * 100).toFixed(1) : '0.0'
 
   doc.autoTable({
     startY: y,
     margin: { left: ML, right: MR },
     head: [['Origem', 'Valor', '% do Total']],
     body: [
-      ['Comandas (Mesas)',    fmt(d.receitaComandas), `${pctComanda}%`],
-      ['Venda Avulsa (Balcão)', fmt(d.receitaAvulsa), `${pctAvulsa}%`],
-      ['Total', fmt(d.receita), '100%'],
+      ['Comandas (Mesas)',       fmt(d.receitaComandas), `${pctC}%`],
+      ['Venda Avulsa (Balcão)', fmt(d.receitaAvulsa),   `${pctA}%`],
+      ['Total',                  fmt(d.receita),          '100%'],
     ],
-    headStyles:  { fillColor: PURPLE, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-    bodyStyles:  { fontSize: 9, textColor: DARK },
-    alternateRowStyles: { fillColor: [240, 238, 255] },
+    headStyles: {
+      fillColor: [240, 240, 245], textColor: BLACK,
+      fontStyle: 'bold', fontSize: 8, lineColor: LGRAY, lineWidth: 0.3,
+    },
+    bodyStyles:  { fontSize: 8, textColor: BLACK, lineColor: LGRAY, lineWidth: 0.2 },
+    alternateRowStyles: { fillColor: BGROW },
     columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
-    foot: [],
     didParseCell: (data: any) => {
-      // Última linha (Total) em negrito
       if (data.row.index === 2) {
         data.cell.styles.fontStyle = 'bold'
-        data.cell.styles.fillColor = [220, 215, 255]
+        data.cell.styles.fillColor = [235, 235, 245]
       }
     },
   })
 
-  y = doc.lastAutoTable.finalY + 8
+  y = doc.lastAutoTable.finalY + 10
 
   // ── Formas de Pagamento ────────────────────────────────────────────────────
-  if (d.pagamentosPorForma.length > 0) {
-    sectionTitle(doc, 'Recebimentos por Forma de Pagamento', y, ML)
-    y += 7
+  y = checkPageBreak(doc, y, 40)
+  y = sectionHeader(doc, 'Recebimentos por Forma de Pagamento', y)
 
-    const rows = d.pagamentosPorForma.map(f => [
+  doc.autoTable({
+    startY: y,
+    margin: { left: ML, right: MR },
+    head: [['Forma de Pagamento', 'Transações', 'Total']],
+    body: d.pagamentosPorForma.map(f => [
       FORMA_LABEL[f.forma] ?? f.forma,
       String(f.quantidade),
       fmt(f.total),
-    ])
+    ]),
+    headStyles: {
+      fillColor: [240, 240, 245], textColor: BLACK,
+      fontStyle: 'bold', fontSize: 8, lineColor: LGRAY, lineWidth: 0.3,
+    },
+    bodyStyles:  { fontSize: 8, textColor: BLACK, lineColor: LGRAY, lineWidth: 0.2 },
+    alternateRowStyles: { fillColor: BGROW },
+    columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' } },
+  })
+
+  y = doc.lastAutoTable.finalY + 6
+
+  // Sub-tabelas de transações por forma
+  for (const f of d.pagamentosPorForma) {
+    if (!f.transacoes || f.transacoes.length === 0) continue
+
+    y = checkPageBreak(doc, y, 20)
+
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...GRAY)
+    doc.text(`Detalhe — ${FORMA_LABEL[f.forma] ?? f.forma}`, ML + 2, y)
+    y += 4
 
     doc.autoTable({
       startY: y,
-      margin: { left: ML, right: MR },
-      head: [['Forma de Pagamento', 'Qtd. Transações', 'Total']],
-      body: rows,
-      headStyles: { fillColor: PURPLE, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 9, textColor: DARK },
-      alternateRowStyles: { fillColor: [240, 238, 255] },
-      columnStyles: { 1: { halign: 'center' }, 2: { halign: 'right' } },
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-    // Sub-tabelas de transações por forma (drill-down)
-    for (const f of d.pagamentosPorForma) {
-      if (!f.transacoes || f.transacoes.length === 0) continue
-
-      const formaLabel = FORMA_LABEL[f.forma] ?? f.forma
-
-      // Verifica se cabe na página, senão adiciona nova
-      if (y > 240) { doc.addPage(); y = 16 }
-
-      doc.setFontSize(8)
-      doc.setFont('helvetica', 'bold')
-      doc.setTextColor(...GRAY_DARK)
-      doc.text(`Transações — ${formaLabel}`, ML, y)
-      y += 5
-
-      const txRows = f.transacoes.map(t => [
+      margin: { left: ML + 2, right: MR },
+      head: [['Origem', 'Cliente', 'Data / Hora', 'Valor']],
+      body: f.transacoes.map(t => [
         t.origem === 'Comanda' ? 'Mesa' : 'Balcão',
         t.cliente ?? '—',
-        fmtData(t.data),
+        fmtDt(t.data),
         fmt(t.valor),
-      ])
+      ]),
+      headStyles: {
+        fillColor: [245, 245, 248], textColor: GRAY,
+        fontSize: 7, fontStyle: 'bold', lineColor: LGRAY, lineWidth: 0.2,
+      },
+      bodyStyles:  { fontSize: 7.5, textColor: BLACK, lineColor: LGRAY, lineWidth: 0.15 },
+      alternateRowStyles: { fillColor: WHITE },
+      columnStyles: { 3: { halign: 'right' } },
+    })
 
-      doc.autoTable({
-        startY: y,
-        margin: { left: ML + 4, right: MR },
-        head: [['Origem', 'Cliente', 'Data/Hora', 'Valor']],
-        body: txRows,
-        headStyles: { fillColor: GRAY_DARK, textColor: WHITE, fontSize: 8 },
-        bodyStyles: { fontSize: 8, textColor: DARK },
-        alternateRowStyles: { fillColor: [248, 248, 255] },
-        columnStyles: { 3: { halign: 'right' } },
-      })
-
-      y = doc.lastAutoTable.finalY + 6
-    }
+    y = doc.lastAutoTable.finalY + 7
   }
 
   // ── Top Produtos ───────────────────────────────────────────────────────────
   if (d.topProdutos.length > 0) {
-    if (y > 220) { doc.addPage(); y = 16 }
-
-    sectionTitle(doc, 'Top Produtos', y, ML)
-    y += 7
+    y = checkPageBreak(doc, y, 40)
+    y = sectionHeader(doc, 'Top Produtos por Receita', y)
 
     doc.autoTable({
       startY: y,
       margin: { left: ML, right: MR },
-      head: [['Produto', 'Qtd', 'Receita', 'Custo', 'Margem']],
-      body: d.topProdutos.map(p => [
+      head: [['#', 'Produto', 'Qtd', 'Receita', 'Custo', 'Margem']],
+      body: d.topProdutos.map((p, i) => [
+        String(i + 1),
         p.nome,
         String(p.qtd),
         fmt(p.receita),
         fmt(p.custo),
         fmt(p.margem),
       ]),
-      headStyles: { fillColor: PURPLE, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 9, textColor: DARK },
-      alternateRowStyles: { fillColor: [240, 238, 255] },
+      headStyles: {
+        fillColor: [240, 240, 245], textColor: BLACK,
+        fontStyle: 'bold', fontSize: 8, lineColor: LGRAY, lineWidth: 0.3,
+      },
+      bodyStyles:  { fontSize: 8, textColor: BLACK, lineColor: LGRAY, lineWidth: 0.2 },
+      alternateRowStyles: { fillColor: BGROW },
       columnStyles: {
-        1: { halign: 'center' },
-        2: { halign: 'right' },
+        0: { halign: 'center', cellWidth: 8 },
+        2: { halign: 'center' },
         3: { halign: 'right' },
         4: { halign: 'right' },
+        5: { halign: 'right' },
       },
     })
 
-    y = doc.lastAutoTable.finalY + 8
+    y = doc.lastAutoTable.finalY + 10
   }
 
   // ── Receita Dia a Dia ──────────────────────────────────────────────────────
   if (d.diaDia.length > 1) {
-    if (y > 220) { doc.addPage(); y = 16 }
-
-    sectionTitle(doc, 'Receita Dia a Dia', y, ML)
-    y += 7
+    y = checkPageBreak(doc, y, 40)
+    y = sectionHeader(doc, 'Receita Dia a Dia', y)
 
     doc.autoTable({
       startY: y,
       margin: { left: ML, right: MR },
-      head: [['Data', 'Receita', 'Custo', 'Margem']],
-      body: d.diaDia.map(dia => [
-        dia.dia,
-        fmt(dia.receita),
-        fmt(dia.custo),
-        fmt(dia.receita - dia.custo),
-      ]),
-      headStyles: { fillColor: PURPLE, textColor: WHITE, fontStyle: 'bold', fontSize: 9 },
-      bodyStyles: { fontSize: 9, textColor: DARK },
-      alternateRowStyles: { fillColor: [240, 238, 255] },
+      head: [['Data', 'Receita', 'Custo', 'Margem', 'Margem %']],
+      body: d.diaDia.map(dia => {
+        const margem = dia.receita - dia.custo
+        const pct = dia.receita > 0 ? (margem / dia.receita * 100).toFixed(1) : '0.0'
+        return [dia.dia, fmt(dia.receita), fmt(dia.custo), fmt(margem), `${pct}%`]
+      }),
+      headStyles: {
+        fillColor: [240, 240, 245], textColor: BLACK,
+        fontStyle: 'bold', fontSize: 8, lineColor: LGRAY, lineWidth: 0.3,
+      },
+      bodyStyles:  { fontSize: 8, textColor: BLACK, lineColor: LGRAY, lineWidth: 0.2 },
+      alternateRowStyles: { fillColor: BGROW },
       columnStyles: {
         1: { halign: 'right' },
         2: { halign: 'right' },
         3: { halign: 'right' },
+        4: { halign: 'right' },
       },
     })
   }
@@ -268,13 +307,12 @@ export async function gerarRelatorioPDF(
   const total = doc.internal.getNumberOfPages()
   for (let i = 1; i <= total; i++) {
     doc.setPage(i)
-    doc.setFillColor(...DARK)
-    doc.rect(0, 288, PW, 9, 'F')
+    hRule(doc, 284, LGRAY, 0.3)
     doc.setFontSize(7)
-    doc.setTextColor(...GRAY_MID)
     doc.setFont('helvetica', 'normal')
-    doc.text('Santuário Nerd — Relatório Financeiro Confidencial', ML, 293)
-    doc.text(`Página ${i} de ${total}`, PW - MR, 293, { align: 'right' })
+    doc.setTextColor(...LGRAY)
+    doc.text('Santuário Nerd  ·  Documento confidencial  ·  Uso interno', ML, 289)
+    doc.text(`Pág. ${i} / ${total}`, PW - MR, 289, { align: 'right' })
   }
 
   // ── Download ───────────────────────────────────────────────────────────────
@@ -282,15 +320,4 @@ export async function gerarRelatorioPDF(
     ? iniStr.replace(/\//g, '-')
     : `${iniStr.replace(/\//g, '-')}_${fimStr.replace(/\//g, '-')}`
   doc.save(`relatorio-financeiro-${nomePeriodo}.pdf`)
-}
-
-// ── Helper: título de seção ───────────────────────────────────────────────────
-function sectionTitle(doc: any, texto: string, y: number, ml: number) {
-  doc.setFontSize(10)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...DARK)
-  doc.text(texto, ml, y)
-  doc.setDrawColor(...PURPLE)
-  doc.setLineWidth(0.5)
-  doc.line(ml, y + 1.5, ml + 182, y + 1.5)
 }
