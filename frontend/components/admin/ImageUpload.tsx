@@ -5,7 +5,7 @@
 // =============================================================================
 
 import { useRef, useState, DragEvent, ChangeEvent } from 'react'
-import { UploadCloud, X, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { UploadCloud, X, Image as ImageIcon, Loader2, RefreshCw } from 'lucide-react'
 import { uploadApi } from '@/lib/api'
 
 interface ImageUploadProps {
@@ -19,10 +19,15 @@ interface ImageUploadProps {
 
 export default function ImageUpload({ currentUrl, onUpload, label = 'Imagem' }: ImageUploadProps) {
   const inputRef           = useRef<HTMLInputElement>(null)
+  const replaceRef         = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError]  = useState<string | null>(null)
   const [preview, setPreview] = useState<string | null>(currentUrl ?? null)
+
+  // Sincroniza preview quando currentUrl mudar (ex: abrir modal de produto diferente)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  if (preview === null && currentUrl) setPreview(currentUrl)
 
   async function handleFile(file: File) {
     setError(null)
@@ -97,15 +102,34 @@ export default function ImageUpload({ currentUrl, onUpload, label = 'Imagem' }: 
             </div>
           )}
           {!uploading && (
-            <button
-              type="button"
-              onClick={clearImage}
-              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 hover:bg-red-600/80 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Remover imagem"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Trocar imagem sem precisar apagar primeiro */}
+              <button
+                type="button"
+                onClick={() => replaceRef.current?.click()}
+                className="w-7 h-7 rounded-full bg-black/60 hover:bg-brand-600/80 flex items-center justify-center text-white"
+                title="Trocar imagem"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={clearImage}
+                className="w-7 h-7 rounded-full bg-black/60 hover:bg-red-600/80 flex items-center justify-center text-white"
+                title="Remover imagem"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           )}
+          {/* Input oculto para trocar imagem diretamente */}
+          <input
+            ref={replaceRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            className="hidden"
+            onChange={handleChange}
+          />
         </div>
       ) : (
         // ── Área de drop ──────────────────────────────────────────────────────
