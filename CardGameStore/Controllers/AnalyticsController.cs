@@ -268,25 +268,47 @@ public class AnalyticsController : ControllerBase
         }
 
         // ── Breakdown por forma de pagamento ─────────────────────────────────
-        // Comandas fechadas no período
+        // Comandas fechadas no período (com cliente para drill-down)
         var comandasPeriodo = await _db.Comandas
-            .Where(c => c.ClosedAt >= ini && c.ClosedAt <= end && c.Status == ComandaStatus.Fechada)
-            .Select(c => new { c.PaymentMethod, c.TotalInCents })
+            .Include(c => c.User)
+            .Where(c => c.ClosedAt >= ini && c.ClosedAt <= end && c.Status == ComandaStatus.Fechada && c.PaymentMethod != null)
+            .Select(c => new { c.PaymentMethod, c.TotalInCents, c.ClosedAt, ClienteNome = c.User != null ? c.User.Name : null })
             .ToListAsync();
 
-        // Agrupa comandas + avulsas por forma (ignora PaymentMethod nulo — registros antigos sem forma)
-        var todasFormas = comandasPeriodo
-            .Where(c => c.PaymentMethod != null)
-            .Select(c => (Forma: c.PaymentMethod!, Centavos: c.TotalInCents))
-            .Concat(todasVendas
-                .Where(v => v.SoldAt >= ini && v.SoldAt <= end)
-                .Select(v => (Forma: v.PaymentMethod, Centavos: v.TotalInCents)))
-            .GroupBy(x => x.Forma)
+        // Transações combinadas (comanda + avulsa) para agrupamento e drill-down
+        var transacoesComanda = comandasPeriodo
+            .Select(c => new TransacaoFinDto
+            {
+                Origem     = "Comanda",
+                Cliente    = c.ClienteNome,
+                Valor      = Math.Round(c.TotalInCents / 100m, 2),
+                Data       = c.ClosedAt!.Value,
+                Forma      = c.PaymentMethod!,
+            });
+
+        var avulsasPeriodo = todasVendas
+            .Where(v => v.SoldAt >= ini && v.SoldAt <= end)
+            .ToList();
+
+        var transacoesAvulsa = avulsasPeriodo
+            .Select(v => new TransacaoFinDto
+            {
+                Origem     = "VendaAvulsa",
+                Cliente    = v.ClientName,
+                Valor      = Math.Round(v.TotalInCents / 100m, 2),
+                Data       = v.SoldAt,
+                Forma      = v.PaymentMethod,
+            });
+
+        // Agrupa por forma e inclui transações individuais (drill-down)
+        var todasFormas = transacoesComanda.Concat(transacoesAvulsa)
+            .GroupBy(t => t.Forma)
             .Select(g => new FormaPagamentoTotalDto
             {
                 Forma      = g.Key,
-                Total      = Math.Round(g.Sum(x => (decimal)x.Centavos) / 100m, 2),
+                Total      = Math.Round(g.Sum(t => t.Valor), 2),
                 Quantidade = g.Count(),
+                Transacoes = g.OrderByDescending(t => t.Data).ToList(),
             })
             .OrderByDescending(f => f.Total)
             .ToList();

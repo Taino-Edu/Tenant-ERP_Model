@@ -98,4 +98,20 @@ public class FormaPagamentoTotalDto
     public string  Forma      { get; set; } = string.Empty;
     public decimal Total      { get; set; }
     public int     Quantidade { get; set; }
+
+    /// <summary>Transações individuais que compõem esse total (drill-down).</summary>
+    public List<TransacaoFinDto> Transacoes { get; set; } = new();
+}
+
+public class TransacaoFinDto
+{
+    /// <summary>"Comanda" ou "VendaAvulsa".</summary>
+    public string  Origem  { get; set; } = string.Empty;
+    public string? Cliente { get; set; }
+    public decimal Valor   { get; set; }
+    public DateTime Data   { get; set; }
+
+    /// <summary>Usado internamente no agrupamento — não serializado.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string Forma { get; set; } = string.Empty;
 }

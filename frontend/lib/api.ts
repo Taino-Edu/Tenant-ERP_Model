@@ -459,10 +459,18 @@ export interface TopProductFinDto {
   margem: number
 }
 
+export interface TransacaoFinDto {
+  origem: string       // 'Comanda' | 'VendaAvulsa'
+  cliente: string | null
+  valor: number
+  data: string
+}
+
 export interface FormaPagamentoTotalDto {
   forma: string
   total: number
   quantidade: number
+  transacoes: TransacaoFinDto[]
 }
 
 export interface FinanceiroDto {

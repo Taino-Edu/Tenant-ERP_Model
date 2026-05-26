@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { analyticsApi, FinanceiroDto } from '@/lib/api'
+import { analyticsApi, FinanceiroDto, FormaPagamentoTotalDto } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   TrendingUp, TrendingDown, DollarSign, AlertCircle,
   RefreshCw, Printer, Package, ShoppingBag, BarChart2,
-  Banknote, CreditCard, QrCode, Receipt,
+  Banknote, CreditCard, QrCode, Receipt, ChevronDown, ChevronUp,
+  Store, ShoppingCart,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -18,6 +19,98 @@ function fmt(v: number) {
 function fmtShort(v: number) {
   if (v >= 1000) return `R$${(v / 1000).toFixed(1)}k`
   return `R$${v.toFixed(0)}`
+}
+
+// ── Formas de pagamento com drill-down ───────────────────────────────────────
+
+const FORMA_LABELS: Record<string, string> = {
+  Dinheiro: 'Dinheiro', Pix: 'Pix',
+  CartaoCredito: 'Cartão de Crédito', CartaoDebito: 'Cartão de Débito',
+  Crediario: 'Crediário',
+}
+
+function FormasPagamentoSection({ formas }: { formas: FormaPagamentoTotalDto[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  const icons: Record<string, React.ReactNode> = {
+    Dinheiro:      <Banknote   className="w-4 h-4 text-emerald-400" />,
+    Pix:           <QrCode     className="w-4 h-4 text-brand-400"   />,
+    CartaoCredito: <CreditCard className="w-4 h-4 text-purple-400"  />,
+    CartaoDebito:  <CreditCard className="w-4 h-4 text-blue-400"    />,
+    Crediario:     <DollarSign className="w-4 h-4 text-amber-400"   />,
+  }
+
+  return (
+    <div className="card p-0 overflow-hidden">
+      <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Receipt className="w-4 h-4 text-brand-400" />
+          <h3 className="text-sm font-semibold text-gray-300">Recebimentos por Forma de Pagamento</h3>
+        </div>
+        <span className="text-xs text-gray-500">Clique para ver transações · NF</span>
+      </div>
+      <div className="divide-y divide-surface-600">
+        {formas.map(f => {
+          const isCard = f.forma === 'CartaoCredito' || f.forma === 'CartaoDebito'
+          const isOpen = expanded === f.forma
+          return (
+            <div key={f.forma}>
+              {/* Linha principal — clicável */}
+              <button
+                onClick={() => setExpanded(isOpen ? null : f.forma)}
+                className={`w-full flex items-center justify-between px-5 py-3 hover:bg-surface-700 transition-colors text-left ${isCard ? 'bg-purple-500/5' : ''}`}
+              >
+                <div className="flex items-center gap-3">
+                  {icons[f.forma] ?? <Receipt className="w-4 h-4 text-gray-500" />}
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {FORMA_LABELS[f.forma] ?? f.forma}
+                      {isCard && <span className="ml-2 text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-semibold">NF</span>}
+                    </p>
+                    <p className="text-xs text-gray-500">{f.quantidade} transação{f.quantidade !== 1 ? 'ões' : ''}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <p className={`text-base font-bold font-mono ${isCard ? 'text-purple-300' : 'text-white'}`}>
+                    {fmt(f.total)}
+                  </p>
+                  {isOpen
+                    ? <ChevronUp   className="w-4 h-4 text-gray-500" />
+                    : <ChevronDown className="w-4 h-4 text-gray-500" />
+                  }
+                </div>
+              </button>
+
+              {/* Drill-down: transações individuais */}
+              {isOpen && f.transacoes.length > 0 && (
+                <div className="bg-surface-800 border-t border-surface-600 divide-y divide-surface-700">
+                  {f.transacoes.map((t, i) => (
+                    <div key={i} className="flex items-center justify-between px-6 py-2.5">
+                      <div className="flex items-center gap-2">
+                        {t.origem === 'Comanda'
+                          ? <ShoppingCart className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                          : <Store        className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        }
+                        <div>
+                          <p className="text-xs text-white font-medium">
+                            {t.cliente ?? (t.origem === 'Comanda' ? 'Comanda' : 'Balcão')}
+                          </p>
+                          <p className="text-[10px] text-gray-500">
+                            {t.origem === 'Comanda' ? 'Mesa' : 'Balcão'} · {new Date(t.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-sm font-bold font-mono text-white">{fmt(t.valor)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
@@ -335,49 +428,7 @@ export default function FinanceiroPage() {
 
           {/* Formas de pagamento */}
           {d.pagamentosPorForma.length > 0 && (
-            <div className="card p-0 overflow-hidden">
-              <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-brand-400" />
-                  <h3 className="text-sm font-semibold text-gray-300">Recebimentos por Forma de Pagamento</h3>
-                </div>
-                <span className="text-xs text-gray-500">Para geração de NF</span>
-              </div>
-              <div className="divide-y divide-surface-600">
-                {d.pagamentosPorForma.map(f => {
-                  const isCard = f.forma === 'CartaoCredito' || f.forma === 'CartaoDebito'
-                  const labels: Record<string, string> = {
-                    Dinheiro: 'Dinheiro', Pix: 'Pix',
-                    CartaoCredito: 'Cartão de Crédito', CartaoDebito: 'Cartão de Débito',
-                    Crediario: 'Crediário',
-                  }
-                  const icons: Record<string, React.ReactNode> = {
-                    Dinheiro:      <Banknote className="w-4 h-4 text-emerald-400" />,
-                    Pix:           <QrCode   className="w-4 h-4 text-brand-400"   />,
-                    CartaoCredito: <CreditCard className="w-4 h-4 text-purple-400" />,
-                    CartaoDebito:  <CreditCard className="w-4 h-4 text-blue-400"   />,
-                    Crediario:     <DollarSign className="w-4 h-4 text-amber-400"  />,
-                  }
-                  return (
-                    <div key={f.forma} className={`flex items-center justify-between px-5 py-3 ${isCard ? 'bg-purple-500/5' : ''}`}>
-                      <div className="flex items-center gap-3">
-                        {icons[f.forma] ?? <Receipt className="w-4 h-4 text-gray-500" />}
-                        <div>
-                          <p className="text-sm font-medium text-white">
-                            {labels[f.forma] ?? f.forma}
-                            {isCard && <span className="ml-2 text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-semibold">NF</span>}
-                          </p>
-                          <p className="text-xs text-gray-500">{f.quantidade} transação{f.quantidade !== 1 ? 'ões' : ''}</p>
-                        </div>
-                      </div>
-                      <p className={`text-base font-bold font-mono ${isCard ? 'text-purple-300' : 'text-white'}`}>
-                        {fmt(f.total)}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
+            <FormasPagamentoSection formas={d.pagamentosPorForma} />
           )}
 
           {/* Top produtos */}
