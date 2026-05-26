@@ -42,13 +42,13 @@ public class ComandaController : ControllerBase
         return Ok(comandas);
     }
 
-    /// <summary>Histórico do dia: comandas fechadas e canceladas hoje. Apenas Admin.</summary>
+    /// <summary>Histórico do dia: comandas fechadas/canceladas. Parâmetro ?data=YYYY-MM-DD (padrão: hoje). Apenas Admin.</summary>
     [HttpGet("history")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(IEnumerable<ComandaDto>), 200)]
-    public async Task<IActionResult> GetHistory()
+    public async Task<IActionResult> GetHistory([FromQuery] DateTime? data)
     {
-        var result = await _service.GetTodayHistoryAsync();
+        var result = await _service.GetTodayHistoryAsync(data);
         return Ok(result);
     }
 

@@ -201,7 +201,7 @@ export const PAYMENT_METHODS = [
 
 export const comandaApi = {
   dashboard:    () => api.get<ComandaDto[]>('/api/comanda/dashboard'),
-  history:      () => api.get<ComandaDto[]>('/api/comanda/history'),
+  history:      (data?: string) => api.get<ComandaDto[]>('/api/comanda/history', { params: data ? { data } : undefined }),
   myComanda:    () => api.get<ComandaDto>('/api/comanda/my'),
   addItem:      (id: string, item: { productId?: string; cardCacheId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),

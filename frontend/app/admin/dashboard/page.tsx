@@ -533,6 +533,7 @@ export default function DashboardPage() {
   const [tab, setTab]             = useState<'ativas' | 'historico'>('ativas')
   const [comandas, setComandas]   = useState<ComandaDto[]>([])
   const [history, setHistory]     = useState<ComandaDto[]>([])
+  const [histData, setHistData]   = useState(() => new Date().toISOString().split('T')[0])
   const [loading, setLoading]     = useState(true)
   const [histLoading, setHistLoad]= useState(false)
   const [connected, setConnected] = useState(false)
@@ -562,11 +563,11 @@ export default function DashboardPage() {
     }
   }, [])
 
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async (data?: string) => {
     setHistLoad(true)
     try {
-      const { data } = await comandaApi.history()
-      setHistory(data)
+      const { data: res } = await comandaApi.history(data)
+      setHistory(res)
     } catch {
       toast.error('Erro ao carregar histórico')
     } finally {
@@ -603,7 +604,7 @@ export default function DashboardPage() {
         })
       })
 
-      hub.on('ComandaClosed', () => { fetchComandas(); fetchHistory() })
+      hub.on('ComandaClosed', () => { fetchComandas(); fetchHistory(histData) })
       hub.onclose(() => setConnected(false))
       hub.onreconnected(() => { setConnected(true); fetchComandas() })
     }).catch(() => setConnected(false))
@@ -612,8 +613,8 @@ export default function DashboardPage() {
   }, [fetchComandas, fetchHistory])
 
   useEffect(() => {
-    if (tab === 'historico') fetchHistory()
-  }, [tab, fetchHistory])
+    if (tab === 'historico') fetchHistory(histData)
+  }, [tab, histData, fetchHistory])
 
   useEffect(() => {
     if (comandas.length > prevCountRef.current && prevCountRef.current > 0)
@@ -630,13 +631,13 @@ export default function DashboardPage() {
     const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
     toast.success(label)
     fetchComandas()
-    fetchHistory()
+    fetchHistory(histData)
   }
   async function handleCancel(id: string) {
     await comandaApi.cancel(id)
     toast.success('Comanda cancelada.')
     fetchComandas()
-    fetchHistory()
+    fetchHistory(histData)
   }
 
   const totalAberto  = comandas.reduce((s, c) => s + c.totalInReais, 0)
@@ -761,9 +762,19 @@ export default function DashboardPage() {
             className={clsx('px-4 py-1.5 rounded-md text-sm font-medium transition-all',
               tab === 'historico' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
           >
-            <History className="w-4 h-4 inline mr-1.5" />Histórico de Hoje
+            <History className="w-4 h-4 inline mr-1.5" />Histórico
           </button>
         </div>
+
+        {tab === 'historico' && (
+          <input
+            type="date"
+            value={histData}
+            max={new Date().toISOString().split('T')[0]}
+            onChange={e => setHistData(e.target.value)}
+            className="input text-sm w-40 py-1.5"
+          />
+        )}
 
         {tab === 'ativas' && (
           <div className="relative">
@@ -821,7 +832,7 @@ export default function DashboardPage() {
             <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
               <History className="w-8 h-8 text-gray-600" />
             </div>
-            <p className="text-gray-400 font-medium">Nenhuma comanda encerrada hoje</p>
+            <p className="text-gray-400 font-medium">Nenhuma comanda encerrada neste dia</p>
           </div>
         ) : (
           <div className="space-y-2">

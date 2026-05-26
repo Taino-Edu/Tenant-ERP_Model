@@ -305,14 +305,14 @@ public class ComandaService : IComandaService
         return comandas.Select(MapToDto).ToList();
     }
 
-    public async Task<IEnumerable<ComandaDto>> GetTodayHistoryAsync()
+    public async Task<IEnumerable<ComandaDto>> GetTodayHistoryAsync(DateTime? data = null)
     {
-        var today = DateTime.UtcNow.Date;
+        var dia = (data?.ToUniversalTime() ?? DateTime.UtcNow).Date;
         var comandas = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)
             .Where(c => (c.Status == ComandaStatus.Fechada || c.Status == ComandaStatus.Cancelada)
-                     && c.ClosedAt.HasValue && c.ClosedAt.Value.Date == today)
+                     && c.ClosedAt.HasValue && c.ClosedAt.Value.Date == dia)
             .OrderByDescending(c => c.ClosedAt)
             .ToListAsync();
 

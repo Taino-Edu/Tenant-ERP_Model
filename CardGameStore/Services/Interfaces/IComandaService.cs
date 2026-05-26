@@ -42,8 +42,8 @@ public interface IComandaService
     /// <summary>Lista todas as comandas abertas/em andamento para o dashboard do Admin.</summary>
     Task<IEnumerable<ComandaDto>> GetActiveCommandasForDashboardAsync();
 
-    /// <summary>Lista comandas fechadas e canceladas do dia de hoje (para histórico).</summary>
-    Task<IEnumerable<ComandaDto>> GetTodayHistoryAsync();
+    /// <summary>Lista comandas fechadas e canceladas do dia especificado (padrão: hoje).</summary>
+    Task<IEnumerable<ComandaDto>> GetTodayHistoryAsync(DateTime? data = null);
 
     /// <summary>Aplica pontos do cliente à comanda, abatendo do total a pagar.</summary>
     Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points);
