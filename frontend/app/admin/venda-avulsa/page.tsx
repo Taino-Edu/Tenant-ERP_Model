@@ -194,7 +194,6 @@ export default function VendaAvulsaPage() {
   const [clientLoading, setClientLoading]   = useState(false)
   const [payment, setPayment]       = useState<string>(PAYMENT_METHODS[0].value)
   const [discountPct, setDiscount]  = useState(0)
-  const [discountMode, setDiscMode] = useState<'total' | 'per_item'>('total')
   const [received, setReceived]     = useState('')
   const [loading, setLoading]       = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -277,17 +276,13 @@ export default function VendaAvulsaPage() {
   function clearAll() {
     setCart([]); setClientName(''); setSelectedUserId(null); setClientSearch(''); setClientResults([])
     setPayment(PAYMENT_METHODS[0].value)
-    setDiscount(0); setDiscMode('total'); setReceived(''); setReceipt(null)
+    setDiscount(0); setReceived(''); setReceipt(null)
     setShowPayModal(false)
   }
 
   const subtotal = cart.reduce((s, i) => s + i.product.priceInCents * i.quantity, 0)
 
-  // Cálculo de desconto: "no total" abate do subtotal final;
-  // "por item" abate de cada unidade (mas o total exibido é o mesmo — a diferença é semântica para o cupom)
-  const discountCents = discountMode === 'total'
-    ? Math.round(subtotal * discountPct / 100)
-    : cart.reduce((s, i) => s + Math.round(i.product.priceInCents * discountPct / 100) * i.quantity, 0)
+  const discountCents = Math.round(subtotal * discountPct / 100)
 
   const total = subtotal - discountCents
   const receivedCents  = Math.round(parseFloat(received.replace(',', '.') || '0') * 100)
@@ -330,7 +325,6 @@ export default function VendaAvulsaPage() {
       setClientName('')
       setSelectedUserId(null)
       setDiscount(0)
-      setDiscMode('total')
       setReceived('')
       toast.success('Venda registrada!')
     } catch (err: unknown) {
@@ -635,34 +629,8 @@ export default function VendaAvulsaPage() {
               )}
             </div>
 
-            {/* Desconto + Total + Troco */}
+            {/* Desconto + Total */}
             <div className="card space-y-3">
-              {/* Modo de desconto */}
-              <div className="flex items-center gap-1 bg-surface-800 p-1 rounded-lg">
-                <button
-                  onClick={() => setDiscMode('total')}
-                  className={clsx(
-                    'flex-1 py-1 rounded-md text-xs font-medium transition-all',
-                    discountMode === 'total'
-                      ? 'bg-brand-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
-                  )}
-                >
-                  No total
-                </button>
-                <button
-                  onClick={() => setDiscMode('per_item')}
-                  className={clsx(
-                    'flex-1 py-1 rounded-md text-xs font-medium transition-all',
-                    discountMode === 'per_item'
-                      ? 'bg-brand-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
-                  )}
-                >
-                  Por item
-                </button>
-              </div>
-
               {/* Percentual de desconto */}
               <div className="flex items-center gap-2">
                 <Tag className="w-4 h-4 text-gray-500 shrink-0" />
@@ -694,7 +662,7 @@ export default function VendaAvulsaPage() {
               {discountPct > 0 && (
                 <div className="flex justify-between text-sm">
                   <span className="text-accent-green">
-                    Desconto {discountPct}% {discountMode === 'per_item' ? '(por item)' : '(no total)'}
+                    Desconto {discountPct}%
                   </span>
                   <span className="text-accent-green font-mono">−{fmt(discountCents / 100)}</span>
                 </div>
