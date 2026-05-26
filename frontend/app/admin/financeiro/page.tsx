@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { analyticsApi, FinanceiroDto, FormaPagamentoTotalDto } from '@/lib/api'
+import { gerarRelatorioPDF } from '@/lib/relatorio'
 import toast from 'react-hot-toast'
 import {
   TrendingUp, TrendingDown, DollarSign, AlertCircle,
@@ -313,8 +314,9 @@ export default function FinanceiroPage() {
   const [preset,  setPreset]  = useState<Preset>('mes')
   const [inicio,  setInicio]  = useState(getRange('mes').inicio)
   const [fim,     setFim]     = useState(getRange('mes').fim)
-  const [data,    setData]    = useState<FinanceiroDto | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [data,      setData]      = useState<FinanceiroDto | null>(null)
+  const [loading,   setLoading]   = useState(true)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(async (ini: string, f: string) => {
     setLoading(true)
@@ -344,8 +346,23 @@ export default function FinanceiroPage() {
           <p className="text-gray-400 text-sm mt-0.5">Receita, custo e margem do período</p>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => window.print()} disabled={!d} className="btn-secondary text-sm print:hidden">
-            <Printer className="w-4 h-4" /> Exportar PDF
+          <button
+            onClick={async () => {
+              if (!d) return
+              setExporting(true)
+              try {
+                await gerarRelatorioPDF(d, { inicio, fim })
+              } catch {
+                toast.error('Erro ao gerar PDF')
+              } finally {
+                setExporting(false)
+              }
+            }}
+            disabled={!d || exporting}
+            className="btn-secondary text-sm print:hidden"
+          >
+            <Printer className="w-4 h-4" />
+            {exporting ? 'Gerando...' : 'Exportar PDF'}
           </button>
           <button onClick={() => load(inicio, fim)} disabled={loading} className="btn-secondary text-sm">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
