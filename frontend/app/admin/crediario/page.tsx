@@ -1,13 +1,14 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import {
-  crediarioApi, CrediariosDto, PagamentoCrediarioDto, FORMAS_PAGAMENTO_CREDIARIO,
+  crediarioApi, userApi, CrediariosDto, PagamentoCrediarioDto,
+  FORMAS_PAGAMENTO_CREDIARIO, UserSummary,
 } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
-  Plus, History, DollarSign, X,
+  Plus, History, DollarSign, X, Search,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -17,6 +18,165 @@ const fmtDateHour = (d: string) =>
   new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 type FilterStatus = 'todos' | 'Aberto' | 'Pago'
+
+// ── Modal de nova dívida manual ───────────────────────────────────────────────
+
+function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [search, setSearch]         = useState('')
+  const [results, setResults]       = useState<UserSummary[]>([])
+  const [searching, setSearching]   = useState(false)
+  const [selected, setSelected]     = useState<UserSummary | null>(null)
+  const [showDrop, setShowDrop]     = useState(false)
+  const [valor, setValor]           = useState('')
+  const [obs, setObs]               = useState('')
+  const [loading, setLoading]       = useState(false)
+
+  useEffect(() => {
+    if (search.trim().length < 2) { setResults([]); return }
+    const t = setTimeout(async () => {
+      setSearching(true)
+      try {
+        const { data } = await userApi.list(search)
+        setResults(data.filter(u => u.role === 'Customer' && u.isActive).slice(0, 6))
+        setShowDrop(true)
+      } catch { /* ignore */ }
+      finally { setSearching(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  function selectUser(u: UserSummary) {
+    setSelected(u)
+    setSearch(u.name)
+    setShowDrop(false)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selected) { toast.error('Selecione um cliente'); return }
+    const valorNum = parseFloat(valor.replace(',', '.'))
+    if (isNaN(valorNum) || valorNum <= 0) { toast.error('Informe um valor válido'); return }
+
+    setLoading(true)
+    try {
+      await crediarioApi.criarManual({
+        userId:         selected.id,
+        valorEmCentavos: Math.round(valorNum * 100),
+        observacao:     obs || undefined,
+      })
+      toast.success(`Crediário de R$ ${valorNum.toFixed(2).replace('.', ',')} criado para ${selected.name}!`)
+      onSuccess()
+      onClose()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao criar crediário')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+          <div>
+            <h2 className="font-bold text-white text-lg flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-amber-400" /> Nova Dívida
+            </h2>
+            <p className="text-sm text-gray-400 mt-0.5">Registrar dívida anterior ao sistema</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {/* Busca de cliente */}
+          <div>
+            <label className="label">Cliente</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Buscar por nome ou CPF..."
+                value={search}
+                onChange={e => { setSearch(e.target.value); setSelected(null) }}
+                onFocus={() => results.length > 0 && setShowDrop(true)}
+                className="input pl-9"
+                autoComplete="off"
+              />
+              {searching && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+              )}
+              {showDrop && results.length > 0 && (
+                <div className="absolute top-full left-0 right-0 z-10 mt-1 bg-surface-700 border border-surface-500 rounded-xl shadow-xl overflow-hidden">
+                  {results.map(u => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => selectUser(u)}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-600 transition-colors text-left"
+                    >
+                      <User className="w-4 h-4 text-gray-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm text-white font-medium truncate">{u.name}</p>
+                        {u.cpf && <p className="text-xs text-gray-500">CPF: {u.cpf}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selected && (
+              <p className="text-xs text-accent-green mt-1.5 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3" /> {selected.name} selecionado
+              </p>
+            )}
+          </div>
+
+          {/* Valor */}
+          <div>
+            <label className="label">Valor da dívida (R$)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={valor}
+              onChange={e => setValor(e.target.value)}
+              className="input"
+              required
+            />
+          </div>
+
+          {/* Observação */}
+          <div>
+            <label className="label">Observação (opcional)</label>
+            <input
+              type="text"
+              placeholder='Ex: "Dívida do torneio de abril"'
+              value={obs}
+              onChange={e => setObs(e.target.value)}
+              className="input"
+              maxLength={500}
+            />
+            <p className="text-xs text-gray-600 mt-1">Se vazio: "Dívida anterior ao sistema". Vencimento padrão: 30 dias.</p>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
+              Cancelar
+            </button>
+            <button type="submit" disabled={loading || !selected} className="btn-primary flex-1 justify-center">
+              {loading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
+                : <><CreditCard className="w-4 h-4" /> Criar Crediário</>
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 // ── Modal de pagamento parcial ─────────────────────────────────────────────────
 interface PagamentoModalProps {
@@ -305,6 +465,7 @@ export default function CrediarioPage() {
   const [filter, setFilter]         = useState<FilterStatus>('Aberto')
   const [loading, setLoading]       = useState(true)
   const [modalCrediario, setModalCrediario] = useState<CrediariosDto | null>(null)
+  const [showNovaDivida, setShowNovaDivida] = useState(false)
 
   const fetchCrediarios = useCallback(async () => {
     setLoading(true)
@@ -331,7 +492,13 @@ export default function CrediarioPage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Modal de pagamento */}
+      {/* Modais */}
+      {showNovaDivida && (
+        <NovaDividaModal
+          onClose={() => setShowNovaDivida(false)}
+          onSuccess={fetchCrediarios}
+        />
+      )}
       {modalCrediario && (
         <PagamentoModal
           crediario={modalCrediario}
@@ -341,13 +508,21 @@ export default function CrediarioPage() {
       )}
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <CreditCard className="w-6 h-6 text-brand-400" /> Crediário
-        </h1>
-        <p className="text-gray-400 text-sm mt-0.5">
-          Clientes com pagamento em aberto — suporta pagamentos parciais
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <CreditCard className="w-6 h-6 text-brand-400" /> Crediário
+          </h1>
+          <p className="text-gray-400 text-sm mt-0.5">
+            Clientes com pagamento em aberto — suporta pagamentos parciais
+          </p>
+        </div>
+        <button
+          onClick={() => setShowNovaDivida(true)}
+          className="btn-primary shrink-0"
+        >
+          <Plus className="w-4 h-4" /> Nova Dívida
+        </button>
       </div>
 
       {/* KPIs */}

@@ -27,12 +27,12 @@ public class Crediario
 
     // ── Comanda de origem ─────────────────────────────────────────────────────
 
-    [Required]
+    /// <summary>Null para crediários criados manualmente (dívidas anteriores ao sistema).</summary>
     [Column("comanda_id")]
-    public Guid ComandaId { get; set; }
+    public Guid? ComandaId { get; set; }
 
     [ForeignKey(nameof(ComandaId))]
-    public Comanda Comanda { get; set; } = null!;
+    public Comanda? Comanda { get; set; }
 
     // ── Valor e datas ─────────────────────────────────────────────────────────
 

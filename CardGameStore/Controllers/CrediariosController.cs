@@ -1,6 +1,7 @@
 // =============================================================================
 // CrediariosController.cs — Gestão de crediários
 //
+// POST /api/crediarios                     → Admin: cria crediário manual (dívida antiga)
 // GET  /api/crediarios                     → Admin: lista todos (filtro por status)
 // GET  /api/crediarios/usuario/{userId}    → Admin: crediários de um cliente
 // GET  /api/crediarios/meu                 → Cliente: seu crediário ativo
@@ -32,6 +33,64 @@ public class CrediariosController : ControllerBase
         _db     = db;
         _email  = email;
         _logger = logger;
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/crediarios — criação manual (dívidas anteriores ao sistema)
+    // -------------------------------------------------------------------------
+    [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(CrediariosDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<ActionResult<CrediariosDto>> CriarManual([FromBody] CriarCrediarioManualRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        // Verifica se o cliente existe
+        var usuario = await _db.Users.FindAsync(request.UserId);
+        if (usuario == null)
+            return BadRequest(new { Message = "Cliente não encontrado." });
+
+        // Bloqueia se já tem crediário aberto
+        var jaTemAberto = await _db.Crediarios
+            .AnyAsync(c => c.UserId == request.UserId && c.Status == CrediariosStatus.Aberto);
+        if (jaTemAberto)
+            return BadRequest(new { Message = "Este cliente já tem um crediário em aberto. Registre um pagamento antes de criar outro." });
+
+        var adminId = GetUserId();
+        var agora   = DateTime.UtcNow;
+
+        var crediario = new Crediario
+        {
+            UserId           = request.UserId,
+            ComandaId        = null, // dívida manual — sem comanda de origem
+            ValorEmCentavos  = request.ValorEmCentavos,
+            DataAbertura     = agora,
+            DataVencimento   = request.DataVencimento.HasValue
+                                   ? request.DataVencimento.Value.ToUniversalTime()
+                                   : agora.AddDays(30),
+            Status           = CrediariosStatus.Aberto,
+            Observacao       = string.IsNullOrWhiteSpace(request.Observacao)
+                                   ? "Dívida anterior ao sistema"
+                                   : request.Observacao,
+            AbertoPorAdminId = adminId,
+        };
+
+        _db.Crediarios.Add(crediario);
+        await _db.SaveChangesAsync();
+
+        // Recarrega com includes para montar o DTO
+        var saved = await _db.Crediarios
+            .Include(c => c.User)
+            .Include(c => c.Pagamentos)
+            .FirstAsync(c => c.Id == crediario.Id);
+
+        _logger.LogInformation(
+            "Crediário manual {Id} criado pelo admin {AdminId} para usuário {UserId} — R$ {Valor:N2}",
+            crediario.Id, adminId, request.UserId, request.ValorEmCentavos / 100m);
+
+        return Ok(MapToDto(saved));
     }
 
     // -------------------------------------------------------------------------

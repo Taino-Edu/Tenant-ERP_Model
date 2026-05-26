@@ -228,7 +228,7 @@ export interface CrediariosDto {
   userId: string
   userName: string
   userEmail: string | null
-  comandaId: string
+  comandaId: string | null
   valorEmReais: number
   valorPagoEmReais: number
   saldoRestanteEmReais: number
@@ -249,6 +249,13 @@ export const FORMAS_PAGAMENTO_CREDIARIO = [
   { value: 'CartaoDebito',  label: 'Cartão de Débito' },
 ] as const
 
+export interface CriarCrediarioManualRequest {
+  userId: string
+  valorEmCentavos: number
+  observacao?: string
+  dataVencimento?: string  // ISO string, opcional
+}
+
 export const crediarioApi = {
   list:        (status?: string) =>
     api.get<CrediariosDto[]>('/api/crediarios', { params: { status } }),
@@ -259,6 +266,8 @@ export const crediarioApi = {
     api.put<CrediariosDto>(`/api/crediarios/${id}/pagar`, { observacao }),
   registrarPagamento: (id: string, valorEmCentavos: number, formaPagamento: string, observacao?: string) =>
     api.post<CrediariosDto>(`/api/crediarios/${id}/pagamento`, { valorEmCentavos, formaPagamento, observacao }),
+  criarManual: (req: CriarCrediarioManualRequest) =>
+    api.post<CrediariosDto>('/api/crediarios', req),
 }
 
 export const COMANDA_PAYMENT_METHODS = [

@@ -13,7 +13,7 @@ public class CrediariosDto
     public Guid      UserId                { get; set; }
     public string    UserName              { get; set; } = string.Empty;
     public string?   UserEmail             { get; set; }
-    public Guid      ComandaId             { get; set; }
+    public Guid?     ComandaId             { get; set; }
     public decimal   ValorEmReais          { get; set; }
     public decimal   ValorPagoEmReais      { get; set; }
     public decimal   SaldoRestanteEmReais  { get; set; }
@@ -48,6 +48,26 @@ public class MarcarPagoRequest
 {
     /// <summary>Observação opcional (ex: "Pago em dinheiro no balcão").</summary>
     public string? Observacao { get; set; }
+}
+
+/// <summary>Body do endpoint POST /api/crediarios (criação manual — dívidas anteriores ao sistema).</summary>
+public class CriarCrediarioManualRequest
+{
+    /// <summary>ID do cliente que tem a dívida.</summary>
+    [Required]
+    public Guid UserId { get; set; }
+
+    /// <summary>Valor da dívida em centavos.</summary>
+    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "O valor deve ser maior que zero.")]
+    public int ValorEmCentavos { get; set; }
+
+    /// <summary>Observação (ex: "Dívida de torneio 12/04/2025").</summary>
+    [MaxLength(500)]
+    public string? Observacao { get; set; }
+
+    /// <summary>Vencimento customizado. Se null, usa DataAbertura + 30 dias.</summary>
+    public DateTime? DataVencimento { get; set; }
 }
 
 /// <summary>Body do endpoint POST /api/crediarios/{id}/pagamento (pagamento parcial).</summary>
