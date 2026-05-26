@@ -449,12 +449,15 @@ export interface ClienteInsightDto {
   userId: string
   nome: string
   email: string | null
+  whatsApp: string | null
   gastoTotal: number
   ticketMedio: number
   numVisitas: number
   ultimaVisita: string | null
   inativo30: boolean
   pontos: number
+  /** Dias até os pontos vencerem. Negativo = já venceu. Null = sem data de vencimento. */
+  pontosVencemEm: number | null
 }
 
 export interface DiaFinanceiroDto {

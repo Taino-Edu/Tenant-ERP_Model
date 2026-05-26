@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { userApi, crediarioApi, CrediariosDto, UserSummary } from '@/lib/api'
+import { userApi, crediarioApi, analyticsApi, CrediariosDto, UserSummary, ClienteInsightDto } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X } from 'lucide-react'
+import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX } from 'lucide-react'
 import Link from 'next/link'
 
 // ── Modal: Novo Cliente ───────────────────────────────────────────────────────
@@ -148,6 +148,8 @@ export default function UsuariosPage() {
   const [adjustingBalance, setAdjustingBalance] = useState(false)
   const [showNovoCliente, setShowNovoCliente] = useState(false)
   const [showRedefinirSenha, setShowRedefinirSenha] = useState(false)
+  const [tabUsuarios, setTabUsuarios]         = useState<'todos' | 'inativos'>('todos')
+  const [insights, setInsights]               = useState<ClienteInsightDto[]>([])
 
   const fetchUsers = useCallback(async (q?: string) => {
     setLoading(true)
@@ -168,7 +170,10 @@ export default function UsuariosPage() {
     }
   }, [])
 
-  useEffect(() => { fetchUsers() }, [fetchUsers])
+  useEffect(() => {
+    fetchUsers()
+    analyticsApi.clientes().then(r => setInsights(r.data)).catch(() => {})
+  }, [fetchUsers])
 
   // Busca ao digitar (debounce simples)
   useEffect(() => {
@@ -214,6 +219,13 @@ export default function UsuariosPage() {
     }
   }
 
+  // ── Derivados para aba inativos ───────────────────────────────────────────────
+  const inativoIds = new Set(insights.filter(i => i.inativo30).map(i => i.userId))
+  const insightMap = new Map(insights.map(i => [i.userId, i]))
+  const listaFiltrada = tabUsuarios === 'inativos'
+    ? users.filter(u => inativoIds.has(u.id))
+    : users
+
   return (
     <div className="p-6 h-full">
       {/* Modals */}
@@ -250,38 +262,73 @@ export default function UsuariosPage() {
 
         {/* ── Lista de clientes ──────────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input
-              className="input pl-9"
-              placeholder="Buscar por nome, CPF ou WhatsApp..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+
+          {/* Tabs + Busca */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex gap-1 bg-surface-800 p-1 rounded-lg shrink-0">
+              <button
+                onClick={() => setTabUsuarios('todos')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${tabUsuarios === 'todos' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                <Users className="w-3.5 h-3.5 inline mr-1" />Todos
+              </button>
+              <button
+                onClick={() => setTabUsuarios('inativos')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${tabUsuarios === 'inativos' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                <UserX className="w-3.5 h-3.5" />
+                Inativos
+                {insights.filter(i => i.inativo30).length > 0 && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${tabUsuarios === 'inativos' ? 'bg-white/20' : 'bg-amber-500/20 text-amber-400'}`}>
+                    {insights.filter(i => i.inativo30).length}
+                  </span>
+                )}
+              </button>
+            </div>
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                className="input pl-9 w-full"
+                placeholder="Buscar por nome, CPF ou WhatsApp..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
           </div>
 
           {loading ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : users.length === 0 ? (
+          ) : listaFiltrada.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-500 gap-3">
-              <Users className="w-10 h-10 text-gray-600" />
-              <p className="text-sm">Nenhum cliente encontrado</p>
+              {tabUsuarios === 'inativos'
+                ? <><UserX className="w-10 h-10 text-amber-600/40" /><p className="text-sm">Nenhum cliente inativo 🎉</p></>
+                : <><Users className="w-10 h-10 text-gray-600" /><p className="text-sm">Nenhum cliente encontrado</p></>
+              }
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {users.map(u => (
+              {listaFiltrada.map(u => {
+                const insight = insightMap.get(u.id)
+                return (
                 <button
                   key={u.id}
                   onClick={() => setSelected(u)}
                   className={`w-full card text-left hover:border-brand-500/40 transition-all duration-150 ${
                     selected?.id === u.id ? 'border-brand-500/60 bg-brand-600/5' : ''
-                  }`}
+                  } ${insight?.inativo30 ? 'border-amber-500/20' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-white text-sm">{u.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-white text-sm">{u.name}</p>
+                        {insight?.inativo30 && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20 shrink-0">
+                            inativo
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-3 mt-1">
                         {u.cpf && (
                           <span className="flex items-center gap-1 text-xs text-gray-500">
@@ -289,8 +336,24 @@ export default function UsuariosPage() {
                           </span>
                         )}
                         {u.whatsApp && (
-                          <span className="flex items-center gap-1 text-xs text-gray-500">
-                            <Phone className="w-3 h-3" /> {u.whatsApp}
+                          <a
+                            href={`https://wa.me/${u.whatsApp.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                          >
+                            <svg viewBox="0 0 24 24" className="w-3 h-3 fill-current shrink-0">
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                            </svg>
+                            {u.whatsApp}
+                          </a>
+                        )}
+                        {insight && (
+                          <span className="flex items-center gap-1 text-xs text-gray-600">
+                            <Clock className="w-3 h-3" />
+                            {insight.numVisitas} visita{insight.numVisitas !== 1 ? 's' : ''}
+                            {insight.ultimaVisita && ` · última: ${new Date(insight.ultimaVisita).toLocaleDateString('pt-BR')}`}
                           </span>
                         )}
                       </div>
@@ -306,7 +369,8 @@ export default function UsuariosPage() {
                     </div>
                   </div>
                 </button>
-              ))}
+              )
+            })}
             </div>
           )}
         </div>
@@ -325,8 +389,20 @@ export default function UsuariosPage() {
                 <p className="text-xs text-gray-500 mb-1">Cliente selecionado</p>
                 <p className="font-bold text-white text-lg">{selected.name}</p>
                 {selected.cpf && <p className="text-xs text-gray-500">CPF: {selected.cpf}</p>}
-                {selected.whatsApp && <p className="text-xs text-gray-500">WhatsApp: {selected.whatsApp}</p>}
-                {selected.email && <p className="text-xs text-gray-500">{selected.email}</p>}
+                {selected.whatsApp && (
+                  <a
+                    href={`https://wa.me/${selected.whatsApp.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition-colors mt-0.5"
+                  >
+                    <svg viewBox="0 0 24 24" className="w-3 h-3 fill-current shrink-0">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                    {selected.whatsApp}
+                  </a>
+                )}
+                {selected.email && <p className="text-xs text-gray-500 mt-0.5">{selected.email}</p>}
                 <button
                   onClick={() => setShowRedefinirSenha(true)}
                   className="btn-secondary mt-2 text-xs py-1.5 px-3 w-full justify-center"

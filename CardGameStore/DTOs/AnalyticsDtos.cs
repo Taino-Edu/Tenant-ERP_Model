@@ -53,12 +53,15 @@ public class ClienteInsightDto
     public Guid    UserId       { get; set; }
     public string  Nome         { get; set; } = string.Empty;
     public string? Email        { get; set; }
+    public string? WhatsApp     { get; set; }
     public decimal GastoTotal   { get; set; }
     public decimal TicketMedio  { get; set; }
     public int     NumVisitas   { get; set; }
     public DateTime? UltimaVisita { get; set; }
     public bool    Inativo30    { get; set; }  // sem visita nos últimos 30 dias
     public int     Pontos       { get; set; }
+    /// <summary>Dias até os pontos vencerem. Negativo = já venceu. Null = sem data de vencimento.</summary>
+    public int?    PontosVencemEm { get; set; }
 }
 
 // ── Financeiro ────────────────────────────────────────────────────────────────

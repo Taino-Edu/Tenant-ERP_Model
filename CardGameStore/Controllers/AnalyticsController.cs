@@ -149,7 +149,7 @@ public class AnalyticsController : ControllerBase
 
         var usuarios = await _db.Users
             .Where(u => u.IsActive && u.Role == UserRole.Customer)
-            .Select(u => new { u.Id, u.Name, u.Email, u.PointsBalance })
+            .Select(u => new { u.Id, u.Name, u.Email, u.WhatsApp, u.PointsBalance, u.PointsExpiresAt })
             .ToListAsync();
 
         var estatisticas = await _db.Comandas
@@ -168,18 +168,23 @@ public class AnalyticsController : ControllerBase
         {
             var stats = estatisticas.FirstOrDefault(e => e.UserId == u.Id);
             var ultima = stats?.UltimaVisita;
+            int? pontosVencemEm = u.PointsExpiresAt.HasValue
+                ? (int)Math.Round((u.PointsExpiresAt.Value - DateTime.UtcNow).TotalDays)
+                : null;
             return new ClienteInsightDto
             {
-                UserId       = u.Id,
-                Nome         = u.Name,
-                Email        = u.Email,
-                GastoTotal   = stats?.GastoTotal ?? 0,
-                TicketMedio  = stats is { NumVisitas: > 0 }
+                UserId        = u.Id,
+                Nome          = u.Name,
+                Email         = u.Email,
+                WhatsApp      = u.WhatsApp,
+                GastoTotal    = stats?.GastoTotal ?? 0,
+                TicketMedio   = stats is { NumVisitas: > 0 }
                     ? Math.Round(stats.GastoTotal / stats.NumVisitas, 2) : 0,
-                NumVisitas   = stats?.NumVisitas ?? 0,
-                UltimaVisita = ultima,
-                Inativo30    = ultima == null || ultima < ha30Dias,
-                Pontos       = u.PointsBalance,
+                NumVisitas    = stats?.NumVisitas ?? 0,
+                UltimaVisita  = ultima,
+                Inativo30     = ultima == null || ultima < ha30Dias,
+                Pontos        = u.PointsBalance,
+                PontosVencemEm = pontosVencemEm,
             };
         })
         .Where(i => !apenasInativos || i.Inativo30)
