@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 # scripts/ deve ser copiado antes do npm ci pois o postinstall chama scripts/patch-next.js
 COPY scripts/ ./scripts/
-RUN npm ci --legacy-peer-deps
+RUN npm install --legacy-peer-deps --package-lock-only && npm ci --legacy-peer-deps
 
 FROM node:20-alpine AS builder
 WORKDIR /app
