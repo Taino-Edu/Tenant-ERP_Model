@@ -28,15 +28,8 @@ public class ComandaService : IComandaService
 
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
     {
-        var existing = await _db.Comandas
-            .Include(c => c.Items)
-            .Include(c => c.User)
-            .FirstOrDefaultAsync(c => c.UserId == userId &&
-                (c.Status == ComandaStatus.Aberta || c.Status == ComandaStatus.EmAndamento));
-
-        if (existing != null)
-            return MapToDto(existing);
-
+        // Sempre cria uma nova comanda — o cliente pode ter múltiplas abertas simultaneamente
+        // (ex: sessão anterior paga via crediário acumulado, nova visita à loja)
         var comanda = new Comanda
         {
             UserId          = userId,
@@ -52,20 +45,25 @@ public class ComandaService : IComandaService
 
     public async Task<ComandaDto?> GetActiveComandaAsync(Guid userId)
     {
+        // Se houver múltiplas abertas, retorna a mais recente
         var comanda = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)
-            .FirstOrDefaultAsync(c => c.UserId == userId &&
-                (c.Status == ComandaStatus.Aberta || c.Status == ComandaStatus.EmAndamento));
+            .Where(c => c.UserId == userId &&
+                (c.Status == ComandaStatus.Aberta || c.Status == ComandaStatus.EmAndamento))
+            .OrderByDescending(c => c.OpenedAt)
+            .FirstOrDefaultAsync();
 
         return comanda == null ? null : MapToDto(comanda);
     }
 
     public async Task<Guid?> GetActiveComandaIdByUserAsync(Guid userId)
     {
+        // Se houver múltiplas abertas, retorna a ID da mais recente
         return await _db.Comandas
             .Where(c => c.UserId == userId &&
                 (c.Status == ComandaStatus.Aberta || c.Status == ComandaStatus.EmAndamento))
+            .OrderByDescending(c => c.OpenedAt)
             .Select(c => (Guid?)c.Id)
             .FirstOrDefaultAsync();
     }
@@ -85,11 +83,14 @@ public class ComandaService : IComandaService
         if (request.Quantity <= 0)
             throw new ArgumentException("Quantidade deve ser maior que zero.");
 
+        // Se houver múltiplas abertas, adiciona à mais recente
         var comanda = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)
-            .FirstOrDefaultAsync(c => c.UserId == userId &&
+            .Where(c => c.UserId == userId &&
                 (c.Status == ComandaStatus.Aberta || c.Status == ComandaStatus.EmAndamento))
+            .OrderByDescending(c => c.OpenedAt)
+            .FirstOrDefaultAsync()
             ?? throw new InvalidOperationException("Comanda ativa não encontrada para este usuário.");
 
         var (itemName, priceInCents) = await ResolveItemAsync(request);
