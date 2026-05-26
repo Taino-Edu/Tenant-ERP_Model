@@ -193,6 +193,10 @@ builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors      = builder.Environment.IsDevelopment();
     options.MaximumReceiveMessageSize = 32 * 1024;
+    // Ping a cada 10s — detecta conexão morta mais rápido (padrão: 15s)
+    options.KeepAliveInterval         = TimeSpan.FromSeconds(10);
+    // Se não receber resposta em 20s, considera desconectado (padrão: 30s)
+    options.ClientTimeoutInterval     = TimeSpan.FromSeconds(20);
 });
 
 // ---------------------------------------------------------------------------

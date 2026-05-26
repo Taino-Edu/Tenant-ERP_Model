@@ -618,14 +618,30 @@ export default function DashboardPage() {
         tocarSom('fechada')
       })
       hub.onclose(() => setConnected(false))
+      hub.onreconnecting(() => setConnected(false))
       hub.onreconnected(() => { setConnected(true); fetchComandas() })
     }).catch(() => setConnected(false))
+
+    // ── Polling de segurança — garante dados frescos mesmo se evento falhar ──
+    // Roda a cada 30s; se hub caiu, tenta reconectar também
+    const poll = setInterval(async () => {
+      const { HubConnectionState } = await import('@microsoft/signalr')
+      const hub = (await import('@/lib/signalr')).getComandaHub()
+      if (hub.state === HubConnectionState.Disconnected) {
+        try { await hub.start(); setConnected(true) } catch { /* ignora */ }
+      }
+      fetchComandas()
+    }, 30_000)
 
     // Limpa badge quando admin foca na aba
     const onFocus = () => clearBadge()
     window.addEventListener('focus', onFocus)
 
-    return () => { stopHub(); window.removeEventListener('focus', onFocus) }
+    return () => {
+      clearInterval(poll)
+      stopHub()
+      window.removeEventListener('focus', onFocus)
+    }
   }, [fetchComandas, fetchHistory])
 
   useEffect(() => {
