@@ -8,6 +8,9 @@ RUN npm ci --legacy-peer-deps
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+# CACHEBUST invalida o cache do COPY a cada deploy sem re-baixar npm
+ARG CACHEBUST=1
+RUN echo "Build: $CACHEBUST"
 COPY . .
 
 # API_URL é passado via --build-arg no docker-compose (ou docker build).
