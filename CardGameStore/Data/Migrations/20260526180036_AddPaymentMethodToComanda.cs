@@ -56,13 +56,13 @@ namespace CardGameStore.Data.Migrations
                 name: "pagamentos_crediario",
                 columns: table => new
                 {
-                    id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    crediario_id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    valor_em_centavos = table.Column<int>(type: "INTEGER", nullable: false),
-                    forma_pagamento = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
-                    observacao = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    admin_id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    created_at = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    id = table.Column<Guid>(nullable: false),
+                    crediario_id = table.Column<Guid>(nullable: false),
+                    valor_em_centavos = table.Column<int>(nullable: false),
+                    forma_pagamento = table.Column<string>(maxLength: 50, nullable: false),
+                    observacao = table.Column<string>(maxLength: 500, nullable: true),
+                    admin_id = table.Column<Guid>(nullable: false),
+                    created_at = table.Column<DateTime>(nullable: false)
                 },
                 constraints: table =>
                 {
@@ -79,12 +79,12 @@ namespace CardGameStore.Data.Migrations
                 name: "product_categories",
                 columns: table => new
                 {
-                    id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    emoji = table.Column<string>(type: "TEXT", maxLength: 10, nullable: true),
-                    display_order = table.Column<int>(type: "INTEGER", nullable: false),
-                    is_active = table.Column<bool>(type: "INTEGER", nullable: false),
-                    created_at = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    id = table.Column<Guid>(nullable: false),
+                    name = table.Column<string>(maxLength: 100, nullable: false),
+                    emoji = table.Column<string>(maxLength: 10, nullable: true),
+                    display_order = table.Column<int>(nullable: false),
+                    is_active = table.Column<bool>(nullable: false),
+                    created_at = table.Column<DateTime>(nullable: false)
                 },
                 constraints: table =>
                 {
