@@ -586,7 +586,7 @@ export default function DashboardPage() {
     analyticsApi.financeiro(hoje, hoje).then(r => setFinHoje(r.data)).catch(() => {})
     analyticsApi.financeiro(ini7s, hoje).then(r => setFin7d(r.data)).catch(() => {})
     productApi.list().then(r => setLowStock(r.data.filter(p => p.isLowStock).length)).catch(() => {})
-    analyticsApi.clientes().then(r => setRanking(r.data.slice(0, 5))).catch(() => {})
+    analyticsApi.clientes().then(r => setRanking(r.data.filter(c => c.gastoTotal > 0).slice(0, 5))).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -741,7 +741,7 @@ export default function DashboardPage() {
       {finHoje && finHoje.receita > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {(() => {
-            const totalTx = finHoje.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0)
+            const totalTx = (finHoje.pagamentosPorForma ?? []).reduce((s, f) => s + f.quantidade, 0)
             const ticketMedio = totalTx > 0 ? finHoje.receita / totalTx : 0
             return [
               { label: 'Fechado Hoje',   value: fmt(totalFechado),  icon: Banknote,   color: 'text-accent-gold' },
