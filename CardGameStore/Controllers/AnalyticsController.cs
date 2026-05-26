@@ -289,13 +289,15 @@ public class AnalyticsController : ControllerBase
 
         return Ok(new FinanceiroDto
         {
-            Receita       = Math.Round(receita, 2),
-            Custo         = Math.Round(custo, 2),
-            Margem        = Math.Round(margem, 2),
-            MargemPercent = margemPercent,
-            Crediarios    = Math.Round(crediarios, 2),
-            DiaDia        = diaDia,
-            TopProdutos   = topProdutos,
+            Receita         = Math.Round(receita, 2),
+            ReceitaComandas = Math.Round(receitaComandas, 2),
+            ReceitaAvulsa   = Math.Round(receitaAvulsa, 2),
+            Custo           = Math.Round(custo, 2),
+            Margem          = Math.Round(margem, 2),
+            MargemPercent   = margemPercent,
+            Crediarios      = Math.Round(crediarios, 2),
+            DiaDia          = diaDia,
+            TopProdutos     = topProdutos,
         });
     }
 }

@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { productApi, vendaAvulsaApi, PAYMENT_METHODS, Product, VendaAvulsaDto } from '@/lib/api'
+import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, Product, VendaAvulsaDto, UserSummary } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import toast from 'react-hot-toast'
 import {
@@ -183,7 +183,11 @@ export default function VendaAvulsaPage() {
   const [tab, setTab]               = useState<'venda' | 'historico'>('venda')
   const [products, setProducts]     = useState<Product[]>([])
   const [cart, setCart]             = useState<CartItem[]>([])
-  const [clientName, setClientName] = useState('')
+  const [clientName, setClientName]         = useState('')
+  const [clientSearch, setClientSearch]     = useState('')
+  const [clientResults, setClientResults]   = useState<UserSummary[]>([])
+  const [clientDropdown, setClientDropdown] = useState(false)
+  const [clientLoading, setClientLoading]   = useState(false)
   const [payment, setPayment]       = useState<string>(PAYMENT_METHODS[0].value)
   const [discountPct, setDiscount]  = useState(0)
   const [discountMode, setDiscMode] = useState<'total' | 'per_item'>('total')
@@ -215,6 +219,27 @@ export default function VendaAvulsaPage() {
       .finally(() => setHistLoad(false))
   }, [tab])
 
+  // ── Busca de clientes cadastrados ────────────────────────────────────────
+  useEffect(() => {
+    if (clientSearch.trim().length < 2) { setClientResults([]); return }
+    const timer = setTimeout(async () => {
+      setClientLoading(true)
+      try {
+        const { data } = await userApi.list(clientSearch)
+        setClientResults(data.filter(u => u.role === 'Customer' && u.isActive).slice(0, 6))
+      } catch { /* silencioso */ }
+      finally { setClientLoading(false) }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [clientSearch])
+
+  function selectClient(u: UserSummary) {
+    setClientName(u.name)
+    setClientSearch(u.name)
+    setClientResults([])
+    setClientDropdown(false)
+  }
+
   // ── Carrinho ──────────────────────────────────────────────────────────────
 
   function addToCart(product: Product) {
@@ -244,7 +269,8 @@ export default function VendaAvulsaPage() {
   }
 
   function clearAll() {
-    setCart([]); setClientName(''); setPayment(PAYMENT_METHODS[0].value)
+    setCart([]); setClientName(''); setClientSearch(''); setClientResults([])
+    setPayment(PAYMENT_METHODS[0].value)
     setDiscount(0); setDiscMode('total'); setReceived(''); setReceipt(null)
   }
 
@@ -497,16 +523,42 @@ export default function VendaAvulsaPage() {
             {/* Cliente + pagamento */}
             <div className="card space-y-3">
               <div>
-                <label className="label text-xs">Nome do cliente (opcional)</label>
+                <label className="label text-xs">Cliente (opcional)</label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 z-10" />
                   <input
                     className="input pl-9 text-sm"
-                    placeholder="Cliente Balcão"
-                    value={clientName}
-                    onChange={e => setClientName(e.target.value)}
+                    placeholder="Buscar por nome ou deixar em branco"
+                    value={clientSearch}
+                    onChange={e => { setClientSearch(e.target.value); setClientName(e.target.value); setClientDropdown(true) }}
+                    onFocus={() => setClientDropdown(true)}
+                    onBlur={() => setTimeout(() => setClientDropdown(false), 150)}
                     maxLength={100}
                   />
+                  {clientLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500 animate-spin" />
+                  )}
+                  {/* Dropdown de clientes */}
+                  {clientDropdown && clientResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-surface-700 border border-surface-500 rounded-xl shadow-2xl overflow-hidden">
+                      {clientResults.map(u => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onMouseDown={() => selectClient(u)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-surface-600 transition-colors text-left"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-brand-600/20 flex items-center justify-center shrink-0">
+                            <User className="w-3.5 h-3.5 text-brand-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-white truncate">{u.name}</p>
+                            {u.cpf && <p className="text-[10px] text-gray-500">{u.cpf}</p>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

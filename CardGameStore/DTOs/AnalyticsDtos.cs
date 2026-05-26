@@ -65,11 +65,13 @@ public class ClienteInsightDto
 
 public class FinanceiroDto
 {
-    public decimal Receita        { get; set; } // vendas do período (R$)
-    public decimal Custo          { get; set; } // custo dos produtos vendidos (R$)
-    public decimal Margem         { get; set; } // receita - custo
-    public decimal MargemPercent  { get; set; } // (margem / custo) * 100
-    public decimal Crediarios     { get; set; } // total em aberto nos crediários (R$)
+    public decimal Receita          { get; set; } // total (comandas + avulsas)
+    public decimal ReceitaComandas  { get; set; } // só comandas fechadas
+    public decimal ReceitaAvulsa    { get; set; } // só vendas avulsas
+    public decimal Custo            { get; set; } // custo dos produtos vendidos (R$)
+    public decimal Margem           { get; set; } // receita - custo
+    public decimal MargemPercent    { get; set; } // (margem / custo) * 100
+    public decimal Crediarios       { get; set; } // total em aberto nos crediários (R$)
     public List<DiaFinanceiroDto> DiaDia { get; set; } = new();
     public List<TopProductFinDto> TopProdutos { get; set; } = new();
 }

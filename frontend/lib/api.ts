@@ -452,6 +452,8 @@ export interface TopProductFinDto {
 
 export interface FinanceiroDto {
   receita: number
+  receitaComandas: number
+  receitaAvulsa: number
   custo: number
   margem: number
   margemPercent: number

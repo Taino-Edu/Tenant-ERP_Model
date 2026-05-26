@@ -290,10 +290,38 @@ export default function FinanceiroPage() {
         <>
           {/* KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard label="Receita total"      value={fmt(d.receita)}          sub={`${d.diaDia.length} dias`}                    color="green"  icon={TrendingUp}   />
-            <KpiCard label="Custo estimado"     value={fmt(d.custo)}            sub="Preço de custo dos itens"                     color="red"    icon={ShoppingBag}  />
+            <KpiCard label="Receita total"      value={fmt(d.receita)}          sub={`${d.diaDia.length} dias`}                      color="green"  icon={TrendingUp}   />
+            <KpiCard label="Custo estimado"     value={fmt(d.custo)}            sub="Preço de custo dos itens"                       color="red"    icon={ShoppingBag}  />
             <KpiCard label="Margem bruta"       value={fmt(d.margem)}           sub={`${d.margemPercent.toFixed(1)}% sobre receita`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} />
-            <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}       sub="A receber"                                    color="yellow" icon={AlertCircle}  />
+            <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}       sub="A receber"                                      color="yellow" icon={AlertCircle}  />
+          </div>
+
+          {/* Breakdown Comandas vs Avulsas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="card flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-brand-600/15 flex items-center justify-center shrink-0">
+                <ShoppingBag className="w-5 h-5 text-brand-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Comandas (mesas)</p>
+                <p className="text-xl font-bold font-mono text-brand-400">{fmt(d.receitaComandas)}</p>
+                {d.receita > 0 && (
+                  <p className="text-xs text-gray-600 mt-0.5">{((d.receitaComandas / d.receita) * 100).toFixed(1)}% do total</p>
+                )}
+              </div>
+            </div>
+            <div className="card flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
+                <Package className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Venda Avulsa (balcão)</p>
+                <p className="text-xl font-bold font-mono text-emerald-400">{fmt(d.receitaAvulsa)}</p>
+                {d.receita > 0 && (
+                  <p className="text-xs text-gray-600 mt-0.5">{((d.receitaAvulsa / d.receita) * 100).toFixed(1)}% do total</p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Gráfico + Donut */}
