@@ -274,9 +274,10 @@ public class AnalyticsController : ControllerBase
             .Select(c => new { c.PaymentMethod, c.TotalInCents })
             .ToListAsync();
 
-        // Agrupa comandas + avulsas por forma
+        // Agrupa comandas + avulsas por forma (ignora PaymentMethod nulo — registros antigos sem forma)
         var todasFormas = comandasPeriodo
-            .Select(c => (Forma: c.PaymentMethod ?? "Outros", Centavos: c.TotalInCents))
+            .Where(c => c.PaymentMethod != null)
+            .Select(c => (Forma: c.PaymentMethod!, Centavos: c.TotalInCents))
             .Concat(todasVendas
                 .Where(v => v.SoldAt >= ini && v.SoldAt <= end)
                 .Select(v => (Forma: v.PaymentMethod, Centavos: v.TotalInCents)))
