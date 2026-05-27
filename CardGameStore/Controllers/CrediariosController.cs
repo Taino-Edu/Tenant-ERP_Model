@@ -196,6 +196,51 @@ public class CrediariosController : ControllerBase
     }
 
     // -------------------------------------------------------------------------
+    // PATCH /api/crediarios/{id} — editar valor, observação ou vencimento
+    // -------------------------------------------------------------------------
+    [HttpPatch("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(CrediariosDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<ActionResult<CrediariosDto>> Editar(Guid id, [FromBody] EditarCrediarioRequest request)
+    {
+        var crediario = await _db.Crediarios
+            .Include(c => c.User)
+            .Include(c => c.Pagamentos)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (crediario == null)
+            return NotFound(new { Message = "Crediário não encontrado." });
+
+        if (crediario.Status == CrediariosStatus.Pago)
+            return BadRequest(new { Message = "Não é possível editar um crediário já quitado." });
+
+        if (request.ValorEmCentavos.HasValue)
+        {
+            if (request.ValorEmCentavos.Value < crediario.ValorPagoEmCentavos)
+                return BadRequest(new
+                {
+                    Message = $"O novo valor (R$ {request.ValorEmCentavos.Value / 100m:N2}) não pode ser menor do que o valor já pago (R$ {crediario.ValorPagoEmCentavos / 100m:N2})."
+                });
+            crediario.ValorEmCentavos = request.ValorEmCentavos.Value;
+        }
+
+        if (request.Observacao != null)
+            crediario.Observacao = request.Observacao;
+
+        if (request.DataVencimento.HasValue)
+            crediario.DataVencimento = request.DataVencimento.Value.ToUniversalTime();
+
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Crediário {Id} editado pelo admin {AdminId}", id, GetUserId());
+
+        return Ok(MapToDto(crediario));
+    }
+
+    // -------------------------------------------------------------------------
     // POST /api/crediarios/{id}/pagamento
     // -------------------------------------------------------------------------
     [HttpPost("{id:guid}/pagamento")]

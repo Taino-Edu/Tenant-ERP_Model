@@ -70,6 +70,21 @@ public class CriarCrediarioManualRequest
     public DateTime? DataVencimento { get; set; }
 }
 
+/// <summary>Body do endpoint PATCH /api/crediarios/{id} (edição de crediário em aberto).</summary>
+public class EditarCrediarioRequest
+{
+    /// <summary>Novo valor total em centavos. Se null, mantém o atual.</summary>
+    [Range(1, int.MaxValue, ErrorMessage = "O valor deve ser maior que zero.")]
+    public int? ValorEmCentavos { get; set; }
+
+    /// <summary>Nova observação. Se null, mantém a atual.</summary>
+    [MaxLength(500)]
+    public string? Observacao { get; set; }
+
+    /// <summary>Nova data de vencimento. Se null, mantém a atual.</summary>
+    public DateTime? DataVencimento { get; set; }
+}
+
 /// <summary>Body do endpoint POST /api/crediarios/{id}/pagamento (pagamento parcial).</summary>
 public class RegistrarPagamentoRequest
 {

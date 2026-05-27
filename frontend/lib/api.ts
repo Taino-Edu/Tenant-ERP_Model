@@ -274,6 +274,8 @@ export const crediarioApi = {
     api.post<CrediariosDto>(`/api/crediarios/${id}/pagamento`, { valorEmCentavos, formaPagamento, observacao }),
   criarManual: (req: CriarCrediarioManualRequest) =>
     api.post<CrediariosDto>('/api/crediarios', req),
+  editar: (id: string, req: { valorEmCentavos?: number; observacao?: string; dataVencimento?: string }) =>
+    api.patch<CrediariosDto>(`/api/crediarios/${id}`, req),
 }
 
 export const COMANDA_PAYMENT_METHODS = [

@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
-  Plus, History, DollarSign, X, Search,
+  Plus, History, DollarSign, X, Search, Pencil,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -178,6 +178,117 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   )
 }
 
+// ── Modal de edição do crediário ─────────────────────────────────────────────
+interface EditarModalProps {
+  crediario: CrediariosDto
+  onClose: () => void
+  onSuccess: () => void
+}
+
+function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProps) {
+  const [valor, setValor]       = useState(crediario.valorEmReais.toFixed(2).replace('.', ','))
+  const [obs, setObs]           = useState(crediario.observacao ?? '')
+  const [venc, setVenc]         = useState(crediario.dataVencimento.slice(0, 10))
+  const [loading, setLoading]   = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const valorNum = parseFloat(valor.replace(',', '.'))
+    if (isNaN(valorNum) || valorNum <= 0) { toast.error('Informe um valor válido'); return }
+
+    setLoading(true)
+    try {
+      await crediarioApi.editar(crediario.id, {
+        valorEmCentavos: Math.round(valorNum * 100),
+        observacao:      obs || undefined,
+        dataVencimento:  venc || undefined,
+      })
+      toast.success('Crediário atualizado!')
+      onSuccess()
+      onClose()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao editar crediário')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+          <div>
+            <h2 className="font-bold text-white text-lg flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-brand-400" /> Editar Crediário
+            </h2>
+            <p className="text-sm text-gray-400 mt-0.5">{crediario.userName}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
+          {/* Valor */}
+          <div>
+            <label className="label">Valor total da dívida (R$)</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="0,00"
+              value={valor}
+              onChange={e => setValor(e.target.value)}
+              className="input"
+              required
+            />
+            {crediario.valorPagoEmReais > 0 && (
+              <p className="text-xs text-amber-400 mt-1">
+                Já pago: R$ {crediario.valorPagoEmReais.toFixed(2).replace('.', ',')} — o valor total não pode ser menor que isso.
+              </p>
+            )}
+          </div>
+
+          {/* Vencimento */}
+          <div>
+            <label className="label">Data de vencimento</label>
+            <input
+              type="date"
+              value={venc}
+              onChange={e => setVenc(e.target.value)}
+              className="input"
+            />
+          </div>
+
+          {/* Observação */}
+          <div>
+            <label className="label">Observação</label>
+            <input
+              type="text"
+              placeholder="Ex: Corrigido — valor real da comanda"
+              value={obs}
+              onChange={e => setObs(e.target.value)}
+              className="input"
+              maxLength={500}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
+              Cancelar
+            </button>
+            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
+              {loading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
+                : <><Pencil className="w-4 h-4" /> Salvar</>
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Modal de pagamento parcial ─────────────────────────────────────────────────
 interface PagamentoModalProps {
   crediario: CrediariosDto
@@ -324,9 +435,11 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
 function CrediarioCard({
   c,
   onPagamento,
+  onEditar,
 }: {
   c: CrediariosDto
   onPagamento: (c: CrediariosDto) => void
+  onEditar: (c: CrediariosDto) => void
 }) {
   const [expandido, setExpandido] = useState(false)
 
@@ -400,12 +513,20 @@ function CrediarioCard({
             )}
           </div>
           {c.status !== 'Pago' && (
-            <button
-              onClick={() => onPagamento(c)}
-              className="btn-success text-sm py-1.5 px-4 whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" /> Registrar Pagamento
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => onPagamento(c)}
+                className="btn-success text-sm py-1.5 px-4 whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" /> Registrar Pagamento
+              </button>
+              <button
+                onClick={() => onEditar(c)}
+                className="btn-secondary text-sm py-1.5 px-4 whitespace-nowrap"
+              >
+                <Pencil className="w-4 h-4" /> Editar Valor
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -464,7 +585,8 @@ export default function CrediarioPage() {
   const [crediarios, setCrediarios] = useState<CrediariosDto[]>([])
   const [filter, setFilter]         = useState<FilterStatus>('Aberto')
   const [loading, setLoading]       = useState(true)
-  const [modalCrediario, setModalCrediario] = useState<CrediariosDto | null>(null)
+  const [modalCrediario, setModalCrediario]   = useState<CrediariosDto | null>(null)
+  const [editarCrediario, setEditarCrediario] = useState<CrediariosDto | null>(null)
   const [showNovaDivida, setShowNovaDivida] = useState(false)
 
   const fetchCrediarios = useCallback(async () => {
@@ -503,6 +625,13 @@ export default function CrediarioPage() {
         <PagamentoModal
           crediario={modalCrediario}
           onClose={() => setModalCrediario(null)}
+          onSuccess={fetchCrediarios}
+        />
+      )}
+      {editarCrediario && (
+        <EditarCrediarioModal
+          crediario={editarCrediario}
+          onClose={() => setEditarCrediario(null)}
           onSuccess={fetchCrediarios}
         />
       )}
@@ -585,6 +714,7 @@ export default function CrediarioPage() {
               key={c.id}
               c={c}
               onPagamento={setModalCrediario}
+              onEditar={setEditarCrediario}
             />
           ))}
         </div>
