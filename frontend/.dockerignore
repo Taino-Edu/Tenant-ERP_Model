@@ -1,0 +1,23 @@
+# ── Dependências locais (recriadas pelo npm ci no build) ─────────────────────
+node_modules/
+
+# ── Build anterior ────────────────────────────────────────────────────────────
+.next/
+out/
+
+# ── Git e CI ─────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.github/
+
+# ── Configs locais / IDE ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.vscode/
+
+# ── Docs e arquivos temporários ───────────────────────────────────────────────
+*.md
+*.log

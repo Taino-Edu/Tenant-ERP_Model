@@ -1,0 +1,23 @@
+# ── Build artifacts ──────────────────────────────────────────────────────────
+bin/
+obj/
+publish/
+
+# ── Git e CI ─────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.github/
+
+# ── Configs locais / IDE ──────────────────────────────────────────────────────
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+launchSettings.json
+appsettings.Development.json
+
+# ── Docs e arquivos temporários ───────────────────────────────────────────────
+*.md
+*.txt
+*.log
