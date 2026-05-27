@@ -416,7 +416,7 @@ function ComandaCard({
     try { await onCancel(comanda.id) } finally { setLoading(false) }
   }
   async function handleRemoveItem(itemId: string, itemName: string) {
-    if (!confirm(`Remover "${itemName}" da comanda?`)) return
+    if (!window.confirm(`Remover "${itemName}" da comanda?`)) return
     setRemovingItem(itemId)
     try {
       const { data } = await comandaApi.removeItem(comanda.id, itemId)
