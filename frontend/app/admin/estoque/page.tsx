@@ -248,23 +248,23 @@ export default function EstoquePage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {modal !== undefined && (
         <ProductModal product={modal} categories={categories} onClose={() => setModal(undefined)} onSave={handleSave} />
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Estoque</h1>
           <p className="text-gray-400 text-sm mt-0.5">{products.length} produtos cadastrados</p>
         </div>
         <div className="flex gap-2">
           <button onClick={exportCsv} className="btn-secondary" title="Exportar CSV">
-            <Download className="w-4 h-4" /> CSV
+            <Download className="w-4 h-4" /> <span className="hidden sm:inline">CSV</span>
           </button>
           <button onClick={() => setModal(null)} className="btn-primary">
-            <Plus className="w-4 h-4" /> Novo Produto
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo Produto</span><span className="sm:hidden">Novo</span>
           </button>
         </div>
       </div>
@@ -286,7 +286,8 @@ export default function EstoquePage() {
         <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
       ) : (
         <div className="card p-0 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-surface-800 border-b border-surface-500">
               <tr className="text-left">
                 {['Produto', 'Categoria', 'Cód. Barras', 'Custo', 'Venda', 'Margem', 'Estoque', 'Ações'].map(h => (
@@ -349,6 +350,7 @@ export default function EstoquePage() {
               Nenhum produto encontrado
             </div>
           )}
+          </div>
         </div>
       )}
     </div>

@@ -227,7 +227,7 @@ export default function UsuariosPage() {
     : users
 
   return (
-    <div className="p-6 h-full">
+    <div className="p-4 sm:p-6 h-full">
       {/* Modals */}
       {showNovoCliente && (
         <NovoClienteModal
@@ -243,7 +243,7 @@ export default function UsuariosPage() {
       )}
 
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="mb-4 sm:mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Users className="w-6 h-6 text-brand-400" /> Clientes & Cashback
@@ -258,7 +258,7 @@ export default function UsuariosPage() {
         </button>
       </div>
 
-      <div className="flex gap-6 h-[calc(100vh-180px)]">
+      <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:h-[calc(100vh-180px)]">
 
         {/* ── Lista de clientes ──────────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col min-w-0">
@@ -376,7 +376,7 @@ export default function UsuariosPage() {
         </div>
 
         {/* ── Painel de pontos ──────────────────────────────────────────────── */}
-        <div className="w-80 shrink-0">
+        <div className="w-full md:w-80 md:shrink-0">
           {!selected ? (
             <div className="card h-full flex flex-col items-center justify-center text-gray-600 gap-3">
               <Star className="w-10 h-10" />

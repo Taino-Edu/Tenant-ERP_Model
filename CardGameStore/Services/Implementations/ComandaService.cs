@@ -192,6 +192,59 @@ public class ComandaService : IComandaService
         return MapToDto(comanda);
     }
 
+    public async Task<ComandaDto> UpdateItemAsync(Guid comandaId, Guid itemId, int newQuantity, Guid adminId)
+    {
+        var item = await _db.ComandaItems.FindAsync(itemId)
+            ?? throw new InvalidOperationException("Item não encontrado.");
+
+        if (item.ComandaId != comandaId)
+            throw new InvalidOperationException("Item não pertence a esta comanda.");
+
+        var comanda = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
+            .FirstAsync(c => c.Id == comandaId);
+
+        if (comanda.Status == ComandaStatus.Fechada || comanda.Status == ComandaStatus.Cancelada)
+            throw new InvalidOperationException("Não é possível editar itens de uma comanda encerrada.");
+
+        // Quantity == 0 → remover item
+        if (newQuantity <= 0)
+            return await RemoveItemAsync(comandaId, itemId, adminId);
+
+        var oldSubtotal = item.SubtotalInCents;
+        var diff        = item.UnitPriceInCents * newQuantity - oldSubtotal;
+
+        // Ajusta estoque físico
+        if (item.ProductId.HasValue)
+        {
+            var delta = item.Quantity - newQuantity; // positivo = devolve, negativo = retira
+            await _db.Products
+                .Where(p => p.Id == item.ProductId.Value)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    p => p.StockQuantity, p => p.StockQuantity + delta));
+        }
+
+        item.Quantity       = newQuantity;
+        item.SubtotalInCents = item.UnitPriceInCents * newQuantity;
+        comanda.TotalInCents = Math.Max(0, comanda.TotalInCents + diff);
+
+        // Ajusta pontos se o total ficou menor que o desconto aplicado
+        if (comanda.PointsApplied > comanda.TotalInCents)
+        {
+            var excess = comanda.PointsApplied - comanda.TotalInCents;
+            comanda.PointsApplied  = comanda.TotalInCents;
+            comanda.User!.PointsBalance += excess;
+        }
+
+        _logger.LogInformation(
+            "Item {ItemId} da comanda {ComandaId} atualizado para qty={Qty} pelo admin {AdminId}",
+            itemId, comandaId, newQuantity, adminId);
+
+        await _db.SaveChangesAsync();
+        return MapToDto(comanda);
+    }
+
     public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null)
     {
         var comanda = await _db.Comandas

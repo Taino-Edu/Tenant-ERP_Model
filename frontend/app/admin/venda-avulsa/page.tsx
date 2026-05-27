@@ -407,7 +407,7 @@ export default function VendaAvulsaPage() {
   // ── Tela principal ────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 h-full flex flex-col">
+    <div className="p-4 sm:p-6 h-full flex flex-col">
 
       {/* Header + tabs */}
       <div className="mb-4 flex items-end justify-between flex-wrap gap-3">
@@ -442,7 +442,7 @@ export default function VendaAvulsaPage() {
 
       {/* ── Tab: Nova Venda ────────────────────────────────────────────────── */}
       {tab === 'venda' && (
-        <div className="flex gap-6 flex-1 min-h-0 h-[calc(100vh-200px)]">
+        <div className="flex flex-col md:flex-row gap-4 sm:gap-6 flex-1 min-h-0 md:h-[calc(100vh-200px)]">
 
           {/* Catálogo */}
           <div className="flex-1 flex flex-col min-w-0 gap-3">
@@ -531,7 +531,7 @@ export default function VendaAvulsaPage() {
           </div>
 
           {/* Carrinho */}
-          <div className="w-80 flex flex-col gap-3 shrink-0">
+          <div className="w-full md:w-80 flex flex-col gap-3 md:shrink-0">
 
             {/* Cliente */}
             <div className="card">

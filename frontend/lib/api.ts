@@ -212,6 +212,8 @@ export const comandaApi = {
   addItem:      (id: string, item: { productId?: string; cardCacheId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
+  updateItem:   (id: string, itemId: string, quantity: number) =>
+    api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
   close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string) =>
     api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),

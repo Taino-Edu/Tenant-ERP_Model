@@ -252,7 +252,7 @@ export default function LgpdAdminPage() {
   }, [tab, loadAudit])
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Título */}
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-xl bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">

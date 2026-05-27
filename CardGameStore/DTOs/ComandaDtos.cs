@@ -57,6 +57,13 @@ public class ApplyPointsRequest
     public int Points { get; set; }
 }
 
+/// <summary>Body do endpoint PATCH /api/comanda/{id}/items/{itemId} (editar quantidade).</summary>
+public class UpdateItemRequest
+{
+    [Range(0, 100, ErrorMessage = "Quantidade deve ser entre 0 e 100.")]
+    public int Quantity { get; set; }
+}
+
 /// <summary>Body do endpoint PUT /api/comanda/{id}/close.</summary>
 public class CloseComandaRequest
 {

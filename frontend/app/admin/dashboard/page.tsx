@@ -389,7 +389,8 @@ function ComandaCard({
   const [addOpen, setAddOpen]     = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
   const [confirm, setConfirm]     = useState<'cancel' | null>(null)
-  const [removingItem, setRemovingItem] = useState<string | null>(null)
+  const [removingItem, setRemovingItem]   = useState<string | null>(null)
+  const [updatingItem, setUpdatingItem]   = useState<string | null>(null)
   const [, forceRender]           = useState(0)
 
   // Atualiza o tempo exibido a cada minuto
@@ -426,6 +427,19 @@ function ComandaCard({
       toast.error('Erro ao remover item.')
     } finally {
       setRemovingItem(null)
+    }
+  }
+
+  async function handleUpdateQty(itemId: string, newQty: number) {
+    if (newQty < 0) return
+    setUpdatingItem(itemId)
+    try {
+      const { data } = await comandaApi.updateItem(comanda.id, itemId, newQty)
+      onUpdate(data)
+    } catch {
+      toast.error('Erro ao atualizar quantidade.')
+    } finally {
+      setUpdatingItem(null)
     }
   }
 
@@ -495,25 +509,45 @@ function ComandaCard({
 
         {expanded && comanda.items.length > 0 && (
           <div className="bg-surface-800 rounded-lg p-3 space-y-1.5 animate-fade-in">
-            {comanda.items.map(item => (
-              <div key={item.id} className="flex items-center justify-between text-sm gap-2">
-                <span className="text-gray-300 flex-1 truncate">{item.quantity}× {item.itemNameSnapshot}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-gray-400">{fmt(item.subtotalInReais)}</span>
-                  <button
-                    onClick={() => handleRemoveItem(item.id, item.itemNameSnapshot)}
-                    disabled={removingItem === item.id}
-                    className="p-0.5 text-gray-600 hover:text-red-400 transition-colors disabled:opacity-40"
-                    title="Remover item"
-                  >
-                    {removingItem === item.id
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <Trash2 className="w-3.5 h-3.5" />
-                    }
-                  </button>
+            {comanda.items.map(item => {
+              const busy = updatingItem === item.id || removingItem === item.id
+              return (
+                <div key={item.id} className="flex items-center gap-2 text-sm">
+                  {/* Controles de quantidade */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleUpdateQty(item.id, item.quantity - 1)}
+                      disabled={busy}
+                      className="w-5 h-5 rounded flex items-center justify-center bg-surface-600 hover:bg-red-600/30 text-gray-400 hover:text-red-400 transition-colors disabled:opacity-40 text-base leading-none"
+                    >−</button>
+                    <span className="w-5 text-center text-xs font-mono text-white">
+                      {busy && updatingItem === item.id
+                        ? <Loader2 className="w-3 h-3 animate-spin mx-auto" />
+                        : item.quantity}
+                    </span>
+                    <button
+                      onClick={() => handleUpdateQty(item.id, item.quantity + 1)}
+                      disabled={busy}
+                      className="w-5 h-5 rounded flex items-center justify-center bg-surface-600 hover:bg-emerald-600/30 text-gray-400 hover:text-emerald-400 transition-colors disabled:opacity-40 text-base leading-none"
+                    >+</button>
+                  </div>
+                  <span className="text-gray-300 flex-1 truncate">{item.itemNameSnapshot}</span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-gray-400 text-xs">{fmt(item.subtotalInReais)}</span>
+                    <button
+                      onClick={() => handleRemoveItem(item.id, item.itemNameSnapshot)}
+                      disabled={busy}
+                      className="p-0.5 text-gray-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                      title="Remover item"
+                    >
+                      {removingItem === item.id
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Trash2 className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
             {comanda.pointsApplied > 0 && (
               <div className="flex items-center justify-between text-sm border-t border-surface-500 pt-1.5">
                 <span className="text-brand-300">Pontos aplicados</span>
@@ -734,7 +768,7 @@ export default function DashboardPage() {
   )
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>

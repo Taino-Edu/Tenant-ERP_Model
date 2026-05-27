@@ -104,6 +104,25 @@ public class ComandaController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Atualiza quantidade de um item (0 = remove). Apenas Admin.</summary>
+    [HttpPatch("{id:guid}/items/{itemId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ComandaDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> UpdateItem(Guid id, Guid itemId, [FromBody] UpdateItemRequest request)
+    {
+        try
+        {
+            var adminId = GetUserId();
+            var result  = await _service.UpdateItemAsync(id, itemId, request.Quantity, adminId);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
     /// <summary>Fecha uma comanda (pagamento recebido). Apenas Admin.</summary>
     [HttpPut("{id:guid}/close")]
     [Authorize(Policy = "AdminOnly")]

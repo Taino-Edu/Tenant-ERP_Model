@@ -45,6 +45,9 @@ public interface IComandaService
     /// <summary>Lista comandas fechadas e canceladas do dia especificado (padrão: hoje).</summary>
     Task<IEnumerable<ComandaDto>> GetTodayHistoryAsync(DateTime? data = null);
 
+    /// <summary>Atualiza a quantidade de um item. Quantity=0 remove o item.</summary>
+    Task<ComandaDto> UpdateItemAsync(Guid comandaId, Guid itemId, int newQuantity, Guid adminId);
+
     /// <summary>Aplica pontos do cliente à comanda, abatendo do total a pagar.</summary>
     Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points);
 }
