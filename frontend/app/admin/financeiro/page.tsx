@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { analyticsApi, FinanceiroDto, FormaPagamentoTotalDto } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import toast from 'react-hot-toast'
@@ -7,128 +7,171 @@ import {
   TrendingUp, TrendingDown, DollarSign, AlertCircle,
   RefreshCw, Printer, Package, ShoppingBag, BarChart2,
   Banknote, CreditCard, QrCode, Receipt, ChevronDown, ChevronUp,
-  Store, ShoppingCart,
+  Store, ShoppingCart, X, Search, Star, Wallet, Filter,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function toDateInput(d: Date) { return d.toISOString().split('T')[0] }
-
 function fmt(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
 }
-
 function fmtShort(v: number) {
   if (v >= 1000) return `R$${(v / 1000).toFixed(1)}k`
   return `R$${v.toFixed(0)}`
 }
 
-// ── Formas de pagamento com drill-down ───────────────────────────────────────
-
+// ── Formas de pagamento ───────────────────────────────────────────────────────
 const FORMA_LABELS: Record<string, string> = {
-  Dinheiro: 'Dinheiro', Pix: 'Pix',
-  CartaoCredito: 'Cartão de Crédito', CartaoDebito: 'Cartão de Débito',
-  Crediario: 'Crediário',
+  Dinheiro:      'Dinheiro',
+  Pix:           'Pix',
+  CartaoCredito: 'Cartão de Crédito',
+  CartaoDebito:  'Cartão de Débito',
+  Crediario:     'Crediário',
+  Pontos:        'Pontos de Fidelidade',
+  Cashback:      'Cashback (Saldo)',
 }
 
-function FormasPagamentoSection({ formas }: { formas: FormaPagamentoTotalDto[] }) {
-  const [expanded, setExpanded] = useState<string | null>(null)
+const FORMA_ICONS: Record<string, React.ReactNode> = {
+  Dinheiro:      <Banknote   className="w-4 h-4 text-emerald-400" />,
+  Pix:           <QrCode     className="w-4 h-4 text-brand-400"   />,
+  CartaoCredito: <CreditCard className="w-4 h-4 text-purple-400"  />,
+  CartaoDebito:  <CreditCard className="w-4 h-4 text-blue-400"    />,
+  Crediario:     <DollarSign className="w-4 h-4 text-amber-400"   />,
+  Pontos:        <Star       className="w-4 h-4 text-yellow-400"  />,
+  Cashback:      <Wallet     className="w-4 h-4 text-pink-400"    />,
+}
 
-  const icons: Record<string, React.ReactNode> = {
-    Dinheiro:      <Banknote   className="w-4 h-4 text-emerald-400" />,
-    Pix:           <QrCode     className="w-4 h-4 text-brand-400"   />,
-    CartaoCredito: <CreditCard className="w-4 h-4 text-purple-400"  />,
-    CartaoDebito:  <CreditCard className="w-4 h-4 text-blue-400"    />,
-    Crediario:     <DollarSign className="w-4 h-4 text-amber-400"   />,
+// ── Modal com gráfico de evolução ─────────────────────────────────────────────
+interface ChartPoint { label: string; value: number }
+
+function KpiChartModal({
+  title, points, color, totalLabel, onClose,
+  extra,
+}: {
+  title: string
+  points: ChartPoint[]
+  color: string
+  totalLabel: string
+  onClose: () => void
+  extra?: React.ReactNode
+}) {
+  const maxVal = Math.max(...points.map(p => p.value), 1)
+  const hasData = points.some(p => p.value > 0)
+
+  const colorMap: Record<string, { bar: string; text: string }> = {
+    green:  { bar: '#10b981', text: 'text-emerald-400' },
+    red:    { bar: 'rgba(239,68,68,0.7)', text: 'text-red-400' },
+    brand:  { bar: '#7839F3', text: 'text-brand-400' },
+    yellow: { bar: '#f59e0b', text: 'text-yellow-400' },
   }
+  const { bar: barColor, text: textClass } = colorMap[color] ?? colorMap.brand
+
+  const W = 480, H = 160, PAD = { top: 12, right: 8, bottom: 28, left: 48 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top - PAD.bottom
+  const barW   = Math.max(6, chartW / (points.length || 1) - 3)
 
   return (
-    <div className="card p-0 overflow-hidden">
-      <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Receipt className="w-4 h-4 text-brand-400" />
-          <h3 className="text-sm font-semibold text-gray-300">Recebimentos por Forma de Pagamento</h3>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-lg shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600">
+          <h3 className="font-semibold text-white">{title}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
         </div>
-        <span className="text-xs text-gray-500">Clique para ver transações · NF</span>
-      </div>
-      <div className="divide-y divide-surface-600">
-        {formas.map(f => {
-          const isCard = f.forma === 'CartaoCredito' || f.forma === 'CartaoDebito'
-          const isOpen = expanded === f.forma
-          return (
-            <div key={f.forma}>
-              {/* Linha principal — clicável */}
-              <button
-                onClick={() => setExpanded(isOpen ? null : f.forma)}
-                className={`w-full flex items-center justify-between px-5 py-3 hover:bg-surface-700 transition-colors text-left ${isCard ? 'bg-purple-500/5' : ''}`}
-              >
-                <div className="flex items-center gap-3">
-                  {icons[f.forma] ?? <Receipt className="w-4 h-4 text-gray-500" />}
-                  <div>
-                    <p className="text-sm font-medium text-white">
-                      {FORMA_LABELS[f.forma] ?? f.forma}
-                      {isCard && <span className="ml-2 text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-semibold">NF</span>}
-                    </p>
-                    <p className="text-xs text-gray-500">{f.quantidade} transação{f.quantidade !== 1 ? 'ões' : ''}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <p className={`text-base font-bold font-mono ${isCard ? 'text-purple-300' : 'text-white'}`}>
-                    {fmt(f.total)}
-                  </p>
-                  {isOpen
-                    ? <ChevronUp   className="w-4 h-4 text-gray-500" />
-                    : <ChevronDown className="w-4 h-4 text-gray-500" />
-                  }
-                </div>
-              </button>
 
-              {/* Drill-down: transações individuais */}
-              {isOpen && f.transacoes.length > 0 && (
-                <div className="bg-surface-800 border-t border-surface-600 divide-y divide-surface-700">
-                  {f.transacoes.map((t, i) => (
-                    <div key={i} className="flex items-center justify-between px-6 py-2.5">
-                      <div className="flex items-center gap-2">
-                        {t.origem === 'Comanda'
-                          ? <ShoppingCart className="w-3.5 h-3.5 text-brand-400 shrink-0" />
-                          : <Store        className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        }
-                        <div>
-                          <p className="text-xs text-white font-medium">
-                            {t.cliente ?? (t.origem === 'Comanda' ? 'Comanda' : 'Balcão')}
-                          </p>
-                          <p className="text-[10px] text-gray-500">
-                            {t.origem === 'Comanda' ? 'Mesa' : 'Balcão'} · {new Date(t.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                      </div>
-                      <p className="text-sm font-bold font-mono text-white">{fmt(t.valor)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
+        <div className="p-5 space-y-4">
+          {/* Total destaque */}
+          <p className={`text-3xl font-bold font-mono ${textClass}`}>{totalLabel}</p>
+
+          {/* Gráfico */}
+          {hasData ? (
+            <div className="bg-surface-900 rounded-xl p-3 overflow-x-auto">
+              <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: Math.max(200, points.length * 18) }}>
+                {/* Grid lines */}
+                {[0.25, 0.5, 0.75, 1].map(f => (
+                  <g key={f}>
+                    <line
+                      x1={PAD.left} y1={PAD.top + chartH * (1 - f)}
+                      x2={W - PAD.right} y2={PAD.top + chartH * (1 - f)}
+                      stroke="#32323f" strokeWidth="1"
+                    />
+                    <text x={PAD.left - 4} y={PAD.top + chartH * (1 - f) + 4}
+                      textAnchor="end" fontSize="8" fill="#6b7280">
+                      {fmtShort(maxVal * f)}
+                    </text>
+                  </g>
+                ))}
+
+                {/* Barras */}
+                {points.map((p, i) => {
+                  const slotW = chartW / points.length
+                  const x     = PAD.left + slotW * i + (slotW - barW) / 2
+                  const bH    = p.value > 0 ? Math.max(2, (p.value / maxVal) * chartH) : 0
+                  const showLabel = points.length <= 31 || i % Math.ceil(points.length / 12) === 0
+                  return (
+                    <g key={p.label}>
+                      {bH > 0 && (
+                        <rect
+                          x={x} y={PAD.top + chartH - bH}
+                          width={barW} height={bH}
+                          fill={barColor} rx="2"
+                        />
+                      )}
+                      {!bH && (
+                        <rect x={x + barW * 0.2} y={PAD.top + chartH - 1} width={barW * 0.6} height={1} fill="#32323f" />
+                      )}
+                      {showLabel && (
+                        <text x={x + barW / 2} y={H - 4}
+                          textAnchor="middle" fontSize="7" fill={bH > 0 ? '#9ca3af' : '#4b5563'}>
+                          {p.label.slice(5)}
+                        </text>
+                      )}
+                    </g>
+                  )
+                })}
+              </svg>
             </div>
-          )
-        })}
+          ) : (
+            <div className="bg-surface-900 rounded-xl p-6 text-center text-gray-500 text-sm">
+              Sem dados para o período selecionado
+            </div>
+          )}
+
+          {/* Extra (breakdown) */}
+          {extra}
+        </div>
       </div>
     </div>
   )
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, color = 'brand', icon: Icon }: {
+function KpiCard({ label, value, sub, color = 'brand', icon: Icon, onClick }: {
   label: string; value: string; sub?: string
   color?: string; icon: React.ElementType
+  onClick?: () => void
 }) {
   const colors: Record<string, string> = {
-    brand: 'text-brand-400',   green: 'text-emerald-400',
-    red:   'text-red-400',     yellow: 'text-yellow-400',
+    brand: 'text-brand-400', green: 'text-emerald-400',
+    red:   'text-red-400',   yellow: 'text-yellow-400',
   }
   const bgs: Record<string, string> = {
-    brand: 'bg-brand-600/15',  green: 'bg-emerald-500/15',
-    red:   'bg-red-500/15',    yellow: 'bg-yellow-500/15',
+    brand: 'bg-brand-600/15', green: 'bg-emerald-500/15',
+    red:   'bg-red-500/15',   yellow: 'bg-yellow-500/15',
   }
   return (
-    <div className="card flex flex-col gap-3">
+    <button
+      onClick={onClick}
+      className={`card flex flex-col gap-3 text-left w-full transition-all ${
+        onClick ? 'hover:border-surface-400 hover:bg-surface-700/50 cursor-pointer active:scale-[0.98]' : ''
+      }`}
+    >
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">{label}</p>
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${bgs[color]}`}>
@@ -136,12 +179,205 @@ function KpiCard({ label, value, sub, color = 'brand', icon: Icon }: {
         </div>
       </div>
       <p className={`text-2xl font-bold font-mono ${colors[color] ?? colors.brand}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-500">{sub}</p>}
+      {sub && (
+        <p className="text-xs text-gray-500 flex items-center gap-1">
+          {sub}
+          {onClick && <span className="ml-auto text-[10px] text-gray-600">clique para detalhar</span>}
+        </p>
+      )}
+    </button>
+  )
+}
+
+// ── Formas de pagamento com filtros ───────────────────────────────────────────
+function FormasPagamentoSection({ formas }: { formas: FormaPagamentoTotalDto[] }) {
+  const [expanded,    setExpanded]    = useState<string | null>(null)
+  const [filterForma, setFilterForma] = useState<string>('Todas')
+  const [filterMin,   setFilterMin]   = useState('')
+  const [filterMax,   setFilterMax]   = useState('')
+  const [searchCliente, setSearch]    = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+
+  const minVal = parseFloat(filterMin.replace(',', '.')) || 0
+  const maxVal = parseFloat(filterMax.replace(',', '.')) || Infinity
+
+  // Filtra formas de pagamento
+  const formasFiltradas = formas.filter(f => {
+    if (filterForma !== 'Todas' && f.forma !== filterForma) return false
+    if (f.total < minVal) return false
+    if (f.total > maxVal) return false
+    return true
+  })
+
+  // Dentro de cada forma, filtra transações
+  function filtrarTransacoes(transacoes: FormaPagamentoTotalDto['transacoes']) {
+    return transacoes.filter(t => {
+      const cliente = (t.cliente ?? '').toLowerCase()
+      if (searchCliente && !cliente.includes(searchCliente.toLowerCase())) return false
+      if (t.valor < minVal) return false
+      if (t.valor > maxVal) return false
+      return true
+    })
+  }
+
+  const hasFilters = filterForma !== 'Todas' || filterMin || filterMax || searchCliente
+
+  return (
+    <div className="card p-0 overflow-hidden">
+      {/* Header + toggle filtros */}
+      <div className="px-5 py-4 border-b border-surface-500">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-brand-400" />
+            <h3 className="text-sm font-semibold text-gray-300">Recebimentos por Forma de Pagamento</h3>
+          </div>
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+              showFilters || hasFilters
+                ? 'bg-brand-600/20 border-brand-500/50 text-brand-300'
+                : 'bg-surface-700 border-surface-600 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            Filtrar
+            {hasFilters && <span className="w-1.5 h-1.5 rounded-full bg-brand-400" />}
+          </button>
+        </div>
+
+        {/* Painel de filtros — aparece abaixo do header */}
+        {showFilters && (
+          <div className="mt-4 space-y-3">
+            {/* Chips de método */}
+            <div className="flex flex-wrap gap-1.5">
+              {['Todas', ...formas.map(f => f.forma)].map(forma => (
+                <button
+                  key={forma}
+                  onClick={() => setFilterForma(forma)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                    filterForma === forma
+                      ? 'bg-brand-600/30 border-brand-500 text-brand-200'
+                      : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                  }`}
+                >
+                  {forma === 'Todas' ? 'Todas' : (FORMA_LABELS[forma] ?? forma)}
+                </button>
+              ))}
+            </div>
+
+            {/* Faixa de valor + busca */}
+            <div className="flex flex-wrap gap-2 items-center">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                <input
+                  className="input pl-8 py-1.5 text-xs w-40"
+                  placeholder="Buscar cliente..."
+                  value={searchCliente}
+                  onChange={e => setSearch(e.target.value)}
+                />
+              </div>
+              <input
+                className="input py-1.5 text-xs w-28"
+                placeholder="Valor mín. R$"
+                value={filterMin}
+                onChange={e => setFilterMin(e.target.value)}
+                type="number" min="0" step="0.01"
+              />
+              <span className="text-gray-500 text-xs">até</span>
+              <input
+                className="input py-1.5 text-xs w-28"
+                placeholder="Valor máx. R$"
+                value={filterMax}
+                onChange={e => setFilterMax(e.target.value)}
+                type="number" min="0" step="0.01"
+              />
+              {hasFilters && (
+                <button
+                  onClick={() => { setFilterForma('Todas'); setFilterMin(''); setFilterMax(''); setSearch('') }}
+                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors flex items-center gap-1"
+                >
+                  <X className="w-3.5 h-3.5" /> Limpar
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Lista */}
+      <div className="divide-y divide-surface-600">
+        {formasFiltradas.length === 0 ? (
+          <p className="text-center text-gray-500 text-sm py-8">Nenhuma forma de pagamento no filtro.</p>
+        ) : (
+          formasFiltradas.map(f => {
+            const isCard = f.forma === 'CartaoCredito' || f.forma === 'CartaoDebito'
+            const isOpen = expanded === f.forma
+            const txsFiltradas = filtrarTransacoes(f.transacoes)
+
+            return (
+              <div key={f.forma}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : f.forma)}
+                  className={`w-full flex items-center justify-between px-5 py-3 hover:bg-surface-700 transition-colors text-left ${isCard ? 'bg-purple-500/5' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {FORMA_ICONS[f.forma] ?? <Receipt className="w-4 h-4 text-gray-500" />}
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {FORMA_LABELS[f.forma] ?? f.forma}
+                        {isCard && <span className="ml-2 text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-semibold">NF</span>}
+                      </p>
+                      <p className="text-xs text-gray-500">{f.quantidade} transação{f.quantidade !== 1 ? 'ões' : ''}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <p className={`text-base font-bold font-mono ${isCard ? 'text-purple-300' : 'text-white'}`}>
+                      {fmt(f.total)}
+                    </p>
+                    {isOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="bg-surface-800 border-t border-surface-600 divide-y divide-surface-700">
+                    {txsFiltradas.length === 0 ? (
+                      <p className="text-center text-gray-500 text-xs py-4">Nenhuma transação no filtro.</p>
+                    ) : (
+                      txsFiltradas.map((t, i) => (
+                        <div key={i} className="flex items-center justify-between px-6 py-2.5">
+                          <div className="flex items-center gap-2">
+                            {t.origem === 'Comanda'
+                              ? <ShoppingCart className="w-3.5 h-3.5 text-brand-400 shrink-0" />
+                              : <Store        className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            }
+                            <div>
+                              <p className="text-xs text-white font-medium">
+                                {t.cliente ?? (t.origem === 'Comanda' ? 'Comanda' : 'Balcão')}
+                              </p>
+                              <p className="text-[10px] text-gray-500">
+                                {t.origem === 'Comanda' ? 'Mesa' : 'Balcão'} ·{' '}
+                                {new Date(t.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                          <p className={`text-sm font-bold font-mono ${t.valor < minVal || t.valor > maxVal ? 'text-gray-600' : 'text-white'}`}>
+                            {fmt(t.valor)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })
+        )}
+      </div>
     </div>
   )
 }
 
-// ── Gráfico SVG de barras ─────────────────────────────────────────────────────
+// ── Gráfico SVG de barras (principal) ─────────────────────────────────────────
 function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   const [tooltip, setTooltip] = useState<{ x: number; y: number; d: FinanceiroDto['diaDia'][0] } | null>(null)
   if (dias.length === 0) return null
@@ -152,7 +388,6 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   const maxVal = Math.max(...dias.map(d => d.receita), 1)
   const barW   = Math.max(8, (chartW / dias.length) - 4)
 
-  // Grid lines
   const gridLines = [0.25, 0.5, 0.75, 1].map(f => ({
     y:   PAD.top + chartH * (1 - f),
     val: maxVal * f,
@@ -169,10 +404,8 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
           <span><span className="inline-block w-3 h-2 rounded-sm bg-red-500/50 mr-1.5 align-middle" />Custo</span>
         </div>
       </div>
-
       <div className="overflow-x-auto">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: Math.max(400, dias.length * 28) }}>
-          {/* Grid */}
           {gridLines.map(g => (
             <g key={g.val}>
               <line x1={PAD.left} y1={g.y} x2={W - PAD.right} y2={g.y} stroke="#32323f" strokeWidth="1" />
@@ -181,57 +414,24 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
               </text>
             </g>
           ))}
-
-          {/* Barras */}
           {dias.map((d, i) => {
             const slotW   = chartW / dias.length
             const x       = PAD.left + slotW * i + (slotW - barW) / 2
-            const recH    = (d.receita / maxVal) * chartH          // sem Math.max — 0 fica 0
+            const recH    = (d.receita / maxVal) * chartH
             const custoH  = d.custo > 0 ? Math.min((d.custo / maxVal) * chartH, recH) : 0
             const margemH = recH - custoH
             const hasData = recH > 0
-
             return (
-              <g
-                key={d.dia}
+              <g key={d.dia}
                 onMouseEnter={hasData ? e => setTooltip({ x: e.clientX, y: e.clientY, d }) : undefined}
                 onMouseLeave={hasData ? () => setTooltip(null) : undefined}
                 className={hasData ? 'cursor-pointer' : ''}
               >
-                {/* Linha de base sutil para dias sem receita */}
-                {!hasData && (
-                  <rect
-                    x={x + barW * 0.2} y={PAD.top + chartH - 1}
-                    width={barW * 0.6} height={1}
-                    fill="#32323f"
-                  />
-                )}
-
-                {/* Custo (parte de baixo da barra) */}
-                {hasData && custoH > 0 && (
-                  <rect
-                    x={x} y={PAD.top + chartH - recH}
-                    width={barW} height={custoH}
-                    fill="rgba(239,68,68,0.5)" rx="2"
-                  />
-                )}
-                {/* Margem (parte de cima da barra) */}
-                {hasData && (
-                  <rect
-                    x={x} y={PAD.top + chartH - recH + custoH}
-                    width={barW} height={margemH}
-                    fill="#7839F3" rx="2"
-                    style={{ transition: 'opacity 0.1s' }}
-                  />
-                )}
-
-                {/* Label dia — mostra só dias com data fechada ou início/fim do período */}
+                {!hasData && <rect x={x + barW * 0.2} y={PAD.top + chartH - 1} width={barW * 0.6} height={1} fill="#32323f" />}
+                {hasData && custoH > 0 && <rect x={x} y={PAD.top + chartH - recH} width={barW} height={custoH} fill="rgba(239,68,68,0.5)" rx="2" />}
+                {hasData && <rect x={x} y={PAD.top + chartH - recH + custoH} width={barW} height={margemH} fill="#7839F3" rx="2" />}
                 {(hasData || i === 0 || i === dias.length - 1 || i % Math.ceil(dias.length / 8) === 0) && (
-                  <text
-                    x={x + barW / 2} y={H - 4}
-                    textAnchor="middle" fontSize="8"
-                    fill={hasData ? '#9ca3af' : '#4b5563'}
-                  >
+                  <text x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize="8" fill={hasData ? '#9ca3af' : '#4b5563'}>
                     {d.dia.slice(5)}
                   </text>
                 )}
@@ -240,13 +440,9 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
           })}
         </svg>
       </div>
-
-      {/* Tooltip */}
       {tooltip && (
-        <div
-          className="fixed z-50 bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none"
-          style={{ left: tooltip.x + 12, top: tooltip.y - 48 }}
-        >
+        <div className="fixed z-50 bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none"
+          style={{ left: tooltip.x + 12, top: tooltip.y - 48 }}>
           <p className="font-semibold text-white mb-1">{tooltip.d.dia}</p>
           <p className="text-emerald-400">Receita: {fmt(tooltip.d.receita)}</p>
           {tooltip.d.custo > 0 && <p className="text-red-400">Custo: {fmt(tooltip.d.custo)}</p>}
@@ -257,38 +453,25 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   )
 }
 
-// ── Donut de distribuição ─────────────────────────────────────────────────────
+// ── Donut custo vs receita ─────────────────────────────────────────────────────
 function MargemDonut({ receita, custo }: { receita: number; custo: number }) {
   if (receita <= 0) return null
-  const pct      = Math.min(100, custo > 0 ? (custo / receita) * 100 : 0)
-  const r        = 42
-  const circ     = 2 * Math.PI * r
-  const dash     = (pct / 100) * circ
-
+  const pct  = Math.min(100, custo > 0 ? (custo / receita) * 100 : 0)
+  const r    = 42, circ = 2 * Math.PI * r
+  const dash = (pct / 100) * circ
   return (
     <div className="card flex flex-col items-center justify-center gap-3 py-6">
       <h3 className="text-sm font-semibold text-gray-300 self-start">Custo vs Receita</h3>
       <svg width="120" height="120" viewBox="0 0 120 120">
         <circle cx="60" cy="60" r={r} fill="none" stroke="#7839F3" strokeWidth="14" />
-        <circle
-          cx="60" cy="60" r={r} fill="none"
-          stroke="rgba(239,68,68,0.5)" strokeWidth="14"
-          strokeDasharray={`${dash} ${circ - dash}`}
-          strokeDashoffset={circ / 4}
-          strokeLinecap="round"
-        />
-        <text x="60" y="56" textAnchor="middle" fontSize="14" fontWeight="bold" fill="white">
-          {(100 - pct).toFixed(0)}%
-        </text>
+        <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(239,68,68,0.5)" strokeWidth="14"
+          strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={circ / 4} strokeLinecap="round" />
+        <text x="60" y="56" textAnchor="middle" fontSize="14" fontWeight="bold" fill="white">{(100 - pct).toFixed(0)}%</text>
         <text x="60" y="70" textAnchor="middle" fontSize="9" fill="#9ca3af">margem</text>
       </svg>
       <div className="flex gap-4 text-xs">
-        <span className="flex items-center gap-1.5 text-brand-400">
-          <span className="w-2.5 h-2.5 rounded-full bg-brand-500" />Margem {(100 - pct).toFixed(1)}%
-        </span>
-        <span className="flex items-center gap-1.5 text-red-400">
-          <span className="w-2.5 h-2.5 rounded-full bg-red-500/60" />Custo {pct.toFixed(1)}%
-        </span>
+        <span className="flex items-center gap-1.5 text-brand-400"><span className="w-2.5 h-2.5 rounded-full bg-brand-500" />Margem {(100 - pct).toFixed(1)}%</span>
+        <span className="flex items-center gap-1.5 text-red-400"><span className="w-2.5 h-2.5 rounded-full bg-red-500/60" />Custo {pct.toFixed(1)}%</span>
       </div>
     </div>
   )
@@ -298,8 +481,7 @@ function MargemDonut({ receita, custo }: { receita: number; custo: number }) {
 type Preset = 'hoje' | '7d' | 'mes' | 'custom'
 
 function getRange(preset: Preset) {
-  const now  = new Date()
-  const hoje = toDateInput(now)
+  const now = new Date(), hoje = toDateInput(now)
   if (preset === 'hoje') return { inicio: hoje, fim: hoje }
   if (preset === '7d') {
     const ini = new Date(now); ini.setDate(ini.getDate() - 6)
@@ -311,12 +493,15 @@ function getRange(preset: Preset) {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function FinanceiroPage() {
-  const [preset,  setPreset]  = useState<Preset>('mes')
-  const [inicio,  setInicio]  = useState(getRange('mes').inicio)
-  const [fim,     setFim]     = useState(getRange('mes').fim)
+  const [preset,    setPreset]    = useState<Preset>('mes')
+  const [inicio,    setInicio]    = useState(getRange('mes').inicio)
+  const [fim,       setFim]       = useState(getRange('mes').fim)
   const [data,      setData]      = useState<FinanceiroDto | null>(null)
   const [loading,   setLoading]   = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [kpiModal,  setKpiModal]  = useState<string | null>(null)
+  const iniRef = useRef(inicio)
+  const fimRef = useRef(fim)
 
   const load = useCallback(async (ini: string, f: string) => {
     setLoading(true)
@@ -331,14 +516,101 @@ export default function FinanceiroPage() {
     setPreset(p)
     if (p !== 'custom') {
       const { inicio: ini, fim: f } = getRange(p)
-      setInicio(ini); setFim(f); load(ini, f)
+      setInicio(ini); setFim(f)
+      iniRef.current = ini; fimRef.current = f
+      load(ini, f)
     }
+  }
+
+  function applyCustom() {
+    setPreset('custom')
+    load(inicio, fim)
   }
 
   const d = data
 
+  // ── Dados dos modais de KPI ────────────────────────────────────────────────
+  const totalTx = d ? d.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0) : 0
+  const ticketMedio = totalTx > 0 && d ? d.receita / totalTx : 0
+
+  const kpiModais: Record<string, {
+    title: string; color: string; totalLabel: string
+    points: ChartPoint[]; extra?: React.ReactNode
+  }> = d ? {
+    receita: {
+      title: 'Receita Total — Evolução Diária',
+      color: 'green',
+      totalLabel: fmt(d.receita),
+      points: d.diaDia.map(x => ({ label: x.dia, value: x.receita })),
+    },
+    custo: {
+      title: 'Custo Estimado — Evolução Diária',
+      color: 'red',
+      totalLabel: fmt(d.custo),
+      points: d.diaDia.map(x => ({ label: x.dia, value: x.custo })),
+      extra: d.topProdutos.filter(p => p.custo > 0).length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Top custos por produto</p>
+          {d.topProdutos.filter(p => p.custo > 0).slice(0, 6).map(p => (
+            <div key={p.nome} className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-white truncate">{p.nome}</p>
+                <div className="h-1 bg-surface-600 rounded-full overflow-hidden mt-1">
+                  <div className="h-full bg-red-500/60 rounded-full"
+                    style={{ width: `${Math.min(100, (p.custo / (d.topProdutos[0]?.custo || 1)) * 100)}%` }} />
+                </div>
+              </div>
+              <span className="text-xs font-mono text-red-400 shrink-0">{fmt(p.custo)}</span>
+            </div>
+          ))}
+        </div>
+      ) : undefined,
+    },
+    margem: {
+      title: 'Margem Bruta — Evolução Diária',
+      color: d.margem >= 0 ? 'brand' : 'red',
+      totalLabel: `${fmt(d.margem)} (${d.margemPercent.toFixed(1)}%)`,
+      points: d.diaDia.map(x => ({ label: x.dia, value: Math.max(0, x.receita - x.custo) })),
+    },
+    ticket: {
+      title: 'Ticket Médio — Distribuição por Pagamento',
+      color: 'brand',
+      totalLabel: fmt(ticketMedio),
+      points: d.diaDia.map(x => ({ label: x.dia, value: x.receita })),
+      extra: (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">{totalTx} transações no período</p>
+          {d.pagamentosPorForma.slice(0, 5).map(f => (
+            <div key={f.forma} className="flex items-center justify-between text-xs">
+              <span className="text-gray-300">{FORMA_LABELS[f.forma] ?? f.forma}</span>
+              <span className="font-mono text-white">{f.quantidade}× · {fmt(f.total)}</span>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    crediarios: {
+      title: 'Crediários em Aberto',
+      color: 'yellow',
+      totalLabel: fmt(d.crediarios),
+      points: [], // sem granularidade diária
+      extra: (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm text-amber-300">
+          Valor total em aberto a receber de clientes com crediário.
+          Gerencie em <a href="/admin/crediario" className="underline">Gestão de Crediários</a>.
+        </div>
+      ),
+    },
+  } : {}
+
   return (
     <div className="p-6 space-y-6 print:p-0">
+
+      {/* Modal KPI */}
+      {kpiModal && kpiModais[kpiModal] && (
+        <KpiChartModal {...kpiModais[kpiModal]} onClose={() => setKpiModal(null)} />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
         <div>
@@ -350,13 +622,9 @@ export default function FinanceiroPage() {
             onClick={async () => {
               if (!d) return
               setExporting(true)
-              try {
-                await gerarRelatorioPDF(d, { inicio, fim })
-              } catch {
-                toast.error('Erro ao gerar PDF')
-              } finally {
-                setExporting(false)
-              }
+              try { await gerarRelatorioPDF(d, { inicio, fim }) }
+              catch { toast.error('Erro ao gerar PDF') }
+              finally { setExporting(false) }
             }}
             disabled={!d || exporting}
             className="btn-secondary text-sm print:hidden"
@@ -370,27 +638,55 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      {/* Filtros */}
-      <div className="card flex flex-wrap gap-3 items-end print:hidden">
-        <div className="flex gap-2 flex-wrap">
-          {(['hoje', '7d', 'mes', 'custom'] as Preset[]).map(p => (
-            <button key={p} onClick={() => applyPreset(p)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                preset === p ? 'bg-brand-600 text-white' : 'bg-surface-700 text-gray-400 hover:text-white'
-              }`}
-            >
-              {{ hoje: 'Hoje', '7d': '7 dias', mes: 'Este mês', custom: 'Personalizado' }[p]}
-            </button>
-          ))}
-        </div>
-        {preset === 'custom' && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <input type="date" className="input py-1 text-sm" value={inicio} onChange={e => setInicio(e.target.value)} />
-            <span className="text-gray-500 text-sm">até</span>
-            <input type="date" className="input py-1 text-sm" value={fim} onChange={e => setFim(e.target.value)} />
-            <button onClick={() => { setPreset('custom'); load(inicio, fim) }} className="btn-primary text-sm py-1.5">Filtrar</button>
+      {/* ── Filtros ── sticky no topo */}
+      <div className="sticky top-0 z-10 print:hidden">
+        <div className="card flex flex-wrap gap-3 items-center border-surface-500 shadow-xl">
+          {/* Presets */}
+          <div className="flex gap-1.5 flex-wrap">
+            {(['hoje', '7d', 'mes', 'custom'] as Preset[]).map(p => (
+              <button key={p} onClick={() => applyPreset(p)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  preset === p ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20' : 'bg-surface-700 text-gray-400 hover:text-white hover:bg-surface-600'
+                }`}
+              >
+                {{ hoje: 'Hoje', '7d': '7 dias', mes: 'Este mês', custom: 'Personalizado' }[p]}
+              </button>
+            ))}
           </div>
-        )}
+
+          {/* Período atual */}
+          {preset !== 'custom' && (
+            <span className="text-xs text-gray-500 ml-1">
+              {inicio === fim ? inicio : `${inicio} → ${fim}`}
+            </span>
+          )}
+
+          {/* Custom inline — sem scroll */}
+          {preset === 'custom' && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input type="date" className="input py-1.5 text-sm w-36"
+                value={inicio} max={fim}
+                onChange={e => setInicio(e.target.value)} />
+              <span className="text-gray-500 text-sm">até</span>
+              <input type="date" className="input py-1.5 text-sm w-36"
+                value={fim} min={inicio} max={toDateInput(new Date())}
+                onChange={e => setFim(e.target.value)} />
+              <button
+                onClick={applyCustom}
+                disabled={loading}
+                className="btn-primary text-sm py-1.5 min-w-[90px]"
+              >
+                {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : null}
+                {loading ? 'Carregando…' : 'Aplicar'}
+              </button>
+            </div>
+          )}
+
+          {/* Loading indicator inline */}
+          {loading && preset !== 'custom' && (
+            <RefreshCw className="w-4 h-4 animate-spin text-brand-400 ml-auto" />
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -399,17 +695,15 @@ export default function FinanceiroPage() {
         </div>
       ) : d ? (
         <>
-          {/* KPIs */}
+          {/* KPIs — clicáveis */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             {(() => {
-              const totalTx = d.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0)
-              const ticketMedio = totalTx > 0 ? d.receita / totalTx : 0
               return (<>
-                <KpiCard label="Receita total"      value={fmt(d.receita)}          sub={`${d.diaDia.length} dias`}                      color="green"  icon={TrendingUp}   />
-                <KpiCard label="Custo estimado"     value={fmt(d.custo)}            sub="Preço de custo dos itens"                       color="red"    icon={ShoppingBag}  />
-                <KpiCard label="Margem bruta"       value={fmt(d.margem)}           sub={`${d.margemPercent.toFixed(1)}% sobre receita`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} />
-                <KpiCard label="Ticket médio"       value={fmt(ticketMedio)}        sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  color="brand"  icon={CreditCard}   />
-                <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}       sub="A receber"                                      color="yellow" icon={AlertCircle}  />
+                <KpiCard label="Receita total"      value={fmt(d.receita)}          sub={`${d.diaDia.length} dias`}                      color="green"  icon={TrendingUp}   onClick={() => setKpiModal('receita')} />
+                <KpiCard label="Custo estimado"     value={fmt(d.custo)}            sub="Clique para detalhar por produto"               color="red"    icon={ShoppingBag}  onClick={() => setKpiModal('custo')} />
+                <KpiCard label="Margem bruta"       value={fmt(d.margem)}           sub={`${d.margemPercent.toFixed(1)}% sobre receita`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} />
+                <KpiCard label="Ticket médio"       value={fmt(ticketMedio)}        sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  color="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')} />
+                <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}       sub="A receber"                                      color="yellow" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} />
               </>)
             })()}
           </div>
@@ -444,9 +738,7 @@ export default function FinanceiroPage() {
 
           {/* Gráfico + Donut */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            <div className="lg:col-span-3">
-              <BarChart dias={d.diaDia} />
-            </div>
+            <div className="lg:col-span-3"><BarChart dias={d.diaDia} /></div>
             <MargemDonut receita={d.receita} custo={d.custo} />
           </div>
 
