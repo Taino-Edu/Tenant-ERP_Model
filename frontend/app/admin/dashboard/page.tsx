@@ -320,7 +320,7 @@ function CloseComandaModal({
                 <CreditCard className="w-4 h-4 shrink-0" />
                 {pm.label}
                 {pm.value === 'Crediario' && (
-                  <span className="ml-auto text-xs text-amber-400/70 font-normal">bloqueia próxima comanda</span>
+                  <span className="ml-auto text-xs text-amber-400/70 font-normal">acumula no saldo</span>
                 )}
               </button>
             ))}
@@ -329,7 +329,7 @@ function CloseComandaModal({
 
         {method === 'Crediario' && (
           <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300">
-            O cliente ficará bloqueado de abrir novas comandas até quitar o crediário em 30 dias.
+            O valor será acumulado no saldo devedor do cliente. Novas comandas podem ser abertas normalmente.
           </div>
         )}
 
@@ -389,6 +389,7 @@ function ComandaCard({
   const [addOpen, setAddOpen]     = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
   const [confirm, setConfirm]     = useState<'cancel' | null>(null)
+  const [removingItem, setRemovingItem] = useState<string | null>(null)
   const [, forceRender]           = useState(0)
 
   // Atualiza o tempo exibido a cada minuto
@@ -413,6 +414,19 @@ function ComandaCard({
     setConfirm(null)
     setLoading(true)
     try { await onCancel(comanda.id) } finally { setLoading(false) }
+  }
+  async function handleRemoveItem(itemId: string, itemName: string) {
+    if (!confirm(`Remover "${itemName}" da comanda?`)) return
+    setRemovingItem(itemId)
+    try {
+      const { data } = await comandaApi.removeItem(comanda.id, itemId)
+      onUpdate(data)
+      toast.success('Item removido.')
+    } catch {
+      toast.error('Erro ao remover item.')
+    } finally {
+      setRemovingItem(null)
+    }
   }
 
   return (
@@ -482,9 +496,22 @@ function ComandaCard({
         {expanded && comanda.items.length > 0 && (
           <div className="bg-surface-800 rounded-lg p-3 space-y-1.5 animate-fade-in">
             {comanda.items.map(item => (
-              <div key={item.id} className="flex items-center justify-between text-sm">
+              <div key={item.id} className="flex items-center justify-between text-sm gap-2">
                 <span className="text-gray-300 flex-1 truncate">{item.quantity}× {item.itemNameSnapshot}</span>
-                <span className="text-gray-400 ml-2 shrink-0">{fmt(item.subtotalInReais)}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-gray-400">{fmt(item.subtotalInReais)}</span>
+                  <button
+                    onClick={() => handleRemoveItem(item.id, item.itemNameSnapshot)}
+                    disabled={removingItem === item.id}
+                    className="p-0.5 text-gray-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                    title="Remover item"
+                  >
+                    {removingItem === item.id
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Trash2 className="w-3.5 h-3.5" />
+                    }
+                  </button>
+                </div>
               </div>
             ))}
             {comanda.pointsApplied > 0 && (
@@ -692,7 +719,9 @@ export default function DashboardPage() {
     { key: 'Pix',           label: 'Pix',        color: 'text-brand-400' },
     { key: 'CartaoCredito', label: 'Crédito',    color: 'text-amber-400' },
     { key: 'CartaoDebito',  label: 'Débito',     color: 'text-blue-400' },
-    { key: 'Crediario',     label: 'Crediário',  color: 'text-red-400' },
+    { key: 'Crediario',     label: 'Crediário',  color: 'text-red-400'    },
+    { key: 'Pontos',        label: 'Pontos',     color: 'text-amber-400'  },
+    { key: 'Cashback',      label: 'Cashback',   color: 'text-purple-400' },
   ].map(pm => ({
     ...pm,
     total: fechadas
@@ -974,6 +1003,14 @@ export default function DashboardPage() {
                       }
                       <span>·</span>
                       {c.items.length} {c.items.length === 1 ? 'item' : 'itens'}
+                      {c.paymentMethod && (
+                        <>
+                          <span>·</span>
+                          <span className="text-gray-400 font-medium">
+                            {COMANDA_PAYMENT_METHODS.find(m => m.value === c.paymentMethod)?.label ?? c.paymentMethod}
+                          </span>
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>

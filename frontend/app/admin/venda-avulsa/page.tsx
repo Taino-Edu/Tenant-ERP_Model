@@ -697,20 +697,21 @@ export default function VendaAvulsaPage() {
                     <span className="text-2xl font-black text-accent-gold">{fmt(total / 100)}</span>
                   </div>
 
-                  {/* Opções de pagamento — linha 1: Pix, Dinheiro, Crédito, Débito */}
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Opções de pagamento */}
+                  <div className="grid grid-cols-4 gap-2">
                     {PAYMENT_METHODS.map(m => (
                       <button
                         key={m.value}
                         onClick={() => { setPayment(m.value); setReceived('') }}
                         className={clsx(
-                          'flex items-center gap-2 px-3 py-3 rounded-xl text-sm font-medium border transition-all',
+                          'flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl text-xs font-medium border transition-all',
                           payment === m.value
-                            ? 'bg-brand-600/30 border-brand-500 text-brand-200'
-                            : 'bg-surface-900 border-surface-600 text-gray-400 hover:border-surface-400'
+                            ? 'bg-brand-600/30 border-brand-500 text-white'
+                            : 'bg-surface-900 border-surface-600 text-gray-400 hover:border-surface-400 hover:text-gray-200'
                         )}
                       >
-                        {PAYMENT_ICONS[m.value]} {m.label}
+                        {PAYMENT_ICONS[m.value]}
+                        <span className="leading-tight text-center">{m.label}</span>
                       </button>
                     ))}
                   </div>

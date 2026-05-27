@@ -43,8 +43,11 @@ export default function ClientePage() {
     return () => { stopHub() }
   }, [fetchComanda])
 
+  const [confirmItem, setConfirmItem] = useState<Product | null>(null)
+
   async function addProduct(product: Product) {
     if (!comanda) return
+    setConfirmItem(null)
     setAdding(product.id)
     try {
       const { data } = await comandaApi.addItem(comanda.id, {
@@ -89,6 +92,40 @@ export default function ClientePage() {
   return (
     <div className="min-h-screen bg-surface-900 pb-32">
       <Toaster position="top-center" toastOptions={{ style: { background: '#1e1e28', color: '#fff', border: '1px solid #32323f' }}} />
+
+      {/* Modal de confirmação de item */}
+      {confirmItem && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-sm p-5 space-y-4">
+            <div>
+              <p className="font-semibold text-white">{confirmItem.name}</p>
+              <p className="text-accent-gold font-bold text-lg mt-0.5">
+                R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
+              </p>
+            </div>
+            <p className="text-gray-400 text-sm">Deseja adicionar este item à sua comanda?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmItem(null)}
+                className="btn-secondary flex-1 justify-center"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => addProduct(confirmItem)}
+                disabled={adding === confirmItem.id}
+                className="btn-primary flex-1 justify-center"
+              >
+                {adding === confirmItem.id
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Plus className="w-4 h-4" />
+                }
+                Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-surface-800 border-b border-surface-500 px-4 py-4 sticky top-0 z-10">
@@ -221,7 +258,7 @@ export default function ClientePage() {
                   {products.map(p => (
                     <button
                       key={p.id}
-                      onClick={() => addProduct(p)}
+                      onClick={() => p.stockQuantity > 0 && setConfirmItem(p)}
                       disabled={adding === p.id || p.stockQuantity === 0}
                       className={clsx(
                         'card text-left hover:border-brand-500/50 transition-all duration-150 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed',
