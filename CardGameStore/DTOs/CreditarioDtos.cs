@@ -31,6 +31,18 @@ public class CrediariosDto
 
     /// <summary>Histórico de pagamentos parciais registrados.</summary>
     public List<PagamentoCrediarioDto> Pagamentos { get; set; } = new();
+
+    /// <summary>Itens da comanda de origem (null = dívida manual sem comanda).</summary>
+    public List<ItemCrediarioDto> ItensComanda { get; set; } = new();
+}
+
+/// <summary>Item da comanda vinculada ao crediário (somente leitura).</summary>
+public class ItemCrediarioDto
+{
+    public string  ItemName        { get; set; } = string.Empty;
+    public int     Quantity        { get; set; }
+    public decimal UnitPriceInReais { get; set; }
+    public decimal SubtotalInReais  { get; set; }
 }
 
 /// <summary>DTO de um pagamento parcial do crediário.</summary>

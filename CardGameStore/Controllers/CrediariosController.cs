@@ -84,6 +84,7 @@ public class CrediariosController : ControllerBase
         var saved = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .FirstAsync(c => c.Id == crediario.Id);
 
         _logger.LogInformation(
@@ -103,6 +104,7 @@ public class CrediariosController : ControllerBase
         var query = _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) &&
@@ -126,6 +128,7 @@ public class CrediariosController : ControllerBase
         var crediarios = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .Where(c => c.UserId == userId)
             .OrderByDescending(c => c.DataAbertura)
             .ToListAsync();
@@ -143,6 +146,7 @@ public class CrediariosController : ControllerBase
         var crediario = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .Where(c => c.UserId == userId && c.Status == CrediariosStatus.Aberto)
             .FirstOrDefaultAsync();
 
@@ -163,6 +167,7 @@ public class CrediariosController : ControllerBase
         var crediario = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .FirstOrDefaultAsync(c => c.Id == id);
 
         if (crediario == null)
@@ -208,6 +213,7 @@ public class CrediariosController : ControllerBase
         var crediario = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .FirstOrDefaultAsync(c => c.Id == id);
 
         if (crediario == null)
@@ -255,6 +261,7 @@ public class CrediariosController : ControllerBase
         var crediario = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .FirstOrDefaultAsync(c => c.Id == id);
 
         if (crediario == null)
@@ -344,6 +351,15 @@ public class CrediariosController : ControllerBase
                     Observacao     = p.Observacao,
                     CreatedAt      = p.CreatedAt,
                 }).ToList(),
+            ItensComanda         = c.Comanda?.Items
+                .OrderBy(i => i.AddedAt)
+                .Select(i => new ItemCrediarioDto
+                {
+                    ItemName         = i.ItemNameSnapshot,
+                    Quantity         = i.Quantity,
+                    UnitPriceInReais = i.UnitPriceInCents / 100m,
+                    SubtotalInReais  = i.SubtotalInCents  / 100m,
+                }).ToList() ?? new(),
         };
     }
 

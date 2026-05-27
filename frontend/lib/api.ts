@@ -231,6 +231,13 @@ export interface PagamentoCrediarioDto {
   createdAt: string
 }
 
+export interface ItemCrediarioDto {
+  itemName: string
+  quantity: number
+  unitPriceInReais: number
+  subtotalInReais: number
+}
+
 export interface CrediariosDto {
   id: string
   userId: string
@@ -248,6 +255,7 @@ export interface CrediariosDto {
   vencido: boolean
   diasRestantes: number
   pagamentos: PagamentoCrediarioDto[]
+  itensComanda: ItemCrediarioDto[]
 }
 
 export const FORMAS_PAGAMENTO_CREDIARIO = [

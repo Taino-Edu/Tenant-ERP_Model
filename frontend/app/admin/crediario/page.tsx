@@ -8,8 +8,9 @@ import toast from 'react-hot-toast'
 import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
-  Plus, History, DollarSign, X, Search, Pencil,
+  Plus, History, DollarSign, X, Search, Pencil, Printer, Package,
 } from 'lucide-react'
+import { ItemCrediarioDto } from '@/lib/api'
 import clsx from 'clsx'
 
 const fmt     = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
@@ -432,6 +433,46 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
 
 // ── Card do crediário ─────────────────────────────────────────────────────────
 
+function imprimirItens(c: CrediariosDto) {
+  const w = window.open('', '_blank', 'width=480,height=640')
+  if (!w) { alert('Permita pop-ups para imprimir'); return }
+  const data = new Date(c.dataAbertura).toLocaleDateString('pt-BR')
+  const linhas = c.itensComanda.map(i =>
+    `<tr>
+      <td>${i.quantity}× ${i.itemName}</td>
+      <td style="text-align:right">R$ ${i.unitPriceInReais.toFixed(2).replace('.', ',')}</td>
+      <td style="text-align:right">R$ ${i.subtotalInReais.toFixed(2).replace('.', ',')}</td>
+    </tr>`
+  ).join('')
+  w.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Crediário — ${c.userName}</title>
+<style>
+  @page { size: A5; margin: 16mm; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #111; }
+  h1 { font-size: 16px; margin: 0 0 2px; }
+  .sub { font-size: 11px; color: #555; margin: 0 0 12px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th { text-align: left; font-size: 10px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding: 4px 2px; }
+  td { padding: 5px 2px; border-bottom: 1px solid #eee; vertical-align: top; }
+  .total { font-weight: bold; font-size: 14px; margin-top: 12px; text-align: right; }
+  .footer { margin-top: 20px; font-size: 10px; color: #888; border-top: 1px dashed #ccc; padding-top: 8px; }
+  @media print { button { display: none; } }
+</style>
+</head><body>
+<h1>Santuário Nerd — Crediário</h1>
+<p class="sub">Cliente: <strong>${c.userName}</strong> · Data: ${data}</p>
+<table>
+  <thead><tr><th>Item</th><th style="text-align:right">Unit.</th><th style="text-align:right">Total</th></tr></thead>
+  <tbody>${linhas}</tbody>
+</table>
+<p class="total">Total: R$ ${c.valorEmReais.toFixed(2).replace('.', ',')}</p>
+<div class="footer">Assinatura do cliente: ____________________________</div>
+<script>window.onload = () => { window.print(); }</script>
+</body></html>`)
+  w.document.close()
+}
+
 function CrediarioCard({
   c,
   onPagamento,
@@ -441,7 +482,8 @@ function CrediarioCard({
   onPagamento: (c: CrediariosDto) => void
   onEditar: (c: CrediariosDto) => void
 }) {
-  const [expandido, setExpandido] = useState(false)
+  const [expandido, setExpandido]         = useState(false)
+  const [expandItens, setExpandItens]     = useState(false)
 
   const progresso = c.valorEmReais > 0
     ? Math.min(100, (c.valorPagoEmReais / c.valorEmReais) * 100)
@@ -543,6 +585,43 @@ function CrediarioCard({
           <p className="text-[10px] text-gray-500 mt-1">
             {progresso.toFixed(0)}% pago ({fmt(c.valorPagoEmReais)} de {fmt(c.valorEmReais)})
           </p>
+        </div>
+      )}
+
+      {/* Itens da comanda de origem */}
+      {c.itensComanda.length > 0 && (
+        <div className="mt-3 border-t border-surface-600 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => setExpandItens(v => !v)}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              <Package className="w-3.5 h-3.5" />
+              {c.itensComanda.length} produto{c.itensComanda.length !== 1 ? 's' : ''} na comanda
+              {expandItens ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+            </button>
+            <button
+              onClick={() => imprimirItens(c)}
+              className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+              title="Imprimir lista de produtos"
+            >
+              <Printer className="w-3.5 h-3.5" /> Imprimir
+            </button>
+          </div>
+          {expandItens && (
+            <div className="space-y-1">
+              {c.itensComanda.map((item: ItemCrediarioDto, idx: number) => (
+                <div key={idx} className="flex items-center justify-between bg-surface-700 rounded-lg px-3 py-2 text-xs">
+                  <span className="text-gray-300 flex-1 truncate">
+                    {item.quantity}× {item.itemName}
+                  </span>
+                  <span className="text-accent-gold font-mono ml-2 shrink-0">
+                    R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
