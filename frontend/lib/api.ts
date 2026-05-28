@@ -291,6 +291,8 @@ export const crediarioApi = {
     api.patch<CrediariosDto>(`/api/crediarios/${id}`, req),
   deletar: (id: string) =>
     api.delete(`/api/crediarios/${id}`),
+  meuHistorico: () =>
+    api.get<CrediariosDto[]>('/api/crediarios/historico'),
 }
 
 export const COMANDA_PAYMENT_METHODS = [

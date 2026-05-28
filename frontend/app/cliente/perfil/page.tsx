@@ -13,8 +13,8 @@ import Link from 'next/link'
 
 export default function PerfilPage() {
   const router = useRouter()
-  const [profile,   setProfile]   = useState<UserProfile | null>(null)
-  const [crediario, setCrediario] = useState<CrediariosDto | null>(null)
+  const [profile,        setProfile]        = useState<UserProfile | null>(null)
+  const [crediarios,     setCrediarios]     = useState<CrediariosDto[]>([])
   const [history,        setHistory]        = useState<ComandaDto[]>([])
   const [participations, setParticipations] = useState<MyParticipation[]>([])
   const [loading,        setLoading]        = useState(true)
@@ -24,11 +24,26 @@ export default function PerfilPage() {
   useEffect(() => {
     Promise.all([
       userApi.me().then(r => setProfile(r.data)).catch(() => {}),
-      crediarioApi.meu().then(r => setCrediario(r.data)).catch(() => {}),
+      crediarioApi.meuHistorico().then(r => setCrediarios(r.data)).catch(() => {}),
       comandaApi.myHistory().then(r => setHistory(r.data)).catch(() => {}),
       championshipApi.myParticipations().then(r => setParticipations(r.data)).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
+
+  // Crediário aberto (se houver)
+  const crediario = crediarios.find(c => c.status === 'Aberto' || c.status === 'Vencido') ?? null
+  // Crediários pagos (histórico)
+  const crediariospagos = crediarios.filter(c => c.status === 'Pago')
+
+  // Consumo mensal — soma das comandas fechadas no mês atual
+  const agora = new Date()
+  const consumoMensal = history
+    .filter(c => {
+      if (!c.closedAt || c.status !== 'Fechada') return false
+      const d = new Date(c.closedAt)
+      return d.getMonth() === agora.getMonth() && d.getFullYear() === agora.getFullYear()
+    })
+    .reduce((s, c) => s + c.totalInReais, 0)
 
   async function handleLogout() {
     try { await authApi.logout() } catch {}
@@ -94,7 +109,7 @@ export default function PerfilPage() {
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {label}
-                  {key === 'crediario' && crediario && crediario.saldoRestanteEmReais > 0 && (
+                  {key === 'crediario' && crediario && (
                     <span className="w-1.5 h-1.5 bg-red-400 rounded-full absolute" />
                   )}
                 </button>
@@ -143,6 +158,17 @@ export default function PerfilPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Consumo mensal */}
+                <div className="bg-surface-700 rounded-xl px-4 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ShoppingBag className="w-4 h-4 text-brand-400" />
+                    <span className="text-sm text-gray-400">Consumo este mês</span>
+                  </div>
+                  <span className="font-bold text-white">
+                    R$ {consumoMensal.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
 
                 <div className="border-t border-surface-500 pt-4 mt-2">
                   <div className="flex items-start gap-2.5 text-xs text-gray-500 leading-relaxed">
@@ -346,6 +372,7 @@ export default function PerfilPage() {
 
             {/* ── Tab: Crediário / Dívida ───────────────────────── */}
             {tab === 'crediario' && (
+              <div className="space-y-3">
               <div className="card">
                 {crediario ? (
                   <div className="space-y-4">
@@ -408,6 +435,38 @@ export default function PerfilPage() {
                     <p className="text-gray-600 text-sm mt-1">Você está em dia com o Maikon! 🎉</p>
                   </div>
                 )}
+              </div>
+
+              {/* Histórico de crediários quitados */}
+              {crediariospagos.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider px-1">
+                    Parcelas quitadas
+                  </p>
+                  {crediariospagos.map(c => (
+                    <div key={c.id} className="card py-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <div>
+                            <p className="text-sm font-semibold text-white">
+                              R$ {c.valorEmReais.toFixed(2).replace('.', ',')}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Quitado em {c.dataPagamento
+                                ? new Date(c.dataPagamento).toLocaleDateString('pt-BR')
+                                : '—'}
+                            </p>
+                          </div>
+                        </div>
+                        {c.observacao && (
+                          <p className="text-xs text-gray-600 text-right max-w-[120px] truncate">{c.observacao}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               </div>
             )}
           </>

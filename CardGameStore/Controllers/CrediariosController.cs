@@ -138,7 +138,7 @@ public class CrediariosController : ControllerBase
     }
 
     // -------------------------------------------------------------------------
-    // GET /api/crediarios/meu
+    // GET /api/crediarios/meu — crediário aberto do cliente
     // -------------------------------------------------------------------------
     [HttpGet("meu")]
     public async Task<ActionResult<CrediariosDto>> GetMeu()
@@ -155,6 +155,24 @@ public class CrediariosController : ControllerBase
             return NotFound(new { Message = "Nenhum crediário em aberto." });
 
         return Ok(MapToDto(crediario));
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/crediarios/historico — todo o histórico de crediários do cliente
+    // -------------------------------------------------------------------------
+    [HttpGet("historico")]
+    public async Task<ActionResult<List<CrediariosDto>>> GetMeuHistorico()
+    {
+        var userId = GetUserId();
+        var lista  = await _db.Crediarios
+            .Include(c => c.User)
+            .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
+            .Where(c => c.UserId == userId)
+            .OrderByDescending(c => c.DataAbertura)
+            .ToListAsync();
+
+        return Ok(lista.Select(MapToDto).ToList());
     }
 
     // -------------------------------------------------------------------------
