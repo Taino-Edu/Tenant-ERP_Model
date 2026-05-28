@@ -111,8 +111,8 @@ export default function AiChatWidget() {
                 <div className="space-y-1.5">
                   {SUGGESTIONS.map(s => (
                     <button key={s} onClick={() => send(s)}
-                            className="w-full text-left text-xs px-3 py-2.5 rounded-xl text-gray-300 hover:text-white hover:border-violet-500/50 transition-all"
-                            style={{ background: '#1a1a24', border: '1px solid #303040' }}>
+                            className="w-full text-left text-xs px-3 py-2.5 rounded-xl text-violet-200 hover:text-white hover:border-violet-500/50 transition-all"
+                            style={{ background: '#1a1a2e', border: '1px solid #4c2d8a' }}>
                       {s}
                     </button>
                   ))}
