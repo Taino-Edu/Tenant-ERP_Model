@@ -1,109 +1,116 @@
-# softNerd — Sistema de Gestão para Lojas de Card Games
+# Santuário Nerd — Sistema de Gestão para Loja de Card Games
 
-> Plataforma completa para gerenciamento de lojas especializadas em card games (Pokémon, Magic: The Gathering, Yu-Gi-Oh! e outros), com painel administrativo moderno, assistente IA, conformidade LGPD e autenticação segura via HttpOnly Cookies.
+> Plataforma completa para gerenciamento de lojas de card games (Pokémon, Magic: The Gathering, Yu-Gi-Oh! e outros). Painel administrativo moderno, frente de caixa, comandas por QR Code, crediário, assistente IA e conformidade LGPD.
 
----
-
-## Sumário
-
-- [Visão Geral](#visão-geral)
-- [Funcionalidades](#funcionalidades)
-- [Stack Tecnológico](#stack-tecnológico)
-- [Estrutura do Projeto](#estrutura-do-projeto)
-- [Instalação e Execução](#instalação-e-execução)
-- [Testes](#testes)
-- [API Reference](#api-reference)
-- [Conformidade LGPD](#conformidade-lgpd)
-- [Segurança](#segurança)
-- [Licença](#licença)
-
----
-
-## Visão Geral
-
-O softNerd é um sistema de gestão desenvolvido especificamente para o nicho de lojas de card games. Centraliza controle de estoque, vendas, crediário, anúncios, precificação automática via APIs de terceiros e comunicação em tempo real entre atendentes e administradores.
-
-A plataforma é composta por uma API REST em ASP.NET Core, um frontend Next.js com App Router e um banco de dados PostgreSQL, totalmente containerizável via Docker.
+**Produção:** [santuarionerd.tech](https://santuarionerd.tech)
 
 ---
 
 ## Funcionalidades
 
-### Gestão de Produtos e Estoque
-- Cadastro de cards com integração às APIs oficiais: **Pokémon TCG**, **Magic: The Gathering (Scryfall)** e **Yu-Gi-Oh! (ygoprodeck.com)**
-- Busca automática de imagens, nomes e metadados dos cards via APIs externas
-- Controle de estoque com alertas de quantidade mínima
-- Upload de imagens direto no sistema (drag-and-drop no painel admin, JPEG/PNG/WebP, máx 5 MB)
+### Frente de Caixa (Venda Avulsa)
+- Venda direta no balcão sem QR Code
+- Catálogo com busca por nome, categoria e código de barras
+- Carrinho com controle de estoque em tempo real
+- Desconto percentual por venda
+- Múltiplas formas de pagamento: Pix, Dinheiro, Cartão Crédito/Débito, Crediário, Pontos, Cashback
+- Geração de comprovante para impressão térmica (80mm) e PDF
+- Histórico navegável por qualquer data com popup de detalhes
 
-### Vendas e Crediário
-- Registro de vendas com múltiplos métodos de pagamento
-- Painel de crediário (`/admin/crediario`) com controle de parcelas, vencimentos e inadimplência
-- Histórico de transações por cliente
+### Comandas por QR Code
+- Clientes escaneiam QR Code na mesa e abrem comanda pelo celular
+- Login rápido por CPF + WhatsApp com consentimento LGPD integrado
+- Dashboard ao vivo com SignalR — novas comandas aparecem sem recarregar
+- Admin pode adicionar itens, fechar (com seleção de pagamento) ou cancelar comandas
+- Leitor de código de barras via câmera ou USB no painel admin
 
-### Painel Administrativo
-- Dashboard com métricas em tempo real via **SignalR** (SSE + Long Polling)
-- Gestão de anúncios e promoções
-- Gerenciamento de usuários e permissões
-- **Assistente IA conversacional** (Google Gemini 2.0 Flash) — chat flutuante para perguntas sobre o negócio em linguagem natural, disponível no painel admin
-- Gerenciamento de solicitações LGPD pelo painel dedicado (`/admin/lgpd`)
+### Crediário
+- Criação automática ao fechar comanda/venda no crédito
+- Acumula dívidas em aberto por cliente
+- Registro de pagamentos parciais com histórico
+- Relatório de inadimplência
 
-### Autenticação e Segurança
-- JWT armazenado em **HttpOnly Cookies** (accessToken + refreshToken) — sem localStorage, sem js-cookie
-- Cookies com flags `HttpOnly` e `Secure` para proteção contra XSS
-- Refresh token automático com rotação
-- BCrypt para hash de senhas
-- `UseForwardedHeaders` para leitura correta de `X-Forwarded-For` em ambientes com proxy reverso
+### Estoque e Produtos
+- Cadastro de cards com integração às APIs: Pokémon TCG, Magic (Scryfall) e Yu-Gi-Oh!
+- Busca automática de imagens e metadados via APIs externas
+- Upload de imagens (JPEG/PNG/WebP, máx 5 MB)
+- Alertas de estoque baixo
+- Categorias customizáveis
+
+### Campeonatos
+- Cadastro com imagem de capa, jogo (texto livre), data, vagas e prêmio
+- Inscrições com controle de vagas
+- Listagem pública e painel admin
+
+### Relatórios Financeiros
+- Dashboard com receita, custo e margem por período
+- Gráfico de barras diário
+- Breakdown por forma de pagamento com drill-down de transações
+- Filtros por data, cliente e faixa de valor
+- Exportação em PDF
+
+### Assistente IA
+- Chat flutuante no painel admin alimentado pelo **Google Gemini 2.5 Flash**
+- Contexto automático do negócio (comandas, estoque, crediário)
+- Sugestões rápidas de perguntas
+
+### Área do Cliente
+- Histórico de pedidos
+- Saldo de pontos de fidelidade e cashback
+- Perfil editável
+
+### Gestão Administrativa
+- Gestão de usuários com funções (Admin / Customer)
+- Pontos de fidelidade e saldo cashback
+- Anúncios e promoções
+- Geração de QR Codes para mesas
+- Painel LGPD para resposta de solicitações de titulares
 
 ### Conformidade LGPD
-- Página pública `/lgpd` para exercício de direitos (acesso, correção, exclusão, portabilidade)
-- Página `/privacidade` (Política de Privacidade) e `/termos` (Termos de Uso)
-- Banner de cookies com aceite granular (`CookieBanner`)
-- Formulário de solicitação com validação de CPF pelo **Módulo 11**
-- Audit log automático com IP anonimizado via **SHA-256**
-- Painel admin `/admin/lgpd` para gestão e resposta de solicitações
-
-### Experiência do Usuário
-- **Tema claro/escuro** (dark/light mode) com `ThemeToggle` disponível em todas as páginas
-- Interface responsiva com Tailwind CSS e Radix UI
-- PWA com auto-hide da barra de navegação
-- Notificações em tempo real via SignalR
+- Formulário público `/lgpd` com validação de CPF (Módulo 11)
+- Audit log imutável com IP anonimizado (SHA-256)
+- Política de Privacidade e Termos de Uso
+- Painel admin para gestão de solicitações dentro do prazo legal
 
 ---
 
 ## Stack Tecnológico
 
-### Backend
+### Backend — `CardGameStore/`
 
-| Tecnologia | Versão | Finalidade |
-|---|---|---|
-| ASP.NET Core | 8.0 | API REST principal |
-| Entity Framework Core | 8.x | ORM e migrações |
-| PostgreSQL | 16 | Banco de dados relacional |
-| SignalR | 8.x | Comunicação em tempo real (SSE + Long Polling) |
-| JWT (HttpOnly Cookies) | — | Autenticação stateless segura |
-| BCrypt.Net | — | Hash de senhas |
-| Google Gemini 2.0 Flash | — | Assistente IA (HTTP direto, sem SDK) |
-| xUnit + Moq + FluentAssertions | — | Testes unitários e de integração |
-| coverlet | — | Cobertura de código |
+| Tecnologia | Finalidade |
+|---|---|
+| ASP.NET Core 8 | API REST |
+| Entity Framework Core 8 | ORM — PostgreSQL (sem migrations automáticas) |
+| PostgreSQL 16 | Usuários, produtos, comandas, crediários, campeonatos |
+| MongoDB 7 | Vendas avulsas (event store imutável) |
+| SignalR | Tempo real — comandas ao vivo |
+| JWT (HttpOnly Cookies) | Autenticação stateless |
+| BCrypt.Net | Hash de senhas |
+| Google Gemini 2.5 Flash | Assistente IA (HTTP direto, sem SDK) |
+| xUnit + Moq + FluentAssertions | Testes unitários |
 
-### Frontend
+### Frontend — `frontend/`
 
-| Tecnologia | Versão | Finalidade |
-|---|---|---|
-| Next.js (App Router) | 14.x | Framework React SSR/SSG |
-| TypeScript | 5.x | Tipagem estática |
-| Tailwind CSS | 3.x | Estilização utilitária |
-| Radix UI | — | Componentes acessíveis |
-| SignalR Client | — | Tempo real com `withCredentials` (cross-origin cookie compatível) |
-| next-themes | — | Dark/light mode |
+| Tecnologia | Finalidade |
+|---|---|
+| Next.js 14 (App Router) | Framework React SSR |
+| TypeScript 5 | Tipagem estática |
+| Tailwind CSS 3 | Estilização |
+| Axios | Chamadas HTTP com interceptors de refresh token |
+| @microsoft/signalr | Cliente SignalR |
+| lucide-react | Ícones |
+| react-hot-toast | Notificações |
+| clsx | Classes condicionais |
 
 ### Infraestrutura
 
 | Tecnologia | Finalidade |
 |---|---|
 | Docker + Docker Compose | Containerização |
-| Nginx | Proxy reverso |
-| GitHub Actions | CI/CD |
+| Nginx 1.27 Alpine | Proxy reverso — porta 80 |
+| Hostinger VPS (Ubuntu 24.04, 4 GB RAM) | Servidor de produção |
+| Cloudflare | DNS + SSL/TLS (HTTPS) |
 
 ---
 
@@ -111,188 +118,198 @@ A plataforma é composta por uma API REST em ASP.NET Core, um frontend Next.js c
 
 ```
 softNerd/
-├── backend/
-│   ├── softNerd.API/              # Controllers, Middleware, Program.cs
-│   ├── softNerd.Application/      # Services, DTOs, Interfaces
-│   ├── softNerd.Domain/           # Entidades, enums
-│   ├── softNerd.Infrastructure/   # Repositórios, EF, Migrations
-│   └── softNerd.Tests/            # Testes unitários (~85 testes)
-│       ├── AuditServiceTests.cs   # 6 testes
-│       ├── LgpdServiceTests.cs    # 8 testes
-│       └── AnnouncementServiceTests.cs
-├── frontend/
-│   └── app/
-│       ├── (public)/
-│       │   ├── privacidade/       # Política de Privacidade
-│       │   ├── termos/            # Termos de Uso
-│       │   └── lgpd/              # Exercício de direitos LGPD
-│       └── admin/
-│           ├── lgpd/              # Painel LGPD admin
-│           ├── crediario/         # Painel de crediário
-│           └── ...
-├── frontend/components/
-│   ├── admin/
-│   │   ├── AiChatWidget.tsx       # Chat flutuante com Gemini
-│   │   └── ImageUpload.tsx        # Upload drag-and-drop
-│   ├── CookieBanner.tsx           # Banner de cookies LGPD
-│   └── ThemeToggle.tsx            # Alternador dark/light
-└── docker-compose.yml
+├── CardGameStore/              # ASP.NET Core 8 — API REST
+│   ├── Controllers/            # Endpoints (Auth, Product, Comanda, Venda, ...)
+│   ├── Services/               # Lógica de negócio
+│   ├── Models/
+│   │   ├── PostgreSQL/         # Entidades EF Core
+│   │   └── MongoDB/            # Documentos (VendaAvulsa)
+│   ├── DTOs/                   # Requests e responses
+│   ├── Data/                   # AppDbContext
+│   └── Dockerfile
+│
+├── frontend/                   # Next.js 14 App Router
+│   ├── app/
+│   │   ├── admin/              # Painel administrativo
+│   │   │   ├── dashboard/      # Comandas ao vivo
+│   │   │   ├── venda-avulsa/   # Frente de caixa
+│   │   │   ├── crediario/      # Gestão de crediário
+│   │   │   ├── estoque/        # Produtos e estoque
+│   │   │   ├── campeonatos/    # Gestão de campeonatos
+│   │   │   ├── financeiro/     # Relatórios
+│   │   │   ├── usuarios/       # Gestão de clientes
+│   │   │   ├── anuncios/       # Anúncios e promoções
+│   │   │   ├── qrcodes/        # QR Codes de mesas
+│   │   │   └── lgpd/           # Painel LGPD
+│   │   ├── cliente/            # Área do cliente logado
+│   │   ├── mesa/[mesa]/        # Login por QR Code
+│   │   ├── lgpd/               # Formulário público LGPD
+│   │   ├── privacidade/        # Política de Privacidade
+│   │   └── termos/             # Termos de Uso
+│   ├── components/
+│   │   └── admin/
+│   │       └── AiChatWidget.tsx  # Chat IA flutuante
+│   ├── lib/
+│   │   ├── api.ts              # Todos os endpoints tipados
+│   │   ├── auth.ts             # Gestão de sessão
+│   │   └── signalr.ts          # Hub de tempo real
+│   └── Dockerfile
+│
+├── tests/
+│   ├── api/                    # Testes de endpoints (.http — REST Client)
+│   └── unit/                   # Testes unitários xUnit (10 serviços)
+│
+├── deploy/
+│   ├── docker-compose.prod.yml # Stack de produção completa
+│   ├── nginx/nginx.conf        # Configuração do proxy reverso
+│   ├── setup.sh                # Instalação automática no VPS
+│   ├── update.sh               # Atualização (git pull + rebuild)
+│   └── cleanup.sh              # Limpeza segura de espaço em disco
+│
+├── softNerd.sln                # Solução Visual Studio
+├── run-tests.ps1               # Runner de testes unitários
+└── .gitignore
 ```
 
 ---
 
-## Instalação e Execução
+## Deploy em Produção
 
-### Pré-requisitos
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-- [Node.js 20+](https://nodejs.org/)
-- [Docker](https://www.docker.com/) (recomendado)
-- PostgreSQL 16 (ou via Docker)
-
-### Via Docker Compose (recomendado)
+### Primeira instalação no VPS
 
 ```bash
-git clone https://github.com/seu-usuario/softNerd.git
-cd softNerd
-cp .env.example .env
-# Edite .env com suas variáveis (ver seção de variáveis abaixo)
-docker-compose up --build
+curl -fsSL https://raw.githubusercontent.com/Taino-Edu/softNerd/main/deploy/setup.sh | bash
 ```
 
-A aplicação estará disponível em:
-- Frontend: `http://localhost:3000`
-- API: `http://localhost:5000`
+O script instala Docker, configura o firewall (UFW), clona o repositório, gera segredos e sobe os containers.
 
-### Manual
+### Atualizar após novo commit
 
-**Backend:**
 ```bash
-cd backend/softNerd.API
-dotnet restore
-dotnet ef database update
-dotnet run
+bash /opt/santuarionerd/deploy/update.sh
 ```
 
-**Frontend:**
+Ou manualmente:
+
 ```bash
-cd frontend
-npm install
-npm run dev
+cd /opt/santuarionerd
+git pull
+docker compose -f deploy/docker-compose.prod.yml build api frontend
+docker compose -f deploy/docker-compose.prod.yml up -d
 ```
 
-### Variáveis de Ambiente
+### Limpar espaço em disco (build cache acumula rápido)
+
+```bash
+bash /opt/santuarionerd/deploy/cleanup.sh
+```
+
+---
+
+## Variáveis de Ambiente
+
+Copie `deploy/.env.example` para `/opt/santuarionerd/.env` e preencha:
 
 ```env
-# Banco de dados
-DATABASE_URL=Host=localhost;Database=softnerd;Username=postgres;Password=sua_senha
+# PostgreSQL
+POSTGRES_DB=cardgamestore
+POSTGRES_USER=cardgame_user
+POSTGRES_PASSWORD=<gerado pelo setup.sh>
 
-# JWT
-JWT_SECRET=sua_chave_secreta_longa
-JWT_ISSUER=softNerd
-JWT_AUDIENCE=softNerd-client
-ACCESS_TOKEN_EXPIRES_MINUTES=15
-REFRESH_TOKEN_EXPIRES_DAYS=7
+# JWT (não altere após o primeiro deploy)
+JWT_SECRET=<gerado pelo setup.sh>
 
-# Cookies
-COOKIE_DOMAIN=localhost
-COOKIE_SECURE=false  # true em produção (HTTPS)
+# E-mail via Resend
+SMTP_PASSWORD=<API Key do resend.com>
 
-# IA
-GEMINI_API_KEY=sua_chave_gemini
+# Google Gemini IA
+GEMINI_API_KEY=<chave do Google AI Studio>
 
-# APIs externas (opcionais)
-POKEMON_TCG_API_KEY=sua_chave_pokemon
+# Segurança
+IP_HASH_SALT=<gerado pelo setup.sh>
 ```
 
 ---
 
 ## Testes
 
-O projeto possui aproximadamente **85 testes** cobrindo serviços, regras de negócio e conformidade LGPD.
+### Unitários (xUnit)
 
 ```bash
-cd backend
-dotnet test
+# Windows
+.\run-tests.ps1
 
-# Com cobertura de código (coverlet)
-dotnet test --collect:"XPlat Code Coverage"
+# Linux/macOS
+dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
 ```
 
-### Cobertura por módulo
+Cobertura: 10 serviços testados (Auth, Product, Comanda, VendaAvulsa, Crediário, Championship, User, Announcement, Audit, LGPD).
 
-| Módulo | Testes |
-|---|---|
-| AuditService | 6 |
-| LgpdService | 8 |
-| AnnouncementService | ✓ |
-| Demais serviços | ~71 |
-| **Total** | **~85** |
+### API (.http files — REST Client)
+
+Abra os arquivos em `tests/api/` com a extensão **REST Client** no VS Code.  
+Configure as variáveis em `tests/api/http-client.env.json`.
 
 ---
 
-## API Reference
+## Principais Endpoints
 
 ### Autenticação
-
 | Método | Endpoint | Descrição |
 |---|---|---|
 | `POST` | `/api/auth/login` | Login — define cookies HttpOnly |
-| `POST` | `/api/auth/refresh` | Renova accessToken via refreshToken cookie |
-| `POST` | `/api/auth/logout` | Invalida tokens e limpa cookies |
+| `POST` | `/api/auth/refresh` | Renova accessToken |
+| `POST` | `/api/auth/logout` | Encerra sessão |
+| `POST` | `/api/auth/quick-login` | Login via QR Code (mesa) |
 
-> Todos os endpoints protegidos leem o JWT do cookie `accessToken` automaticamente. Não é necessário enviar o header `Authorization: Bearer`.
-
-### Produtos e Estoque
-
+### Produtos
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `GET` | `/api/products` | Lista produtos com paginação e filtros |
-| `POST` | `/api/products` | Cria produto |
-| `PUT` | `/api/products/{id}` | Atualiza produto |
-| `DELETE` | `/api/products/{id}` | Remove produto |
+| `GET` | `/api/product` | Lista produtos com filtros |
+| `POST` | `/api/product` | Cria produto |
+| `PUT` | `/api/product/{id}` | Atualiza produto |
+| `DELETE` | `/api/product/{id}` | Desativa produto |
+| `GET` | `/api/product/barcode/{code}` | Busca por código de barras |
+| `GET` | `/api/product/low-stock` | Produtos com estoque baixo |
 
-### Upload de Imagens
-
+### Comandas
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `POST` | `/api/upload/image` | Upload de imagem (JPEG/PNG/WebP, máx 5 MB) |
+| `GET` | `/api/comanda/dashboard` | Comandas ativas (tempo real) |
+| `POST` | `/api/comanda/{id}/item` | Adiciona item |
+| `PUT` | `/api/comanda/{id}/close` | Fecha comanda |
+| `DELETE` | `/api/comanda/{id}` | Cancela comanda |
 
-### APIs de Cards
-
+### Venda Avulsa
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `GET` | `/api/cards/pokemon/search?q={nome}` | Busca cards Pokémon |
-| `GET` | `/api/cards/mtg/search?q={nome}` | Busca cards MTG (Scryfall) |
-| `GET` | `/api/cards/yugioh/search?q={nome}` | Busca cards Yu-Gi-Oh! (ygoprodeck) |
+| `POST` | `/api/venda-avulsa` | Registra venda no balcão |
+| `GET` | `/api/venda-avulsa/recent` | Últimas N vendas |
+| `GET` | `/api/venda-avulsa/by-date?date=YYYY-MM-DD` | Vendas de um dia específico |
 
-### LGPD
-
+### Crediário
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `POST` | `/api/lgpd/solicitacao` | Registra solicitação de titular (valida CPF Módulo 11) |
-| `GET` | `/api/lgpd/solicitacoes` | Lista solicitações (admin) |
-| `PUT` | `/api/lgpd/solicitacoes/{id}` | Atualiza status da solicitação (admin) |
+| `GET` | `/api/crediario` | Lista crediários com filtros |
+| `POST` | `/api/crediario` | Cria crediário manual |
+| `POST` | `/api/crediario/{id}/pagamento` | Registra pagamento |
 
-### Assistente IA
-
+### Campeonatos
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `POST` | `/api/ai/chat` | Envia mensagem ao assistente Gemini 2.0 Flash |
+| `GET` | `/api/championship` | Lista campeonatos |
+| `POST` | `/api/championship` | Cria campeonato |
+| `PUT` | `/api/championship/{id}/image` | Define imagem de capa |
 
----
+### Upload
+| Método | Endpoint | Descrição |
+|---|---|---|
+| `POST` | `/api/upload/image` | Upload de imagem (máx 5 MB) |
 
-## Conformidade LGPD
-
-O softNerd implementa os requisitos da **Lei Geral de Proteção de Dados (Lei 13.709/2018)**:
-
-- **Base legal documentada** para cada finalidade de tratamento
-- **Exercício de direitos** dos titulares via formulário público em `/lgpd` com validação de CPF (Módulo 11)
-- **Audit log imutável** de todas as operações sensíveis, com IP anonimizado (SHA-256)
-- **Minimização de dados** — coleta apenas o necessário para cada operação
-- **Banner de cookies** com aceite granular e registro de consentimento
-- **Painel administrativo** (`/admin/lgpd`) para gestão das solicitações com prazos legais (15 dias)
-- **Política de Privacidade** e **Termos de Uso** em páginas públicas acessíveis
+### IA
+| Método | Endpoint | Descrição |
+|---|---|---|
+| `POST` | `/api/ai/chat` | Chat com Gemini 2.5 Flash |
 
 ---
 
@@ -300,23 +317,21 @@ O softNerd implementa os requisitos da **Lei Geral de Proteção de Dados (Lei 1
 
 | Medida | Implementação |
 |---|---|
-| Autenticação | JWT em HttpOnly Cookies (não acessível via JS) |
+| Autenticação | JWT em HttpOnly Cookies |
 | Senhas | BCrypt com salt aleatório |
-| CSRF | SameSite=Strict nos cookies de sessão |
-| XSS | HttpOnly Cookies + Content Security Policy |
-| SQL Injection | Entity Framework Core (queries parametrizadas) |
-| IP de clientes | `UseForwardedHeaders` + `X-Forwarded-For` |
-| Dados pessoais em logs | IP anonimizado via SHA-256 |
-| HTTPS | Forçado em produção (`COOKIE_SECURE=true`) |
+| CSRF | SameSite=Strict |
+| SQL Injection | EF Core (queries parametrizadas) |
+| IP em logs | Anonimizado via SHA-256 |
+| HTTPS | Forçado via Cloudflare + `COOKIE_SECURE=true` |
+| Proxy reverso | `UseForwardedHeaders` + `X-Forwarded-For` |
 
 ---
 
 ## Licença
 
-Este software é proprietário e confidencial. Todos os direitos reservados.
-
-Consulte o arquivo [LICENSE](./LICENSE) para os termos completos de uso.
+Software proprietário e confidencial. Todos os direitos reservados.  
+Consulte [LICENSE](./LICENSE) para os termos completos.
 
 ---
 
-*softNerd — Gestão inteligente para lojas de card games. Atualizado em 15/05/2026.*
+*Santuário Nerd — Gestão inteligente para lojas de card games.*
