@@ -120,6 +120,7 @@ export interface Championship {
   startDate: string; entryFeeInCents: number; entryFeeInReais: number; maxParticipants: number | null
   description?: string | null; participantCount?: number
   registrationDeadline?: string | null; endDate?: string | null
+  imageUrl?: string | null
   participants?: ChampionshipParticipant[]
 }
 
@@ -396,6 +397,8 @@ export const championshipApi = {
     api.put(`/api/championship/${id}/status`, { status }),
   setPlacement:     (id: string, participantId: string, placement: number) =>
     api.put(`/api/championship/${id}/participants/${participantId}/placement`, { placement }),
+  setImage:         (id: string, imageUrl: string | null) =>
+    api.put<Championship>(`/api/championship/${id}/image`, { imageUrl }),
 }
 
 // ── Assistente IA ─────────────────────────────────────────────────────────────

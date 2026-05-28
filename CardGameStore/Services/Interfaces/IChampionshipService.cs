@@ -11,6 +11,7 @@ public interface IChampionshipService
 {
     Task<Championship>              CreateAsync(Championship championship);
     Task<Championship?>             GetByIdAsync(Guid id);
+    Task<Championship>              UpdateAsync(Championship championship);
     Task<IEnumerable<Championship>> GetUpcomingAsync();
     Task<IEnumerable<Championship>> GetAllAsync(string? search = null);
     Task<Championship>              UpdateStatusAsync(Guid id, ChampionshipStatus newStatus);

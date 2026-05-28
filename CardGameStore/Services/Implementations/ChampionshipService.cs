@@ -23,6 +23,13 @@ public class ChampionshipService : IChampionshipService
     public async Task<Championship?> GetByIdAsync(Guid id) =>
         await _db.Championships.Include(c => c.Participants).FirstOrDefaultAsync(c => c.Id == id);
 
+    public async Task<Championship> UpdateAsync(Championship championship)
+    {
+        _db.Championships.Update(championship);
+        await _db.SaveChangesAsync();
+        return championship;
+    }
+
     public async Task<IEnumerable<Championship>> GetUpcomingAsync() =>
         await _db.Championships
             .Include(c => c.Participants)

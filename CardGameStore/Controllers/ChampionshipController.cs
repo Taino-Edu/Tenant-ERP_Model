@@ -154,6 +154,7 @@ public class ChampionshipController : ControllerBase
             RegistrationDeadline = request.RegistrationDeadline,
             MaxParticipants      = request.MaxParticipants,
             EntryFeeInCents      = request.EntryFeeInCents,
+            ImageUrl             = request.ImageUrl,
             Status               = ChampionshipStatus.Planejado,
             CreatedByAdminId     = adminId
         };
@@ -324,6 +325,25 @@ public class ChampionshipController : ControllerBase
     }
 
     // -------------------------------------------------------------------------
+    // IMAGEM — apenas Admin
+    // -------------------------------------------------------------------------
+
+    /// <summary>Atualiza a URL da imagem de capa de um campeonato.</summary>
+    [HttpPut("{id:guid}/image")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ChampionshipDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> SetImage(Guid id, [FromBody] SetImageRequest request)
+    {
+        var ch = await _service.GetByIdAsync(id);
+        if (ch == null) return NotFound(new { Message = "Campeonato não encontrado." });
+
+        ch.ImageUrl = request.ImageUrl;
+        await _service.UpdateAsync(ch);
+        return Ok(ToDto(ch));
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers privados
     // -------------------------------------------------------------------------
 
@@ -348,7 +368,8 @@ public class ChampionshipController : ControllerBase
         EntryFeeInReais      = ch.EntryFeeInCents / 100m,
         Status               = ch.Status.ToString(),
         ParticipantCount     = ch.Participants?.Count ?? 0,
-        CreatedAt            = ch.CreatedAt
+        CreatedAt            = ch.CreatedAt,
+        ImageUrl             = ch.ImageUrl,
     };
 }
 
@@ -372,6 +393,7 @@ public class ChampionshipDto
     public string    Status               { get; init; } = string.Empty;
     public int       ParticipantCount     { get; init; }
     public DateTime  CreatedAt            { get; init; }
+    public string?   ImageUrl             { get; init; }
 }
 
 /// <summary>DTO de participação do próprio usuário (GET /api/championship/my-participations).</summary>
@@ -421,6 +443,7 @@ public class CreateChampionshipRequest
     public DateTime? RegistrationDeadline { get; init; }
     public int?      MaxParticipants      { get; init; }
     public int       EntryFeeInCents      { get; init; }
+    public string?   ImageUrl             { get; init; }
 }
 
 /// <summary>Request para alterar status do campeonato.</summary>
@@ -439,3 +462,6 @@ public record RegisterChampionshipRequest(string? DeckName);
 
 /// <summary>Request para definir colocação de participante.</summary>
 public record SetPlacementRequest(int Placement);
+
+/// <summary>Request para definir/atualizar a imagem de capa do campeonato.</summary>
+public record SetImageRequest(string? ImageUrl);

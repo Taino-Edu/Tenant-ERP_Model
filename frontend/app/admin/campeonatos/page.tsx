@@ -1,10 +1,11 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { championshipApi, userApi, Championship, ChampionshipParticipant } from '@/lib/api'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { championshipApi, userApi, uploadApi, Championship, ChampionshipParticipant } from '@/lib/api'
 import toast from 'react-hot-toast'
+import Image from 'next/image'
 import {
   Trophy, Plus, Users, Swords, X, Check, Loader2,
-  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search,
+  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -33,18 +34,39 @@ function NewChampionshipModal({ onClose, onSave }: {
   onClose: () => void
   onSave: (c: Partial<Championship>) => Promise<void>
 }) {
-  const [form, setForm] = useState<Partial<Championship>>({ game: 'Pokemon', entryFeeInCents: 0 })
-  const [saving, setSaving] = useState(false)
+  const [form, setForm]       = useState<Partial<Championship>>({ game: 'Pokemon', entryFeeInCents: 0 })
+  const [saving, setSaving]   = useState(false)
+  const [imgPreview, setImgPreview] = useState<string | null>(null)
+  const [uploading, setUploading]   = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
   const set = (k: keyof Championship, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const { data } = await uploadApi.image(file)
+      set('imageUrl', data.url)
+      setImgPreview(data.url)
+      toast.success('Imagem carregada!')
+    } catch {
+      toast.error('Erro ao fazer upload da imagem')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try { await onSave(form) } finally { setSaving(false) }
   }
 
+  const BASE = process.env.NEXT_PUBLIC_API_URL || ''
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-lg animate-bounce-in">
+      <div className="card w-full max-w-lg animate-bounce-in max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Trophy className="w-5 h-5 text-accent-gold" /> Novo Campeonato
@@ -52,6 +74,37 @@ function NewChampionshipModal({ onClose, onSave }: {
           <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-300" /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
+
+          {/* Imagem de capa */}
+          <div>
+            <label className="label">Imagem de capa</label>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
+            {imgPreview ? (
+              <div className="relative w-full h-36 rounded-xl overflow-hidden group">
+                <Image src={`${BASE}${imgPreview}`} alt="Capa" fill className="object-cover" />
+                <button
+                  type="button"
+                  onClick={() => { setImgPreview(null); set('imageUrl', null); if (fileRef.current) fileRef.current.value = '' }}
+                  className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                >
+                  <X className="w-6 h-6 text-white" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="w-full h-36 rounded-xl border-2 border-dashed border-surface-500 flex flex-col items-center justify-center gap-2 text-gray-500 hover:border-brand-500 hover:text-brand-400 transition-colors"
+              >
+                {uploading
+                  ? <Loader2 className="w-6 h-6 animate-spin" />
+                  : <><ImagePlus className="w-6 h-6" /><span className="text-sm">Clique para adicionar imagem</span></>
+                }
+              </button>
+            )}
+          </div>
+
           <div>
             <label className="label">Nome do Campeonato *</label>
             <input className="input" required value={form.name ?? ''}
@@ -92,7 +145,7 @@ function NewChampionshipModal({ onClose, onSave }: {
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
-            <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
+            <button type="submit" disabled={saving || uploading} className="btn-primary flex-1 justify-center">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               Criar Campeonato
             </button>
@@ -293,13 +346,32 @@ function ChampionshipCard({
         />
       )}
 
-      <div className="card space-y-4">
+      <div className="card space-y-4 overflow-hidden !p-0">
+        {/* Banner de imagem */}
+        {c.imageUrl && (
+          <div className="relative w-full h-32">
+            <Image
+              src={`${process.env.NEXT_PUBLIC_API_URL || ''}${c.imageUrl}`}
+              alt={c.name}
+              fill
+              className="object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-surface-900/80 to-transparent" />
+            <span className={clsx('absolute bottom-2 left-3', STATUS_CLASSES[c.status] ?? 'badge')}>
+              {STATUS_LABELS[c.status]}
+            </span>
+          </div>
+        )}
+
+        <div className="px-4 pb-4 pt-2 space-y-4">
         {/* Cabeçalho */}
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <span className={STATUS_CLASSES[c.status] ?? 'badge'}>{STATUS_LABELS[c.status]}</span>
-            </div>
+            {!c.imageUrl && (
+              <div className="flex items-center gap-2 mb-2">
+                <span className={STATUS_CLASSES[c.status] ?? 'badge'}>{STATUS_LABELS[c.status]}</span>
+              </div>
+            )}
             <h3 className="font-bold text-white">{c.name}</h3>
             <p className="text-sm text-gray-400 flex items-center gap-1.5 mt-1">
               <Swords className="w-3.5 h-3.5" />{c.game}
@@ -411,6 +483,7 @@ function ChampionshipCard({
             </button>
           )}
         </div>
+        </div>{/* fim padding */}
       </div>
     </>
   )

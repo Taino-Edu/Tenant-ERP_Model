@@ -69,6 +69,11 @@ public class Championship
     // Auditoria
     // -------------------------------------------------------------------------
 
+    /// <summary>URL pública da imagem de capa (salva em /uploads/).</summary>
+    [MaxLength(500)]
+    [Column("image_url")]
+    public string? ImageUrl { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
