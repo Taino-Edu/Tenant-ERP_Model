@@ -2,7 +2,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { championshipApi, userApi, uploadApi, Championship, ChampionshipParticipant } from '@/lib/api'
 import toast from 'react-hot-toast'
-import Image from 'next/image'
 import {
   Trophy, Plus, Users, Swords, X, Check, Loader2,
   ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus,
@@ -62,8 +61,6 @@ function NewChampionshipModal({ onClose, onSave }: {
     try { await onSave(form) } finally { setSaving(false) }
   }
 
-  const BASE = process.env.NEXT_PUBLIC_API_URL || ''
-
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="card w-full max-w-lg animate-bounce-in max-h-[90vh] overflow-y-auto">
@@ -81,7 +78,8 @@ function NewChampionshipModal({ onClose, onSave }: {
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
             {imgPreview ? (
               <div className="relative w-full h-36 rounded-xl overflow-hidden group">
-                <Image src={`${BASE}${imgPreview}`} alt="Capa" fill className="object-cover" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imgPreview} alt="Capa" className="w-full h-full object-cover" />
                 <button
                   type="button"
                   onClick={() => { setImgPreview(null); set('imageUrl', null); if (fileRef.current) fileRef.current.value = '' }}
@@ -349,13 +347,9 @@ function ChampionshipCard({
       <div className="card space-y-4 overflow-hidden !p-0">
         {/* Banner de imagem */}
         {c.imageUrl && (
-          <div className="relative w-full h-32">
-            <Image
-              src={`${process.env.NEXT_PUBLIC_API_URL || ''}${c.imageUrl}`}
-              alt={c.name}
-              fill
-              className="object-cover"
-            />
+          <div className="relative w-full h-32 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-surface-900/80 to-transparent" />
             <span className={clsx('absolute bottom-2 left-3', STATUS_CLASSES[c.status] ?? 'badge')}>
               {STATUS_LABELS[c.status]}
