@@ -317,13 +317,60 @@ public class CrediariosController : ControllerBase
         return Ok(MapToDto(crediario));
     }
 
+    // -------------------------------------------------------------------------
+    // DELETE /api/crediarios/{id}
+    // -------------------------------------------------------------------------
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> Deletar(Guid id)
+    {
+        var crediario = await _db.Crediarios
+            .Include(c => c.Pagamentos)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (crediario == null)
+            return NotFound(new { Message = "Crediário não encontrado." });
+
+        // Remove pagamentos filhos primeiro (FK Restrict impede deletar com filhos)
+        if (crediario.Pagamentos.Any())
+            _db.PagamentosCrediario.RemoveRange(crediario.Pagamentos);
+
+        _db.Crediarios.Remove(crediario);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Crediário {Id} excluído pelo admin {AdminId}", id, GetUserId());
+        return NoContent();
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static CrediariosDto MapToDto(Crediario c)
     {
-        var agora = DateTime.UtcNow;
+        var agora   = DateTime.UtcNow;
         var vencido = c.Status == CrediariosStatus.Aberto && c.DataVencimento < agora;
         var dias    = (int)Math.Round((c.DataVencimento - agora).TotalDays);
+
+        // Combina itens da comanda vinculada + itens de venda avulsa (frente de caixa).
+        // Um crediário pode acumular de ambas as origens — exibe tudo junto.
+        var fromComanda = c.Comanda?.Items
+            .OrderBy(i => i.AddedAt)
+            .Select(i => new ItemCrediarioDto
+            {
+                ItemName         = i.ItemNameSnapshot,
+                Quantity         = i.Quantity,
+                UnitPriceInReais = i.UnitPriceInCents / 100m,
+                SubtotalInReais  = i.SubtotalInCents  / 100m,
+            })
+            .ToList() ?? new List<ItemCrediarioDto>();
+
+        var fromJson = string.IsNullOrWhiteSpace(c.ItensJson)
+            ? new List<ItemCrediarioDto>()
+            : JsonSerializer.Deserialize<List<ItemCrediarioDto>>(c.ItensJson)
+              ?? new List<ItemCrediarioDto>();
+
+        var todosItens = fromComanda.Concat(fromJson).ToList();
 
         return new CrediariosDto
         {
@@ -352,20 +399,7 @@ public class CrediariosController : ControllerBase
                     Observacao     = p.Observacao,
                     CreatedAt      = p.CreatedAt,
                 }).ToList(),
-            // Itens da comanda vinculada (fecha via mesa/balcão com comanda)
-            ItensComanda = c.Comanda?.Items
-                .OrderBy(i => i.AddedAt)
-                .Select(i => new ItemCrediarioDto
-                {
-                    ItemName         = i.ItemNameSnapshot,
-                    Quantity         = i.Quantity,
-                    UnitPriceInReais = i.UnitPriceInCents / 100m,
-                    SubtotalInReais  = i.SubtotalInCents  / 100m,
-                }).ToList()
-                // Itens de venda avulsa (frente de caixa) — snapshot JSON salvo no momento da venda
-                ?? (string.IsNullOrWhiteSpace(c.ItensJson)
-                    ? new List<ItemCrediarioDto>()
-                    : JsonSerializer.Deserialize<List<ItemCrediarioDto>>(c.ItensJson) ?? new List<ItemCrediarioDto>()),
+            ItensComanda = todosItens,
         };
     }
 

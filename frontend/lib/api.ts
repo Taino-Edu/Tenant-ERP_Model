@@ -289,6 +289,8 @@ export const crediarioApi = {
     api.post<CrediariosDto>('/api/crediarios', req),
   editar: (id: string, req: { valorEmCentavos?: number; observacao?: string; dataVencimento?: string }) =>
     api.patch<CrediariosDto>(`/api/crediarios/${id}`, req),
+  deletar: (id: string) =>
+    api.delete(`/api/crediarios/${id}`),
 }
 
 export const COMANDA_PAYMENT_METHODS = [

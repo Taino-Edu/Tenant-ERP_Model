@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
-  Plus, History, DollarSign, X, Search, Pencil, Printer, Package,
+  Plus, History, DollarSign, X, Search, Pencil, Printer, Package, Trash2,
 } from 'lucide-react'
 import { ItemCrediarioDto } from '@/lib/api'
 import clsx from 'clsx'
@@ -477,10 +477,12 @@ function CrediarioCard({
   c,
   onPagamento,
   onEditar,
+  onDeletar,
 }: {
   c: CrediariosDto
   onPagamento: (c: CrediariosDto) => void
   onEditar: (c: CrediariosDto) => void
+  onDeletar: (c: CrediariosDto) => void
 }) {
   const [expandido, setExpandido]         = useState(false)
   const [expandItens, setExpandItens]     = useState(false)
@@ -570,6 +572,13 @@ function CrediarioCard({
               </button>
             </div>
           )}
+          <button
+            onClick={() => onDeletar(c)}
+            className="text-gray-600 hover:text-red-400 transition-colors p-1 self-end"
+            title="Excluir crediário"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -667,6 +676,18 @@ export default function CrediarioPage() {
   const [modalCrediario, setModalCrediario]   = useState<CrediariosDto | null>(null)
   const [editarCrediario, setEditarCrediario] = useState<CrediariosDto | null>(null)
   const [showNovaDivida, setShowNovaDivida] = useState(false)
+
+  async function handleDeletar(crediario: CrediariosDto) {
+    if (!window.confirm(`Excluir o crediário de ${crediario.userName}?\nEsta ação não pode ser desfeita.`)) return
+    try {
+      await crediarioApi.deletar(crediario.id)
+      toast.success('Crediário excluído!')
+      fetchCrediarios()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao excluir crediário')
+    }
+  }
 
   const fetchCrediarios = useCallback(async () => {
     setLoading(true)
@@ -794,6 +815,7 @@ export default function CrediarioPage() {
               c={c}
               onPagamento={setModalCrediario}
               onEditar={setEditarCrediario}
+              onDeletar={handleDeletar}
             />
           ))}
         </div>
