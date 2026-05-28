@@ -64,6 +64,16 @@ public class UpdateItemRequest
     public int Quantity { get; set; }
 }
 
+/// <summary>Body do endpoint POST /api/comanda/admin-open (admin abre comanda por um cliente).</summary>
+public class AdminOpenComandaRequest
+{
+    [Required]
+    public Guid UserId { get; set; }
+
+    [MaxLength(50)]
+    public string? TableIdentifier { get; set; }
+}
+
 /// <summary>Body do endpoint PUT /api/comanda/{id}/close.</summary>
 public class CloseComandaRequest
 {

@@ -32,6 +32,24 @@ public class ComandaController : ControllerBase
         _service = service;
     }
 
+    /// <summary>Admin abre uma comanda para um cliente (sem precisar que ele escaneie o QR).</summary>
+    [HttpPost("admin-open")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ComandaDto), 200)]
+    [ProducesResponseType(400)]
+    public async Task<IActionResult> AdminOpenComanda([FromBody] AdminOpenComandaRequest request)
+    {
+        try
+        {
+            var result = await _service.OpenComandaAsync(request.UserId, request.TableIdentifier);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
     /// <summary>Dashboard do Admin: lista todas as comandas abertas/em andamento.</summary>
     [HttpGet("dashboard")]
     [Authorize(Policy = "AdminOnly")]

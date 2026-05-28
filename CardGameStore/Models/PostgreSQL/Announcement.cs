@@ -9,6 +9,7 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace CardGameStore.Models.PostgreSQL;
 
@@ -61,6 +62,7 @@ public class Announcement
     public bool IsVisible => IsActive && (ExpiresAt == null || ExpiresAt > DateTime.UtcNow);
 }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum AnnouncementType
 {
     Banner,   // imagem larga no topo da landing

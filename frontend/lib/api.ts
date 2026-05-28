@@ -217,6 +217,8 @@ export const comandaApi = {
   close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string) =>
     api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
+  adminOpen:    (userId: string, tableIdentifier?: string) =>
+    api.post<ComandaDto>('/api/comanda/admin-open', { userId, tableIdentifier }),
   applyPoints:  (id: string, points: number) =>
     api.post<ComandaDto>(`/api/comanda/${id}/apply-points`, { points }),
 }
