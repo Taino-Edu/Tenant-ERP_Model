@@ -25,9 +25,17 @@ public class CategoryService : ICategoryService
 
     public async Task<ProductCategory> UpdateAsync(ProductCategory category)
     {
-        _db.ProductCategories.Update(category);
+        var existing = await _db.ProductCategories.FindAsync(category.Id)
+            ?? throw new InvalidOperationException("Categoria não encontrada.");
+
+        existing.Name         = category.Name;
+        existing.Emoji        = category.Emoji;
+        existing.DisplayOrder = category.DisplayOrder;
+        existing.IsActive     = category.IsActive;
+        // CreatedAt não é atualizado — preserva a data de criação original
+
         await _db.SaveChangesAsync();
-        return category;
+        return existing;
     }
 
     public async Task DeleteAsync(Guid id)
