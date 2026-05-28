@@ -72,6 +72,21 @@ public class VendaAvulsaController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Retorna todas as vendas avulsas de uma data específica (YYYY-MM-DD).</summary>
+    [HttpGet("by-date")]
+    [ProducesResponseType(typeof(IEnumerable<VendaAvulsaDto>), 200)]
+    public async Task<IActionResult> GetByDate([FromQuery] string? date = null)
+    {
+        DateTime day;
+        if (string.IsNullOrWhiteSpace(date) || !DateTime.TryParse(date, out day))
+            day = DateTime.UtcNow.Date;
+        else
+            day = day.Date;
+
+        var result = await _service.GetByDateAsync(day);
+        return Ok(result);
+    }
+
     private Guid GetUserId()
     {
         var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);

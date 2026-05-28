@@ -317,6 +317,8 @@ export const vendaAvulsaApi = {
     api.post<VendaAvulsaDto>('/api/venda-avulsa', { clientName, paymentMethod, items, discountPercent, userId }),
   recent: (limit = 50) =>
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/recent', { params: { limit } }),
+  byDate: (date: string) =>
+    api.get<VendaAvulsaDto[]>('/api/venda-avulsa/by-date', { params: { date } }),
 }
 
 export const productApi = {

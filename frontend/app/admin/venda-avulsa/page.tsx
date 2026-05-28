@@ -203,6 +203,7 @@ export default function VendaAvulsaPage() {
   const [catFilter, setCat]         = useState<string | null>(null)
   const [history, setHistory]       = useState<VendaAvulsaDto[]>([])
   const [histLoading, setHistLoad]  = useState(false)
+  const [histDate, setHistDate]     = useState(() => new Date().toISOString().slice(0, 10))
 
   useEffect(() => {
     productApi.list()
@@ -214,14 +215,11 @@ export default function VendaAvulsaPage() {
   useEffect(() => {
     if (tab !== 'historico') return
     setHistLoad(true)
-    vendaAvulsaApi.recent(100)
-      .then(r => {
-        const today = new Date().toDateString()
-        setHistory(r.data.filter(v => new Date(v.soldAt).toDateString() === today))
-      })
+    vendaAvulsaApi.byDate(histDate)
+      .then(r => setHistory(r.data))
       .catch(() => toast.error('Erro ao carregar histórico'))
       .finally(() => setHistLoad(false))
-  }, [tab])
+  }, [tab, histDate])
 
   // ── Busca de clientes cadastrados ────────────────────────────────────────
   useEffect(() => {
@@ -437,7 +435,7 @@ export default function VendaAvulsaPage() {
 
       {/* ── Tab: Histórico ─────────────────────────────────────────────────── */}
       {tab === 'historico' && (
-        <HistoricoTab history={history} loading={histLoading} />
+        <HistoricoTab history={history} loading={histLoading} date={histDate} onDateChange={setHistDate} />
       )}
 
       {/* ── Tab: Nova Venda ────────────────────────────────────────────────── */}
@@ -786,90 +784,141 @@ export default function VendaAvulsaPage() {
 
 // ── Componente Histórico do Dia ───────────────────────────────────────────────
 
-function HistoricoTab({ history, loading }: { history: VendaAvulsaDto[]; loading: boolean }) {
-  const totalDia   = history.reduce((s, v) => s + v.totalInReais, 0)
-  const countDia   = history.length
+function HistoricoTab({ history, loading, date, onDateChange }: {
+  history: VendaAvulsaDto[]
+  loading: boolean
+  date: string
+  onDateChange: (d: string) => void
+}) {
+  const totalDia = history.reduce((s, v) => s + v.totalInReais, 0)
+  const countDia = history.length
+  const today    = new Date().toISOString().slice(0, 10)
+  const isToday  = date === today
 
-  if (loading) return (
-    <div className="flex-1 flex items-center justify-center py-24">
-      <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-    </div>
-  )
+  const labelData = isToday
+    ? 'hoje'
+    : new Date(date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
-      {/* Resumo do dia + botão PDF */}
-      <div className="flex items-center justify-between gap-3">
+
+      {/* Seletor de data + PDF */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const d = new Date(date + 'T12:00:00')
+              d.setDate(d.getDate() - 1)
+              onDateChange(d.toISOString().slice(0, 10))
+            }}
+            className="w-8 h-8 rounded-lg bg-surface-700 border border-surface-500 hover:border-surface-400 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+          >‹</button>
+          <input
+            type="date"
+            value={date}
+            max={today}
+            onChange={e => onDateChange(e.target.value)}
+            className="input py-1.5 text-sm w-40"
+          />
+          <button
+            onClick={() => {
+              const d = new Date(date + 'T12:00:00')
+              d.setDate(d.getDate() + 1)
+              const next = d.toISOString().slice(0, 10)
+              if (next <= today) onDateChange(next)
+            }}
+            disabled={date >= today}
+            className="w-8 h-8 rounded-lg bg-surface-700 border border-surface-500 hover:border-surface-400 flex items-center justify-center text-gray-400 hover:text-white transition-colors disabled:opacity-30"
+          >›</button>
+          {!isToday && (
+            <button
+              onClick={() => onDateChange(today)}
+              className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+            >
+              Hoje
+            </button>
+          )}
+        </div>
         {history.length > 0 && (
           <button
             onClick={() => printDailyReportPDF(history, PAYMENT_METHODS)}
             className="btn-secondary text-sm flex items-center gap-2 ml-auto"
           >
-            <FileText className="w-4 h-4" /> Exportar PDF do Dia
+            <FileText className="w-4 h-4" /> Exportar PDF
           </button>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="card flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-brand-600/10 flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-brand-400" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-white">{countDia}</p>
-            <p className="text-xs text-gray-400">Vendas hoje</p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 flex items-center justify-center">
-            <Banknote className="w-5 h-5 text-accent-gold" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-accent-gold">{fmt(totalDia)}</p>
-            <p className="text-xs text-gray-400">Total do dia</p>
-          </div>
-        </div>
-      </div>
 
-      {history.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-500 gap-3">
-          <History className="w-10 h-10 text-gray-600" />
-          <p className="text-sm">Nenhuma venda registrada hoje</p>
+      {/* KPIs */}
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="space-y-2">
-          {history.map(v => {
-            const payLabel = PAYMENT_METHODS.find(m => m.value === v.paymentMethod)?.label ?? v.paymentMethod
-            return (
-              <div key={v.id} className="card">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-medium text-white">
-                      {v.clientName ?? <span className="text-gray-500 italic">Cliente Balcão</span>}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
-                      <Clock className="w-3 h-3" />
-                      {new Date(v.soldAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                      <span>·</span>
-                      {PAYMENT_ICONS[v.paymentMethod]}
-                      {payLabel}
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="card flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-brand-600/10 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-brand-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-white">{countDia}</p>
+                <p className="text-xs text-gray-400">Vendas {labelData}</p>
+              </div>
+            </div>
+            <div className="card flex items-center gap-4">
+              <div className="w-11 h-11 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                <Banknote className="w-5 h-5 text-accent-gold" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-accent-gold">{fmt(totalDia)}</p>
+                <p className="text-xs text-gray-400">Total {labelData}</p>
+              </div>
+            </div>
+          </div>
+
+          {history.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-500 gap-3">
+              <History className="w-10 h-10 text-gray-600" />
+              <p className="text-sm">Nenhuma venda registrada em {labelData}</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {history.map(v => {
+                const payLabel = PAYMENT_METHODS.find(m => m.value === v.paymentMethod)?.label ?? v.paymentMethod
+                return (
+                  <div key={v.id} className="card">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          {v.clientName ?? <span className="text-gray-500 italic">Cliente Balcão</span>}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
+                          <Clock className="w-3 h-3" />
+                          {new Date(v.soldAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          <span>·</span>
+                          {PAYMENT_ICONS[v.paymentMethod]}
+                          {payLabel}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-accent-gold font-bold">{fmt(v.totalInReais)}</p>
+                        {v.discountPercent > 0 && (
+                          <p className="text-xs text-accent-green">−{v.discountPercent}% desc.</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {v.items.map((it, idx) => (
+                        <span key={idx}>{idx > 0 && ', '}{it.quantity}× {it.productName}</span>
+                      ))}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-accent-gold font-bold">{fmt(v.totalInReais)}</p>
-                    {v.discountPercent > 0 && (
-                      <p className="text-xs text-accent-green">−{v.discountPercent}% desc.</p>
-                    )}
-                  </div>
-                </div>
-                <div className="text-xs text-gray-500">
-                  {v.items.map((it, idx) => (
-                    <span key={idx}>{idx > 0 && ', '}{it.quantity}× {it.productName}</span>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

@@ -200,6 +200,23 @@ public class VendaAvulsaService : IVendaAvulsaService
         return vendas.Select(MapToDto);
     }
 
+    public async Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime date)
+    {
+        var inicio = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
+        var fim    = inicio.AddDays(1);
+
+        var filter = Builders<VendaAvulsa>.Filter.And(
+            Builders<VendaAvulsa>.Filter.Gte(v => v.SoldAt, inicio),
+            Builders<VendaAvulsa>.Filter.Lt(v => v.SoldAt, fim));
+
+        var vendas = await _collection
+            .Find(filter)
+            .SortByDescending(v => v.SoldAt)
+            .ToListAsync();
+
+        return vendas.Select(MapToDto);
+    }
+
     private static VendaAvulsaDto MapToDto(VendaAvulsa v) => new()
     {
         Id              = v.Id,
