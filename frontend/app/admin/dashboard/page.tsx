@@ -785,6 +785,10 @@ export default function DashboardPage() {
         })
       })
 
+      hub.on('ComandaOpened', () => {
+        fetchComandas()
+      })
+
       hub.on('ComandaClosed', () => {
         fetchComandas()
         fetchHistory(histData)

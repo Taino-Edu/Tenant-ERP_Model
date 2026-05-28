@@ -19,7 +19,12 @@ export default function ClientePage() {
 
   const fetchComanda = useCallback(async () => {
     try { const { data } = await comandaApi.myComanda(); setComanda(data) }
-    catch { /* comanda ainda não existe */ }
+    catch (err: unknown) {
+      // 404 → comanda encerrada/cancelada ou não existe → limpa o estado
+      // Outros erros (rede, 500) → mantém estado anterior para não confundir o cliente
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 404) setComanda(null)
+    }
     finally { setLoading(false) }
   }, [])
 
