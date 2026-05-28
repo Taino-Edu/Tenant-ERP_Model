@@ -1,15 +1,7 @@
 'use client'
 
-// =============================================================================
-// AiChatWidget.tsx — Assistente IA flutuante no painel admin
-//
-// Botão fixo no canto inferior direito. Clique para abrir/fechar o chat.
-// Envia perguntas para POST /api/ai/chat e exibe respostas em texto.
-// Fecha ao pressionar ESC.
-// =============================================================================
-
 import { useState, useRef, useEffect, KeyboardEvent } from 'react'
-import { BrainCircuit, X, Send, Loader2, ChevronDown } from 'lucide-react'
+import { BrainCircuit, X, Send, Loader2, ChevronDown, Sparkles } from 'lucide-react'
 import { aiApi } from '@/lib/api'
 
 interface Message {
@@ -31,24 +23,19 @@ export default function AiChatWidget() {
   const [input,    setInput]    = useState('')
   const [loading,  setLoading]  = useState(false)
 
-  const bottomRef  = useRef<HTMLDivElement>(null)
-  const inputRef   = useRef<HTMLTextAreaElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef  = useRef<HTMLTextAreaElement>(null)
 
-  // Fechar com ESC
   useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // Scroll para o fim ao chegar nova mensagem
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  // Focar input ao abrir
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 100)
   }, [open])
@@ -78,51 +65,54 @@ export default function AiChatWidget() {
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      send()
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
   return (
     <>
-      {/* ── Painel de chat ────────────────────────────────────────────────── */}
+      {/* ── Painel ──────────────────────────────────────────────────────────── */}
       {open && (
-        <div
-          className="fixed bottom-24 right-4 z-50 flex flex-col w-80 sm:w-96 rounded-2xl shadow-2xl overflow-hidden"
-          style={{ background: '#16161C', border: '1px solid #2D2D36', maxHeight: '70vh' }}
-        >
+        <div className="fixed bottom-24 right-4 z-50 flex flex-col w-[340px] sm:w-[400px] rounded-2xl shadow-2xl overflow-hidden"
+             style={{ background: '#111117', border: '1px solid #303040', maxHeight: '72vh' }}>
+
           {/* Cabeçalho */}
           <div className="flex items-center justify-between px-4 py-3"
-               style={{ background: '#1A1A24', borderBottom: '1px solid #2D2D36' }}>
+               style={{ background: 'linear-gradient(135deg, #1a1028 0%, #111117 100%)', borderBottom: '1px solid #303040' }}>
             <div className="flex items-center gap-2">
-              <BrainCircuit size={18} className="text-violet-400" />
-              <span className="text-sm font-semibold text-white">Assistente Santuário Nerd</span>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                   style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
+                <BrainCircuit size={15} className="text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white leading-tight">Assistente IA</p>
+                <p className="text-[10px] text-violet-400 leading-tight">Santuário Nerd · Gemini</p>
+              </div>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="text-gray-400 hover:text-white transition-colors"
-              aria-label="Fechar chat"
-            >
-              <X size={16} />
+            <button onClick={() => setOpen(false)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 transition-all"
+                    aria-label="Fechar">
+              <X size={15} />
             </button>
           </div>
 
           {/* Mensagens */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ minHeight: 0 }}>
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3" style={{ minHeight: 0 }}>
             {messages.length === 0 && (
-              <div className="space-y-3">
-                <p className="text-xs text-gray-400 text-center pt-2">
-                  Pergunte sobre vendas, estoque, crediários ou clientes
-                </p>
-                <div className="space-y-2">
+              <div className="space-y-4">
+                <div className="flex flex-col items-center pt-2 pb-1">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-2"
+                       style={{ background: 'linear-gradient(135deg, #7c3aed33, #6d28d933)', border: '1px solid #7c3aed44' }}>
+                    <Sparkles size={22} className="text-violet-400" />
+                  </div>
+                  <p className="text-xs text-gray-400 text-center">
+                    Pergunte sobre vendas, estoque,<br />crediários ou clientes
+                  </p>
+                </div>
+                <div className="space-y-1.5">
                   {SUGGESTIONS.map(s => (
-                    <button
-                      key={s}
-                      onClick={() => send(s)}
-                      className="w-full text-left text-xs px-3 py-2 rounded-lg text-gray-300 hover:text-white transition-colors"
-                      style={{ background: '#1E1E28', border: '1px solid #2D2D36' }}
-                    >
+                    <button key={s} onClick={() => send(s)}
+                            className="w-full text-left text-xs px-3 py-2.5 rounded-xl text-gray-300 hover:text-white hover:border-violet-500/50 transition-all"
+                            style={{ background: '#1a1a24', border: '1px solid #303040' }}>
                       {s}
                     </button>
                   ))}
@@ -131,18 +121,12 @@ export default function AiChatWidget() {
             )}
 
             {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className="max-w-[85%] px-3 py-2 rounded-xl text-sm leading-relaxed"
-                  style={
-                    m.role === 'user'
-                      ? { background: '#6D28D9', color: '#fff', borderRadius: '12px 12px 2px 12px' }
-                      : { background: '#1E1E28', color: '#E5E7EB', border: '1px solid #2D2D36', borderRadius: '12px 12px 12px 2px' }
-                  }
-                >
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className="max-w-[88%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed"
+                     style={m.role === 'user'
+                       ? { background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', borderRadius: '16px 16px 4px 16px' }
+                       : { background: '#1a1a26', color: '#e5e7eb', border: '1px solid #2d2d40', borderRadius: '16px 16px 16px 4px' }
+                     }>
                   {m.text}
                 </div>
               </div>
@@ -150,9 +134,11 @@ export default function AiChatWidget() {
 
             {loading && (
               <div className="flex justify-start">
-                <div className="px-3 py-2 rounded-xl text-sm"
-                     style={{ background: '#1E1E28', border: '1px solid #2D2D36', borderRadius: '12px 12px 12px 2px' }}>
-                  <Loader2 size={14} className="animate-spin text-violet-400" />
+                <div className="px-4 py-3 rounded-2xl flex items-center gap-2"
+                     style={{ background: '#1a1a26', border: '1px solid #2d2d40', borderRadius: '16px 16px 16px 4px' }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             )}
@@ -161,8 +147,9 @@ export default function AiChatWidget() {
           </div>
 
           {/* Input */}
-          <div className="px-3 py-3" style={{ borderTop: '1px solid #2D2D36' }}>
-            <div className="flex items-end gap-2">
+          <div className="px-3 py-3" style={{ borderTop: '1px solid #303040', background: '#111117' }}>
+            <div className="flex items-end gap-2 rounded-xl p-1"
+                 style={{ background: '#1e1e2e', border: '1px solid #404058' }}>
               <textarea
                 ref={inputRef}
                 value={input}
@@ -171,28 +158,19 @@ export default function AiChatWidget() {
                 placeholder="Pergunte algo sobre a loja..."
                 rows={1}
                 disabled={loading}
-                className="flex-1 resize-none text-sm text-white placeholder-gray-500 rounded-xl px-3 py-2 outline-none disabled:opacity-50"
-                style={{
-                  background: '#1E1E28',
-                  border: '1px solid #2D2D36',
-                  maxHeight: '80px',
-                  lineHeight: '1.5',
-                }}
+                className="flex-1 resize-none bg-transparent text-sm text-white placeholder-gray-500 px-2 py-1.5 outline-none disabled:opacity-50"
+                style={{ maxHeight: '80px', lineHeight: '1.5' }}
               />
               <button
                 onClick={() => send()}
                 disabled={!input.trim() || loading}
-                className="flex-shrink-0 p-2 rounded-xl transition-colors disabled:opacity-40"
-                style={{ background: '#6D28D9' }}
-                aria-label="Enviar"
-              >
-                {loading
-                  ? <Loader2 size={16} className="animate-spin text-white" />
-                  : <Send size={16} className="text-white" />
-                }
+                className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 hover:opacity-90 active:scale-95 mb-0.5"
+                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
+                aria-label="Enviar">
+                <Send size={14} className="text-white" />
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-1 text-center">
+            <p className="text-[10px] text-gray-600 mt-1.5 text-center">
               Enter para enviar · Shift+Enter nova linha
             </p>
           </div>
@@ -202,16 +180,14 @@ export default function AiChatWidget() {
       {/* ── Botão flutuante ───────────────────────────────────────────────── */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="fixed bottom-5 right-4 z-50 flex items-center justify-center w-13 h-13 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95"
+        className="fixed bottom-5 right-4 z-50 flex items-center justify-center rounded-full shadow-lg transition-all hover:scale-105 active:scale-95"
         style={{
-          background: open ? '#4C1D95' : 'linear-gradient(135deg, #6D28D9, #7C3AED)',
-          width: '52px',
-          height: '52px',
-          boxShadow: '0 4px 20px rgba(109, 40, 217, 0.5)',
+          background: open ? '#4c1d95' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+          width: '52px', height: '52px',
+          boxShadow: '0 4px 24px rgba(109, 40, 217, 0.6)',
         }}
         aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}
-        title="Assistente IA"
-      >
+        title="Assistente IA">
         {open
           ? <ChevronDown size={22} className="text-white" />
           : <BrainCircuit size={22} className="text-white" />
