@@ -116,6 +116,7 @@ frontend/tsconfig.tsbuildinfo
 *-ef?????.sln
 *-ef?????.sln.*
 instalar-dependencias.ps1
+CONTEXTO-SESSAO.md
 
 # package-lock na raiz (o real fica em frontend/)
 /package-lock.json
