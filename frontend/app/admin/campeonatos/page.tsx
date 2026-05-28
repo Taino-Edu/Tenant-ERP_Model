@@ -112,9 +112,13 @@ function NewChampionshipModal({ onClose, onSave }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Jogo *</label>
-              <select className="input" value={form.game ?? ''} onChange={e => set('game', e.target.value)}>
-                {GAMES.map(g => <option key={g}>{g}</option>)}
-              </select>
+              <input className="input" required list="games-list"
+                placeholder="Ex: Pokemon, Magic, Yu-Gi-Oh!..."
+                value={form.game ?? ''}
+                onChange={e => set('game', e.target.value)} />
+              <datalist id="games-list">
+                {GAMES.map(g => <option key={g} value={g} />)}
+              </datalist>
             </div>
             <div>
               <label className="label">Taxa de inscrição (R$)</label>
