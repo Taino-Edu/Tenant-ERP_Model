@@ -7,7 +7,7 @@ import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag,
+  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -28,6 +28,7 @@ const sections = [
       { href: '/admin/crediario',   label: 'Crediário',    icon: CreditCard },
       { href: '/admin/estoque',     label: 'Estoque',      icon: Package },
       { href: '/admin/financeiro',  label: 'Financeiro',   icon: TrendingUp },
+      { href: '/admin/relatorios',  label: 'Relatórios',   icon: BarChart2 },
       { href: '/admin/categorias',  label: 'Categorias',   icon: Tag },
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone },
       { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search },

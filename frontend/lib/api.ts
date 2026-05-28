@@ -547,3 +547,32 @@ export const analyticsApi = {
   financeiro: (inicio?: string, fim?: string) =>
     api.get<FinanceiroDto>('/api/analytics/financeiro', { params: { inicio, fim } }),
 }
+
+// ── Relatórios de vendas por categoria ───────────────────────────────────────
+
+export interface RelatorioProduto {
+  nome: string
+  quantidadeVendida: number
+  totalEmReais: number
+}
+
+export interface RelatorioCategoria {
+  categoria: string
+  emoji: string
+  quantidadeVendida: number
+  totalEmReais: number
+  produtos: RelatorioProduto[]
+}
+
+export interface RelatorioVendasDto {
+  mes: number
+  ano: number
+  totalGeralEmReais: number
+  totalItensVendidos: number
+  porCategoria: RelatorioCategoria[]
+}
+
+export const relatorioApi = {
+  vendas: (mes: number, ano: number) =>
+    api.get<RelatorioVendasDto>('/api/relatorios/vendas', { params: { mes, ano } }),
+}
