@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import {
   ShoppingBag, Plus, Minus, Trash2, User, CheckCircle, RotateCcw,
   Loader2, Receipt, PackageOpen, Banknote, CreditCard, QrCode,
-  Tag, History, TrendingUp, Clock, FileText, AlertCircle, Star, Wallet,
+  Tag, History, TrendingUp, Clock, FileText, AlertCircle, Star, Wallet, X,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -170,7 +170,104 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   w.document.close()
 }
 
-const PAYMENT_ICONS: Record<string, React.ReactNode> = {
+// ── Modal de detalhes de uma venda ────────────────────────────────────────────
+
+function VendaDetailModal({ venda, onClose }: { venda: VendaAvulsaDto; onClose: () => void }) {
+  const payLabel = PAYMENT_METHODS.find(m => m.value === venda.paymentMethod)?.label ?? venda.paymentMethod
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
+
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-surface-600">
+          <div>
+            <h3 className="font-bold text-white text-lg flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-brand-400" />
+              {venda.clientName ?? 'Cliente Balcão'}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-2">
+              <Clock className="w-3 h-3" />
+              {new Date(venda.soldAt).toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit',
+              })}
+              {venda.soldByAdminName && (
+                <><span>·</span> <span>{venda.soldByAdminName}</span></>
+              )}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors ml-3 shrink-0">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Itens */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-1.5">
+          {venda.items.map((it, idx) => (
+            <div key={idx} className="flex items-center justify-between text-sm">
+              <div className="flex-1 min-w-0">
+                <span className="text-gray-300">{it.quantity}×&nbsp;</span>
+                <span className="text-white">{it.productName}</span>
+                {it.productCategory && (
+                  <span className="ml-2 text-xs text-gray-600">{it.productCategory}</span>
+                )}
+              </div>
+              <span className="text-gray-400 font-mono ml-3 shrink-0">
+                {fmt(it.subtotalInReais)}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Totais + Pagamento */}
+        <div className="border-t border-surface-600 px-5 py-4 space-y-2">
+          {venda.discountPercent > 0 && (
+            <>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Subtotal</span>
+                <span className="text-gray-400 font-mono">
+                  {fmt(venda.totalInReais + venda.discountInReais)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-accent-green">Desconto ({venda.discountPercent}%)</span>
+                <span className="text-accent-green font-mono">−{fmt(venda.discountInReais)}</span>
+              </div>
+            </>
+          )}
+          <div className="flex justify-between items-center pt-1">
+            <span className="font-semibold text-white">Total</span>
+            <span className="text-xl font-bold text-accent-gold">{fmt(venda.totalInReais)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-400 pt-1">
+            {PAYMENT_ICONS_INNER[venda.paymentMethod]}
+            <span>{payLabel}</span>
+          </div>
+        </div>
+
+        {/* Ações */}
+        <div className="px-5 pb-5 flex gap-2">
+          <button
+            onClick={() => printReceiptPDF(venda, payLabel)}
+            className="btn-secondary flex-1 justify-center text-sm"
+          >
+            <FileText className="w-4 h-4" /> Imprimir / PDF
+          </button>
+          <button onClick={onClose} className="btn-primary flex-1 justify-center text-sm">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Exportado internamente para o modal acima (antes do PAYMENT_ICONS que usa JSX)
+const PAYMENT_ICONS_INNER: Record<string, React.ReactNode> = {
   Pix:           <QrCode     className="w-4 h-4" />,
   Dinheiro:      <Banknote   className="w-4 h-4" />,
   CartaoCredito: <CreditCard className="w-4 h-4" />,
@@ -179,6 +276,8 @@ const PAYMENT_ICONS: Record<string, React.ReactNode> = {
   Pontos:        <Star       className="w-4 h-4" />,
   Cashback:      <Wallet     className="w-4 h-4" />,
 }
+
+const PAYMENT_ICONS = PAYMENT_ICONS_INNER
 
 const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 
@@ -790,6 +889,8 @@ function HistoricoTab({ history, loading, date, onDateChange }: {
   date: string
   onDateChange: (d: string) => void
 }) {
+  const [selectedVenda, setSelectedVenda] = useState<VendaAvulsaDto | null>(null)
+
   const totalDia = history.reduce((s, v) => s + v.totalInReais, 0)
   const countDia = history.length
   const today    = new Date().toISOString().slice(0, 10)
@@ -801,6 +902,11 @@ function HistoricoTab({ history, loading, date, onDateChange }: {
 
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
+
+      {/* Modal de detalhes */}
+      {selectedVenda && (
+        <VendaDetailModal venda={selectedVenda} onClose={() => setSelectedVenda(null)} />
+      )}
 
       {/* Seletor de data + PDF */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -887,10 +993,14 @@ function HistoricoTab({ history, loading, date, onDateChange }: {
               {history.map(v => {
                 const payLabel = PAYMENT_METHODS.find(m => m.value === v.paymentMethod)?.label ?? v.paymentMethod
                 return (
-                  <div key={v.id} className="card">
+                  <button
+                    key={v.id}
+                    onClick={() => setSelectedVenda(v)}
+                    className="card w-full text-left hover:border-brand-500/40 hover:bg-surface-700/50 active:scale-[0.99] transition-all duration-150 cursor-pointer"
+                  >
                     <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="text-sm font-medium text-white">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-white truncate">
                           {v.clientName ?? <span className="text-gray-500 italic">Cliente Balcão</span>}
                         </p>
                         <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
@@ -901,19 +1011,19 @@ function HistoricoTab({ history, loading, date, onDateChange }: {
                           {payLabel}
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0 ml-3">
                         <p className="text-accent-gold font-bold">{fmt(v.totalInReais)}</p>
                         {v.discountPercent > 0 && (
                           <p className="text-xs text-accent-green">−{v.discountPercent}% desc.</p>
                         )}
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 truncate">
                       {v.items.map((it, idx) => (
                         <span key={idx}>{idx > 0 && ', '}{it.quantity}× {it.productName}</span>
                       ))}
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>
