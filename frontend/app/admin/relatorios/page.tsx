@@ -107,11 +107,11 @@ export default function RelatoriosPage() {
         </div>
 
         {/* Seletor de período */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <select
             value={mes}
             onChange={e => setMes(Number(e.target.value))}
-            className="input py-1.5 text-sm"
+            className="input py-1.5 text-sm max-w-[130px]"
           >
             {MESES.map((m, i) => (
               <option key={i + 1} value={i + 1}>{m}</option>
@@ -120,7 +120,7 @@ export default function RelatoriosPage() {
           <select
             value={ano}
             onChange={e => setAno(Number(e.target.value))}
-            className="input py-1.5 text-sm"
+            className="input py-1.5 text-sm w-[80px]"
           >
             {anos.map(a => <option key={a} value={a}>{a}</option>)}
           </select>

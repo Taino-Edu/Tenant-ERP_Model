@@ -574,7 +574,7 @@ function CrediarioCard({
           )}
           <button
             onClick={() => onDeletar(c)}
-            className="text-gray-600 hover:text-red-400 transition-colors p-1 self-end"
+            className="text-gray-600 hover:text-red-400 transition-colors p-1 mt-1"
             title="Excluir crediário"
           >
             <Trash2 className="w-4 h-4" />

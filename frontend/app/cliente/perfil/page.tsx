@@ -101,7 +101,7 @@ export default function PerfilPage() {
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg text-[10px] font-semibold transition-all ${
+                  className={`relative flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg text-[10px] font-semibold transition-all ${
                     tab === key
                       ? 'bg-brand-500 text-white shadow'
                       : 'text-gray-400 hover:text-white'
@@ -110,7 +110,7 @@ export default function PerfilPage() {
                   <Icon className="w-3.5 h-3.5" />
                   {label}
                   {key === 'crediario' && crediario && (
-                    <span className="w-1.5 h-1.5 bg-red-400 rounded-full absolute" />
+                    <span className="w-1.5 h-1.5 bg-red-400 rounded-full absolute top-1.5 right-1.5" />
                   )}
                 </button>
               ))}
@@ -373,7 +373,7 @@ export default function PerfilPage() {
             {/* ── Tab: Crediário / Dívida ───────────────────────── */}
             {tab === 'crediario' && (
               <div className="space-y-3">
-              <div className="card">
+                <div className="card">
                 {crediario ? (
                   <div className="space-y-4">
                     {/* Saldo destaque */}
@@ -435,7 +435,7 @@ export default function PerfilPage() {
                     <p className="text-gray-600 text-sm mt-1">Você está em dia com o Maikon! 🎉</p>
                   </div>
                 )}
-              </div>
+                </div>
 
               {/* Histórico de crediários quitados */}
               {crediariospagos.length > 0 && (
