@@ -209,6 +209,7 @@ export const comandaApi = {
   dashboard:    () => api.get<ComandaDto[]>('/api/comanda/dashboard'),
   history:      (data?: string) => api.get<ComandaDto[]>('/api/comanda/history', { params: data ? { data } : undefined }),
   myComanda:    () => api.get<ComandaDto>('/api/comanda/my'),
+  myHistory:    () => api.get<ComandaDto[]>('/api/comanda/my-history'),
   addItem:      (id: string, item: { productId?: string; cardCacheId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),

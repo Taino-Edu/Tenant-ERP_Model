@@ -50,4 +50,7 @@ public interface IComandaService
 
     /// <summary>Aplica pontos do cliente à comanda, abatendo do total a pagar.</summary>
     Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points);
+
+    /// <summary>Retorna as últimas comandas fechadas/canceladas do próprio usuário autenticado.</summary>
+    Task<IEnumerable<ComandaDto>> GetUserHistoryAsync(Guid userId, int limit = 20);
 }

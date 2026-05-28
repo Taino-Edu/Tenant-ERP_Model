@@ -81,6 +81,16 @@ public class ComandaController : ControllerBase
         return comanda == null ? NotFound(new { Message = "Comanda não encontrada." }) : Ok(comanda);
     }
 
+    /// <summary>Histórico de comandas fechadas/canceladas do cliente autenticado.</summary>
+    [HttpGet("my-history")]
+    [ProducesResponseType(typeof(IEnumerable<ComandaDto>), 200)]
+    public async Task<IActionResult> GetMyHistory()
+    {
+        var userId = GetUserId();
+        var result = await _service.GetUserHistoryAsync(userId);
+        return Ok(result);
+    }
+
     /// <summary>Retorna a comanda ativa do cliente autenticado.</summary>
     [HttpGet("my")]
     [ProducesResponseType(typeof(ComandaDto), 200)]

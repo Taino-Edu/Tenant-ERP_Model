@@ -413,6 +413,20 @@ public class ComandaService : IComandaService
         return comandas.Select(MapToDto).ToList();
     }
 
+    public async Task<IEnumerable<ComandaDto>> GetUserHistoryAsync(Guid userId, int limit = 20)
+    {
+        var comandas = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
+            .Where(c => c.UserId == userId &&
+                (c.Status == ComandaStatus.Fechada || c.Status == ComandaStatus.Cancelada))
+            .OrderByDescending(c => c.ClosedAt)
+            .Take(limit)
+            .ToListAsync();
+
+        return comandas.Select(MapToDto).ToList();
+    }
+
     public async Task<IEnumerable<ComandaDto>> GetTodayHistoryAsync(DateTime? data = null)
     {
         var dia = (data?.ToUniversalTime() ?? DateTime.UtcNow).Date;
