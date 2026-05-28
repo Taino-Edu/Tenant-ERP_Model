@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { comandaApi, userApi, productApi, categoryApi, ComandaDto, Product, ProductCategory, UserProfile } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
-import { startHub, stopHub } from '@/lib/signalr'
+import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
 import { ShoppingCart, Plus, Trash2, Loader2, Clock, TableProperties, Receipt, PackageOpen, Star } from 'lucide-react'
 import Link from 'next/link'
@@ -30,12 +30,38 @@ export default function ClientePage() {
     userApi.me().then(r => setProfile(r.data)).catch(() => {})
 
     startHub().then(hub => {
+      // Admin abriu uma comanda pro cliente → entrar no grupo e buscar a comanda
+      hub.on('ComandaOpened', async (data: ComandaOpenedEvent) => {
+        await hub.invoke('JoinComandaGroup', data.comandaId).catch(() => {})
+        await fetchComanda()
+        toast.success('Sua comanda foi aberta! 🎉', { duration: 5000 })
+      })
+
+      // Admin fechou a comanda
       hub.on('ComandaClosed', () => {
         toast.success('Sua comanda foi fechada! Obrigado pela visita 🎉', { duration: 6000 })
         fetchComanda()
       })
+
+      // Admin cancelou a comanda
+      hub.on('ComandaCancelled', () => {
+        toast.error('Sua comanda foi cancelada.', { duration: 6000 })
+        fetchComanda()
+      })
+
+      // Admin adicionou item manualmente
       hub.on('ItemAddedByAdmin', (data: { itemName: string; newTotalInReais: number }) => {
         toast(`+${data.itemName} adicionado pelo atendente`, { icon: '🛒' })
+        fetchComanda()
+      })
+
+      // Admin atualizou/removeu item → sincroniza a comanda
+      hub.on('ComandaUpdated', () => {
+        fetchComanda()
+      })
+
+      // Reconectou após queda → sincroniza estado
+      hub.onreconnected(() => {
         fetchComanda()
       })
     }).catch(() => {})

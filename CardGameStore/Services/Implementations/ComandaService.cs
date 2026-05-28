@@ -1,7 +1,9 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Services.Implementations;
@@ -17,13 +19,15 @@ public class ComandaService : IComandaService
     private readonly IEmailService           _email;
     private readonly ILogger<ComandaService> _logger;
     private readonly IServiceScopeFactory    _scopeFactory;
+    private readonly IHubContext<ComandaHub> _hub;
 
-    public ComandaService(AppDbContext db, IEmailService email, ILogger<ComandaService> logger, IServiceScopeFactory scopeFactory)
+    public ComandaService(AppDbContext db, IEmailService email, ILogger<ComandaService> logger, IServiceScopeFactory scopeFactory, IHubContext<ComandaHub> hub)
     {
         _db           = db;
         _email        = email;
         _logger       = logger;
         _scopeFactory = scopeFactory;
+        _hub          = hub;
     }
 
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
@@ -40,6 +44,19 @@ public class ComandaService : IComandaService
         _db.Comandas.Add(comanda);
         await _db.SaveChangesAsync();
         _logger.LogInformation("Comanda {Id} aberta para usuário {UserId}", comanda.Id, userId);
+
+        // Notifica o cliente (User_{userId}) que a comanda foi aberta pelo admin
+        await _hub.Clients.Group(ComandaHub.GetUserGroup(userId))
+            .SendAsync("ComandaOpened", new { ComandaId = comanda.Id, TableIdentifier = comanda.TableIdentifier });
+
+        // Notifica o admin (dashboard)
+        var userName = await _db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => u.Name)
+            .FirstOrDefaultAsync() ?? string.Empty;
+        await _hub.Clients.Group(ComandaHub.AdminGroup)
+            .SendAsync("ComandaOpened", new { ComandaId = comanda.Id, UserId = userId, UserName = userName, TableIdentifier = comanda.TableIdentifier });
+
         return MapToDto(comanda);
     }
 
@@ -115,6 +132,21 @@ public class ComandaService : IComandaService
         comanda.TotalInCents += item.SubtotalInCents;
 
         await _db.SaveChangesAsync();
+
+        // Notifica o admin sobre o item adicionado pelo cliente
+        await _hub.Clients.Group(ComandaHub.AdminGroup)
+            .SendAsync("ComandaUpdated", new ComandaUpdateEvent
+            {
+                ComandaId       = comanda.Id,
+                UserId          = userId,
+                UserName        = comanda.User?.Name ?? string.Empty,
+                TableIdentifier = comanda.TableIdentifier,
+                TotalInReais    = comanda.TotalInReais,
+                Status          = comanda.Status.ToString(),
+                LastItemAdded   = item.ItemNameSnapshot,
+                UpdatedAt       = DateTime.UtcNow,
+            });
+
         return MapToDto(comanda);
     }
 
@@ -148,6 +180,28 @@ public class ComandaService : IComandaService
         comanda.TotalInCents += item.SubtotalInCents;
 
         await _db.SaveChangesAsync();
+
+        // Notifica o cliente na comanda que o admin adicionou um item
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+            .SendAsync("ItemAddedByAdmin", new
+            {
+                ItemName        = item.ItemNameSnapshot,
+                NewTotalInReais = comanda.TotalInReais,
+            });
+        // Notifica o admin (outros painéis)
+        await _hub.Clients.Group(ComandaHub.AdminGroup)
+            .SendAsync("ComandaUpdated", new ComandaUpdateEvent
+            {
+                ComandaId       = comanda.Id,
+                UserId          = comanda.UserId,
+                UserName        = comanda.User?.Name ?? string.Empty,
+                TableIdentifier = comanda.TableIdentifier,
+                TotalInReais    = comanda.TotalInReais,
+                Status          = comanda.Status.ToString(),
+                LastItemAdded   = item.ItemNameSnapshot,
+                UpdatedAt       = DateTime.UtcNow,
+            });
+
         return MapToDto(comanda);
     }
 
@@ -189,7 +243,24 @@ public class ComandaService : IComandaService
             comanda.Status = ComandaStatus.Aberta;
 
         await _db.SaveChangesAsync();
-        return MapToDto(comanda);
+
+        var dto = MapToDto(comanda);
+        // Notifica cliente e admin da remoção
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+            .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
+        await _hub.Clients.Group(ComandaHub.AdminGroup)
+            .SendAsync("ComandaUpdated", new ComandaUpdateEvent
+            {
+                ComandaId       = dto.Id,
+                UserId          = dto.UserId,
+                UserName        = dto.UserName,
+                TableIdentifier = dto.TableIdentifier,
+                TotalInReais    = dto.TotalInReais,
+                Status          = dto.Status,
+                UpdatedAt       = DateTime.UtcNow,
+            });
+
+        return dto;
     }
 
     public async Task<ComandaDto> UpdateItemAsync(Guid comandaId, Guid itemId, int newQuantity, Guid adminId)
@@ -242,7 +313,24 @@ public class ComandaService : IComandaService
             itemId, comandaId, newQuantity, adminId);
 
         await _db.SaveChangesAsync();
-        return MapToDto(comanda);
+
+        var dto = MapToDto(comanda);
+        // Notifica cliente e admin da atualização de quantidade
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+            .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
+        await _hub.Clients.Group(ComandaHub.AdminGroup)
+            .SendAsync("ComandaUpdated", new ComandaUpdateEvent
+            {
+                ComandaId       = dto.Id,
+                UserId          = dto.UserId,
+                UserName        = dto.UserName,
+                TableIdentifier = dto.TableIdentifier,
+                TotalInReais    = dto.TotalInReais,
+                Status          = dto.Status,
+                UpdatedAt       = DateTime.UtcNow,
+            });
+
+        return dto;
     }
 
     public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null)
@@ -372,7 +460,23 @@ public class ComandaService : IComandaService
         }
 
         await _db.SaveChangesAsync();
-        return MapToDto(comanda);
+
+        var dto = MapToDto(comanda);
+        // Notifica o cliente que a comanda foi fechada
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+            .SendAsync("ComandaClosed", new { ComandaId = comandaId, PaymentMethod = paymentMethod });
+        // Notifica o admin
+        await _hub.Clients.Group(ComandaHub.AdminGroup)
+            .SendAsync("ComandaClosed", new
+            {
+                ComandaId     = comandaId,
+                UserId        = comanda.UserId,
+                UserName      = dto.UserName,
+                TotalInReais  = dto.TotalInReais,
+                PaymentMethod = paymentMethod,
+            });
+
+        return dto;
     }
 
     public async Task<ComandaDto> CancelComandaAsync(Guid comandaId, Guid adminId)
@@ -397,6 +501,13 @@ public class ComandaService : IComandaService
 
         _logger.LogInformation("Comanda {Id} cancelada — estoque restaurado para {Count} produto(s).",
             comandaId, comanda.Items.Count(i => i.ProductId.HasValue));
+
+        // Notifica o cliente que a comanda foi cancelada
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+            .SendAsync("ComandaCancelled", new { ComandaId = comandaId });
+        // Notifica o admin
+        await _hub.Clients.Group(ComandaHub.AdminGroup)
+            .SendAsync("ComandaCancelled", new { ComandaId = comandaId, UserId = comanda.UserId });
 
         return MapToDto(comanda);
     }

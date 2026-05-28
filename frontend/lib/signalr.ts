@@ -60,3 +60,17 @@ export interface ComandaUpdatedEvent {
   tableIdentifier: string | null; totalInReais: number
   status: string; lastItemAdded: string | null; updatedAt: string
 }
+
+export interface ComandaOpenedEvent {
+  comandaId: string
+  tableIdentifier: string | null
+}
+
+export interface ComandaClosedEvent {
+  comandaId: string
+  paymentMethod: string
+}
+
+export interface ComandaCancelledEvent {
+  comandaId: string
+}
