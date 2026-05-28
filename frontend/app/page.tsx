@@ -22,6 +22,7 @@ export default function LandingPage() {
   const [loading,       setLoading]       = useState(true)
   const [registerModal, setRegisterModal] = useState<Championship | null>(null)
   const [productModal,  setProductModal]  = useState<Product | null>(null)
+  const [annModal,      setAnnModal]      = useState<AnnouncementDto | null>(null)
   const [mobileMenu,    setMobileMenu]    = useState(false)
 
   useEffect(() => {
@@ -42,9 +43,6 @@ export default function LandingPage() {
     ]).finally(() => setLoading(false))
   }, [router])
 
-  const banners   = announcements.filter(a => a.type === 'Banner')
-  const avisos    = announcements.filter(a => a.type === 'Aviso')
-  const destaques = announcements.filter(a => a.type === 'Destaque')
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
@@ -133,76 +131,39 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Banners (imagem full-width com overlay de texto) ──────── */}
-      {banners.length > 0 && (
-        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-4">
-          {banners.map(a => (
-            <a key={a.id}
-              href={a.linkUrl ?? '#'}
-              target={a.linkUrl ? '_blank' : undefined}
-              rel="noreferrer"
-              className={`block relative rounded-2xl overflow-hidden border border-surface-600 group ${a.linkUrl ? 'cursor-pointer' : 'cursor-default'}`}>
-              {a.imageUrl ? (
-                <>
-                  <img src={a.imageUrl} alt={a.title}
-                    className="w-full object-cover max-h-[280px] group-hover:scale-[1.02] transition-transform duration-500" />
-                  {(a.title || a.body) && (
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent flex items-end p-6">
-                      <div>
-                        <p className="text-white font-bold text-base leading-snug drop-shadow">{a.title}</p>
-                        {a.body && <p className="text-gray-300 text-sm mt-1 drop-shadow">{a.body}</p>}
-                      </div>
-                    </div>
+      {/* ── Anúncios — cards clicáveis que abrem popup ────────────── */}
+      {announcements.length > 0 && (
+        <section className="px-6 pb-8 max-w-5xl mx-auto">
+          <div className={`grid gap-4 ${
+            announcements.length === 1 ? 'grid-cols-1 max-w-sm mx-auto' :
+            announcements.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+            'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
+          }`}>
+            {announcements.map(a => (
+              <button key={a.id} onClick={() => setAnnModal(a)}
+                className="text-left rounded-2xl overflow-hidden border border-surface-600 hover:border-brand-500/50 hover:shadow-lg hover:shadow-brand-500/10 transition-all group cursor-pointer bg-surface-800">
+                {/* imagem */}
+                {a.imageUrl ? (
+                  <div className="w-full h-44 overflow-hidden">
+                    <img src={a.imageUrl} alt={a.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" />
+                  </div>
+                ) : (
+                  <div className="w-full h-44 bg-gradient-to-br from-brand-500/20 to-surface-700 flex items-center justify-center">
+                    <span className="text-4xl font-black text-brand-500/30 select-none">!</span>
+                  </div>
+                )}
+                {/* texto */}
+                <div className="p-4">
+                  <p className="font-bold text-white text-sm leading-snug">{a.title}</p>
+                  {a.body && (
+                    <p className="text-gray-400 text-xs mt-1.5 leading-relaxed line-clamp-2">{a.body}</p>
                   )}
-                </>
-              ) : (
-                <div className="bg-surface-800 px-6 py-5">
-                  <p className="font-bold text-white">{a.title}</p>
-                  {a.body && <p className="text-gray-400 text-sm mt-1">{a.body}</p>}
+                  <p className="text-brand-400 text-xs mt-2 font-medium">Ver mais →</p>
                 </div>
-              )}
-            </a>
-          ))}
-        </section>
-      )}
-
-      {/* ── Destaques (card com imagem lateral) ───────────────────── */}
-      {destaques.length > 0 && (
-        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-3">
-          {destaques.map(a => (
-            <a key={a.id}
-              href={a.linkUrl ?? '#'}
-              target={a.linkUrl ? '_blank' : undefined}
-              rel="noreferrer"
-              className={`flex items-center gap-0 rounded-2xl overflow-hidden border border-amber-500/25 bg-gradient-to-r from-amber-500/10 to-transparent group ${a.linkUrl ? 'cursor-pointer hover:border-amber-500/50' : 'cursor-default'} transition`}>
-              {a.imageUrl && (
-                <img src={a.imageUrl} alt=""
-                  className="w-28 h-20 object-cover shrink-0 group-hover:brightness-110 transition" />
-              )}
-              <div className="px-5 py-4 flex items-center gap-3 flex-1 min-w-0">
-                <Star className="w-4 h-4 text-amber-400 shrink-0" />
-                <div className="min-w-0">
-                  <p className="font-bold text-amber-300 text-sm truncate">{a.title}</p>
-                  {a.body && <p className="text-gray-400 text-xs mt-0.5 line-clamp-1">{a.body}</p>}
-                </div>
-              </div>
-            </a>
-          ))}
-        </section>
-      )}
-
-      {/* ── Avisos (barra de notificação slim) ────────────────────── */}
-      {avisos.length > 0 && (
-        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-2">
-          {avisos.map(a => (
-            <div key={a.id} className="flex items-center gap-3 bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3">
-              <Zap className="w-4 h-4 text-brand-400 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <span className="font-semibold text-brand-300 text-sm">{a.title}</span>
-                {a.body && <span className="text-gray-400 text-xs ml-2">{a.body}</span>}
-              </div>
-            </div>
-          ))}
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
@@ -392,6 +353,65 @@ export default function LandingPage() {
       {registerModal && (
         <RegisterModal championship={registerModal} onClose={() => setRegisterModal(null)} />
       )}
+      {annModal && (
+        <AnnouncementModal ann={annModal} onClose={() => setAnnModal(null)} />
+      )}
+    </div>
+  )
+}
+
+// ── Modal de anúncio ──────────────────────────────────────────────────────
+
+function AnnouncementModal({ ann, onClose }: { ann: AnnouncementDto; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl border border-surface-500 bg-surface-800"
+        onClick={e => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 hover:bg-black/80 transition"
+        >
+          <X className="w-4 h-4 text-white" />
+        </button>
+
+        {ann.imageUrl && (
+          <img src={ann.imageUrl} alt={ann.title} className="w-full max-h-64 object-cover" />
+        )}
+
+        <div className="p-6">
+          <h3 className="text-xl font-bold text-white leading-snug">{ann.title}</h3>
+          {ann.body && (
+            <p className="text-gray-400 text-sm mt-3 leading-relaxed whitespace-pre-wrap">{ann.body}</p>
+          )}
+          {ann.linkUrl && (
+            <a
+              href={ann.linkUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 inline-flex items-center justify-center w-full gap-2 bg-brand-500 hover:bg-brand-400 text-white font-bold py-3 rounded-xl transition active:scale-95"
+            >
+              Saiba mais
+            </a>
+          )}
+          <button
+            onClick={onClose}
+            className="mt-3 w-full py-2.5 text-sm text-gray-400 hover:text-white border border-surface-500 hover:border-surface-400 rounded-xl transition"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
