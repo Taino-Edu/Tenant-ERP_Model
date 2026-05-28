@@ -574,7 +574,41 @@ export interface RelatorioVendasDto {
   porCategoria: RelatorioCategoria[]
 }
 
+export interface DevedorDto {
+  userId: string
+  nome: string
+  email: string | null
+  whatsApp: string | null
+  saldoEmReais: number
+  vencido: boolean
+  diasAtraso: number
+  dataVencimento: string
+}
+
+export interface PagamentoMesDto {
+  clienteNome: string
+  valorEmReais: number
+  formaPagamento: string
+  observacao: string | null
+  createdAt: string
+}
+
+export interface RelatorioCrediarioDto {
+  mes: number
+  ano: number
+  totalEmAbertoEmReais: number
+  totalVencidoEmReais: number
+  qtdAbertos: number
+  qtdVencidos: number
+  recebidoNoMesEmReais: number
+  qtdPagamentosNoMes: number
+  devedores: DevedorDto[]
+  pagamentosNoMes: PagamentoMesDto[]
+}
+
 export const relatorioApi = {
   vendas: (mes: number, ano: number) =>
     api.get<RelatorioVendasDto>('/api/relatorios/vendas', { params: { mes, ano } }),
+  crediario: (mes: number, ano: number) =>
+    api.get<RelatorioCrediarioDto>('/api/relatorios/crediario', { params: { mes, ano } }),
 }

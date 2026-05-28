@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
+using System.Linq;
 
 namespace CardGameStore.Controllers;
 
@@ -141,6 +142,82 @@ public class RelatoriosController : ControllerBase
             TotalGeralEmReais  = porCategoria.Sum(c => c.TotalEmReais),
             TotalItensVendidos = porCategoria.Sum(c => c.QuantidadeVendida),
             PorCategoria       = porCategoria,
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/relatorios/crediario?mes=5&ano=2026
+    // -------------------------------------------------------------------------
+    [HttpGet("crediario")]
+    public async Task<ActionResult<RelatorioCrediarioDto>> Crediario(
+        [FromQuery] int mes = 0,
+        [FromQuery] int ano = 0)
+    {
+        var agora = DateTime.UtcNow;
+        if (mes <= 0 || mes > 12) mes = agora.Month;
+        if (ano <= 0)             ano = agora.Year;
+
+        var iniciomes = new DateTime(ano, mes, 1, 0, 0, 0, DateTimeKind.Utc);
+        var fimMes    = iniciomes.AddMonths(1);
+
+        // ── 1. Todos os crediários abertos (situação atual) ───────────────────
+        var abertos = await _db.Crediarios
+            .Include(c => c.User)
+            .Where(c => c.Status == CrediariosStatus.Aberto)
+            .ToListAsync();
+
+        var agr = DateTime.UtcNow;
+        var devedores = abertos
+            .Select(c =>
+            {
+                var vencido    = c.DataVencimento < agr;
+                var diasAtraso = vencido ? (int)(agr - c.DataVencimento).TotalDays : 0;
+                return new DevedorDto
+                {
+                    UserId         = c.UserId,
+                    Nome           = c.User?.Name ?? "—",
+                    Email          = c.User?.Email,
+                    WhatsApp       = c.User?.WhatsApp,
+                    SaldoEmReais   = c.SaldoRestanteEmReais,
+                    Vencido        = vencido,
+                    DiasAtraso     = diasAtraso,
+                    DataVencimento = c.DataVencimento,
+                };
+            })
+            .OrderByDescending(d => d.Vencido)
+            .ThenByDescending(d => d.SaldoEmReais)
+            .ToList();
+
+        // ── 2. Pagamentos registrados no mês ──────────────────────────────────
+        var pagamentosMes = await _db.PagamentosCrediario
+            .Include(p => p.Crediario).ThenInclude(c => c.User)
+            .Where(p => p.CreatedAt >= iniciomes && p.CreatedAt < fimMes)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+
+        var pagamentosMesDto = pagamentosMes.Select(p => new PagamentoMesDto
+        {
+            ClienteNome    = p.Crediario?.User?.Name ?? "—",
+            ValorEmReais   = p.ValorEmReais,
+            FormaPagamento = p.FormaPagamento,
+            Observacao     = p.Observacao,
+            CreatedAt      = p.CreatedAt,
+        }).ToList();
+
+        var vencidos = abertos.Where(c => c.DataVencimento < agr).ToList();
+
+        return Ok(new RelatorioCrediarioDto
+        {
+            Mes                 = mes,
+            Ano                 = ano,
+            TotalEmAbertoEmReais = abertos.Sum(c => c.SaldoRestanteEmReais),
+            TotalVencidoEmReais  = vencidos.Sum(c => c.SaldoRestanteEmReais),
+            QtdAbertos           = abertos.Count,
+            QtdVencidos          = vencidos.Count,
+            RecebidoNoMesEmReais = pagamentosMes.Sum(p => p.ValorEmReais),
+            QtdPagamentosNoMes   = pagamentosMes.Count,
+            Devedores            = devedores,
+            PagamentosNoMes      = pagamentosMesDto,
         });
     }
 }
