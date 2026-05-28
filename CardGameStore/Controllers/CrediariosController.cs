@@ -9,6 +9,7 @@
 // POST /api/crediarios/{id}/pagamento      → Admin: registra pagamento parcial ou total
 // =============================================================================
 
+using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -351,7 +352,8 @@ public class CrediariosController : ControllerBase
                     Observacao     = p.Observacao,
                     CreatedAt      = p.CreatedAt,
                 }).ToList(),
-            ItensComanda         = c.Comanda?.Items
+            // Itens da comanda vinculada (fecha via mesa/balcão com comanda)
+            ItensComanda = c.Comanda?.Items
                 .OrderBy(i => i.AddedAt)
                 .Select(i => new ItemCrediarioDto
                 {
@@ -359,7 +361,11 @@ public class CrediariosController : ControllerBase
                     Quantity         = i.Quantity,
                     UnitPriceInReais = i.UnitPriceInCents / 100m,
                     SubtotalInReais  = i.SubtotalInCents  / 100m,
-                }).ToList() ?? new(),
+                }).ToList()
+                // Itens de venda avulsa (frente de caixa) — snapshot JSON salvo no momento da venda
+                ?? (string.IsNullOrWhiteSpace(c.ItensJson)
+                    ? new List<ItemCrediarioDto>()
+                    : JsonSerializer.Deserialize<List<ItemCrediarioDto>>(c.ItensJson) ?? new List<ItemCrediarioDto>()),
         };
     }
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.MongoDB;
@@ -112,8 +113,25 @@ public class VendaAvulsaService : IVendaAvulsaService
                     .FirstOrDefaultAsync(c => c.UserId == userId && c.Status == CrediariosStatus.Aberto);
                 var vencimento = DateTime.UtcNow.AddDays(30);
 
+                // Snapshot dos itens desta venda para registrar no crediário
+                var novosItens = vendaItems.Select(i => new ItemCrediarioDto
+                {
+                    ItemName         = i.ProductName,
+                    Quantity         = i.Quantity,
+                    UnitPriceInReais = i.UnitPriceInCents / 100m,
+                    SubtotalInReais  = i.SubtotalInCents  / 100m,
+                }).ToList();
+
                 if (crediarioExistente != null)
                 {
+                    // Acumula itens anteriores + novos no JSON
+                    var itensAtuais = string.IsNullOrWhiteSpace(crediarioExistente.ItensJson)
+                        ? new List<ItemCrediarioDto>()
+                        : JsonSerializer.Deserialize<List<ItemCrediarioDto>>(crediarioExistente.ItensJson)
+                          ?? new List<ItemCrediarioDto>();
+
+                    itensAtuais.AddRange(novosItens);
+                    crediarioExistente.ItensJson        = JsonSerializer.Serialize(itensAtuais);
                     crediarioExistente.ValorEmCentavos += finalTotal;
                     crediarioExistente.DataVencimento   = vencimento;
                     _logger.LogInformation(
@@ -124,14 +142,15 @@ public class VendaAvulsaService : IVendaAvulsaService
                 {
                     var crediario = new Crediario
                     {
-                        UserId          = userId,
-                        ComandaId       = null,
-                        ValorEmCentavos = finalTotal,
-                        DataAbertura    = DateTime.UtcNow,
-                        DataVencimento  = vencimento,
-                        Status          = CrediariosStatus.Aberto,
+                        UserId           = userId,
+                        ComandaId        = null,
+                        ValorEmCentavos  = finalTotal,
+                        DataAbertura     = DateTime.UtcNow,
+                        DataVencimento   = vencimento,
+                        Status           = CrediariosStatus.Aberto,
                         AbertoPorAdminId = adminId,
                         Observacao       = "Venda avulsa no balcão",
+                        ItensJson        = JsonSerializer.Serialize(novosItens),
                     };
                     _db.Crediarios.Add(crediario);
                     _logger.LogInformation(

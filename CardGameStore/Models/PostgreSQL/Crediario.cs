@@ -75,6 +75,16 @@ public class Crediario
     [Column("pago_por_admin_id")]
     public Guid? PagoPorAdminId { get; set; }
 
+    // ── Itens de venda avulsa (JSON snapshot) ─────────────────────────────────
+
+    /// <summary>
+    /// JSON serializado dos itens quando o crediário é originado de uma venda avulsa
+    /// (ComandaId == null). Cada acumulação acrescenta novos lançamentos ao array.
+    /// Null quando não há itens registrados (crediário manual ou comanda vinculada).
+    /// </summary>
+    [Column("itens_json", TypeName = "text")]
+    public string? ItensJson { get; set; }
+
     // ── Pagamentos parciais ───────────────────────────────────────────────────
 
     public ICollection<PagamentoCrediario> Pagamentos { get; set; } = new List<PagamentoCrediario>();

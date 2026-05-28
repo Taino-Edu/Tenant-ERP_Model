@@ -445,6 +445,10 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("data_vencimento");
 
+                    b.Property<string>("ItensJson")
+                        .HasColumnType("text")
+                        .HasColumnName("itens_json");
+
                     b.Property<string>("Observacao")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT")
