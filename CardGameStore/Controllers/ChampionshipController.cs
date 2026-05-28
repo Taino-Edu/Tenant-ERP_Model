@@ -85,6 +85,30 @@ public class ChampionshipController : ControllerBase
         return ch == null ? NotFound(new { Message = "Campeonato não encontrado." }) : Ok(ToDto(ch));
     }
 
+    /// <summary>Lista todos os campeonatos em que o usuário autenticado está inscrito.</summary>
+    [HttpGet("my-participations")]
+    [Authorize]
+    [ProducesResponseType(typeof(IEnumerable<MyParticipationDto>), 200)]
+    public async Task<IActionResult> GetMyParticipations()
+    {
+        var userId       = GetUserId();
+        var participations = await _service.GetUserParticipationsAsync(userId);
+        return Ok(participations.Select(p => new MyParticipationDto
+        {
+            ParticipationId  = p.Id,
+            ChampionshipId   = p.ChampionshipId,
+            ChampionshipName = p.Championship?.Name ?? string.Empty,
+            Game             = p.Championship?.Game ?? string.Empty,
+            StartDate        = p.Championship?.StartDate ?? default,
+            Status           = p.Championship?.Status.ToString() ?? string.Empty,
+            EntryFeeInReais  = (p.Championship?.EntryFeeInCents ?? 0) / 100m,
+            PlayerNumber     = p.PlayerNumber,
+            DeckName         = p.DeckName,
+            Placement        = p.Placement,
+            RegisteredAt     = p.RegisteredAt,
+        }));
+    }
+
     /// <summary>Lista os participantes inscritos em um campeonato.</summary>
     [HttpGet("{id:guid}/participants")]
     [Authorize]
@@ -348,6 +372,22 @@ public class ChampionshipDto
     public string    Status               { get; init; } = string.Empty;
     public int       ParticipantCount     { get; init; }
     public DateTime  CreatedAt            { get; init; }
+}
+
+/// <summary>DTO de participação do próprio usuário (GET /api/championship/my-participations).</summary>
+public class MyParticipationDto
+{
+    public Guid      ParticipationId  { get; init; }
+    public Guid      ChampionshipId   { get; init; }
+    public string    ChampionshipName { get; init; } = string.Empty;
+    public string    Game             { get; init; } = string.Empty;
+    public DateTime  StartDate        { get; init; }
+    public string    Status           { get; init; } = string.Empty;
+    public decimal   EntryFeeInReais  { get; init; }
+    public int       PlayerNumber     { get; init; }
+    public string?   DeckName         { get; init; }
+    public int?      Placement        { get; init; }
+    public DateTime  RegisteredAt     { get; init; }
 }
 
 /// <summary>DTO de participante em um campeonato.</summary>

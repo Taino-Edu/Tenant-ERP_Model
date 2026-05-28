@@ -98,6 +98,13 @@ public class ChampionshipService : IChampionshipService
             .Where(p => p.ChampionshipId == championshipId)
             .OrderBy(p => p.PlayerNumber).ToListAsync();
 
+    public async Task<IEnumerable<ChampionshipParticipant>> GetUserParticipationsAsync(Guid userId) =>
+        await _db.ChampionshipParticipants
+            .Include(p => p.Championship)
+            .Where(p => p.UserId == userId)
+            .OrderByDescending(p => p.RegisteredAt)
+            .ToListAsync();
+
     public async Task SetPlacementAsync(Guid participantId, int placement)
     {
         var p = await _db.ChampionshipParticipants.FindAsync(participantId);

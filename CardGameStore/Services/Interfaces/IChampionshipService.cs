@@ -19,6 +19,7 @@ public interface IChampionshipService
     Task<ChampionshipParticipant>   RegisterParticipantAsync(Guid championshipId, Guid userId, string? deckName = null);
     Task                            LinkComandaToParticipantAsync(Guid participantId, Guid comandaId);
     Task<IEnumerable<ChampionshipParticipant>> GetParticipantsAsync(Guid championshipId);
+    Task<IEnumerable<ChampionshipParticipant>> GetUserParticipationsAsync(Guid userId);
     Task                            SetPlacementAsync(Guid participantId, int placement);
     Task                            RemoveParticipantAsync(Guid participantId);
 }

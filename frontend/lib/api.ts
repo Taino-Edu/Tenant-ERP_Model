@@ -366,8 +366,16 @@ export const tcgApi = {
 }
 
 
+export interface MyParticipation {
+  participationId: string; championshipId: string
+  championshipName: string; game: string; startDate: string; status: string
+  entryFeeInReais: number; playerNumber: number; deckName: string | null
+  placement: number | null; registeredAt: string
+}
+
 export const championshipApi = {
   list:             () => api.get<Championship[]>('/api/championship'),
+  myParticipations: () => api.get<MyParticipation[]>('/api/championship/my-participations'),
   listAll:          (search?: string) => api.get<Championship[]>('/api/championship/admin/all', { params: search ? { search } : {} }),
   get:              (id: string) => api.get<Championship>(`/api/championship/${id}`),
   create:           (c: Partial<Championship>) => api.post<Championship>('/api/championship', c),

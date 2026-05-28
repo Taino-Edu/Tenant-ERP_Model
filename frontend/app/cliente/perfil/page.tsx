@@ -1,13 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto } from '@/lib/api'
+import { userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto, championshipApi, MyParticipation } from '@/lib/api'
 import { getUserName, clearAuth } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   Star, User, Phone, CreditCard, Clock, AlertCircle, ArrowLeft, LogOut,
   CheckCircle, Wallet, CalendarClock, Receipt, ChevronDown, ChevronUp,
-  ShoppingBag, XCircle,
+  ShoppingBag, XCircle, Trophy, Coins,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -15,16 +15,18 @@ export default function PerfilPage() {
   const router = useRouter()
   const [profile,   setProfile]   = useState<UserProfile | null>(null)
   const [crediario, setCrediario] = useState<CrediariosDto | null>(null)
-  const [history,   setHistory]   = useState<ComandaDto[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [expanded,  setExpanded]  = useState<string | null>(null)
-  const [tab,       setTab]       = useState<'pontos' | 'historico' | 'crediario'>('pontos')
+  const [history,        setHistory]        = useState<ComandaDto[]>([])
+  const [participations, setParticipations] = useState<MyParticipation[]>([])
+  const [loading,        setLoading]        = useState(true)
+  const [expanded,       setExpanded]       = useState<string | null>(null)
+  const [tab,            setTab]            = useState<'pontos' | 'historico' | 'torneios' | 'crediario'>('pontos')
 
   useEffect(() => {
     Promise.all([
       userApi.me().then(r => setProfile(r.data)).catch(() => {}),
       crediarioApi.meu().then(r => setCrediario(r.data)).catch(() => {}),
       comandaApi.myHistory().then(r => setHistory(r.data)).catch(() => {}),
+      championshipApi.myParticipations().then(r => setParticipations(r.data)).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
 
@@ -74,16 +76,17 @@ export default function PerfilPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex rounded-xl bg-surface-800 border border-surface-600 p-1 gap-1">
+            <div className="grid grid-cols-4 rounded-xl bg-surface-800 border border-surface-600 p-1 gap-1">
               {([
                 { key: 'pontos',    label: 'Pontos',    icon: Star },
                 { key: 'historico', label: 'Histórico', icon: Receipt },
+                { key: 'torneios',  label: 'Torneios',  icon: Trophy },
                 { key: 'crediario', label: 'Dívida',    icon: Wallet },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+                  className={`flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg text-[10px] font-semibold transition-all ${
                     tab === key
                       ? 'bg-brand-500 text-white shadow'
                       : 'text-gray-400 hover:text-white'
@@ -92,7 +95,7 @@ export default function PerfilPage() {
                   <Icon className="w-3.5 h-3.5" />
                   {label}
                   {key === 'crediario' && crediario && crediario.saldoRestanteEmReais > 0 && (
-                    <span className="w-1.5 h-1.5 bg-red-400 rounded-full" />
+                    <span className="w-1.5 h-1.5 bg-red-400 rounded-full absolute" />
                   )}
                 </button>
               ))}
@@ -127,6 +130,19 @@ export default function PerfilPage() {
                     <p className="text-gray-600 text-sm mt-3">Você ainda não tem pontos. Fale com o Maikon!</p>
                   )}
                 </div>
+
+                {/* Cashback / Crédito na loja */}
+                {(profile?.balanceInCents ?? 0) > 0 && (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 flex items-center gap-3">
+                    <Coins className="w-5 h-5 text-emerald-400 shrink-0" />
+                    <div>
+                      <p className="text-xs text-gray-400">Cashback / Crédito na loja</p>
+                      <p className="font-bold text-emerald-400">
+                        R$ {((profile?.balanceInCents ?? 0) / 100).toFixed(2).replace('.', ',')}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="border-t border-surface-500 pt-4 mt-2">
                   <div className="flex items-start gap-2.5 text-xs text-gray-500 leading-relaxed">
@@ -252,6 +268,75 @@ export default function PerfilPage() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            {/* ── Tab: Torneios ────────────────────────────────── */}
+            {tab === 'torneios' && (
+              <div className="space-y-3">
+                {participations.length === 0 ? (
+                  <div className="card text-center py-10">
+                    <Trophy className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">Você ainda não participou de nenhum torneio.</p>
+                  </div>
+                ) : (
+                  participations.map(p => {
+                    const statusColor: Record<string, string> = {
+                      Planejado:   'text-gray-400',
+                      Inscricoes:  'text-brand-400',
+                      EmAndamento: 'text-amber-400',
+                      Finalizado:  'text-emerald-400',
+                      Cancelado:   'text-red-400',
+                    }
+                    const statusLabel: Record<string, string> = {
+                      Planejado:   'Em breve',
+                      Inscricoes:  'Inscrições abertas',
+                      EmAndamento: 'Em andamento',
+                      Finalizado:  'Finalizado',
+                      Cancelado:   'Cancelado',
+                    }
+                    return (
+                      <div key={p.participationId} className="card">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-white text-sm leading-snug">{p.championshipName}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{p.game} · {new Date(p.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                          </div>
+                          <span className={`text-xs font-semibold shrink-0 ${statusColor[p.status] ?? 'text-gray-400'}`}>
+                            {statusLabel[p.status] ?? p.status}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-4 mt-3 pt-3 border-t border-surface-600">
+                          <div className="text-center">
+                            <p className="text-xs text-gray-500">Nº</p>
+                            <p className="font-bold text-white text-sm">#{p.playerNumber}</p>
+                          </div>
+                          {p.deckName && (
+                            <div>
+                              <p className="text-xs text-gray-500">Deck</p>
+                              <p className="text-sm text-white">{p.deckName}</p>
+                            </div>
+                          )}
+                          {p.placement && (
+                            <div className="ml-auto text-center">
+                              <p className="text-xs text-gray-500">Colocação</p>
+                              <p className={`font-black text-lg ${p.placement === 1 ? 'text-yellow-400' : p.placement === 2 ? 'text-gray-300' : p.placement === 3 ? 'text-amber-600' : 'text-white'}`}>
+                                {p.placement === 1 ? '🥇' : p.placement === 2 ? '🥈' : p.placement === 3 ? '🥉' : `${p.placement}º`}
+                              </p>
+                            </div>
+                          )}
+                          {p.entryFeeInReais > 0 && (
+                            <div className="ml-auto text-right">
+                              <p className="text-xs text-gray-500">Taxa</p>
+                              <p className="text-sm text-accent-gold font-semibold">R$ {p.entryFeeInReais.toFixed(2).replace('.', ',')}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )
                   })
