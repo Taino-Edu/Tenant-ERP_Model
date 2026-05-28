@@ -149,7 +149,7 @@ export default function AiChatWidget() {
           {/* Input */}
           <div className="px-3 py-3" style={{ borderTop: '1px solid #303040', background: '#111117' }}>
             <div className="flex items-end gap-2 rounded-xl p-1"
-                 style={{ background: '#1e1e2e', border: '1px solid #404058' }}>
+                 style={{ background: '#252538', border: '1px solid #6d28d9' }}>
               <textarea
                 ref={inputRef}
                 value={input}
@@ -158,7 +158,7 @@ export default function AiChatWidget() {
                 placeholder="Pergunte algo sobre a loja..."
                 rows={1}
                 disabled={loading}
-                className="flex-1 resize-none bg-transparent text-sm text-white placeholder-gray-500 px-2 py-1.5 outline-none disabled:opacity-50"
+                className="flex-1 resize-none bg-transparent text-sm text-violet-200 placeholder-gray-500 px-2 py-1.5 outline-none disabled:opacity-50"
                 style={{ maxHeight: '80px', lineHeight: '1.5' }}
               />
               <button
