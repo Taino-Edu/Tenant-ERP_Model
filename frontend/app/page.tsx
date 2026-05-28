@@ -133,22 +133,57 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Destaques ─────────────────────────────────────────────── */}
+      {/* ── Banners (imagem full-width com overlay de texto) ──────── */}
+      {banners.length > 0 && (
+        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-4">
+          {banners.map(a => (
+            <a key={a.id}
+              href={a.linkUrl ?? '#'}
+              target={a.linkUrl ? '_blank' : undefined}
+              rel="noreferrer"
+              className={`block relative rounded-2xl overflow-hidden border border-surface-600 group ${a.linkUrl ? 'cursor-pointer' : 'cursor-default'}`}>
+              {a.imageUrl ? (
+                <>
+                  <img src={a.imageUrl} alt={a.title}
+                    className="w-full object-cover max-h-[280px] group-hover:scale-[1.02] transition-transform duration-500" />
+                  {(a.title || a.body) && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent flex items-end p-6">
+                      <div>
+                        <p className="text-white font-bold text-base leading-snug drop-shadow">{a.title}</p>
+                        {a.body && <p className="text-gray-300 text-sm mt-1 drop-shadow">{a.body}</p>}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="bg-surface-800 px-6 py-5">
+                  <p className="font-bold text-white">{a.title}</p>
+                  {a.body && <p className="text-gray-400 text-sm mt-1">{a.body}</p>}
+                </div>
+              )}
+            </a>
+          ))}
+        </section>
+      )}
+
+      {/* ── Destaques (card com imagem lateral) ───────────────────── */}
       {destaques.length > 0 && (
         <section className="px-6 pb-6 max-w-5xl mx-auto space-y-3">
           {destaques.map(a => (
-            <a key={a.id} href={a.linkUrl ?? '#'} target={a.linkUrl ? '_blank' : undefined} rel="noreferrer"
-              className={`block rounded-2xl overflow-hidden border border-amber-500/30 bg-amber-500/5 hover:border-amber-500/60 transition ${a.linkUrl ? 'cursor-pointer' : 'cursor-default'}`}>
+            <a key={a.id}
+              href={a.linkUrl ?? '#'}
+              target={a.linkUrl ? '_blank' : undefined}
+              rel="noreferrer"
+              className={`flex items-center gap-0 rounded-2xl overflow-hidden border border-amber-500/25 bg-gradient-to-r from-amber-500/10 to-transparent group ${a.linkUrl ? 'cursor-pointer hover:border-amber-500/50' : 'cursor-default'} transition`}>
               {a.imageUrl && (
-                <img src={a.imageUrl} alt={a.title} className="w-full object-cover max-h-[220px]" />
+                <img src={a.imageUrl} alt=""
+                  className="w-28 h-20 object-cover shrink-0 group-hover:brightness-110 transition" />
               )}
-              <div className="px-5 py-4 flex items-start gap-4">
-                <div className="w-8 h-8 bg-amber-500/20 rounded-lg flex items-center justify-center shrink-0 mt-0.5">
-                  <Star className="w-4 h-4 text-amber-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-amber-300 text-sm">{a.title}</p>
-                  {a.body && <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{a.body}</p>}
+              <div className="px-5 py-4 flex items-center gap-3 flex-1 min-w-0">
+                <Star className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className="min-w-0">
+                  <p className="font-bold text-amber-300 text-sm truncate">{a.title}</p>
+                  {a.body && <p className="text-gray-400 text-xs mt-0.5 line-clamp-1">{a.body}</p>}
                 </div>
               </div>
             </a>
@@ -156,41 +191,15 @@ export default function LandingPage() {
         </section>
       )}
 
-      {/* ── Banners de imagem ──────────────────────────────────────── */}
-      {banners.length > 0 && (
-        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-3">
-          {banners.map(a => (
-            <a key={a.id} href={a.linkUrl ?? '#'} target={a.linkUrl ? '_blank' : undefined} rel="noreferrer"
-              className={`block rounded-2xl overflow-hidden border border-surface-500 hover:border-brand-500/40 transition ${a.linkUrl ? 'cursor-pointer' : 'cursor-default'}`}>
-              {a.imageUrl && (
-                <img src={a.imageUrl} alt={a.title} className="w-full object-cover max-h-[220px]" />
-              )}
-              {(a.title || a.body) && !a.imageUrl && (
-                <div className="px-5 py-4">
-                  <p className="font-semibold text-white text-sm">{a.title}</p>
-                  {a.body && <p className="text-gray-400 text-xs mt-0.5">{a.body}</p>}
-                </div>
-              )}
-            </a>
-          ))}
-        </section>
-      )}
-
-      {/* ── Avisos de texto ───────────────────────────────────────── */}
+      {/* ── Avisos (barra de notificação slim) ────────────────────── */}
       {avisos.length > 0 && (
-        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-3">
+        <section className="px-6 pb-6 max-w-5xl mx-auto space-y-2">
           {avisos.map(a => (
-            <div key={a.id} className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-5 py-4 flex items-center gap-4">
-              {a.imageUrl ? (
-                <img src={a.imageUrl} alt="" className="w-14 h-14 rounded-lg object-cover shrink-0" />
-              ) : (
-                <div className="w-8 h-8 bg-brand-500/20 rounded-lg flex items-center justify-center shrink-0">
-                  <Zap className="w-4 h-4 text-brand-400" />
-                </div>
-              )}
-              <div className="min-w-0">
-                <p className="font-semibold text-brand-300 text-sm">{a.title}</p>
-                {a.body && <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{a.body}</p>}
+            <div key={a.id} className="flex items-center gap-3 bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3">
+              <Zap className="w-4 h-4 text-brand-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <span className="font-semibold text-brand-300 text-sm">{a.title}</span>
+                {a.body && <span className="text-gray-400 text-xs ml-2">{a.body}</span>}
               </div>
             </div>
           ))}
