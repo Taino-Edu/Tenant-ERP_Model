@@ -20,7 +20,7 @@ namespace CardGameStore.Services.Implementations;
 public class GeminiChatService : IAiChatService
 {
     private const string GEMINI_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent";
 
     private readonly AppDbContext              _db;
     private readonly IVendaAvulsaService       _vendas;
