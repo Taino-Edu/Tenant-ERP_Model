@@ -113,6 +113,13 @@ public class LgpdController : ControllerBase
             deadline:    request.Deadline
         );
 
+        // Sanitiza campos de texto livre antes de inserir no HTML do e-mail
+        var safeName  = HtmlEncoder.Default.Encode(request.RequesterName);
+        var safeEmail = HtmlEncoder.Default.Encode(request.RequesterEmail);
+        var safeDesc  = request.Description != null
+            ? HtmlEncoder.Default.Encode(request.Description)
+            : null;
+
         // Email de notificação interna
         await _email.SendAnuncioAsync(
             destinatarios: [(PrivacidadeEmail, "softNerd — Privacidade")],
@@ -122,10 +129,10 @@ public class LgpdController : ControllerBase
                 <ul>
                   <li><strong>Protocolo:</strong> {request.Id}</li>
                   <li><strong>Tipo:</strong> {request.RequestType}</li>
-                  <li><strong>Solicitante:</strong> {request.RequesterName} ({request.RequesterEmail})</li>
+                  <li><strong>Solicitante:</strong> {safeName} ({safeEmail})</li>
                   <li><strong>CPF:</strong> {request.RequesterCpf}</li>
                   <li><strong>Prazo:</strong> {request.Deadline:dd/MM/yyyy}</li>
-                  {(request.Description != null ? $"<li><strong>Descrição:</strong> {request.Description}</li>" : "")}
+                  {(safeDesc != null ? $"<li><strong>Descrição:</strong> {safeDesc}</li>" : "")}
                 </ul>
                 <p>Acesse o painel admin para responder: <a href="https://softnerd.com.br/admin/lgpd">Admin › LGPD</a></p>
                 """

@@ -147,6 +147,19 @@ builder.Services.AddAuthorization(options =>
 // ---------------------------------------------------------------------------
 builder.Services.AddRateLimiter(options =>
 {
+    // Política global — protege TODOS os endpoints sem [EnableRateLimiting] explícito
+    // 300 req/min por IP é generoso o suficiente para uso legítimo
+    options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, IPAddress>(
+        context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress ?? IPAddress.Loopback,
+            _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit          = 300,
+                Window               = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit           = 0
+            }));
+
     options.AddFixedWindowLimiter("auth", opt =>
     {
         opt.PermitLimit              = 5;
@@ -339,12 +352,16 @@ using (var scope = app.Services.CreateScope())
         // Seed: cria o admin se não existir
         if (!db.Users.Any(u => u.Email == "admin@cardgamestore.com.br"))
         {
+            var adminPassword = Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD") ?? "SenhaForte@123";
+            if (adminPassword == "SenhaForte@123")
+                logger.LogWarning("ATENÇÃO: admin criado com senha padrão. Defina ADMIN_SEED_PASSWORD no ambiente de produção!");
+
             db.Users.Add(new CardGameStore.Models.PostgreSQL.User
             {
                 Id           = Guid.Parse("00000000-0000-0000-0000-000000000001"),
                 Name         = "Maikon",
                 Email        = "admin@cardgamestore.com.br",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("SenhaForte@123"),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
                 Role         = CardGameStore.Models.PostgreSQL.UserRole.Admin,
                 IsActive     = true,
                 CreatedAt    = DateTime.UtcNow,
@@ -381,11 +398,13 @@ app.UseForwardedHeaders(forwardedOptions);
 // Headers de segurança HTTP em todas as respostas
 app.Use(async (context, next) =>
 {
-    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-    context.Response.Headers["X-Frame-Options"]        = "DENY";
-    context.Response.Headers["X-XSS-Protection"]      = "1; mode=block";
-    context.Response.Headers["Referrer-Policy"]        = "no-referrer";
-    context.Response.Headers["Permissions-Policy"]     = "camera=(), microphone=(), geolocation=()";
+    context.Response.Headers["X-Content-Type-Options"]  = "nosniff";
+    context.Response.Headers["X-Frame-Options"]         = "DENY";
+    context.Response.Headers["X-XSS-Protection"]        = "1; mode=block";
+    context.Response.Headers["Referrer-Policy"]         = "no-referrer";
+    context.Response.Headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()";
+    // CSP: API retorna apenas JSON/binários — bloquear todo conteúdo ativo
+    context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
     await next();
 });
 

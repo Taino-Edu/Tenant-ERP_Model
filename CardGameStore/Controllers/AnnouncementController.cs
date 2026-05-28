@@ -91,6 +91,8 @@ public class AnnouncementController : ControllerBase
     private Guid GetUserId()
     {
         var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-        return Guid.Parse(claim!.Value);
+        if (claim is null || !Guid.TryParse(claim.Value, out var id))
+            throw new UnauthorizedAccessException("Token inválido: identificador de usuário ausente.");
+        return id;
     }
 }

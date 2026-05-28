@@ -215,4 +215,79 @@ public class ProductServiceTests
         atualizado.Name.Should().Be("Nome Atualizado");
         atualizado.UpdatedAt.Should().BeAfter(antes);
     }
+
+    // ── Busca por ID ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetById_ProdutoExistente_DeveRetornarProduto()
+    {
+        var db      = CreateDb(nameof(GetById_ProdutoExistente_DeveRetornarProduto));
+        var service = CreateService(db);
+        var p       = MakeProduct("Card Lendário");
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        var result = await service.GetByIdAsync(p.Id);
+
+        result.Should().NotBeNull();
+        result!.Name.Should().Be("Card Lendário");
+        result.Id.Should().Be(p.Id);
+    }
+
+    [Fact]
+    public async Task GetById_ProdutoInexistente_DeveRetornarNull()
+    {
+        var db      = CreateDb(nameof(GetById_ProdutoInexistente_DeveRetornarNull));
+        var service = CreateService(db);
+
+        var result = await service.GetByIdAsync(Guid.NewGuid());
+
+        result.Should().BeNull();
+    }
+
+    // ── Busca por código de barras ────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetByBarcode_ProdutoExistente_DeveRetornarProduto()
+    {
+        var db      = CreateDb(nameof(GetByBarcode_ProdutoExistente_DeveRetornarProduto));
+        var service = CreateService(db);
+        var p       = MakeProduct("Produto Scanável");
+        p.Barcode   = "7891234567890";
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        var result = await service.GetByBarcodeAsync("7891234567890");
+
+        result.Should().NotBeNull();
+        result!.Barcode.Should().Be("7891234567890");
+        result.Name.Should().Be("Produto Scanável");
+    }
+
+    [Fact]
+    public async Task GetByBarcode_CodigoInexistente_DeveRetornarNull()
+    {
+        var db      = CreateDb(nameof(GetByBarcode_CodigoInexistente_DeveRetornarNull));
+        var service = CreateService(db);
+
+        var result = await service.GetByBarcodeAsync("0000000000000");
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetByBarcode_ProdutoInativo_DeveRetornarNull()
+    {
+        // Produto inativo não deve aparecer no leitor de código de barras
+        var db      = CreateDb(nameof(GetByBarcode_ProdutoInativo_DeveRetornarNull));
+        var service = CreateService(db);
+        var p       = MakeProduct("Produto Descontinuado", active: false);
+        p.Barcode   = "9999999999999";
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        var result = await service.GetByBarcodeAsync("9999999999999");
+
+        result.Should().BeNull("produto inativo não deve ser retornado");
+    }
 }

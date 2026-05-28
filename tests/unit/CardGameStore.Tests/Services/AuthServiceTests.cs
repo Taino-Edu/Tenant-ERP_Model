@@ -6,12 +6,15 @@
 using CardGameStore.Configuration;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -42,6 +45,22 @@ public class AuthServiceTests
         return db;
     }
 
+    /// <summary>Cria um mock de IHubContext com Clients.Group configurado para evitar NullReferenceException.</summary>
+    private static IHubContext<ComandaHub> CreateHubMock()
+    {
+        var mockClientProxy = new Mock<IClientProxy>();
+        mockClientProxy
+            .Setup(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mockClients = new Mock<IHubClients>();
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockClientProxy.Object);
+
+        var mockHub = new Mock<IHubContext<ComandaHub>>();
+        mockHub.Setup(h => h.Clients).Returns(mockClients.Object);
+        return mockHub.Object;
+    }
+
     private static AuthService CreateAuthService(AppDbContext db, ILogger<AuthService>? logger = null)
     {
         var jwtSettings = Options.Create(new JwtSettings
@@ -56,7 +75,9 @@ public class AuthServiceTests
         var comandaService = new ComandaService(
             db,
             new Mock<IEmailService>().Object,
-            NullLogger<ComandaService>.Instance);
+            NullLogger<ComandaService>.Instance,
+            new Mock<IServiceScopeFactory>().Object,
+            CreateHubMock());
 
         return new AuthService(
             db,
@@ -285,5 +306,215 @@ public class AuthServiceTests
         // Assert — apenas um usuário com esse CPF
         var count = await db.Users.CountAsync(u => u.Cpf == cpf);
         count.Should().Be(1, "não deve criar duplicata para o mesmo CPF");
+    }
+
+    // ── Login — usuário inativo / senha errada ────────────────────────────────
+
+    [Fact]
+    public async Task Login_UsuarioInativo_DeveLancarUnauthorized()
+    {
+        var db = CreateSqliteDb();
+        db.Users.Add(new User
+        {
+            Id           = Guid.NewGuid(),
+            Name         = "Inativo",
+            Email        = "inativo@softnerd.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("Senha123!"),
+            Role         = UserRole.Admin,
+            IsActive     = false, // conta desativada
+        });
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+
+        var act = async () => await service.LoginAsync(new LoginRequest("inativo@softnerd.com", "Senha123!"));
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "usuário inativo não pode fazer login mesmo com senha correta");
+    }
+
+    [Fact]
+    public async Task Login_SenhaErrada_DeveLancarUnauthorized()
+    {
+        var db = CreateSqliteDb();
+        db.Users.Add(new User
+        {
+            Id           = Guid.NewGuid(),
+            Name         = "Admin",
+            Email        = "admin2@softnerd.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("SenhaCorreta!"),
+            Role         = UserRole.Admin,
+            IsActive     = true,
+        });
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+
+        var act = async () => await service.LoginAsync(new LoginRequest("admin2@softnerd.com", "SenhaErrada!"));
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>("senha incorreta deve ser rejeitada");
+    }
+
+    // ── Refresh Token ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RefreshToken_TokenExpirado_DeveLancarUnauthorized()
+    {
+        var db = CreateSqliteDb();
+        db.Users.Add(new User
+        {
+            Id                 = Guid.NewGuid(),
+            Name               = "Cliente",
+            Email              = "cliente@softnerd.com",
+            PasswordHash       = BCrypt.Net.BCrypt.HashPassword("Senha123!"),
+            Role               = UserRole.Customer,
+            IsActive           = true,
+            RefreshToken       = "token-expirado-abc",
+            RefreshTokenExpiry = DateTime.UtcNow.AddHours(-1), // já expirou
+        });
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+
+        var act = async () => await service.RefreshTokenAsync(new RefreshTokenRequest("token-expirado-abc"));
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*expirado*");
+    }
+
+    [Fact]
+    public async Task RefreshToken_TokenInvalido_DeveLancarUnauthorized()
+    {
+        var db      = CreateSqliteDb();
+        var service = CreateAuthService(db);
+
+        var act = async () => await service.RefreshTokenAsync(new RefreshTokenRequest("token-que-nao-existe-xyz"));
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>("token inexistente não deve ser aceito");
+    }
+
+    // ── ForgotPassword ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ForgotPassword_EmailExistente_DeveGerarTokenDeReset()
+    {
+        var db = CreateSqliteDb();
+        var user = new User
+        {
+            Id           = Guid.NewGuid(),
+            Name         = "Cliente Reset",
+            Email        = "reset@softnerd.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123!"),
+            Role         = UserRole.Customer,
+            IsActive     = true,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+
+        await service.ForgotPasswordAsync(new ForgotPasswordRequest("reset@softnerd.com"));
+
+        var atualizado = await db.Users.FindAsync(user.Id);
+        atualizado!.PasswordResetToken.Should().NotBeNullOrWhiteSpace(
+            "deve gerar token de reset para email cadastrado");
+        atualizado.PasswordResetTokenExpiry.Should().BeAfter(DateTime.UtcNow,
+            "token deve ter validade futura");
+    }
+
+    [Fact]
+    public async Task ForgotPassword_EmailInexistente_NaoDeveLancarExcecao()
+    {
+        var db      = CreateSqliteDb();
+        var service = CreateAuthService(db);
+
+        // Resposta silenciosa — não revelar se e-mail existe (proteção contra user enumeration)
+        var act = async () => await service.ForgotPasswordAsync(
+            new ForgotPasswordRequest("nao.cadastrado@softnerd.com"));
+
+        await act.Should().NotThrowAsync();
+    }
+
+    // ── ResetPassword ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ResetPassword_TokenValido_DeveAlterarSenha()
+    {
+        const string resetToken = "token-valido-abc123";
+        var db = CreateSqliteDb();
+        var user = new User
+        {
+            Id                       = Guid.NewGuid(),
+            Name                     = "Cliente",
+            Email                    = "troca@softnerd.com",
+            PasswordHash             = BCrypt.Net.BCrypt.HashPassword("SenhaAntiga!"),
+            Role                     = UserRole.Customer,
+            IsActive                 = true,
+            PasswordResetToken       = resetToken,
+            PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(2),
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+
+        await service.ResetPasswordAsync(new ResetPasswordRequest(resetToken, "NovaSenha123!"));
+
+        var atualizado = await db.Users.FindAsync(user.Id);
+        BCrypt.Net.BCrypt.Verify("NovaSenha123!", atualizado!.PasswordHash!)
+            .Should().BeTrue("nova senha deve funcionar após o reset");
+        atualizado.PasswordResetToken.Should().BeNull("token deve ser removido após uso único");
+    }
+
+    [Fact]
+    public async Task ResetPassword_TokenExpirado_DeveLancarUnauthorized()
+    {
+        const string resetToken = "token-expirado-reset";
+        var db = CreateSqliteDb();
+        db.Users.Add(new User
+        {
+            Id                       = Guid.NewGuid(),
+            Name                     = "Cliente",
+            Email                    = "expired@softnerd.com",
+            PasswordHash             = BCrypt.Net.BCrypt.HashPassword("Senha123!"),
+            Role                     = UserRole.Customer,
+            IsActive                 = true,
+            PasswordResetToken       = resetToken,
+            PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(-1), // expirado
+        });
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+
+        var act = async () => await service.ResetPasswordAsync(
+            new ResetPasswordRequest(resetToken, "NovaSenha123!"));
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
+            .WithMessage("*expirado*");
+    }
+
+    [Fact]
+    public async Task ResetPassword_DeveInvalidarSessoesAtivas()
+    {
+        // Segurança: troca de senha deve forçar novo login (invalida refresh tokens ativos)
+        const string resetToken = "token-valido-session-test";
+        var db = CreateSqliteDb();
+        var user = new User
+        {
+            Id                       = Guid.NewGuid(),
+            Name                     = "Cliente",
+            Email                    = "session@softnerd.com",
+            PasswordHash             = BCrypt.Net.BCrypt.HashPassword("OldPass!"),
+            Role                     = UserRole.Customer,
+            IsActive                 = true,
+            RefreshToken             = "sessao-ativa-token-xyz",
+            RefreshTokenExpiry       = DateTime.UtcNow.AddDays(30),
+            PasswordResetToken       = resetToken,
+            PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(2),
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        var service = CreateAuthService(db);
+
+        await service.ResetPasswordAsync(new ResetPasswordRequest(resetToken, "NewPass123!"));
+
+        var atualizado = await db.Users.FindAsync(user.Id);
+        atualizado!.RefreshToken.Should().BeNull(
+            "sessões ativas devem ser invalidadas quando a senha é alterada");
+        atualizado.RefreshTokenExpiry.Should().BeNull();
     }
 }

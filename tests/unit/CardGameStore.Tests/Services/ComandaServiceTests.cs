@@ -6,12 +6,16 @@
 
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -36,8 +40,28 @@ public class ComandaServiceTests
         return db;
     }
 
+    /// <summary>Cria mock de IHubContext com Clients.Group configurado para evitar NullReferenceException.</summary>
+    private static IHubContext<ComandaHub> CreateHubMock()
+    {
+        var mockClientProxy = new Mock<IClientProxy>();
+        mockClientProxy
+            .Setup(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var mockClients = new Mock<IHubClients>();
+        mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockClientProxy.Object);
+
+        var mockHub = new Mock<IHubContext<ComandaHub>>();
+        mockHub.Setup(h => h.Clients).Returns(mockClients.Object);
+        return mockHub.Object;
+    }
+
     private static ComandaService CreateService(AppDbContext db) =>
-        new(db, new Mock<IEmailService>().Object, NullLogger<ComandaService>.Instance);
+        new(db,
+            new Mock<IEmailService>().Object,
+            NullLogger<ComandaService>.Instance,
+            new Mock<IServiceScopeFactory>().Object,
+            CreateHubMock());
 
     private static async Task<(User user, Product product, Comanda comanda)> SeedAsync(AppDbContext db)
     {
@@ -91,16 +115,20 @@ public class ComandaServiceTests
     }
 
     [Fact]
-    public async Task OpenComanda_JaExiste_DeveRetornarMesmaComanda()
+    public async Task OpenComanda_SegundaChamada_DeveCriarNovaComanda()
     {
-        var db      = CreateDb(nameof(OpenComanda_JaExiste_DeveRetornarMesmaComanda));
+        // O serviço sempre cria uma nova comanda — clientes podem ter múltiplas abertas
+        // (ex.: sessão anterior paga via crediário, nova visita à loja na mesma sessão de testes)
+        var db      = CreateDb(nameof(OpenComanda_SegundaChamada_DeveCriarNovaComanda));
         var service = CreateService(db);
         var (user, _, _) = await SeedAsync(db);
 
         var primeira  = await service.OpenComandaAsync(user.Id);
         var segunda   = await service.OpenComandaAsync(user.Id);
 
-        segunda.Id.Should().Be(primeira.Id, "deve reutilizar a comanda ativa, não criar duplicata");
+        segunda.Id.Should().NotBe(primeira.Id, "cada chamada cria uma comanda separada");
+        var totalComandas = await db.Comandas.CountAsync(c => c.UserId == user.Id);
+        totalComandas.Should().Be(3, "seed já cria 1, OpenComanda adiciona mais 2");
     }
 
     // ── Adicionar item ────────────────────────────────────────────────────────
@@ -200,6 +228,8 @@ public class ComandaServiceTests
         var resultado = await service.RemoveItemAsync(comanda.Id, itemId, user.Id);
 
         resultado.Items.Should().BeEmpty();
+        // ExecuteUpdateAsync bypassa o change tracker — limpar cache antes de reler do banco
+        db.ChangeTracker.Clear();
         var estoqueAtual = (await db.Products.FindAsync(product.Id))!.StockQuantity;
         estoqueAtual.Should().Be(10); // estoque restaurado
     }
@@ -239,6 +269,8 @@ public class ComandaServiceTests
         var resultado = await service.CancelComandaAsync(comanda.Id, adminId);
 
         resultado.Status.Should().Be("Cancelada");
+        // ExecuteUpdateAsync bypassa o change tracker — limpar cache antes de reler do banco
+        db.ChangeTracker.Clear();
         var estoqueAtual = (await db.Products.FindAsync(product.Id))!.StockQuantity;
         estoqueAtual.Should().Be(10); // 10 - 5 + 5 = 10 restaurado
     }

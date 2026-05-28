@@ -101,7 +101,7 @@ public record ResetPasswordRequest(
 // Responses (saída)
 // -------------------------------------------------------------------------
 
-/// <summary>Resposta de autenticação bem-sucedida.</summary>
+/// <summary>Resposta interna de autenticação — inclui tokens para uso nos cookies.</summary>
 public record AuthResponse(
     string   AccessToken,
     string   RefreshToken,
@@ -113,5 +113,17 @@ public record AuthResponse(
     /// ID da comanda ativa — preenchido apenas no quick-login (cliente via QR Code).
     /// Null no login completo do Admin.
     /// </summary>
+    Guid?    ComandaId = null
+);
+
+/// <summary>
+/// Resposta de auth enviada ao cliente via JSON — sem tokens.
+/// Os tokens trafegam exclusivamente como cookies HttpOnly (proteção XSS).
+/// </summary>
+public record SafeAuthResponse(
+    DateTime ExpiresAt,
+    string   Role,
+    string   UserName,
+    Guid     UserId,
     Guid?    ComandaId = null
 );

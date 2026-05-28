@@ -114,7 +114,8 @@ public class AuthController : ControllerBase
             var response = await _authService.LoginAsync(request);
             _logger.LogInformation("Login bem-sucedido para {Email}", request.Email);
             SetAuthCookies(response.AccessToken, response.RefreshToken);
-            return Ok(response);
+            // Tokens enviados apenas via cookies HttpOnly — body não expõe credenciais
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -158,7 +159,7 @@ public class AuthController : ControllerBase
                 "Quick-login realizado: {Name} | Mesa: {Table} | Comanda: {ComandaId}",
                 request.Name, request.TableIdentifier, response.ComandaId);
             SetAuthCookies(response.AccessToken, response.RefreshToken);
-            return Ok(response);
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId, response.ComandaId));
         }
         catch (ArgumentException ex)
         {
@@ -208,7 +209,7 @@ public class AuthController : ControllerBase
             var response = await _authService.RefreshTokenAsync(tokenRequest);
             // Renova os cookies com os novos tokens
             SetAuthCookies(response.AccessToken, response.RefreshToken);
-            return Ok(response);
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -251,7 +252,7 @@ public class AuthController : ControllerBase
         {
             var response = await _authService.SetupAccountAsync(request);
             SetAuthCookies(response.AccessToken, response.RefreshToken);
-            return Ok(response);
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
         }
         catch (KeyNotFoundException ex)    { return NotFound(new { Message = ex.Message }); }
         catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
@@ -267,7 +268,7 @@ public class AuthController : ControllerBase
         {
             var response = await _authService.ClientLoginAsync(request);
             SetAuthCookies(response.AccessToken, response.RefreshToken);
-            return Ok(response);
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
         }
         catch (UnauthorizedAccessException) { return Unauthorized(new { Message = "E-mail ou senha inválidos." }); }
     }

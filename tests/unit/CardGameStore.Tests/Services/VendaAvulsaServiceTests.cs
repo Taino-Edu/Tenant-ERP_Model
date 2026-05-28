@@ -9,6 +9,7 @@ using CardGameStore.Models.MongoDB;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using FluentAssertions;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -20,12 +21,18 @@ public class VendaAvulsaServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static AppDbContext CreateDb(string name)
+    // Usa SQLite in-memory (não o EF InMemory provider) para suportar ExecuteUpdateAsync.
+    // O EF InMemory provider não implementa bulk operations (ExecuteUpdate/Delete).
+    private static AppDbContext CreateDb(string _)
     {
+        var connection = new SqliteConnection("Filename=:memory:");
+        connection.Open();
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(name)
+            .UseSqlite(connection)
             .Options;
-        return new AppDbContext(options);
+        var db = new AppDbContext(options);
+        db.Database.EnsureCreated();
+        return db;
     }
 
     private static (Mock<IMongoDatabase> db, Mock<IMongoCollection<VendaAvulsa>> collection) CreateMongoBacks(
@@ -131,6 +138,8 @@ public class VendaAvulsaServiceTests
         resultado.Items[0].Quantity.Should().Be(2);
         resultado.Items[0].SubtotalInReais.Should().Be(40.00m);
 
+        // ExecuteUpdateAsync bypassa o change tracker — limpar antes de reler do banco
+        db.ChangeTracker.Clear();
         var estoque = (await db.Products.FindAsync(product.Id))!.StockQuantity;
         estoque.Should().Be(3); // 5 - 2
     }
@@ -193,6 +202,8 @@ public class VendaAvulsaServiceTests
         resultado.TotalInReais.Should().Be(40.00m); // 3×10 + 2×5
         resultado.Items.Should().HaveCount(2);
 
+        // ExecuteUpdateAsync bypassa o change tracker — limpar antes de reler do banco
+        db.ChangeTracker.Clear();
         (await db.Products.FindAsync(p1.Id))!.StockQuantity.Should().Be(2);
         (await db.Products.FindAsync(p2.Id))!.StockQuantity.Should().Be(3);
     }
@@ -292,8 +303,103 @@ public class VendaAvulsaServiceTests
         catch (InvalidOperationException) { }
 
         // Estoque não deve ter sido alterado — fail-fast antes de qualquer escrita
+        db.ChangeTracker.Clear();
         var estoque = (await db.Products.FindAsync(product.Id))!.StockQuantity;
         estoque.Should().Be(3);
+    }
+
+    // ── Desconto ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Register_ComDesconto10Porcento_DeveCalcularTotalComDesconto()
+    {
+        // 1 × R$20,00 com 10% desconto → R$18,00 final, R$2,00 desconto
+        var db = CreateDb(nameof(Register_ComDesconto10Porcento_DeveCalcularTotalComDesconto));
+        var product = await SeedProductAsync(db, priceInCents: 2000, stock: 5);
+        var (mockMongo, _) = CreateMongoBacks();
+        var service = CreateService(db, mockMongo.Object);
+
+        var result = await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            PaymentMethod   = PaymentMethod.Pix,
+            DiscountPercent = 10,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        result.TotalInReais.Should().Be(18.00m,    "10% de desconto sobre R$20,00");
+        result.DiscountPercent.Should().Be(10);
+        result.DiscountInReais.Should().Be(2.00m,  "desconto de 10% sobre R$20,00 = R$2,00");
+    }
+
+    [Fact]
+    public async Task Register_SemDesconto_TotalDeveSerioBruto()
+    {
+        // DiscountPercent = 0 → total bruto sem alteração
+        var db = CreateDb(nameof(Register_SemDesconto_TotalDeveSerioBruto));
+        var product = await SeedProductAsync(db, priceInCents: 1500, stock: 3);
+        var (mockMongo, _) = CreateMongoBacks();
+        var service = CreateService(db, mockMongo.Object);
+
+        var result = await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            PaymentMethod   = PaymentMethod.Dinheiro,
+            DiscountPercent = 0,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 2 }],
+        }, AdminId, AdminName);
+
+        result.TotalInReais.Should().Be(30.00m);  // 2 × R$15,00
+        result.DiscountInReais.Should().Be(0.00m);
+    }
+
+    // ── GetByDate ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetByDate_DeveRetornarVendasMapeadasComTotalCorreto()
+    {
+        var db = CreateDb(nameof(GetByDate_DeveRetornarVendasMapeadasComTotalCorreto));
+        var targetDate = DateTime.UtcNow.Date;
+        var doc = new VendaAvulsa
+        {
+            PaymentMethod   = PaymentMethod.Pix,
+            ClientName      = "Comprador Dia",
+            TotalInCents    = 5000,
+            DiscountInCents = 500,
+            DiscountPercent = 10,
+            SoldAt          = targetDate.AddHours(14), // 14h do dia alvo
+            SoldByAdminId   = AdminId,
+            SoldByAdminName = AdminName,
+            Items =
+            [
+                new VendaAvulsaItem
+                {
+                    ProductId = Guid.NewGuid(), ProductName = "Booster",
+                    Quantity = 1, UnitPriceInCents = 5500, SubtotalInCents = 5500
+                }
+            ],
+        };
+        var (mockMongo, _) = CreateMongoBacks([doc]);
+        var service = CreateService(db, mockMongo.Object);
+
+        var result = (await service.GetByDateAsync(targetDate)).ToList();
+
+        result.Should().ContainSingle();
+        result[0].TotalInReais.Should().Be(50.00m);         // 5000 / 100
+        result[0].DiscountInReais.Should().Be(5.00m);       // 500 / 100
+        result[0].ClientName.Should().Be("Comprador Dia");
+        result[0].PaymentMethod.Should().Be(PaymentMethod.Pix);
+    }
+
+    [Fact]
+    public async Task GetByDate_SemVendas_DeveRetornarListaVazia()
+    {
+        var db = CreateDb(nameof(GetByDate_SemVendas_DeveRetornarListaVazia));
+        // Cursor mock que retorna lista vazia
+        var (mockMongo, _) = CreateMongoBacks(new List<VendaAvulsa>());
+        var service = CreateService(db, mockMongo.Object);
+
+        var result = (await service.GetByDateAsync(DateTime.UtcNow.Date)).ToList();
+
+        result.Should().BeEmpty("sem vendas no MongoDB, lista deve ser vazia");
     }
 
     // ── GetRecent ─────────────────────────────────────────────────────────────
