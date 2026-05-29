@@ -72,16 +72,16 @@ public class VendaAvulsaController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Retorna todas as vendas avulsas de uma data específica (YYYY-MM-DD).</summary>
+    /// <summary>Retorna todas as vendas avulsas de uma data específica (YYYY-MM-DD, fuso de Brasília). Padrão: hoje.</summary>
     [HttpGet("by-date")]
     [ProducesResponseType(typeof(IEnumerable<VendaAvulsaDto>), 200)]
     public async Task<IActionResult> GetByDate([FromQuery] string? date = null)
     {
-        DateTime day;
-        if (string.IsNullOrWhiteSpace(date) || !DateTime.TryParse(date, out day))
-            day = DateTime.UtcNow.Date;
-        else
-            day = day.Date;
+        // Quando não há ?date=, passa null → serviço calcula "hoje" no fuso BR.
+        // Quando há data explícita, repassa como DateTime para o serviço converter corretamente.
+        DateTime? day = null;
+        if (!string.IsNullOrWhiteSpace(date) && DateTime.TryParse(date, out var parsed))
+            day = parsed.Date;
 
         var result = await _service.GetByDateAsync(day);
         return Ok(result);

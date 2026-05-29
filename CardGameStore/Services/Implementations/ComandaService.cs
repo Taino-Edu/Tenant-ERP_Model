@@ -10,6 +10,28 @@ namespace CardGameStore.Services.Implementations;
 
 public class ComandaService : IComandaService
 {
+    // Fuso horário de Brasília (UTC-3 fixo; BR não usa horário de verão desde 2019).
+    // Funciona em Linux (IANA) e Windows (ID legado).
+    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
+    private static TimeZoneInfo GetBrazilZone()
+    {
+        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
+        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
+    }
+
+    /// <summary>
+    /// Retorna o intervalo UTC correspondente a um dia no fuso de Brasília.
+    /// Ex.: dia 29/05 BR → [29/05 03:00 UTC, 30/05 03:00 UTC)
+    /// </summary>
+    private static (DateTime InicioUtc, DateTime FimUtc) DiaBrasil(DateTime? dia = null)
+    {
+        var agora    = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        var dataBr   = dia.HasValue ? dia.Value.Date : agora.Date;
+        var inicioUtc = TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(dataBr, DateTimeKind.Unspecified), BrazilZone);
+        return (inicioUtc, inicioUtc.AddDays(1));
+    }
+
     // Constantes para evitar magic strings sensíveis a typo/case
     private const string PaymentCrediario = "Crediario";
     private const string PaymentPontos    = "Pontos";
@@ -540,12 +562,18 @@ public class ComandaService : IComandaService
 
     public async Task<IEnumerable<ComandaDto>> GetTodayHistoryAsync(DateTime? data = null)
     {
-        var dia = (data?.ToUniversalTime() ?? DateTime.UtcNow).Date;
+        // Usa intervalo UTC calculado a partir do fuso de Brasília.
+        // Sem isso, uma comanda fechada às 22h30 BR (= 01h30 UTC do dia seguinte)
+        // aparecia incorretamente como "hoje" no dashboard.
+        var (inicioUtc, fimUtc) = DiaBrasil(data);
+
         var comandas = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)
             .Where(c => (c.Status == ComandaStatus.Fechada || c.Status == ComandaStatus.Cancelada)
-                     && c.ClosedAt.HasValue && c.ClosedAt.Value.Date == dia)
+                     && c.ClosedAt.HasValue
+                     && c.ClosedAt.Value >= inicioUtc
+                     && c.ClosedAt.Value <  fimUtc)
             .OrderByDescending(c => c.ClosedAt)
             .ToListAsync();
 

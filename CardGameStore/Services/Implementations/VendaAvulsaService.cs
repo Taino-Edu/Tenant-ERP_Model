@@ -11,6 +11,23 @@ namespace CardGameStore.Services.Implementations;
 
 public class VendaAvulsaService : IVendaAvulsaService
 {
+    // Fuso horário de Brasília — funciona em Linux (IANA) e Windows (ID legado).
+    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
+    private static TimeZoneInfo GetBrazilZone()
+    {
+        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
+        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
+    }
+
+    private static (DateTime InicioUtc, DateTime FimUtc) DiaBrasil(DateTime? dia = null)
+    {
+        var agora    = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        var dataBr   = dia.HasValue ? dia.Value.Date : agora.Date;
+        var inicioUtc = TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(dataBr, DateTimeKind.Unspecified), BrazilZone);
+        return (inicioUtc, inicioUtc.AddDays(1));
+    }
+
     private readonly AppDbContext                    _db;
     private readonly IMongoCollection<VendaAvulsa>  _collection;
     private readonly ILogger<VendaAvulsaService>    _logger;
@@ -200,10 +217,11 @@ public class VendaAvulsaService : IVendaAvulsaService
         return vendas.Select(MapToDto);
     }
 
-    public async Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime date)
+    public async Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime? date = null)
     {
-        var inicio = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
-        var fim    = inicio.AddDays(1);
+        // Converte data BR → intervalo UTC para evitar o bug de timezone:
+        // uma venda às 22h BR (= 01h UTC do dia seguinte) aparecia como "hoje".
+        var (inicio, fim) = DiaBrasil(date);
 
         var filter = Builders<VendaAvulsa>.Filter.And(
             Builders<VendaAvulsa>.Filter.Gte(v => v.SoldAt, inicio),

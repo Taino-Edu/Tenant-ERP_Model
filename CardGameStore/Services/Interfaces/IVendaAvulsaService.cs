@@ -13,6 +13,6 @@ public interface IVendaAvulsaService
     /// <summary>Retorna as vendas avulsas mais recentes (padrão: últimas 50).</summary>
     Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50);
 
-    /// <summary>Retorna todas as vendas avulsas de um dia específico (UTC).</summary>
-    Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime date);
+    /// <summary>Retorna todas as vendas avulsas de um dia específico (fuso de Brasília). Padrão: hoje BR.</summary>
+    Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime? date = null);
 }
