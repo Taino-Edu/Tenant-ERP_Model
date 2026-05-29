@@ -721,17 +721,19 @@ public class ComandaService : IComandaService
 
     private static ComandaDto MapToDto(Comanda comanda) => new()
     {
-        Id              = comanda.Id,
-        UserId          = comanda.UserId,
-        UserName        = comanda.User?.Name ?? string.Empty,
-        TableIdentifier = comanda.TableIdentifier,
-        Status          = comanda.Status.ToString(),
-        TotalInReais    = comanda.TotalInReais,
-        PointsApplied   = comanda.PointsApplied,
-        OpenedAt        = comanda.OpenedAt,
-        ClosedAt        = comanda.ClosedAt,
-        PaymentMethod   = comanda.PaymentMethod,
-        Items           = comanda.Items.Select(i => new ComandaItemDto
+        Id                  = comanda.Id,
+        UserId              = comanda.UserId,
+        UserName            = comanda.User?.Name ?? string.Empty,
+        TableIdentifier     = comanda.TableIdentifier,
+        Status              = comanda.Status.ToString(),
+        TotalInReais        = comanda.TotalInReais,
+        PointsApplied       = comanda.PointsApplied,
+        OpenedAt            = comanda.OpenedAt,
+        ClosedAt            = comanda.ClosedAt,
+        PaymentMethod       = comanda.PaymentMethod,
+        UserPointsBalance   = comanda.User?.PointsBalance  ?? 0,
+        UserBalanceInCents  = comanda.User?.BalanceInCents ?? 0,
+        Items               = comanda.Items.Select(i => new ComandaItemDto
         {
             Id               = i.Id,
             ItemNameSnapshot = i.ItemNameSnapshot,

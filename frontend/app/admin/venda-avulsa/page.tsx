@@ -287,6 +287,7 @@ export default function VendaAvulsaPage() {
   const [cart, setCart]             = useState<CartItem[]>([])
   const [clientName, setClientName]         = useState('')
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [selectedUser,   setSelectedUser]   = useState<UserSummary | null>(null)
   const [clientSearch, setClientSearch]     = useState('')
   const [clientResults, setClientResults]   = useState<UserSummary[]>([])
   const [clientDropdown, setClientDropdown] = useState(false)
@@ -302,7 +303,7 @@ export default function VendaAvulsaPage() {
   const [catFilter, setCat]         = useState<string | null>(null)
   const [history, setHistory]       = useState<VendaAvulsaDto[]>([])
   const [histLoading, setHistLoad]  = useState(false)
-  const [histDate, setHistDate]     = useState(() => new Date().toISOString().slice(0, 10))
+  const [histDate, setHistDate]     = useState(() => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date()))
 
   useEffect(() => {
     productApi.list()
@@ -337,6 +338,7 @@ export default function VendaAvulsaPage() {
   function selectClient(u: UserSummary) {
     setClientName(u.name)
     setSelectedUserId(u.id)
+    setSelectedUser(u)
     setClientSearch(u.name)
     setClientResults([])
     setClientDropdown(false)
@@ -821,6 +823,23 @@ export default function VendaAvulsaPage() {
                         <strong>{payment === 'Crediario' ? 'Crediário' : payment}</strong> exige um cliente cadastrado.
                         Selecione o cliente no campo acima antes de finalizar.
                       </span>
+                    </div>
+                  )}
+
+                  {/* Saldo do cliente quando Pontos ou Cashback selecionado */}
+                  {selectedUser && (payment === 'Pontos' || payment === 'Cashback') && (
+                    <div className="flex items-center gap-2 bg-surface-800 border border-surface-500 rounded-lg px-3 py-2 text-xs">
+                      <span className="text-gray-400">Saldo de {selectedUser.name}:</span>
+                      {payment === 'Pontos' && (
+                        <span className={clsx('font-bold', selectedUser.pointsBalance > 0 ? 'text-amber-400' : 'text-red-400')}>
+                          {selectedUser.pointsBalance} pontos
+                        </span>
+                      )}
+                      {payment === 'Cashback' && (
+                        <span className={clsx('font-bold', selectedUser.balanceInCents > 0 ? 'text-emerald-400' : 'text-red-400')}>
+                          R$ {(selectedUser.balanceInCents / 100).toFixed(2).replace('.', ',')}
+                        </span>
+                      )}
                     </div>
                   )}
 

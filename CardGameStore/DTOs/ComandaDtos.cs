@@ -48,6 +48,11 @@ public class ComandaDto
     public DateTime?         ClosedAt        { get; set; }
     public string?           PaymentMethod   { get; set; }
     public List<ComandaItemDto> Items        { get; set; } = new();
+
+    /// <summary>Saldo de pontos do cliente — exibido na modal de fechamento.</summary>
+    public int  UserPointsBalance  { get; set; }
+    /// <summary>Saldo de cashback do cliente em centavos — exibido na modal de fechamento.</summary>
+    public int  UserBalanceInCents { get; set; }
 }
 
 /// <summary>Request para aplicar pontos a uma comanda.</summary>

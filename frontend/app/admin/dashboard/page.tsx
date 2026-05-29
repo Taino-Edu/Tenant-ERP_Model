@@ -404,6 +404,14 @@ function CloseComandaModal({
 }) {
   const [method, setMethod] = useState('Dinheiro')
 
+  const totalRestante = comanda.totalInReais - comanda.pointsApplied / 100
+  const saldoCashback = comanda.userBalanceInCents / 100
+  const saldoPontos   = comanda.userPointsBalance
+
+  const semSaldoCashback = method === 'Cashback' && saldoCashback < totalRestante
+  const semSaldoPontos   = method === 'Pontos'   && saldoPontos   < comanda.totalInReais * 100 - comanda.pointsApplied
+  const bloqueado = semSaldoCashback || semSaldoPontos
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
       <div className="bg-surface-700 border border-surface-500 rounded-2xl w-full max-w-sm p-6 space-y-4" onClick={e => e.stopPropagation()}>
@@ -412,6 +420,21 @@ function CloseComandaModal({
           <p className="text-gray-400 text-sm mt-1">
             {comanda.userName} · <span className="text-accent-gold font-bold">{`R$ ${comanda.totalInReais.toFixed(2).replace('.', ',')}`}</span>
           </p>
+          {/* Saldos do cliente */}
+          {(saldoPontos > 0 || saldoCashback > 0) && (
+            <div className="flex gap-3 mt-2">
+              {saldoPontos > 0 && (
+                <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1">
+                  {saldoPontos} pts
+                </span>
+              )}
+              {saldoCashback > 0 && (
+                <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1">
+                  R$ {saldoCashback.toFixed(2).replace('.', ',')} cashback
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div>
@@ -435,6 +458,16 @@ function CloseComandaModal({
                 {pm.value === 'Crediario' && (
                   <span className="ml-auto text-xs text-amber-400/70 font-normal">acumula no saldo</span>
                 )}
+                {pm.value === 'Cashback' && saldoCashback > 0 && (
+                  <span className="ml-auto text-xs text-emerald-400/70 font-normal">
+                    R$ {saldoCashback.toFixed(2).replace('.', ',')} disponível
+                  </span>
+                )}
+                {pm.value === 'Pontos' && saldoPontos > 0 && (
+                  <span className="ml-auto text-xs text-amber-400/70 font-normal">
+                    {saldoPontos} pts disponíveis
+                  </span>
+                )}
               </button>
             ))}
           </div>
@@ -445,12 +478,23 @@ function CloseComandaModal({
             O valor será acumulado no saldo devedor do cliente. Novas comandas podem ser abertas normalmente.
           </div>
         )}
+        {semSaldoCashback && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-xs text-red-400">
+            Saldo insuficiente. Cliente tem R$ {saldoCashback.toFixed(2).replace('.', ',')} mas a comanda custa R$ {totalRestante.toFixed(2).replace('.', ',')}.
+          </div>
+        )}
+        {semSaldoPontos && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-xs text-red-400">
+            Pontos insuficientes. Cliente tem {saldoPontos} pts mas a comanda requer {Math.ceil(totalRestante * 100 - comanda.pointsApplied)} pts.
+          </div>
+        )}
 
         <div className="flex gap-3 pt-1">
           <button onClick={onCancel} className="btn-secondary flex-1 justify-center">Voltar</button>
           <button
             onClick={() => onConfirm(method)}
-            className="btn-success flex-1 justify-center"
+            disabled={bloqueado}
+            className="btn-success flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCircle className="w-4 h-4" /> Confirmar
           </button>

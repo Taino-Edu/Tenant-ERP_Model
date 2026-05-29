@@ -71,6 +71,10 @@ export interface ComandaDto {
   openedAt: string; closedAt?: string
   paymentMethod: string | null
   items: ComandaItemDto[]
+  /** Saldo de pontos do cliente (para exibir na modal de fechamento). */
+  userPointsBalance: number
+  /** Saldo de cashback/crédito do cliente em centavos. */
+  userBalanceInCents: number
 }
 
 export interface ComandaItemDto {
