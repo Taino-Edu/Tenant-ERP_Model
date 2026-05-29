@@ -620,6 +620,64 @@ public class ComandaService : IComandaService
         return MapToDto(comanda);
     }
 
+    public async Task<ComandaDto> RemovePointsAsync(Guid comandaId, Guid requestingUserId)
+    {
+        var comanda = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.Id == comandaId)
+            ?? throw new InvalidOperationException("Comanda não encontrada.");
+
+        if (comanda.Status == ComandaStatus.Fechada || comanda.Status == ComandaStatus.Cancelada)
+            throw new InvalidOperationException("Não é possível remover pontos de comanda encerrada.");
+
+        if (comanda.PointsApplied == 0)
+            throw new InvalidOperationException("Não há pontos aplicados nesta comanda.");
+
+        // Valida permissão: deve ser o dono da comanda ou um Admin
+        var isOwner = comanda.UserId == requestingUserId;
+        if (!isOwner)
+        {
+            var requestingUser = await _db.Users.FindAsync(requestingUserId)
+                ?? throw new UnauthorizedAccessException("Usuário solicitante não encontrado.");
+            if (requestingUser.Role != UserRole.Admin)
+                throw new UnauthorizedAccessException("Sem permissão para remover pontos desta comanda.");
+        }
+
+        var user = await _db.Users.FindAsync(comanda.UserId)
+            ?? throw new InvalidOperationException("Usuário da comanda não encontrado.");
+
+        var pontosDevolvidos   = comanda.PointsApplied;
+        user.PointsBalance    += pontosDevolvidos;
+        user.UpdatedAt         = DateTime.UtcNow;
+        comanda.PointsApplied  = 0;
+
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Pontos removidos da comanda {ComandaId} por {RequestingUserId}. {Points} pts devolvidos ao usuário {UserId}.",
+            comandaId, requestingUserId, pontosDevolvidos, comanda.UserId);
+
+        var dto = MapToDto(comanda);
+
+        // Notifica o cliente que os pontos foram removidos
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+            .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
+        // Notifica o admin (dashboard)
+        await _hub.Clients.Group(ComandaHub.AdminGroup)
+            .SendAsync("ComandaUpdated", new ComandaUpdateEvent
+            {
+                ComandaId  = dto.Id,
+                UserId     = dto.UserId,
+                UserName   = comanda.User?.Name ?? string.Empty,
+                Status     = dto.Status,
+                LastItemAdded = "(pontos removidos)",
+                UpdatedAt  = DateTime.UtcNow,
+            });
+
+        return dto;
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>

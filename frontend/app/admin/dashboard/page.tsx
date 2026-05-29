@@ -501,6 +501,7 @@ function ComandaCard({
   const [confirm, setConfirm]     = useState<'cancel' | null>(null)
   const [removingItem, setRemovingItem]   = useState<string | null>(null)
   const [updatingItem, setUpdatingItem]   = useState<string | null>(null)
+  const [removingPts,  setRemovingPts]    = useState(false)
   const [, forceRender]           = useState(0)
 
   // Atualiza o tempo exibido a cada minuto
@@ -537,6 +538,20 @@ function ComandaCard({
       toast.error('Erro ao remover item.')
     } finally {
       setRemovingItem(null)
+    }
+  }
+  async function handleRemovePoints() {
+    if (!window.confirm('Remover os pontos aplicados e devolver ao saldo do cliente?')) return
+    setRemovingPts(true)
+    try {
+      const { data } = await comandaApi.removePoints(comanda.id)
+      onUpdate(data)
+      toast.success('Pontos removidos e devolvidos ao cliente!')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao remover pontos.')
+    } finally {
+      setRemovingPts(false)
     }
   }
 
@@ -659,9 +674,24 @@ function ComandaCard({
               )
             })}
             {comanda.pointsApplied > 0 && (
-              <div className="flex items-center justify-between text-sm border-t border-surface-500 pt-1.5">
-                <span className="text-brand-300">Pontos aplicados</span>
-                <span className="text-brand-300">−{fmt(comanda.pointsApplied / 100)}</span>
+              <div className="flex items-center justify-between text-sm border-t border-surface-500 pt-1.5 gap-2">
+                <span className="text-brand-300 flex items-center gap-1">
+                  <Star className="w-3 h-3" />
+                  Pontos aplicados
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-brand-300">−{fmt(comanda.pointsApplied / 100)}</span>
+                  <button
+                    onClick={handleRemovePoints}
+                    disabled={removingPts}
+                    title="Remover pontos (devolver ao cliente)"
+                    className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                  >
+                    {removingPts
+                      ? <Loader2 className="w-3 h-3 animate-spin" />
+                      : <Trash2 className="w-3 h-3" />}
+                  </button>
+                </div>
               </div>
             )}
             <div className="border-t border-surface-500 pt-1.5 flex justify-between text-sm font-semibold">

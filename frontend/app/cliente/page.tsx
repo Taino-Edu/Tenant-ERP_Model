@@ -15,7 +15,8 @@ export default function ClientePage() {
   const [profile, setProfile]         = useState<UserProfile | null>(null)
   const [loading, setLoading]         = useState(true)
   const [adding, setAdding]           = useState<string | null>(null)
-  const [applyingPts, setApplyingPts] = useState(false)
+  const [applyingPts,  setApplyingPts]  = useState(false)
+  const [removingPts,  setRemovingPts]  = useState(false)
 
   const fetchComanda = useCallback(async () => {
     try { const { data } = await comandaApi.myComanda(); setComanda(data) }
@@ -105,6 +106,21 @@ export default function ClientePage() {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao aplicar pontos.')
     } finally { setApplyingPts(false) }
+  }
+
+  async function removePoints() {
+    if (!comanda) return
+    setRemovingPts(true)
+    try {
+      const { data } = await comandaApi.removePoints(comanda.id)
+      const pontosDevolvidos = comanda.pointsApplied
+      setComanda(data)
+      setProfile(prev => prev ? { ...prev, pointsBalance: (prev.pointsBalance ?? 0) + pontosDevolvidos } : prev)
+      toast.success('Pontos removidos e devolvidos ao saldo! ✅')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao remover pontos.')
+    } finally { setRemovingPts(false) }
   }
 
   async function removeItem(itemId: string) {
@@ -239,16 +255,30 @@ export default function ClientePage() {
                 </div>
               )}
 
-              {/* Pontos aplicados */}
+              {/* Pontos aplicados + botão para desfazer */}
               {comanda.pointsApplied > 0 && (
-                <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5">
+                <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 gap-2">
                   <div className="flex items-center gap-2 text-amber-400 text-sm font-medium">
-                    <Star className="w-4 h-4" />
+                    <Star className="w-4 h-4 shrink-0" />
                     Pontos aplicados
                   </div>
-                  <span className="text-amber-400 font-bold text-sm">
-                    -{(comanda.pointsApplied / 100).toFixed(2).replace('.', ',')} pts
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400 font-bold text-sm">
+                      -{(comanda.pointsApplied / 100).toFixed(2).replace('.', ',')} pts
+                    </span>
+                    {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
+                      <button
+                        onClick={removePoints}
+                        disabled={removingPts}
+                        title="Desfazer aplicação de pontos"
+                        className="text-gray-500 hover:text-red-400 transition-colors disabled:opacity-40"
+                      >
+                        {removingPts
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Trash2 className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
 

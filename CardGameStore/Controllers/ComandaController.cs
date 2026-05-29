@@ -200,6 +200,32 @@ public class ComandaController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Remove os pontos aplicados à comanda, devolvendo-os ao saldo do cliente.
+    /// Pode ser chamado pelo próprio cliente ou por qualquer Admin.
+    /// </summary>
+    [HttpDelete("{id:guid}/apply-points")]
+    [ProducesResponseType(typeof(ComandaDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(403)]
+    public async Task<IActionResult> RemovePoints(Guid id)
+    {
+        try
+        {
+            var userId = GetUserId();
+            var result = await _service.RemovePointsAsync(id, userId);
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
     private Guid GetUserId()
     {
         var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);

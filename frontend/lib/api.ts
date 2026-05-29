@@ -223,6 +223,8 @@ export const comandaApi = {
     api.post<ComandaDto>('/api/comanda/admin-open', { userId, tableIdentifier }),
   applyPoints:  (id: string, points: number) =>
     api.post<ComandaDto>(`/api/comanda/${id}/apply-points`, { points }),
+  removePoints: (id: string) =>
+    api.delete<ComandaDto>(`/api/comanda/${id}/apply-points`),
 }
 
 // ── Crediário ─────────────────────────────────────────────────────────────────
