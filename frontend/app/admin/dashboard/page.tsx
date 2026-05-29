@@ -16,6 +16,9 @@ import clsx from 'clsx'
 
 const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 
+/** Data de hoje no fuso de Brasília como YYYY-MM-DD (nunca usa UTC). */
+const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+
 // ── Mini gráfico de barras (últimos 7 dias) ───────────────────────────────────
 function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   const [hovered, setHovered] = useState<number | null>(null)
@@ -735,7 +738,7 @@ export default function DashboardPage() {
   const [tab, setTab]             = useState<'ativas' | 'historico'>('ativas')
   const [comandas, setComandas]   = useState<ComandaDto[]>([])
   const [history, setHistory]     = useState<ComandaDto[]>([])
-  const [histData, setHistData]   = useState(() => new Date().toISOString().split('T')[0])
+  const [histData, setHistData]   = useState(() => brToday())
   const [loading, setLoading]     = useState(true)
   const [histLoading, setHistLoad]= useState(false)
   const [connected, setConnected] = useState(false)
@@ -782,9 +785,9 @@ export default function DashboardPage() {
 
   // Carrega dados financeiros e estoque baixo
   useEffect(() => {
-    const hoje = new Date().toISOString().split('T')[0]
-    const ini7 = new Date(); ini7.setDate(ini7.getDate() - 6)
-    const ini7s = ini7.toISOString().split('T')[0]
+    const hoje  = brToday()
+    const ini7d = new Date(); ini7d.setDate(ini7d.getDate() - 6)
+    const ini7s = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(ini7d)
 
     analyticsApi.financeiro(hoje, hoje).then(r => setFinHoje(r.data)).catch(() => {})
     analyticsApi.financeiro(ini7s, hoje).then(r => setFin7d(r.data)).catch(() => {})
@@ -985,7 +988,7 @@ export default function DashboardPage() {
             const totalTx = (finHoje.pagamentosPorForma ?? []).reduce((s, f) => s + f.quantidade, 0)
             const ticketMedio = totalTx > 0 ? finHoje.receita / totalTx : 0
             return [
-              { label: 'Fechado Hoje',   value: fmt(totalFechado),  icon: Banknote,   color: 'text-accent-gold' },
+              { label: 'Receita Total',   value: fmt(finHoje.receita), icon: Banknote,   color: 'text-accent-gold' },
               { label: 'Custo Hoje',     value: fmt(finHoje.custo),  icon: TrendingUp, color: 'text-red-400'     },
               { label: 'Margem Hoje',    value: fmt(finHoje.margem), icon: TrendingUp, color: finHoje.margem >= 0 ? 'text-emerald-400' : 'text-red-400' },
               { label: 'Ticket Médio',   value: fmt(ticketMedio),    icon: CreditCard, color: 'text-brand-400'   },
@@ -1117,7 +1120,7 @@ export default function DashboardPage() {
           <input
             type="date"
             value={histData}
-            max={new Date().toISOString().split('T')[0]}
+            max={brToday()}
             onChange={e => setHistData(e.target.value)}
             className="input text-sm w-40 py-1.5"
           />

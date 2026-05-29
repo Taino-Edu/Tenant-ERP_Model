@@ -17,6 +17,22 @@ namespace CardGameStore.Controllers;
 [Authorize(Roles = "Admin")]
 public class AnalyticsController : ControllerBase
 {
+    // Fuso horário de Brasília — funciona em Linux (IANA) e Windows (ID legado).
+    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
+    private static TimeZoneInfo GetBrazilZone()
+    {
+        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
+        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
+    }
+
+    /// <summary>
+    /// Converte uma data local de Brasília no início UTC daquele dia.
+    /// Ex.: 29/05 BR (UTC-3) → 29/05 03:00:00 UTC
+    /// </summary>
+    private static DateTime BrDateToUtcStart(DateTime brDate) =>
+        TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(brDate.Date, DateTimeKind.Unspecified), BrazilZone);
+
     private readonly AppDbContext         _db;
     private readonly IVendaAvulsaService  _vendas;
 
@@ -203,19 +219,24 @@ public class AnalyticsController : ControllerBase
         [FromQuery] DateTime? inicio,
         [FromQuery] DateTime? fim)
     {
-        var agora = DateTime.UtcNow;
-        var ini   = (inicio ?? new DateTime(agora.Year, agora.Month, 1, 0, 0, 0, DateTimeKind.Utc)).ToUniversalTime();
-        var end   = (fim    ?? agora).ToUniversalTime().Date.AddDays(1).AddTicks(-1); // inclusive
+        // As datas chegam do frontend como datas locais de Brasília (ex: "2026-05-29").
+        // Convertemos para o intervalo UTC correto: dia BR inicia às 03:00 UTC (UTC-3).
+        var agoraBr   = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        var dataBrIni = inicio.HasValue ? inicio.Value.Date : new DateTime(agoraBr.Year, agoraBr.Month, 1);
+        var dataBrFim = fim.HasValue    ? fim.Value.Date    : agoraBr.Date;
+
+        var ini = BrDateToUtcStart(dataBrIni);
+        var end = BrDateToUtcStart(dataBrFim.AddDays(1)); // exclusivo: início do próximo dia BR em UTC
 
         // ── Receita de comandas no período ────────────────────────────────────
         var receitaComandas = await _db.Comandas
-            .Where(c => c.ClosedAt >= ini && c.ClosedAt <= end && c.Status == ComandaStatus.Fechada)
+            .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada)
             .SumAsync(c => (decimal)c.TotalInCents) / 100m;
 
         // ── Receita de vendas avulsas (MongoDB) ───────────────────────────────
         var todasVendas    = (await _vendas.GetRecentAsync(2000)).ToList();
         var receitaAvulsa  = todasVendas
-            .Where(v => v.SoldAt >= ini && v.SoldAt <= end)
+            .Where(v => v.SoldAt >= ini && v.SoldAt < end)
             .Sum(v => (decimal)v.TotalInCents) / 100m;
 
         var receita = receitaComandas + receitaAvulsa;
@@ -226,7 +247,7 @@ public class AnalyticsController : ControllerBase
             .Include(i => i.Comanda)
             .Where(i => i.Comanda != null
                      && i.Comanda.ClosedAt >= ini
-                     && i.Comanda.ClosedAt <= end
+                     && i.Comanda.ClosedAt < end
                      && i.Comanda.Status == ComandaStatus.Fechada
                      && i.ProductId != null
                      && i.Product != null)
@@ -243,30 +264,31 @@ public class AnalyticsController : ControllerBase
             .Where(c => c.Status == CrediariosStatus.Aberto)
             .SumAsync(c => (decimal)(c.ValorEmCentavos - c.ValorPagoEmCentavos)) / 100m;
 
-        // ── Breakdown dia a dia ───────────────────────────────────────────────
-        var dias = (int)(end.Date - ini.Date).TotalDays + 1;
-        var diaDia = new List<DiaFinanceiroDto>();
+        // ── Breakdown dia a dia (usando datas BR para os intervalos corretos) ──
+        var totalDias = (int)(dataBrFim - dataBrIni).TotalDays + 1;
+        var diaDia    = new List<DiaFinanceiroDto>();
 
-        for (var d = 0; d < dias; d++)
+        for (var d = 0; d < totalDias; d++)
         {
-            var dIni = ini.Date.AddDays(d);
-            var dFim = dIni.AddDays(1).AddTicks(-1);
+            var dBr  = dataBrIni.AddDays(d);
+            var dIni = BrDateToUtcStart(dBr);
+            var dFim = BrDateToUtcStart(dBr.AddDays(1)); // exclusivo
 
             var rComanda = await _db.Comandas
-                .Where(c => c.ClosedAt >= dIni && c.ClosedAt <= dFim && c.Status == ComandaStatus.Fechada)
+                .Where(c => c.ClosedAt >= dIni && c.ClosedAt < dFim && c.Status == ComandaStatus.Fechada)
                 .SumAsync(c => (decimal)c.TotalInCents) / 100m;
 
             var rAvulsa = todasVendas
-                .Where(v => v.SoldAt >= dIni && v.SoldAt <= dFim)
+                .Where(v => v.SoldAt >= dIni && v.SoldAt < dFim)
                 .Sum(v => (decimal)v.TotalInCents) / 100m;
 
             var cDia = itens
-                .Where(i => i.Comanda!.ClosedAt >= dIni && i.Comanda.ClosedAt <= dFim)
+                .Where(i => i.Comanda!.ClosedAt >= dIni && i.Comanda.ClosedAt < dFim)
                 .Sum(i => (decimal)i.Product!.CostPriceInCents * i.Quantity) / 100m;
 
             diaDia.Add(new DiaFinanceiroDto
             {
-                Dia     = dIni.ToString("dd/MM"),
+                Dia     = dBr.ToString("dd/MM"), // exibe data BR (não UTC)
                 Receita = Math.Round(rComanda + rAvulsa, 2),
                 Custo   = Math.Round(cDia, 2),
             });
@@ -276,7 +298,7 @@ public class AnalyticsController : ControllerBase
         // Comandas fechadas no período (com cliente para drill-down)
         var comandasPeriodo = await _db.Comandas
             .Include(c => c.User)
-            .Where(c => c.ClosedAt >= ini && c.ClosedAt <= end && c.Status == ComandaStatus.Fechada && c.PaymentMethod != null)
+            .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada && c.PaymentMethod != null)
             .Select(c => new { c.PaymentMethod, c.TotalInCents, c.ClosedAt, ClienteNome = c.User != null ? c.User.Name : null })
             .ToListAsync();
 
@@ -292,7 +314,7 @@ public class AnalyticsController : ControllerBase
             });
 
         var avulsasPeriodo = todasVendas
-            .Where(v => v.SoldAt >= ini && v.SoldAt <= end)
+            .Where(v => v.SoldAt >= ini && v.SoldAt < end)
             .ToList();
 
         var transacoesAvulsa = avulsasPeriodo
