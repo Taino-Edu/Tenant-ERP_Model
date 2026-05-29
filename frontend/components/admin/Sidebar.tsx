@@ -161,7 +161,7 @@ export default function Sidebar() {
           <div className="flex items-center gap-3">
             <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
             <div>
-              <p className="text-white text-base leading-tight">Santuário Nerd</p>
+              <p className="text-white text-base leading-tight" style={{ fontFamily: 'var(--font-cinzel)' }}>Santuário Nerd</p>
               <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
             </div>
           </div>
@@ -178,7 +178,7 @@ export default function Sidebar() {
         <div className="px-6 py-7 shrink-0 flex items-center gap-3">
           <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
           <div>
-            <p className="text-white text-base leading-tight">Santuário Nerd</p>
+            <p className="text-white text-base leading-tight" style={{ fontFamily: 'var(--font-cinzel)' }}>Santuário Nerd</p>
             <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
           </div>
         </div>

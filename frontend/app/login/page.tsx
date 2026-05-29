@@ -44,7 +44,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-brand-600/10 border border-brand-500/20 rounded-2xl mb-4">
             <img src="/logo-santuario.png" alt="Santuário Nerd" className="w-14 h-14 object-contain" />
           </div>
-          <h1 className="text-3xl text-white font-bold">Santuário Nerd</h1>
+          <h1 className="text-3xl text-white" style={{ fontFamily: 'var(--font-cinzel)' }}>Santuário Nerd</h1>
           <p className="text-gray-400 mt-1 text-sm">Painel de Gestão</p>
         </div>
 
