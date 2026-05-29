@@ -1,16 +1,8 @@
 import type { Metadata, Viewport } from 'next'
-import { Modak } from 'next/font/google'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
-
-const modak = Modak({
-  weight: '400',
-  subsets: ['latin'],
-  variable: '--font-modak',
-  display: 'swap',
-})
 
 export const viewport: Viewport = {
   themeColor: '#42B6EE',
@@ -51,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className={modak.variable}>
+      <body>
         {/* Script VLibras — Acessibilidade (atributos customizados via spread para evitar erro TS) */}
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <div {...({ vw: 'true' } as any)} className="enabled">
