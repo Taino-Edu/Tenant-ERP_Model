@@ -22,6 +22,8 @@ type FilterStatus = 'todos' | 'Aberto' | 'Pago'
 
 // ── Modal de nova dívida manual ───────────────────────────────────────────────
 
+interface ItemForm { nome: string; qty: string; preco: string }
+
 function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [search, setSearch]         = useState('')
   const [results, setResults]       = useState<UserSummary[]>([])
@@ -31,6 +33,8 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   const [valor, setValor]           = useState('')
   const [obs, setObs]               = useState('')
   const [loading, setLoading]       = useState(false)
+  const [itens, setItens]           = useState<ItemForm[]>([])
+  const [novoItem, setNovoItem]     = useState<ItemForm>({ nome: '', qty: '1', preco: '' })
 
   useEffect(() => {
     if (search.trim().length < 2) { setResults([]); return }
@@ -52,18 +56,57 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
     setShowDrop(false)
   }
 
+  // Calcula total dos itens em R$
+  const totalItens = itens.reduce((acc, i) => {
+    const q = parseFloat(i.qty) || 0
+    const p = parseFloat(i.preco.replace(',', '.')) || 0
+    return acc + q * p
+  }, 0)
+
+  // Sincroniza campo de valor quando itens mudam
+  function addItem() {
+    const q = parseFloat(novoItem.qty) || 0
+    const p = parseFloat(novoItem.preco.replace(',', '.')) || 0
+    if (!novoItem.nome.trim() || q <= 0 || p <= 0) {
+      toast.error('Preencha nome, quantidade e preço do item.')
+      return
+    }
+    const novos = [...itens, { ...novoItem }]
+    setItens(novos)
+    const total = novos.reduce((acc, i) => acc + (parseFloat(i.qty) || 0) * (parseFloat(i.preco.replace(',', '.')) || 0), 0)
+    setValor(total.toFixed(2).replace('.', ','))
+    setNovoItem({ nome: '', qty: '1', preco: '' })
+  }
+
+  function removeItem(idx: number) {
+    const novos = itens.filter((_, i) => i !== idx)
+    setItens(novos)
+    if (novos.length > 0) {
+      const total = novos.reduce((acc, i) => acc + (parseFloat(i.qty) || 0) * (parseFloat(i.preco.replace(',', '.')) || 0), 0)
+      setValor(total.toFixed(2).replace('.', ','))
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selected) { toast.error('Selecione um cliente'); return }
     const valorNum = parseFloat(valor.replace(',', '.'))
     if (isNaN(valorNum) || valorNum <= 0) { toast.error('Informe um valor válido'); return }
 
+    const itensDto = itens.length > 0 ? itens.map(i => ({
+      itemName:        i.nome,
+      quantity:        parseInt(i.qty) || 1,
+      unitPriceInReais: parseFloat(i.preco.replace(',', '.')) || 0,
+      subtotalInReais:  (parseInt(i.qty) || 1) * (parseFloat(i.preco.replace(',', '.')) || 0),
+    })) : undefined
+
     setLoading(true)
     try {
       await crediarioApi.criarManual({
-        userId:         selected.id,
+        userId:          selected.id,
         valorEmCentavos: Math.round(valorNum * 100),
-        observacao:     obs || undefined,
+        observacao:      obs || undefined,
+        itens:           itensDto,
       })
       toast.success(`Crediário de R$ ${valorNum.toFixed(2).replace('.', ',')} criado para ${selected.name}!`)
       onSuccess()
@@ -134,9 +177,70 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
             )}
           </div>
 
+          {/* Itens da dívida */}
+          <div>
+            <label className="label flex items-center gap-1">
+              <Package className="w-3.5 h-3.5" /> Itens da dívida (opcional)
+            </label>
+
+            {/* Lista de itens adicionados */}
+            {itens.length > 0 && (
+              <div className="bg-surface-900 rounded-xl border border-surface-600 divide-y divide-surface-600 mb-2">
+                {itens.map((it, idx) => (
+                  <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
+                    <span className="flex-1 text-white truncate">{it.nome}</span>
+                    <span className="text-gray-400 shrink-0">{it.qty}× R$ {parseFloat(it.preco.replace(',', '.')).toFixed(2).replace('.', ',')}</span>
+                    <button type="button" onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <div className="px-3 py-2 flex justify-between text-xs font-semibold text-accent-gold">
+                  <span>Total calculado</span>
+                  <span>R$ {totalItens.toFixed(2).replace('.', ',')}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Formulário de novo item */}
+            <div className="grid grid-cols-[1fr_60px_80px_32px] gap-1.5 items-end">
+              <input
+                type="text"
+                placeholder="Nome do item"
+                value={novoItem.nome}
+                onChange={e => setNovoItem(p => ({ ...p, nome: e.target.value }))}
+                className="input text-sm"
+              />
+              <input
+                type="number"
+                min="1"
+                placeholder="Qtd"
+                value={novoItem.qty}
+                onChange={e => setNovoItem(p => ({ ...p, qty: e.target.value }))}
+                className="input text-sm text-center"
+              />
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="R$ unit."
+                value={novoItem.preco}
+                onChange={e => setNovoItem(p => ({ ...p, preco: e.target.value }))}
+                className="input text-sm"
+              />
+              <button
+                type="button"
+                onClick={addItem}
+                className="btn-secondary h-10 px-2 justify-center"
+                title="Adicionar item"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
           {/* Valor */}
           <div>
-            <label className="label">Valor da dívida (R$)</label>
+            <label className="label">Valor total da dívida (R$)</label>
             <input
               type="text"
               inputMode="decimal"
@@ -146,6 +250,9 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               className="input"
               required
             />
+            {itens.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1">Calculado automaticamente pelos itens. Pode ajustar manualmente se necessário.</p>
+            )}
           </div>
 
           {/* Observação */}

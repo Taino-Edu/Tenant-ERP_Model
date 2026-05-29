@@ -80,6 +80,12 @@ public class CriarCrediarioManualRequest
 
     /// <summary>Vencimento customizado. Se null, usa DataAbertura + 30 dias.</summary>
     public DateTime? DataVencimento { get; set; }
+
+    /// <summary>
+    /// Lista de itens que compõem a dívida (opcional).
+    /// Serializada como JSON no campo ItensJson da entidade.
+    /// </summary>
+    public List<ItemCrediarioDto>? Itens { get; set; }
 }
 
 /// <summary>Body do endpoint PATCH /api/crediarios/{id} (edição de crediário em aberto).</summary>

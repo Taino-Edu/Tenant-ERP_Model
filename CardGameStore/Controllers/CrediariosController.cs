@@ -62,6 +62,11 @@ public class CrediariosController : ControllerBase
         var adminId = GetUserId();
         var agora   = DateTime.UtcNow;
 
+        // Serializa lista de itens se informada
+        string? itensJson = null;
+        if (request.Itens != null && request.Itens.Count > 0)
+            itensJson = JsonSerializer.Serialize(request.Itens);
+
         var crediario = new Crediario
         {
             UserId           = request.UserId,
@@ -76,6 +81,7 @@ public class CrediariosController : ControllerBase
                                    ? "Dívida anterior ao sistema"
                                    : request.Observacao,
             AbertoPorAdminId = adminId,
+            ItensJson        = itensJson,
         };
 
         _db.Crediarios.Add(crediario);

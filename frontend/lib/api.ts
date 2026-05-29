@@ -280,6 +280,7 @@ export interface CriarCrediarioManualRequest {
   valorEmCentavos: number
   observacao?: string
   dataVencimento?: string  // ISO string, opcional
+  itens?: ItemCrediarioDto[]
 }
 
 export const crediarioApi = {
