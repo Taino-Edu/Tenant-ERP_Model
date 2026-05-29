@@ -78,7 +78,7 @@ function CategoryModal({
               value={form.displayOrder ?? 0}
               onChange={e => set('displayOrder', parseInt(e.target.value))}
             />
-            <p className="text-xs text-gray-600 mt-1">Menor número aparece primeiro.</p>
+            <p className="text-xs text-gray-400 mt-1">Menor número aparece primeiro.</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -169,7 +169,7 @@ export default function CategoriasPage() {
             <Tag className="w-8 h-8 text-gray-600" />
           </div>
           <p className="text-gray-400 font-medium">Nenhuma categoria cadastrada</p>
-          <p className="text-gray-600 text-sm mt-1">Crie categorias para organizar os produtos</p>
+          <p className="text-gray-400 text-sm mt-1">Crie categorias para organizar os produtos</p>
         </div>
       ) : (
         <div className="card p-0 overflow-hidden">
@@ -184,14 +184,14 @@ export default function CategoriasPage() {
             <tbody className="divide-y divide-surface-500">
               {categories.map(c => (
                 <tr key={c.id} className="hover:bg-surface-600/30 transition-colors">
-                  <td className="px-3 py-3 text-gray-600">
+                  <td className="px-3 py-3 text-gray-500">
                     <GripVertical className="w-4 h-4" />
                   </td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-white">{c.name}</p>
                   </td>
                   <td className="px-4 py-3 text-2xl">
-                    {c.emoji ?? <span className="text-gray-600 text-sm">—</span>}
+                    {c.emoji ?? <span className="text-gray-400 text-sm">—</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-400">{c.displayOrder}</td>
                   <td className="px-4 py-3">
@@ -225,9 +225,9 @@ export default function CategoriasPage() {
       )}
 
       <div className="card bg-surface-800/50 border-surface-600">
-        <p className="text-xs text-gray-500 leading-relaxed">
-          <strong className="text-gray-400">Dica:</strong> As categorias aparecem no cadastro de produtos e na tela dos clientes.
-          O emoji é exibido na comanda do cliente. Ao remover uma categoria, os produtos vinculados a ela <strong className="text-gray-400">não são apagados</strong> — apenas ficam sem categoria definida.
+        <p className="text-xs text-gray-400 leading-relaxed">
+          <strong className="text-gray-300">Dica:</strong> As categorias aparecem no cadastro de produtos e na tela dos clientes.
+          O emoji é exibido na comanda do cliente. Ao remover uma categoria, os produtos vinculados a ela <strong className="text-gray-300">não são apagados</strong> — apenas ficam sem categoria definida.
         </p>
       </div>
     </div>
