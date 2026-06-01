@@ -205,7 +205,7 @@ export default function ClientePage() {
               </div>
               <div>
                 <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Seus Pontos</p>
-                <p className="text-2xl font-black text-white">{profile.pointsBalance} <span className="text-sm font-normal text-gray-500">pts</span></p>
+                <p className="text-2xl font-black text-gray-100">{profile.pointsBalance} <span className="text-sm font-normal text-gray-500">pts</span></p>
               </div>
             </div>
           </section>
@@ -222,7 +222,7 @@ export default function ClientePage() {
               <PackageOpen className="w-10 h-10 text-gray-500" />
             </div>
             <div className="space-y-1">
-              <h2 className="text-white font-bold text-lg">Nenhuma comanda aberta</h2>
+              <h2 className="text-gray-100 font-bold text-lg">Nenhuma comanda aberta</h2>
               <p className="text-gray-400 text-sm">Escaneie o QR Code da sua mesa para começar.</p>
             </div>
           </section>
@@ -251,7 +251,7 @@ export default function ClientePage() {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
                   <Receipt className={clsx("w-5 h-5", immersiveMode ? "text-[#5d4037]" : "text-brand-500")} />
-                  <span className={clsx("font-bold text-sm uppercase tracking-wider", immersiveMode ? "text-[#5d4037]" : "text-white")}>
+                  <span className={clsx("font-bold text-sm uppercase tracking-wider", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>
                     Mesa {comanda.tableIdentifier || 'N/A'}
                   </span>
                 </div>
@@ -273,7 +273,7 @@ export default function ClientePage() {
                   {comanda.items.map(item => (
                     <div key={item.id} className="flex justify-between items-start gap-4">
                       <div className="flex-1">
-                        <p className={clsx("text-sm font-bold leading-tight", immersiveMode ? "text-[#5d4037]" : "text-white")}>
+                        <p className={clsx("text-sm font-bold leading-tight", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>
                           {item.itemNameSnapshot}
                         </p>
                         <p className={clsx("text-[10px] mt-0.5 font-medium", immersiveMode ? "text-[#5d4037]/60" : "text-gray-400")}>
@@ -289,13 +289,14 @@ export default function ClientePage() {
                   <div className={clsx("pt-4 border-t-2 border-dashed flex justify-between items-center", 
                     immersiveMode ? "border-[#5d4037]/20" : "border-surface-600"
                   )}>
-                    <span className={clsx("font-black uppercase text-sm", immersiveMode ? "text-[#5d4037]" : "text-white")}>Total</span>
+                    <span className={clsx("font-black uppercase text-sm", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>Total</span>
                     <span className={clsx("text-2xl font-black", immersiveMode ? "text-[#5d4037]" : "text-accent-green")}>
                       R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
                     </span>
                   </div>
                 </div>
               )}
+
 
               {/* Botão de Pontos (Estilo diferenciado) */}
               {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
