@@ -54,8 +54,43 @@ public class ComandaService : IComandaService
 
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
     {
-        // Sempre cria uma nova comanda — o cliente pode ter múltiplas abertas simultaneamente
-        // (ex: sessão anterior paga via crediário acumulado, nova visita à loja)
+        // Verifica se já existe uma comanda aberta ou em andamento para este usuário.
+        // Se existir, reutilizamos ela para evitar duplicidade (ex: cliente leu QR code duas vezes).
+        var comandaExistente = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
+            .Where(c => c.UserId == userId && (c.Status == ComandaStatus.Aberta || c.Status == ComandaStatus.EmAndamento))
+            .OrderByDescending(c => c.OpenedAt)
+            .FirstOrDefaultAsync();
+
+        if (comandaExistente != null)
+        {
+            _logger.LogInformation("Reutilizando comanda {Id} existente para usuário {UserId}", comandaExistente.Id, userId);
+            
+            // Se o identificador da mesa mudou (cliente trocou de lugar), atualizamos
+            if (!string.IsNullOrEmpty(tableIdentifier) && comandaExistente.TableIdentifier != tableIdentifier)
+            {
+                comandaExistente.TableIdentifier = tableIdentifier;
+                await _db.SaveChangesAsync();
+                
+                // Notifica o admin que a mesa da comanda mudou
+                await _hub.Clients.Group(ComandaHub.AdminGroup)
+                    .SendAsync("ComandaUpdated", new ComandaUpdateEvent
+                    {
+                        ComandaId       = comandaExistente.Id,
+                        UserId          = userId,
+                        UserName        = comandaExistente.User?.Name ?? string.Empty,
+                        TableIdentifier = tableIdentifier,
+                        TotalInReais    = comandaExistente.TotalInReais,
+                        Status          = comandaExistente.Status.ToString(),
+                        UpdatedAt       = DateTime.UtcNow,
+                    });
+            }
+
+            return MapToDto(comandaExistente);
+        }
+
+        // Se não houver comanda ativa, cria uma nova
         var comanda = new Comanda
         {
             UserId          = userId,

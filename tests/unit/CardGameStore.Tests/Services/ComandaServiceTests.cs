@@ -115,20 +115,32 @@ public class ComandaServiceTests
     }
 
     [Fact]
-    public async Task OpenComanda_SegundaChamada_DeveCriarNovaComanda()
+    public async Task OpenComanda_ComComandaAtiva_DeveReutilizarExistente()
     {
-        // O serviço sempre cria uma nova comanda — clientes podem ter múltiplas abertas
-        // (ex.: sessão anterior paga via crediário, nova visita à loja na mesma sessão de testes)
-        var db      = CreateDb(nameof(OpenComanda_SegundaChamada_DeveCriarNovaComanda));
+        // Agora o serviço reutiliza a comanda se houver uma aberta ou em andamento
+        var db      = CreateDb(nameof(OpenComanda_ComComandaAtiva_DeveReutilizarExistente));
         var service = CreateService(db);
         var (user, _, _) = await SeedAsync(db);
 
-        var primeira  = await service.OpenComandaAsync(user.Id);
-        var segunda   = await service.OpenComandaAsync(user.Id);
+        var primeira  = await service.OpenComandaAsync(user.Id, "Mesa-01");
+        var segunda   = await service.OpenComandaAsync(user.Id, "Mesa-01");
 
-        segunda.Id.Should().NotBe(primeira.Id, "cada chamada cria uma comanda separada");
+        segunda.Id.Should().Be(primeira.Id, "deve reutilizar a comanda existente para evitar duplicidade");
         var totalComandas = await db.Comandas.CountAsync(c => c.UserId == user.Id);
-        totalComandas.Should().Be(3, "seed já cria 1, OpenComanda adiciona mais 2");
+        totalComandas.Should().Be(1, "seed já cria 1, OpenComanda reutiliza a mesma");
+    }
+
+    [Fact]
+    public async Task OpenComanda_TrocaDeMesa_DeveAtualizarTableIdentifier()
+    {
+        var db      = CreateDb(nameof(OpenComanda_TrocaDeMesa_DeveAtualizarTableIdentifier));
+        var service = CreateService(db);
+        var (user, _, _) = await SeedAsync(db);
+
+        await service.OpenComandaAsync(user.Id, "Mesa-01");
+        var segunda = await service.OpenComandaAsync(user.Id, "Mesa-02");
+
+        segunda.TableIdentifier.Should().Be("Mesa-02", "deve atualizar a mesa se o cliente trocou de lugar");
     }
 
     // ── Adicionar item ────────────────────────────────────────────────────────
