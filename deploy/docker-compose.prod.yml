@@ -32,6 +32,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ---------------------------------------------------------------------------
   # FRONTEND — Next.js 14
@@ -48,6 +53,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ---------------------------------------------------------------------------
   # API — ASP.NET Core 8
@@ -95,6 +105,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:5000/health || exit 1"]
       interval: 30s
@@ -117,6 +132,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cardgame_user} -d ${POSTGRES_DB:-cardgamestore}"]
       interval: 10s
@@ -134,6 +154,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 # -----------------------------------------------------------------------------
 # Volumes persistentes (dados sobrevivem a reinicios e redeploys)
