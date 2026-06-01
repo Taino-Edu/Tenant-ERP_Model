@@ -370,9 +370,3 @@ function getCategoryEmoji(cat: string, categories: ProductCategory[]): string {
   const found = categories.find(c => c.name === cat)
   return found?.emoji ?? '📦'
 }
-
-
-function getCategoryEmoji(cat: string, categories: ProductCategory[]): string {
-  const found = categories.find(c => c.name === cat)
-  return found?.emoji ?? '📦'
-}
