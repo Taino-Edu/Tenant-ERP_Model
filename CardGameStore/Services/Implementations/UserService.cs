@@ -61,6 +61,7 @@ public class UserService : IUserService
             Email           = user.Email,
             Cpf             = user.Cpf,
             WhatsApp        = user.WhatsApp,
+            ProfileImageUrl = user.ProfileImageUrl,
             Role            = user.Role,
             PointsBalance   = GetEffectivePoints(user),
             PointsExpiresAt = user.PointsExpiresAt,

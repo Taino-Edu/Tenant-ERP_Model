@@ -14,6 +14,7 @@ public class UserSummaryDto
     public string?  Email           { get; set; }
     public string?  Cpf             { get; set; }
     public string?  WhatsApp        { get; set; }
+    public string?  ProfileImageUrl { get; set; }
     public string   Role            { get; set; } = string.Empty;
     public int      PointsBalance   { get; set; }
     public DateTime? PointsExpiresAt { get; set; }
@@ -31,6 +32,7 @@ public class UserProfileDto
     public string?   Email           { get; set; }
     public string?   Cpf             { get; set; }
     public string?   WhatsApp        { get; set; }
+    public string?   ProfileImageUrl { get; set; }
     public string    Role            { get; set; } = string.Empty;
     public int       PointsBalance   { get; set; }
     public DateTime? PointsExpiresAt { get; set; }

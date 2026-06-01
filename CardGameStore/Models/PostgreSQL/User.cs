@@ -55,6 +55,11 @@ public class User
     [Column("cpf")]
     public string? Cpf { get; set; }
 
+    /// <summary>URL da foto de perfil do usuário (avatar).</summary>
+    [MaxLength(500)]
+    [Column("profile_image_url")]
+    public string? ProfileImageUrl { get; set; }
+
     // -------------------------------------------------------------------------
     // Controle de acesso
     // -------------------------------------------------------------------------
