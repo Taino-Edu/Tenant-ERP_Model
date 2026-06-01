@@ -133,6 +133,21 @@ public class UserService : IUserService
 
     // ── LGPD — Direitos do titular ────────────────────────────────────────────
 
+    public async Task<UserProfileDto> UpdateProfileImageAsync(Guid userId, string? imageUrl)
+    {
+        var user = await _db.Users.FindAsync(userId)
+            ?? throw new InvalidOperationException("Usuário não encontrado.");
+
+        user.ProfileImageUrl = imageUrl;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Usuário {UserId} atualizou sua foto de perfil.", userId);
+
+        return (await GetProfileAsync(userId))!;
+    }
+
     public async Task<UserProfileDto> UpdateMeAsync(Guid userId, UpdateMeRequest request)
     {
         var user = await _db.Users.FindAsync(userId)

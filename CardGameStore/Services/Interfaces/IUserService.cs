@@ -32,6 +32,9 @@ public interface IUserService
 
     // ── LGPD — Direitos do titular ────────────────────────────────────────────
 
+    /// <summary>Atualiza a URL da foto de perfil do usuário.</summary>
+    Task<UserProfileDto> UpdateProfileImageAsync(Guid userId, string? imageUrl);
+
     /// <summary>
     /// Permite ao titular corrigir seus próprios dados (nome, e-mail, WhatsApp).
     /// Direito de retificação conforme Art. 18, IV da LGPD.

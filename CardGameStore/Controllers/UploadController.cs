@@ -6,6 +6,8 @@
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CardGameStore.Services.Interfaces;
+using System.Security.Claims;
 
 namespace CardGameStore.Controllers;
 
@@ -16,6 +18,7 @@ public class UploadController : ControllerBase
 {
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<UploadController> _logger;
+    private readonly IUserService _userService;
 
     private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -35,10 +38,11 @@ public class UploadController : ControllerBase
 
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
-    public UploadController(IWebHostEnvironment env, ILogger<UploadController> logger)
+    public UploadController(IWebHostEnvironment env, ILogger<UploadController> logger, IUserService userService)
     {
-        _env    = env;
-        _logger = logger;
+        _env         = env;
+        _logger      = logger;
+        _userService = userService;
     }
 
     /// <summary>
@@ -51,6 +55,35 @@ public class UploadController : ControllerBase
     [ProducesResponseType(typeof(UploadImageResponse), 200)]
     [ProducesResponseType(typeof(ErrorResponse), 400)]
     public async Task<IActionResult> UploadImage(IFormFile? file)
+    {
+        return await ProcessImageUpload(file, "uploads");
+    }
+
+    /// <summary>
+    /// Faz upload da foto de perfil do usuário logado.
+    /// Salva em /uploads/profiles/ e atualiza o banco de dados.
+    /// </summary>
+    [HttpPost("profile-image")]
+    [Authorize]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<IActionResult> UploadProfileImage(IFormFile? file)
+    {
+        var claim = User.FindFirst("sub") ?? User.FindFirst(ClaimTypes.NameIdentifier);
+        if (claim == null || !Guid.TryParse(claim.Value, out var userId))
+            return Unauthorized();
+
+        var result = await ProcessImageUpload(file, Path.Combine("uploads", "profiles"));
+
+        if (result is OkObjectResult okResult && okResult.Value is UploadImageResponse response)
+        {
+            await _userService.UpdateProfileImageAsync(userId, response.Url);
+            return Ok(response);
+        }
+
+        return result;
+    }
+
+    private async Task<IActionResult> ProcessImageUpload(IFormFile? file, string relativeDir)
     {
         if (file is null || file.Length == 0)
             return BadRequest(new ErrorResponse("Nenhum arquivo enviado."));
@@ -65,11 +98,11 @@ public class UploadController : ControllerBase
         if (!AllowedExtensions.Contains(ext))
             return BadRequest(new ErrorResponse($"Extensão não permitida: {ext}. Use .jpg, .jpeg, .png ou .webp."));
 
-        // Garante que a pasta de uploads existe
-        var uploadsDir = Path.Combine(_env.WebRootPath, "uploads");
+        // Garante que a pasta existe
+        var uploadsDir = Path.Combine(_env.WebRootPath, relativeDir);
         Directory.CreateDirectory(uploadsDir);
 
-        // Nome único para evitar colisões e path traversal
+        // Nome único
         var fileName = $"{Guid.NewGuid():N}{ext}";
         var filePath = Path.Combine(uploadsDir, fileName);
 
@@ -78,7 +111,10 @@ public class UploadController : ControllerBase
             await file.CopyToAsync(stream);
         }
 
-        var url = $"/uploads/{fileName}";
+        // Se relativeDir for "uploads\profiles" (Windows), substitui \ por / na URL final
+        var urlPath = relativeDir.Replace("\\", "/");
+        var url = $"/{urlPath}/{fileName}";
+        
         _logger.LogInformation("Upload de imagem: {FileName} ({Size} bytes) por {User}",
             fileName, file.Length, User.Identity?.Name ?? "unknown");
 
