@@ -51,6 +51,34 @@ export default function PerfilPage() {
   }
 
   const isExpired = profile?.pointsExpired
+  const [isUploading, setIsUploading] = useState(false)
+
+  async function handleAvatarClick() {
+    document.getElementById('avatar-upload')?.click()
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 5MB.')
+      return
+    }
+
+    setIsUploading(true)
+    try {
+      const { data } = await authApi.uploadProfileImage(file)
+      setProfile(prev => prev ? { ...prev, profileImageUrl: data.url } : prev)
+      toast.success('Avatar atualizado!')
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Erro ao enviar imagem.')
+    } finally {
+      setIsUploading(false)
+      // Limpa o input para permitir upload da mesma foto novamente se necessário
+      e.target.value = ''
+    }
+  }
 
   return (
     <div className="min-h-screen bg-surface-900 pb-20 text-white font-sans">
@@ -81,9 +109,41 @@ export default function PerfilPage() {
           <>
             {/* ── PERFIL / AVATAR ── */}
             <section className="bg-gradient-to-b from-surface-800 to-surface-900 border border-surface-600 rounded-3xl p-8 text-center shadow-xl">
-              <div className="w-20 h-20 bg-brand-500/10 border-2 border-brand-500/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(66,182,238,0.15)]">
-                <User className="w-10 h-10 text-brand-500" />
-              </div>
+              <input 
+                type="file" 
+                id="avatar-upload" 
+                accept="image/jpeg, image/png, image/webp" 
+                className="hidden" 
+                onChange={handleFileChange}
+              />
+              <button 
+                onClick={handleAvatarClick}
+                disabled={isUploading}
+                className="relative w-20 h-20 bg-brand-500/10 border-2 border-brand-500/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(66,182,238,0.15)] hover:scale-105 hover:border-brand-500 transition-all cursor-pointer group overflow-hidden"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+                ) : profile?.profileImageUrl ? (
+                  <>
+                    <img 
+                      src={`${process.env.NEXT_PUBLIC_API_URL || 'https://santuarionerd.tech'}${profile.profileImageUrl}`} 
+                      alt="Avatar" 
+                      className="w-full h-full object-cover" 
+                      crossOrigin="anonymous"
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white">Editar</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <User className="w-10 h-10 text-brand-500" />
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-white">Editar</span>
+                    </div>
+                  </>
+                )}
+              </button>
               <h2 className="text-xl font-bold text-white">{profile?.name ?? getUserName() ?? 'Visitante'}</h2>
               <div className="flex flex-col gap-1 mt-2">
                 {profile?.email && (

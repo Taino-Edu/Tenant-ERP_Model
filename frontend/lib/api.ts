@@ -167,6 +167,13 @@ export const authApi = {
     api.post('/api/auth/forgot-password', { email }),
   resetPassword:  (token: string, newPassword: string) =>
     api.post('/api/auth/reset-password', { token, newPassword }),
+  uploadProfileImage: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post<{ url: string }>('/api/upload/profile-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  }
 }
 
 export const announcementApi = {
