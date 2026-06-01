@@ -331,7 +331,7 @@ export default function ClientePage() {
             {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
               <section className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h2 className="font-bold text-white uppercase tracking-widest text-xs flex items-center gap-2">
+                  <h2 className="font-bold text-gray-100 uppercase tracking-widest text-xs flex items-center gap-2">
                     <ShoppingCart className="w-4 h-4 text-brand-500" /> Cardápio Disponível
                   </h2>
                   <span className="text-[10px] text-gray-500 font-bold uppercase">{products.length} Itens</span>
@@ -344,20 +344,38 @@ export default function ClientePage() {
                       onClick={() => p.stockQuantity > 0 && setConfirmItem(p)}
                       disabled={adding === p.id || p.stockQuantity === 0}
                       className={clsx(
-                        'bg-surface-800 border border-surface-600 rounded-2xl p-4 text-left transition-all duration-200 active:scale-95 disabled:opacity-40 relative group',
+                        'bg-surface-800 border border-surface-600 rounded-2xl p-4 text-left transition-all duration-200 active:scale-95 disabled:opacity-40 relative group overflow-hidden',
                         adding === p.id && 'border-brand-500'
                       )}
                     >
-                      <div className="flex justify-between items-start mb-3">
-                        <span className="text-3xl filter drop-shadow-sm">{getCategoryEmoji(p.category, categories)}</span>
-                        <div className="w-8 h-8 rounded-full bg-surface-900 flex items-center justify-center border border-surface-600 group-hover:border-brand-500/50 transition-colors">
-                          <Plus className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                      {/* Product Image Background */}
+                      {p.imageUrl && (
+                        <div 
+                          className="absolute inset-0 z-0 opacity-20 group-hover:opacity-30 transition-opacity"
+                          style={{
+                            backgroundImage: `url(${p.imageUrl})`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center'
+                          }}
+                        />
+                      )}
+                      
+                      {/* Dark overlay to ensure text readability */}
+                      <div className="absolute inset-0 z-0 bg-gradient-to-t from-surface-800 to-transparent" />
+
+                      <div className="relative z-10 flex flex-col h-full justify-between">
+                        <div className="flex justify-end mb-8">
+                          <div className="w-8 h-8 rounded-full bg-surface-900 flex items-center justify-center border border-surface-600 group-hover:border-brand-500/50 transition-colors shadow-lg">
+                            <Plus className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-100 line-clamp-2 min-h-[2rem] drop-shadow-md">{p.name}</p>
+                          <p className="text-accent-green font-black text-sm mt-2 drop-shadow-md">
+                            R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-xs font-bold text-white line-clamp-2 min-h-[2rem]">{p.name}</p>
-                      <p className="text-accent-green font-black text-sm mt-2">
-                        R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-                      </p>
                     </button>
                   ))}
                 </div>
@@ -368,9 +386,4 @@ export default function ClientePage() {
       </main>
     </div>
   )
-}
-
-function getCategoryEmoji(cat: string, categories: ProductCategory[]): string {
-  const found = categories.find(c => c.name === cat)
-  return found?.emoji ?? '📦'
 }

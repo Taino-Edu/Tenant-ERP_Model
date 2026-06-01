@@ -29,10 +29,10 @@ interface SavedUser {
 function PrivacyModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="relative w-full max-w-md bg-[#1e1e28] border border-[#32323f] rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-[#252530]">
+      <div className="relative w-full max-w-md bg-surface-800 border border-surface-600 rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between p-6 border-b border-surface-700">
           <div className="flex items-center gap-3">
-            <Shield className="w-6 h-6 text-[#7839F3]" />
+            <Shield className="w-6 h-6 text-brand-500" />
             <h2 className="text-white font-bold tracking-tight">Privacidade & Dados</h2>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-white transition-colors">
@@ -46,11 +46,11 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
             informamos como tratamos seus dados pessoais.
           </p>
           <div className="space-y-3">
-            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+            <div className="bg-surface-700 p-4 rounded-2xl border border-surface-600">
               <p><strong className="text-white text-xs uppercase">Dados coletados:</strong></p>
               <p>Nome completo, CPF e número de WhatsApp.</p>
             </div>
-            <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+            <div className="bg-surface-700 p-4 rounded-2xl border border-surface-600">
               <p><strong className="text-white text-xs uppercase">Finalidade:</strong></p>
               <p>Identificação do cliente para abertura de comanda e registro de pontos de fidelidade.</p>
             </div>
@@ -63,8 +63,8 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
             Responsável: Santuário Nerd — São José do Rio Preto, SP.
           </p>
         </div>
-        <div className="p-6 border-t border-[#252530]">
-          <button onClick={onClose} className="w-full py-4 bg-[#7839F3] text-white font-bold rounded-2xl shadow-lg shadow-[#7839F3]/20 hover:bg-[#8b55f5] transition-all">
+        <div className="p-6 border-t border-surface-700">
+          <button onClick={onClose} className="w-full py-4 bg-brand-500 text-white font-bold rounded-2xl shadow-lg shadow-brand-500/20 hover:bg-brand-600 transition-all">
             Entendido
           </button>
         </div>
