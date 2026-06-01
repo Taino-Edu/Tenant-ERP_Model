@@ -9,8 +9,10 @@ import {
   TableProperties, Receipt, PackageOpen, Star,
   Layout, BookOpen, Settings2, User as UserIcon
 } from 'lucide-react'
+import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 import clsx from 'clsx'
+
 
 export default function ClientePage() {
   const [comanda, setComanda]         = useState<ComandaDto | null>(null)
@@ -137,28 +139,28 @@ export default function ClientePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f13] pb-32">
-      <Toaster position="top-center" toastOptions={{ style: { background: '#1e1e28', color: '#fff', border: '1px solid #32323f' }}} />
+    <div className="min-h-screen bg-surface-900 pb-32">
+      <Toaster position="top-center" toastOptions={{ style: { background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}} />
 
       {/* Modal de confirmação de item */}
       {confirmItem && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#1e1e28] border border-[#32323f] rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+          <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
             <div>
               <p className="text-sm text-gray-400 font-medium mb-1">Deseja adicionar?</p>
               <p className="font-bold text-white text-xl">{confirmItem.name}</p>
-              <p className="text-[#00F0A8] font-bold text-lg mt-0.5">
+              <p className="text-accent-green font-bold text-lg mt-0.5">
                 R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
               </p>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setConfirmItem(null)} className="flex-1 py-3 px-4 rounded-xl border border-[#32323f] text-gray-400 font-bold hover:bg-white/5 transition-colors">
+              <button onClick={() => setConfirmItem(null)} className="flex-1 py-3 px-4 rounded-xl border border-surface-500 text-gray-400 font-bold hover:bg-white/5 transition-colors">
                 Cancelar
               </button>
               <button
                 onClick={() => addProduct(confirmItem)}
                 disabled={adding === confirmItem.id}
-                className="flex-1 py-3 px-4 rounded-xl bg-[#7839F3] text-white font-bold hover:bg-[#8b55f5] transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-3 px-4 rounded-xl bg-brand-500 text-white font-bold hover:bg-brand-600 transition-colors flex items-center justify-center gap-2"
               >
                 {adding === confirmItem.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
                 Confirmar
@@ -169,18 +171,19 @@ export default function ClientePage() {
       )}
 
       {/* ── TOP HEADER (ESTILO SANTUÁRIO) ────────────────────────── */}
-      <header className="bg-[#16161d] border-b border-[#252530] px-6 pt-8 pb-6 text-center">
-        <img src="/logo-santuario.png" alt="Logo" className="w-16 h-16 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(120,57,243,0.3)]" />
+      <header className="bg-surface-800 border-b border-surface-700 px-6 pt-8 pb-6 text-center">
+        <img src="/logo-santuario.png" alt="Logo" className="w-16 h-16 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(66,182,238,0.3)]" />
         <h1 className="text-2xl tracking-[0.2em] text-white uppercase" style={{ fontFamily: 'var(--font-cinzel)' }}>
           O Santuário Nerd
         </h1>
-        <div className="flex items-center justify-center gap-4 mt-4">
-          <Link href="/cliente/perfil" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1e1e28] border border-[#32323f] text-xs text-gray-400 hover:text-white transition-colors">
+        <div className="flex items-center justify-center gap-3 mt-4">
+          <ThemeToggle compact />
+          <Link href="/cliente/perfil" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-900 border border-surface-600 text-xs text-gray-400 hover:text-white transition-colors">
             <UserIcon className="w-3.5 h-3.5" /> Conta
           </Link>
           <button onClick={toggleImmersive} className={clsx(
             "flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all text-xs font-medium",
-            immersiveMode ? "bg-[#7839F3]/10 border-[#7839F3] text-[#7839F3]" : "bg-[#1e1e28] border-[#32323f] text-gray-400"
+            immersiveMode ? "bg-brand-500/10 border-brand-500 text-brand-500" : "bg-surface-900 border-surface-600 text-gray-400"
           )}>
             <BookOpen className="w-3.5 h-3.5" /> {immersiveMode ? 'Modo RPG On' : 'Modo Clássico'}
           </button>
@@ -192,17 +195,17 @@ export default function ClientePage() {
 
         {/* Status do Jogador / Pontos */}
         {profile && (
-          <section className="bg-gradient-to-br from-[#1e1e28] to-[#16161d] rounded-2xl p-5 border border-[#32323f] relative overflow-hidden group">
+          <section className="bg-gradient-to-br from-surface-800 to-surface-900 rounded-2xl p-5 border border-surface-600 relative overflow-hidden group">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Star className="w-20 h-20 text-white" />
             </div>
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-[#7839F3]/20 flex items-center justify-center border border-[#7839F3]/30">
-                <Star className="w-6 h-6 text-[#7839F3]" />
+              <div className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center border border-brand-500/30">
+                <Star className="w-6 h-6 text-brand-500" />
               </div>
               <div>
-                <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Seus Pontos</p>
-                <p className="text-2xl font-black text-white">{profile.pointsBalance} <span className="text-sm font-normal text-gray-400">pts</span></p>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Seus Pontos</p>
+                <p className="text-2xl font-black text-white">{profile.pointsBalance} <span className="text-sm font-normal text-gray-500">pts</span></p>
               </div>
             </div>
           </section>
@@ -210,17 +213,17 @@ export default function ClientePage() {
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-[#7839F3]" />
+            <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
             <p className="text-sm text-gray-500 font-medium">Lendo os pergaminhos...</p>
           </div>
         ) : !comanda ? (
           <section className="text-center py-16 space-y-4">
-            <div className="w-20 h-20 bg-[#1e1e28] rounded-full flex items-center justify-center mx-auto border border-[#32323f]">
-              <PackageOpen className="w-10 h-10 text-gray-600" />
+            <div className="w-20 h-20 bg-surface-800 rounded-full flex items-center justify-center mx-auto border border-surface-600">
+              <PackageOpen className="w-10 h-10 text-gray-500" />
             </div>
             <div className="space-y-1">
               <h2 className="text-white font-bold text-lg">Nenhuma comanda aberta</h2>
-              <p className="text-gray-500 text-sm">Escaneie o QR Code da sua mesa para começar.</p>
+              <p className="text-gray-400 text-sm">Escaneie o QR Code da sua mesa para começar.</p>
             </div>
           </section>
         ) : (
@@ -228,7 +231,7 @@ export default function ClientePage() {
             {/* COMANDA ATIVA */}
             <section className={clsx(
               "relative transition-all duration-500",
-              immersiveMode ? "bg-[#f4e4bc] text-[#5d4037] p-8 rounded-[2px] shadow-[0_10px_30px_rgba(0,0,0,0.5)] border-x-8 border-[#d7c49e]" : "bg-[#1e1e28] border border-[#32323f] rounded-2xl p-6"
+              immersiveMode ? "bg-[#f4e4bc] text-[#5d4037] p-8 rounded-[2px] shadow-[0_10px_30px_rgba(0,0,0,0.5)] border-x-8 border-[#d7c49e]" : "bg-surface-800 border border-surface-600 rounded-2xl p-6"
             )}>
               {/* Detalhes Visuais do Modo Imersivo */}
               {immersiveMode && (
@@ -247,7 +250,7 @@ export default function ClientePage() {
 
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2">
-                  <Receipt className={clsx("w-5 h-5", immersiveMode ? "text-[#5d4037]" : "text-[#7839F3]")} />
+                  <Receipt className={clsx("w-5 h-5", immersiveMode ? "text-[#5d4037]" : "text-brand-500")} />
                   <span className={clsx("font-bold text-sm uppercase tracking-wider", immersiveMode ? "text-[#5d4037]" : "text-white")}>
                     Mesa {comanda.tableIdentifier || 'N/A'}
                   </span>
@@ -261,7 +264,7 @@ export default function ClientePage() {
 
               {comanda.items.length === 0 ? (
                 <div className={clsx("text-center py-8 border-2 border-dashed rounded-xl", 
-                  immersiveMode ? "border-[#5d4037]/20 text-[#5d4037]/60" : "border-[#32323f] text-gray-500"
+                  immersiveMode ? "border-[#5d4037]/20 text-[#5d4037]/60" : "border-surface-500 text-gray-500"
                 )}>
                   <p className="text-sm italic">Seu pergaminho está em branco...</p>
                 </div>
@@ -273,21 +276,21 @@ export default function ClientePage() {
                         <p className={clsx("text-sm font-bold leading-tight", immersiveMode ? "text-[#5d4037]" : "text-white")}>
                           {item.itemNameSnapshot}
                         </p>
-                        <p className={clsx("text-[10px] mt-0.5 font-medium", immersiveMode ? "text-[#5d4037]/60" : "text-gray-500")}>
+                        <p className={clsx("text-[10px] mt-0.5 font-medium", immersiveMode ? "text-[#5d4037]/60" : "text-gray-400")}>
                           {item.quantity}× R$ {item.unitPriceInReais.toFixed(2).replace('.', ',')}
                         </p>
                       </div>
-                      <span className={clsx("font-bold text-sm", immersiveMode ? "text-[#5d4037]" : "text-[#00F0A8]")}>
+                      <span className={clsx("font-bold text-sm", immersiveMode ? "text-[#5d4037]" : "text-accent-green")}>
                         R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}
                       </span>
                     </div>
                   ))}
 
                   <div className={clsx("pt-4 border-t-2 border-dashed flex justify-between items-center", 
-                    immersiveMode ? "border-[#5d4037]/20" : "border-[#32323f]"
+                    immersiveMode ? "border-[#5d4037]/20" : "border-surface-600"
                   )}>
                     <span className={clsx("font-black uppercase text-sm", immersiveMode ? "text-[#5d4037]" : "text-white")}>Total</span>
-                    <span className={clsx("text-2xl font-black", immersiveMode ? "text-[#5d4037]" : "text-[#00F0A8]")}>
+                    <span className={clsx("text-2xl font-black", immersiveMode ? "text-[#5d4037]" : "text-accent-green")}>
                       R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
                     </span>
                   </div>
@@ -313,7 +316,7 @@ export default function ClientePage() {
                   ) : profile && profile.pointsBalance > 0 && !profile.pointsExpired && (
                     <button onClick={applyPoints} disabled={applyingPts} className={clsx(
                       "w-full p-3 rounded-xl flex items-center justify-between border-2 border-dashed transition-all active:scale-95",
-                      immersiveMode ? "border-[#5d4037]/30 text-[#5d4037] hover:bg-black/5" : "border-[#7839F3]/30 text-[#7839F3] hover:bg-[#7839F3]/5"
+                      immersiveMode ? "border-[#5d4037]/30 text-[#5d4037] hover:bg-black/5" : "border-brand-500/30 text-brand-400 hover:bg-brand-500/5"
                     )}>
                       <span className="font-black text-xs uppercase tracking-widest">Usar Pontos Acumulados</span>
                       <Plus className="w-4 h-4" />
@@ -328,7 +331,7 @@ export default function ClientePage() {
               <section className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h2 className="font-bold text-white uppercase tracking-widest text-xs flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4 text-[#7839F3]" /> Cardápio Disponível
+                    <ShoppingCart className="w-4 h-4 text-brand-500" /> Cardápio Disponível
                   </h2>
                   <span className="text-[10px] text-gray-500 font-bold uppercase">{products.length} Itens</span>
                 </div>
@@ -340,18 +343,18 @@ export default function ClientePage() {
                       onClick={() => p.stockQuantity > 0 && setConfirmItem(p)}
                       disabled={adding === p.id || p.stockQuantity === 0}
                       className={clsx(
-                        'bg-[#1e1e28] border border-[#32323f] rounded-2xl p-4 text-left transition-all duration-200 active:scale-95 disabled:opacity-40 relative group',
-                        adding === p.id && 'border-[#7839F3]'
+                        'bg-surface-800 border border-surface-600 rounded-2xl p-4 text-left transition-all duration-200 active:scale-95 disabled:opacity-40 relative group',
+                        adding === p.id && 'border-brand-500'
                       )}
                     >
                       <div className="flex justify-between items-start mb-3">
                         <span className="text-3xl filter drop-shadow-sm">{getCategoryEmoji(p.category, categories)}</span>
-                        <div className="w-8 h-8 rounded-full bg-[#16161d] flex items-center justify-center border border-[#32323f] group-hover:border-[#7839F3]/50 transition-colors">
-                          <Plus className="w-4 h-4 text-gray-400 group-hover:text-[#7839F3]" />
+                        <div className="w-8 h-8 rounded-full bg-surface-900 flex items-center justify-center border border-surface-600 group-hover:border-brand-500/50 transition-colors">
+                          <Plus className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
                         </div>
                       </div>
                       <p className="text-xs font-bold text-white line-clamp-2 min-h-[2rem]">{p.name}</p>
-                      <p className="text-[#00F0A8] font-black text-sm mt-2">
+                      <p className="text-accent-green font-black text-sm mt-2">
                         R$ {p.priceInReais.toFixed(2).replace('.', ',')}
                       </p>
                     </button>

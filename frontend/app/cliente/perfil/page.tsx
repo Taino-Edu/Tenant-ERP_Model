@@ -53,10 +53,10 @@ export default function PerfilPage() {
   const isExpired = profile?.pointsExpired
 
   return (
-    <div className="min-h-screen bg-[#0f0f13] pb-20 text-white font-sans">
+    <div className="min-h-screen bg-surface-900 pb-20 text-white font-sans">
       
       {/* ── HEADER ────────────────────────────────────────────────── */}
-      <header className="bg-[#16161d] border-b border-[#252530] px-6 py-5 sticky top-0 z-20 backdrop-blur-md">
+      <header className="bg-surface-800 border-b border-surface-700 px-6 py-5 sticky top-0 z-20 backdrop-blur-md">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <Link href="/cliente" className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
             <ArrowLeft className="w-5 h-5" />
@@ -64,7 +64,7 @@ export default function PerfilPage() {
           <h1 className="text-sm font-black uppercase tracking-[0.2em]" style={{ fontFamily: 'var(--font-cinzel)' }}>
             Minha Conta
           </h1>
-          <button onClick={handleLogout} className="p-2 -mr-2 text-gray-400 hover:text-red-400 transition-colors">
+          <button onClick={handleLogout} className="p-2 -mr-2 text-gray-400 hover:text-accent-red transition-colors">
             <LogOut className="w-5 h-5" />
           </button>
         </div>
@@ -74,15 +74,15 @@ export default function PerfilPage() {
         
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-[#7839F3]" />
+            <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
             <p className="text-sm text-gray-500 font-medium text-center">Consultando registros...</p>
           </div>
         ) : (
           <>
             {/* ── PERFIL / AVATAR ── */}
-            <section className="bg-gradient-to-b from-[#1e1e28] to-[#16161d] border border-[#32323f] rounded-3xl p-8 text-center shadow-xl">
-              <div className="w-20 h-20 bg-[#7839F3]/10 border-2 border-[#7839F3]/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(120,57,243,0.15)]">
-                <User className="w-10 h-10 text-[#7839F3]" />
+            <section className="bg-gradient-to-b from-surface-800 to-surface-900 border border-surface-600 rounded-3xl p-8 text-center shadow-xl">
+              <div className="w-20 h-20 bg-brand-500/10 border-2 border-brand-500/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(66,182,238,0.15)]">
+                <User className="w-10 h-10 text-brand-500" />
               </div>
               <h2 className="text-xl font-bold text-white">{profile?.name ?? getUserName() ?? 'Visitante'}</h2>
               <div className="flex flex-col gap-1 mt-2">
@@ -100,10 +100,10 @@ export default function PerfilPage() {
             </section>
 
             {/* ── TABS NAVEGAÇÃO ── */}
-            <nav className="flex bg-[#16161d] p-1 rounded-2xl border border-[#252530] gap-1">
+            <nav className="flex bg-surface-800 p-1 rounded-2xl border border-surface-600 gap-1">
               {[
                 { id: 'pontos', icon: Star, label: 'Pontos' },
-                { id: 'historico', icon: Receipt, label: 'Logs' },
+                { id: 'historico', icon: Receipt, label: 'Histórico' },
                 { id: 'torneios', icon: Trophy, label: 'Torneios' },
                 { id: 'crediario', icon: Wallet, label: 'Dívida' },
               ].map((t) => (
@@ -112,7 +112,7 @@ export default function PerfilPage() {
                   onClick={() => setTab(t.id as any)}
                   className={clsx(
                     "flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all",
-                    tab === t.id ? "bg-[#7839F3] text-white shadow-lg" : "text-gray-500 hover:text-gray-300"
+                    tab === t.id ? "bg-brand-500 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"
                   )}
                 >
                   <t.icon className={clsx("w-5 h-5 mb-1", tab === t.id ? "text-white" : "text-gray-600")} />
@@ -127,9 +127,9 @@ export default function PerfilPage() {
               {/* TAB: PONTOS */}
               {tab === 'pontos' && (
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <div className="bg-[#1e1e28] border border-[#32323f] rounded-2xl p-6 relative overflow-hidden">
+                  <div className="bg-surface-800 border border-surface-600 rounded-2xl p-6 relative overflow-hidden">
                     <Star className="absolute -right-4 -bottom-4 w-24 h-24 text-white opacity-[0.03]" />
-                    <p className="text-xs font-bold text-[#7839F3] uppercase tracking-widest mb-1">Saldo de Experiência</p>
+                    <p className="text-xs font-bold text-brand-500 uppercase tracking-widest mb-1">Saldo de Experiência</p>
                     <div className="flex items-baseline gap-2">
                       <span className="text-4xl font-black">{profile?.pointsBalance ?? 0}</span>
                       <span className="text-gray-500 font-bold uppercase text-xs tracking-widest">Pontos</span>
@@ -143,13 +143,13 @@ export default function PerfilPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#1e1e28] border border-[#32323f] rounded-2xl p-4">
+                    <div className="bg-surface-800 border border-surface-600 rounded-2xl p-4">
                       <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Gasto no Mês</p>
                       <p className="text-lg font-bold">R$ {consumoMensal.toFixed(2).replace('.', ',')}</p>
                     </div>
-                    <div className="bg-[#1e1e28] border border-[#32323f] rounded-2xl p-4">
+                    <div className="bg-surface-800 border border-surface-600 rounded-2xl p-4">
                       <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Status</p>
-                      <p className="text-lg font-bold flex items-center gap-1.5 text-emerald-400">
+                      <p className="text-lg font-bold flex items-center gap-1.5 text-accent-green">
                         <ShieldCheck className="w-4 h-4" /> Ativo
                       </p>
                     </div>
@@ -169,13 +169,13 @@ export default function PerfilPage() {
                     history.map(c => {
                       const open = expanded === c.id
                       return (
-                        <div key={c.id} className="bg-[#1e1e28] border border-[#32323f] rounded-2xl overflow-hidden group">
+                        <div key={c.id} className="bg-surface-800 border border-surface-600 rounded-2xl overflow-hidden group">
                           <button 
                             onClick={() => setExpanded(open ? null : c.id)}
-                            className="w-full p-4 flex items-center justify-between"
+                            className="w-full p-4 flex items-center justify-between hover:bg-surface-700/50 transition-colors"
                           >
                             <div className="flex items-center gap-3 text-left">
-                              <div className="w-10 h-10 rounded-xl bg-[#16161d] flex items-center justify-center border border-[#32323f] group-hover:border-[#7839F3]/30 transition-colors">
+                              <div className="w-10 h-10 rounded-xl bg-surface-900 flex items-center justify-center border border-surface-600 group-hover:border-brand-500/30 transition-colors">
                                 <Receipt className="w-5 h-5 text-gray-500" />
                               </div>
                               <div>
@@ -184,12 +184,12 @@ export default function PerfilPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="font-black text-[#00F0A8]">R$ {c.totalInReais.toFixed(2).replace('.', ',')}</span>
-                              {open ? <ChevronUp className="w-4 h-4 text-gray-600" /> : <ChevronDown className="w-4 h-4 text-gray-600" />}
+                              <span className="font-black text-accent-green">R$ {c.totalInReais.toFixed(2).replace('.', ',')}</span>
+                              {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
                             </div>
                           </button>
                           {open && (
-                            <div className="px-4 pb-4 border-t border-[#252530] bg-[#16161d]/50 space-y-2 pt-3">
+                            <div className="px-4 pb-4 border-t border-surface-700 bg-surface-900/50 space-y-2 pt-3">
                               {c.items.map((item, idx) => (
                                 <div key={idx} className="flex justify-between items-center text-xs">
                                   <span className="text-gray-400 font-medium">{item.quantity}x {item.itemNameSnapshot}</span>
@@ -215,17 +215,17 @@ export default function PerfilPage() {
                     </div>
                   ) : (
                     participations.map(p => (
-                      <div key={p.participationId} className="bg-[#1e1e28] border border-[#32323f] rounded-2xl p-5 space-y-3">
+                      <div key={p.participationId} className="bg-surface-800 border border-surface-600 rounded-2xl p-5 space-y-3">
                         <div className="flex justify-between items-start">
                           <div>
-                            <p className="text-xs font-bold text-[#7839F3] uppercase tracking-widest">{p.game}</p>
+                            <p className="text-xs font-bold text-brand-500 uppercase tracking-widest">{p.game}</p>
                             <h3 className="text-lg font-bold text-white leading-tight">{p.championshipName}</h3>
                           </div>
                           <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black text-emerald-400 uppercase">
                             Inscrito
                           </div>
                         </div>
-                        <div className="flex items-center gap-4 pt-2 border-t border-[#32323f]">
+                        <div className="flex items-center gap-4 pt-2 border-t border-surface-600">
                           <div className="flex items-center gap-1.5 text-xs text-gray-400">
                             <CalendarClock className="w-3.5 h-3.5" />
                             {new Date(p.startDate).toLocaleDateString('pt-BR')}
