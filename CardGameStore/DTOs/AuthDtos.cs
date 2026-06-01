@@ -91,10 +91,9 @@ public record ForgotPasswordRequest(
     [Required, EmailAddress] string Email
 );
 
-/// <summary>Redefine a senha usando o token recebido por email.</summary>
-public record ResetPasswordRequest(
-    [Required] string Token,
-    [Required, MinLength(8)] string NewPassword
+/// <summary>Solicita envio de um email de teste para diagnóstico.</summary>
+public record TestEmailRequest(
+    [Required, EmailAddress] string Email
 );
 
 // -------------------------------------------------------------------------

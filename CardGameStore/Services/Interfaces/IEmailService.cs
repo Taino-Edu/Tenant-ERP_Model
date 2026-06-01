@@ -43,6 +43,6 @@ public interface IEmailService
     /// <summary>
     /// Envia ao solicitante a resposta formal do responsável pelo tratamento de dados.
     /// </summary>
-    Task SendLgpdResponseAsync(string toEmail, string toName, string protocol,
-                                string requestType, string response);
+    /// <summary>Envia um email de diagnóstico para testar as configurações de SMTP.</summary>
+    Task<bool> SendDiagnosticEmailAsync(string toEmail);
 }

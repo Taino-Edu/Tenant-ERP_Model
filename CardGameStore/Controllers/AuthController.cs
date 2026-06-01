@@ -26,17 +26,20 @@ public class AuthController : ControllerBase
     private readonly ILogger<AuthController> _logger;
     private readonly JwtSettings             _jwt;
     private readonly IWebHostEnvironment     _env;
+    private readonly IEmailService           _emailService;
 
     public AuthController(
         IAuthService        authService,
         ILogger<AuthController> logger,
         IOptions<JwtSettings>   jwt,
-        IWebHostEnvironment     env)
+        IWebHostEnvironment     env,
+        IEmailService       emailService)
     {
-        _authService = authService;
-        _logger      = logger;
-        _jwt         = jwt.Value;
-        _env         = env;
+        _authService  = authService;
+        _logger       = logger;
+        _jwt          = jwt.Value;
+        _env          = env;
+        _emailService = emailService;
     }
 
     // =========================================================================
@@ -341,5 +344,24 @@ public class AuthController : ControllerBase
         ClearAuthCookies();
         _logger.LogInformation("Logout realizado para usuário {UserId}", userId);
         return NoContent();
+    }
+
+    // =========================================================================
+    // DIAGNÓSTICO — Teste de Email
+    // =========================================================================
+
+    /// <summary>
+    /// Envia um email de teste para verificar as configurações de SMTP.
+    /// Apenas Admin pode disparar este teste.
+    /// </summary>
+    [HttpPost("test-email")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> TestEmail([FromBody] TestEmailRequest request)
+    {
+        var success = await _emailService.SendDiagnosticEmailAsync(request.Email);
+        
+        return success 
+            ? Ok(new { Message = $"Email de teste enviado com sucesso para {request.Email}. Verifique sua caixa de entrada e SPAM." })
+            : BadRequest(new { Message = "Falha ao enviar email. Verifique os logs do servidor para detalhes do erro de SMTP." });
     }
 }

@@ -251,6 +251,27 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, $"Resposta à sua solicitação LGPD — Protocolo {protocol}", body);
     }
 
+    public async Task<bool> SendDiagnosticEmailAsync(string toEmail)
+    {
+        var body = $"""
+            <h2>Teste de Diagnóstico — softNerd</h2>
+            <p>Se você está lendo isso, a configuração de SMTP do servidor está <strong>funcional</strong>!</p>
+            <hr/>
+            <p><strong>Timestamp:</strong> {DateTime.Now:dd/MM/yyyy HH:mm:ss}</p>
+            <p><strong>Servidor:</strong> {Environment.MachineName}</p>
+            """;
+
+        try
+        {
+            await SendAsync(toEmail, "Admin Teste", "Diagnóstico de Email — softNerd", body);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     // ── Interno ───────────────────────────────────────────────────────────────
 
     private async Task SendAsync(string toEmail, string toName, string subject, string htmlBody)
