@@ -136,12 +136,12 @@ export default function MesaPage() {
 
     setStep('loading')
     try {
-      const { data } = await authApi.quickLogin({
-        name: requestName,
-        cpf: requestCpf,
-        whatsApp: requestWhatsApp,
-        tableIdentifier: mesa
-      })
+      const { data } = await authApi.quickLogin(
+        requestName,
+        requestCpf,
+        requestWhatsApp,
+        mesa
+      )
 
       saveAuth(data)
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
