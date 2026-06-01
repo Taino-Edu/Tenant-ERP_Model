@@ -135,14 +135,14 @@ export interface ChampionshipParticipant {
 
 export interface UserSummary {
   id: string; name: string; email: string | null
-  cpf: string | null; whatsApp: string | null; role: string
+  cpf: string | null; whatsApp: string | null; role: string; profileImageUrl: string | null
   pointsBalance: number; pointsExpiresAt: string | null
   pointsExpired: boolean; balanceInCents: number; isActive: boolean; createdAt: string
 }
 
 export interface UserProfile {
   id: string; name: string; email: string | null
-  cpf: string | null; whatsApp: string | null; role: string
+  cpf: string | null; whatsApp: string | null; role: string; profileImageUrl: string | null
   pointsBalance: number; pointsExpiresAt: string | null
   pointsExpired: boolean; balanceInCents: number; createdAt: string
 }
