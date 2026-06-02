@@ -344,14 +344,14 @@ export default function ClientePage() {
                       onClick={() => p.stockQuantity > 0 && setConfirmItem(p)}
                       disabled={adding === p.id || p.stockQuantity === 0}
                       className={clsx(
-                        'bg-surface-800 border border-surface-600 rounded-2xl p-4 text-left transition-all duration-200 active:scale-95 disabled:opacity-40 relative group overflow-hidden',
+                        'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-200 active:scale-95 disabled:opacity-40 relative group overflow-hidden h-40',
                         adding === p.id && 'border-brand-500'
                       )}
                     >
-                      {/* Product Image Background */}
+                      {/* Imagem limpa, sem overlay escuro */}
                       {p.imageUrl && (
                         <div
-                          className="absolute inset-0 z-0 opacity-40 group-hover:opacity-55 transition-opacity"
+                          className="absolute inset-0 z-0 group-hover:scale-105 transition-transform duration-300"
                           style={{
                             backgroundImage: `url(${p.imageUrl})`,
                             backgroundSize: 'cover',
@@ -360,18 +360,16 @@ export default function ClientePage() {
                         />
                       )}
 
-                      {/* Dark overlay to ensure text readability */}
-                      <div className="absolute inset-0 z-0 bg-gradient-to-t from-surface-800 via-surface-800/60 to-transparent" />
-
-                      <div className="relative z-10 flex flex-col h-full justify-between">
-                        <div className="flex justify-end mb-8">
-                          <div className="w-8 h-8 rounded-full bg-surface-900 flex items-center justify-center border border-surface-600 group-hover:border-brand-500/50 transition-colors shadow-lg">
-                            <Plus className="w-4 h-4 text-gray-400 group-hover:text-brand-500" />
+                      <div className="relative z-10 flex flex-col h-full justify-between p-3">
+                        <div className="flex justify-end">
+                          <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center border border-white/20 group-hover:border-brand-500/60 transition-colors shadow-lg">
+                            <Plus className="w-4 h-4" style={{ color: '#FFFFFF' }} />
                           </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-gray-100 line-clamp-2 min-h-[2rem] drop-shadow-md">{p.name}</p>
-                          <p className="text-accent-green font-black text-sm mt-2 drop-shadow-md">
+                        {/* Backdrop escuro sempre visível em qualquer tema */}
+                        <div className="bg-black/55 backdrop-blur-sm rounded-xl px-3 py-2">
+                          <p className="text-xs font-bold line-clamp-2" style={{ color: '#F3F4F6' }}>{p.name}</p>
+                          <p className="font-black text-sm mt-1" style={{ color: '#00F0A8' }}>
                             R$ {p.priceInReais.toFixed(2).replace('.', ',')}
                           </p>
                         </div>

@@ -398,6 +398,10 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
+        // Total líquido: desconta pontos que o cliente já pré-pagou via ApplyPoints.
+        // Após o fechamento, TotalInCents passa a refletir este valor líquido.
+        var netTotal = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+
         // ── Crediário ─────────────────────────────────────────────────────────
         if (paymentMethod == PaymentCrediario)
         {
@@ -409,7 +413,7 @@ public class ComandaService : IComandaService
             if (crediarioExistente != null)
             {
                 // Acumula no crediário já aberto (cliente com conta corrente/aba)
-                crediarioExistente.ValorEmCentavos += comanda.TotalInCents;
+                crediarioExistente.ValorEmCentavos += netTotal; // líquido: já desconta pontos aplicados
                 crediarioExistente.DataVencimento   = vencimento;
                 if (!string.IsNullOrWhiteSpace(observacao))
                     crediarioExistente.Observacao = observacao;
@@ -426,7 +430,7 @@ public class ComandaService : IComandaService
                 {
                     UserId           = comanda.UserId,
                     ComandaId        = comanda.Id,
-                    ValorEmCentavos  = comanda.TotalInCents,
+                    ValorEmCentavos  = netTotal, // líquido: já desconta pontos aplicados
                     DataAbertura     = DateTime.UtcNow,
                     DataVencimento   = vencimento,
                     Status           = CrediariosStatus.Aberto,
@@ -462,13 +466,12 @@ public class ComandaService : IComandaService
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado.");
 
-            var totalRestante = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+            var totalRestante = netTotal; // restante após pontos pré-aplicados pelo cliente
             if (comanda.User.PointsBalance < totalRestante)
                 throw new InvalidOperationException(
                     $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, faltam {totalRestante} pts.");
 
             comanda.User.PointsBalance -= totalRestante;
-            comanda.PointsApplied       = comanda.TotalInCents; // comanda totalmente coberta
             comanda.User.UpdatedAt      = DateTime.UtcNow;
             _logger.LogInformation(
                 "Comanda {Id} quitada com {Pts} pontos do usuário {UserId}. Saldo restante: {Saldo}",
@@ -481,7 +484,7 @@ public class ComandaService : IComandaService
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado.");
 
-            var totalRestante = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+            var totalRestante = netTotal; // restante após pontos pré-aplicados pelo cliente
             if (comanda.User.BalanceInCents < totalRestante)
                 throw new InvalidOperationException(
                     $"Saldo insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, falta R$ {totalRestante / 100m:N2}.");
@@ -493,18 +496,20 @@ public class ComandaService : IComandaService
                 comandaId, totalRestante / 100m, comanda.UserId, comanda.User.BalanceInCents / 100m);
         }
 
+        // Grava o total líquido (o que o cliente efetivamente pagou, após desconto de pontos)
+        comanda.TotalInCents  = netTotal;
         comanda.Status        = ComandaStatus.Fechada;
         comanda.ClosedAt      = DateTime.UtcNow;
         comanda.PaymentMethod = paymentMethod;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
-        // Regra: 1 ponto por R$1 gasto (após desconto de pontos aplicados)
+        // Regra: 1 ponto por R$1 gasto. TotalInCents já é líquido aqui.
         // Não acumula pontos quando o próprio pagamento é via pontos ou cashback
         if (comanda.User != null && paymentMethod != PaymentCrediario
                                  && paymentMethod != PaymentPontos
                                  && paymentMethod != PaymentCashback)
         {
-            var valorPago   = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+            var valorPago   = comanda.TotalInCents; // já é o netTotal
             var pontosGanhos = valorPago / 100; // 1 ponto por real
             if (pontosGanhos > 0)
             {
