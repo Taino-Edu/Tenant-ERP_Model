@@ -4,7 +4,16 @@ import { categoryApi, ProductCategory } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Edit2, Trash2, Tag, X, Loader2, Check, GripVertical } from 'lucide-react'
 
-const EMOJI_SUGESTOES = ['🥤','🍿','🎮','🃏','🗂️','🧤','📦','🍫','☕','🎲','⚔️','🧩','🖊️','🎴','💎']
+const EMOJI_SUGESTOES = [
+  // Jogos & TCG
+  '🃏','🎴','🎲','🧩','🎮','🕹️','🏆','🎯','🪄','🔮','⚔️','🛡️','🐉','🧙','👾',
+  // Colecionáveis & Acessórios
+  '💎','🪙','🌟','🎁','📦','🧤','🗂️','🖊️','📐','🎨','🪆','🤖','🦄','🧸','🪀',
+  // Alimentos & Bebidas
+  '🥤','🧃','☕','🍫','🍿','🍕','🍭','🧇','🫗','🧋',
+  // Campeonatos & Eventos
+  '🏅','🥇','🎪','🎠','🌸','🎸','⭐','🔥','💫','🎉',
+]
 
 function CategoryModal({
   category, onClose, onSave,

@@ -411,9 +411,9 @@ export default function UsuariosPage() {
                 </button>
               </div>
 
-              {/* Pontos Maikon */}
+              {/* Pontos */}
               <div className="bg-surface-800 rounded-xl p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">Pontos Maikon</p>
+                <p className="text-xs text-gray-500 mb-1">Pontos</p>
                 <p className="text-4xl font-black text-accent-gold">{selected.pointsBalance}</p>
                 <p className="text-xs text-gray-500 mt-0.5">pontos</p>
 
@@ -430,13 +430,13 @@ export default function UsuariosPage() {
                   </div>
                 )}
                 {selected.pointsBalance === 0 && !selected.pointsExpiresAt && (
-                  <p className="text-xs text-gray-400 mt-2">Sem pontos Maikon cadastrados</p>
+                  <p className="text-xs text-gray-400 mt-2">Sem pontos cadastrados</p>
                 )}
               </div>
 
-              {/* Adicionar Pontos Maikon */}
+              {/* Adicionar Pontos */}
               <div className="space-y-3">
-                <p className="text-sm font-semibold text-white">Adicionar Pontos Maikon</p>
+                <p className="text-sm font-semibold text-white">Adicionar Pontos</p>
                 <div>
                   <label className="label text-xs">Quantidade de pontos</label>
                   <input
@@ -465,7 +465,7 @@ export default function UsuariosPage() {
                 >
                   {adding
                     ? <><Loader2 className="w-4 h-4 animate-spin" /> Adicionando...</>
-                    : <><Plus className="w-4 h-4" /> Adicionar Pontos Maikon</>
+                    : <><Plus className="w-4 h-4" /> Adicionar Pontos</>
                   }
                 </button>
                 <p className="text-xs text-gray-400 text-center">
