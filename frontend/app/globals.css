@@ -176,6 +176,28 @@ html.light {
 
   /* Placeholders */
   ::placeholder { color: #AAAAAA !important; }
+
+  /* Gradientes de surface — o Tailwind resolve from-/to-/via- em build time,
+     então precisamos sobrescrever as variáveis CSS de gradiente manualmente */
+  .from-surface-900 {
+    --tw-gradient-from: #F5F5F7 var(--tw-gradient-from-position);
+    --tw-gradient-to: rgb(245 245 247 / 0) var(--tw-gradient-to-position);
+  }
+  .from-surface-800 {
+    --tw-gradient-from: #FFFFFF var(--tw-gradient-from-position);
+    --tw-gradient-to: rgb(255 255 255 / 0) var(--tw-gradient-to-position);
+  }
+  .from-surface-700 {
+    --tw-gradient-from: #F0F0F5 var(--tw-gradient-from-position);
+    --tw-gradient-to: rgb(240 240 245 / 0) var(--tw-gradient-to-position);
+  }
+  .to-surface-900   { --tw-gradient-to: #F5F5F7 var(--tw-gradient-to-position); }
+  .to-surface-800   { --tw-gradient-to: #FFFFFF var(--tw-gradient-to-position); }
+  .to-surface-700   { --tw-gradient-to: #F0F0F5 var(--tw-gradient-to-position); }
+  [class*="via-surface-800"] {
+    --tw-gradient-via: #FFFFFF var(--tw-gradient-via-position);
+    --tw-gradient-to: rgb(255 255 255 / 0) var(--tw-gradient-to-position);
+  }
 }
 
 /* ── Animação scan de câmera ───────────────────────────────────────────────── */
