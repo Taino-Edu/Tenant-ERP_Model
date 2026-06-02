@@ -1,16 +1,8 @@
 import type { Metadata, Viewport } from 'next'
-import { Cinzel } from 'next/font/google'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
-
-const cinzel = Cinzel({
-  weight: ['700'],
-  subsets: ['latin'],
-  variable: '--font-cinzel',
-  display: 'swap',
-})
 
 export const viewport: Viewport = {
   themeColor: '#42B6EE',
@@ -51,7 +43,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className={cinzel.variable}>
+      <body>
         {/* Script VLibras — Acessibilidade (atributos customizados via spread para evitar erro TS) */}
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <div {...({ vw: 'true' } as any)} className="enabled">

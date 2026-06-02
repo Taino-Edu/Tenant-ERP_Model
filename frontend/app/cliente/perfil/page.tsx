@@ -92,7 +92,7 @@ export default function PerfilPage() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-sm font-black uppercase tracking-[0.2em]" style={{ fontFamily: 'var(--font-cinzel)' }}>
+          <h1 className="text-sm font-black uppercase tracking-[0.2em]">
             Minha Conta
           </h1>
           <button onClick={handleLogout} className="p-2 -mr-2 text-gray-400 hover:text-accent-red transition-colors">

@@ -173,7 +173,7 @@ export default function ClientePage() {
       {/* ── TOP HEADER (ESTILO SANTUÁRIO) ────────────────────────── */}
       <header className="bg-surface-800 border-b border-surface-700 px-6 pt-8 pb-6 text-center">
         <img src="/logo-santuario.png" alt="Logo" className="w-16 h-16 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(66,182,238,0.3)]" />
-        <h1 className="text-2xl tracking-[0.2em] text-white uppercase" style={{ fontFamily: 'var(--font-cinzel)' }}>
+        <h1 className="text-2xl font-bold tracking-[0.2em] text-white uppercase">
           O Santuário Nerd
         </h1>
         <div className="flex items-center justify-center gap-3 mt-4">
@@ -241,7 +241,7 @@ export default function ClientePage() {
                     <div className="w-8 h-6 bg-[#d7c49e] rounded-t-full" />
                   </div>
                   <div className="border-b border-[#5d4037]/20 pb-4 mb-6">
-                    <h2 className="font-bold uppercase tracking-[0.1em] text-center" style={{ fontFamily: 'var(--font-cinzel)' }}>
+                    <h2 className="font-bold uppercase tracking-[0.1em] text-center">
                       Relatório de Consumo
                     </h2>
                   </div>

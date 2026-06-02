@@ -52,7 +52,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-9 w-9 object-contain" />
-            <span className="text-white text-xl" style={{ fontFamily: 'var(--font-cinzel)' }}>Santuário Nerd</span>
+            <span className="text-white text-xl font-bold">Santuário Nerd</span>
           </div>
 
           <div className="hidden md:flex items-center gap-6 text-sm text-gray-400">
