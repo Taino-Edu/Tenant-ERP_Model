@@ -155,9 +155,9 @@ html.light {
   .text-gray-100  { color: #1a1a24 !important; }
   .text-gray-200  { color: #2a2a38 !important; }
   .text-gray-300  { color: #444455 !important; }
-  .text-gray-400  { color: #666677 !important; }
-  .text-gray-500  { color: #888899 !important; }
-  .text-gray-600  { color: #AAAAAA !important; }
+  .text-gray-400  { color: #555566 !important; }
+  .text-gray-500  { color: #777788 !important; }
+  .text-gray-600  { color: #999AAA !important; }
 
   /* Inputs e selects com bg fixo */
   .bg-surface-700.input,

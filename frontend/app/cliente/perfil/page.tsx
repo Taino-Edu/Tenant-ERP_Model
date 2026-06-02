@@ -9,7 +9,6 @@ import {
   CheckCircle, Wallet, CalendarClock, Receipt, ChevronDown, ChevronUp,
   ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail
 } from 'lucide-react'
-import Link from 'next/link'
 import clsx from 'clsx'
 import toast, { Toaster } from 'react-hot-toast'
 
@@ -86,9 +85,13 @@ export default function PerfilPage() {
       {/* ── HEADER ────────────────────────────────────────────────── */}
       <header className="bg-surface-800 border-b border-surface-700 px-6 py-5 sticky top-0 z-20 backdrop-blur-md">
         <div className="max-w-lg mx-auto flex items-center justify-between">
-          <Link href="/cliente" className="p-2 -ml-2 text-gray-400 hover:text-white transition-colors">
+          <button
+            onClick={() => router.back()}
+            className="p-3 -ml-3 text-gray-400 hover:text-white transition-colors active:scale-90"
+            aria-label="Voltar"
+          >
             <ArrowLeft className="w-5 h-5" />
-          </Link>
+          </button>
           <h1 className="text-sm font-black uppercase tracking-[0.2em]" style={{ fontFamily: 'var(--font-cinzel)' }}>
             Minha Conta
           </h1>

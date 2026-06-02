@@ -350,8 +350,8 @@ export default function ClientePage() {
                     >
                       {/* Product Image Background */}
                       {p.imageUrl && (
-                        <div 
-                          className="absolute inset-0 z-0 opacity-20 group-hover:opacity-30 transition-opacity"
+                        <div
+                          className="absolute inset-0 z-0 opacity-40 group-hover:opacity-55 transition-opacity"
                           style={{
                             backgroundImage: `url(${p.imageUrl})`,
                             backgroundSize: 'cover',
@@ -359,9 +359,9 @@ export default function ClientePage() {
                           }}
                         />
                       )}
-                      
+
                       {/* Dark overlay to ensure text readability */}
-                      <div className="absolute inset-0 z-0 bg-gradient-to-t from-surface-800 to-transparent" />
+                      <div className="absolute inset-0 z-0 bg-gradient-to-t from-surface-800 via-surface-800/60 to-transparent" />
 
                       <div className="relative z-10 flex flex-col h-full justify-between">
                         <div className="flex justify-end mb-8">
