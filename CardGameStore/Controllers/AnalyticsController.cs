@@ -57,12 +57,12 @@ public class AnalyticsController : ControllerBase
 
         // ── Comandas fechadas ─────────────────────────────────────────────────
         var comandasHoje = await _db.Comandas
-            .Where(c => c.ClosedAt >= hojeInicio && c.ClosedAt < hojeInicio.AddDays(1))
+            .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= hojeInicio && c.ClosedAt < hojeInicio.AddDays(1))
             .Select(c => new { c.TotalInCents, c.ClosedAt })
             .ToListAsync();
 
         var comandasOntem = await _db.Comandas
-            .Where(c => c.ClosedAt >= ontemInicio && c.ClosedAt < hojeInicio)
+            .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ontemInicio && c.ClosedAt < hojeInicio)
             .SumAsync(c => (long)c.TotalInCents);
 
         // ── Vendas avulsas (MongoDB) ──────────────────────────────────────────
@@ -76,12 +76,12 @@ public class AnalyticsController : ControllerBase
 
         // ── Ticket médio (últimos 30 dias, só comandas) ───────────────────────
         var ticketsRecentes = await _db.Comandas
-            .Where(c => c.ClosedAt >= ha30Dias && c.TotalInCents > 0)
+            .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ha30Dias && c.TotalInCents > 0)
             .Select(c => (decimal)c.TotalInCents)
             .ToListAsync();
 
         var ticketsAnteriores = await _db.Comandas
-            .Where(c => c.ClosedAt >= ha60Dias && c.ClosedAt < ha30Dias && c.TotalInCents > 0)
+            .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ha60Dias && c.ClosedAt < ha30Dias && c.TotalInCents > 0)
             .Select(c => (decimal)c.TotalInCents)
             .ToListAsync();
 
@@ -93,7 +93,7 @@ public class AnalyticsController : ControllerBase
         var novosClientesMes = await _db.Users.CountAsync(u => u.IsActive && u.Role == UserRole.Customer && u.CreatedAt >= inicioMes);
 
         var ultimasVisitas = await _db.Comandas
-            .Where(c => c.ClosedAt != null)
+            .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt != null)
             .GroupBy(c => c.UserId)
             .Select(g => new { UserId = g.Key, Ultima = g.Max(c => c.ClosedAt) })
             .ToListAsync();
@@ -169,7 +169,7 @@ public class AnalyticsController : ControllerBase
             .ToListAsync();
 
         var estatisticas = await _db.Comandas
-            .Where(c => c.ClosedAt != null)
+            .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt != null)
             .GroupBy(c => c.UserId)
             .Select(g => new
             {

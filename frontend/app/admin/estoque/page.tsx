@@ -93,7 +93,7 @@ function ProductModal({
                 <Camera className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-1">USB: escaneie + Enter • Celular: botão de câmera</p>
+            <p className="text-xs text-gray-400 mt-1">USB: escaneie + Enter • Celular: botão de câmera</p>
           </div>
           <div>
             <label className="label">Nome *</label>
@@ -306,7 +306,7 @@ export default function EstoquePage() {
                     <span className="badge bg-surface-600 text-gray-300 border-surface-500">{p.category}</span>
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-gray-400">
-                    {p.barcode ?? <span className="text-gray-600">—</span>}
+                    {p.barcode ?? <span className="text-gray-400">—</span>}
                   </td>
                   <td className="px-4 py-3 font-mono text-gray-400 text-xs">
                     {p.costPriceInCents > 0 ? `R$ ${p.costPriceInReais.toFixed(2).replace('.', ',')}` : '—'}
@@ -319,7 +319,7 @@ export default function EstoquePage() {
                       ? <span className={p.marginInReais >= 0 ? 'text-emerald-400' : 'text-red-400'}>
                           {p.marginPercent.toFixed(1)}%
                         </span>
-                      : <span className="text-gray-600">—</span>
+                      : <span className="text-gray-400">—</span>
                     }
                   </td>
                   <td className="px-4 py-3">
@@ -346,7 +346,7 @@ export default function EstoquePage() {
           </table>
           {filtered.length === 0 && (
             <div className="text-center py-12 text-gray-500">
-              <Package className="w-8 h-8 mx-auto mb-2 text-gray-600" />
+              <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
               Nenhum produto encontrado
             </div>
           )}

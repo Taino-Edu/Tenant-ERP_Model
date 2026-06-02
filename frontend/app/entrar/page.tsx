@@ -90,7 +90,7 @@ export default function EntrarPage() {
         </form>
 
         <div className="mt-4 text-center">
-          <Link href="/reset-password" className="text-xs text-gray-600 hover:text-gray-400 transition">
+          <Link href="/reset-password" className="text-xs text-gray-400 hover:text-gray-400 transition">
             Esqueci minha senha
           </Link>
         </div>

@@ -83,7 +83,7 @@ function AbaVendas({ mes, ano }: { mes: number; ano: number }) {
   if (!data || data.porCategoria.length === 0)
     return (
       <div className="flex flex-col items-center justify-center py-24 text-center">
-        <BarChart2 className="w-12 h-12 text-gray-600 mb-3" />
+        <BarChart2 className="w-12 h-12 text-gray-400 mb-3" />
         <p className="text-gray-400 font-medium">Nenhuma venda em {MESES[mes - 1]} {ano}</p>
       </div>
     )
@@ -190,7 +190,7 @@ function AbaCrediario({ mes, ano }: { mes: number; ano: number }) {
             <div className="min-w-0">
               <p className="text-base font-bold text-white truncate">{m.value}</p>
               <p className="text-[11px] text-gray-400 truncate">{m.label}</p>
-              <p className="text-[10px] text-gray-600 truncate">{m.sub}</p>
+              <p className="text-[10px] text-gray-400 truncate">{m.sub}</p>
             </div>
           </div>
         ))}

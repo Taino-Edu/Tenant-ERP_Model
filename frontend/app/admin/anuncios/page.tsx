@@ -179,9 +179,9 @@ export default function AnunciosPage() {
         </div>
       ) : items.length === 0 ? (
         <div className="card text-center py-12">
-          <Megaphone className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+          <Megaphone className="w-10 h-10 text-gray-400 mx-auto mb-3" />
           <p className="text-gray-500">Nenhum anúncio criado ainda.</p>
-          <p className="text-gray-600 text-sm mt-1">Crie banners, avisos e destaques para a landing page.</p>
+          <p className="text-gray-400 text-sm mt-1">Crie banners, avisos e destaques para a landing page.</p>
         </div>
       ) : (
         <div className="space-y-3">

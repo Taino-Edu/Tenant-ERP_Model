@@ -182,7 +182,7 @@ function KpiCard({ label, value, sub, color = 'brand', icon: Icon, onClick }: {
       {sub && (
         <p className="text-xs text-gray-500 flex items-center gap-1">
           {sub}
-          {onClick && <span className="ml-auto text-[10px] text-gray-600">clique para detalhar</span>}
+          {onClick && <span className="ml-auto text-[10px] text-gray-400">clique para detalhar</span>}
         </p>
       )}
     </button>
@@ -360,7 +360,7 @@ function FormasPagamentoSection({ formas }: { formas: FormaPagamentoTotalDto[] }
                               </p>
                             </div>
                           </div>
-                          <p className={`text-sm font-bold font-mono ${t.valor < minVal || t.valor > maxVal ? 'text-gray-600' : 'text-white'}`}>
+                          <p className={`text-sm font-bold font-mono ${t.valor < minVal || t.valor > maxVal ? 'text-gray-400' : 'text-white'}`}>
                             {fmt(t.valor)}
                           </p>
                         </div>
@@ -718,7 +718,7 @@ export default function FinanceiroPage() {
                 <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Comandas (mesas)</p>
                 <p className="text-xl font-bold font-mono text-brand-400">{fmt(d.receitaComandas)}</p>
                 {d.receita > 0 && (
-                  <p className="text-xs text-gray-600 mt-0.5">{((d.receitaComandas / d.receita) * 100).toFixed(1)}% do total</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{((d.receitaComandas / d.receita) * 100).toFixed(1)}% do total</p>
                 )}
               </div>
             </div>
@@ -730,7 +730,7 @@ export default function FinanceiroPage() {
                 <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Venda Avulsa (balcão)</p>
                 <p className="text-xl font-bold font-mono text-emerald-400">{fmt(d.receitaAvulsa)}</p>
                 {d.receita > 0 && (
-                  <p className="text-xs text-gray-600 mt-0.5">{((d.receitaAvulsa / d.receita) * 100).toFixed(1)}% do total</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{((d.receitaAvulsa / d.receita) * 100).toFixed(1)}% do total</p>
                 )}
               </div>
             </div>
@@ -768,15 +768,15 @@ export default function FinanceiroPage() {
                       const pct = p.custo > 0 ? ((p.margem / p.receita) * 100) : null
                       return (
                         <tr key={p.nome} className="hover:bg-surface-600/20 transition-colors">
-                          <td className="px-4 py-2.5 text-gray-600 text-xs font-mono">{i + 1}</td>
+                          <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
                           <td className="px-4 py-2.5 font-medium text-white">{p.nome}</td>
                           <td className="px-4 py-2.5 text-gray-400">{p.qtd}x</td>
                           <td className="px-4 py-2.5 font-mono text-accent-gold font-semibold">{fmt(p.receita)}</td>
-                          <td className="px-4 py-2.5 font-mono text-gray-400 text-xs">{p.custo > 0 ? fmt(p.custo) : <span className="text-gray-600">—</span>}</td>
+                          <td className="px-4 py-2.5 font-mono text-gray-400 text-xs">{p.custo > 0 ? fmt(p.custo) : <span className="text-gray-400">—</span>}</td>
                           <td className="px-4 py-2.5 font-mono text-xs">
                             {p.custo > 0
                               ? <span className={p.margem >= 0 ? 'text-emerald-400 font-semibold' : 'text-red-400'}>{fmt(p.margem)}</span>
-                              : <span className="text-gray-600">—</span>}
+                              : <span className="text-gray-400">—</span>}
                           </td>
                           <td className="px-4 py-2.5">
                             {pct !== null ? (
@@ -786,7 +786,7 @@ export default function FinanceiroPage() {
                                 </div>
                                 <span className={`text-xs font-mono ${pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{pct.toFixed(0)}%</span>
                               </div>
-                            ) : <span className="text-gray-600 text-xs">—</span>}
+                            ) : <span className="text-gray-400 text-xs">—</span>}
                           </td>
                         </tr>
                       )
@@ -810,7 +810,7 @@ export default function FinanceiroPage() {
 
           {d.receita === 0 && (
             <div className="flex items-center gap-3 rounded-xl bg-surface-700 border border-surface-500 p-6 text-sm text-gray-400">
-              <DollarSign className="w-5 h-5 text-gray-600" />
+              <DollarSign className="w-5 h-5 text-gray-400" />
               Nenhuma venda registrada no período selecionado.
             </div>
           )}

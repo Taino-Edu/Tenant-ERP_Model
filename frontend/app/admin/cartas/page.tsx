@@ -422,8 +422,8 @@ export default function CartasPage() {
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="text-6xl mb-4">🃏</div>
           <p className="text-gray-400 font-medium">Busque cartas de qualquer TCG</p>
-          <p className="text-gray-600 text-sm mt-1">Pokémon, Magic, Yu-Gi-Oh, One Piece e mais</p>
-          <p className="text-gray-600 text-sm mt-0.5">Passe o mouse sobre a carta para adicionar ao estoque</p>
+          <p className="text-gray-400 text-sm mt-1">Pokémon, Magic, Yu-Gi-Oh, One Piece e mais</p>
+          <p className="text-gray-400 text-sm mt-0.5">Passe o mouse sobre a carta para adicionar ao estoque</p>
         </div>
       ) : null}
     </div>

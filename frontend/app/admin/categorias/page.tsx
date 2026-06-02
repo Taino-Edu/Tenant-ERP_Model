@@ -166,7 +166,7 @@ export default function CategoriasPage() {
       ) : categories.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
-            <Tag className="w-8 h-8 text-gray-600" />
+            <Tag className="w-8 h-8 text-gray-400" />
           </div>
           <p className="text-gray-400 font-medium">Nenhuma categoria cadastrada</p>
           <p className="text-gray-400 text-sm mt-1">Crie categorias para organizar os produtos</p>

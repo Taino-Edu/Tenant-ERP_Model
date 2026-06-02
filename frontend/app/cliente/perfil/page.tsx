@@ -175,7 +175,7 @@ export default function PerfilPage() {
                     tab === t.id ? "bg-brand-500 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"
                   )}
                 >
-                  <t.icon className={clsx("w-5 h-5 mb-1", tab === t.id ? "text-white" : "text-gray-600")} />
+                  <t.icon className={clsx("w-5 h-5 mb-1", tab === t.id ? "text-white" : "text-gray-400")} />
                   <span className="text-[10px] font-bold uppercase tracking-tighter">{t.label}</span>
                 </button>
               ))}
@@ -221,7 +221,7 @@ export default function PerfilPage() {
               {tab === 'historico' && (
                 <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   {history.length === 0 ? (
-                    <div className="text-center py-12 text-gray-600">
+                    <div className="text-center py-12 text-gray-400">
                       <Clock className="w-10 h-10 mx-auto mb-2 opacity-20" />
                       <p className="text-sm italic text-center">Nenhum registro encontrado...</p>
                     </div>
@@ -269,7 +269,7 @@ export default function PerfilPage() {
               {tab === 'torneios' && (
                 <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
                   {participations.length === 0 ? (
-                    <div className="text-center py-12 text-gray-600">
+                    <div className="text-center py-12 text-gray-400">
                       <Trophy className="w-10 h-10 mx-auto mb-2 opacity-20" />
                       <p className="text-sm italic text-center">Você ainda não entrou em batalhas...</p>
                     </div>
@@ -329,7 +329,7 @@ export default function PerfilPage() {
                           <span className="text-red-400 font-bold">{new Date(crediario.dataVencimento).toLocaleDateString('pt-BR')}</span>
                         </div>
                       </div>
-                      <p className="text-[10px] text-gray-600 italic text-center">
+                      <p className="text-[10px] text-gray-400 italic text-center">
                         * Compareça ao balcão para quitar sua dívida com o Maikon.
                       </p>
                     </div>

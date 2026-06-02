@@ -56,7 +56,7 @@ function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
                   style={{ height: `${Math.max(4, pct * 0.72)}px` }}
                 />
               </div>
-              <span className="text-[9px] text-gray-600">{d.dia.slice(8)}</span>
+              <span className="text-[9px] text-gray-400">{d.dia.slice(8)}</span>
             </div>
           )
         })}
@@ -709,7 +709,7 @@ function ComandaCard({
                     <button
                       onClick={() => handleRemoveItem(item.id, item.itemNameSnapshot)}
                       disabled={busy}
-                      className="p-0.5 text-gray-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                      className="p-0.5 text-gray-400 hover:text-red-400 transition-colors disabled:opacity-40"
                       title="Remover item"
                     >
                       {removingItem === item.id
@@ -732,7 +732,7 @@ function ComandaCard({
                     onClick={handleRemovePoints}
                     disabled={removingPts}
                     title="Remover pontos (devolver ao cliente)"
-                    className="text-gray-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                    className="text-gray-400 hover:text-red-400 transition-colors disabled:opacity-40"
                   >
                     {removingPts
                       ? <Loader2 className="w-3 h-3 animate-spin" />
@@ -1068,7 +1068,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-2">
               {ranking.map((c, i) => {
-                const medalColor = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-600'
+                const medalColor = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-400'
                 const MedalIcon  = i === 0 ? Star : i <= 2 ? Medal : Trophy
                 return (
                   <div key={c.userId} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors">
@@ -1192,12 +1192,12 @@ export default function DashboardPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
-              <Users className="w-8 h-8 text-gray-600" />
+              <Users className="w-8 h-8 text-gray-400" />
             </div>
             <p className="text-gray-400 font-medium">
               {search ? `Nenhuma comanda para "${search}"` : 'Nenhuma comanda aberta no momento'}
             </p>
-            {!search && <p className="text-gray-600 text-sm mt-1">Clientes acessam via QR Code nas mesas</p>}
+            {!search && <p className="text-gray-400 text-sm mt-1">Clientes acessam via QR Code nas mesas</p>}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
@@ -1224,7 +1224,7 @@ export default function DashboardPage() {
         ) : history.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
-              <History className="w-8 h-8 text-gray-600" />
+              <History className="w-8 h-8 text-gray-400" />
             </div>
             <p className="text-gray-400 font-medium">Nenhuma comanda encerrada neste dia</p>
           </div>

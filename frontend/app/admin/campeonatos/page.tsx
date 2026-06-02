@@ -270,7 +270,7 @@ function AddParticipantModal({ championshipId, onClose, onAdded }: {
 
           {/* Nome do deck (opcional) */}
           <div>
-            <label className="label">Nome do Deck <span className="text-gray-600">(opcional)</span></label>
+            <label className="label">Nome do Deck <span className="text-gray-400">(opcional)</span></label>
             <input className="input" placeholder="Ex: Charizard ex, Mewtwo..."
               value={deckName} onChange={e => setDeckName(e.target.value)} />
           </div>
@@ -424,7 +424,7 @@ function ChampionshipCard({
                 <Loader2 className="w-5 h-5 animate-spin text-brand-400" />
               </div>
             ) : participants.length === 0 ? (
-              <p className="text-center text-sm text-gray-600 py-4">Nenhum inscrito ainda</p>
+              <p className="text-center text-sm text-gray-400 py-4">Nenhum inscrito ainda</p>
             ) : (
               participants.map(p => (
                 <div key={p.id} className="flex items-center gap-3 bg-surface-800 rounded-lg px-3 py-2">
@@ -444,7 +444,7 @@ function ChampionshipCard({
                   {(c.status === 'Inscricoes' || c.status === 'EmAndamento') && (
                     <button
                       onClick={() => handleRemove(p)}
-                      className="text-gray-600 hover:text-red-400 transition-colors ml-1 shrink-0"
+                      className="text-gray-400 hover:text-red-400 transition-colors ml-1 shrink-0"
                       title="Remover"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -576,7 +576,7 @@ export default function CampeonatosPage() {
         </div>
       ) : championships.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <Trophy className="w-12 h-12 text-gray-600 mb-3" />
+          <Trophy className="w-12 h-12 text-gray-400 mb-3" />
           <p className="text-gray-400 font-medium">
             {search ? 'Nenhum campeonato encontrado para essa busca' : 'Nenhum campeonato ainda'}
           </p>

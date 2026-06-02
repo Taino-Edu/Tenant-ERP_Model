@@ -89,7 +89,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-gray-600 mt-6">
+        <p className="text-center text-xs text-gray-400 mt-6">
           Clientes acessam via QR Code nas mesas
         </p>
       </div>

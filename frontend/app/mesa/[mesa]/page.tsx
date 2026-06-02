@@ -59,7 +59,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
             <strong className="text-white">Seus direitos:</strong> Você pode solicitar acesso, correção ou
             exclusão dos seus dados a qualquer momento pelo painel do cliente.
           </p>
-          <p className="text-[10px] text-gray-600 italic">
+          <p className="text-[10px] text-gray-400 italic">
             Responsável: Santuário Nerd — São José do Rio Preto, SP.
           </p>
         </div>
@@ -236,7 +236,7 @@ export default function MesaPage() {
                     <input
                       type="text" value={name} onChange={e => setName(e.target.value)}
                       placeholder="Como quer ser chamado?"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-medium outline-none transition-all placeholder:text-gray-700"
+                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-medium outline-none transition-all placeholder:text-gray-500"
                     />
                   </div>
                 </div>
@@ -250,7 +250,7 @@ export default function MesaPage() {
                       type="tel" value={cpf}
                       onChange={e => setCpf(formatCpf(e.target.value))}
                       placeholder="000.000.000-00"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-mono outline-none transition-all placeholder:text-gray-700"
+                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-mono outline-none transition-all placeholder:text-gray-500"
                     />
                   </div>
                 </div>
@@ -263,7 +263,7 @@ export default function MesaPage() {
                     <input
                       type="tel" value={whatsApp} onChange={e => setWhatsApp(formatPhone(e.target.value))}
                       placeholder="55 (17) 99999-9999"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm outline-none transition-all placeholder:text-gray-700"
+                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm outline-none transition-all placeholder:text-gray-500"
                     />
                   </div>
                 </div>
@@ -301,7 +301,7 @@ export default function MesaPage() {
       </main>
 
       {/* FOOTER */}
-      <footer className="p-8 text-center text-[10px] text-gray-600 font-bold uppercase tracking-[0.3em]">
+      <footer className="p-8 text-center text-[10px] text-gray-400 font-bold uppercase tracking-[0.3em]">
         Santuário Nerd © 2026
       </footer>
 

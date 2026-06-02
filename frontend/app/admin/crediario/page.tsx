@@ -190,7 +190,7 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
                   <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
                     <span className="flex-1 text-white truncate">{it.nome}</span>
                     <span className="text-gray-400 shrink-0">{it.qty}× R$ {parseFloat(it.preco.replace(',', '.')).toFixed(2).replace('.', ',')}</span>
-                    <button type="button" onClick={() => removeItem(idx)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
+                    <button type="button" onClick={() => removeItem(idx)} className="text-gray-400 hover:text-red-400 transition-colors shrink-0">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -266,7 +266,7 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               className="input"
               maxLength={500}
             />
-            <p className="text-xs text-gray-600 mt-1">Se vazio: "Dívida anterior ao sistema". Vencimento padrão: 30 dias.</p>
+            <p className="text-xs text-gray-400 mt-1">Se vazio: "Dívida anterior ao sistema". Vencimento padrão: 30 dias.</p>
           </div>
 
           <div className="flex gap-3 pt-2">
@@ -681,7 +681,7 @@ function CrediarioCard({
           )}
           <button
             onClick={() => onDeletar(c)}
-            className="text-gray-600 hover:text-red-400 transition-colors p-1 mt-1"
+            className="text-gray-400 hover:text-red-400 transition-colors p-1 mt-1"
             title="Excluir crediário"
           >
             <Trash2 className="w-4 h-4" />
@@ -910,7 +910,7 @@ export default function CrediarioPage() {
       ) : crediarios.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
-            <CreditCard className="w-8 h-8 text-gray-600" />
+            <CreditCard className="w-8 h-8 text-gray-400" />
           </div>
           <p className="text-gray-400 font-medium">Nenhum crediário encontrado</p>
         </div>

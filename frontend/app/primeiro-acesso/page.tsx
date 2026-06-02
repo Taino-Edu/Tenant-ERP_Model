@@ -189,7 +189,7 @@ export default function PrimeiroAcessoPage() {
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <KeyRound className="w-5 h-5" />}
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
-            <Link href="/reset-password" className="block text-center text-xs text-gray-600 hover:text-gray-400 transition">
+            <Link href="/reset-password" className="block text-center text-xs text-gray-400 hover:text-gray-400 transition">
               Esqueci minha senha
             </Link>
           </form>

@@ -213,7 +213,7 @@ function VendaDetailModal({ venda, onClose }: { venda: VendaAvulsaDto; onClose: 
                 <span className="text-gray-300">{it.quantity}×&nbsp;</span>
                 <span className="text-white">{it.productName}</span>
                 {it.productCategory && (
-                  <span className="ml-2 text-xs text-gray-600">{it.productCategory}</span>
+                  <span className="ml-2 text-xs text-gray-400">{it.productCategory}</span>
                 )}
               </div>
               <span className="text-gray-400 font-mono ml-3 shrink-0">
@@ -485,7 +485,7 @@ export default function VendaAvulsaPage() {
             </div>
           </div>
 
-          <p className="text-xs text-gray-600">{new Date(receipt.soldAt).toLocaleString('pt-BR')}</p>
+          <p className="text-xs text-gray-400">{new Date(receipt.soldAt).toLocaleString('pt-BR')}</p>
 
           <div className="flex gap-2">
             <button
@@ -593,7 +593,7 @@ export default function VendaAvulsaPage() {
               </div>
             ) : filtered.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-500 gap-3">
-                <PackageOpen className="w-10 h-10 text-gray-600" />
+                <PackageOpen className="w-10 h-10 text-gray-400" />
                 <p className="text-sm">Nenhum produto encontrado</p>
               </div>
             ) : (
@@ -620,7 +620,7 @@ export default function VendaAvulsaPage() {
                         <p className="text-accent-gold font-bold text-sm">
                           {fmt(p.priceInReais)}
                         </p>
-                        <span className="text-xs text-gray-600">{p.stockQuantity} un.</span>
+                        <span className="text-xs text-gray-400">{p.stockQuantity} un.</span>
                       </div>
                     </button>
                   )
@@ -680,14 +680,14 @@ export default function VendaAvulsaPage() {
                   <Receipt className="w-4 h-4 text-brand-400" /> Itens
                 </h2>
                 {cart.length > 0 && (
-                  <button onClick={() => setCart([])} className="text-xs text-gray-600 hover:text-red-400 transition-colors">
+                  <button onClick={() => setCart([])} className="text-xs text-gray-400 hover:text-red-400 transition-colors">
                     Limpar
                   </button>
                 )}
               </div>
 
               {cart.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-600 gap-2">
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-2">
                   <ShoppingBag className="w-8 h-8" />
                   <p className="text-xs">Clique nos produtos para adicionar</p>
                 </div>
@@ -697,7 +697,7 @@ export default function VendaAvulsaPage() {
                     <div key={product.id} className="bg-surface-800 rounded-lg p-2.5">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <p className="text-xs text-white font-medium leading-tight flex-1">{product.name}</p>
-                        <button onClick={() => removeFromCart(product.id)} className="text-gray-600 hover:text-red-400 transition-colors shrink-0">
+                        <button onClick={() => removeFromCart(product.id)} className="text-gray-400 hover:text-red-400 transition-colors shrink-0">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1004,7 +1004,7 @@ function HistoricoTab({ history, loading, date, onDateChange }: {
 
           {history.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-gray-500 gap-3">
-              <History className="w-10 h-10 text-gray-600" />
+              <History className="w-10 h-10 text-gray-400" />
               <p className="text-sm">Nenhuma venda registrada em {labelData}</p>
             </div>
           ) : (

@@ -174,7 +174,7 @@ export default function QRCodesPage() {
                 <Table2 className="w-4 h-4 text-brand-400" />
                 <p className="font-bold text-white text-sm">{mesa.nome}</p>
               </div>
-              <p className="text-[10px] text-gray-600 break-all leading-tight mb-3">{mesa.url}</p>
+              <p className="text-[10px] text-gray-400 break-all leading-tight mb-3">{mesa.url}</p>
 
               {/* Ações */}
               <div className="flex gap-2 w-full opacity-0 group-hover:opacity-100 transition-opacity">

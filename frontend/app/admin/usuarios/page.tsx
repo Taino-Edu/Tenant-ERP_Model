@@ -67,7 +67,7 @@ function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSucce
           <div>
             <label className="label">Senha inicial (opcional)</label>
             <input type="password" className="input" placeholder="Mínimo 8 caracteres" value={senha} onChange={e => setSenha(e.target.value)} minLength={8} />
-            <p className="text-xs text-gray-600 mt-1">Se não informada, o cliente precisará redefinir via e-mail.</p>
+            <p className="text-xs text-gray-400 mt-1">Se não informada, o cliente precisará redefinir via e-mail.</p>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
@@ -304,7 +304,7 @@ export default function UsuariosPage() {
             <div className="flex-1 flex flex-col items-center justify-center text-gray-500 gap-3">
               {tabUsuarios === 'inativos'
                 ? <><UserX className="w-10 h-10 text-amber-600/40" /><p className="text-sm">Nenhum cliente inativo 🎉</p></>
-                : <><Users className="w-10 h-10 text-gray-600" /><p className="text-sm">Nenhum cliente encontrado</p></>
+                : <><Users className="w-10 h-10 text-gray-400" /><p className="text-sm">Nenhum cliente encontrado</p></>
               }
             </div>
           ) : (
@@ -350,7 +350,7 @@ export default function UsuariosPage() {
                           </a>
                         )}
                         {insight && (
-                          <span className="flex items-center gap-1 text-xs text-gray-600">
+                          <span className="flex items-center gap-1 text-xs text-gray-400">
                             <Clock className="w-3 h-3" />
                             {insight.numVisitas} visita{insight.numVisitas !== 1 ? 's' : ''}
                             {insight.ultimaVisita && ` · última: ${new Date(insight.ultimaVisita).toLocaleDateString('pt-BR')}`}
@@ -378,7 +378,7 @@ export default function UsuariosPage() {
         {/* ── Painel de pontos ──────────────────────────────────────────────── */}
         <div className="w-full md:w-80 md:shrink-0">
           {!selected ? (
-            <div className="card h-full flex flex-col items-center justify-center text-gray-600 gap-3">
+            <div className="card h-full flex flex-col items-center justify-center text-gray-400 gap-3">
               <Star className="w-10 h-10" />
               <p className="text-sm text-center">Selecione um cliente<br />para gerenciar pontos Maikon e cashback</p>
             </div>
@@ -430,7 +430,7 @@ export default function UsuariosPage() {
                   </div>
                 )}
                 {selected.pointsBalance === 0 && !selected.pointsExpiresAt && (
-                  <p className="text-xs text-gray-600 mt-2">Sem pontos Maikon cadastrados</p>
+                  <p className="text-xs text-gray-400 mt-2">Sem pontos Maikon cadastrados</p>
                 )}
               </div>
 
@@ -468,7 +468,7 @@ export default function UsuariosPage() {
                     : <><Plus className="w-4 h-4" /> Adicionar Pontos Maikon</>
                   }
                 </button>
-                <p className="text-xs text-gray-600 text-center">
+                <p className="text-xs text-gray-400 text-center">
                   Validade renovada para 30 dias após cada adição
                 </p>
               </div>
@@ -546,7 +546,7 @@ function PointsBadge({ user }: { user: UserSummary }) {
       </span>
     )
   return (
-    <span className="text-xs text-gray-600">0 pts Maikon</span>
+    <span className="text-xs text-gray-400">0 pts Maikon</span>
   )
 }
 

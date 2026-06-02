@@ -227,7 +227,7 @@ export default function LandingPage() {
             <div className="text-center py-16 border border-surface-500 rounded-2xl bg-surface-800/30">
               <Trophy className="w-10 h-10 text-surface-500 mx-auto mb-3" />
               <p className="text-gray-500 font-medium">Nenhum evento agendado no momento.</p>
-              <p className="text-gray-600 text-sm mt-1">Fique atento às novidades.</p>
+              <p className="text-gray-400 text-sm mt-1">Fique atento às novidades.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -508,7 +508,7 @@ function EventCalendar({ championships }: { championships: Championship[] }) {
                 <p className={`text-xl font-black leading-none ${isPast ? 'text-gray-500' : 'text-brand-400'}`}>
                   {d.getDate().toString().padStart(2, '0')}
                 </p>
-                <p className={`text-[10px] uppercase font-bold ${isPast ? 'text-gray-600' : 'text-brand-500/70'}`}>
+                <p className={`text-[10px] uppercase font-bold ${isPast ? 'text-gray-400' : 'text-brand-500/70'}`}>
                   {d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}
                 </p>
               </div>
@@ -589,7 +589,7 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
         >
           Quero me inscrever
         </button>
-        <p className="text-xs text-gray-600 text-center mt-2">Pague na chegada · Vagas limitadas</p>
+        <p className="text-xs text-gray-400 text-center mt-2">Pague na chegada · Vagas limitadas</p>
       </div>
     </div>
   )
@@ -732,7 +732,7 @@ function RegisterModal({ championship, onClose }: { championship: Championship; 
               <MessageCircle className="w-4 h-4" />
               Confirmar pelo WhatsApp
             </button>
-            <p className="text-xs text-gray-600 text-center">
+            <p className="text-xs text-gray-400 text-center">
               Você será redirecionado para o WhatsApp para confirmar a vaga.
             </p>
           </form>

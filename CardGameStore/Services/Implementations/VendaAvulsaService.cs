@@ -202,6 +202,26 @@ public class VendaAvulsaService : IVendaAvulsaService
 
             await _db.SaveChangesAsync();
         }
+        else if (request.UserId.HasValue)
+        {
+            // Pagamento normal (Pix / Dinheiro / Cartão) com cliente identificado
+            // → acumula pontos de fidelidade: 1 ponto por R$1 gasto
+            var userId = request.UserId.Value;
+            var user   = await _db.Users.FindAsync(userId)
+                ?? throw new InvalidOperationException("Cliente não encontrado.");
+
+            var pontosGanhos = finalTotal / 100; // 1 ponto por real
+            if (pontosGanhos > 0)
+            {
+                user.PointsBalance   += pontosGanhos;
+                user.PointsExpiresAt  = DateTime.UtcNow.AddYears(1);
+                user.UpdatedAt        = DateTime.UtcNow;
+                _logger.LogInformation(
+                    "Usuário {UserId} ganhou {Pontos} pontos em venda avulsa {VendaId}.",
+                    userId, pontosGanhos, venda.Id);
+                await _db.SaveChangesAsync();
+            }
+        }
 
         return MapToDto(venda);
     }
