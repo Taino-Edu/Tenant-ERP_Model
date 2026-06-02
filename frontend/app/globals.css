@@ -104,8 +104,8 @@
 
   /* Flash de novo item no dashboard */
   @keyframes flash-new {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(120, 57, 243, 0); }
-    50%       { box-shadow: 0 0 0 4px rgba(120, 57, 243, 0.5); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(66, 182, 238, 0); }
+    50%       { box-shadow: 0 0 0 4px rgba(66, 182, 238, 0.5); }
   }
   .flash-new { animation: flash-new 1s ease-in-out 2; }
 
@@ -121,15 +121,15 @@
 
   /* Nav sidebar — item ativo adaptado ao tema */
   .nav-item-active {
-    background-color: rgba(108, 63, 197, 0.15);
-    color: #7839F3;
+    background-color: rgba(66, 182, 238, 0.15);
+    color: #42B6EE;
   }
   .nav-item-label { color: inherit; }
   html.light .nav-item-active {
-    background-color: #EDE9FF;
-    color: #5B21B6;
+    background-color: #E3F5FD;
+    color: #0e7ab5;
   }
-  html.light .nav-item-active .nav-item-label { color: #5B21B6; }
+  html.light .nav-item-active .nav-item-label { color: #0e7ab5; }
 
   /* Fundo do painel admin com gradiente que usa variável de tema */
   .admin-main {

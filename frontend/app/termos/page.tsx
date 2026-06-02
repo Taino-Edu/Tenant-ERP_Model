@@ -156,12 +156,12 @@ export default function TermosPage() {
               Estes Termos nÃ£o afastam ou limitam os direitos previstos no{' '}
               <strong>CÃ³digo de Defesa do Consumidor (Lei nÂ° 8.078/1990)</strong>. Em caso de reclamaÃ§Ã£o,
               vocÃª pode entrar em contato com a SantuÃ¡rio Nerd pelo e-mail{' '}
-              <a href="mailto:contato@santuarionerd.com.br" className="text-[#7839F3] underline">
+              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
                 contato@santuarionerd.com.br
               </a>{' '}
               ou pelo portal do consumidor{' '}
               <a href="https://www.consumidor.gov.br" target="_blank" rel="noopener noreferrer"
-                 className="text-[#7839F3] underline">
+                 className="text-[#42B6EE] underline">
                 consumidor.gov.br
               </a>.
             </p>
@@ -186,7 +186,7 @@ export default function TermosPage() {
             </p>
             <p className="mt-2">
               <strong>E-mail:</strong>{' '}
-              <a href="mailto:contato@santuarionerd.com.br" className="text-[#7839F3] underline">
+              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
                 contato@santuarionerd.com.br
               </a><br />
               <strong>Local:</strong> SantuÃ¡rio Nerd â€” SÃ£o JosÃ© do Rio Preto, SP
@@ -196,7 +196,7 @@ export default function TermosPage() {
         </div>
 
         {/* Links */}
-        <div className="mt-12 pt-6 flex flex-wrap gap-4 text-sm text-[#7839F3]">
+        <div className="mt-12 pt-6 flex flex-wrap gap-4 text-sm text-[#42B6EE]">
           <Link href="/privacidade" className="underline">PolÃ­tica de Privacidade</Link>
           <Link href="/lgpd" className="underline">Exercer meus Direitos (LGPD)</Link>
           <a href="mailto:contato@santuarionerd.com.br" className="underline">

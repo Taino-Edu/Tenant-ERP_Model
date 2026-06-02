@@ -58,7 +58,7 @@ export default function PrivacidadePage() {
               <strong>Controlador dos dados:</strong><br />
               SantuÃ¡rio Nerd â€” SÃ£o JosÃ© do Rio Preto, SP<br />
               E-mail:{' '}
-              <a href="mailto:contato@santuarionerd.com.br" className="text-[#7839F3] underline">
+              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
                 contato@santuarionerd.com.br
               </a>
             </p>
@@ -143,7 +143,7 @@ export default function PrivacidadePage() {
             <p>
               Para mais informaÃ§Ãµes sobre as prÃ¡ticas de privacidade do Google, consulte:{' '}
               <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer"
-                className="text-[#7839F3] underline">
+                className="text-[#42B6EE] underline">
                 policies.google.com/privacy
               </a>.
             </p>
@@ -181,11 +181,11 @@ export default function PrivacidadePage() {
             </ul>
             <p className="mt-3">
               Acesse{' '}
-              <Link href="/lgpd" className="text-[#7839F3] underline font-medium">
+              <Link href="/lgpd" className="text-[#42B6EE] underline font-medium">
                 santuarionerd.tech/lgpd
               </Link>
               {' '}para exercer seus direitos ou envie e-mail para{' '}
-              <a href="mailto:contato@santuarionerd.com.br" className="text-[#7839F3] underline">
+              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
                 contato@santuarionerd.com.br
               </a>.
               Respondemos em atÃ© <strong>15 dias corridos</strong> (Art. 18 Â§ 5Âº).
@@ -240,7 +240,7 @@ export default function PrivacidadePage() {
             <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>11. Contato e ReclamaÃ§Ãµes</h2>
             <p>
               <strong>E-mail:</strong>{' '}
-              <a href="mailto:contato@santuarionerd.com.br" className="text-[#7839F3] underline">
+              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
                 contato@santuarionerd.com.br
               </a><br />
               <strong>EndereÃ§o:</strong> SantuÃ¡rio Nerd â€” SÃ£o JosÃ© do Rio Preto, SP
@@ -248,7 +248,7 @@ export default function PrivacidadePage() {
             <p className="mt-2">
               Insatisfeito com nossa resposta? Registre reclamaÃ§Ã£o na{' '}
               <a href="https://www.gov.br/anpd" target="_blank" rel="noopener noreferrer"
-                className="text-[#7839F3] underline">
+                className="text-[#42B6EE] underline">
                 ANPD â€” Autoridade Nacional de ProteÃ§Ã£o de Dados
               </a>.
             </p>
@@ -267,7 +267,7 @@ export default function PrivacidadePage() {
         </div>
 
         {/* Links rodapÃ© */}
-        <div className="mt-12 pt-6 flex flex-wrap gap-4 text-sm text-[#7839F3]"
+        <div className="mt-12 pt-6 flex flex-wrap gap-4 text-sm text-[#42B6EE]"
              style={{ borderTop: '1px solid var(--border-color)' }}>
           <Link href="/termos" className="underline">Termos de Uso</Link>
           <Link href="/lgpd" className="underline">Exercer meus Direitos (LGPD)</Link>

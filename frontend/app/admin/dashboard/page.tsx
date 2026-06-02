@@ -858,7 +858,7 @@ export default function DashboardPage() {
         notificarBrowser('Nova atividade — Santuário Nerd', `${event.userName}: +${event.lastItemAdded ?? 'item'}`)
         toast(`📋 ${event.userName}: +${event.lastItemAdded ?? 'item'}`, {
           icon: '🃏',
-          style: { background: '#1A1A1F', color: '#fff', border: '1px solid #7839F3', borderRadius: '12px' }
+          style: { background: '#1A1A1F', color: '#fff', border: '1px solid #42B6EE', borderRadius: '12px' }
         })
       })
 

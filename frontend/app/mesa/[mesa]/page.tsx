@@ -165,7 +165,7 @@ export default function MesaPage() {
 
       {/* ── BACKGROUND DECORATION ── */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#7839F3] rounded-full blur-[120px]" />
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#42B6EE] rounded-full blur-[120px]" />
         <div className="absolute top-1/2 -right-24 w-64 h-64 bg-[#00F0A8] rounded-full blur-[100px]" />
       </div>
 
@@ -173,9 +173,9 @@ export default function MesaPage() {
         
         {/* LOGO & TITLE */}
         <div className="text-center mb-10">
-          <img src="/logo-santuario.png" alt="Santuário Nerd" className="w-24 h-24 mx-auto mb-4 drop-shadow-[0_0_20px_rgba(120,57,243,0.4)]" />
+          <img src="/logo-santuario.png" alt="Santuário Nerd" className="w-24 h-24 mx-auto mb-4 drop-shadow-[0_0_20px_rgba(66,182,238,0.4)]" />
           <h1 className="text-3xl font-black uppercase tracking-[0.2em] leading-tight" style={{ fontFamily: 'var(--font-cinzel)' }}>
-            O Santuário<br/><span className="text-[#7839F3]">Nerd</span>
+            O Santuário<br/><span className="text-[#42B6EE]">Nerd</span>
           </h1>
           <div className="mt-4 flex items-center justify-center gap-2 text-gray-500">
             <div className="h-px w-8 bg-[#32323f]" />
@@ -190,7 +190,7 @@ export default function MesaPage() {
         {step === 'loading' && (
           <div className="flex flex-col items-center gap-4 py-12">
             <div className="relative">
-               <Loader2 className="w-12 h-12 animate-spin text-[#7839F3]" />
+               <Loader2 className="w-12 h-12 animate-spin text-[#42B6EE]" />
                <Zap className="absolute inset-0 m-auto w-4 h-4 text-white animate-pulse" />
             </div>
             <p className="text-sm font-bold uppercase tracking-tighter text-gray-400">Consultando o oráculo...</p>
@@ -201,13 +201,13 @@ export default function MesaPage() {
         {step === 'quick' && savedUser && (
           <div className="w-full max-w-sm space-y-6 animate-in fade-in zoom-in-95 duration-300">
             <div className="bg-[#1e1e28] border border-[#32323f] rounded-3xl p-8 text-center shadow-xl">
-               <div className="w-20 h-20 bg-[#7839F3]/10 border-2 border-[#7839F3]/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Award className="w-10 h-10 text-[#7839F3]" />
+               <div className="w-20 h-20 bg-[#42B6EE]/10 border-2 border-[#42B6EE]/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Award className="w-10 h-10 text-[#42B6EE]" />
                </div>
                <p className="text-gray-400 text-sm mb-1 font-medium">Seja bem-vindo de volta,</p>
                <h2 className="text-xl font-black text-white mb-6">{savedUser.name.split(' ')[0]}!</h2>
                
-               <button onClick={() => handleLogin(true)} className="w-full py-4 bg-[#7839F3] text-white font-bold rounded-2xl shadow-lg shadow-[#7839F3]/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform">
+               <button onClick={() => handleLogin(true)} className="w-full py-4 bg-[#42B6EE] text-white font-bold rounded-2xl shadow-lg shadow-[#42B6EE]/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform">
                   Entrar no Santuário <ChevronRight className="w-5 h-5" />
                </button>
                
@@ -230,40 +230,40 @@ export default function MesaPage() {
               <div className="space-y-4">
                 {/* Nome */}
                 <div className="space-y-1.5 group">
-                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#7839F3] transition-colors">Seu Nome</label>
+                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#42B6EE] transition-colors">Seu Nome</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <input
                       type="text" value={name} onChange={e => setName(e.target.value)}
                       placeholder="Como quer ser chamado?"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-medium outline-none transition-all placeholder:text-gray-500"
+                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#42B6EE] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-medium outline-none transition-all placeholder:text-gray-500"
                     />
                   </div>
                 </div>
 
                 {/* CPF */}
                 <div className="space-y-1.5 group">
-                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#7839F3] transition-colors">Seu CPF</label>
+                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#42B6EE] transition-colors">Seu CPF</label>
                   <div className="relative">
                     <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <input
                       type="tel" value={cpf}
                       onChange={e => setCpf(formatCpf(e.target.value))}
                       placeholder="000.000.000-00"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-mono outline-none transition-all placeholder:text-gray-500"
+                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#42B6EE] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-mono outline-none transition-all placeholder:text-gray-500"
                     />
                   </div>
                 </div>
 
                 {/* WhatsApp */}
                 <div className="space-y-1.5 group">
-                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#7839F3] transition-colors">WhatsApp</label>
+                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#42B6EE] transition-colors">WhatsApp</label>
                   <div className="relative">
                     <MessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <input
                       type="tel" value={whatsApp} onChange={e => setWhatsApp(formatPhone(e.target.value))}
                       placeholder="55 (17) 99999-9999"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#7839F3] rounded-2xl py-3.5 pl-11 pr-4 text-sm outline-none transition-all placeholder:text-gray-500"
+                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#42B6EE] rounded-2xl py-3.5 pl-11 pr-4 text-sm outline-none transition-all placeholder:text-gray-500"
                     />
                   </div>
                 </div>
@@ -272,11 +272,11 @@ export default function MesaPage() {
                 <label className="flex items-start gap-3 p-1 cursor-pointer select-none">
                   <input
                     type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
-                    className="mt-1 w-4 h-4 rounded-md border-[#32323f] bg-[#16161d] text-[#7839F3] focus:ring-[#7839F3] transition-all"
+                    className="mt-1 w-4 h-4 rounded-md border-[#32323f] bg-[#16161d] text-[#42B6EE] focus:ring-[#42B6EE] transition-all"
                   />
                   <span className="text-[11px] text-gray-500 leading-tight">
                     Aceito que meus dados sejam usados para gerenciar minha comanda e pontos conforme a{' '}
-                    <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#7839F3] font-bold hover:underline">
+                    <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#42B6EE] font-bold hover:underline">
                       Política de Privacidade
                     </button>.
                   </span>
@@ -285,7 +285,7 @@ export default function MesaPage() {
 
               <button
                 onClick={() => handleLogin(false)}
-                className="w-full py-4 bg-[#7839F3] text-white font-bold rounded-2xl shadow-lg shadow-[#7839F3]/20 flex items-center justify-center gap-2 hover:bg-[#8b55f5] active:scale-[0.98] transition-all"
+                className="w-full py-4 bg-[#42B6EE] text-white font-bold rounded-2xl shadow-lg shadow-[#42B6EE]/20 flex items-center justify-center gap-2 hover:bg-[#2ea8e0] active:scale-[0.98] transition-all"
               >
                 Abrir Comanda <ChevronRight className="w-5 h-5" />
               </button>

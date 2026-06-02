@@ -126,7 +126,7 @@ export default function LgpdPage() {
       <main className="max-w-2xl mx-auto px-4 py-10">
         {/* Título */}
         <div className="flex items-start gap-3 mb-8">
-          <Shield className="w-8 h-8 text-[#7839F3] mt-1 shrink-0" />
+          <Shield className="w-8 h-8 text-[#42B6EE] mt-1 shrink-0" />
           <div>
             <h1 className="text-2xl font-bold">Seus Direitos sobre seus Dados — LGPD</h1>
             <p className="text-gray-600 mt-1 text-sm leading-relaxed">
@@ -155,7 +155,7 @@ export default function LgpdPage() {
               </p>
               <button
                 onClick={() => setProtocolo(null)}
-                className="mt-4 text-sm text-[#7839F3] underline"
+                className="mt-4 text-sm text-[#42B6EE] underline"
               >
                 Abrir nova solicitação
               </button>
@@ -171,7 +171,7 @@ export default function LgpdPage() {
                   required
                   value={form.requesterName}
                   onChange={e => setForm(f => ({ ...f, requesterName: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3]"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE]"
                   placeholder="Seu nome completo"
                 />
               </div>
@@ -185,7 +185,7 @@ export default function LgpdPage() {
                   required
                   value={form.requesterEmail}
                   onChange={e => setForm(f => ({ ...f, requesterEmail: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3]"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE]"
                   placeholder="seu@email.com"
                 />
               </div>
@@ -200,7 +200,7 @@ export default function LgpdPage() {
                   maxLength={14}
                   value={form.requesterCpf}
                   onChange={e => setForm(f => ({ ...f, requesterCpf: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3]"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE]"
                   placeholder="000.000.000-00"
                 />
                 <p className="text-xs text-gray-400 mt-1">Usado apenas para identificação do titular.</p>
@@ -215,7 +215,7 @@ export default function LgpdPage() {
                     required
                     value={form.requestType}
                     onChange={e => setForm(f => ({ ...f, requestType: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-[#7839F3] bg-white"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-[#42B6EE] bg-white"
                   >
                     <option value="">Selecione o tipo...</option>
                     {TIPOS_SOLICITACAO.map(t => (
@@ -235,7 +235,7 @@ export default function LgpdPage() {
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   rows={3}
                   maxLength={2000}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3] resize-none"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE] resize-none"
                   placeholder="Detalhe sua solicitação se desejar..."
                 />
               </div>
@@ -249,7 +249,7 @@ export default function LgpdPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#7839F3] text-white font-medium py-2.5 rounded-lg text-sm hover:bg-[#6C3FC5] disabled:opacity-50 transition-colors"
+                className="w-full bg-[#42B6EE] text-white font-medium py-2.5 rounded-lg text-sm hover:bg-[#2ea8e0] disabled:opacity-50 transition-colors"
               >
                 {loading ? 'Enviando...' : 'Enviar solicitação'}
               </button>
@@ -264,7 +264,7 @@ export default function LgpdPage() {
         {/* Consulta de protocolo */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-5">
-            <Search className="w-5 h-5 text-[#7839F3]" />
+            <Search className="w-5 h-5 text-[#42B6EE]" />
             <h2 className="text-lg font-bold">Consultar Protocolo Existente</h2>
           </div>
 
@@ -273,7 +273,7 @@ export default function LgpdPage() {
               type="text"
               value={consultaId}
               onChange={e => setConsultaId(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3] font-mono"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE] font-mono"
               placeholder="Número do protocolo (ex: abc123-...)"
               required
             />
@@ -283,14 +283,14 @@ export default function LgpdPage() {
                 type="email"
                 value={consultaEmail}
                 onChange={e => setConsultaEmail(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#7839F3]"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE]"
                 placeholder="E-mail usado na solicitação"
                 required
               />
               <button
                 type="submit"
                 disabled={consultaLoading}
-                className="bg-[#7839F3] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#6C3FC5] disabled:opacity-50 transition-colors"
+                className="bg-[#42B6EE] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#2ea8e0] disabled:opacity-50 transition-colors"
               >
                 {consultaLoading ? '...' : 'Consultar'}
               </button>
@@ -349,8 +349,8 @@ export default function LgpdPage() {
 
         {/* Links */}
         <div className="mt-8 text-center text-sm text-gray-500 space-x-4">
-          <Link href="/privacidade" className="text-[#7839F3] underline">Política de Privacidade</Link>
-          <Link href="/termos" className="text-[#7839F3] underline">Termos de Uso</Link>
+          <Link href="/privacidade" className="text-[#42B6EE] underline">Política de Privacidade</Link>
+          <Link href="/termos" className="text-[#42B6EE] underline">Termos de Uso</Link>
         </div>
       </main>
     </div>

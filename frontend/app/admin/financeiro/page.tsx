@@ -61,7 +61,7 @@ function KpiChartModal({
   const colorMap: Record<string, { bar: string; text: string }> = {
     green:  { bar: '#10b981', text: 'text-emerald-400' },
     red:    { bar: 'rgba(239,68,68,0.7)', text: 'text-red-400' },
-    brand:  { bar: '#7839F3', text: 'text-brand-400' },
+    brand:  { bar: '#42B6EE', text: 'text-brand-400' },
     yellow: { bar: '#f59e0b', text: 'text-yellow-400' },
   }
   const { bar: barColor, text: textClass } = colorMap[color] ?? colorMap.brand
@@ -429,7 +429,7 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
               >
                 {!hasData && <rect x={x + barW * 0.2} y={PAD.top + chartH - 1} width={barW * 0.6} height={1} fill="#32323f" />}
                 {hasData && custoH > 0 && <rect x={x} y={PAD.top + chartH - recH} width={barW} height={custoH} fill="rgba(239,68,68,0.5)" rx="2" />}
-                {hasData && <rect x={x} y={PAD.top + chartH - recH + custoH} width={barW} height={margemH} fill="#7839F3" rx="2" />}
+                {hasData && <rect x={x} y={PAD.top + chartH - recH + custoH} width={barW} height={margemH} fill="#42B6EE" rx="2" />}
                 {(hasData || i === 0 || i === dias.length - 1 || i % Math.ceil(dias.length / 8) === 0) && (
                   <text x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize="8" fill={hasData ? '#9ca3af' : '#4b5563'}>
                     {d.dia.slice(5)}
@@ -463,7 +463,7 @@ function MargemDonut({ receita, custo }: { receita: number; custo: number }) {
     <div className="card flex flex-col items-center justify-center gap-3 py-6">
       <h3 className="text-sm font-semibold text-gray-300 self-start">Custo vs Receita</h3>
       <svg width="120" height="120" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="#7839F3" strokeWidth="14" />
+        <circle cx="60" cy="60" r={r} fill="none" stroke="#42B6EE" strokeWidth="14" />
         <circle cx="60" cy="60" r={r} fill="none" stroke="rgba(239,68,68,0.5)" strokeWidth="14"
           strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={circ / 4} strokeLinecap="round" />
         <text x="60" y="56" textAnchor="middle" fontSize="14" fontWeight="bold" fill="white">{(100 - pct).toFixed(0)}%</text>
