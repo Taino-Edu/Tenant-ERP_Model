@@ -204,8 +204,8 @@ export default function MesaPage() {
                <div className="w-20 h-20 bg-[#42B6EE]/10 border-2 border-[#42B6EE]/30 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Award className="w-10 h-10 text-[#42B6EE]" />
                </div>
-               <p className="text-gray-400 text-sm mb-1 font-medium">Seja bem-vindo de volta,</p>
-               <h2 className="text-xl font-black text-white mb-6">{savedUser.name.split(' ')[0]}!</h2>
+               <p className="text-sm mb-1 font-medium" style={{ color: '#9CA3AF' }}>Seja bem-vindo de volta,</p>
+               <h2 className="text-xl font-black mb-6" style={{ color: '#FFFFFF' }}>{savedUser.name.split(' ')[0]}!</h2>
                
                <button onClick={() => handleLogin(true)} className="w-full py-4 bg-[#42B6EE] text-white font-bold rounded-2xl shadow-lg shadow-[#42B6EE]/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform">
                   Entrar no Santuário <ChevronRight className="w-5 h-5" />
