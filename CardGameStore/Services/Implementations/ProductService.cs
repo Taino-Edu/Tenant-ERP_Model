@@ -14,10 +14,10 @@ public class ProductService : IProductService
     public ProductService(AppDbContext db) { _db = db; }
 
     public async Task<IEnumerable<Product>> GetAllActiveAsync() =>
-        await _db.Products.Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+        await _db.Products.Where(p => p.IsActive && p.StockQuantity > 0).OrderBy(p => p.Name).ToListAsync();
 
     public async Task<IEnumerable<Product>> GetByCategoryAsync(string category) =>
-        await _db.Products.Where(p => p.IsActive && p.Category == category).ToListAsync();
+        await _db.Products.Where(p => p.IsActive && p.StockQuantity > 0 && p.Category == category).ToListAsync();
 
     public async Task<Product?> GetByIdAsync(Guid id) =>
         await _db.Products.FindAsync(id);

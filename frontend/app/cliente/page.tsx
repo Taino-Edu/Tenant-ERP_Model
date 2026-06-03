@@ -4,8 +4,8 @@ import { comandaApi, userApi, productApi, categoryApi, ComandaDto, Product, Prod
 import { getUserName } from '@/lib/auth'
 import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
-import { 
-  ShoppingCart, Plus, Trash2, Loader2, Clock, 
+import {
+  ShoppingCart, Plus, Trash2, Loader2, Clock, Search,
   TableProperties, Receipt, PackageOpen, Star,
   Layout, BookOpen, Settings2, User as UserIcon
 } from 'lucide-react'
@@ -26,6 +26,7 @@ export default function ClientePage() {
 
   // Opção de estilo visual (opcional para o cliente)
   const [immersiveMode, setImmersiveMode] = useState(false)
+  const [searchQuery, setSearchQuery]     = useState('')
 
   const fetchComanda = useCallback(async () => {
     try { 
@@ -131,6 +132,19 @@ export default function ClientePage() {
     } finally { setRemovingPts(false) }
   }
 
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const groupedProducts = categories
+    .filter(cat => cat.isActive && filteredProducts.some(p => p.category === cat.name))
+    .sort((a, b) => a.displayOrder - b.displayOrder)
+    .map(cat => ({ category: cat, items: filteredProducts.filter(p => p.category === cat.name) }))
+
+  const uncategorized = filteredProducts.filter(p =>
+    !categories.some(cat => cat.name === p.category)
+  )
+
   const statusColors: Record<string, string> = {
     Aberta: 'text-emerald-400', 
     EmAndamento: 'text-amber-400',
@@ -173,8 +187,8 @@ export default function ClientePage() {
       {/* ── TOP HEADER (ESTILO SANTUÁRIO) ────────────────────────── */}
       <header className="bg-surface-800 border-b border-surface-700 px-6 pt-8 pb-6 text-center">
         <img src="/logo-santuario.png" alt="Logo" className="w-16 h-16 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(66,182,238,0.3)]" />
-        <h1 className="text-2xl font-bold tracking-[0.2em] text-white uppercase">
-          O Santuário Nerd
+        <h1 className="text-2xl font-bold tracking-widest text-white uppercase">
+          Santuário Nerd
         </h1>
         <div className="flex items-center justify-center gap-3 mt-4">
           <ThemeToggle compact />
@@ -327,56 +341,107 @@ export default function ClientePage() {
               )}
             </section>
 
-            {/* CARDÁPIO / MENU DE PRODUTOS */}
+            {/* ITENS PARA SUA JORNADA */}
             {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
-              <section className="space-y-4">
+              <section className="space-y-5">
                 <div className="flex items-center justify-between">
                   <h2 className="font-bold text-gray-100 uppercase tracking-widest text-xs flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4 text-brand-500" /> Cardápio Disponível
+                    <ShoppingCart className="w-4 h-4 text-brand-500" /> Itens para sua Jornada
                   </h2>
-                  <span className="text-[10px] text-gray-500 font-bold uppercase">{products.length} Itens</span>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase">{filteredProducts.length} Itens</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  {products.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => p.stockQuantity > 0 && setConfirmItem(p)}
-                      disabled={adding === p.id || p.stockQuantity === 0}
-                      className={clsx(
-                        'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-200 active:scale-95 disabled:opacity-40 relative group overflow-hidden h-40',
-                        adding === p.id && 'border-brand-500'
-                      )}
-                    >
-                      {/* Imagem limpa, sem overlay escuro */}
-                      {p.imageUrl && (
-                        <div
-                          className="absolute inset-0 z-0 group-hover:scale-105 transition-transform duration-300"
-                          style={{
-                            backgroundImage: `url(${p.imageUrl})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center'
-                          }}
-                        />
-                      )}
+                {/* Busca */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar item..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full bg-surface-800 border border-surface-600 rounded-xl pl-9 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
+                  />
+                </div>
 
-                      <div className="relative z-10 flex flex-col h-full justify-between p-3">
-                        <div className="flex justify-end">
-                          <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center border border-white/20 group-hover:border-brand-500/60 transition-colors shadow-lg">
-                            <Plus className="w-4 h-4" style={{ color: '#FFFFFF' }} />
+                {/* Por categoria */}
+                {groupedProducts.map(({ category, items }) => (
+                  <div key={category.id} className="space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
+                      {category.emoji && <span className="text-base">{category.emoji}</span>}
+                      {category.name}
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {items.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => setConfirmItem(p)}
+                          disabled={adding === p.id}
+                          className={clsx(
+                            'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-200 active:scale-95 relative group overflow-hidden h-40',
+                            adding === p.id && 'border-brand-500'
+                          )}
+                        >
+                          {p.imageUrl && (
+                            <div className="absolute inset-0 z-0 group-hover:scale-105 transition-transform duration-300"
+                              style={{ backgroundImage: `url(${p.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                          )}
+                          <div className="relative z-10 flex flex-col h-full justify-between p-3">
+                            <div className="flex justify-end">
+                              <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center border border-white/20 group-hover:border-brand-500/60 transition-colors shadow-lg">
+                                <Plus className="w-4 h-4" style={{ color: '#FFFFFF' }} />
+                              </div>
+                            </div>
+                            <div className="bg-black/55 backdrop-blur-sm rounded-xl px-3 py-2">
+                              <p className="text-xs font-bold line-clamp-2" style={{ color: '#F3F4F6' }}>{p.name}</p>
+                              <p className="font-black text-sm mt-1" style={{ color: '#00F0A8' }}>
+                                R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Itens sem categoria cadastrada */}
+                {uncategorized.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    {uncategorized.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setConfirmItem(p)}
+                        disabled={adding === p.id}
+                        className={clsx(
+                          'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-200 active:scale-95 relative group overflow-hidden h-40',
+                          adding === p.id && 'border-brand-500'
+                        )}
+                      >
+                        {p.imageUrl && (
+                          <div className="absolute inset-0 z-0 group-hover:scale-105 transition-transform duration-300"
+                            style={{ backgroundImage: `url(${p.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                        )}
+                        <div className="relative z-10 flex flex-col h-full justify-between p-3">
+                          <div className="flex justify-end">
+                            <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center border border-white/20 group-hover:border-brand-500/60 transition-colors shadow-lg">
+                              <Plus className="w-4 h-4" style={{ color: '#FFFFFF' }} />
+                            </div>
+                          </div>
+                          <div className="bg-black/55 backdrop-blur-sm rounded-xl px-3 py-2">
+                            <p className="text-xs font-bold line-clamp-2" style={{ color: '#F3F4F6' }}>{p.name}</p>
+                            <p className="font-black text-sm mt-1" style={{ color: '#00F0A8' }}>
+                              R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                            </p>
                           </div>
                         </div>
-                        {/* Backdrop escuro sempre visível em qualquer tema */}
-                        <div className="bg-black/55 backdrop-blur-sm rounded-xl px-3 py-2">
-                          <p className="text-xs font-bold line-clamp-2" style={{ color: '#F3F4F6' }}>{p.name}</p>
-                          <p className="font-black text-sm mt-1" style={{ color: '#00F0A8' }}>
-                            R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {filteredProducts.length === 0 && (
+                  <p className="text-center text-gray-500 text-sm py-8">Nenhum item encontrado.</p>
+                )}
               </section>
             )}
           </>
