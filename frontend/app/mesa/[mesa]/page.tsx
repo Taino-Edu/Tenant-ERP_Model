@@ -174,8 +174,8 @@ export default function MesaPage() {
         {/* LOGO & TITLE */}
         <div className="text-center mb-10">
           <img src="/logo-santuario.png" alt="Santuário Nerd" className="w-24 h-24 mx-auto mb-4 drop-shadow-[0_0_20px_rgba(66,182,238,0.4)]" />
-          <h1 className="text-3xl font-black uppercase tracking-[0.2em] leading-tight">
-            O Santuário<br/><span className="text-[#42B6EE]">Nerd</span>
+          <h1 className="text-3xl font-black uppercase tracking-[0.2em] leading-tight text-white">
+            Santuário<br/><span className="text-[#42B6EE]">Nerd</span>
           </h1>
           <div className="mt-4 flex items-center justify-center gap-2 text-gray-500">
             <div className="h-px w-8 bg-[#32323f]" />
