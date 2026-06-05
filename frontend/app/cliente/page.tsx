@@ -377,25 +377,32 @@ export default function ClientePage() {
                           onClick={() => setConfirmItem(p)}
                           disabled={adding === p.id}
                           className={clsx(
-                            'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-200 active:scale-95 relative group overflow-hidden h-40',
+                            'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-150 active:scale-95 overflow-hidden flex flex-col disabled:opacity-50',
                             adding === p.id && 'border-brand-500'
                           )}
                         >
-                          {p.imageUrl && (
-                            <div className="absolute inset-0 z-0 group-hover:scale-105 transition-transform duration-300"
-                              style={{ backgroundImage: `url(${p.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                          )}
-                          <div className="relative z-10 flex flex-col h-full justify-between p-3">
-                            <div className="flex justify-end">
-                              <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center border border-white/20 group-hover:border-brand-500/60 transition-colors shadow-lg">
-                                <Plus className="w-4 h-4" style={{ color: '#FFFFFF' }} />
-                              </div>
-                            </div>
-                            <div className="bg-black/55 backdrop-blur-sm rounded-xl px-3 py-2">
-                              <p className="text-xs font-bold line-clamp-2" style={{ color: '#F3F4F6' }}>{p.name}</p>
-                              <p className="font-black text-sm mt-1" style={{ color: '#00F0A8' }}>
+                          {/* Imagem no topo */}
+                          <div className="w-full h-32 bg-surface-700 flex items-center justify-center overflow-hidden">
+                            {p.imageUrl
+                              ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                              : <span className="text-4xl">{category.emoji ?? '📦'}</span>
+                            }
+                          </div>
+                          {/* Info abaixo */}
+                          <div className="p-3 flex flex-col flex-1">
+                            <p className="text-xs font-semibold text-gray-100 line-clamp-2 flex-1 mb-2">{p.name}</p>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-accent-green font-black text-sm">
                                 R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-                              </p>
+                              </span>
+                              <div className={clsx(
+                                'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors',
+                                adding === p.id ? 'bg-brand-500/20' : 'bg-brand-500'
+                              )}>
+                                {adding === p.id
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" />
+                                  : <Plus className="w-3.5 h-3.5 text-white" />}
+                              </div>
                             </div>
                           </div>
                         </button>
@@ -413,25 +420,30 @@ export default function ClientePage() {
                         onClick={() => setConfirmItem(p)}
                         disabled={adding === p.id}
                         className={clsx(
-                          'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-200 active:scale-95 relative group overflow-hidden h-40',
+                          'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-150 active:scale-95 overflow-hidden flex flex-col disabled:opacity-50',
                           adding === p.id && 'border-brand-500'
                         )}
                       >
-                        {p.imageUrl && (
-                          <div className="absolute inset-0 z-0 group-hover:scale-105 transition-transform duration-300"
-                            style={{ backgroundImage: `url(${p.imageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-                        )}
-                        <div className="relative z-10 flex flex-col h-full justify-between p-3">
-                          <div className="flex justify-end">
-                            <div className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center border border-white/20 group-hover:border-brand-500/60 transition-colors shadow-lg">
-                              <Plus className="w-4 h-4" style={{ color: '#FFFFFF' }} />
-                            </div>
-                          </div>
-                          <div className="bg-black/55 backdrop-blur-sm rounded-xl px-3 py-2">
-                            <p className="text-xs font-bold line-clamp-2" style={{ color: '#F3F4F6' }}>{p.name}</p>
-                            <p className="font-black text-sm mt-1" style={{ color: '#00F0A8' }}>
+                        <div className="w-full h-32 bg-surface-700 flex items-center justify-center overflow-hidden">
+                          {p.imageUrl
+                            ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                            : <span className="text-4xl">{getCategoryEmoji(p.category, categories)}</span>
+                          }
+                        </div>
+                        <div className="p-3 flex flex-col flex-1">
+                          <p className="text-xs font-semibold text-gray-100 line-clamp-2 flex-1 mb-2">{p.name}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-accent-green font-black text-sm">
                               R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-                            </p>
+                            </span>
+                            <div className={clsx(
+                              'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors',
+                              adding === p.id ? 'bg-brand-500/20' : 'bg-brand-500'
+                            )}>
+                              {adding === p.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" />
+                                : <Plus className="w-3.5 h-3.5 text-white" />}
+                            </div>
                           </div>
                         </div>
                       </button>
