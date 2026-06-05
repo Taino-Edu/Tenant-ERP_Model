@@ -6,16 +6,15 @@ import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
-  Receipt, PackageOpen, Star, BookOpen, User as UserIcon
+  Receipt, PackageOpen, Star, BookOpen, User as UserIcon, Package
 } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 import clsx from 'clsx'
 
 
-function ProductCard({ p, fallbackEmoji, adding, onAdd }: {
+function ProductCard({ p, adding, onAdd }: {
   p: Product
-  fallbackEmoji: string
   adding: string | null
   onAdd: () => void
 }) {
@@ -32,7 +31,7 @@ function ProductCard({ p, fallbackEmoji, adding, onAdd }: {
       <div className="w-full h-36 bg-surface-700 flex items-center justify-center overflow-hidden p-1">
         {p.imageUrl
           ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
-          : <span className="text-5xl">{fallbackEmoji}</span>
+          : <Package className="w-12 h-12 text-gray-500 opacity-40" />
         }
       </div>
       <div className="p-3 flex flex-col gap-2">
@@ -427,7 +426,7 @@ export default function ClientePage() {
                       <span className="uppercase tracking-widest">{category.name}</span>
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
-                      {items.map(p => <ProductCard key={p.id} p={p} fallbackEmoji={category.emoji ?? '📦'} adding={adding} onAdd={() => setConfirmItem(p)} />)}
+                      {items.map(p => <ProductCard key={p.id} p={p} adding={adding} onAdd={() => setConfirmItem(p)} />)}
                     </div>
                   </div>
                 ))}
@@ -435,7 +434,7 @@ export default function ClientePage() {
                 {/* Itens sem categoria */}
                 {uncategorized.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
-                    {uncategorized.map(p => <ProductCard key={p.id} p={p} fallbackEmoji="📦" adding={adding} onAdd={() => setConfirmItem(p)} />)}
+                    {uncategorized.map(p => <ProductCard key={p.id} p={p} adding={adding} onAdd={() => setConfirmItem(p)} />)}
                   </div>
                 )}
 
