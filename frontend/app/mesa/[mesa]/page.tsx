@@ -173,7 +173,7 @@ export default function MesaPage() {
         
         {/* LOGO & TITLE */}
         <div className="text-center mb-10">
-          <img src="/logo-santuario.png" alt="Santuário Nerd" className="w-24 h-24 mx-auto mb-4 drop-shadow-[0_0_20px_rgba(66,182,238,0.4)]" />
+          <img src="/maikon-avatar.png" alt="Mascote" className="w-28 h-28 mx-auto mb-4 rounded-full object-cover object-top" />
           <h1 className="text-3xl font-black uppercase tracking-[0.2em] leading-tight text-white">
             Santuário<br/><span className="text-[#42B6EE]">Nerd</span>
           </h1>
