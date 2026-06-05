@@ -5,14 +5,55 @@ import { getUserName } from '@/lib/auth'
 import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
 import {
-  ShoppingCart, Plus, Trash2, Loader2, Clock, Search,
-  TableProperties, Receipt, PackageOpen, Star,
-  Layout, BookOpen, Settings2, User as UserIcon
+  ShoppingCart, Plus, Trash2, Loader2, Search,
+  Receipt, PackageOpen, Star, BookOpen, User as UserIcon
 } from 'lucide-react'
 import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
 import clsx from 'clsx'
 
+
+function ProductCard({ p, fallbackEmoji, adding, onAdd }: {
+  p: Product
+  fallbackEmoji: string
+  adding: string | null
+  onAdd: () => void
+}) {
+  const isAdding = adding === p.id
+  return (
+    <button
+      onClick={onAdd}
+      disabled={isAdding}
+      className={clsx(
+        'bg-surface-800 border rounded-2xl text-left transition-all duration-150 active:scale-95 overflow-hidden flex flex-col disabled:opacity-50',
+        isAdding ? 'border-brand-500' : 'border-surface-600'
+      )}
+    >
+      <div className="w-full h-36 bg-surface-750 flex items-center justify-center overflow-hidden">
+        {p.imageUrl
+          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+          : <span className="text-5xl">{fallbackEmoji}</span>
+        }
+      </div>
+      <div className="p-3 flex flex-col flex-1 gap-2">
+        <p className="text-xs font-semibold text-gray-100 line-clamp-2 leading-snug flex-1">{p.name}</p>
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-accent-green font-black text-sm">
+            R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+          </span>
+          <div className={clsx(
+            'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors',
+            isAdding ? 'bg-brand-500/20' : 'bg-brand-500'
+          )}>
+            {isAdding
+              ? <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+              : <Plus className="w-4 h-4 text-white" />}
+          </div>
+        </div>
+      </div>
+    </button>
+  )
+}
 
 export default function ClientePage() {
   const [comanda, setComanda]         = useState<ComandaDto | null>(null)
@@ -184,44 +225,56 @@ export default function ClientePage() {
         </div>
       )}
 
-      {/* ── TOP HEADER (ESTILO SANTUÁRIO) ────────────────────────── */}
-      <header className="bg-surface-800 border-b border-surface-700 px-6 pt-8 pb-6 text-center">
-        <img src="/logo-santuario.png" alt="Logo" className="w-16 h-16 mx-auto mb-4 drop-shadow-[0_0_15px_rgba(66,182,238,0.3)]" />
-        <h1 className="text-2xl font-bold tracking-widest text-white uppercase">
-          Santuário Nerd
-        </h1>
-        <div className="flex items-center justify-center gap-3 mt-4">
-          <ThemeToggle compact />
-          <Link href="/cliente/perfil" className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-900 border border-surface-600 text-xs text-gray-400 hover:text-white transition-colors">
-            <UserIcon className="w-3.5 h-3.5" /> Conta
-          </Link>
-          <button onClick={toggleImmersive} className={clsx(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all text-xs font-medium",
-            immersiveMode ? "bg-brand-500/10 border-brand-500 text-brand-500" : "bg-surface-900 border-surface-600 text-gray-400"
-          )}>
-            <BookOpen className="w-3.5 h-3.5" /> {immersiveMode ? 'Modo RPG On' : 'Modo Clássico'}
-          </button>
+      {/* ── TOP HEADER ───────────────────────────────────────────── */}
+      <header className="bg-surface-800 border-b border-surface-700 px-5 pt-10 pb-5">
+        <div className="flex items-center justify-between max-w-lg mx-auto">
+          <div className="flex items-center gap-3">
+            <img src="/logo-santuario.png" alt="Logo" className="w-9 h-9 drop-shadow-[0_0_10px_rgba(66,182,238,0.4)]" />
+            <div>
+              <h1 className="text-base font-bold text-white leading-tight">Santuário Nerd</h1>
+              {profile && <p className="text-xs text-gray-400">Olá, {profile.name.split(' ')[0]} 👋</p>}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={toggleImmersive} className={clsx(
+              "p-2 rounded-full border transition-all",
+              immersiveMode ? "bg-brand-500/10 border-brand-500 text-brand-500" : "border-surface-600 text-gray-500 hover:text-gray-300"
+            )} title={immersiveMode ? 'Modo RPG' : 'Modo Clássico'}>
+              <BookOpen className="w-4 h-4" />
+            </button>
+            <Link href="/cliente/perfil">
+              {profile?.profileImageUrl
+                ? <img src={profile.profileImageUrl} alt={profile.name} className="w-9 h-9 rounded-full object-cover ring-2 ring-brand-500/40" />
+                : <div className="w-9 h-9 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">
+                    <span className="text-sm font-bold text-brand-400">{profile?.name?.charAt(0).toUpperCase() ?? <UserIcon className="w-4 h-4" />}</span>
+                  </div>
+              }
+            </Link>
+          </div>
         </div>
       </header>
 
       {/* ── CONTENT AREA ─────────────────────────────────────────── */}
       <main className="max-w-lg mx-auto px-4 py-8 space-y-8">
 
-        {/* Status do Jogador / Pontos */}
+        {/* Pontos */}
         {profile && (
-          <section className="bg-gradient-to-br from-surface-800 to-surface-900 rounded-2xl p-5 border border-surface-600 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-              <Star className="w-20 h-20 text-white" />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center border border-brand-500/30">
-                <Star className="w-6 h-6 text-brand-500" />
+          <section className="bg-surface-800 rounded-2xl p-4 border border-surface-600 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-brand-500/15 flex items-center justify-center border border-brand-500/25">
+                <Star className="w-5 h-5 text-brand-400" />
               </div>
               <div>
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Seus Pontos</p>
-                <p className="text-2xl font-black text-gray-100">{profile.pointsBalance} <span className="text-sm font-normal text-gray-500">pts</span></p>
+                <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">Seus Pontos</p>
+                <p className="text-xl font-black text-gray-100 leading-tight">{profile.pointsBalance} <span className="text-xs font-normal text-gray-500">pts</span></p>
               </div>
             </div>
+            {profile.balanceInCents > 0 && (
+              <div className="text-right">
+                <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">Cashback</p>
+                <p className="text-base font-black text-accent-green leading-tight">R$ {(profile.balanceInCents / 100).toFixed(2).replace('.', ',')}</p>
+              </div>
+            )}
           </section>
         )}
 
@@ -244,96 +297,91 @@ export default function ClientePage() {
           <>
             {/* COMANDA ATIVA */}
             <section className={clsx(
-              "relative transition-all duration-500",
-              immersiveMode ? "bg-[#f4e4bc] text-[#5d4037] p-8 rounded-[2px] shadow-[0_10px_30px_rgba(0,0,0,0.5)] border-x-8 border-[#d7c49e]" : "bg-surface-800 border border-surface-600 rounded-2xl p-6"
+              "rounded-2xl overflow-hidden border transition-all duration-500",
+              immersiveMode
+                ? "bg-[#f4e4bc] border-[#d7c49e] shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+                : "bg-surface-800 border-surface-600"
             )}>
-              {/* Detalhes Visuais do Modo Imersivo */}
-              {immersiveMode && (
-                <>
-                  <div className="absolute -top-3 left-0 right-0 flex justify-between px-8">
-                    <div className="w-8 h-6 bg-[#d7c49e] rounded-t-full" />
-                    <div className="w-8 h-6 bg-[#d7c49e] rounded-t-full" />
-                  </div>
-                  <div className="border-b border-[#5d4037]/20 pb-4 mb-6">
-                    <h2 className="font-bold uppercase tracking-[0.1em] text-center">
-                      Relatório de Consumo
-                    </h2>
-                  </div>
-                </>
-              )}
-
-              <div className="flex items-center justify-between mb-6">
+              {/* Header da comanda */}
+              <div className={clsx(
+                "flex items-center justify-between px-5 py-4 border-b",
+                immersiveMode ? "border-[#d7c49e]" : "border-surface-600"
+              )}>
                 <div className="flex items-center gap-2">
-                  <Receipt className={clsx("w-5 h-5", immersiveMode ? "text-[#5d4037]" : "text-brand-500")} />
-                  <span className={clsx("font-bold text-sm uppercase tracking-wider", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>
-                    Mesa {comanda.tableIdentifier || 'N/A'}
+                  <Receipt className={clsx("w-4 h-4", immersiveMode ? "text-[#5d4037]" : "text-brand-500")} />
+                  <span className={clsx("font-bold text-sm", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>
+                    {immersiveMode ? 'Pergaminho de Consumo' : `Mesa ${comanda.tableIdentifier || 'N/A'}`}
                   </span>
                 </div>
-                <span className={clsx("text-[10px] font-black uppercase px-2 py-0.5 rounded border", 
-                  immersiveMode ? "border-[#5d4037] text-[#5d4037]" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                <span className={clsx(
+                  "text-[10px] font-bold uppercase px-2.5 py-1 rounded-full",
+                  immersiveMode ? "bg-[#5d4037]/10 text-[#5d4037]" : "bg-emerald-500/10 text-emerald-400"
                 )}>
                   {comanda.status}
                 </span>
               </div>
 
-              {comanda.items.length === 0 ? (
-                <div className={clsx("text-center py-8 border-2 border-dashed rounded-xl", 
-                  immersiveMode ? "border-[#5d4037]/20 text-[#5d4037]/60" : "border-surface-500 text-gray-500"
-                )}>
-                  <p className="text-sm italic">Seu pergaminho está em branco...</p>
-                </div>
-              ) : (
-                <div className="space-y-4 mb-8">
-                  {comanda.items.map(item => (
-                    <div key={item.id} className="flex justify-between items-start gap-4">
-                      <div className="flex-1">
-                        <p className={clsx("text-sm font-bold leading-tight", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>
-                          {item.itemNameSnapshot}
-                        </p>
-                        <p className={clsx("text-[10px] mt-0.5 font-medium", immersiveMode ? "text-[#5d4037]/60" : "text-gray-400")}>
-                          {item.quantity}× R$ {item.unitPriceInReais.toFixed(2).replace('.', ',')}
-                        </p>
+              {/* Itens */}
+              <div className="px-5 py-4">
+                {comanda.items.length === 0 ? (
+                  <p className={clsx("text-center text-sm py-6 italic", immersiveMode ? "text-[#5d4037]/50" : "text-gray-500")}>
+                    Nenhum item ainda...
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {comanda.items.map((item, idx) => (
+                      <div key={item.id}>
+                        <div className="flex justify-between items-center gap-4">
+                          <div className="flex-1 min-w-0">
+                            <p className={clsx("text-sm font-semibold leading-tight truncate", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>
+                              {item.itemNameSnapshot}
+                            </p>
+                            <p className={clsx("text-xs mt-0.5", immersiveMode ? "text-[#5d4037]/60" : "text-gray-500")}>
+                              {item.quantity}× R$ {item.unitPriceInReais.toFixed(2).replace('.', ',')}
+                            </p>
+                          </div>
+                          <span className={clsx("font-bold text-sm shrink-0", immersiveMode ? "text-[#5d4037]" : "text-accent-green")}>
+                            R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                        {idx < comanda.items.length - 1 && (
+                          <div className={clsx("mt-3 border-b", immersiveMode ? "border-[#5d4037]/10" : "border-surface-700")} />
+                        )}
                       </div>
-                      <span className={clsx("font-bold text-sm", immersiveMode ? "text-[#5d4037]" : "text-accent-green")}>
-                        R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
 
-                  <div className={clsx("pt-4 border-t-2 border-dashed flex justify-between items-center", 
-                    immersiveMode ? "border-[#5d4037]/20" : "border-surface-600"
-                  )}>
-                    <span className={clsx("font-black uppercase text-sm", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>Total</span>
-                    <span className={clsx("text-2xl font-black", immersiveMode ? "text-[#5d4037]" : "text-accent-green")}>
+                {/* Total */}
+                {comanda.items.length > 0 && (
+                  <div className={clsx("flex justify-between items-center mt-4 pt-4 border-t", immersiveMode ? "border-[#5d4037]/20" : "border-surface-600")}>
+                    <span className={clsx("font-bold text-sm uppercase tracking-wide", immersiveMode ? "text-[#5d4037]" : "text-gray-400")}>Total</span>
+                    <span className={clsx("text-2xl font-black", immersiveMode ? "text-[#5d4037]" : "text-white")}>
                       R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
                     </span>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
-
-              {/* Botão de Pontos (Estilo diferenciado) */}
+              {/* Pontos */}
               {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
-                <div className="mt-6">
+                <div className={clsx("px-5 pb-5")}>
                   {comanda.pointsApplied > 0 ? (
                     <button onClick={removePoints} disabled={removingPts} className={clsx(
                       "w-full p-3 rounded-xl flex items-center justify-between transition-opacity",
-                      immersiveMode ? "bg-black/5 text-[#5d4037]" : "bg-emerald-500/10 text-emerald-400"
+                      immersiveMode ? "bg-[#5d4037]/10 text-[#5d4037]" : "bg-emerald-500/10 text-emerald-400"
                     )}>
-                      <div className="flex items-center gap-2 font-bold text-xs uppercase">
-                        <Star className="w-4 h-4" /> Descontado
+                      <div className="flex items-center gap-2 font-semibold text-xs">
+                        <Star className="w-4 h-4" /> {(comanda.pointsApplied / 100).toFixed(2).replace('.', ',')} pts aplicados
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-black">-{ (comanda.pointsApplied / 100).toFixed(2).replace('.', ',') } pts</span>
-                        <Trash2 className="w-3.5 h-3.5 opacity-50" />
-                      </div>
+                      <Trash2 className="w-3.5 h-3.5 opacity-50" />
                     </button>
                   ) : profile && profile.pointsBalance > 0 && !profile.pointsExpired && (
                     <button onClick={applyPoints} disabled={applyingPts} className={clsx(
-                      "w-full p-3 rounded-xl flex items-center justify-between border-2 border-dashed transition-all active:scale-95",
-                      immersiveMode ? "border-[#5d4037]/30 text-[#5d4037] hover:bg-black/5" : "border-brand-500/30 text-brand-400 hover:bg-brand-500/5"
+                      "w-full p-3 rounded-xl flex items-center justify-between border border-dashed transition-all active:scale-95",
+                      immersiveMode ? "border-[#5d4037]/30 text-[#5d4037]" : "border-brand-500/30 text-brand-400 hover:bg-brand-500/5"
                     )}>
-                      <span className="font-black text-xs uppercase tracking-widest">Usar Pontos Acumulados</span>
+                      <span className="font-semibold text-xs">Usar {profile.pointsBalance} pontos acumulados</span>
                       <Plus className="w-4 h-4" />
                     </button>
                   )}
@@ -366,88 +414,20 @@ export default function ClientePage() {
                 {/* Por categoria */}
                 {groupedProducts.map(({ category, items }) => (
                   <div key={category.id} className="space-y-3">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1.5">
-                      {category.emoji && <span className="text-base">{category.emoji}</span>}
-                      {category.name}
+                    <h3 className="text-xs font-bold text-gray-400 flex items-center gap-1.5">
+                      {category.emoji && <span className="text-sm">{category.emoji}</span>}
+                      <span className="uppercase tracking-widest">{category.name}</span>
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
-                      {items.map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => setConfirmItem(p)}
-                          disabled={adding === p.id}
-                          className={clsx(
-                            'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-150 active:scale-95 overflow-hidden flex flex-col disabled:opacity-50',
-                            adding === p.id && 'border-brand-500'
-                          )}
-                        >
-                          {/* Imagem no topo */}
-                          <div className="w-full h-32 bg-surface-700 flex items-center justify-center overflow-hidden">
-                            {p.imageUrl
-                              ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                              : <span className="text-4xl">{category.emoji ?? '📦'}</span>
-                            }
-                          </div>
-                          {/* Info abaixo */}
-                          <div className="p-3 flex flex-col flex-1">
-                            <p className="text-xs font-semibold text-gray-100 line-clamp-2 flex-1 mb-2">{p.name}</p>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-accent-green font-black text-sm">
-                                R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-                              </span>
-                              <div className={clsx(
-                                'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors',
-                                adding === p.id ? 'bg-brand-500/20' : 'bg-brand-500'
-                              )}>
-                                {adding === p.id
-                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" />
-                                  : <Plus className="w-3.5 h-3.5 text-white" />}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
+                      {items.map(p => <ProductCard key={p.id} p={p} fallbackEmoji={category.emoji ?? '📦'} adding={adding} onAdd={() => setConfirmItem(p)} />)}
                     </div>
                   </div>
                 ))}
 
-                {/* Itens sem categoria cadastrada */}
+                {/* Itens sem categoria */}
                 {uncategorized.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
-                    {uncategorized.map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => setConfirmItem(p)}
-                        disabled={adding === p.id}
-                        className={clsx(
-                          'bg-surface-800 border border-surface-600 rounded-2xl text-left transition-all duration-150 active:scale-95 overflow-hidden flex flex-col disabled:opacity-50',
-                          adding === p.id && 'border-brand-500'
-                        )}
-                      >
-                        <div className="w-full h-32 bg-surface-700 flex items-center justify-center overflow-hidden">
-                          {p.imageUrl
-                            ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                            : <span className="text-4xl">{getCategoryEmoji(p.category, categories)}</span>
-                          }
-                        </div>
-                        <div className="p-3 flex flex-col flex-1">
-                          <p className="text-xs font-semibold text-gray-100 line-clamp-2 flex-1 mb-2">{p.name}</p>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-accent-green font-black text-sm">
-                              R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-                            </span>
-                            <div className={clsx(
-                              'w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors',
-                              adding === p.id ? 'bg-brand-500/20' : 'bg-brand-500'
-                            )}>
-                              {adding === p.id
-                                ? <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" />
-                                : <Plus className="w-3.5 h-3.5 text-white" />}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                    {uncategorized.map(p => <ProductCard key={p.id} p={p} fallbackEmoji="📦" adding={adding} onAdd={() => setConfirmItem(p)} />)}
                   </div>
                 )}
 
