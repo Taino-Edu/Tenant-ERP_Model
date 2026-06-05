@@ -29,14 +29,14 @@ function ProductCard({ p, fallbackEmoji, adding, onAdd }: {
         isAdding ? 'border-brand-500' : 'border-surface-600'
       )}
     >
-      <div className="w-full h-36 bg-surface-750 flex items-center justify-center overflow-hidden">
+      <div className="w-full h-36 bg-surface-700 flex items-center justify-center overflow-hidden p-1">
         {p.imageUrl
-          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
           : <span className="text-5xl">{fallbackEmoji}</span>
         }
       </div>
-      <div className="p-3 flex flex-col flex-1 gap-2">
-        <p className="text-xs font-semibold text-gray-100 line-clamp-2 leading-snug flex-1">{p.name}</p>
+      <div className="p-3 flex flex-col gap-2">
+        <p className="text-xs font-semibold text-gray-100 leading-snug min-h-[2.5rem] line-clamp-2">{p.name}</p>
         <div className="flex items-center justify-between gap-1">
           <span className="text-accent-green font-black text-sm">
             R$ {p.priceInReais.toFixed(2).replace('.', ',')}
@@ -200,26 +200,33 @@ export default function ClientePage() {
       {/* Modal de confirmação de item */}
       {confirmItem && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
-            <div>
-              <p className="text-sm text-gray-400 font-medium mb-1">Deseja adicionar?</p>
-              <p className="font-bold text-white text-xl">{confirmItem.name}</p>
-              <p className="text-accent-green font-bold text-lg mt-0.5">
-                R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmItem(null)} className="flex-1 py-3 px-4 rounded-xl border border-surface-500 text-gray-400 font-bold hover:bg-white/5 transition-colors">
-                Cancelar
-              </button>
-              <button
-                onClick={() => addProduct(confirmItem)}
-                disabled={adding === confirmItem.id}
-                className="flex-1 py-3 px-4 rounded-xl bg-brand-500 text-white font-bold hover:bg-brand-600 transition-colors flex items-center justify-center gap-2"
-              >
-                {adding === confirmItem.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                Confirmar
-              </button>
+          <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+            {confirmItem.imageUrl && (
+              <div className="w-full h-48 bg-surface-700 flex items-center justify-center p-3">
+                <img src={confirmItem.imageUrl} alt={confirmItem.name} className="h-full w-full object-contain" />
+              </div>
+            )}
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Adicionar à comanda</p>
+                <p className="font-bold text-white text-lg leading-snug">{confirmItem.name}</p>
+                <p className="text-accent-green font-black text-xl mt-1">
+                  R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirmItem(null)} className="flex-1 py-3 px-4 rounded-xl border border-surface-500 text-gray-400 font-semibold hover:bg-white/5 transition-colors">
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => addProduct(confirmItem)}
+                  disabled={adding === confirmItem.id}
+                  className="flex-1 py-3 px-4 rounded-xl bg-brand-500 text-white font-bold hover:bg-brand-600 transition-colors flex items-center justify-center gap-2"
+                >
+                  {adding === confirmItem.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
+                  Confirmar
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -236,6 +243,7 @@ export default function ClientePage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle compact />
             <button onClick={toggleImmersive} className={clsx(
               "p-2 rounded-full border transition-all",
               immersiveMode ? "bg-brand-500/10 border-brand-500 text-brand-500" : "border-surface-600 text-gray-500 hover:text-gray-300"
