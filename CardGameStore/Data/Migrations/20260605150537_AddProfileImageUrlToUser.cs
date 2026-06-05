@@ -10,19 +10,10 @@ namespace CardGameStore.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "profile_image_url",
-                table: "users",
-                type: "TEXT",
-                maxLength: 500,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "image_url",
-                table: "championships",
-                type: "TEXT",
-                maxLength: 500,
-                nullable: true);
+            // Usa SQL direto com IF NOT EXISTS para não falhar se as colunas
+            // já existirem (criadas via EnsureCreated ou SQL manual anterior).
+            migrationBuilder.Sql("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_url TEXT;");
+            migrationBuilder.Sql("ALTER TABLE championships ADD COLUMN IF NOT EXISTS image_url TEXT;");
         }
 
         /// <inheritdoc />
