@@ -235,7 +235,7 @@ export default function ClientePage() {
       <header className="bg-surface-800 border-b border-surface-700 px-5 pt-10 pb-5">
         <div className="flex items-center justify-between max-w-lg mx-auto">
           <div className="flex items-center gap-3">
-            <img src="/maikon-avatar.png" alt="Mascote" className="w-10 h-10 rounded-full object-cover object-top" />
+            <img src="/maikon-avatar.png" alt="Mascote" className="w-10 h-10 object-contain" />
             <div>
               <h1 className="text-base font-bold text-white leading-tight">Santuário Nerd</h1>
               {profile && <p className="text-xs text-gray-400">Olá, {profile.name.split(' ')[0]} 👋</p>}
