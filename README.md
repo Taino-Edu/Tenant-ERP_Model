@@ -23,6 +23,9 @@
 - Dashboard ao vivo com SignalR — novas comandas aparecem sem recarregar
 - Admin pode adicionar itens, fechar (com seleção de pagamento) ou cancelar comandas
 - Leitor de código de barras via câmera ou USB no painel admin
+- Saldo de pontos e cashback do cliente exibido na modal de fechamento (bloqueia se insuficiente)
+- Cliente pode aplicar e remover pontos de fidelidade antes do fechamento
+- Desconto de pontos aplicados deduzido do `TotalInCents` no fechamento (analytics corretos)
 
 ### Crediário
 - Criação automática ao fechar comanda/venda no crédito
@@ -55,13 +58,18 @@
 - Sugestões rápidas de perguntas
 
 ### Área do Cliente
-- Histórico de pedidos
-- Saldo de pontos de fidelidade e cashback
-- Perfil editável
+- Histórico de comandas com detalhamento de itens
+- Saldo de pontos de fidelidade e cashback/crédito na loja
+- Perfil editável com upload de foto (JPEG/PNG/WebP, máx 5 MB)
+- ThemeToggle (modo claro/escuro persistido)
+- Modo RPG — comanda exibida como "pergaminho" temático
+- Histórico de campeonatos e inscrições
 
 ### Gestão Administrativa
 - Gestão de usuários com funções (Admin / Customer)
-- Pontos de fidelidade e saldo cashback
+- Pontos de fidelidade e saldo cashback por cliente
+- Inscrição manual de clientes em campeonatos; remoção de participantes
+- Nova dívida (crediário) com lista de itens e cálculo automático do total
 - Anúncios e promoções
 - Geração de QR Codes para mesas
 - Painel LGPD para resposta de solicitações de titulares
@@ -119,7 +127,7 @@
 ```
 softNerd/
 ├── CardGameStore/              # ASP.NET Core 8 — API REST
-│   ├── Controllers/            # Endpoints (Auth, Product, Comanda, Venda, ...)
+│   ├── Controllers/            # Endpoints (Auth, Product, Comanda, Venda, Upload, ...)
 │   ├── Services/               # Lógica de negócio
 │   ├── Models/
 │   │   ├── PostgreSQL/         # Entidades EF Core
@@ -227,6 +235,10 @@ GEMINI_API_KEY=<chave do Google AI Studio>
 
 # Segurança
 IP_HASH_SALT=<gerado pelo setup.sh>
+
+# Senha do admin inicial (opcional — só tem efeito no PRIMEIRO boot com banco vazio)
+# Se omitido, usa "SenhaForte@123" e emite LogWarning
+ADMIN_SEED_PASSWORD=<senha forte para o admin inicial>
 ```
 
 ---
@@ -243,7 +255,16 @@ IP_HASH_SALT=<gerado pelo setup.sh>
 dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
 ```
 
-Cobertura: 10 serviços testados (Auth, Product, Comanda, VendaAvulsa, Crediário, Championship, User, Announcement, Audit, LGPD).
+Cobertura: 134 testes unitários, 100% aprovados. Serviços: Auth, Product, Comanda, VendaAvulsa, Crediário, Championship, User, Announcement, Audit, LGPD.
+
+### E2E (Playwright)
+
+```bash
+cd frontend
+npx playwright test
+```
+
+Infraestrutura de testes E2E configurada em `frontend/tests/`.
 
 ### API (.http files — REST Client)
 
@@ -276,9 +297,12 @@ Configure as variáveis em `tests/api/http-client.env.json`.
 | Método | Endpoint | Descrição |
 |---|---|---|
 | `GET` | `/api/comanda/dashboard` | Comandas ativas (tempo real) |
-| `POST` | `/api/comanda/{id}/item` | Adiciona item |
+| `POST` | `/api/comanda/{id}/items` | Adiciona item |
+| `DELETE` | `/api/comanda/{id}/items/{itemId}` | Remove item |
 | `PUT` | `/api/comanda/{id}/close` | Fecha comanda |
-| `DELETE` | `/api/comanda/{id}` | Cancela comanda |
+| `PUT` | `/api/comanda/{id}/cancel` | Cancela comanda |
+| `POST` | `/api/comanda/{id}/apply-points` | Aplica pontos de fidelidade |
+| `DELETE` | `/api/comanda/{id}/apply-points` | Remove pontos aplicados |
 
 ### Venda Avulsa
 | Método | Endpoint | Descrição |
@@ -297,14 +321,19 @@ Configure as variáveis em `tests/api/http-client.env.json`.
 ### Campeonatos
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `GET` | `/api/championship` | Lista campeonatos |
+| `GET` | `/api/championship` | Lista campeonatos públicos |
+| `GET` | `/api/championship/admin/all` | Lista todos (admin, com busca) |
 | `POST` | `/api/championship` | Cria campeonato |
 | `PUT` | `/api/championship/{id}/image` | Define imagem de capa |
+| `DELETE` | `/api/championship/{id}` | Remove campeonato finalizado/cancelado |
+| `POST` | `/api/championship/{id}/admin-register` | Inscreve cliente manualmente |
+| `DELETE` | `/api/championship/{id}/participants/{pid}` | Remove participante |
 
 ### Upload
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `POST` | `/api/upload/image` | Upload de imagem (máx 5 MB) |
+| `POST` | `/api/upload/image` | Upload de imagem de produto (máx 5 MB) |
+| `POST` | `/api/upload/profile-image` | Upload de foto de perfil do usuário (máx 5 MB) |
 
 ### IA
 | Método | Endpoint | Descrição |
@@ -317,13 +346,17 @@ Configure as variáveis em `tests/api/http-client.env.json`.
 
 | Medida | Implementação |
 |---|---|
-| Autenticação | JWT em HttpOnly Cookies |
-| Senhas | BCrypt com salt aleatório |
-| CSRF | SameSite=Strict |
+| Autenticação | JWT em HttpOnly Cookies (tokens nunca expostos no body JSON) |
+| Senhas | BCrypt com salt aleatório; admin seed via `ADMIN_SEED_PASSWORD` |
+| CSRF | SameSite=Lax |
+| Rate Limiting | GlobalLimiter 300 req/min por IP; políticas "auth" (5/min) e "api" (200/min) |
+| Content-Security-Policy | `default-src 'none'; frame-ancestors 'none'` |
 | SQL Injection | EF Core (queries parametrizadas) |
+| HTML Injection | `HtmlEncoder.Default.Encode()` em campos livres enviados por e-mail |
 | IP em logs | Anonimizado via SHA-256 |
 | HTTPS | Forçado via Cloudflare + `COOKIE_SECURE=true` |
 | Proxy reverso | `UseForwardedHeaders` + `X-Forwarded-For` |
+| Claims nulas | `Guid.TryParse` em todos os controllers — nunca null-forgiving operator |
 
 ---
 
