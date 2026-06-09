@@ -4,7 +4,7 @@ import { championshipApi, userApi, uploadApi, Championship, ChampionshipParticip
 import toast from 'react-hot-toast'
 import {
   Trophy, Plus, Users, Swords, X, Check, Loader2,
-  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus,
+  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus, Edit2,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -158,6 +158,142 @@ function NewChampionshipModal({ onClose, onSave }: {
   )
 }
 
+// ── Modal: Editar Campeonato ──────────────────────────────────────────────────
+function EditChampionshipModal({ championship, onClose, onSave }: {
+  championship: Championship
+  onClose: () => void
+  onSave: (id: string, c: Partial<Championship>) => Promise<void>
+}) {
+  const [form, setForm]       = useState<Partial<Championship>>({ ...championship })
+  const [saving, setSaving]   = useState(false)
+  const [imgPreview, setImgPreview] = useState<string | null>(championship.imageUrl ?? null)
+  const [uploading, setUploading]   = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const set = (k: keyof Championship, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const { data } = await uploadApi.image(file)
+      set('imageUrl', data.url)
+      setImgPreview(data.url)
+      toast.success('Imagem atualizada!')
+    } catch {
+      toast.error('Erro ao fazer upload da imagem')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setSaving(true)
+    try { await onSave(championship.id, form) } finally { setSaving(false) }
+  }
+
+  const startLocal = form.startDate
+    ? new Date(new Date(form.startDate).getTime() - new Date().getTimezoneOffset() * 60000)
+        .toISOString().slice(0, 16)
+    : ''
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-lg animate-bounce-in max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <Edit2 className="w-5 h-5 text-brand-400" /> Editar Campeonato
+          </h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-gray-500 hover:text-gray-300" /></button>
+        </div>
+        <form onSubmit={submit} className="space-y-4">
+
+          {/* Imagem de capa */}
+          <div>
+            <label className="label">Imagem de capa</label>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
+            {imgPreview ? (
+              <div className="relative w-full h-36 rounded-xl overflow-hidden group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={imgPreview} alt="Capa" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => { setImgPreview(null); set('imageUrl', null); if (fileRef.current) fileRef.current.value = '' }}
+                  className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
+                >
+                  <X className="w-6 h-6 text-white" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={uploading}
+                className="w-full h-36 rounded-xl border-2 border-dashed border-surface-500 flex flex-col items-center justify-center gap-2 text-gray-500 hover:border-brand-500 hover:text-brand-400 transition-colors"
+              >
+                {uploading
+                  ? <Loader2 className="w-6 h-6 animate-spin" />
+                  : <><ImagePlus className="w-6 h-6" /><span className="text-sm">Clique para adicionar imagem</span></>
+                }
+              </button>
+            )}
+          </div>
+
+          <div>
+            <label className="label">Nome do Campeonato *</label>
+            <input className="input" required value={form.name ?? ''}
+              onChange={e => set('name', e.target.value)} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Jogo *</label>
+              <input className="input" required list="games-list-edit"
+                value={form.game ?? ''}
+                onChange={e => set('game', e.target.value)} />
+              <datalist id="games-list-edit">
+                {['Pokemon', 'Magic: The Gathering', 'Yu-Gi-Oh!', 'One Piece TCG', 'Dragon Ball Super'].map(g => <option key={g} value={g} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="label">Taxa de inscrição (R$)</label>
+              <input className="input" type="number" min="0" step="0.01"
+                value={(form.entryFeeInCents ?? 0) / 100}
+                onChange={e => set('entryFeeInCents', Math.round(parseFloat(e.target.value) * 100))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Data / Hora *</label>
+              <input className="input" type="datetime-local" required
+                value={startLocal}
+                onChange={e => set('startDate', new Date(e.target.value).toISOString())} />
+            </div>
+            <div>
+              <label className="label">Máx. participantes</label>
+              <input className="input" type="number" min="2" placeholder="Sem limite"
+                value={form.maxParticipants ?? ''}
+                onChange={e => set('maxParticipants', e.target.value ? parseInt(e.target.value) : null)} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Descrição / Regras</label>
+            <textarea className="input resize-none h-20"
+              value={form.description ?? ''}
+              onChange={e => set('description', e.target.value)} />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={saving || uploading} className="btn-primary flex-1 justify-center">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Salvar alterações
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // ── Modal: Adicionar Participante ─────────────────────────────────────────────
 function AddParticipantModal({ championshipId, onClose, onAdded }: {
   championshipId: string
@@ -294,12 +430,13 @@ function AddParticipantModal({ championshipId, onClose, onAdded }: {
 
 // ── Card do Campeonato ────────────────────────────────────────────────────────
 function ChampionshipCard({
-  c, onStatusChange, onParticipantChange, onDelete,
+  c, onStatusChange, onParticipantChange, onDelete, onEdit,
 }: {
   c: Championship
   onStatusChange: (id: string, status: string) => void
   onParticipantChange: () => void
   onDelete?: (id: string) => void
+  onEdit?:   (c: Championship) => void
 }) {
   const [expanded, setExpanded]         = useState(false)
   const [participants, setParticipants] = useState<ChampionshipParticipant[]>([])
@@ -472,14 +609,24 @@ function ChampionshipCard({
               → {STATUS_LABELS[next]}
             </button>
           ))}
-          {canDelete && onDelete && (
-            <button
-              onClick={() => onDelete(c.id)}
-              className="ml-auto text-xs px-3 py-1.5 rounded-lg font-medium bg-red-600/20 text-red-400 hover:bg-red-600/40 border border-red-500/20 transition-colors flex items-center gap-1.5"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Apagar
-            </button>
-          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(c)}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium bg-surface-700 text-gray-300 hover:bg-surface-600 border border-surface-500 transition-colors flex items-center gap-1.5"
+              >
+                <Edit2 className="w-3.5 h-3.5" /> Editar
+              </button>
+            )}
+            {canDelete && onDelete && (
+              <button
+                onClick={() => onDelete(c.id)}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium bg-red-600/20 text-red-400 hover:bg-red-600/40 border border-red-500/20 transition-colors flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Apagar
+              </button>
+            )}
+          </div>
         </div>
         </div>{/* fim padding */}
       </div>
@@ -492,6 +639,7 @@ export default function CampeonatosPage() {
   const [championships, setChampionships] = useState<Championship[]>([])
   const [loading, setLoading]             = useState(true)
   const [showModal, setShowModal]         = useState(false)
+  const [editTarget, setEditTarget]       = useState<Championship | null>(null)
   const [search, setSearch]               = useState('')
 
   const load = useCallback(async (q?: string) => {
@@ -525,6 +673,17 @@ export default function CampeonatosPage() {
     catch { toast.error('Erro ao atualizar status') }
   }
 
+  async function handleEdit(id: string, form: Partial<Championship>) {
+    try {
+      await championshipApi.update(id, form)
+      toast.success('Campeonato atualizado!')
+      setEditTarget(null)
+      load(search || undefined)
+    } catch {
+      toast.error('Erro ao atualizar campeonato')
+    }
+  }
+
   async function handleDelete(id: string) {
     const c = championships.find(x => x.id === id)
     if (!confirm(`Apagar "${c?.name}" permanentemente? Esta ação não pode ser desfeita.`)) return
@@ -545,6 +704,13 @@ export default function CampeonatosPage() {
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {showModal && <NewChampionshipModal onClose={() => setShowModal(false)} onSave={handleSave} />}
+      {editTarget && (
+        <EditChampionshipModal
+          championship={editTarget}
+          onClose={() => setEditTarget(null)}
+          onSave={handleEdit}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -596,6 +762,7 @@ export default function CampeonatosPage() {
                   <ChampionshipCard key={c.id} c={c}
                     onStatusChange={handleStatusChange}
                     onParticipantChange={() => load(search || undefined)}
+                    onEdit={setEditTarget}
                   />
                 ))}
               </div>
@@ -610,6 +777,7 @@ export default function CampeonatosPage() {
                   <ChampionshipCard key={c.id} c={c}
                     onStatusChange={handleStatusChange}
                     onParticipantChange={() => load(search || undefined)}
+                    onEdit={setEditTarget}
                   />
                 ))}
               </div>
@@ -624,6 +792,7 @@ export default function CampeonatosPage() {
                   <ChampionshipCard key={c.id} c={c}
                     onStatusChange={handleStatusChange}
                     onParticipantChange={() => load(search || undefined)}
+                    onEdit={setEditTarget}
                     onDelete={handleDelete}
                   />
                 ))}

@@ -5,6 +5,7 @@
 // GET  /api/championship/{id}/participants → lista participantes
 // POST /api/championship              → cria campeonato (Admin)
 // POST /api/championship/{id}/register → inscreve usuário logado
+// PUT  /api/championship/{id}         → edita campeonato (Admin)
 // PUT  /api/championship/{id}/status  → muda status (Admin)
 // PUT  /api/championship/{id}/participants/{pid}/placement → define colocação (Admin)
 // =============================================================================
@@ -162,6 +163,40 @@ public class ChampionshipController : ControllerBase
         var created = await _service.CreateAsync(championship);
         _logger.LogInformation("Campeonato {Id} criado pelo admin {AdminId}", created.Id, adminId);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, ToDto(created));
+    }
+
+    // -------------------------------------------------------------------------
+    // EDIÇÃO — apenas Admin
+    // -------------------------------------------------------------------------
+
+    /// <summary>Atualiza os campos editáveis de um campeonato. Apenas Admin.</summary>
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ChampionshipDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateChampionshipRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var ch = await _service.GetByIdAsync(id);
+        if (ch == null)
+            return NotFound(new { Message = "Campeonato não encontrado." });
+
+        ch.Name                 = request.Name;
+        ch.Description          = request.Description;
+        ch.Game                 = request.Game;
+        ch.StartDate            = request.StartDate;
+        ch.EndDate              = request.EndDate;
+        ch.RegistrationDeadline = request.RegistrationDeadline;
+        ch.MaxParticipants      = request.MaxParticipants;
+        ch.EntryFeeInCents      = request.EntryFeeInCents;
+        ch.ImageUrl             = request.ImageUrl;
+
+        var updated = await _service.UpdateAsync(ch);
+        _logger.LogInformation("Campeonato {Id} editado pelo admin", id);
+        return Ok(ToDto(updated));
     }
 
     // -------------------------------------------------------------------------
@@ -378,6 +413,28 @@ public class ChampionshipController : ControllerBase
 // =============================================================================
 // DTOs e Request Records — definidos no mesmo arquivo para simplicidade
 // =============================================================================
+
+/// <summary>Request para atualizar campos editáveis de um campeonato.</summary>
+public class UpdateChampionshipRequest
+{
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string    Name                 { get; init; } = string.Empty;
+
+    [System.ComponentModel.DataAnnotations.MaxLength(1000)]
+    public string?   Description          { get; init; }
+
+    [System.ComponentModel.DataAnnotations.Required]
+    [System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public string    Game                 { get; init; } = string.Empty;
+
+    public DateTime  StartDate            { get; init; }
+    public DateTime? EndDate              { get; init; }
+    public DateTime? RegistrationDeadline { get; init; }
+    public int?      MaxParticipants      { get; init; }
+    public int       EntryFeeInCents      { get; init; }
+    public string?   ImageUrl             { get; init; }
+}
 
 /// <summary>DTO de resposta de campeonato (sem circular reference).</summary>
 public class ChampionshipDto

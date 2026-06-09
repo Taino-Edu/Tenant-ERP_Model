@@ -396,6 +396,7 @@ export interface MyParticipation {
 
 export const championshipApi = {
   list:             () => api.get<Championship[]>('/api/championship'),
+  update:           (id: string, c: Partial<Championship>) => api.put<Championship>(`/api/championship/${id}`, c),
   myParticipations: () => api.get<MyParticipation[]>('/api/championship/my-participations'),
   listAll:          (search?: string) => api.get<Championship[]>('/api/championship/admin/all', { params: search ? { search } : {} }),
   get:              (id: string) => api.get<Championship>(`/api/championship/${id}`),
