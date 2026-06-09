@@ -25,7 +25,7 @@ const NEXT_STATUS: Record<string, string[]> = {
   Planejado: ['Inscricoes', 'Cancelado'],
   Inscricoes: ['EmAndamento', 'Cancelado'],
   EmAndamento: ['Finalizado', 'Cancelado'],
-  Finalizado: [], Cancelado: [],
+  Finalizado: ['Planejado'], Cancelado: ['Planejado'],
 }
 
 // ── Modal: Novo Campeonato ────────────────────────────────────────────────────
