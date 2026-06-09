@@ -51,7 +51,7 @@ export default function LandingPage() {
       <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md border-b" style={{ backgroundColor: 'color-mix(in srgb, var(--bg-primary) 90%, transparent)', borderColor: 'var(--border-color)' }}>
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-9 w-9 object-contain" />
+            <img src="/maikon-avatar.png" alt="Santuário Nerd" className="h-9 w-9 object-contain" />
             <span className="text-white text-xl font-bold">Santuário Nerd</span>
           </div>
 
@@ -554,7 +554,20 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
   }
 
   return (
-    <div className="bg-surface-800 border border-surface-500 rounded-2xl p-5 hover:border-brand-500/40 transition group flex flex-col">
+    <div className="bg-surface-800 border border-surface-500 rounded-2xl overflow-hidden hover:border-brand-500/40 transition group flex flex-col">
+      {/* Imagem do campeonato */}
+      {c.imageUrl ? (
+        <div className="w-full h-40 overflow-hidden">
+          <img src={c.imageUrl} alt={c.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        </div>
+      ) : (
+        <div className="w-full h-40 bg-gradient-to-br from-brand-500/20 via-surface-700 to-surface-800 flex items-center justify-center">
+          <Trophy className="w-10 h-10 text-brand-500/30" />
+        </div>
+      )}
+
+      <div className="p-5 flex flex-col flex-1">
       <div className="flex items-start justify-between mb-4">
         <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${gameColor[c.game] ?? 'bg-surface-700 text-gray-400 border-surface-500'}`}>
           {c.game}
@@ -590,6 +603,7 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
           Quero me inscrever
         </button>
         <p className="text-xs text-gray-400 text-center mt-2">Pague na chegada · Vagas limitadas</p>
+      </div>
       </div>
     </div>
   )
