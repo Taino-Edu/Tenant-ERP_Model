@@ -6,12 +6,20 @@ import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
-  Receipt, PackageOpen, Star, BookOpen, User as UserIcon, Package
+  Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight
 } from 'lucide-react'
-import ThemeToggle from '@/components/ThemeToggle'
 import Link from 'next/link'
-import clsx from 'clsx'
 
+const C = {
+  navy:   '#0C3D5A',
+  blue:   '#3EC2F2',
+  blue2:  '#1A9DD4',
+  yellow: '#FFE45E',
+  bg:     '#EBF7FD',
+  white:  '#FFFFFF',
+  muted:  '#4D8FAC',
+  border: 'rgba(62,194,242,0.18)',
+}
 
 function ProductCard({ p, adding, onAdd }: {
   p: Product
@@ -23,29 +31,26 @@ function ProductCard({ p, adding, onAdd }: {
     <button
       onClick={onAdd}
       disabled={isAdding}
-      className={clsx(
-        'bg-surface-800 border rounded-2xl text-left transition-all duration-150 active:scale-95 overflow-hidden flex flex-col disabled:opacity-50',
-        isAdding ? 'border-brand-500' : 'border-surface-600'
-      )}
+      className="text-left rounded-2xl overflow-hidden flex flex-col active:scale-95 transition-all duration-150 disabled:opacity-60"
+      style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)' }}
     >
-      <div className="w-full h-36 bg-surface-700 flex items-center justify-center overflow-hidden p-1">
+      <div className="w-full aspect-square overflow-hidden flex items-center justify-center p-2"
+        style={{ backgroundColor: C.bg }}>
         {p.imageUrl
           ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
-          : <Package className="w-12 h-12 text-gray-500 opacity-40" />
+          : <Package className="w-10 h-10 opacity-20" style={{ color: C.blue2 }} />
         }
       </div>
-      <div className="p-3 flex flex-col gap-2">
-        <p className="text-xs font-semibold text-gray-100 leading-snug min-h-[2.5rem] line-clamp-2">{p.name}</p>
-        <div className="flex items-center justify-between gap-1">
-          <span className="text-accent-green font-black text-sm">
+      <div className="p-3 flex flex-col gap-1.5 flex-1">
+        <p className="text-xs font-bold leading-snug line-clamp-2 flex-1" style={{ color: C.navy }}>{p.name}</p>
+        <div className="flex items-center justify-between mt-1 gap-1">
+          <span className="text-sm font-black" style={{ color: C.blue2 }}>
             R$ {p.priceInReais.toFixed(2).replace('.', ',')}
           </span>
-          <div className={clsx(
-            'w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors',
-            isAdding ? 'bg-brand-500/20' : 'bg-brand-500'
-          )}>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors"
+            style={{ backgroundColor: isAdding ? `${C.blue}25` : C.blue }}>
             {isAdding
-              ? <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+              ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.blue }} />
               : <Plus className="w-4 h-4 text-white" />}
           </div>
         </div>
@@ -55,36 +60,31 @@ function ProductCard({ p, adding, onAdd }: {
 }
 
 export default function ClientePage() {
-  const [comanda, setComanda]         = useState<ComandaDto | null>(null)
-  const [products, setProducts]       = useState<Product[]>([])
-  const [categories, setCategories]   = useState<ProductCategory[]>([])
-  const [profile, setProfile]         = useState<UserProfile | null>(null)
-  const [loading, setLoading]         = useState(true)
-  const [adding, setAdding]           = useState<string | null>(null)
-  const [applyingPts, setApplyingPts] = useState(false)
-  const [removingPts, setRemovingPts] = useState(false)
-
-  // Opção de estilo visual (opcional para o cliente)
-  const [immersiveMode, setImmersiveMode] = useState(false)
-  const [searchQuery, setSearchQuery]     = useState('')
+  const [comanda,      setComanda]      = useState<ComandaDto | null>(null)
+  const [products,     setProducts]     = useState<Product[]>([])
+  const [categories,   setCategories]   = useState<ProductCategory[]>([])
+  const [profile,      setProfile]      = useState<UserProfile | null>(null)
+  const [loading,      setLoading]      = useState(true)
+  const [adding,       setAdding]       = useState<string | null>(null)
+  const [applyingPts,  setApplyingPts]  = useState(false)
+  const [removingPts,  setRemovingPts]  = useState(false)
+  const [searchQuery,  setSearchQuery]  = useState('')
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [confirmItem,  setConfirmItem]  = useState<Product | null>(null)
 
   const fetchComanda = useCallback(async () => {
-    try { 
+    try {
       const { data } = await comandaApi.myComanda()
-      setComanda(data) 
+      setComanda(data)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 404) setComanda(null)
-    } finally { 
-      setLoading(false) 
+    } finally {
+      setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    // Recupera preferência de tema do localstorage
-    const savedMode = localStorage.getItem('immersive-mode')
-    if (savedMode === 'true') setImmersiveMode(true)
-
     fetchComanda()
     productApi.list().then(r => setProducts(r.data)).catch(() => {})
     categoryApi.list().then(r => setCategories(r.data)).catch(() => {})
@@ -94,17 +94,17 @@ export default function ClientePage() {
       hub.on('ComandaOpened', async (data: ComandaOpenedEvent) => {
         await hub.invoke('JoinComandaGroup', data.comandaId).catch(() => {})
         await fetchComanda()
-        toast.success('Sua comanda foi aberta! 🎉', { duration: 5000 })
+        toast.success('Sua comanda foi aberta!', { duration: 5000 })
       })
       hub.on('ComandaClosed', () => {
-        toast.success('Sua comanda foi fechada! Obrigado pela visita 🎉', { duration: 6000 })
+        toast.success('Comanda fechada! Obrigado pela visita.', { duration: 6000 })
         fetchComanda()
       })
       hub.on('ComandaCancelled', () => {
         toast.error('Sua comanda foi cancelada.', { duration: 6000 })
         fetchComanda()
       })
-      hub.on('ItemAddedByAdmin', (data: { itemName: string; newTotalInReais: number }) => {
+      hub.on('ItemAddedByAdmin', (data: { itemName: string }) => {
         toast(`+${data.itemName} adicionado pelo atendente`, { icon: '🛒' })
         fetchComanda()
       })
@@ -114,14 +114,6 @@ export default function ClientePage() {
 
     return () => { stopHub() }
   }, [fetchComanda])
-
-  const toggleImmersive = () => {
-    const newVal = !immersiveMode
-    setImmersiveMode(newVal)
-    localStorage.setItem('immersive-mode', String(newVal))
-  }
-
-  const [confirmItem, setConfirmItem] = useState<Product | null>(null)
 
   async function addProduct(product: Product) {
     if (!comanda) return
@@ -135,11 +127,11 @@ export default function ClientePage() {
         quantity: 1,
       })
       setComanda(data)
-      toast.success(`${product.name} adicionado!`, { icon: '✅' })
-    } catch { 
-      toast.error('Não foi possível adicionar o item.') 
-    } finally { 
-      setAdding(null) 
+      toast.success(`${product.name} adicionado!`)
+    } catch {
+      toast.error('Não foi possível adicionar o item.')
+    } finally {
+      setAdding(null)
     }
   }
 
@@ -150,7 +142,7 @@ export default function ClientePage() {
       const { data } = await comandaApi.applyPoints(comanda.id, profile.pointsBalance)
       setComanda(data)
       setProfile(prev => prev ? { ...prev, pointsBalance: 0 } : prev)
-      toast.success(`${profile.pointsBalance} pontos aplicados! 🎉`)
+      toast.success(`${profile.pointsBalance} pontos aplicados!`)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao aplicar pontos.')
@@ -162,68 +154,78 @@ export default function ClientePage() {
     setRemovingPts(true)
     try {
       const { data } = await comandaApi.removePoints(comanda.id)
-      const pontosDevolvidos = comanda.pointsApplied
+      const devolvidos = comanda.pointsApplied
       setComanda(data)
-      setProfile(prev => prev ? { ...prev, pointsBalance: (prev.pointsBalance ?? 0) + pontosDevolvidos } : prev)
-      toast.success('Pontos removidos e devolvidos ao saldo! ✅')
+      setProfile(prev => prev ? { ...prev, pointsBalance: (prev.pointsBalance ?? 0) + devolvidos } : prev)
+      toast.success('Pontos devolvidos ao saldo!')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao remover pontos.')
     } finally { setRemovingPts(false) }
   }
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const activeProducts = products.filter(p => p.isActive && p.stockQuantity > 0)
 
-  const groupedProducts = categories
-    .filter(cat => cat.isActive && filteredProducts.some(p => p.category === cat.name))
+  const filteredProducts = activeProducts.filter(p => {
+    const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchCat    = !activeCategory || p.category === activeCategory
+    return matchSearch && matchCat
+  })
+
+  const activeCategories = categories
+    .filter(cat => cat.isActive && activeProducts.some(p => p.category === cat.name))
     .sort((a, b) => a.displayOrder - b.displayOrder)
+
+  const groupedProducts = activeCategories
+    .filter(cat => filteredProducts.some(p => p.category === cat.name))
     .map(cat => ({ category: cat, items: filteredProducts.filter(p => p.category === cat.name) }))
 
   const uncategorized = filteredProducts.filter(p =>
     !categories.some(cat => cat.name === p.category)
   )
 
-  const statusColors: Record<string, string> = {
-    Aberta: 'text-emerald-400', 
-    EmAndamento: 'text-amber-400',
-    Fechada: 'text-blue-400', 
-    Cancelada: 'text-red-400',
-  }
-
   return (
-    <div className="min-h-screen bg-surface-900 pb-32">
-      <Toaster position="top-center" toastOptions={{ style: { background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}} />
+    <div className="min-h-screen" style={{ backgroundColor: C.bg }}>
+      <Toaster position="top-center" toastOptions={{
+        style: { background: C.white, color: C.navy, border: `1px solid ${C.border}`, fontWeight: 600 }
+      }} />
 
-      {/* Modal de confirmação de item */}
+      {/* Modal de confirmação */}
       {confirmItem && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setConfirmItem(null)}>
+          <div className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
+            style={{ backgroundColor: C.white }}
+            onClick={e => e.stopPropagation()}>
             {confirmItem.imageUrl && (
-              <div className="w-full h-48 bg-surface-700 flex items-center justify-center p-3">
+              <div className="w-full h-48 flex items-center justify-center p-4"
+                style={{ backgroundColor: C.bg }}>
                 <img src={confirmItem.imageUrl} alt={confirmItem.name} className="h-full w-full object-contain" />
               </div>
             )}
             <div className="p-5 space-y-4">
               <div>
-                <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Adicionar à comanda</p>
-                <p className="font-bold text-white text-lg leading-snug">{confirmItem.name}</p>
-                <p className="text-accent-green font-black text-xl mt-1">
+                <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: C.muted }}>
+                  Adicionar à comanda
+                </p>
+                <p className="font-black text-lg leading-snug" style={{ color: C.navy }}>{confirmItem.name}</p>
+                <p className="text-xl font-black mt-1" style={{ color: C.blue2 }}>
                   R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
                 </p>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setConfirmItem(null)} className="flex-1 py-3 px-4 rounded-xl border border-surface-500 text-gray-400 font-semibold hover:bg-white/5 transition-colors">
+                <button onClick={() => setConfirmItem(null)}
+                  className="flex-1 py-3 rounded-2xl font-bold text-sm border transition-colors"
+                  style={{ borderColor: C.border, color: C.muted }}>
                   Cancelar
                 </button>
-                <button
-                  onClick={() => addProduct(confirmItem)}
+                <button onClick={() => addProduct(confirmItem)}
                   disabled={adding === confirmItem.id}
-                  className="flex-1 py-3 px-4 rounded-xl bg-brand-500 text-white font-bold hover:bg-brand-600 transition-colors flex items-center justify-center gap-2"
-                >
-                  {adding === confirmItem.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}
-                  Confirmar
+                  className="flex-1 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
+                  style={{ backgroundColor: C.yellow, color: C.navy }}>
+                  {adding === confirmItem.id
+                    ? <Loader2 className="w-5 h-5 animate-spin" />
+                    : <><Plus className="w-5 h-5" /> Confirmar</>}
                 </button>
               </div>
             </div>
@@ -231,99 +233,96 @@ export default function ClientePage() {
         </div>
       )}
 
-      {/* ── TOP HEADER ───────────────────────────────────────────── */}
-      <header className="bg-surface-800 border-b border-surface-700 px-5 pt-10 pb-5">
-        <div className="flex items-center justify-between max-w-lg mx-auto">
+      {/* ── HEADER ──────────────────────────────────────────────────── */}
+      <header style={{ background: `linear-gradient(160deg, ${C.navy} 0%, ${C.blue2} 60%, ${C.blue} 100%)` }}>
+        <div className="max-w-lg mx-auto px-5 pt-10 pb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/maikon-avatar.png" alt="Mascote" className="w-10 h-10 object-contain" />
+            <img src="/logo-maikon.png" alt="Santuário Nerd" className="w-10 h-10 object-contain drop-shadow-md" />
             <div>
-              <h1 className="text-base font-bold text-white leading-tight">Santuário Nerd</h1>
-              {profile && <p className="text-xs text-gray-400">Olá, {profile.name.split(' ')[0]} 👋</p>}
+              <p className="text-white font-black text-base leading-tight">Santuário Nerd</p>
+              {profile && (
+                <p className="text-xs font-bold mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                  Olá, {profile.name.split(' ')[0]}!
+                </p>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle compact />
-            <button onClick={toggleImmersive} className={clsx(
-              "p-2 rounded-full border transition-all",
-              immersiveMode ? "bg-brand-500/10 border-brand-500 text-brand-500" : "border-surface-600 text-gray-500 hover:text-gray-300"
-            )} title={immersiveMode ? 'Modo RPG' : 'Modo Clássico'}>
-              <BookOpen className="w-4 h-4" />
-            </button>
-            <Link href="/cliente/perfil">
-              {profile?.profileImageUrl
-                ? <img src={profile.profileImageUrl} alt={profile.name} className="w-9 h-9 rounded-full object-cover ring-2 ring-brand-500/40" />
-                : <div className="w-9 h-9 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">
-                    <span className="text-sm font-bold text-brand-400">{profile?.name?.charAt(0).toUpperCase() ?? <UserIcon className="w-4 h-4" />}</span>
-                  </div>
-              }
-            </Link>
-          </div>
+          <Link href="/cliente/perfil">
+            {profile?.profileImageUrl
+              ? <img src={profile.profileImageUrl} alt={profile.name}
+                  className="w-10 h-10 rounded-full object-cover ring-2 ring-white/40" />
+              : <div className="w-10 h-10 rounded-full flex items-center justify-center font-black text-sm"
+                  style={{ backgroundColor: C.yellow, color: C.navy }}>
+                  {profile?.name?.charAt(0).toUpperCase() ?? <UserIcon className="w-5 h-5" />}
+                </div>
+            }
+          </Link>
         </div>
       </header>
 
-      {/* ── CONTENT AREA ─────────────────────────────────────────── */}
-      <main className="max-w-lg mx-auto px-4 py-8 space-y-8">
+      {/* ── CONTENT ─────────────────────────────────────────────────── */}
+      <main className="max-w-lg mx-auto px-4 py-6 space-y-4 pb-24">
 
         {/* Pontos */}
         {profile && (
-          <section className="bg-surface-800 rounded-2xl p-4 border border-surface-600 flex items-center justify-between">
+          <div className="rounded-2xl p-4 flex items-center justify-between"
+            style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 10px rgba(12,61,90,0.06)' }}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-brand-500/15 flex items-center justify-center border border-brand-500/25">
-                <Star className="w-5 h-5 text-brand-400" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ backgroundColor: `${C.blue}18` }}>
+                <Star className="w-5 h-5" style={{ color: C.blue }} />
               </div>
               <div>
-                <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">Seus Pontos</p>
-                <p className="text-xl font-black text-gray-100 leading-tight">{profile.pointsBalance} <span className="text-xs font-normal text-gray-500">pts</span></p>
+                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Seus Pontos</p>
+                <p className="text-xl font-black leading-tight" style={{ color: C.navy }}>
+                  {profile.pointsBalance} <span className="text-xs font-semibold" style={{ color: C.muted }}>pts</span>
+                </p>
               </div>
             </div>
             {profile.balanceInCents > 0 && (
               <div className="text-right">
-                <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider">Cashback</p>
-                <p className="text-base font-black text-accent-green leading-tight">R$ {(profile.balanceInCents / 100).toFixed(2).replace('.', ',')}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Cashback</p>
+                <p className="text-base font-black" style={{ color: '#22c55e' }}>
+                  R$ {(profile.balanceInCents / 100).toFixed(2).replace('.', ',')}
+                </p>
               </div>
             )}
-          </section>
+          </div>
         )}
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
-            <p className="text-sm text-gray-500 font-medium">Lendo os pergaminhos...</p>
+            <Loader2 className="w-8 h-8 animate-spin" style={{ color: C.blue }} />
+            <p className="text-sm font-semibold" style={{ color: C.muted }}>Carregando sua comanda...</p>
           </div>
         ) : !comanda ? (
-          <section className="text-center py-16 space-y-4">
-            <div className="w-20 h-20 bg-surface-800 rounded-full flex items-center justify-center mx-auto border border-surface-600">
-              <PackageOpen className="w-10 h-10 text-gray-500" />
+          <div className="text-center py-16 space-y-4">
+            <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto"
+              style={{ backgroundColor: C.white, border: `1px solid ${C.border}` }}>
+              <PackageOpen className="w-10 h-10" style={{ color: C.muted }} />
             </div>
-            <div className="space-y-1">
-              <h2 className="text-gray-100 font-bold text-lg">Nenhuma comanda aberta</h2>
-              <p className="text-gray-400 text-sm">Escaneie o QR Code da sua mesa para começar.</p>
+            <div>
+              <h2 className="font-black text-lg" style={{ color: C.navy }}>Nenhuma comanda aberta</h2>
+              <p className="text-sm mt-1" style={{ color: C.muted }}>Escaneie o QR Code da sua mesa para começar.</p>
             </div>
-          </section>
+          </div>
         ) : (
           <>
-            {/* COMANDA ATIVA */}
-            <section className={clsx(
-              "rounded-2xl overflow-hidden border transition-all duration-500",
-              immersiveMode
-                ? "bg-[#f4e4bc] border-[#d7c49e] shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
-                : "bg-surface-800 border-surface-600"
-            )}>
+            {/* ── COMANDA ───────────────────────────────────────────── */}
+            <div className="rounded-2xl overflow-hidden"
+              style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 10px rgba(12,61,90,0.06)' }}>
+
               {/* Header da comanda */}
-              <div className={clsx(
-                "flex items-center justify-between px-5 py-4 border-b",
-                immersiveMode ? "border-[#d7c49e]" : "border-surface-600"
-              )}>
+              <div className="flex items-center justify-between px-5 py-4 border-b"
+                style={{ borderColor: C.border }}>
                 <div className="flex items-center gap-2">
-                  <Receipt className={clsx("w-4 h-4", immersiveMode ? "text-[#5d4037]" : "text-brand-500")} />
-                  <span className={clsx("font-bold text-sm", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>
-                    {immersiveMode ? 'Pergaminho de Consumo' : `Mesa ${comanda.tableIdentifier || 'N/A'}`}
+                  <Receipt className="w-4 h-4" style={{ color: C.blue }} />
+                  <span className="font-black text-sm" style={{ color: C.navy }}>
+                    Mesa {comanda.tableIdentifier || 'N/A'}
                   </span>
                 </div>
-                <span className={clsx(
-                  "text-[10px] font-bold uppercase px-2.5 py-1 rounded-full",
-                  immersiveMode ? "bg-[#5d4037]/10 text-[#5d4037]" : "bg-emerald-500/10 text-emerald-400"
-                )}>
+                <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full"
+                  style={{ backgroundColor: `${C.blue}15`, color: C.blue2 }}>
                   {comanda.status}
                 </span>
               </div>
@@ -331,7 +330,7 @@ export default function ClientePage() {
               {/* Itens */}
               <div className="px-5 py-4">
                 {comanda.items.length === 0 ? (
-                  <p className={clsx("text-center text-sm py-6 italic", immersiveMode ? "text-[#5d4037]/50" : "text-gray-500")}>
+                  <p className="text-center text-sm py-4 italic font-medium" style={{ color: C.muted }}>
                     Nenhum item ainda...
                   </p>
                 ) : (
@@ -340,108 +339,153 @@ export default function ClientePage() {
                       <div key={item.id}>
                         <div className="flex justify-between items-center gap-4">
                           <div className="flex-1 min-w-0">
-                            <p className={clsx("text-sm font-semibold leading-tight truncate", immersiveMode ? "text-[#5d4037]" : "text-gray-100")}>
+                            <p className="text-sm font-bold leading-tight truncate" style={{ color: C.navy }}>
                               {item.itemNameSnapshot}
                             </p>
-                            <p className={clsx("text-xs mt-0.5", immersiveMode ? "text-[#5d4037]/60" : "text-gray-500")}>
+                            <p className="text-xs mt-0.5 font-medium" style={{ color: C.muted }}>
                               {item.quantity}× R$ {item.unitPriceInReais.toFixed(2).replace('.', ',')}
                             </p>
                           </div>
-                          <span className={clsx("font-bold text-sm shrink-0", immersiveMode ? "text-[#5d4037]" : "text-accent-green")}>
+                          <span className="font-black text-sm shrink-0" style={{ color: C.blue2 }}>
                             R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}
                           </span>
                         </div>
                         {idx < comanda.items.length - 1 && (
-                          <div className={clsx("mt-3 border-b", immersiveMode ? "border-[#5d4037]/10" : "border-surface-700")} />
+                          <div className="mt-3 border-b" style={{ borderColor: C.border }} />
                         )}
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Total */}
                 {comanda.items.length > 0 && (
-                  <div className={clsx("flex justify-between items-center mt-4 pt-4 border-t", immersiveMode ? "border-[#5d4037]/20" : "border-surface-600")}>
-                    <span className={clsx("font-bold text-sm uppercase tracking-wide", immersiveMode ? "text-[#5d4037]" : "text-gray-400")}>Total</span>
-                    <span className={clsx("text-2xl font-black", immersiveMode ? "text-[#5d4037]" : "text-white")}>
+                  <div className="flex justify-between items-center mt-4 pt-4 border-t" style={{ borderColor: C.border }}>
+                    <span className="font-black text-xs uppercase tracking-wide" style={{ color: C.muted }}>Total</span>
+                    <span className="text-2xl font-black" style={{ color: C.navy }}>
                       R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Pontos */}
+              {/* Usar pontos */}
               {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
-                <div className={clsx("px-5 pb-5")}>
+                <div className="px-5 pb-5">
                   {comanda.pointsApplied > 0 ? (
-                    <button onClick={removePoints} disabled={removingPts} className={clsx(
-                      "w-full p-3 rounded-xl flex items-center justify-between transition-opacity",
-                      immersiveMode ? "bg-[#5d4037]/10 text-[#5d4037]" : "bg-emerald-500/10 text-emerald-400"
-                    )}>
-                      <div className="flex items-center gap-2 font-semibold text-xs">
-                        <Star className="w-4 h-4" /> {(comanda.pointsApplied / 100).toFixed(2).replace('.', ',')} pts aplicados
+                    <button onClick={removePoints} disabled={removingPts}
+                      className="w-full p-3 rounded-xl flex items-center justify-between transition-opacity"
+                      style={{ backgroundColor: '#22c55e18', color: '#16a34a' }}>
+                      <div className="flex items-center gap-2 font-bold text-xs">
+                        <Star className="w-4 h-4" />
+                        {(comanda.pointsApplied / 100).toFixed(2).replace('.', ',')} pts aplicados
                       </div>
-                      <Trash2 className="w-3.5 h-3.5 opacity-50" />
+                      <Trash2 className="w-3.5 h-3.5 opacity-60" />
                     </button>
                   ) : profile && profile.pointsBalance > 0 && !profile.pointsExpired && (
-                    <button onClick={applyPoints} disabled={applyingPts} className={clsx(
-                      "w-full p-3 rounded-xl flex items-center justify-between border border-dashed transition-all active:scale-95",
-                      immersiveMode ? "border-[#5d4037]/30 text-[#5d4037]" : "border-brand-500/30 text-brand-400 hover:bg-brand-500/5"
-                    )}>
-                      <span className="font-semibold text-xs">Usar {profile.pointsBalance} pontos acumulados</span>
-                      <Plus className="w-4 h-4" />
+                    <button onClick={applyPoints} disabled={applyingPts}
+                      className="w-full p-3 rounded-xl flex items-center justify-between border border-dashed transition-all active:scale-95"
+                      style={{ borderColor: `${C.blue}40`, color: C.blue2 }}>
+                      <span className="font-bold text-xs">Usar {profile.pointsBalance} pontos acumulados</span>
+                      {applyingPts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                     </button>
                   )}
                 </div>
               )}
-            </section>
+            </div>
 
-            {/* ITENS PARA SUA JORNADA */}
+            {/* ── PRODUTOS ──────────────────────────────────────────── */}
             {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
-              <section className="space-y-5">
-                <div className="flex items-center justify-between">
-                  <h2 className="font-bold text-gray-100 uppercase tracking-widest text-xs flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4 text-brand-500" /> Itens para sua Jornada
+              <div className="space-y-4">
+                {/* Título */}
+                <div className="flex items-center justify-between pt-2">
+                  <h2 className="font-black text-xs uppercase tracking-widest flex items-center gap-2"
+                    style={{ color: C.navy }}>
+                    <ShoppingCart className="w-4 h-4" style={{ color: C.blue }} />
+                    Itens para sua Jornada
                   </h2>
-                  <span className="text-[10px] text-gray-500 font-bold uppercase">{filteredProducts.length} Itens</span>
+                  <span className="text-[10px] font-black uppercase" style={{ color: C.muted }}>
+                    {filteredProducts.length} itens
+                  </span>
                 </div>
 
                 {/* Busca */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                    style={{ color: C.muted }} />
                   <input
                     type="text"
                     placeholder="Buscar item..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full bg-surface-800 border border-surface-600 rounded-xl pl-9 pr-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-brand-500 transition-colors"
+                    className="w-full rounded-2xl pl-10 pr-4 py-3 text-sm font-semibold outline-none transition-all"
+                    style={{
+                      backgroundColor: C.white,
+                      border: `1.5px solid ${C.border}`,
+                      color: C.navy,
+                    }}
                   />
                 </div>
 
-                {/* Por categoria */}
+                {/* Chips de categoria */}
+                {activeCategories.length > 1 && (
+                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                    <button
+                      onClick={() => setActiveCategory(null)}
+                      className="shrink-0 px-4 py-2 rounded-full text-xs font-black transition-all"
+                      style={{
+                        backgroundColor: activeCategory === null ? C.blue : C.white,
+                        color: activeCategory === null ? C.white : C.muted,
+                        border: `1.5px solid ${activeCategory === null ? C.blue : C.border}`,
+                      }}>
+                      Todos
+                    </button>
+                    {activeCategories.map(cat => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setActiveCategory(activeCategory === cat.name ? null : cat.name)}
+                        className="shrink-0 px-4 py-2 rounded-full text-xs font-black transition-all whitespace-nowrap"
+                        style={{
+                          backgroundColor: activeCategory === cat.name ? C.blue : C.white,
+                          color: activeCategory === cat.name ? C.white : C.muted,
+                          border: `1.5px solid ${activeCategory === cat.name ? C.blue : C.border}`,
+                        }}>
+                        {cat.emoji && <span className="mr-1">{cat.emoji}</span>}
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Grid por categoria */}
                 {groupedProducts.map(({ category, items }) => (
                   <div key={category.id} className="space-y-3">
-                    <h3 className="text-xs font-bold text-gray-400 flex items-center gap-1.5">
-                      {category.emoji && <span className="text-sm">{category.emoji}</span>}
-                      <span className="uppercase tracking-widest">{category.name}</span>
+                    <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-1.5"
+                      style={{ color: C.blue2 }}>
+                      {category.emoji && <span className="text-base">{category.emoji}</span>}
+                      {category.name}
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
-                      {items.map(p => <ProductCard key={p.id} p={p} adding={adding} onAdd={() => setConfirmItem(p)} />)}
+                      {items.map(p => (
+                        <ProductCard key={p.id} p={p} adding={adding} onAdd={() => setConfirmItem(p)} />
+                      ))}
                     </div>
                   </div>
                 ))}
 
-                {/* Itens sem categoria */}
                 {uncategorized.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
-                    {uncategorized.map(p => <ProductCard key={p.id} p={p} adding={adding} onAdd={() => setConfirmItem(p)} />)}
+                    {uncategorized.map(p => (
+                      <ProductCard key={p.id} p={p} adding={adding} onAdd={() => setConfirmItem(p)} />
+                    ))}
                   </div>
                 )}
 
                 {filteredProducts.length === 0 && (
-                  <p className="text-center text-gray-500 text-sm py-8">Nenhum item encontrado.</p>
+                  <p className="text-center text-sm py-8 font-semibold" style={{ color: C.muted }}>
+                    Nenhum item encontrado.
+                  </p>
                 )}
-              </section>
+              </div>
             )}
           </>
         )}
