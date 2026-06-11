@@ -13,13 +13,14 @@ import {
 const MAIKON_WHATSAPP = '5517997633103'
 
 const C = {
-  bg:      '#121215',
-  card:    '#1A1A1F',
-  cardAlt: '#1E1E24',
-  border:  'rgba(255,255,255,0.07)',
+  bg:      '#EBF7FD',
+  card:    '#FFFFFF',
+  cardAlt: '#F0F9FF',
+  border:  'rgba(12,61,90,0.10)',
   blue:    '#3EC2F2',
   yellow:  '#FFE45E',
-  text:    'rgba(255,255,255,0.55)',
+  text:    '#4D8FAC',
+  navy:    '#0C3D5A',
 }
 
 export default function LandingPage() {
@@ -43,18 +44,20 @@ export default function LandingPage() {
         setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 4))
       ),
       productApi.list().then(r => {
-        setProducts(r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.isFeatured && p.showOnSite).slice(0, 8))
+        const visible  = r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnSite)
+        const featured = visible.filter(p => p.isFeatured)
+        setProducts(featured.length > 0 ? featured.slice(0, 8) : visible.slice(0, 8))
       }),
       announcementApi.visible().then(r => setAnnouncements(r.data)),
     ]).finally(() => setLoading(false))
   }, [router])
 
   return (
-    <div className="min-h-screen text-white" style={{ backgroundColor: C.bg }}>
+    <div className="min-h-screen" style={{ backgroundColor: C.bg, color: C.navy }}>
 
       {/* ── NAVBAR ─────────────────────────────────────────────────────── */}
       <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center border-b"
-        style={{ backgroundColor: 'rgba(18,18,21,0.92)', backdropFilter: 'blur(16px)', borderColor: C.border }}>
+        style={{ backgroundColor: C.navy, backdropFilter: 'blur(16px)', borderColor: 'rgba(255,255,255,0.10)' }}>
         <div className="w-full max-w-6xl mx-auto px-5 flex items-center justify-between">
 
           {/* Logo */}
@@ -64,7 +67,7 @@ export default function LandingPage() {
           </div>
 
           {/* Links desktop */}
-          <div className="hidden md:flex items-center gap-7 text-sm font-medium" style={{ color: C.text }}>
+          <div className="hidden md:flex items-center gap-7 text-sm font-medium" style={{ color: 'rgba(255,255,255,0.70)' }}>
             <a href="#eventos"  className="hover:text-white transition-colors">Torneios</a>
             <a href="#produtos" className="hover:text-white transition-colors">Produtos</a>
             <a href="#pontos"   className="hover:text-white transition-colors">Pontos</a>
@@ -74,18 +77,18 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-2">
             <Link href="/entrar"
               className="text-sm px-4 py-2 rounded-xl border transition-colors hover:border-white/30 hover:text-white"
-              style={{ color: C.text, borderColor: C.border }}>
+              style={{ color: 'rgba(255,255,255,0.70)', borderColor: 'rgba(255,255,255,0.25)' }}>
               Minha Conta
             </Link>
             <a href="#eventos"
               className="text-sm font-black px-5 py-2 rounded-xl transition-all active:scale-95 shadow-lg"
-              style={{ backgroundColor: C.blue, color: C.bg, boxShadow: `0 4px 20px rgba(62,194,242,0.3)` }}>
+              style={{ backgroundColor: C.blue, color: '#fff', boxShadow: `0 4px 20px rgba(62,194,242,0.3)` }}>
               Ver Eventos
             </a>
           </div>
 
           {/* Hamburger mobile */}
-          <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: C.text }}>
+          <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: 'rgba(255,255,255,0.70)' }}>
             <div className="space-y-1.5">
               <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
               <span className={`block w-5 h-0.5 bg-current transition-opacity ${mobileMenu ? 'opacity-0' : ''}`} />
@@ -98,22 +101,22 @@ export default function LandingPage() {
       {/* Menu mobile */}
       {mobileMenu && (
         <div className="fixed inset-x-0 top-16 z-40 border-b md:hidden px-5 py-4 space-y-1"
-          style={{ backgroundColor: C.card, borderColor: C.border }}>
+          style={{ backgroundColor: C.navy, borderColor: 'rgba(255,255,255,0.10)' }}>
           {[['#eventos','Torneios'],['#produtos','Produtos'],['#pontos','Pontos']].map(([href, label]) => (
             <a key={href} href={href} onClick={() => setMobileMenu(false)}
-              className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: C.text }}>
+              className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
               {label}
             </a>
           ))}
-          <div className="flex gap-2 pt-3 border-t" style={{ borderColor: C.border }}>
+          <div className="flex gap-2 pt-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.10)' }}>
             <Link href="/entrar" onClick={() => setMobileMenu(false)}
               className="flex-1 text-center py-2.5 text-sm rounded-xl border font-medium hover:text-white transition-colors"
-              style={{ color: C.text, borderColor: C.border }}>
+              style={{ color: 'rgba(255,255,255,0.70)', borderColor: 'rgba(255,255,255,0.25)' }}>
               Minha Conta
             </Link>
             <a href="#eventos" onClick={() => setMobileMenu(false)}
               className="flex-1 text-center py-2.5 text-sm rounded-xl font-black"
-              style={{ backgroundColor: C.blue, color: C.bg }}>
+              style={{ backgroundColor: C.blue, color: '#fff' }}>
               Eventos
             </a>
           </div>
@@ -121,7 +124,7 @@ export default function LandingPage() {
       )}
 
       {/* ── HERO ───────────────────────────────────────────────────────── */}
-      <section className="relative pt-16 overflow-hidden">
+      <section className="relative pt-16 overflow-hidden" style={{ backgroundColor: C.navy }}>
 
         <div className="relative max-w-6xl mx-auto px-5 py-20 md:py-24">
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
@@ -129,17 +132,17 @@ export default function LandingPage() {
             {/* Texto */}
             <div className="flex-1 text-center md:text-left">
               <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full mb-6 border"
-                style={{ color: C.blue, borderColor: `${C.blue}40`, backgroundColor: `${C.blue}10` }}>
+                style={{ color: C.blue, borderColor: `${C.blue}40`, backgroundColor: `${C.blue}15` }}>
                 Card Games &amp; Campeonatos · José Bonifácio — SP
               </div>
 
-              <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-5 tracking-tight">
+              <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-5 tracking-tight text-white">
                 Sua loja de<br />
-                <span style={{ color: C.blue }}>card games</span><br />
+                <span style={{ color: C.blue }}>Santuário Nerd</span><br />
                 favorita
               </h1>
 
-              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: C.text }}>
+              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: 'rgba(255,255,255,0.65)' }}>
                 Produtos, torneios e a melhor experiência TCG da região.
                 Acumule pontos, compre na mesa e participe de campeonatos.
               </p>
@@ -147,12 +150,12 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
                 <a href="#eventos"
                   className="inline-flex items-center justify-center gap-2 font-black px-7 py-3.5 rounded-xl transition-all active:scale-95"
-                  style={{ backgroundColor: C.yellow, color: C.bg, boxShadow: `0 8px 28px rgba(255,228,94,0.22)` }}>
+                  style={{ backgroundColor: C.yellow, color: C.navy, boxShadow: `0 8px 28px rgba(255,228,94,0.22)` }}>
                   <Trophy className="w-5 h-5" /> Ver Torneios
                 </a>
                 <a href="#produtos"
                   className="inline-flex items-center justify-center gap-2 font-semibold px-7 py-3.5 rounded-xl border transition-all hover:border-white/30 hover:text-white"
-                  style={{ borderColor: C.border, color: C.text }}>
+                  style={{ borderColor: 'rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.70)' }}>
                   <ShoppingBag className="w-5 h-5" /> Ver Produtos
                 </a>
               </div>
@@ -163,7 +166,7 @@ export default function LandingPage() {
               <img
                 src="/logo-maikon.png"
                 alt="Mascote Maikon"
-                className="w-48 sm:w-56 md:w-64 h-auto object-contain drop-shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+                className="w-48 sm:w-56 md:w-64 h-auto object-contain drop-shadow-[0_16px_40px_rgba(0,0,0,0.4)]"
               />
             </div>
           </div>
@@ -201,7 +204,7 @@ export default function LandingPage() {
                   </div>
                 )}
                 <div className="p-4">
-                  <p className="font-black text-white text-sm leading-snug">{a.title}</p>
+                  <p className="font-black text-sm leading-snug" style={{ color: C.navy }}>{a.title}</p>
                   {a.body && <p className="text-xs mt-1.5 line-clamp-2 leading-relaxed" style={{ color: C.text }}>{a.body}</p>}
                   <p className="text-xs mt-2 font-bold" style={{ color: C.blue }}>Ver mais →</p>
                 </div>
@@ -217,7 +220,7 @@ export default function LandingPage() {
           <div className="flex items-baseline justify-between mb-8">
             <div>
               <p className="text-xs font-black uppercase tracking-widest mb-1.5" style={{ color: C.blue }}>Agenda</p>
-              <h2 className="text-2xl md:text-3xl font-black text-white">Próximos Torneios</h2>
+              <h2 className="text-2xl md:text-3xl font-black" style={{ color: C.navy }}>Próximos Torneios</h2>
             </div>
           </div>
 
@@ -228,9 +231,9 @@ export default function LandingPage() {
             </div>
           ) : championships.length === 0 ? (
             <div className="text-center py-14 rounded-2xl border" style={{ borderColor: C.border, backgroundColor: C.card }}>
-              <Trophy className="w-8 h-8 mx-auto mb-3 opacity-20 text-white" />
-              <p className="font-medium opacity-40 text-white">Nenhum evento agendado no momento.</p>
-              <p className="text-sm mt-1 opacity-30 text-white">Fique de olho nas novidades.</p>
+              <Trophy className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: C.navy }} />
+              <p className="font-medium opacity-50" style={{ color: C.navy }}>Nenhum evento agendado no momento.</p>
+              <p className="text-sm mt-1 opacity-40" style={{ color: C.text }}>Fique de olho nas novidades.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -248,7 +251,7 @@ export default function LandingPage() {
           <div className="flex items-baseline justify-between mb-8">
             <div>
               <p className="text-xs font-black uppercase tracking-widest mb-1.5" style={{ color: C.blue }}>Vitrine</p>
-              <h2 className="text-2xl md:text-3xl font-black text-white">Em Destaque</h2>
+              <h2 className="text-2xl md:text-3xl font-black" style={{ color: C.navy }}>Em Destaque</h2>
             </div>
           </div>
 
@@ -259,8 +262,8 @@ export default function LandingPage() {
             </div>
           ) : products.length === 0 ? (
             <div className="text-center py-14 rounded-2xl border" style={{ borderColor: C.border, backgroundColor: C.card }}>
-              <Package className="w-8 h-8 mx-auto mb-3 opacity-20 text-white" />
-              <p className="font-medium opacity-40 text-white">Produtos em breve.</p>
+              <Package className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: C.navy }} />
+              <p className="font-medium opacity-50" style={{ color: C.navy }}>Produtos em breve.</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
@@ -283,7 +286,7 @@ export default function LandingPage() {
               <div className="flex-1 text-center md:text-left">
                 <p className="text-xs font-black uppercase tracking-widest mb-3"
                   style={{ color: C.yellow }}>Programa de Fidelidade</p>
-                <h2 className="text-2xl md:text-3xl font-black text-white mb-4 leading-tight">
+                <h2 className="text-2xl md:text-3xl font-black mb-4 leading-tight" style={{ color: C.navy }}>
                   Ganhe pontos a cada visita
                 </h2>
                 <p className="text-sm leading-relaxed max-w-sm mb-6" style={{ color: C.text }}>
@@ -309,7 +312,7 @@ export default function LandingPage() {
                       style={{ backgroundColor: `${C.blue}18` }}>
                       <Icon className="w-5 h-5" style={{ color: C.blue }} />
                     </div>
-                    <p className="text-white text-xs font-black leading-snug">{label}</p>
+                    <p className="text-xs font-black leading-snug" style={{ color: C.navy }}>{label}</p>
                     <p className="text-[10px] mt-0.5 leading-snug" style={{ color: C.text }}>{sub}</p>
                   </div>
                 ))}
@@ -337,8 +340,8 @@ export default function LandingPage() {
       <footer className="border-t py-10 px-5" style={{ borderColor: C.border }}>
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
           <div className="flex items-center gap-2.5">
-            <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-7 w-auto object-contain" />
-            <span className="font-black text-white">Santuário Nerd</span>
+            <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-7 w-auto object-contain" />
+            <span className="font-black" style={{ color: C.navy }}>Santuário Nerd</span>
           </div>
 
           <p className="text-xs text-center" style={{ color: `${C.text}` }}>
@@ -410,7 +413,7 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
         </div>
 
         {/* Nome */}
-        <h3 className="font-black text-white text-sm leading-snug line-clamp-2">{c.name}</h3>
+        <h3 className="font-black text-sm leading-snug line-clamp-2" style={{ color: C.navy }}>{c.name}</h3>
 
         {/* Data + vagas */}
         <div className="space-y-1.5 text-xs" style={{ color: C.text }}>
@@ -435,7 +438,7 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
           <button
             onClick={onRegister}
             className="text-xs font-black px-3.5 py-2 rounded-xl flex items-center gap-1 transition-all active:scale-95"
-            style={{ backgroundColor: C.blue, color: C.bg }}>
+            style={{ backgroundColor: C.blue, color: '#fff' }}>
             Inscrever <ChevronRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -473,7 +476,7 @@ function ProductCard({ product: p, onClick }: { product: Product; onClick: () =>
         <p className="text-[10px] uppercase tracking-wide mb-1 font-medium" style={{ color: C.text }}>
           {p.category}
         </p>
-        <p className="text-xs font-bold text-white leading-snug line-clamp-2 mb-2">{p.name}</p>
+        <p className="text-xs font-bold leading-snug line-clamp-2 mb-2" style={{ color: C.navy }}>{p.name}</p>
         <div className="flex items-center justify-between">
           {p.isOnPromo && p.discountPriceInReais != null ? (
             <div className="flex flex-col">
@@ -528,7 +531,7 @@ function AnnouncementModal({ ann, onClose }: { ann: AnnouncementDto; onClose: ()
           {ann.linkUrl && (
             <a href={ann.linkUrl} target="_blank" rel="noreferrer"
               className="mt-5 flex items-center justify-center gap-2 w-full font-black py-3 rounded-xl transition active:scale-95"
-              style={{ backgroundColor: C.blue, color: C.bg }}>
+              style={{ backgroundColor: C.blue, color: '#fff' }}>
               Saiba mais
             </a>
           )}
@@ -673,7 +676,7 @@ function RegisterModal({ championship, onClose }: { championship: Championship; 
             </div>
             <button type="submit"
               className="w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-xl transition-all active:scale-95"
-              style={{ backgroundColor: C.blue, color: C.bg }}>
+              style={{ backgroundColor: C.blue, color: '#fff' }}>
               <MessageCircle className="w-4 h-4" /> Confirmar pelo WhatsApp
             </button>
             <p className="text-xs text-center" style={{ color: C.text }}>
