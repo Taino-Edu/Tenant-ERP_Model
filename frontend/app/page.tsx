@@ -15,6 +15,8 @@ const MAIKON_WHATSAPP = '5517997633103'
 const MAIKON_EMAIL    = 'santuarionerd@gmail.com'
 const NAVY            = '#0C3D5A'
 
+type Theme = { bg: string; card: string; cardAlt: string; border: string; blue: string; yellow: string; text: string; navy: string }
+
 export default function LandingPage() {
   const router = useRouter()
   const [championships, setChampionships] = useState<Championship[]>([])
@@ -266,12 +268,12 @@ export default function LandingPage() {
             <div className="flex flex-col lg:flex-row gap-6">
               {/* Calendário */}
               <div className="shrink-0 lg:w-64">
-                <EventCalendar championships={championships} onSelect={c => setRegisterModal(c)} />
+                <EventCalendar championships={championships} onSelect={c => setRegisterModal(c)} C={C} />
               </div>
               {/* Cards */}
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
                 {championships.map(c => (
-                  <ChampionshipCard key={c.id} championship={c} onRegister={() => setRegisterModal(c)} />
+                  <ChampionshipCard key={c.id} championship={c} onRegister={() => setRegisterModal(c)} C={C} />
                 ))}
               </div>
             </div>
@@ -302,7 +304,7 @@ export default function LandingPage() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
               {products.map(p => (
-                <ProductCard key={p.id} product={p} onClick={() => setProductModal(p)} />
+                <ProductCard key={p.id} product={p} onClick={() => setProductModal(p)} C={C} />
               ))}
             </div>
           )}
@@ -437,18 +439,19 @@ export default function LandingPage() {
       </a>
 
       {/* ── MODAIS ──────────────────────────────────────────────────────── */}
-      {annModal      && <AnnouncementModal ann={annModal}               onClose={() => setAnnModal(null)} />}
-      {productModal  && <ProductModal      product={productModal}       onClose={() => setProductModal(null)} />}
-      {registerModal && <RegisterModal     championship={registerModal} onClose={() => setRegisterModal(null)} />}
+      {annModal      && <AnnouncementModal ann={annModal}               onClose={() => setAnnModal(null)}      C={C} />}
+      {productModal  && <ProductModal      product={productModal}       onClose={() => setProductModal(null)}  C={C} />}
+      {registerModal && <RegisterModal     championship={registerModal} onClose={() => setRegisterModal(null)} C={C} />}
     </div>
   )
 }
 
 // ── Event Calendar ────────────────────────────────────────────────────────────
 
-function EventCalendar({ championships, onSelect }: {
+function EventCalendar({ championships, onSelect, C }: {
   championships: Championship[]
   onSelect: (c: Championship) => void
+  C: Theme
 }) {
   const [view, setView] = useState(() => new Date())
   const year  = view.getFullYear()
@@ -546,7 +549,7 @@ function EventCalendar({ championships, onSelect }: {
 
 // ── Championship Card ─────────────────────────────────────────────────────────
 
-function ChampionshipCard({ championship: c, onRegister }: { championship: Championship; onRegister: () => void }) {
+function ChampionshipCard({ championship: c, onRegister, C }: { championship: Championship; onRegister: () => void; C: Theme }) {
   const gameColors: Record<string, { bg: string; text: string }> = {
     'Pokemon':   { bg: 'rgba(234,179,8,0.15)',  text: '#FBBF24' },
     'Magic':     { bg: 'rgba(99,102,241,0.15)', text: '#818CF8' },
@@ -624,7 +627,7 @@ function ChampionshipCard({ championship: c, onRegister }: { championship: Champ
 
 // ── Product Card ──────────────────────────────────────────────────────────────
 
-function ProductCard({ product: p, onClick }: { product: Product; onClick: () => void }) {
+function ProductCard({ product: p, onClick, C }: { product: Product; onClick: () => void; C: Theme }) {
   return (
     <button
       onClick={onClick}
@@ -678,7 +681,7 @@ function ProductCard({ product: p, onClick }: { product: Product; onClick: () =>
 
 // ── Modais ────────────────────────────────────────────────────────────────────
 
-function AnnouncementModal({ ann, onClose }: { ann: AnnouncementDto; onClose: () => void }) {
+function AnnouncementModal({ ann, onClose, C }: { ann: AnnouncementDto; onClose: () => void; C: Theme }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', h)
@@ -721,7 +724,7 @@ function AnnouncementModal({ ann, onClose }: { ann: AnnouncementDto; onClose: ()
   )
 }
 
-function ProductModal({ product: p, onClose }: { product: Product; onClose: () => void }) {
+function ProductModal({ product: p, onClose, C }: { product: Product; onClose: () => void; C: Theme }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', h)
@@ -778,7 +781,7 @@ function ProductModal({ product: p, onClose }: { product: Product; onClose: () =
   )
 }
 
-function RegisterModal({ championship, onClose }: { championship: Championship; onClose: () => void }) {
+function RegisterModal({ championship, onClose, C }: { championship: Championship; onClose: () => void; C: Theme }) {
   const [name,  setName]  = useState('')
   const [phone, setPhone] = useState('')
   const [done,  setDone]  = useState(false)
