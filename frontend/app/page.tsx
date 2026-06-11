@@ -44,7 +44,7 @@ export default function LandingPage() {
         setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 4))
       ),
       productApi.list().then(r => {
-        const visible  = r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnSite)
+        const visible  = r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnSite !== false)
         const featured = visible.filter(p => p.isFeatured)
         setProducts(featured.length > 0 ? featured.slice(0, 8) : visible.slice(0, 8))
       }),
@@ -361,6 +361,18 @@ export default function LandingPage() {
         </div>
       </footer>
 
+      {/* ── WHATSAPP FLUTUANTE ──────────────────────────────────────────── */}
+      <a
+        href={`https://wa.me/${MAIKON_WHATSAPP}`}
+        target="_blank"
+        rel="noreferrer"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 font-black text-sm px-4 py-3 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95"
+        style={{ backgroundColor: '#25D366', color: '#fff', boxShadow: '0 8px 24px rgba(37,211,102,0.4)' }}
+      >
+        <MessageCircle className="w-5 h-5" />
+        Falar com o Maikon
+      </a>
+
       {/* ── MODAIS ──────────────────────────────────────────────────────── */}
       {annModal      && <AnnouncementModal ann={annModal}               onClose={() => setAnnModal(null)} />}
       {productModal  && <ProductModal      product={productModal}       onClose={() => setProductModal(null)} />}
@@ -626,10 +638,10 @@ function RegisterModal({ championship, onClose }: { championship: Championship; 
         style={{ backgroundColor: C.card, borderColor: C.border }}>
         <div className="flex items-start justify-between mb-5">
           <div>
-            <h3 className="font-black text-white text-lg">Inscrição</h3>
+            <h3 className="font-black text-lg" style={{ color: C.navy }}>Inscrição</h3>
             <p className="text-sm mt-0.5" style={{ color: C.text }}>{championship.name}</p>
           </div>
-          <button onClick={onClose} className="p-1 hover:text-white transition-colors" style={{ color: C.text }}>
+          <button onClick={onClose} className="p-1 transition-colors" style={{ color: C.text }}>
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -638,14 +650,14 @@ function RegisterModal({ championship, onClose }: { championship: Championship; 
           <div className="text-center py-6">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
               style={{ backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
-              <CheckCircle className="w-7 h-7 text-green-400" />
+              <CheckCircle className="w-7 h-7 text-green-500" />
             </div>
-            <p className="font-black text-white mb-1">Solicitação enviada!</p>
+            <p className="font-black mb-1" style={{ color: C.navy }}>Solicitação enviada!</p>
             <p className="text-sm leading-relaxed" style={{ color: C.text }}>
               O Maikon vai confirmar sua vaga pelo WhatsApp. Pague na chegada.
             </p>
             <button onClick={onClose}
-              className="mt-5 w-full py-2.5 text-sm rounded-xl border transition-colors hover:text-white"
+              className="mt-5 w-full py-2.5 text-sm rounded-xl border transition-colors"
               style={{ color: C.text, borderColor: C.border }}>
               Fechar
             </button>
@@ -657,19 +669,19 @@ function RegisterModal({ championship, onClose }: { championship: Championship; 
               Taxa: <strong>R$ {(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}</strong> — pague na chegada
             </div>
             <div>
-              <label className="block text-xs font-bold mb-1.5" style={{ color: C.text }}>Seu nome</label>
+              <label className="block text-xs font-bold mb-1.5" style={{ color: C.navy }}>Seu nome</label>
               <input
-                className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 transition-all"
-                style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, ['--tw-ring-color' as any]: C.blue }}
+                className="w-full rounded-xl px-4 py-3 text-sm outline-none border transition-all"
+                style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, color: C.navy }}
                 placeholder="Nome completo"
                 value={name} onChange={e => setName(e.target.value)} required
               />
             </div>
             <div>
-              <label className="block text-xs font-bold mb-1.5" style={{ color: C.text }}>Seu WhatsApp</label>
+              <label className="block text-xs font-bold mb-1.5" style={{ color: C.navy }}>Seu WhatsApp</label>
               <input
-                className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 transition-all"
-                style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}
+                className="w-full rounded-xl px-4 py-3 text-sm outline-none border transition-all"
+                style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, color: C.navy }}
                 placeholder="(17) 99999-9999"
                 value={phone} onChange={e => setPhone(e.target.value)} required
               />
