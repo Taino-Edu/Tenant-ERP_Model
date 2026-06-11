@@ -9,15 +9,14 @@ import { UploadCloud, X, Image as ImageIcon, Loader2, RefreshCw } from 'lucide-r
 import { uploadApi } from '@/lib/api'
 
 interface ImageUploadProps {
-  /** URL atual da imagem (para preview). Opcional. */
   currentUrl?: string | null
-  /** Callback chamado com a URL retornada pelo servidor ao concluir upload. */
   onUpload: (url: string) => void
-  /** Rótulo exibido acima do campo. Padrão: "Imagem" */
   label?: string
+  /** Dica de tamanho/formato exibida abaixo do label. Ex: "800×450px recomendado" */
+  hint?: string
 }
 
-export default function ImageUpload({ currentUrl, onUpload, label = 'Imagem' }: ImageUploadProps) {
+export default function ImageUpload({ currentUrl, onUpload, label = 'Imagem', hint }: ImageUploadProps) {
   const inputRef           = useRef<HTMLInputElement>(null)
   const replaceRef         = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -86,7 +85,10 @@ export default function ImageUpload({ currentUrl, onUpload, label = 'Imagem' }: 
 
   return (
     <div className="space-y-2">
-      <label className="label">{label}</label>
+      <div className="flex items-baseline gap-2">
+        <label className="label">{label}</label>
+        {hint && <span className="text-[10px] text-[var(--text-muted)]">{hint}</span>}
+      </div>
 
       {preview ? (
         // ── Preview da imagem selecionada ─────────────────────────────────────

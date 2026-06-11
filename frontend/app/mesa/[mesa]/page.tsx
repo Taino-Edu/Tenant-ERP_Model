@@ -4,67 +4,52 @@ import { useParams, useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
 import toast, { Toaster } from 'react-hot-toast'
-import { 
-  Smartphone, User, Hash, MessageCircle, Loader2, 
-  Sword, TableProperties, X, Shield, Zap, 
-  ChevronRight, ArrowLeft, BookOpen, Award
+import {
+  User, Hash, MessageCircle, Loader2,
+  X, Shield, ChevronRight, ArrowLeft
 } from 'lucide-react'
-import clsx from 'clsx'
 
-// =============================================================================
-// Chave usada para persistir dados do usuário no localStorage
-// =============================================================================
 const STORAGE_KEY = 'mesa-last-user'
 
 interface SavedUser {
   name: string
-  cpf: string       // raw 11 digits
+  cpf: string
   whatsApp: string
-  displayCpf: string // formatted for display
+  displayCpf: string
 }
 
-// =============================================================================
-// Modal de Política de Privacidade (LGPD — Art. 9 — direito à informação)
-// =============================================================================
 function PrivacyModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="relative w-full max-w-md bg-surface-800 border border-surface-600 rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-surface-700">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <Shield className="w-6 h-6 text-brand-500" />
-            <h2 className="text-white font-bold tracking-tight">Privacidade & Dados</h2>
+            <Shield className="w-5 h-5 text-[#3EC2F2]" />
+            <h2 className="text-gray-900 font-bold text-sm">Privacidade & Dados</h2>
           </div>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-white transition-colors">
-            <X className="w-6 h-6" />
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors rounded-full hover:bg-gray-100">
+            <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto text-sm text-gray-400 space-y-4 leading-relaxed">
-          <p><strong className="text-white">Santuário Nerd — Política de Privacidade</strong></p>
-          <p>
-            Em conformidade com a Lei Geral de Proteção de Dados Pessoais (LGPD — Lei nº 13.709/2018),
-            informamos como tratamos seus dados pessoais.
-          </p>
+        <div className="p-6 overflow-y-auto text-sm text-gray-500 space-y-4 leading-relaxed">
+          <p><strong className="text-gray-900">Santuário Nerd — Política de Privacidade</strong></p>
+          <p>Em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018), informamos como tratamos seus dados.</p>
           <div className="space-y-3">
-            <div className="bg-surface-700 p-4 rounded-2xl border border-surface-600">
-              <p><strong className="text-white text-xs uppercase">Dados coletados:</strong></p>
+            <div className="bg-blue-50 p-4 rounded-2xl">
+              <p className="font-bold text-gray-800 text-[11px] uppercase mb-1">Dados coletados</p>
               <p>Nome completo, CPF e número de WhatsApp.</p>
             </div>
-            <div className="bg-surface-700 p-4 rounded-2xl border border-surface-600">
-              <p><strong className="text-white text-xs uppercase">Finalidade:</strong></p>
+            <div className="bg-blue-50 p-4 rounded-2xl">
+              <p className="font-bold text-gray-800 text-[11px] uppercase mb-1">Finalidade</p>
               <p>Identificação do cliente para abertura de comanda e registro de pontos de fidelidade.</p>
             </div>
           </div>
-          <p>
-            <strong className="text-white">Seus direitos:</strong> Você pode solicitar acesso, correção ou
-            exclusão dos seus dados a qualquer momento pelo painel do cliente.
-          </p>
-          <p className="text-[10px] text-gray-400 italic">
-            Responsável: Santuário Nerd — São José do Rio Preto, SP.
-          </p>
+          <p><strong className="text-gray-900">Seus direitos:</strong> Acesso, correção ou exclusão a qualquer momento pelo painel do cliente.</p>
+          <p className="text-[10px] text-gray-400 italic">Responsável: Santuário Nerd — São José do Rio Preto, SP.</p>
         </div>
-        <div className="p-6 border-t border-surface-700">
-          <button onClick={onClose} className="w-full py-4 bg-brand-500 text-white font-bold rounded-2xl shadow-lg shadow-brand-500/20 hover:bg-brand-600 transition-all">
+        <div className="p-5 border-t border-gray-100">
+          <button onClick={onClose} className="w-full py-4 font-black text-gray-900 rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-md"
+            style={{ background: 'linear-gradient(135deg, #FFE45E, #F5C518)' }}>
             Entendido
           </button>
         </div>
@@ -73,9 +58,6 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-// =============================================================================
-// Página de Quick-Login por QR Code
-// =============================================================================
 export default function MesaPage() {
   const params  = useParams()
   const router  = useRouter()
@@ -83,7 +65,6 @@ export default function MesaPage() {
 
   const [step, setStep]             = useState<'quick' | 'form' | 'loading'>('form')
   const [savedUser, setSavedUser]   = useState<SavedUser | null>(null)
-
   const [name, setName]             = useState('')
   const [cpf, setCpf]               = useState('')
   const [whatsApp, setWhatsApp]     = useState('')
@@ -100,7 +81,7 @@ export default function MesaPage() {
           setStep('quick')
         }
       }
-    } catch { /* ignore */ }
+    } catch {}
   }, [])
 
   function formatCpf(v: string) {
@@ -136,21 +117,12 @@ export default function MesaPage() {
 
     setStep('loading')
     try {
-      const { data } = await authApi.quickLogin(
-        requestName,
-        requestCpf,
-        requestWhatsApp,
-        mesa
-      )
-
+      const { data } = await authApi.quickLogin(requestName, requestCpf, requestWhatsApp, mesa)
       saveAuth(data)
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        name: requestName,
-        cpf: requestCpf,
-        whatsApp: requestWhatsApp,
+        name: requestName, cpf: requestCpf, whatsApp: requestWhatsApp,
         displayCpf: maskCpf(requestCpf)
       }))
-
       toast.success('Entrada autorizada! Boas compras.', { icon: '🏰' })
       setTimeout(() => router.push('/cliente'), 800)
     } catch (err: any) {
@@ -160,150 +132,183 @@ export default function MesaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f13] flex flex-col text-white">
-      <Toaster position="top-center" />
+    <div className="min-h-screen flex flex-col"
+      style={{ background: 'linear-gradient(160deg, #3EC2F2 0%, #1A6DB5 60%, #1352A2 100%)' }}>
 
-      {/* ── BACKGROUND DECORATION ── */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-20">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-[#42B6EE] rounded-full blur-[120px]" />
-        <div className="absolute top-1/2 -right-24 w-64 h-64 bg-[#00F0A8] rounded-full blur-[100px]" />
+      <Toaster position="top-center" toastOptions={{ style: { background: '#fff', color: '#1a1a2e', border: '1px solid #e5e7eb' } }} />
+
+      {/* Nuvens decorativas */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none select-none" aria-hidden>
+        <div className="absolute top-6 left-2 w-24 h-8 bg-white/25 rounded-full blur-md" />
+        <div className="absolute top-10 left-14 w-36 h-6 bg-white/20 rounded-full blur-md" />
+        <div className="absolute top-5 right-6 w-28 h-8 bg-white/25 rounded-full blur-md" />
+        <div className="absolute top-14 right-2 w-18 h-5 bg-white/15 rounded-full blur-sm" />
+        <div className="absolute top-20 left-4 w-16 h-4 bg-white/15 rounded-full blur-sm" />
       </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center p-6 relative z-10">
-        
-        {/* LOGO & TITLE */}
-        <div className="text-center mb-10">
-          <img src="/maikon-avatar.png" alt="Mascote" className="w-28 h-28 mx-auto mb-4 object-contain" />
-          <h1 className="text-3xl font-black uppercase tracking-[0.2em] leading-tight text-white">
-            Santuário<br/><span className="text-[#42B6EE]">Nerd</span>
-          </h1>
-          <div className="mt-4 flex items-center justify-center gap-2 text-gray-500">
-            <div className="h-px w-8 bg-[#32323f]" />
-            <span className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5">
-              <TableProperties className="w-3 h-3 text-[#00F0A8]" /> Mesa {mesa}
-            </span>
-            <div className="h-px w-8 bg-[#32323f]" />
+      {/* Cabeçalho */}
+      <div className="relative pt-10 pb-2 px-6 text-center">
+        <div className="inline-flex items-center gap-2.5 justify-center">
+          <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-8 w-auto object-contain drop-shadow-md" />
+          <div className="text-left">
+            <h1 className="text-xl font-black text-white leading-none tracking-wide">Santuário Nerd</h1>
+            <p className="text-[9px] font-bold text-white/65 uppercase tracking-[0.22em] mt-0.5">
+              Seu Universo Geek Começa Aqui
+            </p>
           </div>
         </div>
+        <p className="text-[11px] text-white/55 mt-2 font-medium">Mesa {mesa}</p>
+      </div>
 
-        {/* STEP: LOADING */}
+      {/* Mascote — flutuando no gradiente, sem moldura */}
+      <div className="relative flex justify-center py-4">
+        <img
+          src="/logo-maikon.png"
+          alt="Mascote Maikon"
+          className="w-32 h-32 object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.35)]"
+        />
+      </div>
+
+      {/* Card branco principal */}
+      <div className="relative flex-1 bg-white rounded-t-[2.5rem] shadow-[0_-8px_40px_rgba(0,0,0,0.15)] px-6 pt-8 pb-12">
+
+        {/* Loading */}
         {step === 'loading' && (
-          <div className="flex flex-col items-center gap-4 py-12">
-            <div className="relative">
-               <Loader2 className="w-12 h-12 animate-spin text-[#42B6EE]" />
-               <Zap className="absolute inset-0 m-auto w-4 h-4 text-white animate-pulse" />
-            </div>
-            <p className="text-sm font-bold uppercase tracking-tighter text-gray-400">Consultando o oráculo...</p>
+          <div className="flex flex-col items-center justify-center py-20 gap-4">
+            <Loader2 className="w-10 h-10 animate-spin text-[#3EC2F2]" />
+            <p className="text-sm text-gray-500 font-semibold">Verificando dados...</p>
           </div>
         )}
 
-        {/* STEP: QUICK LOGIN */}
+        {/* Quick Login */}
         {step === 'quick' && savedUser && (
-          <div className="w-full max-w-sm space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <div className="bg-[#1e1e28] border border-[#32323f] rounded-3xl p-8 text-center shadow-xl">
-               <div className="w-20 h-20 bg-[#42B6EE]/10 border-2 border-[#42B6EE]/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Award className="w-10 h-10 text-[#42B6EE]" />
-               </div>
-               <p className="text-sm mb-1 font-medium" style={{ color: '#9CA3AF' }}>Seja bem-vindo de volta,</p>
-               <h2 className="text-xl font-black mb-6" style={{ color: '#FFFFFF' }}>{savedUser.name.split(' ')[0]}!</h2>
-               
-               <button onClick={() => handleLogin(true)} className="w-full py-4 bg-[#42B6EE] text-white font-bold rounded-2xl shadow-lg shadow-[#42B6EE]/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform">
-                  Entrar no Santuário <ChevronRight className="w-5 h-5" />
-               </button>
-               
-               <button onClick={() => setStep('form')} className="mt-6 text-xs text-gray-500 font-bold uppercase tracking-widest hover:text-white transition-colors">
-                  Não é você? Clique aqui
-               </button>
+          <div className="space-y-6 max-w-sm mx-auto">
+            <div className="text-center">
+              <h2 className="text-xl font-black text-gray-900">Identificação do Cliente</h2>
+              <p className="text-gray-400 text-sm mt-1">
+                Bem-vindo de volta,{' '}
+                <span className="text-[#3EC2F2] font-bold">{savedUser.name.split(' ')[0]}</span>!
+              </p>
             </div>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#3EC2F2]/15 flex items-center justify-center shrink-0">
+                <User className="w-5 h-5 text-[#3EC2F2]" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-gray-900 text-sm truncate">{savedUser.name}</p>
+                <p className="text-[11px] text-gray-500 font-mono">{savedUser.displayCpf}</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => handleLogin(true)}
+              className="w-full py-4 font-black text-gray-900 rounded-2xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all text-base shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #FFE45E, #F5C518)' }}
+            >
+              Abrir Comanda <ChevronRight className="w-5 h-5" />
+            </button>
+
+            <button onClick={() => setStep('form')}
+              className="w-full text-center text-xs text-gray-400 hover:text-gray-600 transition-colors py-2">
+              Não é você? Clique aqui
+            </button>
           </div>
         )}
 
-        {/* STEP: COMPLETE FORM */}
+        {/* Formulário */}
         {step === 'form' && (
-          <div className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-[#1e1e28] border border-[#32323f] rounded-3xl p-8 shadow-xl space-y-6">
-              <div className="space-y-1">
-                <h2 className="text-lg font-bold text-white">Novo Acesso</h2>
-                <p className="text-xs text-gray-500">Preencha os campos para abrir sua comanda.</p>
-              </div>
-
-              <div className="space-y-4">
-                {/* Nome */}
-                <div className="space-y-1.5 group">
-                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#42B6EE] transition-colors">Seu Nome</label>
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input
-                      type="text" value={name} onChange={e => setName(e.target.value)}
-                      placeholder="Como quer ser chamado?"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#42B6EE] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-medium outline-none transition-all placeholder:text-gray-500"
-                    />
-                  </div>
-                </div>
-
-                {/* CPF */}
-                <div className="space-y-1.5 group">
-                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#42B6EE] transition-colors">Seu CPF</label>
-                  <div className="relative">
-                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input
-                      type="tel" value={cpf}
-                      onChange={e => setCpf(formatCpf(e.target.value))}
-                      placeholder="000.000.000-00"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#42B6EE] rounded-2xl py-3.5 pl-11 pr-4 text-sm font-mono outline-none transition-all placeholder:text-gray-500"
-                    />
-                  </div>
-                </div>
-
-                {/* WhatsApp */}
-                <div className="space-y-1.5 group">
-                  <label className="text-[10px] font-black uppercase text-gray-500 ml-1 tracking-widest group-focus-within:text-[#42B6EE] transition-colors">WhatsApp</label>
-                  <div className="relative">
-                    <MessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input
-                      type="tel" value={whatsApp} onChange={e => setWhatsApp(formatPhone(e.target.value))}
-                      placeholder="55 (17) 99999-9999"
-                      className="w-full bg-[#16161d] border border-[#252530] focus:border-[#42B6EE] rounded-2xl py-3.5 pl-11 pr-4 text-sm outline-none transition-all placeholder:text-gray-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Consentimento */}
-                <label className="flex items-start gap-3 p-1 cursor-pointer select-none">
-                  <input
-                    type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
-                    className="mt-1 w-4 h-4 rounded-md border-[#32323f] bg-[#16161d] text-[#42B6EE] focus:ring-[#42B6EE] transition-all"
-                  />
-                  <span className="text-[11px] text-gray-500 leading-tight">
-                    Aceito que meus dados sejam usados para gerenciar minha comanda e pontos conforme a{' '}
-                    <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#42B6EE] font-bold hover:underline">
-                      Política de Privacidade
-                    </button>.
-                  </span>
-                </label>
-              </div>
-
-              <button
-                onClick={() => handleLogin(false)}
-                className="w-full py-4 bg-[#42B6EE] text-white font-bold rounded-2xl shadow-lg shadow-[#42B6EE]/20 flex items-center justify-center gap-2 hover:bg-[#2ea8e0] active:scale-[0.98] transition-all"
-              >
-                Abrir Comanda <ChevronRight className="w-5 h-5" />
-              </button>
-              
-              {savedUser && (
-                <button onClick={() => setStep('quick')} className="w-full flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors">
-                  <ArrowLeft className="w-3 h-3" /> Voltar
-                </button>
-              )}
+          <div className="space-y-5 max-w-sm mx-auto">
+            <div className="text-center">
+              <h2 className="text-xl font-black text-gray-900">Identificação do Cliente</h2>
+              <p className="text-gray-400 text-sm mt-1">Preencha seus dados para abrir a comanda</p>
             </div>
+
+            <div className="space-y-4">
+
+              <div>
+                <label className="block text-[11px] font-black text-[#1A6DB5] uppercase tracking-wider mb-2">
+                  Nome Completo
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text" value={name} onChange={e => setName(e.target.value)}
+                    placeholder="Seu nome completo"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#3EC2F2] focus:ring-2 focus:ring-[#3EC2F2]/20 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-[#1A6DB5] uppercase tracking-wider mb-2">
+                  CPF
+                </label>
+                <div className="relative">
+                  <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="tel" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))}
+                    placeholder="000.000.000-00"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 font-mono placeholder-gray-400 outline-none focus:border-[#3EC2F2] focus:ring-2 focus:ring-[#3EC2F2]/20 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-[#1A6DB5] uppercase tracking-wider mb-2">
+                  WhatsApp / Telefone
+                </label>
+                <div className="relative">
+                  <MessageCircle className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="tel" value={whatsApp} onChange={e => setWhatsApp(formatPhone(e.target.value))}
+                    placeholder="(00) 00000-0000"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#3EC2F2] focus:ring-2 focus:ring-[#3EC2F2]/20 transition-all"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#3EC2F2] focus:ring-[#3EC2F2] shrink-0"
+                />
+                <span className="text-xs text-gray-500 leading-relaxed">
+                  Li e concordo com os{' '}
+                  <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#3EC2F2] font-semibold underline underline-offset-2">
+                    Termos de Uso
+                  </button>
+                  {' '}e a{' '}
+                  <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#3EC2F2] font-semibold underline underline-offset-2">
+                    Política de Privacidade
+                  </button>
+                  {' '}do Santuário Nerd, conforme a{' '}
+                  <strong className="text-gray-700">Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018)</strong>.
+                </span>
+              </label>
+            </div>
+
+            <button
+              onClick={() => handleLogin(false)}
+              className="w-full py-4 font-black text-gray-900 rounded-2xl flex items-center justify-center gap-2 hover:opacity-90 active:scale-95 transition-all text-base shadow-lg"
+              style={{ background: 'linear-gradient(135deg, #FFE45E, #F5C518)' }}
+            >
+              Abrir Comanda <ChevronRight className="w-5 h-5" />
+            </button>
+
+            {savedUser && (
+              <button onClick={() => setStep('quick')}
+                className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors py-1">
+                <ArrowLeft className="w-3 h-3" /> Voltar
+              </button>
+            )}
           </div>
         )}
-      </main>
 
-      {/* FOOTER */}
-      <footer className="p-8 text-center text-[10px] text-gray-400 font-bold uppercase tracking-[0.3em]">
-        Santuário Nerd © 2026
-      </footer>
+        <p className="text-center text-[10px] text-gray-300 mt-10 font-medium">
+          Powered by Santuário Nerd © 2025
+        </p>
+      </div>
 
       {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
     </div>

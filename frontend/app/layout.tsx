@@ -1,8 +1,16 @@
 import type { Metadata, Viewport } from 'next'
+import { Nunito } from 'next/font/google'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
+
+const nunito = Nunito({
+  subsets: ['latin'],
+  variable: '--font-nunito',
+  display: 'swap',
+  weight: ['400', '500', '600', '700', '800', '900'],
+})
 
 export const viewport: Viewport = {
   themeColor: '#42B6EE',
@@ -16,10 +24,10 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   icons: {
     icon: [
-      { url: '/logo-santuario.png', type: 'image/png' },
+      { url: '/logo-maikon.png', type: 'image/png' },
     ],
-    apple: '/logo-santuario.png',
-    shortcut: '/logo-santuario.png',
+    apple: '/logo-maikon.png',
+    shortcut: '/logo-maikon.png',
   },
   appleWebApp: {
     capable: true,
@@ -30,7 +38,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" className={nunito.variable}>
       <head>
         {/* iOS Safari PWA meta tags */}
         <meta name="mobile-web-app-capable" content="yes" />

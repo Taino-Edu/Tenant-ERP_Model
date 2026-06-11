@@ -161,6 +161,7 @@ function ProductModal({
           <div>
             <ImageUpload
               label="Imagem do produto"
+              hint="600×600px recomendado · fundo transparente (PNG)"
               currentUrl={form.imageUrl ?? null}
               onUpload={url => set('imageUrl', url || null)}
             />

@@ -86,7 +86,8 @@ function AnnouncementForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <ImageUpload
-            label="Imagem (Banner: 1200×400px · Aviso: 600×300px)"
+            label="Imagem do anúncio"
+            hint="Banner: 1200×400px · Aviso: 600×300px"
             currentUrl={imageUrl || null}
             onUpload={url => setImageUrl(url)}
           />

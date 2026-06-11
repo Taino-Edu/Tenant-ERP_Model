@@ -4,15 +4,23 @@ import { useRouter } from 'next/navigation'
 import { isLoggedIn, isAdmin } from '@/lib/auth'
 import { championshipApi, productApi, announcementApi, Championship, Product, AnnouncementDto } from '@/lib/api'
 import Link from 'next/link'
-import ThemeToggle from '@/components/ThemeToggle'
 import {
-  Trophy, ShoppingBag, QrCode, Star,
-  Calendar, Users, ChevronRight, Zap, Shield,
+  Trophy, ShoppingBag, Star, Calendar, Users,
   X, MessageCircle, CheckCircle, Package,
-  ScanLine, CreditCard, Award
+  CreditCard, Award, QrCode, Shield, ChevronRight
 } from 'lucide-react'
 
-const MAIKON_WHATSAPP = '5517997633103' // WhatsApp do Maikon
+const MAIKON_WHATSAPP = '5517997633103'
+
+const C = {
+  bg:      '#121215',
+  card:    '#1A1A1F',
+  cardAlt: '#1E1E24',
+  border:  'rgba(255,255,255,0.07)',
+  blue:    '#3EC2F2',
+  yellow:  '#FFE45E',
+  text:    'rgba(255,255,255,0.55)',
+}
 
 export default function LandingPage() {
   const router = useRouter()
@@ -32,51 +40,54 @@ export default function LandingPage() {
     }
     Promise.allSettled([
       championshipApi.list().then(r =>
-        setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 3))
+        setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 4))
       ),
       productApi.list().then(r => {
         const active   = r.data.filter(p => p.isActive && p.stockQuantity > 0)
         const featured = active.filter(p => p.isFeatured)
-        setProducts(featured.length > 0 ? featured.slice(0, 6) : active.slice(0, 6))
+        setProducts(featured.length > 0 ? featured.slice(0, 8) : active.slice(0, 8))
       }),
       announcementApi.visible().then(r => setAnnouncements(r.data)),
     ]).finally(() => setLoading(false))
   }, [router])
 
-
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <div className="min-h-screen text-white" style={{ backgroundColor: C.bg }}>
 
-      {/* ── Navbar ─────────────────────────────────────────────────── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md border-b" style={{ backgroundColor: 'color-mix(in srgb, var(--bg-primary) 90%, transparent)', borderColor: 'var(--border-color)' }}>
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+      {/* ── NAVBAR ─────────────────────────────────────────────────────── */}
+      <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center border-b"
+        style={{ backgroundColor: 'rgba(18,18,21,0.92)', backdropFilter: 'blur(16px)', borderColor: C.border }}>
+        <div className="w-full max-w-6xl mx-auto px-5 flex items-center justify-between">
+
+          {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <img src="/maikon-avatar.png" alt="Santuário Nerd" className="h-9 w-9 object-contain" />
-            <span className="text-white text-xl font-bold">Santuário Nerd</span>
+            <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-8 w-auto object-contain" />
+            <span className="font-black text-lg text-white leading-none">Santuário Nerd</span>
           </div>
 
-          <div className="hidden md:flex items-center gap-6 text-sm text-gray-400">
-            <a href="#calendario"    className="hover:text-white transition">Calendário</a>
-            <a href="#campeonatos"   className="hover:text-white transition">Campeonatos</a>
-            <a href="#produtos"      className="hover:text-white transition">Produtos</a>
-            <a href="#como-funciona" className="hover:text-white transition">Como Funciona</a>
-            <a href="#pontos"        className="hover:text-white transition">Pontos</a>
+          {/* Links desktop */}
+          <div className="hidden md:flex items-center gap-7 text-sm font-medium" style={{ color: C.text }}>
+            <a href="#eventos"  className="hover:text-white transition-colors">Torneios</a>
+            <a href="#produtos" className="hover:text-white transition-colors">Produtos</a>
+            <a href="#pontos"   className="hover:text-white transition-colors">Pontos</a>
           </div>
 
-          <div className="hidden md:flex items-center gap-3">
-            <ThemeToggle compact />
+          {/* Ações desktop */}
+          <div className="hidden md:flex items-center gap-2">
             <Link href="/entrar"
-              className="text-sm text-gray-400 hover:text-white transition px-4 py-2">
+              className="text-sm px-4 py-2 rounded-xl border transition-colors hover:border-white/30 hover:text-white"
+              style={{ color: C.text, borderColor: C.border }}>
               Minha Conta
             </Link>
-            <a href="#campeonatos"
-              className="text-sm bg-brand-500 hover:bg-brand-400 text-white font-semibold px-4 py-2 rounded-xl transition shadow-lg shadow-brand-500/20">
+            <a href="#eventos"
+              className="text-sm font-black px-5 py-2 rounded-xl transition-all active:scale-95 shadow-lg"
+              style={{ backgroundColor: C.blue, color: C.bg, boxShadow: `0 4px 20px rgba(62,194,242,0.3)` }}>
               Ver Eventos
             </a>
           </div>
 
-          <button onClick={() => setMobileMenu(!mobileMenu)}
-            className="md:hidden text-gray-400 hover:text-white p-1">
+          {/* Hamburger mobile */}
+          <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: C.text }}>
             <div className="space-y-1.5">
               <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
               <span className={`block w-5 h-0.5 bg-current transition-opacity ${mobileMenu ? 'opacity-0' : ''}`} />
@@ -84,82 +95,117 @@ export default function LandingPage() {
             </div>
           </button>
         </div>
-
-        {mobileMenu && (
-          <div className="md:hidden border-t px-6 py-4 space-y-3" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)' }}>
-            {['#calendario','#campeonatos','#produtos','#como-funciona','#pontos'].map((href, i) => (
-              <a key={href} href={href} onClick={() => setMobileMenu(false)}
-                className="block text-sm py-1.5 capitalize" style={{ color: 'var(--text-muted)' }}>
-                {['Calendário','Campeonatos','Produtos','Como Funciona','Pontos'][i]}
-              </a>
-            ))}
-            <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-color)' }}>
-              <ThemeToggle compact />
-              <Link href="/entrar" className="flex-1 text-center py-2 text-sm border rounded-xl" style={{ color: 'var(--text-muted)', borderColor: 'var(--border-color)' }}>Minha Conta</Link>
-              <a href="#campeonatos" className="flex-1 text-center py-2 text-sm bg-brand-500 text-white font-semibold rounded-xl">Eventos</a>
-            </div>
-          </div>
-        )}
       </nav>
 
-      {/* ── Hero ───────────────────────────────────────────────────── */}
-      <section className="pt-32 pb-24 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 rounded-full px-4 py-1.5 text-brand-400 text-sm font-medium mb-6">
-            <Zap className="w-3.5 h-3.5" />
-            Loja de Card Games e Campeonatos
+      {/* Menu mobile */}
+      {mobileMenu && (
+        <div className="fixed inset-x-0 top-16 z-40 border-b md:hidden px-5 py-4 space-y-1"
+          style={{ backgroundColor: C.card, borderColor: C.border }}>
+          {[['#eventos','Torneios'],['#produtos','Produtos'],['#pontos','Pontos']].map(([href, label]) => (
+            <a key={href} href={href} onClick={() => setMobileMenu(false)}
+              className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: C.text }}>
+              {label}
+            </a>
+          ))}
+          <div className="flex gap-2 pt-3 border-t" style={{ borderColor: C.border }}>
+            <Link href="/entrar" onClick={() => setMobileMenu(false)}
+              className="flex-1 text-center py-2.5 text-sm rounded-xl border font-medium hover:text-white transition-colors"
+              style={{ color: C.text, borderColor: C.border }}>
+              Minha Conta
+            </Link>
+            <a href="#eventos" onClick={() => setMobileMenu(false)}
+              className="flex-1 text-center py-2.5 text-sm rounded-xl font-black"
+              style={{ backgroundColor: C.blue, color: C.bg }}>
+              Eventos
+            </a>
           </div>
-          <h1 className="text-5xl md:text-7xl font-black text-white mb-6 leading-none tracking-tight">
-            Sua loja de
-            <span className="text-brand-400"> card games</span>
-            <br />favorita
-          </h1>
-          <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-            Produtos, campeonatos e a melhor experiência para jogadores de TCG.
-            Sente na mesa, escaneie o QR Code e faça seu pedido direto pelo celular.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a href="#campeonatos"
-              className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-bold px-8 py-3.5 rounded-xl transition-all active:scale-95 shadow-lg shadow-brand-500/20">
-              <Trophy className="w-5 h-5" /> Ver Campeonatos
-            </a>
-            <a href="#produtos"
-              className="inline-flex items-center justify-center gap-2 bg-surface-800 hover:bg-surface-700 border border-surface-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-all active:scale-95">
-              <ShoppingBag className="w-5 h-5" /> Ver Produtos
-            </a>
+        </div>
+      )}
+
+      {/* ── HERO ───────────────────────────────────────────────────────── */}
+      <section className="relative pt-16 overflow-hidden">
+
+        <div className="relative max-w-6xl mx-auto px-5 py-20 md:py-24">
+          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
+
+            {/* Texto */}
+            <div className="flex-1 text-center md:text-left">
+              <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full mb-6 border"
+                style={{ color: C.blue, borderColor: `${C.blue}40`, backgroundColor: `${C.blue}10` }}>
+                Card Games &amp; Campeonatos · José Bonifácio — SP
+              </div>
+
+              <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-5 tracking-tight">
+                Sua loja de<br />
+                <span style={{ color: C.blue }}>card games</span><br />
+                favorita
+              </h1>
+
+              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: C.text }}>
+                Produtos, torneios e a melhor experiência TCG da região.
+                Acumule pontos, compre na mesa e participe de campeonatos.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+                <a href="#eventos"
+                  className="inline-flex items-center justify-center gap-2 font-black px-7 py-3.5 rounded-xl transition-all active:scale-95"
+                  style={{ backgroundColor: C.yellow, color: C.bg, boxShadow: `0 8px 28px rgba(255,228,94,0.22)` }}>
+                  <Trophy className="w-5 h-5" /> Ver Torneios
+                </a>
+                <a href="#produtos"
+                  className="inline-flex items-center justify-center gap-2 font-semibold px-7 py-3.5 rounded-xl border transition-all hover:border-white/30 hover:text-white"
+                  style={{ borderColor: C.border, color: C.text }}>
+                  <ShoppingBag className="w-5 h-5" /> Ver Produtos
+                </a>
+              </div>
+            </div>
+
+            {/* Mascote */}
+            <div className="relative shrink-0">
+              <img
+                src="/logo-maikon.png"
+                alt="Mascote Maikon"
+                className="w-48 sm:w-56 md:w-64 h-auto object-contain drop-shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+              />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Anúncios — cards clicáveis que abrem popup ────────────── */}
+      {/* ── ANÚNCIOS (gerenciados pelo admin) ──────────────────────────── */}
       {announcements.length > 0 && (
-        <section className="px-6 pb-8 max-w-5xl mx-auto">
-          <div className={`grid gap-4 ${
-            announcements.length === 1 ? 'grid-cols-1 max-w-sm mx-auto' :
-            announcements.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
-            'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
-          }`}>
+        <section className="px-5 pb-8 max-w-6xl mx-auto">
+          <div className={
+            announcements.length === 1
+              ? 'grid grid-cols-1'
+              : announcements.length === 2
+                ? 'grid grid-cols-1 sm:grid-cols-2 gap-4'
+                : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
+          }>
             {announcements.map(a => (
-              <button key={a.id} onClick={() => setAnnModal(a)}
-                className="text-left rounded-2xl overflow-hidden border border-surface-600 hover:border-brand-500/50 hover:shadow-lg hover:shadow-brand-500/10 transition-all group cursor-pointer bg-surface-800">
-                {/* imagem */}
+              <button
+                key={a.id}
+                onClick={() => setAnnModal(a)}
+                className="text-left rounded-2xl overflow-hidden border group cursor-pointer transition-all"
+                style={{ backgroundColor: C.card, borderColor: C.border }}
+              >
                 {a.imageUrl ? (
-                  <div className="w-full h-44 overflow-hidden">
-                    <img src={a.imageUrl} alt={a.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-400" />
+                  <div className={`w-full overflow-hidden ${announcements.length === 1 ? 'h-56 md:h-72' : 'h-44'}`}>
+                    <img
+                      src={a.imageUrl} alt={a.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
                   </div>
                 ) : (
-                  <div className="w-full h-44 bg-gradient-to-br from-brand-500/20 to-surface-700 flex items-center justify-center">
-                    <span className="text-4xl font-black text-brand-500/30 select-none">!</span>
+                  <div className={`w-full flex items-center justify-center ${announcements.length === 1 ? 'h-36' : 'h-44'}`}
+                    style={{ background: `linear-gradient(135deg, ${C.blue}18, ${C.card})` }}>
+                    <span className="text-5xl font-black opacity-20" style={{ color: C.blue }}>!</span>
                   </div>
                 )}
-                {/* texto */}
                 <div className="p-4">
-                  <p className="font-bold text-white text-sm leading-snug">{a.title}</p>
-                  {a.body && (
-                    <p className="text-gray-400 text-xs mt-1.5 leading-relaxed line-clamp-2">{a.body}</p>
-                  )}
-                  <p className="text-brand-400 text-xs mt-2 font-medium">Ver mais →</p>
+                  <p className="font-black text-white text-sm leading-snug">{a.title}</p>
+                  {a.body && <p className="text-xs mt-1.5 line-clamp-2 leading-relaxed" style={{ color: C.text }}>{a.body}</p>}
+                  <p className="text-xs mt-2 font-bold" style={{ color: C.blue }}>Ver mais →</p>
                 </div>
               </button>
             ))}
@@ -167,70 +213,29 @@ export default function LandingPage() {
         </section>
       )}
 
-      {/* ── Como funciona ─────────────────────────────────────────── */}
-      <section id="como-funciona" className="py-20 px-6 border-y" style={{ borderColor: 'var(--border-color)', backgroundColor: 'color-mix(in srgb, var(--bg-card) 30%, transparent)' }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Simples assim</p>
-            <h2 className="text-3xl font-bold text-white">Como funciona</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative">
-            {/* linha conectora desktop */}
-            <div className="hidden md:block absolute top-7 left-[12.5%] right-[12.5%] h-px bg-surface-500" />
-            {[
-              { icon: ScanLine, step: '01', title: 'Escaneie o QR Code', desc: 'Cada mesa tem um QR único. Escaneie e sua comanda abre automaticamente.' },
-              { icon: ShoppingBag, step: '02', title: 'Faça seu pedido', desc: 'Adicione bebidas, salgadinhos e produtos TCG pelo celular.' },
-              { icon: Award, step: '03', title: 'Acumule pontos', desc: 'A cada visita você acumula pontos que podem ser trocados por produtos.' },
-              { icon: Trophy, step: '04', title: 'Participe de torneios', desc: 'Inscreva-se nos campeonatos e compita com outros jogadores.' },
-            ].map(({ icon: Icon, step, title, desc }) => (
-              <div key={step} className="text-center relative">
-                <div className="w-14 h-14 bg-surface-800 border border-surface-500 rounded-2xl flex items-center justify-center mx-auto mb-4 relative z-10">
-                  <Icon className="w-6 h-6 text-brand-400" />
-                </div>
-                <p className="text-xs font-bold text-brand-500 mb-1">{step}</p>
-                <h3 className="font-bold text-white mb-2 text-sm">{title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Campeonatos ───────────────────────────────────────────── */}
-      {/* ── Calendário de Eventos ─────────────────────────────────── */}
-      <section id="calendario" className="py-20 px-6 border-t" style={{ borderColor: 'var(--border-color)', backgroundColor: 'color-mix(in srgb, var(--bg-card) 30%, transparent)' }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
-            <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Agenda</p>
-            <h2 className="text-3xl font-bold text-white">Calendário de Eventos</h2>
-            <p className="text-gray-400 mt-2">Veja os próximos campeonatos e marque na agenda</p>
-          </div>
-          <EventCalendar championships={championships} />
-        </div>
-      </section>
-
-      {/* ── Campeonatos ────────────────────────────────────────────── */}
-      <section id="campeonatos" className="py-20 px-6">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-end justify-between mb-10">
+      {/* ── TORNEIOS ────────────────────────────────────────────────────── */}
+      <section id="eventos" className="py-16 px-5 border-t" style={{ borderColor: C.border }}>
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-baseline justify-between mb-8">
             <div>
-              <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Torneios</p>
-              <h2 className="text-3xl font-bold text-white">Próximos Eventos</h2>
+              <p className="text-xs font-black uppercase tracking-widest mb-1.5" style={{ color: C.blue }}>Agenda</p>
+              <h2 className="text-2xl md:text-3xl font-black text-white">Próximos Torneios</h2>
             </div>
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-14">
+              <div className="w-7 h-7 border-2 rounded-full animate-spin"
+                style={{ borderColor: C.blue, borderTopColor: 'transparent' }} />
             </div>
           ) : championships.length === 0 ? (
-            <div className="text-center py-16 border border-surface-500 rounded-2xl bg-surface-800/30">
-              <Trophy className="w-10 h-10 text-surface-500 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">Nenhum evento agendado no momento.</p>
-              <p className="text-gray-400 text-sm mt-1">Fique atento às novidades.</p>
+            <div className="text-center py-14 rounded-2xl border" style={{ borderColor: C.border, backgroundColor: C.card }}>
+              <Trophy className="w-8 h-8 mx-auto mb-3 opacity-20 text-white" />
+              <p className="font-medium opacity-40 text-white">Nenhum evento agendado no momento.</p>
+              <p className="text-sm mt-1 opacity-30 text-white">Fique de olho nas novidades.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {championships.map(c => (
                 <ChampionshipCard key={c.id} championship={c} onRegister={() => setRegisterModal(c)} />
               ))}
@@ -239,175 +244,282 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Produtos ──────────────────────────────────────────────── */}
-      <section id="produtos" className="py-20 px-6 border-t" style={{ borderColor: 'var(--border-color)', backgroundColor: 'color-mix(in srgb, var(--bg-card) 20%, transparent)' }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="flex items-end justify-between mb-10">
+      {/* ── PRODUTOS ────────────────────────────────────────────────────── */}
+      <section id="produtos" className="py-16 px-5 border-t" style={{ borderColor: C.border }}>
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-baseline justify-between mb-8">
             <div>
-              <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Vitrine</p>
-              <h2 className="text-3xl font-bold text-white">Produtos em Destaque</h2>
+              <p className="text-xs font-black uppercase tracking-widest mb-1.5" style={{ color: C.blue }}>Vitrine</p>
+              <h2 className="text-2xl md:text-3xl font-black text-white">Em Destaque</h2>
             </div>
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-16">
-              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+            <div className="flex justify-center py-14">
+              <div className="w-7 h-7 border-2 rounded-full animate-spin"
+                style={{ borderColor: C.blue, borderTopColor: 'transparent' }} />
             </div>
           ) : products.length === 0 ? (
-            <div className="text-center py-16 border border-surface-500 rounded-2xl bg-surface-800/30">
-              <Package className="w-10 h-10 text-surface-500 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">Produtos em breve.</p>
+            <div className="text-center py-14 rounded-2xl border" style={{ borderColor: C.border, backgroundColor: C.card }}>
+              <Package className="w-8 h-8 mx-auto mb-3 opacity-20 text-white" />
+              <p className="font-medium opacity-40 text-white">Produtos em breve.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {products.map(p => <ProductCard key={p.id} product={p} onClick={() => setProductModal(p)} />)}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+              {products.map(p => (
+                <ProductCard key={p.id} product={p} onClick={() => setProductModal(p)} />
+              ))}
             </div>
           )}
         </div>
       </section>
 
-      {/* ── Pontos ────────────────────────────────────────────────── */}
-      <section id="pontos" className="py-20 px-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-12">
-            <p className="text-xs uppercase text-brand-400 font-bold tracking-widest mb-2">Programa de Fidelidade</p>
-            <h2 className="text-3xl md:text-4xl font-black text-white mb-4">
-              Ganhe pontos e troque por prêmios
-            </h2>
-            <p className="text-gray-400 text-lg max-w-xl mx-auto">
-              A cada compra você acumula pontos que podem ser usados como desconto na próxima visita.
-              Sem aplicativo, sem complicação.
-            </p>
-          </div>
+      {/* ── PONTOS / FIDELIDADE ─────────────────────────────────────────── */}
+      <section id="pontos" className="py-16 px-5 border-t" style={{ borderColor: C.border }}>
+        <div className="max-w-6xl mx-auto">
+          <div className="rounded-2xl overflow-hidden border"
+            style={{ backgroundColor: C.card, borderColor: `${C.blue}25` }}>
+            <div className="p-8 md:p-12 flex flex-col md:flex-row gap-8 md:gap-16 items-center">
 
-          {/* Timeline de como funciona */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
-            {[
-              { step: '01', icon: QrCode,      color: 'text-brand-400',   bg: 'bg-brand-500/10 border-brand-500/20',   title: 'Cadastre-se',       desc: 'Escaneie o QR Code na loja e informe seu CPF e WhatsApp. Gratuito.' },
-              { step: '02', icon: ShoppingBag, color: 'text-amber-400',   bg: 'bg-amber-500/10 border-amber-500/20',   title: 'Compre na loja',     desc: 'A cada compra ou visita, o atendente adiciona pontos à sua conta.' },
-              { step: '03', icon: Star,         color: 'text-accent-green',bg: 'bg-accent-green/10 border-accent-green/20', title: 'Acumule pontos',  desc: 'Veja seu saldo de pontos e o histórico a qualquer momento.' },
-              { step: '04', icon: Award,        color: 'text-rose-400',   bg: 'bg-rose-500/10 border-rose-500/20',     title: 'Resgate descontos', desc: 'Troque seus pontos por desconto na comanda ou em produtos da loja.' },
-            ].map(({ step, icon: Icon, color, bg, title, desc }) => (
-              <div key={step} className="bg-surface-800 border border-surface-500 rounded-2xl p-6 relative hover:border-brand-500/30 transition group">
-                <span className="absolute top-4 right-4 text-3xl font-black text-surface-500 group-hover:text-brand-500/20 transition">{step}</span>
-                <div className={`w-10 h-10 ${bg} border rounded-xl flex items-center justify-center mb-4`}>
-                  <Icon className={`w-5 h-5 ${color}`} />
-                </div>
-                <h3 className="font-bold text-white mb-1 text-sm">{title}</h3>
-                <p className="text-gray-500 text-xs leading-relaxed">{desc}</p>
+              {/* Texto */}
+              <div className="flex-1 text-center md:text-left">
+                <p className="text-xs font-black uppercase tracking-widest mb-3"
+                  style={{ color: C.yellow }}>Programa de Fidelidade</p>
+                <h2 className="text-2xl md:text-3xl font-black text-white mb-4 leading-tight">
+                  Ganhe pontos a cada visita
+                </h2>
+                <p className="text-sm leading-relaxed max-w-sm mb-6" style={{ color: C.text }}>
+                  Acumule pontos nas suas compras e troque por descontos.
+                  Só com CPF e WhatsApp — nada de senha ou aplicativo.
+                </p>
+                <a href="#" className="inline-flex items-center gap-2 text-sm font-bold hover:gap-3 transition-all"
+                  style={{ color: C.blue }}>
+                  Saiba mais <ChevronRight className="w-4 h-4" />
+                </a>
               </div>
-            ))}
-          </div>
 
-          {/* Destaque de benefícios */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-10">
-            {[
-              { label: 'Sem senha necessária', desc: 'Login só com CPF' },
-              { label: 'Pontos não expiram', desc: 'Válidos enquanto ativo' },
-              { label: '1 ponto = R$ 0,01', desc: '100 pontos = R$ 1,00 off' },
-            ].map(({ label, desc }) => (
-              <div key={label} className="flex items-center gap-3 bg-surface-800 border border-surface-500 rounded-xl px-4 py-3">
-                <CheckCircle className="w-5 h-5 text-accent-green shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-white">{label}</p>
-                  <p className="text-xs text-gray-500">{desc}</p>
-                </div>
+              {/* Cards de benefício */}
+              <div className="grid grid-cols-3 gap-3 w-full md:w-auto md:min-w-[340px]">
+                {[
+                  { icon: QrCode, label: 'Sem senha', sub: 'Login só com CPF' },
+                  { icon: Star,   label: 'Pontos válidos', sub: 'Enquanto você for ativo' },
+                  { icon: Award,  label: '100pts = R$1', sub: 'Desconto na comanda' },
+                ].map(({ icon: Icon, label, sub }) => (
+                  <div key={label} className="flex flex-col items-center text-center p-4 rounded-xl border"
+                    style={{ backgroundColor: `${C.blue}08`, borderColor: `${C.blue}20` }}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3"
+                      style={{ backgroundColor: `${C.blue}18` }}>
+                      <Icon className="w-5 h-5" style={{ color: C.blue }} />
+                    </div>
+                    <p className="text-white text-xs font-black leading-snug">{label}</p>
+                    <p className="text-[10px] mt-0.5 leading-snug" style={{ color: C.text }}>{sub}</p>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
 
-          <div className="flex justify-center">
-            <div className="inline-flex items-center gap-2 bg-surface-800 border border-surface-500 rounded-xl px-5 py-3 text-sm text-gray-400">
-              <Shield className="w-4 h-4 text-brand-400 shrink-0" />
-              Dados protegidos — apenas CPF e WhatsApp para identificação
+            {/* Strip de garantia */}
+            <div className="border-t px-8 py-4 flex flex-wrap justify-center md:justify-start gap-x-6 gap-y-2"
+              style={{ borderColor: C.border }}>
+              {[
+                { icon: Shield, text: 'Dados protegidos — LGPD' },
+                { icon: CheckCircle, text: 'Sem aplicativo necessário' },
+                { icon: MessageCircle, text: `Suporte via WhatsApp` },
+              ].map(({ icon: Icon, text }) => (
+                <span key={text} className="flex items-center gap-2 text-xs font-medium" style={{ color: C.text }}>
+                  <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: C.blue }} /> {text}
+                </span>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── CTA final ─────────────────────────────────────────────── */}
-      <section className="py-20 px-6 border-t" style={{ borderColor: 'var(--border-color)' }}>
-        <div className="max-w-3xl mx-auto border border-brand-500/20 rounded-2xl p-10 md:p-14 text-center" style={{ backgroundColor: 'var(--bg-card)' }}>
-          <h2 className="text-3xl md:text-4xl font-black text-white mb-3">Pronto para jogar?</h2>
-          <p className="text-gray-400 mb-8 max-w-md mx-auto">
-            Escaneie o QR Code na mesa e comece a aproveitar a experiência Santuário Nerd.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <a href="#campeonatos"
-              className="inline-flex items-center justify-center gap-2 bg-brand-500 hover:bg-brand-400 text-white font-bold px-8 py-3.5 rounded-xl transition shadow-lg shadow-brand-500/20 active:scale-95">
-              <Trophy className="w-5 h-5" /> Ver Eventos
-            </a>
-            <Link href="/login"
-              className="inline-flex items-center justify-center gap-2 bg-surface-700 hover:bg-surface-600 border border-surface-500 text-white font-semibold px-8 py-3.5 rounded-xl transition active:scale-95">
-              <CreditCard className="w-5 h-5" /> Área Admin
-            </Link>
+      {/* ── FOOTER ──────────────────────────────────────────────────────── */}
+      <footer className="border-t py-10 px-5" style={{ borderColor: C.border }}>
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-7 w-auto object-contain" />
+            <span className="font-black text-white">Santuário Nerd</span>
           </div>
+
+          <p className="text-xs text-center" style={{ color: `${C.text}` }}>
+            José Bonifácio — SP &nbsp;·&nbsp;
+            <a href={`https://wa.me/${MAIKON_WHATSAPP}`} target="_blank" rel="noreferrer"
+              className="hover:text-white transition-colors">
+              WhatsApp
+            </a>
+            &nbsp;·&nbsp; © {new Date().getFullYear()} Santuário Nerd
+          </p>
+
+          <Link href="/login"
+            className="flex items-center gap-1.5 text-xs transition-colors hover:text-white"
+            style={{ color: C.text }}>
+            <CreditCard className="w-3.5 h-3.5" /> Área do Admin
+          </Link>
         </div>
-      </section>
+      </footer>
 
-      {/* O rodapé com links legais (LGPD) é renderizado pelo Footer global em app/layout.tsx */}
-
-      {productModal && (
-        <ProductModal product={productModal} onClose={() => setProductModal(null)} />
-      )}
-      {registerModal && (
-        <RegisterModal championship={registerModal} onClose={() => setRegisterModal(null)} />
-      )}
-      {annModal && (
-        <AnnouncementModal ann={annModal} onClose={() => setAnnModal(null)} />
-      )}
+      {/* ── MODAIS ──────────────────────────────────────────────────────── */}
+      {annModal      && <AnnouncementModal ann={annModal}               onClose={() => setAnnModal(null)} />}
+      {productModal  && <ProductModal      product={productModal}       onClose={() => setProductModal(null)} />}
+      {registerModal && <RegisterModal     championship={registerModal} onClose={() => setRegisterModal(null)} />}
     </div>
   )
 }
 
-// ── Modal de anúncio ──────────────────────────────────────────────────────
+// ── Championship Card ─────────────────────────────────────────────────────────
+
+function ChampionshipCard({ championship: c, onRegister }: { championship: Championship; onRegister: () => void }) {
+  const gameColors: Record<string, { bg: string; text: string }> = {
+    'Pokemon':   { bg: 'rgba(234,179,8,0.15)',  text: '#FBBF24' },
+    'Magic':     { bg: 'rgba(99,102,241,0.15)', text: '#818CF8' },
+    'Yu-Gi-Oh':  { bg: 'rgba(168,85,247,0.15)', text: '#C084FC' },
+    'One Piece': { bg: 'rgba(239,68,68,0.15)',  text: '#F87171' },
+  }
+  const gc = gameColors[c.game] ?? { bg: 'rgba(62,194,242,0.12)', text: '#3EC2F2' }
+
+  return (
+    <div className="rounded-2xl overflow-hidden flex flex-col group transition-all hover:translate-y-[-2px]"
+      style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
+
+      {/* Imagem */}
+      {c.imageUrl ? (
+        <div className="w-full h-36 overflow-hidden">
+          <img src={c.imageUrl} alt={c.name}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        </div>
+      ) : (
+        <div className="w-full h-36 flex items-center justify-center"
+          style={{ background: `linear-gradient(135deg, ${gc.bg}, ${C.cardAlt})` }}>
+          <Trophy className="w-9 h-9 opacity-30" style={{ color: gc.text }} />
+        </div>
+      )}
+
+      <div className="p-4 flex flex-col flex-1 gap-3">
+        {/* Game badge + status */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full"
+            style={{ backgroundColor: gc.bg, color: gc.text }}>
+            {c.game}
+          </span>
+          {c.status === 'Inscricoes' && (
+            <span className="text-[10px] font-bold px-2 py-1 rounded-full"
+              style={{ backgroundColor: 'rgba(34,197,94,0.12)', color: '#4ADE80' }}>
+              Inscrições abertas
+            </span>
+          )}
+        </div>
+
+        {/* Nome */}
+        <h3 className="font-black text-white text-sm leading-snug line-clamp-2">{c.name}</h3>
+
+        {/* Data + vagas */}
+        <div className="space-y-1.5 text-xs" style={{ color: C.text }}>
+          <div className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5 shrink-0" style={{ color: C.blue }} />
+            {new Date(c.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </div>
+          {c.maxParticipants && (
+            <div className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 shrink-0" style={{ color: C.blue }} />
+              Até {c.maxParticipants} jogadores
+            </div>
+          )}
+        </div>
+
+        {/* Taxa + botão */}
+        <div className="mt-auto pt-3 border-t flex items-center justify-between gap-2"
+          style={{ borderColor: C.border }}>
+          <span className="text-sm font-black" style={{ color: C.yellow }}>
+            R$ {(c.entryFeeInCents / 100).toFixed(2).replace('.', ',')}
+          </span>
+          <button
+            onClick={onRegister}
+            className="text-xs font-black px-3.5 py-2 rounded-xl flex items-center gap-1 transition-all active:scale-95"
+            style={{ backgroundColor: C.blue, color: C.bg }}>
+            Inscrever <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Product Card ──────────────────────────────────────────────────────────────
+
+function ProductCard({ product: p, onClick }: { product: Product; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="text-left rounded-2xl overflow-hidden group transition-all active:scale-95 hover:translate-y-[-2px]"
+      style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}
+    >
+      <div className="w-full aspect-[3/4] overflow-hidden"
+        style={{ backgroundColor: C.cardAlt }}>
+        {p.imageUrl
+          ? <img src={p.imageUrl} alt={p.name}
+              className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 p-2" />
+          : <div className="w-full h-full flex items-center justify-center">
+              <Package className="w-10 h-10 opacity-20 text-white" />
+            </div>
+        }
+      </div>
+      <div className="p-3">
+        <p className="text-[10px] uppercase tracking-wide mb-1 font-medium" style={{ color: C.text }}>
+          {p.category}
+        </p>
+        <p className="text-xs font-bold text-white leading-snug line-clamp-2 mb-2">{p.name}</p>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-black" style={{ color: C.yellow }}>
+            R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+          </span>
+          <span className="text-[10px] font-medium" style={{ color: C.text }}>
+            {p.stockQuantity} un.
+          </span>
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ── Modais ────────────────────────────────────────────────────────────────────
 
 function AnnouncementModal({ ann, onClose }: { ann: AnnouncementDto; onClose: () => void }) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
   }, [onClose])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="relative w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl border border-surface-500 bg-surface-800"
-        onClick={e => e.stopPropagation()}
-      >
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 hover:bg-black/80 transition"
-        >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="relative w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl border"
+        style={{ backgroundColor: C.card, borderColor: C.border }}
+        onClick={e => e.stopPropagation()}>
+        <button onClick={onClose}
+          className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 hover:bg-black/80 transition">
           <X className="w-4 h-4 text-white" />
         </button>
-
         {ann.imageUrl && (
           <img src={ann.imageUrl} alt={ann.title} className="w-full max-h-64 object-cover" />
         )}
-
         <div className="p-6">
-          <h3 className="text-xl font-bold text-white leading-snug">{ann.title}</h3>
+          <h3 className="text-xl font-black text-white leading-snug">{ann.title}</h3>
           {ann.body && (
-            <p className="text-gray-400 text-sm mt-3 leading-relaxed whitespace-pre-wrap">{ann.body}</p>
+            <p className="text-sm mt-3 leading-relaxed whitespace-pre-wrap" style={{ color: C.text }}>{ann.body}</p>
           )}
           {ann.linkUrl && (
-            <a
-              href={ann.linkUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-5 inline-flex items-center justify-center w-full gap-2 bg-brand-500 hover:bg-brand-400 text-white font-bold py-3 rounded-xl transition active:scale-95"
-            >
+            <a href={ann.linkUrl} target="_blank" rel="noreferrer"
+              className="mt-5 flex items-center justify-center gap-2 w-full font-black py-3 rounded-xl transition active:scale-95"
+              style={{ backgroundColor: C.blue, color: C.bg }}>
               Saiba mais
             </a>
           )}
-          <button
-            onClick={onClose}
-            className="mt-3 w-full py-2.5 text-sm text-gray-400 hover:text-white border border-surface-500 hover:border-surface-400 rounded-xl transition"
-          >
+          <button onClick={onClose}
+            className="mt-3 w-full py-2.5 text-sm rounded-xl border transition-colors hover:text-white"
+            style={{ color: C.text, borderColor: C.border }}>
             Fechar
           </button>
         </div>
@@ -416,261 +528,43 @@ function AnnouncementModal({ ann, onClose }: { ann: AnnouncementDto; onClose: ()
   )
 }
 
-// ── Calendário de eventos ─────────────────────────────────────────────────
-
-function EventCalendar({ championships }: { championships: Championship[] }) {
-  const today    = new Date()
-  const year     = today.getFullYear()
-  const month    = today.getMonth()
-
-  const monthName = today.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-  const firstDay  = new Date(year, month, 1).getDay() // 0=Dom
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-
-  // Dias com evento
-  const eventDays = new Set(
-    championships
-      .map(c => new Date(c.startDate))
-      .filter(d => d.getFullYear() === year && d.getMonth() === month)
-      .map(d => d.getDate())
-  )
-
-  // Evento do dia clicado
-  const getEvent = (day: number) =>
-    championships.find(c => {
-      const d = new Date(c.startDate)
-      return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day
-    })
-
-  const cells = []
-  for (let i = 0; i < firstDay; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-
-  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-
-  if (championships.length === 0) {
-    return (
-      <div className="text-center py-12 rounded-2xl border" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
-        <Calendar className="w-10 h-10 mx-auto mb-3 text-gray-500" />
-        <p className="text-gray-500">Nenhum evento agendado para este mês.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex flex-col md:flex-row gap-6 items-start">
-      {/* Calendário */}
-      <div className="rounded-2xl border p-5 w-full md:w-80 shrink-0" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
-        <p className="text-center font-bold capitalize mb-4" style={{ color: 'var(--text-primary)' }}>{monthName}</p>
-        <div className="grid grid-cols-7 gap-1 mb-2">
-          {weekDays.map(d => (
-            <div key={d} className="text-center text-[10px] font-semibold text-gray-500 uppercase">{d}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {cells.map((day, i) => {
-            if (!day) return <div key={i} />
-            const hasEvent = eventDays.has(day)
-            const isToday  = day === today.getDate()
-            return (
-              <div
-                key={i}
-                className={`aspect-square flex items-center justify-center rounded-lg text-xs font-medium relative transition-all
-                  ${hasEvent ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30 cursor-pointer hover:bg-brand-400' : ''}
-                  ${isToday && !hasEvent ? 'border-2 border-brand-500/50' : ''}
-                  ${!hasEvent ? 'text-gray-400' : ''}
-                `}
-                style={!hasEvent ? { color: 'var(--text-muted)' } : {}}
-                title={hasEvent ? getEvent(day)?.name : undefined}
-              >
-                {day}
-                {hasEvent && <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full" />}
-              </div>
-            )
-          })}
-        </div>
-        <div className="flex items-center gap-2 mt-4 text-xs" style={{ color: 'var(--text-muted)' }}>
-          <span className="w-3 h-3 rounded bg-brand-500 shrink-0" />
-          <span>Evento marcado</span>
-        </div>
-      </div>
-
-      {/* Lista de próximos eventos */}
-      <div className="flex-1 space-y-3">
-        {championships.map(c => {
-          const d = new Date(c.startDate)
-          const isPast = d < today
-          return (
-            <div key={c.id} className="flex items-start gap-4 rounded-xl p-4 border transition-all hover:border-brand-500/30"
-              style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-card)' }}>
-              {/* Data */}
-              <div className={`shrink-0 w-14 text-center rounded-xl py-2 ${isPast ? 'bg-gray-500/10' : 'bg-brand-500/10'}`}>
-                <p className={`text-xl font-black leading-none ${isPast ? 'text-gray-500' : 'text-brand-400'}`}>
-                  {d.getDate().toString().padStart(2, '0')}
-                </p>
-                <p className={`text-[10px] uppercase font-bold ${isPast ? 'text-gray-400' : 'text-brand-500/70'}`}>
-                  {d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}
-                </p>
-              </div>
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate" style={{ color: 'var(--text-primary)' }}>{c.name}</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  {c.game} · {d.toLocaleDateString('pt-BR', { weekday: 'long' })}
-                  {c.maxParticipants && ` · Até ${c.maxParticipants} jogadores`}
-                </p>
-                {c.entryFeeInReais > 0 && (
-                  <p className="text-xs text-emerald-500 font-semibold mt-1">Taxa: R$ {c.entryFeeInReais.toFixed(2).replace('.', ',')}</p>
-                )}
-              </div>
-              {/* Status badge */}
-              <div className="shrink-0">
-                {c.status === 'Inscricoes' && !isPast
-                  ? <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-1 rounded-full font-bold">Inscrições abertas</span>
-                  : <span className="text-[10px] bg-gray-500/10 text-gray-500 border border-gray-500/20 px-2 py-1 rounded-full font-bold">{c.status === 'Planejado' ? 'Em breve' : c.status}</span>
-                }
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ── Sub-componentes ───────────────────────────────────────────────────────
-
-function ChampionshipCard({ championship: c, onRegister }: { championship: Championship; onRegister: () => void }) {
-  const gameColor: Record<string, string> = {
-    'Pokemon':   'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-    'Magic':     'bg-blue-500/10   text-blue-400   border-blue-500/20',
-    'Yu-Gi-Oh':  'bg-purple-500/10 text-purple-400 border-purple-500/20',
-    'One Piece': 'bg-red-500/10    text-red-400    border-red-500/20',
-  }
-  const statusLabel: Record<string, string> = {
-    Planejado:   'Em breve',
-    Inscricoes:  'Inscrições abertas',
-    EmAndamento: 'Em andamento',
-  }
-
-  return (
-    <div className="bg-surface-800 border border-surface-500 rounded-2xl overflow-hidden hover:border-brand-500/40 transition group flex flex-col">
-      {/* Imagem do campeonato */}
-      {c.imageUrl ? (
-        <div className="w-full h-40 overflow-hidden">
-          <img src={c.imageUrl} alt={c.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        </div>
-      ) : (
-        <div className="w-full h-40 bg-gradient-to-br from-brand-500/20 via-surface-700 to-surface-800 flex items-center justify-center">
-          <Trophy className="w-10 h-10 text-brand-500/30" />
-        </div>
-      )}
-
-      <div className="p-5 flex flex-col flex-1">
-      <div className="flex items-start justify-between mb-4">
-        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${gameColor[c.game] ?? 'bg-surface-700 text-gray-400 border-surface-500'}`}>
-          {c.game}
-        </span>
-        <span className="text-xs text-accent-green bg-accent-green/10 border border-accent-green/20 px-2.5 py-1 rounded-full font-medium">
-          {statusLabel[c.status] ?? c.status}
-        </span>
-      </div>
-
-      <h3 className="font-bold text-white mb-3 leading-snug">{c.name}</h3>
-
-      <div className="space-y-1.5 text-sm text-gray-500 mb-4">
-        <div className="flex items-center gap-1.5">
-          <Calendar className="w-3.5 h-3.5 shrink-0" />
-          {new Date(c.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-        </div>
-        {c.maxParticipants && (
-          <div className="flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5 shrink-0" />
-            Até {c.maxParticipants} participantes
-          </div>
-        )}
-        <div className="flex items-center gap-1.5 text-brand-400 font-semibold">
-          Inscrição: R$ {(c.entryFeeInCents / 100).toFixed(2).replace('.', ',')}
-        </div>
-      </div>
-
-      <div className="mt-auto pt-4 border-t border-surface-500">
-        <button
-          onClick={onRegister}
-          className="w-full bg-brand-500 hover:bg-brand-400 text-white font-bold text-sm py-2.5 rounded-xl transition shadow-lg shadow-brand-500/20 active:scale-95"
-        >
-          Quero me inscrever
-        </button>
-        <p className="text-xs text-gray-400 text-center mt-2">Pague na chegada · Vagas limitadas</p>
-      </div>
-      </div>
-    </div>
-  )
-}
-
-function ProductCard({ product: p, onClick }: { product: Product; onClick: () => void }) {
-  return (
-    <div
-      onClick={onClick}
-      className="bg-surface-800 border border-surface-500 rounded-2xl p-4 hover:border-brand-500/50 hover:shadow-lg cursor-pointer transition-all group"
-    >
-      {p.imageUrl && (
-        <div className="w-full aspect-square rounded-xl overflow-hidden mb-3 bg-surface-700">
-          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        </div>
-      )}
-      <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">{p.category}</p>
-      <p className="text-sm font-semibold leading-snug line-clamp-2 mb-3" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
-      <div className="flex items-center justify-between">
-        <span className="text-brand-400 font-bold">R$ {p.priceInReais.toFixed(2).replace('.', ',')}</span>
-        <span className="text-xs text-gray-500 flex items-center gap-1">
-          <Package className="w-3 h-3" /> {p.stockQuantity} un.
-        </span>
-      </div>
-    </div>
-  )
-}
-
 function ProductModal({ product: p, onClose }: { product: Product; onClose: () => void }) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="relative w-full max-w-md rounded-2xl shadow-2xl overflow-hidden"
-        style={{ background: 'var(--card-bg, #ffffff)', border: '1px solid var(--border-color)' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <button onClick={onClose} className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-surface-700 hover:bg-surface-600 transition">
-          <X className="w-4 h-4 text-gray-400" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={onClose}>
+      <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border"
+        style={{ backgroundColor: C.card, borderColor: C.border }}
+        onClick={e => e.stopPropagation()}>
+        <button onClick={onClose}
+          className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 hover:bg-black/80 transition">
+          <X className="w-4 h-4 text-white" />
         </button>
-
         {p.imageUrl ? (
-          <div className="w-full aspect-video bg-surface-700">
-            <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+          <div className="w-full aspect-square" style={{ backgroundColor: C.cardAlt }}>
+            <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-4" />
           </div>
         ) : (
-          <div className="w-full aspect-video bg-surface-700 flex items-center justify-center">
-            <Package className="w-12 h-12 text-surface-500" />
+          <div className="w-full aspect-square flex items-center justify-center" style={{ backgroundColor: C.cardAlt }}>
+            <Package className="w-12 h-12 opacity-20 text-white" />
           </div>
         )}
-
-        <div className="p-5" style={{ background: 'var(--card-bg, #ffffff)' }}>
-          <p className="text-xs uppercase tracking-wide mb-1" style={{ color: 'var(--text-secondary, #6b7280)' }}>{p.category}</p>
-          <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text-primary, #111827)' }}>{p.name}</h3>
+        <div className="p-5">
+          <p className="text-xs uppercase tracking-wide mb-1 font-medium" style={{ color: C.text }}>{p.category}</p>
+          <h3 className="text-lg font-black text-white leading-snug mb-2">{p.name}</h3>
           {p.description && (
-            <p className="text-sm mb-4 leading-relaxed" style={{ color: 'var(--text-secondary, #6b7280)' }}>{p.description}</p>
+            <p className="text-sm mb-4 leading-relaxed" style={{ color: C.text }}>{p.description}</p>
           )}
-          <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--border-color)' }}>
-            <span className="text-2xl font-bold text-brand-400">
+          <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: C.border }}>
+            <span className="text-2xl font-black" style={{ color: C.yellow }}>
               R$ {p.priceInReais.toFixed(2).replace('.', ',')}
             </span>
-            <span className="text-sm flex items-center gap-1" style={{ color: 'var(--text-secondary, #6b7280)' }}>
+            <span className="text-sm flex items-center gap-1" style={{ color: C.text }}>
               <Package className="w-4 h-4" /> {p.stockQuantity} em estoque
             </span>
           </div>
@@ -699,55 +593,65 @@ function RegisterModal({ championship, onClose }: { championship: Championship; 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl shadow-2xl border p-6"
+        style={{ backgroundColor: C.card, borderColor: C.border }}>
         <div className="flex items-start justify-between mb-5">
           <div>
-            <h3 className="font-bold text-white text-lg">Inscrição</h3>
-            <p className="text-gray-500 text-sm mt-0.5">{championship.name}</p>
+            <h3 className="font-black text-white text-lg">Inscrição</h3>
+            <p className="text-sm mt-0.5" style={{ color: C.text }}>{championship.name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition p-1">
+          <button onClick={onClose} className="p-1 hover:text-white transition-colors" style={{ color: C.text }}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {done ? (
           <div className="text-center py-6">
-            <div className="w-14 h-14 bg-accent-green/10 border border-accent-green/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-7 h-7 text-accent-green" />
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+              style={{ backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+              <CheckCircle className="w-7 h-7 text-green-400" />
             </div>
-            <p className="font-bold text-white mb-1">Solicitação enviada!</p>
-            <p className="text-gray-400 text-sm leading-relaxed">
+            <p className="font-black text-white mb-1">Solicitação enviada!</p>
+            <p className="text-sm leading-relaxed" style={{ color: C.text }}>
               O Maikon vai confirmar sua vaga pelo WhatsApp. Pague na chegada.
             </p>
             <button onClick={onClose}
-              className="mt-5 w-full btn-secondary justify-center py-2.5">
+              className="mt-5 w-full py-2.5 text-sm rounded-xl border transition-colors hover:text-white"
+              style={{ color: C.text, borderColor: C.border }}>
               Fechar
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3 text-sm text-brand-300">
-              Taxa de inscrição:{' '}
-              <strong>R$ {(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}</strong>
-              {' '}— pague na chegada
+            <div className="text-sm px-4 py-3 rounded-xl border"
+              style={{ color: C.blue, borderColor: `${C.blue}30`, backgroundColor: `${C.blue}08` }}>
+              Taxa: <strong>R$ {(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}</strong> — pague na chegada
             </div>
             <div>
-              <label className="label">Seu nome</label>
-              <input className="input" placeholder="Nome completo"
-                value={name} onChange={e => setName(e.target.value)} required />
+              <label className="block text-xs font-bold mb-1.5" style={{ color: C.text }}>Seu nome</label>
+              <input
+                className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 transition-all"
+                style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, ['--tw-ring-color' as any]: C.blue }}
+                placeholder="Nome completo"
+                value={name} onChange={e => setName(e.target.value)} required
+              />
             </div>
             <div>
-              <label className="label">Seu WhatsApp</label>
-              <input className="input" placeholder="(11) 99999-9999"
-                value={phone} onChange={e => setPhone(e.target.value)} required />
+              <label className="block text-xs font-bold mb-1.5" style={{ color: C.text }}>Seu WhatsApp</label>
+              <input
+                className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none focus:ring-2 transition-all"
+                style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}` }}
+                placeholder="(17) 99999-9999"
+                value={phone} onChange={e => setPhone(e.target.value)} required
+              />
             </div>
             <button type="submit"
-              className="w-full btn-primary justify-center py-3">
-              <MessageCircle className="w-4 h-4" />
-              Confirmar pelo WhatsApp
+              className="w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-xl transition-all active:scale-95"
+              style={{ backgroundColor: C.blue, color: C.bg }}>
+              <MessageCircle className="w-4 h-4" /> Confirmar pelo WhatsApp
             </button>
-            <p className="text-xs text-gray-400 text-center">
-              Você será redirecionado para o WhatsApp para confirmar a vaga.
+            <p className="text-xs text-center" style={{ color: C.text }}>
+              Você será redirecionado para o WhatsApp.
             </p>
           </form>
         )}

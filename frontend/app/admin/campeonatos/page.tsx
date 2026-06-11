@@ -74,7 +74,10 @@ function NewChampionshipModal({ onClose, onSave }: {
 
           {/* Imagem de capa */}
           <div>
-            <label className="label">Imagem de capa</label>
+            <div className="flex items-baseline gap-2">
+              <label className="label">Imagem de capa</label>
+              <span className="text-[10px] text-gray-500">800×450px recomendado</span>
+            </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
             {imgPreview ? (
               <div className="relative w-full h-36 rounded-xl overflow-hidden group">
@@ -210,7 +213,10 @@ function EditChampionshipModal({ championship, onClose, onSave }: {
 
           {/* Imagem de capa */}
           <div>
-            <label className="label">Imagem de capa</label>
+            <div className="flex items-baseline gap-2">
+              <label className="label">Imagem de capa</label>
+              <span className="text-[10px] text-gray-500">800×450px recomendado</span>
+            </div>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
             {imgPreview ? (
               <div className="relative w-full h-36 rounded-xl overflow-hidden group">
