@@ -34,19 +34,36 @@ function ProductCard({ p, adding, onAdd }: {
       className="text-left rounded-2xl overflow-hidden flex flex-col active:scale-95 transition-all duration-150 disabled:opacity-60"
       style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)' }}
     >
-      <div className="w-full aspect-square overflow-hidden flex items-center justify-center p-2"
+      <div className="relative w-full aspect-square overflow-hidden flex items-center justify-center p-2"
         style={{ backgroundColor: C.bg }}>
         {p.imageUrl
           ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
           : <Package className="w-10 h-10 opacity-20" style={{ color: C.blue2 }} />
         }
+        {p.isOnPromo && (
+          <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md text-white"
+            style={{ backgroundColor: '#FF3B3B' }}>
+            Promoção
+          </span>
+        )}
       </div>
       <div className="p-3 flex flex-col gap-1.5 flex-1">
         <p className="text-xs font-bold leading-snug line-clamp-2 flex-1" style={{ color: C.navy }}>{p.name}</p>
         <div className="flex items-center justify-between mt-1 gap-1">
-          <span className="text-sm font-black" style={{ color: C.blue2 }}>
-            R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-          </span>
+          {p.isOnPromo && p.discountPriceInReais != null ? (
+            <div className="flex flex-col">
+              <span className="text-[10px] line-through" style={{ color: C.muted }}>
+                R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+              </span>
+              <span className="text-sm font-black" style={{ color: '#FF3B3B' }}>
+                R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm font-black" style={{ color: C.blue2 }}>
+              R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+            </span>
+          )}
           <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors"
             style={{ backgroundColor: isAdding ? `${C.blue}25` : C.blue }}>
             {isAdding
@@ -209,9 +226,20 @@ export default function ClientePage() {
                   Adicionar à comanda
                 </p>
                 <p className="font-black text-lg leading-snug" style={{ color: C.navy }}>{confirmItem.name}</p>
-                <p className="text-xl font-black mt-1" style={{ color: C.blue2 }}>
-                  R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
-                </p>
+                {confirmItem.isOnPromo && confirmItem.discountPriceInReais != null ? (
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-xl font-black" style={{ color: '#FF3B3B' }}>
+                      R$ {confirmItem.discountPriceInReais.toFixed(2).replace('.', ',')}
+                    </span>
+                    <span className="text-sm line-through" style={{ color: C.muted }}>
+                      R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xl font-black mt-1" style={{ color: C.blue2 }}>
+                    R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
+                  </p>
+                )}
               </div>
               <div className="flex gap-3">
                 <button onClick={() => setConfirmItem(null)}

@@ -138,6 +138,22 @@ function ProductModal({
               </div>
             )
           })()}
+          <div>
+            <label className="label">Preço promocional (R$)</label>
+            <input className="input" type="number" min="0" step="0.01"
+              value={form.discountPriceInCents != null ? form.discountPriceInCents / 100 : ''}
+              onChange={e => set('discountPriceInCents', e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null)}
+              placeholder="Deixe em branco para sem promoção"
+            />
+            {(form.discountPriceInCents ?? 0) > 0 && (form.priceInCents ?? 0) > 0 && (form.discountPriceInCents ?? 0) < (form.priceInCents ?? 0) && (
+              <p className="text-xs text-emerald-400 mt-1">
+                Desconto de R$ {(((form.priceInCents ?? 0) - (form.discountPriceInCents ?? 0)) / 100).toFixed(2).replace('.', ',')} · badge &quot;Promoção&quot; ativado
+              </p>
+            )}
+            {(form.discountPriceInCents ?? 0) > 0 && (form.discountPriceInCents ?? 0) >= (form.priceInCents ?? 0) && (
+              <p className="text-xs text-amber-400 mt-1">Preço promocional deve ser menor que o preço de venda</p>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Estoque *</label>
@@ -165,6 +181,44 @@ function ProductModal({
               currentUrl={form.imageUrl ?? null}
               onUpload={url => set('imageUrl', url || null)}
             />
+          </div>
+          <div className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3 space-y-3">
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-gray-200">Mostrar no site público</p>
+                <p className="text-xs text-gray-500">Desmarcado: produto não aparece na loja</p>
+              </div>
+              <div
+                onClick={() => set('showOnSite', !(form.showOnSite ?? true))}
+                className={[
+                  'relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0',
+                  (form.showOnSite ?? true) ? 'bg-brand-500' : 'bg-surface-600',
+                ].join(' ')}
+              >
+                <span className={[
+                  'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                  (form.showOnSite ?? true) ? 'translate-x-4' : 'translate-x-0',
+                ].join(' ')} />
+              </div>
+            </label>
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-yellow-300">⭐ Destaque na landing</p>
+                <p className="text-xs text-gray-500">Aparece na seção de produtos da home</p>
+              </div>
+              <div
+                onClick={() => set('isFeatured', !form.isFeatured)}
+                className={[
+                  'relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0',
+                  form.isFeatured ? 'bg-yellow-500' : 'bg-surface-600',
+                ].join(' ')}
+              >
+                <span className={[
+                  'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                  form.isFeatured ? 'translate-x-4' : 'translate-x-0',
+                ].join(' ')} />
+              </div>
+            </label>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>

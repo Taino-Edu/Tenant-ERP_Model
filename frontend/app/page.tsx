@@ -43,9 +43,7 @@ export default function LandingPage() {
         setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 4))
       ),
       productApi.list().then(r => {
-        const active   = r.data.filter(p => p.isActive && p.stockQuantity > 0)
-        const featured = active.filter(p => p.isFeatured)
-        setProducts(featured.length > 0 ? featured.slice(0, 8) : active.slice(0, 8))
+        setProducts(r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.isFeatured && p.showOnSite).slice(0, 8))
       }),
       announcementApi.visible().then(r => setAnnouncements(r.data)),
     ]).finally(() => setLoading(false))
@@ -455,7 +453,7 @@ function ProductCard({ product: p, onClick }: { product: Product; onClick: () =>
       className="text-left rounded-2xl overflow-hidden group transition-all active:scale-95 hover:translate-y-[-2px]"
       style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}
     >
-      <div className="w-full aspect-[3/4] overflow-hidden"
+      <div className="relative w-full aspect-[3/4] overflow-hidden"
         style={{ backgroundColor: C.cardAlt }}>
         {p.imageUrl
           ? <img src={p.imageUrl} alt={p.name}
@@ -464,6 +462,12 @@ function ProductCard({ product: p, onClick }: { product: Product; onClick: () =>
               <Package className="w-10 h-10 opacity-20 text-white" />
             </div>
         }
+        {p.isOnPromo && (
+          <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+            style={{ backgroundColor: '#FF3B3B', color: '#fff' }}>
+            Promoção
+          </span>
+        )}
       </div>
       <div className="p-3">
         <p className="text-[10px] uppercase tracking-wide mb-1 font-medium" style={{ color: C.text }}>
@@ -471,9 +475,20 @@ function ProductCard({ product: p, onClick }: { product: Product; onClick: () =>
         </p>
         <p className="text-xs font-bold text-white leading-snug line-clamp-2 mb-2">{p.name}</p>
         <div className="flex items-center justify-between">
-          <span className="text-sm font-black" style={{ color: C.yellow }}>
-            R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-          </span>
+          {p.isOnPromo && p.discountPriceInReais != null ? (
+            <div className="flex flex-col">
+              <span className="text-[10px] line-through" style={{ color: C.text }}>
+                R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+              </span>
+              <span className="text-sm font-black" style={{ color: '#FF3B3B' }}>
+                R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm font-black" style={{ color: C.yellow }}>
+              R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+            </span>
+          )}
           <span className="text-[10px] font-medium" style={{ color: C.text }}>
             {p.stockQuantity} un.
           </span>
@@ -561,9 +576,20 @@ function ProductModal({ product: p, onClose }: { product: Product; onClose: () =
             <p className="text-sm mb-4 leading-relaxed" style={{ color: C.text }}>{p.description}</p>
           )}
           <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: C.border }}>
-            <span className="text-2xl font-black" style={{ color: C.yellow }}>
-              R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-            </span>
+            {p.isOnPromo && p.discountPriceInReais != null ? (
+              <div className="flex flex-col">
+                <span className="text-sm line-through" style={{ color: C.text }}>
+                  R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                </span>
+                <span className="text-2xl font-black" style={{ color: '#FF3B3B' }}>
+                  R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+            ) : (
+              <span className="text-2xl font-black" style={{ color: C.yellow }}>
+                R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+              </span>
+            )}
             <span className="text-sm flex items-center gap-1" style={{ color: C.text }}>
               <Package className="w-4 h-4" /> {p.stockQuantity} em estoque
             </span>
