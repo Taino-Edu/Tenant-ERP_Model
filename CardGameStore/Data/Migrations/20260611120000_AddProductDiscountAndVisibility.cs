@@ -13,13 +13,13 @@ namespace CardGameStore.Data.Migrations
             migrationBuilder.AddColumn<int>(
                 name: "discount_price_in_cents",
                 table: "products",
-                type: "INTEGER",
+                type: "integer",
                 nullable: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "show_on_site",
                 table: "products",
-                type: "INTEGER",
+                type: "boolean",
                 nullable: false,
                 defaultValue: true);
         }
