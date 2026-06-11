@@ -24,10 +24,11 @@ function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   const [hovered, setHovered] = useState<number | null>(null)
   if (!dias || dias.length === 0) return null
   const maxVal = Math.max(...dias.map(d => d.receita), 1)
+  const BAR_H = 72
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-brand-400" /> Receita — últimos 7 dias
         </h3>
@@ -35,31 +36,41 @@ function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
           Ver relatório completo →
         </a>
       </div>
-      <div className="flex items-end gap-1.5 h-24">
+
+      {/* Barras ancoradas no bottom */}
+      <div className="flex items-end gap-1.5" style={{ height: `${BAR_H}px` }}>
         {dias.map((d, i) => {
-          const pct = (d.receita / maxVal) * 100
+          const barH = Math.max(4, Math.round((d.receita / maxVal) * BAR_H))
+          const isHovered = hovered === i
           return (
             <div
               key={d.dia}
-              className="flex-1 flex flex-col items-center gap-1 group cursor-pointer"
+              className="flex-1 relative group cursor-pointer"
+              style={{ height: `${barH}px` }}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered(null)}
             >
-              {hovered === i && (
-                <div className="absolute -top-8 bg-surface-700 border border-surface-500 rounded px-2 py-1 text-xs text-white whitespace-nowrap z-10 pointer-events-none">
-                  {d.dia.slice(5)}: {fmt(d.receita)}
+              {/* Tooltip */}
+              {isHovered && (
+                <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-surface-700 border border-surface-500 rounded px-2 py-1 text-xs text-white whitespace-nowrap z-10 pointer-events-none">
+                  {d.dia.slice(5).replace('-', '/')}: {fmt(d.receita)}
                 </div>
               )}
-              <div className="w-full flex flex-col justify-end relative" style={{ height: '72px' }}>
-                <div
-                  className={`w-full rounded-t transition-all ${hovered === i ? 'bg-brand-400' : 'bg-brand-600'}`}
-                  style={{ height: `${Math.max(4, pct * 0.72)}px` }}
-                />
-              </div>
-              <span className="text-[9px] text-gray-400">{d.dia.slice(8)}</span>
+              <div
+                className={`w-full h-full rounded-t transition-colors ${isHovered ? 'bg-brand-400' : 'bg-brand-600'}`}
+              />
             </div>
           )
         })}
+      </div>
+
+      {/* Labels de data abaixo das barras */}
+      <div className="flex gap-1.5 mt-1.5">
+        {dias.map(d => (
+          <span key={d.dia} className="flex-1 text-center text-[9px] text-gray-500 leading-none">
+            {d.dia.slice(8)}
+          </span>
+        ))}
       </div>
     </div>
   )
