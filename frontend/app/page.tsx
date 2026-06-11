@@ -236,10 +236,17 @@ export default function LandingPage() {
               <p className="text-sm mt-1 opacity-40" style={{ color: C.text }}>Fique de olho nas novidades.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {championships.map(c => (
-                <ChampionshipCard key={c.id} championship={c} onRegister={() => setRegisterModal(c)} />
-              ))}
+            <div className="flex flex-col lg:flex-row gap-6">
+              {/* Calendário */}
+              <div className="shrink-0 lg:w-64">
+                <EventCalendar championships={championships} onSelect={c => setRegisterModal(c)} />
+              </div>
+              {/* Cards */}
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
+                {championships.map(c => (
+                  <ChampionshipCard key={c.id} championship={c} onRegister={() => setRegisterModal(c)} />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -377,6 +384,106 @@ export default function LandingPage() {
       {annModal      && <AnnouncementModal ann={annModal}               onClose={() => setAnnModal(null)} />}
       {productModal  && <ProductModal      product={productModal}       onClose={() => setProductModal(null)} />}
       {registerModal && <RegisterModal     championship={registerModal} onClose={() => setRegisterModal(null)} />}
+    </div>
+  )
+}
+
+// ── Event Calendar ────────────────────────────────────────────────────────────
+
+function EventCalendar({ championships, onSelect }: {
+  championships: Championship[]
+  onSelect: (c: Championship) => void
+}) {
+  const [view, setView] = useState(() => new Date())
+  const year  = view.getFullYear()
+  const month = view.getMonth()
+
+  const firstWeekDay  = new Date(year, month, 1).getDay()
+  const daysInMonth   = new Date(year, month + 1, 0).getDate()
+  const monthLabel    = view.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  // { day: Championship } para o mês visível
+  const eventDays = championships.reduce<Record<number, Championship>>((acc, c) => {
+    const d = new Date(c.startDate)
+    if (d.getMonth() === month && d.getFullYear() === year) acc[d.getDate()] = c
+    return acc
+  }, {})
+
+  const today    = new Date()
+  const isToday  = (d: number) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear()
+  const prevMonth = () => setView(new Date(year, month - 1, 1))
+  const nextMonth = () => setView(new Date(year, month + 1, 1))
+
+  const cells: (number | null)[] = [
+    ...Array(firstWeekDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+
+  return (
+    <div className="rounded-2xl border p-4" style={{ backgroundColor: C.card, borderColor: C.border }}>
+      {/* Cabeçalho do mês */}
+      <div className="flex items-center justify-between mb-3">
+        <button onClick={prevMonth}
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors"
+          style={{ color: C.text, backgroundColor: C.cardAlt }}>
+          ‹
+        </button>
+        <p className="text-xs font-black capitalize" style={{ color: C.navy }}>{monthLabel}</p>
+        <button onClick={nextMonth}
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors"
+          style={{ color: C.text, backgroundColor: C.cardAlt }}>
+          ›
+        </button>
+      </div>
+
+      {/* Dias da semana */}
+      <div className="grid grid-cols-7 mb-1">
+        {['D','S','T','Q','Q','S','S'].map((d, i) => (
+          <div key={i} className="text-center text-[10px] font-black pb-1" style={{ color: C.text }}>{d}</div>
+        ))}
+      </div>
+
+      {/* Células */}
+      <div className="grid grid-cols-7 gap-y-1">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />
+          const hasEvent = !!eventDays[day]
+          const todayCell = isToday(day)
+          return (
+            <button
+              key={i}
+              onClick={() => hasEvent && onSelect(eventDays[day])}
+              disabled={!hasEvent}
+              className="relative flex flex-col items-center justify-center h-8 rounded-lg text-xs font-bold transition-all"
+              style={{
+                color:           hasEvent ? '#fff' : todayCell ? C.navy : C.text,
+                backgroundColor: hasEvent ? C.blue  : todayCell ? `${C.blue}20` : 'transparent',
+                fontWeight:      todayCell || hasEvent ? 900 : 500,
+                cursor:          hasEvent ? 'pointer' : 'default',
+              }}
+            >
+              {day}
+              {hasEvent && (
+                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white opacity-80" />
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Legenda */}
+      {Object.keys(eventDays).length > 0 && (
+        <div className="mt-3 pt-3 border-t space-y-1.5" style={{ borderColor: C.border }}>
+          {Object.entries(eventDays).map(([day, c]) => (
+            <button key={day} onClick={() => onSelect(c)}
+              className="w-full text-left flex items-center gap-2 text-[11px] hover:opacity-80 transition-opacity">
+              <span className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 font-black text-white text-[10px]"
+                style={{ backgroundColor: C.blue }}>{day}</span>
+              <span className="line-clamp-1 font-semibold" style={{ color: C.navy }}>{c.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
