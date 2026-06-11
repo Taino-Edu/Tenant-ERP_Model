@@ -80,12 +80,41 @@ public class Championship
     [Column("created_by_admin_id")]
     public Guid CreatedByAdminId { get; set; }
 
+    /// <summary>JSON do pódio após finalização: [{"lugar":1,"nome":"João"},{"lugar":2,"nome":"Maria"},{"lugar":3,"nome":"Pedro"}]</summary>
+    [MaxLength(1000)]
+    [Column("podio_json")]
+    public string? PodioJson { get; set; }
+
     // -------------------------------------------------------------------------
     // Navegação
     // -------------------------------------------------------------------------
 
     public ICollection<ChampionshipParticipant> Participants { get; set; } = new List<ChampionshipParticipant>();
     public ICollection<Comanda> Comandas { get; set; } = new List<Comanda>();
+    public ICollection<ChampionshipPreInscricao> PreInscricoes { get; set; } = new List<ChampionshipPreInscricao>();
+}
+
+/// <summary>Pré-inscrição vinda da landing page (sem conta de usuário).</summary>
+[Table("championship_preinscricoes")]
+public class ChampionshipPreInscricao
+{
+    [Key] [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Required] [Column("championship_id")]
+    public Guid ChampionshipId { get; set; }
+
+    [ForeignKey(nameof(ChampionshipId))]
+    public Championship Championship { get; set; } = null!;
+
+    [Required, MaxLength(200)] [Column("nome")]
+    public string Nome { get; set; } = string.Empty;
+
+    [Required, MaxLength(30)] [Column("whatsapp")]
+    public string WhatsApp { get; set; } = string.Empty;
+
+    [Column("created_at")]
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 /// <summary>
