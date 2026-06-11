@@ -26,13 +26,20 @@ function ProductCard({ p, adding, onAdd }: {
   adding: string | null
   onAdd: () => void
 }) {
-  const isAdding = adding === p.id
+  const isAdding     = adding === p.id
+  const unavailable  = p.stockQuantity === 0
   return (
     <button
-      onClick={onAdd}
-      disabled={isAdding}
-      className="text-left rounded-2xl overflow-hidden flex flex-col active:scale-95 transition-all duration-150 disabled:opacity-60"
-      style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)' }}
+      onClick={unavailable ? undefined : onAdd}
+      disabled={isAdding || unavailable}
+      className="text-left rounded-2xl overflow-hidden flex flex-col transition-all duration-150"
+      style={{
+        backgroundColor: C.white,
+        border: `1px solid ${C.border}`,
+        boxShadow: '0 2px 8px rgba(12,61,90,0.06)',
+        opacity: unavailable ? 0.7 : 1,
+        cursor: unavailable ? 'default' : undefined,
+      }}
     >
       <div className="relative w-full aspect-square overflow-hidden flex items-center justify-center p-2"
         style={{ backgroundColor: C.bg }}>
@@ -40,17 +47,26 @@ function ProductCard({ p, adding, onAdd }: {
           ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
           : <Package className="w-10 h-10 opacity-20" style={{ color: C.blue2 }} />
         }
-        {p.isOnPromo && (
+        {p.isOnPromo && !unavailable && (
           <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md text-white"
             style={{ backgroundColor: '#FF3B3B' }}>
             Promoção
           </span>
         )}
+        {unavailable && (
+          <div className="absolute inset-0 flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(255,255,255,0.55)' }}>
+            <span className="text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-md text-white"
+              style={{ backgroundColor: '#6B7280' }}>
+              Indisponível
+            </span>
+          </div>
+        )}
       </div>
       <div className="p-3 flex flex-col gap-1.5 flex-1">
         <p className="text-xs font-bold leading-snug line-clamp-2 flex-1" style={{ color: C.navy }}>{p.name}</p>
         <div className="flex items-center justify-between mt-1 gap-1">
-          {p.isOnPromo && p.discountPriceInReais != null ? (
+          {p.isOnPromo && p.discountPriceInReais != null && !unavailable ? (
             <div className="flex flex-col">
               <span className="text-[10px] line-through" style={{ color: C.muted }}>
                 R$ {p.priceInReais.toFixed(2).replace('.', ',')}
@@ -60,15 +76,18 @@ function ProductCard({ p, adding, onAdd }: {
               </span>
             </div>
           ) : (
-            <span className="text-sm font-black" style={{ color: C.blue2 }}>
+            <span className="text-sm font-black" style={{ color: unavailable ? C.muted : C.blue2 }}>
               R$ {p.priceInReais.toFixed(2).replace('.', ',')}
             </span>
           )}
           <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors"
-            style={{ backgroundColor: isAdding ? `${C.blue}25` : C.blue }}>
+            style={{ backgroundColor: unavailable ? '#E5E7EB' : isAdding ? `${C.blue}25` : C.blue }}>
             {isAdding
               ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.blue }} />
-              : <Plus className="w-4 h-4 text-white" />}
+              : unavailable
+                ? <span className="text-[10px] font-bold text-gray-400">—</span>
+                : <Plus className="w-4 h-4 text-white" />
+            }
           </div>
         </div>
       </div>
@@ -181,7 +200,8 @@ export default function ClientePage() {
     } finally { setRemovingPts(false) }
   }
 
-  const activeProducts = products.filter(p => p.isActive && p.stockQuantity > 0)
+  // Backend já filtra isActive + showOnSite; exibimos todos inclusive sem estoque (badge "Indisponível")
+  const activeProducts = products.filter(p => p.isActive)
 
   const filteredProducts = activeProducts.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase())
