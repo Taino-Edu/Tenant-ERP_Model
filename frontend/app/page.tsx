@@ -7,21 +7,13 @@ import Link from 'next/link'
 import {
   Trophy, ShoppingBag, Star, Calendar, Users,
   X, MessageCircle, CheckCircle, Package,
-  CreditCard, Award, QrCode, Shield, ChevronRight
+  CreditCard, Award, QrCode, Shield, ChevronRight,
+  Sun, Moon, Mail,
 } from 'lucide-react'
 
 const MAIKON_WHATSAPP = '5517997633103'
-
-const C = {
-  bg:      '#EBF7FD',
-  card:    '#FFFFFF',
-  cardAlt: '#F0F9FF',
-  border:  'rgba(12,61,90,0.10)',
-  blue:    '#3EC2F2',
-  yellow:  '#FFE45E',
-  text:    '#4D8FAC',
-  navy:    '#0C3D5A',
-}
+const MAIKON_EMAIL    = 'santuarionerd@gmail.com'
+const NAVY            = '#0C3D5A'
 
 export default function LandingPage() {
   const router = useRouter()
@@ -33,8 +25,30 @@ export default function LandingPage() {
   const [productModal,  setProductModal]  = useState<Product | null>(null)
   const [annModal,      setAnnModal]      = useState<AnnouncementDto | null>(null)
   const [mobileMenu,    setMobileMenu]    = useState(false)
+  const [isDark,        setIsDark]        = useState(false)
+
+  const C = isDark ? {
+    bg: '#121215', card: '#1A1A1F', cardAlt: '#1E1E24',
+    border: 'rgba(255,255,255,0.07)', blue: '#3EC2F2',
+    yellow: '#FFE45E', text: 'rgba(255,255,255,0.60)',
+    navy: '#FFFFFF',
+  } : {
+    bg: '#EBF7FD', card: '#FFFFFF', cardAlt: '#F0F9FF',
+    border: 'rgba(12,61,90,0.10)', blue: '#3EC2F2',
+    yellow: '#FFE45E', text: '#4D8FAC',
+    navy: '#0C3D5A',
+  }
+
+  function toggleDark() {
+    const next = !isDark
+    setIsDark(next)
+    localStorage.setItem('landing-theme', next ? 'dark' : 'light')
+  }
 
   useEffect(() => {
+    const saved = localStorage.getItem('landing-theme')
+    if (saved === 'dark') setIsDark(true)
+
     if (isLoggedIn()) {
       router.replace(isAdmin() ? '/admin/dashboard' : '/cliente')
       return
@@ -57,7 +71,7 @@ export default function LandingPage() {
 
       {/* ── NAVBAR ─────────────────────────────────────────────────────── */}
       <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center border-b"
-        style={{ backgroundColor: C.navy, backdropFilter: 'blur(16px)', borderColor: 'rgba(255,255,255,0.10)' }}>
+        style={{ backgroundColor: NAVY, backdropFilter: 'blur(16px)', borderColor: 'rgba(255,255,255,0.10)' }}>
         <div className="w-full max-w-6xl mx-auto px-5 flex items-center justify-between">
 
           {/* Logo */}
@@ -72,6 +86,13 @@ export default function LandingPage() {
             <a href="#produtos" className="hover:text-white transition-colors">Produtos</a>
             <a href="#pontos"   className="hover:text-white transition-colors">Pontos</a>
           </div>
+
+          {/* Toggle tema */}
+          <button onClick={toggleDark} title={isDark ? 'Modo claro' : 'Modo escuro'}
+            className="hidden md:flex p-2 rounded-xl transition-colors hover:bg-white/10"
+            style={{ color: 'rgba(255,255,255,0.70)' }}>
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
 
           {/* Ações desktop */}
           <div className="hidden md:flex items-center gap-2">
@@ -101,7 +122,7 @@ export default function LandingPage() {
       {/* Menu mobile */}
       {mobileMenu && (
         <div className="fixed inset-x-0 top-16 z-40 border-b md:hidden px-5 py-4 space-y-1"
-          style={{ backgroundColor: C.navy, borderColor: 'rgba(255,255,255,0.10)' }}>
+          style={{ backgroundColor: NAVY, borderColor: 'rgba(255,255,255,0.10)' }}>
           {[['#eventos','Torneios'],['#produtos','Produtos'],['#pontos','Pontos']].map(([href, label]) => (
             <a key={href} href={href} onClick={() => setMobileMenu(false)}
               className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
@@ -114,6 +135,12 @@ export default function LandingPage() {
               style={{ color: 'rgba(255,255,255,0.70)', borderColor: 'rgba(255,255,255,0.25)' }}>
               Minha Conta
             </Link>
+            <button onClick={() => { toggleDark(); setMobileMenu(false) }}
+              className="px-4 py-2.5 text-sm rounded-xl border font-medium hover:text-white transition-colors flex items-center gap-1.5"
+              style={{ color: 'rgba(255,255,255,0.70)', borderColor: 'rgba(255,255,255,0.25)' }}>
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {isDark ? 'Claro' : 'Escuro'}
+            </button>
             <a href="#eventos" onClick={() => setMobileMenu(false)}
               className="flex-1 text-center py-2.5 text-sm rounded-xl font-black"
               style={{ backgroundColor: C.blue, color: '#fff' }}>
@@ -124,7 +151,7 @@ export default function LandingPage() {
       )}
 
       {/* ── HERO ───────────────────────────────────────────────────────── */}
-      <section className="relative pt-16 overflow-hidden" style={{ backgroundColor: C.navy }}>
+      <section className="relative pt-16 overflow-hidden" style={{ backgroundColor: NAVY }}>
 
         <div className="relative max-w-6xl mx-auto px-5 py-20 md:py-24">
           <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
@@ -150,7 +177,7 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
                 <a href="#eventos"
                   className="inline-flex items-center justify-center gap-2 font-black px-7 py-3.5 rounded-xl transition-all active:scale-95"
-                  style={{ backgroundColor: C.yellow, color: C.navy, boxShadow: `0 8px 28px rgba(255,228,94,0.22)` }}>
+                  style={{ backgroundColor: C.yellow, color: NAVY, boxShadow: `0 8px 28px rgba(255,228,94,0.22)` }}>
                   <Trophy className="w-5 h-5" /> Ver Torneios
                 </a>
                 <a href="#produtos"
@@ -344,27 +371,56 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ──────────────────────────────────────────────────────── */}
-      <footer className="border-t py-10 px-5" style={{ borderColor: C.border }}>
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-7 w-auto object-contain" />
-            <span className="font-black" style={{ color: C.navy }}>Santuário Nerd</span>
+      <footer className="border-t pt-8 pb-6 px-5" style={{ borderColor: C.border }}>
+        <div className="max-w-6xl mx-auto">
+          {/* Linha principal */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
+            {/* Logo */}
+            <div className="flex items-center gap-2.5">
+              <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-8 w-auto object-contain" />
+              <div>
+                <p className="font-black text-sm leading-tight" style={{ color: C.navy }}>Santuário Nerd</p>
+                <p className="text-[10px]" style={{ color: C.text }}>José Bonifácio — SP</p>
+              </div>
+            </div>
+
+            {/* Contato */}
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <a href={`https://wa.me/${MAIKON_WHATSAPP}`} target="_blank" rel="noreferrer"
+                className="flex items-center gap-1.5 text-xs font-semibold transition-opacity hover:opacity-70"
+                style={{ color: '#25D366' }}>
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
+                (17) 99763-3103
+              </a>
+
+              <a href={`mailto:${MAIKON_EMAIL}`}
+                className="flex items-center gap-1.5 text-xs font-semibold transition-opacity hover:opacity-70"
+                style={{ color: C.blue }}>
+                <Mail className="w-4 h-4 shrink-0" />
+                {MAIKON_EMAIL}
+              </a>
+
+              <Link href="/lgpd"
+                className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-70"
+                style={{ color: C.text }}>
+                <Shield className="w-3.5 h-3.5 shrink-0" />
+                LGPD &amp; Privacidade
+              </Link>
+            </div>
+
+            <Link href="/login"
+              className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-70"
+              style={{ color: C.text }}>
+              <CreditCard className="w-3.5 h-3.5" /> Área do Admin
+            </Link>
           </div>
 
-          <p className="text-xs text-center" style={{ color: `${C.text}` }}>
-            José Bonifácio — SP &nbsp;·&nbsp;
-            <a href={`https://wa.me/${MAIKON_WHATSAPP}`} target="_blank" rel="noreferrer"
-              className="hover:text-white transition-colors">
-              WhatsApp
-            </a>
-            &nbsp;·&nbsp; © {new Date().getFullYear()} Santuário Nerd
-          </p>
-
-          <Link href="/login"
-            className="flex items-center gap-1.5 text-xs transition-colors hover:text-white"
-            style={{ color: C.text }}>
-            <CreditCard className="w-3.5 h-3.5" /> Área do Admin
-          </Link>
+          {/* Rodapé copyright */}
+          <div className="border-t pt-4 text-center text-[11px]" style={{ borderColor: C.border, color: C.text }}>
+            © {new Date().getFullYear()} Santuário Nerd · José Bonifácio — SP · Todos os direitos reservados
+          </div>
         </div>
       </footer>
 
