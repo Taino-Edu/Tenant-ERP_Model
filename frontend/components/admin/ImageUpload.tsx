@@ -175,7 +175,7 @@ export default function ImageUpload({ currentUrl, onUpload, label = 'Imagem', hi
       {/* Alternativa: URL manual */}
       {!uploading && (
         <input
-          type="url"
+          type="text"
           className="input text-xs"
           placeholder="https://exemplo.com/imagem.jpg  (alternativa ao upload)"
           value={preview && !preview.startsWith('blob:') ? preview : ''}
