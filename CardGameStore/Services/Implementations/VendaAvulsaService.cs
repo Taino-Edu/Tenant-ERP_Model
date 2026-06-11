@@ -75,7 +75,8 @@ public class VendaAvulsaService : IVendaAvulsaService
             if (updated == 0)
                 throw new InvalidOperationException($"Estoque insuficiente para '{product.Name}' (venda simultânea detectada).");
 
-            var subtotal = product.PriceInCents * reqItem.Quantity;
+            var effectivePrice = product.IsOnPromo ? product.DiscountPriceInCents!.Value : product.PriceInCents;
+            var subtotal = effectivePrice * reqItem.Quantity;
             total += subtotal;
 
             vendaItems.Add(new VendaAvulsaItem
@@ -84,7 +85,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 ProductName      = product.Name,
                 ProductCategory  = product.Category,
                 Quantity         = reqItem.Quantity,
-                UnitPriceInCents = product.PriceInCents,
+                UnitPriceInCents = effectivePrice,
                 SubtotalInCents  = subtotal,
             });
         }

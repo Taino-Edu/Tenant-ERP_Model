@@ -756,7 +756,8 @@ public class ComandaService : IComandaService
 
         // Mantém o objeto local sincronizado para o SaveChanges final
         product.StockQuantity -= request.Quantity;
-        return (product.Name, product.PriceInCents);
+        var effectivePrice = product.IsOnPromo ? product.DiscountPriceInCents!.Value : product.PriceInCents;
+        return (product.Name, effectivePrice);
     }
 
     private static ComandaDto MapToDto(Comanda comanda) => new()
