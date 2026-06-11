@@ -782,13 +782,19 @@ function ProductModal({ product: p, onClose, C }: { product: Product; onClose: (
 }
 
 function RegisterModal({ championship, onClose, C }: { championship: Championship; onClose: () => void; C: Theme }) {
-  const [name,  setName]  = useState('')
-  const [phone, setPhone] = useState('')
-  const [done,  setDone]  = useState(false)
+  const [name,    setName]    = useState('')
+  const [phone,   setPhone]   = useState('')
+  const [done,    setDone]    = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim() || !phone.trim()) return
+    setLoading(true)
+    try {
+      await championshipApi.addPreInscricao(championship.id, name.trim(), phone.trim())
+    } catch { /* silently continue — WhatsApp still opens */ }
+    finally { setLoading(false) }
     const msg = encodeURIComponent(
       `Olá! Quero me inscrever no *${championship.name}*.\n` +
       `Nome: ${name.trim()}\nWhatsApp: ${phone.trim()}\n` +
@@ -852,10 +858,14 @@ function RegisterModal({ championship, onClose, C }: { championship: Championshi
                 value={phone} onChange={e => setPhone(e.target.value)} required
               />
             </div>
-            <button type="submit"
-              className="w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-xl transition-all active:scale-95"
+            <button type="submit" disabled={loading}
+              className="w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-xl transition-all active:scale-95 disabled:opacity-60"
               style={{ backgroundColor: C.blue, color: '#fff' }}>
-              <MessageCircle className="w-4 h-4" /> Confirmar pelo WhatsApp
+              {loading
+                ? <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 62.8" /></svg>
+                : <MessageCircle className="w-4 h-4" />
+              }
+              {loading ? 'Registrando...' : 'Confirmar pelo WhatsApp'}
             </button>
             <p className="text-xs text-center" style={{ color: C.text }}>
               Você será redirecionado para o WhatsApp.

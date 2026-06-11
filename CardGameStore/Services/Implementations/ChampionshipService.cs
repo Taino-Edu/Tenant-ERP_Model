@@ -125,4 +125,25 @@ public class ChampionshipService : IChampionshipService
         _db.ChampionshipParticipants.Remove(p);
         await _db.SaveChangesAsync();
     }
+
+    public async Task<ChampionshipPreInscricao> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp)
+    {
+        var pi = new ChampionshipPreInscricao { ChampionshipId = championshipId, Nome = nome, WhatsApp = whatsApp };
+        _db.ChampionshipPreInscricoes.Add(pi);
+        await _db.SaveChangesAsync();
+        return pi;
+    }
+
+    public async Task<IEnumerable<ChampionshipPreInscricao>> GetPreInscricoesAsync(Guid championshipId) =>
+        await _db.ChampionshipPreInscricoes
+            .Where(p => p.ChampionshipId == championshipId)
+            .OrderBy(p => p.CreatedAt).ToListAsync();
+
+    public async Task SetPodioAsync(Guid championshipId, string podioJson)
+    {
+        var ch = await _db.Championships.FindAsync(championshipId)
+            ?? throw new InvalidOperationException("Campeonato não encontrado.");
+        ch.PodioJson = podioJson;
+        await _db.SaveChangesAsync();
+    }
 }

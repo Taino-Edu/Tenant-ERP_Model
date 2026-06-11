@@ -379,6 +379,63 @@ public class ChampionshipController : ControllerBase
     }
 
     // -------------------------------------------------------------------------
+    // PRÉ-INSCRIÇÃO (landing page, sem login)
+    // -------------------------------------------------------------------------
+
+    /// <summary>Registra pré-inscrição pública (nome + WhatsApp) em um campeonato.</summary>
+    [HttpPost("{id:guid}/preinscricoes")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(PreInscricaoDto), 201)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> AddPreInscricao(Guid id, [FromBody] PreInscricaoRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var ch = await _service.GetByIdAsync(id);
+        if (ch == null) return NotFound(new { Message = "Campeonato não encontrado." });
+
+        if (ch.Status != ChampionshipStatus.Inscricoes && ch.Status != ChampionshipStatus.Planejado)
+            return BadRequest(new { Message = "Este campeonato não está aceitando inscrições." });
+
+        var pi = await _service.AddPreInscricaoAsync(id, request.Nome, request.WhatsApp);
+        _logger.LogInformation("Pré-inscrição recebida para campeonato {Id}: {Nome}", id, request.Nome);
+        return StatusCode(201, new PreInscricaoDto { Id = pi.Id, Nome = pi.Nome, WhatsApp = pi.WhatsApp, CreatedAt = pi.CreatedAt });
+    }
+
+    /// <summary>Lista pré-inscrições de um campeonato (Admin).</summary>
+    [HttpGet("{id:guid}/preinscricoes")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(IEnumerable<PreInscricaoDto>), 200)]
+    public async Task<IActionResult> GetPreInscricoes(Guid id)
+    {
+        var list = await _service.GetPreInscricoesAsync(id);
+        return Ok(list.Select(p => new PreInscricaoDto { Id = p.Id, Nome = p.Nome, WhatsApp = p.WhatsApp, CreatedAt = p.CreatedAt }));
+    }
+
+    // -------------------------------------------------------------------------
+    // PÓDIO — apenas Admin
+    // -------------------------------------------------------------------------
+
+    /// <summary>Salva o pódio do campeonato como JSON. Apenas Admin.</summary>
+    [HttpPatch("{id:guid}/podio")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> SetPodio(Guid id, [FromBody] SetPodioRequest request)
+    {
+        try
+        {
+            await _service.SetPodioAsync(id, request.PodioJson);
+            return Ok(new { Message = "Pódio salvo com sucesso." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(new { Message = ex.Message });
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers privados
     // -------------------------------------------------------------------------
 
@@ -407,6 +464,7 @@ public class ChampionshipController : ControllerBase
         ParticipantCount     = ch.Participants?.Count ?? 0,
         CreatedAt            = ch.CreatedAt,
         ImageUrl             = ch.ImageUrl,
+        PodioJson            = ch.PodioJson,
     };
 }
 
@@ -453,6 +511,7 @@ public class ChampionshipDto
     public int       ParticipantCount     { get; init; }
     public DateTime  CreatedAt            { get; init; }
     public string?   ImageUrl             { get; init; }
+    public string?   PodioJson            { get; init; }
 }
 
 /// <summary>DTO de participação do próprio usuário (GET /api/championship/my-participations).</summary>
@@ -524,3 +583,24 @@ public record SetPlacementRequest(int Placement);
 
 /// <summary>Request para definir/atualizar a imagem de capa do campeonato.</summary>
 public record SetImageRequest(string? ImageUrl);
+
+/// <summary>Request de pré-inscrição pública (sem login).</summary>
+public class PreInscricaoRequest
+{
+    [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string Nome     { get; init; } = string.Empty;
+    [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(30)]
+    public string WhatsApp { get; init; } = string.Empty;
+}
+
+/// <summary>DTO de pré-inscrição retornado ao frontend.</summary>
+public class PreInscricaoDto
+{
+    public Guid     Id        { get; init; }
+    public string   Nome      { get; init; } = string.Empty;
+    public string   WhatsApp  { get; init; } = string.Empty;
+    public DateTime CreatedAt { get; init; }
+}
+
+/// <summary>Request para salvar o pódio de um campeonato.</summary>
+public record SetPodioRequest(string PodioJson);

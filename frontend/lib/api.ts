@@ -125,9 +125,15 @@ export interface Championship {
   startDate: string; entryFeeInCents: number; entryFeeInReais: number; maxParticipants: number | null
   description?: string | null; participantCount?: number
   registrationDeadline?: string | null; endDate?: string | null
-  imageUrl?: string | null
+  imageUrl?: string | null; podioJson?: string | null
   participants?: ChampionshipParticipant[]
 }
+
+export interface ChampionshipPreInscricao {
+  id: string; nome: string; whatsApp: string; createdAt: string
+}
+
+export interface PodioItem { lugar: number; nome: string }
 
 export interface ChampionshipParticipant {
   id: string; userId: string; userName: string; playerNumber: number
@@ -417,6 +423,12 @@ export const championshipApi = {
     api.put(`/api/championship/${id}/participants/${participantId}/placement`, { placement }),
   setImage:         (id: string, imageUrl: string | null) =>
     api.put<Championship>(`/api/championship/${id}/image`, { imageUrl }),
+  addPreInscricao:  (id: string, nome: string, whatsApp: string) =>
+    api.post<ChampionshipPreInscricao>(`/api/championship/${id}/preinscricoes`, { nome, whatsApp }),
+  getPreInscricoes: (id: string) =>
+    api.get<ChampionshipPreInscricao[]>(`/api/championship/${id}/preinscricoes`),
+  setPodio:         (id: string, podioJson: string) =>
+    api.patch(`/api/championship/${id}/podio`, { podioJson }),
 }
 
 // ── Assistente IA ─────────────────────────────────────────────────────────────

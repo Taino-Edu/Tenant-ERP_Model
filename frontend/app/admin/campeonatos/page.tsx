@@ -1,10 +1,10 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { championshipApi, userApi, uploadApi, Championship, ChampionshipParticipant } from '@/lib/api'
+import { championshipApi, userApi, uploadApi, Championship, ChampionshipParticipant, ChampionshipPreInscricao, PodioItem } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   Trophy, Plus, Users, Swords, X, Check, Loader2,
-  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus, Edit2,
+  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus, Edit2, MessageCircle, Award,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -444,25 +444,41 @@ function ChampionshipCard({
   onDelete?: (id: string) => void
   onEdit?:   (c: Championship) => void
 }) {
-  const [expanded, setExpanded]         = useState(false)
-  const [participants, setParticipants] = useState<ChampionshipParticipant[]>([])
-  const [loadingP, setLoadingP]         = useState(false)
-  const [showAdd, setShowAdd]           = useState(false)
+  const [expanded, setExpanded]           = useState(false)
+  const [activeTab, setActiveTab]         = useState<'participantes' | 'preinscricoes' | 'podio'>('participantes')
+  const [participants, setParticipants]   = useState<ChampionshipParticipant[]>([])
+  const [preInscricoes, setPreInscricoes] = useState<ChampionshipPreInscricao[]>([])
+  const [loadingP, setLoadingP]           = useState(false)
+  const [showAdd, setShowAdd]             = useState(false)
 
-  const loadParticipants = useCallback(async () => {
+  // Pódio
+  const parsedPodio = (): [string, string, string] => {
+    try {
+      const arr: PodioItem[] = c.podioJson ? JSON.parse(c.podioJson) : []
+      return [arr[0]?.nome ?? '', arr[1]?.nome ?? '', arr[2]?.nome ?? '']
+    } catch { return ['', '', ''] }
+  }
+  const [podioNames, setPodioNames]   = useState<[string, string, string]>(parsedPodio)
+  const [savingPodio, setSavingPodio] = useState(false)
+
+  const loadAll = useCallback(async () => {
     setLoadingP(true)
     try {
-      const { data } = await championshipApi.participants(c.id)
-      setParticipants(data)
+      const [pRes, piRes] = await Promise.all([
+        championshipApi.participants(c.id),
+        championshipApi.getPreInscricoes(c.id),
+      ])
+      setParticipants(pRes.data)
+      setPreInscricoes(piRes.data)
     } catch {
-      toast.error('Erro ao carregar participantes')
+      toast.error('Erro ao carregar dados')
     } finally {
       setLoadingP(false)
     }
   }, [c.id])
 
   async function toggleExpand() {
-    if (!expanded) await loadParticipants()
+    if (!expanded) await loadAll()
     setExpanded(v => !v)
   }
 
@@ -471,15 +487,34 @@ function ChampionshipCard({
     try {
       await championshipApi.removeParticipant(c.id, p.id)
       toast.success(`${p.userName} removido`)
-      loadParticipants()
+      loadAll()
       onParticipantChange()
     } catch {
       toast.error('Erro ao remover participante')
     }
   }
 
+  async function handleSavePodio() {
+    setSavingPodio(true)
+    try {
+      const podio: PodioItem[] = podioNames
+        .map((nome, i) => ({ lugar: i + 1, nome: nome.trim() }))
+        .filter(p => p.nome)
+      await championshipApi.setPodio(c.id, JSON.stringify(podio))
+      toast.success('Pódio salvo!')
+    } catch {
+      toast.error('Erro ao salvar pódio')
+    } finally {
+      setSavingPodio(false)
+    }
+  }
+
   const canAddParticipants  = c.status === 'Inscricoes' || c.status === 'EmAndamento'
   const canDelete           = c.status === 'Finalizado' || c.status === 'Cancelado'
+  const canPodio            = c.status === 'EmAndamento' || c.status === 'Finalizado'
+
+  const MEDAL_COLORS = ['text-accent-gold', 'text-gray-300', 'text-amber-700']
+  const LUGAR_LABELS = ['1º lugar', '2º lugar', '3º lugar']
 
   return (
     <>
@@ -487,7 +522,7 @@ function ChampionshipCard({
         <AddParticipantModal
           championshipId={c.id}
           onClose={() => setShowAdd(false)}
-          onAdded={() => { loadParticipants(); onParticipantChange() }}
+          onAdded={() => { loadAll(); onParticipantChange() }}
         />
       )}
 
@@ -536,7 +571,7 @@ function ChampionshipCard({
           </div>
         </div>
 
-        {/* Participantes header */}
+        {/* Expand toggle */}
         <div className="flex items-center justify-between pt-1 border-t border-surface-500">
           <button
             onClick={toggleExpand}
@@ -559,42 +594,139 @@ function ChampionshipCard({
           )}
         </div>
 
-        {/* Lista de participantes */}
+        {/* Painel expandido */}
         {expanded && (
-          <div className="space-y-1.5">
+          <div className="space-y-3">
+            {/* Abas */}
+            <div className="flex gap-1 bg-surface-800 rounded-lg p-1">
+              <button
+                onClick={() => setActiveTab('participantes')}
+                className={clsx('flex-1 text-xs py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5',
+                  activeTab === 'participantes' ? 'bg-surface-600 text-white' : 'text-gray-400 hover:text-gray-200')}
+              >
+                <Users className="w-3.5 h-3.5" /> Participantes
+                {participants.length > 0 && <span className="bg-brand-500/30 text-brand-300 text-[10px] px-1.5 rounded-full">{participants.length}</span>}
+              </button>
+              <button
+                onClick={() => setActiveTab('preinscricoes')}
+                className={clsx('flex-1 text-xs py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5',
+                  activeTab === 'preinscricoes' ? 'bg-surface-600 text-white' : 'text-gray-400 hover:text-gray-200')}
+              >
+                <MessageCircle className="w-3.5 h-3.5" /> Pré-inscrições
+                {preInscricoes.length > 0 && <span className="bg-amber-500/30 text-amber-300 text-[10px] px-1.5 rounded-full">{preInscricoes.length}</span>}
+              </button>
+              {canPodio && (
+                <button
+                  onClick={() => setActiveTab('podio')}
+                  className={clsx('flex-1 text-xs py-1.5 rounded-md font-medium transition-colors flex items-center justify-center gap-1.5',
+                    activeTab === 'podio' ? 'bg-surface-600 text-white' : 'text-gray-400 hover:text-gray-200')}
+                >
+                  <Award className="w-3.5 h-3.5" /> Pódio
+                </button>
+              )}
+            </div>
+
             {loadingP ? (
               <div className="flex justify-center py-4">
                 <Loader2 className="w-5 h-5 animate-spin text-brand-400" />
               </div>
-            ) : participants.length === 0 ? (
-              <p className="text-center text-sm text-gray-400 py-4">Nenhum inscrito ainda</p>
             ) : (
-              participants.map(p => (
-                <div key={p.id} className="flex items-center gap-3 bg-surface-800 rounded-lg px-3 py-2">
-                  <span className="text-xs font-mono text-gray-500 w-5 text-right shrink-0">#{p.playerNumber}</span>
-                  <div className="w-7 h-7 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0">
-                    <span className="text-brand-400 text-xs font-bold">{p.userName?.[0] ?? '?'}</span>
+              <>
+                {/* Aba: Participantes */}
+                {activeTab === 'participantes' && (
+                  <div className="space-y-1.5">
+                    {participants.length === 0 ? (
+                      <p className="text-center text-sm text-gray-400 py-4">Nenhum participante ainda</p>
+                    ) : (
+                      participants.map(p => (
+                        <div key={p.id} className="flex items-center gap-3 bg-surface-800 rounded-lg px-3 py-2">
+                          <span className="text-xs font-mono text-gray-500 w-5 text-right shrink-0">#{p.playerNumber}</span>
+                          <div className="w-7 h-7 rounded-full bg-brand-500/20 flex items-center justify-center shrink-0">
+                            <span className="text-brand-400 text-xs font-bold">{p.userName?.[0] ?? '?'}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{p.userName}</p>
+                            {p.deckName && <p className="text-xs text-gray-500 truncate">{p.deckName}</p>}
+                          </div>
+                          {p.placement && (
+                            <span className="text-xs font-bold text-accent-gold flex items-center gap-1">
+                              <Medal className="w-3.5 h-3.5" />{p.placement}º
+                            </span>
+                          )}
+                          {(c.status === 'Inscricoes' || c.status === 'EmAndamento') && (
+                            <button
+                              onClick={() => handleRemove(p)}
+                              className="text-gray-400 hover:text-red-400 transition-colors ml-1 shrink-0"
+                              title="Remover"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{p.userName}</p>
-                    {p.deckName && <p className="text-xs text-gray-500 truncate">{p.deckName}</p>}
+                )}
+
+                {/* Aba: Pré-inscrições */}
+                {activeTab === 'preinscricoes' && (
+                  <div className="space-y-1.5">
+                    {preInscricoes.length === 0 ? (
+                      <p className="text-center text-sm text-gray-400 py-4">Nenhuma pré-inscrição recebida</p>
+                    ) : (
+                      preInscricoes.map(pi => (
+                        <div key={pi.id} className="flex items-center gap-3 bg-surface-800 rounded-lg px-3 py-2">
+                          <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                            <span className="text-amber-400 text-xs font-bold">{pi.nome[0]}</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{pi.nome}</p>
+                            <p className="text-xs text-gray-500">{pi.whatsApp}</p>
+                          </div>
+                          <a
+                            href={`https://wa.me/${pi.whatsApp.replace(/\D/g, '')}`}
+                            target="_blank" rel="noreferrer"
+                            className="text-accent-green hover:text-green-300 shrink-0"
+                            title="Contatar no WhatsApp"
+                          >
+                            <MessageCircle className="w-4 h-4" />
+                          </a>
+                        </div>
+                      ))
+                    )}
                   </div>
-                  {p.placement && (
-                    <span className="text-xs font-bold text-accent-gold flex items-center gap-1">
-                      <Medal className="w-3.5 h-3.5" />{p.placement}º
-                    </span>
-                  )}
-                  {(c.status === 'Inscricoes' || c.status === 'EmAndamento') && (
+                )}
+
+                {/* Aba: Pódio */}
+                {activeTab === 'podio' && canPodio && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-gray-400">Registre os vencedores do torneio:</p>
+                    {LUGAR_LABELS.map((label, i) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <Medal className={clsx('w-4 h-4 shrink-0', MEDAL_COLORS[i])} />
+                        <input
+                          className="input flex-1 text-sm"
+                          placeholder={label}
+                          value={podioNames[i]}
+                          onChange={e => {
+                            const updated: [string, string, string] = [...podioNames] as [string, string, string]
+                            updated[i] = e.target.value
+                            setPodioNames(updated)
+                          }}
+                        />
+                      </div>
+                    ))}
                     <button
-                      onClick={() => handleRemove(p)}
-                      className="text-gray-400 hover:text-red-400 transition-colors ml-1 shrink-0"
-                      title="Remover"
+                      onClick={handleSavePodio}
+                      disabled={savingPodio}
+                      className="btn-primary w-full justify-center text-sm"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      {savingPodio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      Salvar Pódio
                     </button>
-                  )}
-                </div>
-              ))
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
