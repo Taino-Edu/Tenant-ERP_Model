@@ -81,9 +81,17 @@ public class Product
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 
-    /// <summary>Se true, o produto aparece em destaque na landing page.</summary>
+    /// <summary>Se true, o produto aparece em destaque na landing page (escolha manual do admin).</summary>
     [Column("is_featured")]
     public bool IsFeatured { get; set; } = false;
+
+    /// <summary>Se true, o produto aparece no site público. Consumíveis internos devem ter false.</summary>
+    [Column("show_on_site")]
+    public bool ShowOnSite { get; set; } = true;
+
+    /// <summary>Preço promocional em centavos. Quando preenchido, exibe badge "Promoção" e preço riscado.</summary>
+    [Column("discount_price_in_cents")]
+    public int? DiscountPriceInCents { get; set; }
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -98,6 +106,14 @@ public class Product
     /// <summary>Preço em reais para exibição na interface.</summary>
     [NotMapped]
     public decimal PriceInReais => PriceInCents / 100m;
+
+    /// <summary>Preço promocional em reais (null se não houver promoção).</summary>
+    [NotMapped]
+    public decimal? DiscountPriceInReais => DiscountPriceInCents.HasValue ? DiscountPriceInCents.Value / 100m : null;
+
+    /// <summary>True se o produto estiver em promoção.</summary>
+    [NotMapped]
+    public bool IsOnPromo => DiscountPriceInCents.HasValue && DiscountPriceInCents.Value > 0 && DiscountPriceInCents.Value < PriceInCents;
 
     /// <summary>Preço de custo em reais.</summary>
     [NotMapped]
