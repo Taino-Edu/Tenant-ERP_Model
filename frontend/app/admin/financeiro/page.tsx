@@ -8,6 +8,7 @@ import {
   RefreshCw, Printer, Package, ShoppingBag, BarChart2,
   Banknote, CreditCard, QrCode, Receipt, ChevronDown, ChevronUp,
   Store, ShoppingCart, X, Search, Star, Wallet, Filter,
+  FileText, Lightbulb, ArrowUp, ArrowDown, Minus,
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -499,7 +500,8 @@ export default function FinanceiroPage() {
   const [data,      setData]      = useState<FinanceiroDto | null>(null)
   const [loading,   setLoading]   = useState(true)
   const [exporting, setExporting] = useState(false)
-  const [kpiModal,  setKpiModal]  = useState<string | null>(null)
+  const [kpiModal,   setKpiModal]   = useState<string | null>(null)
+  const [targetPct,  setTargetPct]  = useState(40)
   const iniRef = useRef(inicio)
   const fimRef = useRef(fim)
 
@@ -528,6 +530,14 @@ export default function FinanceiroPage() {
   }
 
   const d = data
+
+  // ── Projeção do mês ───────────────────────────────────────────────────────
+  const hoje = new Date()
+  const diasNoMes      = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()
+  const diaAtual       = hoje.getDate()
+  const diasRestantes  = diasNoMes - diaAtual
+  const mediaDiaria    = d && d.diaDia.length > 0 ? d.receita / d.diaDia.length : 0
+  const projecaoMes    = d ? d.receita + mediaDiaria * diasRestantes : 0
 
   // ── Dados dos modais de KPI ────────────────────────────────────────────────
   const totalTx = d ? d.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0) : 0
@@ -736,6 +746,87 @@ export default function FinanceiroPage() {
             </div>
           </div>
 
+          {/* ── DRE ─────────────────────────────────────────────────────── */}
+          {d.receita > 0 && (
+            <div className="card p-0 overflow-hidden">
+              <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-brand-400" />
+                  <h3 className="text-sm font-semibold text-gray-300">DRE — Demonstração do Resultado</h3>
+                </div>
+                <span className="text-[11px] text-gray-500">{inicio === fim ? inicio : `${inicio} → ${fim}`}</span>
+              </div>
+
+              <div className="p-5 space-y-0">
+                {/* Receita Bruta */}
+                <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-200">Receita Bruta</p>
+                    <div className="flex gap-4 mt-1">
+                      <span className="text-xs text-gray-500">Comandas: <span className="text-gray-300">{fmt(d.receitaComandas)}</span></span>
+                      <span className="text-xs text-gray-500">Avulsas: <span className="text-gray-300">{fmt(d.receitaAvulsa)}</span></span>
+                    </div>
+                  </div>
+                  <span className="text-emerald-400 font-bold font-mono text-lg">{fmt(d.receita)}</span>
+                </div>
+
+                {/* CMV */}
+                {d.custo > 0 ? (
+                  <>
+                    <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
+                      <p className="text-sm text-gray-400">(−) CMV — Custo das Mercadorias Vendidas</p>
+                      <span className="text-red-400 font-mono">({fmt(d.custo)})</span>
+                    </div>
+
+                    {/* Lucro Bruto */}
+                    <div className="flex items-center justify-between py-3 border-b-2 border-surface-400">
+                      <p className="text-base font-black text-white">LUCRO BRUTO</p>
+                      <div className="text-right">
+                        <span className={`font-black font-mono text-xl ${d.margem >= 0 ? 'text-brand-400' : 'text-red-400'}`}>
+                          {fmt(d.margem)}
+                        </span>
+                        <span className="text-xs text-gray-500 ml-2 font-mono">({d.margemPercent.toFixed(1)}%)</span>
+                      </div>
+                    </div>
+
+                    {/* Crediários */}
+                    {d.crediarios > 0 && (
+                      <>
+                        <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
+                          <p className="text-sm text-gray-400">(−) Crediários em Aberto</p>
+                          <span className="text-amber-400 font-mono">({fmt(d.crediarios)})</span>
+                        </div>
+                        <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
+                          <p className="text-sm text-gray-300">Resultado Estimado</p>
+                          <span className={`font-semibold font-mono ${d.margem - d.crediarios >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {fmt(d.margem - d.crediarios)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Projeção */}
+                    {diasRestantes > 0 && mediaDiaria > 0 && preset === 'mes' && (
+                      <div className="flex items-center justify-between py-3 mt-1 rounded-xl bg-brand-500/8 px-4 -mx-0">
+                        <div>
+                          <p className="text-xs font-semibold text-brand-300">📈 Projeção para o mês completo</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">
+                            {diasRestantes} dias restantes · média {fmt(mediaDiaria)}/dia
+                          </p>
+                        </div>
+                        <span className="font-black font-mono text-brand-400 text-lg">{fmt(projecaoMes)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="py-3 text-xs text-yellow-400/80">
+                    Cadastre o preço de custo nos produtos para ver Lucro Bruto e CMV.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Gráfico + Donut */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-3"><BarChart dias={d.diaDia} /></div>
@@ -750,49 +841,108 @@ export default function FinanceiroPage() {
           {/* Top produtos */}
           {d.topProdutos.length > 0 && (
             <div className="card p-0 overflow-hidden">
-              <div className="px-5 py-4 border-b border-surface-500 flex items-center gap-2">
-                <Package className="w-4 h-4 text-brand-400" />
-                <h3 className="text-sm font-semibold text-gray-300">Top Produtos — Receita &amp; Margem</h3>
+              <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4 text-yellow-400" />
+                  <h3 className="text-sm font-semibold text-gray-300">Top Produtos — Rentabilidade &amp; Sugestão de Preço</h3>
+                </div>
+                {/* Seletor de margem alvo */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500">Meta de margem:</span>
+                  {[30, 40, 50, 60].map(pct => (
+                    <button key={pct} onClick={() => setTargetPct(pct)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                        targetPct === pct
+                          ? 'bg-yellow-500/20 border-yellow-500/60 text-yellow-300'
+                          : 'bg-surface-700 border-surface-600 text-gray-400 hover:text-gray-200'
+                      }`}>
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-surface-800">
                     <tr className="text-left">
-                      {['#', 'Produto', 'Qtd', 'Receita', 'Custo', 'Margem', 'Margem %'].map(h => (
+                      {['#', 'Produto', 'Qtd', 'Preço Médio', 'Custo Médio', 'Margem Atual', 'Sugestão', 'Ação'].map(h => (
                         <th key={h} className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-500">
                     {d.topProdutos.map((p, i) => {
-                      const pct = p.custo > 0 ? ((p.margem / p.receita) * 100) : null
+                      const precoMedio  = p.qtd > 0 ? p.receita / p.qtd : 0
+                      const custoMedio  = p.qtd > 0 ? p.custo   / p.qtd : 0
+                      const margemAtual = precoMedio > 0 && custoMedio > 0
+                        ? ((precoMedio - custoMedio) / precoMedio) * 100
+                        : null
+                      // Preço sugerido para atingir targetPct% de margem sobre preço
+                      const precoSugerido = custoMedio > 0
+                        ? custoMedio / (1 - targetPct / 100)
+                        : null
+                      const diff = precoSugerido !== null ? precoSugerido - precoMedio : null
+                      const pct  = p.custo > 0 ? ((p.margem / p.receita) * 100) : null
                       return (
                         <tr key={p.nome} className="hover:bg-surface-600/20 transition-colors">
                           <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
-                          <td className="px-4 py-2.5 font-medium text-white">{p.nome}</td>
-                          <td className="px-4 py-2.5 text-gray-400">{p.qtd}x</td>
-                          <td className="px-4 py-2.5 font-mono text-accent-gold font-semibold">{fmt(p.receita)}</td>
-                          <td className="px-4 py-2.5 font-mono text-gray-400 text-xs">{p.custo > 0 ? fmt(p.custo) : <span className="text-gray-400">—</span>}</td>
-                          <td className="px-4 py-2.5 font-mono text-xs">
-                            {p.custo > 0
-                              ? <span className={p.margem >= 0 ? 'text-emerald-400 font-semibold' : 'text-red-400'}>{fmt(p.margem)}</span>
-                              : <span className="text-gray-400">—</span>}
+                          <td className="px-4 py-2.5 font-medium text-white max-w-[180px]">
+                            <p className="truncate">{p.nome}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5">{p.qtd}x vendido</p>
+                          </td>
+                          <td className="px-4 py-2.5 text-gray-400 text-xs">{p.qtd}x</td>
+                          <td className="px-4 py-2.5 font-mono text-yellow-300 font-semibold text-xs">
+                            {precoMedio > 0 ? fmt(precoMedio) : '—'}
+                          </td>
+                          <td className="px-4 py-2.5 font-mono text-gray-400 text-xs">
+                            {custoMedio > 0 ? fmt(custoMedio) : <span className="text-gray-600">—</span>}
                           </td>
                           <td className="px-4 py-2.5">
-                            {pct !== null ? (
+                            {margemAtual !== null ? (
                               <div className="flex items-center gap-2">
-                                <div className="flex-1 h-1.5 bg-surface-600 rounded-full overflow-hidden" style={{ minWidth: 48 }}>
-                                  <div className={`h-full rounded-full ${pct >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`} style={{ width: `${Math.min(100, Math.abs(pct))}%` }} />
+                                <div className="w-12 h-1.5 bg-surface-600 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${margemAtual >= targetPct ? 'bg-emerald-500' : margemAtual >= 0 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    style={{ width: `${Math.min(100, Math.abs(margemAtual))}%` }} />
                                 </div>
-                                <span className={`text-xs font-mono ${pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{pct.toFixed(0)}%</span>
+                                <span className={`text-xs font-mono font-bold ${margemAtual >= targetPct ? 'text-emerald-400' : margemAtual >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                  {margemAtual.toFixed(0)}%
+                                </span>
                               </div>
-                            ) : <span className="text-gray-400 text-xs">—</span>}
+                            ) : <span className="text-gray-600 text-xs">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5 font-mono text-xs">
+                            {precoSugerido !== null
+                              ? <span className="text-brand-400 font-semibold">{fmt(precoSugerido)}</span>
+                              : <span className="text-gray-600">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {diff !== null ? (
+                              Math.abs(diff) < 0.50 ? (
+                                <span className="flex items-center gap-1 text-xs text-emerald-400">
+                                  <Minus className="w-3 h-3" /> Ok
+                                </span>
+                              ) : diff > 0 ? (
+                                <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
+                                  <ArrowUp className="w-3 h-3" /> +{fmt(diff)}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-xs text-emerald-400">
+                                  <ArrowDown className="w-3 h-3" /> {fmt(diff)}
+                                </span>
+                              )
+                            ) : <span className="text-gray-600 text-xs">—</span>}
                           </td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
+                {/* Legenda */}
+                <div className="px-4 py-3 border-t border-surface-600 flex flex-wrap gap-4 text-[11px] text-gray-500">
+                  <span><span className="text-yellow-300 font-bold">Preço Médio</span> = Receita total ÷ Qtd vendida</span>
+                  <span><span className="text-brand-400 font-bold">Sugestão</span> = Custo Médio ÷ (1 − {targetPct}%) para atingir margem de {targetPct}%</span>
+                  <span><ArrowUp className="w-3 h-3 text-red-400 inline" /> subir preço · <ArrowDown className="w-3 h-3 text-emerald-400 inline" /> pode baixar · <Minus className="w-3 h-3 text-emerald-400 inline" /> preço ok</span>
+                </div>
               </div>
             </div>
           )}
