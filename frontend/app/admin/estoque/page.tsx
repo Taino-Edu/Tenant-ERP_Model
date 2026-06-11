@@ -185,8 +185,8 @@ function ProductModal({
           <div className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3 space-y-3">
             <label className="flex items-center justify-between gap-3 cursor-pointer">
               <div>
-                <p className="text-sm font-medium text-gray-200">Mostrar no site público</p>
-                <p className="text-xs text-gray-500">Desmarcado: produto não aparece na loja</p>
+                <p className="text-sm font-medium text-[var(--text-primary)]">Mostrar no site público</p>
+                <p className="text-xs text-[var(--text-muted)]">Desmarcado: produto não aparece na loja</p>
               </div>
               <div
                 onClick={() => set('showOnSite', !(form.showOnSite ?? true))}
@@ -203,8 +203,8 @@ function ProductModal({
             </label>
             <label className="flex items-center justify-between gap-3 cursor-pointer">
               <div>
-                <p className="text-sm font-medium text-yellow-300">⭐ Destaque na landing</p>
-                <p className="text-xs text-gray-500">Aparece na seção de produtos da home</p>
+                <p className="text-sm font-medium text-[var(--text-primary)]">⭐ Destaque na landing</p>
+                <p className="text-xs text-[var(--text-muted)]">Aparece na seção de produtos da home</p>
               </div>
               <div
                 onClick={() => set('isFeatured', !form.isFeatured)}
