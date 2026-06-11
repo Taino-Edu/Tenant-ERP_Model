@@ -137,9 +137,9 @@ export default function LandingPage() {
               </div>
 
               <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-5 tracking-tight text-white">
-                Sua loja de<br />
                 <span style={{ color: C.blue }}>Santuário Nerd</span><br />
-                favorita
+                Card Games &amp;<br />
+                Campeonatos
               </h1>
 
               <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: 'rgba(255,255,255,0.65)' }}>
