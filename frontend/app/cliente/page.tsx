@@ -363,11 +363,32 @@ export default function ClientePage() {
               {/* Header da comanda */}
               <div className="flex items-center justify-between px-5 py-4 border-b"
                 style={{ borderColor: C.border }}>
-                <div className="flex items-center gap-2">
-                  <Receipt className="w-4 h-4" style={{ color: C.blue }} />
-                  <span className="font-black text-sm" style={{ color: C.navy }}>
-                    Mesa {comanda.tableIdentifier || 'N/A'}
-                  </span>
+                <div className="flex items-center gap-3">
+                  {profile?.profileImageUrl ? (
+                    <img
+                      src={profile.profileImageUrl}
+                      alt={profile.name}
+                      className="w-10 h-10 rounded-full object-cover shrink-0"
+                      style={{ border: `2px solid ${C.border}` }}
+                    />
+                  ) : (
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shrink-0"
+                      style={{ backgroundColor: C.yellow, color: C.navy }}
+                    >
+                      {profile?.name?.charAt(0).toUpperCase() ?? <UserIcon className="w-4 h-4" />}
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-black text-sm block" style={{ color: C.navy }}>
+                      Mesa {comanda.tableIdentifier || 'N/A'}
+                    </span>
+                    {profile && (
+                      <span className="text-[11px] font-semibold block" style={{ color: C.muted }}>
+                        {profile.name}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full"
                   style={{ backgroundColor: `${C.blue}15`, color: C.blue2 }}>
