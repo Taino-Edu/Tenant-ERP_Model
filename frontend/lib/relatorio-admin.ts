@@ -255,7 +255,7 @@ export async function gerarRelatorioPDV(
       startY: y,
       head: [['Data', 'Receita', 'Custo', 'Margem']],
       body: data.diaDia.map(d => [
-        fmtDate(d.dia), fmt(d.receita), fmt(d.custo), fmt(d.receita - d.custo),
+        d.dia, fmt(d.receita), fmt(d.custo), fmt(d.receita - d.custo),
       ]),
       styles:      { fontSize: 7.5, cellPadding: 2, textColor: BLACK },
       headStyles:  { fillColor: ACCENT, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },

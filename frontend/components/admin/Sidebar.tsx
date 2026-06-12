@@ -7,7 +7,7 @@ import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2,
+  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -38,7 +38,8 @@ const sections = [
   {
     label: 'Compliance',
     items: [
-      { href: '/admin/lgpd', label: 'LGPD & Auditoria', icon: Shield },
+      { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield },
+      { href: '/admin/sobre', label: 'Sobre o Sistema',   icon: Info },
     ],
   },
 ]
@@ -136,7 +137,7 @@ export default function Sidebar() {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-30 flex items-center justify-between bg-surface-800 border-b border-surface-500 px-4 py-3">
         <div className="flex items-center gap-2">
-          <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-9" />
+          <img src="/maikon-avatar.png" alt="Santuário Nerd" className="h-9" />
           <span className="text-xs text-brand-400 font-bold">Admin</span>
         </div>
         <button onClick={() => setMobileOpen(true)} className="text-gray-400 hover:text-white p-1">
@@ -159,7 +160,7 @@ export default function Sidebar() {
       )}>
         <div className="flex items-center justify-between px-6 py-6 shrink-0">
           <div className="flex items-center gap-3">
-            <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
+            <img src="/maikon-avatar.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
             <div>
               <p className="text-white text-base leading-tight">Santuário Nerd</p>
               <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
@@ -176,7 +177,7 @@ export default function Sidebar() {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-[260px] min-h-screen bg-surface-900 border-r border-surface-500 flex-col shrink-0">
         <div className="px-6 py-7 shrink-0 flex items-center gap-3">
-          <img src="/logo-santuario.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
+          <img src="/maikon-avatar.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
           <div>
             <p className="text-white text-base leading-tight">Santuário Nerd</p>
             <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
