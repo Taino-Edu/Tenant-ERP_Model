@@ -10,7 +10,7 @@ import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
   History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode, Camera,
-  AlertTriangle, DollarSign, BarChart2, Trophy, Medal, Star, FolderOpen,
+  AlertTriangle, DollarSign, BarChart2, Trophy, Medal, Star, FolderOpen, Package,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -818,6 +818,7 @@ export default function DashboardPage() {
   const [fin7d, setFin7d]         = useState<FinanceiroDto | null>(null)
   const [finHoje, setFinHoje]     = useState<FinanceiroDto | null>(null)
   const [lowStock, setLowStock]   = useState(0)
+  const [allProducts, setAllProducts] = useState<Product[]>([])
   const [ranking, setRanking]     = useState<ClienteInsightDto[]>([])
   const [openModal, setOpenModal] = useState(false)
   const [expandedHist, setExpandedHist] = useState<string | null>(null)
@@ -862,7 +863,11 @@ export default function DashboardPage() {
 
     analyticsApi.financeiro(hoje, hoje).then(r => setFinHoje(r.data)).catch(() => {})
     analyticsApi.financeiro(ini7s, hoje).then(r => setFin7d(r.data)).catch(() => {})
-    productApi.list().then(r => setLowStock(r.data.filter(p => p.isLowStock).length)).catch(() => {})
+    productApi.list().then(r => {
+      const prods = r.data.filter(p => p.isActive)
+      setLowStock(prods.filter(p => p.isLowStock).length)
+      setAllProducts(prods)
+    }).catch(() => {})
     analyticsApi.clientes().then(r => setRanking(r.data.filter(c => c.gastoTotal > 0).slice(0, 5))).catch(() => {})
   }, [])
 
@@ -975,6 +980,11 @@ export default function DashboardPage() {
     }
   }
 
+  const patrimonioCusto  = allProducts.reduce((s, p) => s + p.costPriceInCents  * p.stockQuantity, 0) / 100
+  const patrimonioVenda  = allProducts.reduce((s, p) => s + p.priceInCents      * p.stockQuantity, 0) / 100
+  const lucroEstoque     = patrimonioVenda - patrimonioCusto
+  const totalPecas       = allProducts.reduce((s, p) => s + p.stockQuantity, 0)
+
   const totalAberto  = comandas.reduce((s, c) => s + c.totalInReais, 0)
   const emAndamento  = comandas.filter(c => c.status === 'EmAndamento').length
   const fechadas     = history.filter(c => c.status === 'Fechada')
@@ -1078,7 +1088,44 @@ export default function DashboardPage() {
 
       {/* Gráfico 7 dias + Ranking lado a lado em telas grandes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
+
+        {/* Coluna esquerda: gráfico + patrimônio */}
+        <div className="flex flex-col gap-5">
+          {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
+
+          {allProducts.length > 0 && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                  <Package className="w-4 h-4 text-emerald-400" /> Patrimônio em Estoque
+                </h3>
+                <a href="/admin/estoque" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
+                  Ver estoque →
+                </a>
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="bg-surface-800 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 mb-1">Custo total</p>
+                  <p className="text-base font-bold text-white font-mono">{fmt(patrimonioCusto)}</p>
+                </div>
+                <div className="bg-surface-800 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 mb-1">Valor de venda</p>
+                  <p className="text-base font-bold text-accent-gold font-mono">{fmt(patrimonioVenda)}</p>
+                </div>
+                <div className="bg-surface-800 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 mb-1">Lucro potencial</p>
+                  <p className={`text-base font-bold font-mono ${lucroEstoque >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {fmt(lucroEstoque)}
+                  </p>
+                </div>
+                <div className="bg-surface-800 rounded-xl p-3">
+                  <p className="text-xs text-gray-500 mb-1">Total de peças</p>
+                  <p className="text-base font-bold text-brand-400 font-mono">{totalPecas.toLocaleString('pt-BR')}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Ranking de clientes — sempre visível */}
         <div className="card">
