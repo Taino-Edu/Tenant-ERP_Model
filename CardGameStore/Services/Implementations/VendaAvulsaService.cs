@@ -227,10 +227,14 @@ public class VendaAvulsaService : IVendaAvulsaService
         return MapToDto(venda);
     }
 
-    public async Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50)
+    public async Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50, DateTime? desde = null)
     {
+        var filter = desde.HasValue
+            ? Builders<VendaAvulsa>.Filter.Gte(v => v.SoldAt, desde.Value)
+            : Builders<VendaAvulsa>.Filter.Empty;
+
         var vendas = await _collection
-            .Find(Builders<VendaAvulsa>.Filter.Empty)
+            .Find(filter)
             .SortByDescending(v => v.SoldAt)
             .Limit(limit)
             .ToListAsync();

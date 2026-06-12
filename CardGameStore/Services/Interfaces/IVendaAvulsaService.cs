@@ -10,8 +10,8 @@ public interface IVendaAvulsaService
     /// </summary>
     Task<VendaAvulsaDto> RegisterAsync(VendaAvulsaRequest request, Guid adminId, string adminName);
 
-    /// <summary>Retorna as vendas avulsas mais recentes (padrão: últimas 50).</summary>
-    Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50);
+    /// <summary>Retorna as vendas avulsas mais recentes (padrão: últimas 50). Se <paramref name="desde"/> for informado, filtra direto no MongoDB.</summary>
+    Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50, DateTime? desde = null);
 
     /// <summary>Retorna todas as vendas avulsas de um dia específico (fuso de Brasília). Padrão: hoje BR.</summary>
     Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime? date = null);

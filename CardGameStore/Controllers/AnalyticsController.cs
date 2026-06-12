@@ -65,8 +65,8 @@ public class AnalyticsController : ControllerBase
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ontemInicio && c.ClosedAt < hojeInicio)
             .SumAsync(c => (long)c.TotalInCents);
 
-        // ── Vendas avulsas (MongoDB) ──────────────────────────────────────────
-        var todasVendas  = (await _vendas.GetRecentAsync(500)).ToList();
+        // ── Vendas avulsas (MongoDB) — filtra desde ontem direto no Mongo ───
+        var todasVendas  = (await _vendas.GetRecentAsync(500, ontemInicio)).ToList();
         var vendasHoje   = todasVendas.Where(v => v.SoldAt >= hojeInicio).ToList();
         var vendasOntem  = todasVendas.Where(v => v.SoldAt >= ontemInicio && v.SoldAt < hojeInicio).ToList();
 
@@ -180,9 +180,10 @@ public class AnalyticsController : ControllerBase
             })
             .ToListAsync();
 
+        var statsDict = estatisticas.ToDictionary(e => e.UserId);
         var insights = usuarios.Select(u =>
         {
-            var stats = estatisticas.FirstOrDefault(e => e.UserId == u.Id);
+            statsDict.TryGetValue(u.Id, out var stats);
             var ultima = stats?.UltimaVisita;
             int? pontosVencemEm = u.PointsExpiresAt.HasValue
                 ? (int)Math.Round((u.PointsExpiresAt.Value - DateTime.UtcNow).TotalDays)
@@ -233,28 +234,32 @@ public class AnalyticsController : ControllerBase
             .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada)
             .SumAsync(c => (decimal)c.TotalInCents) / 100m;
 
-        // ── Receita de vendas avulsas (MongoDB) ───────────────────────────────
-        var todasVendas    = (await _vendas.GetRecentAsync(2000)).ToList();
-        var receitaAvulsa  = todasVendas
+        // ── Receita de vendas avulsas (MongoDB) — filtra desde ini direto ────
+        var todasVendas   = (await _vendas.GetRecentAsync(2000, ini)).ToList();
+        var receitaAvulsa = todasVendas
             .Where(v => v.SoldAt >= ini && v.SoldAt < end)
             .Sum(v => (decimal)v.TotalInCents) / 100m;
 
         var receita = receitaComandas + receitaAvulsa;
 
-        // ── Custo (itens de comanda com ProductId no período) ─────────────────
+        // ── Custo: projeção mínima — sem Include(Comanda) completo ───────────
         var itens = await _db.ComandaItems
-            .Include(i => i.Product)
-            .Include(i => i.Comanda)
-            .Where(i => i.Comanda != null
-                     && i.Comanda.ClosedAt >= ini
+            .Where(i => i.Comanda!.ClosedAt >= ini
                      && i.Comanda.ClosedAt < end
                      && i.Comanda.Status == ComandaStatus.Fechada
                      && i.ProductId != null
                      && i.Product != null)
+            .Select(i => new {
+                i.ItemNameSnapshot,
+                i.UnitPriceInCents,
+                i.Quantity,
+                ProductCostPriceInCents = i.Product!.CostPriceInCents,
+                ComandaClosedAt = i.Comanda!.ClosedAt,
+            })
             .ToListAsync();
 
         var custo = itens
-            .Sum(i => (decimal)i.Product!.CostPriceInCents * i.Quantity) / 100m;
+            .Sum(i => (decimal)i.ProductCostPriceInCents * i.Quantity) / 100m;
 
         var margem       = receita - custo;
         var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
@@ -264,7 +269,12 @@ public class AnalyticsController : ControllerBase
             .Where(c => c.Status == CrediariosStatus.Aberto)
             .SumAsync(c => (decimal)(c.ValorEmCentavos - c.ValorPagoEmCentavos)) / 100m;
 
-        // ── Breakdown dia a dia (usando datas BR para os intervalos corretos) ──
+        // ── Breakdown dia a dia — pré-carrega comandas para evitar N queries ──
+        var comandasDoPeriodo = await _db.Comandas
+            .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada)
+            .Select(c => new { c.ClosedAt, c.TotalInCents })
+            .ToListAsync();
+
         var totalDias = (int)(dataBrFim - dataBrIni).TotalDays + 1;
         var diaDia    = new List<DiaFinanceiroDto>();
 
@@ -274,17 +284,17 @@ public class AnalyticsController : ControllerBase
             var dIni = BrDateToUtcStart(dBr);
             var dFim = BrDateToUtcStart(dBr.AddDays(1)); // exclusivo
 
-            var rComanda = await _db.Comandas
-                .Where(c => c.ClosedAt >= dIni && c.ClosedAt < dFim && c.Status == ComandaStatus.Fechada)
-                .SumAsync(c => (decimal)c.TotalInCents) / 100m;
+            var rComanda = comandasDoPeriodo
+                .Where(c => c.ClosedAt >= dIni && c.ClosedAt < dFim)
+                .Sum(c => (decimal)c.TotalInCents) / 100m;
 
             var rAvulsa = todasVendas
                 .Where(v => v.SoldAt >= dIni && v.SoldAt < dFim)
                 .Sum(v => (decimal)v.TotalInCents) / 100m;
 
             var cDia = itens
-                .Where(i => i.Comanda!.ClosedAt >= dIni && i.Comanda.ClosedAt < dFim)
-                .Sum(i => (decimal)i.Product!.CostPriceInCents * i.Quantity) / 100m;
+                .Where(i => i.ComandaClosedAt >= dIni && i.ComandaClosedAt < dFim)
+                .Sum(i => (decimal)i.ProductCostPriceInCents * i.Quantity) / 100m;
 
             diaDia.Add(new DiaFinanceiroDto
             {
@@ -346,7 +356,7 @@ public class AnalyticsController : ControllerBase
             .Select(g =>
             {
                 var r = g.Sum(i => (decimal)i.UnitPriceInCents * i.Quantity) / 100m;
-                var c = g.Sum(i => (decimal)i.Product!.CostPriceInCents * i.Quantity) / 100m;
+                var c = g.Sum(i => (decimal)i.ProductCostPriceInCents * i.Quantity) / 100m;
                 return new TopProductFinDto
                 {
                     Nome    = g.Key,
