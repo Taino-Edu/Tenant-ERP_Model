@@ -91,6 +91,7 @@ export interface Product {
   isActive: boolean; isFeatured: boolean; showOnSite: boolean; imageUrl: string | null
   isLowStock: boolean; priceInReais: number; costPriceInReais: number
   marginInReais: number; marginPercent: number
+  updatedAt: string; createdAt: string
 }
 
 export interface ProductCategory {

@@ -2,8 +2,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { productApi, categoryApi, Product, ProductCategory } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2 } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
+import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import CameraScanner from '@/components/CameraScanner'
 
 function ProductModal({
@@ -314,9 +315,23 @@ export default function EstoquePage() {
           <h1 className="text-2xl font-bold text-white">Estoque</h1>
           <p className="text-gray-400 text-sm mt-0.5">{products.length} produtos cadastrados</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={exportCsv} className="btn-secondary" title="Exportar CSV">
             <Download className="w-4 h-4" /> <span className="hidden sm:inline">CSV</span>
+          </button>
+          <button
+            onClick={() => gerarRelatorioOperacional(products, categories).catch(() => toast.error('Erro ao gerar PDF'))}
+            className="btn-secondary"
+            title="Relatório Operacional PDF"
+          >
+            <FileText className="w-4 h-4" /> <span className="hidden sm:inline">Operacional</span>
+          </button>
+          <button
+            onClick={() => gerarRelatorioGerencial(products, categories).catch(() => toast.error('Erro ao gerar PDF'))}
+            className="btn-secondary"
+            title="Relatório Gerencial PDF"
+          >
+            <BarChart2 className="w-4 h-4" /> <span className="hidden sm:inline">Gerencial</span>
           </button>
           <button onClick={() => setModal(null)} className="btn-primary">
             <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo Produto</span><span className="sm:hidden">Novo</span>
