@@ -774,6 +774,7 @@ public class ComandaService : IComandaService
         PaymentMethod       = comanda.PaymentMethod,
         UserPointsBalance   = comanda.User?.PointsBalance  ?? 0,
         UserBalanceInCents  = comanda.User?.BalanceInCents ?? 0,
+        ProfileImageUrl     = comanda.User?.ProfileImageUrl,
         Items               = comanda.Items.Select(i => new ComandaItemDto
         {
             Id               = i.Id,

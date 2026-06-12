@@ -153,10 +153,11 @@ function KpiChartModal({
 }
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, color = 'brand', icon: Icon, onClick }: {
+function KpiCard({ label, value, sub, color = 'brand', icon: Icon, onClick, change }: {
   label: string; value: string; sub?: string
   color?: string; icon: React.ElementType
   onClick?: () => void
+  change?: number | null
 }) {
   const colors: Record<string, string> = {
     brand: 'text-brand-400', green: 'text-emerald-400',
@@ -180,6 +181,15 @@ function KpiCard({ label, value, sub, color = 'brand', icon: Icon, onClick }: {
         </div>
       </div>
       <p className={`text-2xl font-bold font-mono ${colors[color] ?? colors.brand}`}>{value}</p>
+      {change != null && (
+        <div className={`flex items-center gap-1 text-xs font-semibold ${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+          {change >= 0
+            ? <TrendingUp  className="w-3 h-3 shrink-0" />
+            : <TrendingDown className="w-3 h-3 shrink-0" />}
+          <span>{change >= 0 ? '+' : ''}{change.toFixed(1)}%</span>
+          <span className="text-gray-500 font-normal">vs mês ant.</span>
+        </div>
+      )}
       {sub && (
         <p className="text-xs text-gray-500 flex items-center gap-1">
           {sub}
@@ -502,8 +512,20 @@ export default function FinanceiroPage() {
   const [exporting, setExporting] = useState(false)
   const [kpiModal,   setKpiModal]   = useState<string | null>(null)
   const [targetPct,  setTargetPct]  = useState(40)
+  const [tableView,  setTableView]  = useState<'simples' | 'analise'>('analise')
+  const [prevData,   setPrevData]   = useState<FinanceiroDto | null>(null)
   const iniRef = useRef(inicio)
   const fimRef = useRef(fim)
+
+  const loadPrevMonth = useCallback(async (currentIni: string) => {
+    const iniDate = new Date(currentIni + 'T12:00:00')
+    const prevFimDate = new Date(iniDate.getFullYear(), iniDate.getMonth(), 0)
+    const prevIniDate = new Date(prevFimDate.getFullYear(), prevFimDate.getMonth(), 1)
+    try {
+      const res = await analyticsApi.financeiro(toDateInput(prevIniDate), toDateInput(prevFimDate))
+      setPrevData(res.data)
+    } catch { setPrevData(null) }
+  }, [])
 
   const load = useCallback(async (ini: string, f: string) => {
     setLoading(true)
@@ -512,7 +534,7 @@ export default function FinanceiroPage() {
     finally { setLoading(false) }
   }, [])
 
-  useEffect(() => { load(inicio, fim) }, []) // eslint-disable-line
+  useEffect(() => { load(inicio, fim); loadPrevMonth(inicio) }, []) // eslint-disable-line
 
   function applyPreset(p: Preset) {
     setPreset(p)
@@ -521,6 +543,8 @@ export default function FinanceiroPage() {
       setInicio(ini); setFim(f)
       iniRef.current = ini; fimRef.current = f
       load(ini, f)
+      if (p === 'mes') loadPrevMonth(ini)
+      else setPrevData(null)
     }
   }
 
@@ -706,17 +730,23 @@ export default function FinanceiroPage() {
       ) : d ? (
         <>
           {/* KPIs — clicáveis */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {(() => {
-              return (<>
-                <KpiCard label="Receita total"      value={fmt(d.receita)}          sub={`${d.diaDia.length} dias`}                      color="green"  icon={TrendingUp}   onClick={() => setKpiModal('receita')} />
-                <KpiCard label="Custo estimado"     value={fmt(d.custo)}            sub="Clique para detalhar por produto"               color="red"    icon={ShoppingBag}  onClick={() => setKpiModal('custo')} />
-                <KpiCard label="Margem bruta"       value={fmt(d.margem)}           sub={`${d.margemPercent.toFixed(1)}% sobre receita`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} />
-                <KpiCard label="Ticket médio"       value={fmt(ticketMedio)}        sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  color="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')} />
-                <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}       sub="A receber"                                      color="yellow" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} />
-              </>)
-            })()}
-          </div>
+          {(() => {
+            function pctChange(cur: number, prev: number): number | null {
+              if (!prevData || prev === 0) return null
+              return ((cur - prev) / prev) * 100
+            }
+            const prevTx = prevData ? prevData.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0) : 0
+            const prevTicket = prevTx > 0 && prevData ? prevData.receita / prevTx : 0
+            return (
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                <KpiCard label="Receita total"      value={fmt(d.receita)}     sub={`${d.diaDia.length} dias`}                      color="green"  icon={TrendingUp}   onClick={() => setKpiModal('receita')}    change={pctChange(d.receita,    prevData?.receita    ?? 0)} />
+                <KpiCard label="Custo estimado"     value={fmt(d.custo)}       sub="Clique para detalhar por produto"               color="red"    icon={ShoppingBag}  onClick={() => setKpiModal('custo')}      change={pctChange(d.custo,      prevData?.custo      ?? 0)} />
+                <KpiCard label="Margem bruta"       value={fmt(d.margem)}      sub={`${d.margemPercent.toFixed(1)}% sobre receita`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} change={pctChange(d.margem,     prevData?.margem     ?? 0)} />
+                <KpiCard label="Ticket médio"       value={fmt(ticketMedio)}   sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  color="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')}     change={pctChange(ticketMedio,  prevTicket)} />
+                <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}  sub="A receber"                                      color="yellow" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} change={pctChange(d.crediarios, prevData?.crediarios ?? 0)} />
+              </div>
+            )
+          })()}
 
           {/* Breakdown Comandas vs Avulsas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -844,105 +874,154 @@ export default function FinanceiroPage() {
               <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
                   <Lightbulb className="w-4 h-4 text-yellow-400" />
-                  <h3 className="text-sm font-semibold text-gray-300">Top Produtos — Rentabilidade &amp; Sugestão de Preço</h3>
+                  <h3 className="text-sm font-semibold text-gray-300">
+                    {tableView === 'analise' ? 'Top Produtos — Rentabilidade & Sugestão de Preço' : 'Top Produtos — Resumo de Vendas'}
+                  </h3>
                 </div>
-                {/* Seletor de margem alvo */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs text-gray-500">Meta de margem:</span>
-                  {[30, 40, 50, 60].map(pct => (
-                    <button key={pct} onClick={() => setTargetPct(pct)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
-                        targetPct === pct
-                          ? 'bg-yellow-500/20 border-yellow-500/60 text-yellow-300'
-                          : 'bg-surface-700 border-surface-600 text-gray-400 hover:text-gray-200'
-                      }`}>
-                      {pct}%
-                    </button>
-                  ))}
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Toggle Simples / Análise */}
+                  <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
+                    <button
+                      onClick={() => setTableView('simples')}
+                      className={`px-3 py-1.5 transition-colors ${tableView === 'simples' ? 'bg-brand-600/30 text-brand-300' : 'text-gray-400 hover:text-gray-200'}`}
+                    >Simples</button>
+                    <button
+                      onClick={() => setTableView('analise')}
+                      className={`px-3 py-1.5 transition-colors border-l border-surface-600 ${tableView === 'analise' ? 'bg-yellow-500/20 text-yellow-300' : 'text-gray-400 hover:text-gray-200'}`}
+                    >Análise</button>
+                  </div>
+                  {/* Seletor de margem alvo — só no modo análise */}
+                  {tableView === 'analise' && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-gray-500">Meta:</span>
+                      {[30, 40, 50, 60].map(pct => (
+                        <button key={pct} onClick={() => setTargetPct(pct)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                            targetPct === pct
+                              ? 'bg-yellow-500/20 border-yellow-500/60 text-yellow-300'
+                              : 'bg-surface-700 border-surface-600 text-gray-400 hover:text-gray-200'
+                          }`}>
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-800">
-                    <tr className="text-left">
-                      {['#', 'Produto', 'Qtd', 'Preço Médio', 'Custo Médio', 'Margem Atual', 'Sugestão', 'Ação'].map(h => (
-                        <th key={h} className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-500">
-                    {d.topProdutos.map((p, i) => {
-                      const precoMedio  = p.qtd > 0 ? p.receita / p.qtd : 0
-                      const custoMedio  = p.qtd > 0 ? p.custo   / p.qtd : 0
-                      const margemAtual = precoMedio > 0 && custoMedio > 0
-                        ? ((precoMedio - custoMedio) / precoMedio) * 100
-                        : null
-                      // Preço sugerido para atingir targetPct% de margem sobre preço
-                      const precoSugerido = custoMedio > 0
-                        ? custoMedio / (1 - targetPct / 100)
-                        : null
-                      const diff = precoSugerido !== null ? precoSugerido - precoMedio : null
-                      const pct  = p.custo > 0 ? ((p.margem / p.receita) * 100) : null
-                      return (
-                        <tr key={p.nome} className="hover:bg-surface-600/20 transition-colors">
-                          <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
-                          <td className="px-4 py-2.5 font-medium text-white max-w-[180px]">
-                            <p className="truncate">{p.nome}</p>
-                            <p className="text-[10px] text-gray-500 mt-0.5">{p.qtd}x vendido</p>
-                          </td>
-                          <td className="px-4 py-2.5 text-gray-400 text-xs">{p.qtd}x</td>
-                          <td className="px-4 py-2.5 font-mono text-yellow-300 font-semibold text-xs">
-                            {precoMedio > 0 ? fmt(precoMedio) : '—'}
-                          </td>
-                          <td className="px-4 py-2.5 font-mono text-gray-400 text-xs">
-                            {custoMedio > 0 ? fmt(custoMedio) : <span className="text-gray-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {margemAtual !== null ? (
-                              <div className="flex items-center gap-2">
-                                <div className="w-12 h-1.5 bg-surface-600 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${margemAtual >= targetPct ? 'bg-emerald-500' : margemAtual >= 0 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                    style={{ width: `${Math.min(100, Math.abs(margemAtual))}%` }} />
+                {tableView === 'simples' ? (
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-800">
+                      <tr className="text-left">
+                        {['#', 'Produto', 'Qtd', 'Receita Total', 'Preço Médio'].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-500">
+                      {d.topProdutos.map((p, i) => {
+                        const precoMedio = p.qtd > 0 ? p.receita / p.qtd : 0
+                        return (
+                          <tr key={p.nome} className="hover:bg-surface-600/20 transition-colors">
+                            <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
+                            <td className="px-4 py-2.5 font-medium text-white max-w-[220px]">
+                              <p className="truncate">{p.nome}</p>
+                            </td>
+                            <td className="px-4 py-2.5 text-gray-300 text-xs font-mono font-semibold">{p.qtd}x</td>
+                            <td className="px-4 py-2.5 font-mono text-emerald-400 font-bold text-sm">
+                              {fmt(p.receita)}
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-yellow-300 text-xs">
+                              {precoMedio > 0 ? fmt(precoMedio) : '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-800">
+                      <tr className="text-left">
+                        {['#', 'Produto', 'Qtd', 'Preço Médio', 'Custo Médio', 'Margem Atual', 'Sugestão', 'Ação'].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-500">
+                      {d.topProdutos.map((p, i) => {
+                        const precoMedio  = p.qtd > 0 ? p.receita / p.qtd : 0
+                        const custoMedio  = p.qtd > 0 ? p.custo   / p.qtd : 0
+                        const margemAtual = precoMedio > 0 && custoMedio > 0
+                          ? ((precoMedio - custoMedio) / precoMedio) * 100
+                          : null
+                        const precoSugerido = custoMedio > 0
+                          ? custoMedio / (1 - targetPct / 100)
+                          : null
+                        const diff = precoSugerido !== null ? precoSugerido - precoMedio : null
+                        return (
+                          <tr key={p.nome} className="hover:bg-surface-600/20 transition-colors">
+                            <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
+                            <td className="px-4 py-2.5 font-medium text-white max-w-[180px]">
+                              <p className="truncate">{p.nome}</p>
+                              <p className="text-[10px] text-gray-500 mt-0.5">{p.qtd}x vendido</p>
+                            </td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs">{p.qtd}x</td>
+                            <td className="px-4 py-2.5 font-mono text-yellow-300 font-semibold text-xs">
+                              {precoMedio > 0 ? fmt(precoMedio) : '—'}
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-gray-400 text-xs">
+                              {custoMedio > 0 ? fmt(custoMedio) : <span className="text-gray-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              {margemAtual !== null ? (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-12 h-1.5 bg-surface-600 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${margemAtual >= targetPct ? 'bg-emerald-500' : margemAtual >= 0 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                      style={{ width: `${Math.min(100, Math.abs(margemAtual))}%` }} />
+                                  </div>
+                                  <span className={`text-xs font-mono font-bold ${margemAtual >= targetPct ? 'text-emerald-400' : margemAtual >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                    {margemAtual.toFixed(0)}%
+                                  </span>
                                 </div>
-                                <span className={`text-xs font-mono font-bold ${margemAtual >= targetPct ? 'text-emerald-400' : margemAtual >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
-                                  {margemAtual.toFixed(0)}%
-                                </span>
-                              </div>
-                            ) : <span className="text-gray-600 text-xs">—</span>}
-                          </td>
-                          <td className="px-4 py-2.5 font-mono text-xs">
-                            {precoSugerido !== null
-                              ? <span className="text-brand-400 font-semibold">{fmt(precoSugerido)}</span>
-                              : <span className="text-gray-600">—</span>}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            {diff !== null ? (
-                              Math.abs(diff) < 0.50 ? (
-                                <span className="flex items-center gap-1 text-xs text-emerald-400">
-                                  <Minus className="w-3 h-3" /> Ok
-                                </span>
-                              ) : diff > 0 ? (
-                                <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
-                                  <ArrowUp className="w-3 h-3" /> +{fmt(diff)}
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-1 text-xs text-emerald-400">
-                                  <ArrowDown className="w-3 h-3" /> {fmt(diff)}
-                                </span>
-                              )
-                            ) : <span className="text-gray-600 text-xs">—</span>}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                              ) : <span className="text-gray-600 text-xs">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-xs">
+                              {precoSugerido !== null
+                                ? <span className="text-brand-400 font-semibold">{fmt(precoSugerido)}</span>
+                                : <span className="text-gray-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5">
+                              {diff !== null ? (
+                                Math.abs(diff) < 0.50 ? (
+                                  <span className="flex items-center gap-1 text-xs text-emerald-400">
+                                    <Minus className="w-3 h-3" /> Ok
+                                  </span>
+                                ) : diff > 0 ? (
+                                  <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
+                                    <ArrowUp className="w-3 h-3" /> +{fmt(diff)}
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-xs text-emerald-400">
+                                    <ArrowDown className="w-3 h-3" /> {fmt(diff)}
+                                  </span>
+                                )
+                              ) : <span className="text-gray-600 text-xs">—</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
                 {/* Legenda */}
-                <div className="px-4 py-3 border-t border-surface-600 flex flex-wrap gap-4 text-[11px] text-gray-500">
-                  <span><span className="text-yellow-300 font-bold">Preço Médio</span> = Receita total ÷ Qtd vendida</span>
-                  <span><span className="text-brand-400 font-bold">Sugestão</span> = Custo Médio ÷ (1 − {targetPct}%) para atingir margem de {targetPct}%</span>
-                  <span><ArrowUp className="w-3 h-3 text-red-400 inline" /> subir preço · <ArrowDown className="w-3 h-3 text-emerald-400 inline" /> pode baixar · <Minus className="w-3 h-3 text-emerald-400 inline" /> preço ok</span>
-                </div>
+                {tableView === 'analise' && (
+                  <div className="px-4 py-3 border-t border-surface-600 flex flex-wrap gap-4 text-[11px] text-gray-500">
+                    <span><span className="text-yellow-300 font-bold">Preço Médio</span> = Receita total ÷ Qtd vendida</span>
+                    <span><span className="text-brand-400 font-bold">Sugestão</span> = Custo Médio ÷ (1 − {targetPct}%) para atingir margem de {targetPct}%</span>
+                    <span><ArrowUp className="w-3 h-3 text-red-400 inline" /> subir preço · <ArrowDown className="w-3 h-3 text-emerald-400 inline" /> pode baixar · <Minus className="w-3 h-3 text-emerald-400 inline" /> preço ok</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

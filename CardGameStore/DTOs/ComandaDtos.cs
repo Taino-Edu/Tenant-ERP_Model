@@ -53,6 +53,7 @@ public class ComandaDto
     public int  UserPointsBalance  { get; set; }
     /// <summary>Saldo de cashback do cliente em centavos — exibido na modal de fechamento.</summary>
     public int  UserBalanceInCents { get; set; }
+    public string? ProfileImageUrl { get; set; }
 }
 
 /// <summary>Request para aplicar pontos a uma comanda.</summary>

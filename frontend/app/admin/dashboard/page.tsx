@@ -659,16 +659,32 @@ function ComandaCard({
       )}>
         {/* Header */}
         <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className={statusMap[comanda.status] ?? 'badge'}>{statusLabel[comanda.status]}</span>
-            </div>
-            <p className="font-semibold text-white truncate">{comanda.userName}</p>
-            {comanda.tableIdentifier && (
-              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-                <TableProperties className="w-3 h-3" /> {comanda.tableIdentifier}
+          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+            {/* Avatar */}
+            {comanda.profileImageUrl ? (
+              <img
+                src={comanda.profileImageUrl}
+                alt=""
+                className="w-9 h-9 rounded-full object-cover shrink-0 mt-0.5 ring-2 ring-surface-600"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-brand-600/25 flex items-center justify-center shrink-0 mt-0.5 ring-2 ring-surface-600">
+                <span className="text-sm font-bold text-brand-300 leading-none">
+                  {comanda.userName[0]?.toUpperCase() ?? '?'}
+                </span>
               </div>
             )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={statusMap[comanda.status] ?? 'badge'}>{statusLabel[comanda.status]}</span>
+              </div>
+              <p className="font-semibold text-white truncate">{comanda.userName}</p>
+              {comanda.tableIdentifier && (
+                <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                  <TableProperties className="w-3 h-3" /> {comanda.tableIdentifier}
+                </div>
+              )}
+            </div>
           </div>
           <div className="text-right ml-3">
             <p className="text-xl font-bold text-accent-gold">{fmt(comanda.totalInReais)}</p>

@@ -75,6 +75,7 @@ export interface ComandaDto {
   userPointsBalance: number
   /** Saldo de cashback/crédito do cliente em centavos. */
   userBalanceInCents: number
+  profileImageUrl?: string | null
 }
 
 export interface ComandaItemDto {
