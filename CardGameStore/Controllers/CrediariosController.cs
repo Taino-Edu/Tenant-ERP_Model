@@ -261,7 +261,11 @@ public class CrediariosController : ControllerBase
             crediario.Observacao = request.Observacao;
 
         if (request.DataVencimento.HasValue)
+        {
+            if (request.DataVencimento.Value.ToUniversalTime().Date < DateTime.UtcNow.Date)
+                return BadRequest(new { Message = "A data de vencimento não pode ser no passado." });
             crediario.DataVencimento = request.DataVencimento.Value.ToUniversalTime();
+        }
 
         await _db.SaveChangesAsync();
 
@@ -315,8 +319,8 @@ public class CrediariosController : ControllerBase
 
         crediario.ValorPagoEmCentavos += request.ValorEmCentavos;
 
-        // Quita automaticamente se saldo chegou a zero
-        if (crediario.SaldoRestanteEmCentavos == 0)
+        // Quita automaticamente se saldo chegou a zero (tolerância de 1 centavo para arredondamentos)
+        if (crediario.SaldoRestanteEmCentavos <= 1)
         {
             crediario.Status         = CrediariosStatus.Pago;
             crediario.DataPagamento  = DateTime.UtcNow;

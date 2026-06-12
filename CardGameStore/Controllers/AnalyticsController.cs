@@ -48,42 +48,46 @@ public class AnalyticsController : ControllerBase
     [HttpGet("dashboard")]
     public async Task<ActionResult<DashboardAnalyticsDto>> GetDashboard()
     {
-        var agora       = DateTime.UtcNow;
-        var hojeInicio  = agora.Date;
+        var agoraBr     = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        var hojeInicio  = BrDateToUtcStart(agoraBr.Date);
         var ontemInicio = hojeInicio.AddDays(-1);
         var ha30Dias    = hojeInicio.AddDays(-30);
         var ha60Dias    = hojeInicio.AddDays(-60);
-        var inicioMes   = new DateTime(agora.Year, agora.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var inicioMes   = BrDateToUtcStart(new DateTime(agoraBr.Year, agoraBr.Month, 1));
 
         // ── Comandas fechadas ─────────────────────────────────────────────────
         var comandasHoje = await _db.Comandas
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= hojeInicio && c.ClosedAt < hojeInicio.AddDays(1))
-            .Select(c => new { c.TotalInCents, c.ClosedAt })
+            .Select(c => new { c.TotalInCents, c.ClosedAt, c.PaymentMethod })
             .ToListAsync();
 
         var comandasOntem = await _db.Comandas
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ontemInicio && c.ClosedAt < hojeInicio)
             .SumAsync(c => (long)c.TotalInCents);
 
-        // ── Vendas avulsas (MongoDB) — filtra desde ontem direto no Mongo ───
-        var todasVendas  = (await _vendas.GetRecentAsync(500, ontemInicio)).ToList();
-        var vendasHoje   = todasVendas.Where(v => v.SoldAt >= hojeInicio).ToList();
-        var vendasOntem  = todasVendas.Where(v => v.SoldAt >= ontemInicio && v.SoldAt < hojeInicio).ToList();
+        // ── Vendas avulsas (MongoDB) — 60 dias cobre todas as métricas do dashboard ──
+        var vendas60Dias = (await _vendas.GetRecentAsync(5000, ha60Dias)).ToList();
+        var vendasHoje   = vendas60Dias.Where(v => v.SoldAt >= hojeInicio).ToList();
+        var vendasOntem  = vendas60Dias.Where(v => v.SoldAt >= ontemInicio && v.SoldAt < hojeInicio).ToList();
+        var vendasUlt30  = vendas60Dias.Where(v => v.SoldAt >= ha30Dias).ToList();
+        var vendasAnt30  = vendas60Dias.Where(v => v.SoldAt >= ha60Dias && v.SoldAt < ha30Dias).ToList();
 
         var totalHoje  = (comandasHoje.Sum(c => c.TotalInCents) + vendasHoje.Sum(v => v.TotalInCents)) / 100m;
         var totalOntem = (comandasOntem + vendasOntem.Sum(v => (long)v.TotalInCents)) / 100m;
         var variacao   = totalOntem == 0 ? 0m : Math.Round((totalHoje - totalOntem) / totalOntem * 100, 1);
 
-        // ── Ticket médio (últimos 30 dias, só comandas) ───────────────────────
+        // ── Ticket médio (últimos 30 dias — comandas + vendas avulsas) ────────────
         var ticketsRecentes = await _db.Comandas
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ha30Dias && c.TotalInCents > 0)
             .Select(c => (decimal)c.TotalInCents)
             .ToListAsync();
+        ticketsRecentes.AddRange(vendasUlt30.Where(v => v.TotalInCents > 0).Select(v => (decimal)v.TotalInCents));
 
         var ticketsAnteriores = await _db.Comandas
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ha60Dias && c.ClosedAt < ha30Dias && c.TotalInCents > 0)
             .Select(c => (decimal)c.TotalInCents)
             .ToListAsync();
+        ticketsAnteriores.AddRange(vendasAnt30.Where(v => v.TotalInCents > 0).Select(v => (decimal)v.TotalInCents));
 
         var ticketMedio    = ticketsRecentes.Count > 0 ? ticketsRecentes.Average() / 100m : 0;
         var ticketAnterior = ticketsAnteriores.Count > 0 ? ticketsAnteriores.Average() / 100m : 0;
@@ -111,8 +115,8 @@ public class AnalyticsController : ControllerBase
             return new HourlyRevenueDto { Hora = $"{h}h", Valor = (vc + vv) / 100m };
         }).ToList();
 
-        // ── Top produtos (últimos 30 dias, via itens de comanda) ──────────────
-        var topProdutos = await _db.ComandaItems
+        // ── Top produtos (últimos 30 dias — comandas + vendas avulsas) ───────────
+        var topComandaItens = await _db.ComandaItems
             .Where(i => i.AddedAt >= ha30Dias)
             .GroupBy(i => i.ItemNameSnapshot)
             .Select(g => new TopProductDto
@@ -121,14 +125,38 @@ public class AnalyticsController : ControllerBase
                 QuantVendida = g.Sum(i => i.Quantity),
                 Receita      = g.Sum(i => i.UnitPriceInCents * i.Quantity) / 100m,
             })
-            .OrderByDescending(t => t.QuantVendida)
-            .Take(5)
             .ToListAsync();
 
-        // ── Formas de pagamento (vendas avulsas hoje) ─────────────────────────
-        var pix      = vendasHoje.Count(v => v.PaymentMethod == "Pix");
-        var cartao   = vendasHoje.Count(v => v.PaymentMethod is "CartaoCredito" or "CartaoDebito");
-        var dinheiro = vendasHoje.Count(v => v.PaymentMethod == "Dinheiro");
+        var topAvulsaItens = vendasUlt30
+            .SelectMany(v => v.Items)
+            .GroupBy(i => i.ProductName)
+            .Select(g => new TopProductDto
+            {
+                Nome         = g.Key,
+                QuantVendida = g.Sum(i => i.Quantity),
+                Receita      = Math.Round(g.Sum(i => (decimal)i.Quantity * i.UnitPriceInReais), 2),
+            })
+            .ToList();
+
+        var topProdutos = topComandaItens.Concat(topAvulsaItens)
+            .GroupBy(t => t.Nome)
+            .Select(g => new TopProductDto
+            {
+                Nome         = g.Key,
+                QuantVendida = g.Sum(t => t.QuantVendida),
+                Receita      = Math.Round(g.Sum(t => t.Receita), 2),
+            })
+            .OrderByDescending(t => t.QuantVendida)
+            .Take(5)
+            .ToList();
+
+        // ── Formas de pagamento (vendas avulsas + comandas hoje) ─────────────────
+        var pix      = vendasHoje.Count(v => v.PaymentMethod == "Pix")
+                     + comandasHoje.Count(c => c.PaymentMethod == "Pix");
+        var cartao   = vendasHoje.Count(v => v.PaymentMethod is "CartaoCredito" or "CartaoDebito")
+                     + comandasHoje.Count(c => c.PaymentMethod is "CartaoCredito" or "CartaoDebito");
+        var dinheiro = vendasHoje.Count(v => v.PaymentMethod == "Dinheiro")
+                     + comandasHoje.Count(c => c.PaymentMethod == "Dinheiro");
 
         var comandasAbertas = await _db.Comandas.CountAsync(c => c.Status == ComandaStatus.Aberta);
 
@@ -262,7 +290,7 @@ public class AnalyticsController : ControllerBase
             .Sum(i => (decimal)i.ProductCostPriceInCents * i.Quantity) / 100m;
 
         var margem       = receita - custo;
-        var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
+        var margemPercent = receita > 0 ? Math.Round(margem / receita * 100, 1) : 0;
 
         // ── Crediários em aberto (saldo real = total - já pago) ──────────────
         var crediarios = await _db.Crediarios

@@ -178,6 +178,9 @@ public class VendaAvulsaService : IVendaAvulsaService
             }
             else if (pm == PaymentMethod.Pontos)
             {
+                if (user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow)
+                    throw new InvalidOperationException("Os pontos deste cliente estão expirados.");
+
                 if (user.PointsBalance < finalTotal)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente. Cliente tem {user.PointsBalance} pts, venda custa {finalTotal} pts.");
