@@ -3,15 +3,17 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   relatorioApi, RelatorioVendasDto, RelatorioCategoria,
   RelatorioCrediarioDto, DevedorDto, PagamentoMesDto,
-  analyticsApi, productApi, categoryApi,
+  analyticsApi, productApi, categoryApi, userApi, comandaApi,
 } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
+import { gerarRelatorioClientes, gerarRelatorioPDV, gerarRelatorioComandas } from '@/lib/relatorio-admin'
 import toast from 'react-hot-toast'
 import {
   BarChart2, ChevronDown, ChevronUp, Loader2, Package,
   TrendingUp, ShoppingCart, CreditCard, AlertTriangle,
   CheckCircle, DollarSign, Phone, FileText, BarChart,
+  Users, Store, ClipboardList,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -248,8 +250,8 @@ function AbaCrediario({ mes, ano }: { mes: number; ano: number }) {
 
 // ── Página principal ──────────────────────────────────────────────────────────
 
-type Aba = 'vendas' | 'crediario'
-type PdfKey = 'financeiro' | 'operacional' | 'gerencial' | null
+type Aba    = 'vendas' | 'crediario'
+type PdfKey = 'financeiro' | 'operacional' | 'gerencial' | 'clientes' | 'pdv' | 'comandas' | null
 
 export default function RelatoriosPage() {
   const hoje = new Date()
@@ -257,6 +259,8 @@ export default function RelatoriosPage() {
   const [ano, setAno] = useState(hoje.getFullYear())
   const [aba, setAba] = useState<Aba>('vendas')
   const [pdfLoading, setPdfLoading] = useState<PdfKey>(null)
+  const [diasPdv, setDiasPdv]         = useState(30)
+  const [diasComandas, setDiasComandas] = useState(0)
 
   const anos = Array.from({ length: 3 }, (_, i) => hoje.getFullYear() - i)
 
@@ -267,42 +271,145 @@ export default function RelatoriosPage() {
       const fim    = new Date(ano, mes, 0).toISOString().split('T')[0]
       const { data } = await analyticsApi.financeiro(inicio, fim)
       await gerarRelatorioPDF(data, { inicio, fim })
-    } catch {
-      toast.error('Erro ao gerar relatório financeiro')
-    } finally {
-      setPdfLoading(null)
-    }
+    } catch { toast.error('Erro ao gerar PDF financeiro') }
+    finally { setPdfLoading(null) }
   }, [mes, ano])
 
   const handleOperacionalPDF = useCallback(async () => {
     setPdfLoading('operacional')
     try {
-      const [{ data: products }, { data: categories }] = await Promise.all([
-        productApi.list(),
-        categoryApi.list(),
-      ])
+      const [{ data: products }, { data: categories }] = await Promise.all([productApi.list(), categoryApi.list()])
       await gerarRelatorioOperacional(products, categories)
-    } catch {
-      toast.error('Erro ao gerar relatório operacional')
-    } finally {
-      setPdfLoading(null)
-    }
+    } catch { toast.error('Erro ao gerar PDF operacional') }
+    finally { setPdfLoading(null) }
   }, [])
 
   const handleGerencialPDF = useCallback(async () => {
     setPdfLoading('gerencial')
     try {
-      const [{ data: products }, { data: categories }] = await Promise.all([
-        productApi.list(),
-        categoryApi.list(),
-      ])
+      const [{ data: products }, { data: categories }] = await Promise.all([productApi.list(), categoryApi.list()])
       await gerarRelatorioGerencial(products, categories)
-    } catch {
-      toast.error('Erro ao gerar relatório gerencial')
-    } finally {
-      setPdfLoading(null)
-    }
+    } catch { toast.error('Erro ao gerar PDF gerencial') }
+    finally { setPdfLoading(null) }
   }, [])
+
+  const handleClientesPDF = useCallback(async () => {
+    setPdfLoading('clientes')
+    try {
+      const { data } = await analyticsApi.clientes()
+      await gerarRelatorioClientes(data)
+    } catch { toast.error('Erro ao gerar PDF de clientes') }
+    finally { setPdfLoading(null) }
+  }, [])
+
+  const handlePdvPDF = useCallback(async () => {
+    setPdfLoading('pdv')
+    try {
+      const fim    = new Date().toISOString().split('T')[0]
+      const inicio = new Date(Date.now() - diasPdv * 86_400_000).toISOString().split('T')[0]
+      const { data } = await analyticsApi.financeiro(inicio, fim)
+      await gerarRelatorioPDV(data, { inicio, fim, dias: diasPdv })
+    } catch { toast.error('Erro ao gerar PDF PDV') }
+    finally { setPdfLoading(null) }
+  }, [diasPdv])
+
+  const handleComandasPDF = useCallback(async () => {
+    setPdfLoading('comandas')
+    try {
+      const { data } = await comandaApi.dashboard()
+      await gerarRelatorioComandas(data, diasComandas)
+    } catch { toast.error('Erro ao gerar PDF de comandas') }
+    finally { setPdfLoading(null) }
+  }, [diasComandas])
+
+  // ── Cards de relatório ──────────────────────────────────────────────────────
+  const reports = [
+    {
+      key: 'financeiro' as PdfKey,
+      icon: FileText,
+      color: 'text-brand-400',
+      bg:   'bg-brand-500/10',
+      title: 'Financeiro Mensal',
+      tag: 'Finanças',
+      desc: 'Resumo completo de receita, custo e margem do mês selecionado. Inclui breakdown por forma de pagamento, top produtos vendidos e comparativo de desempenho. Use para fechamento mensal e apresentação ao gestor.',
+      control: (
+        <span className="text-xs text-gray-400">{MESES[mes - 1]} {ano}</span>
+      ),
+      onGenerate: handleFinanceiroPDF,
+    },
+    {
+      key: 'operacional' as PdfKey,
+      icon: Package,
+      color: 'text-amber-400',
+      bg:   'bg-amber-500/10',
+      title: 'Estoque Operacional',
+      tag: 'Estoque',
+      desc: 'Inventário completo com quantidade, custo unitário e valor total por produto. Destaca itens em estoque crítico (≤3 un.) e produtos zerados. Use para conferência física, compras e auditoria de estoque.',
+      onGenerate: handleOperacionalPDF,
+    },
+    {
+      key: 'gerencial' as PdfKey,
+      icon: BarChart,
+      color: 'text-purple-400',
+      bg:   'bg-purple-500/10',
+      title: 'Estoque Gerencial',
+      tag: 'Estoque',
+      desc: 'Visão executiva do estoque: capital imobilizado por categoria, top 10 produtos por valor parado, lista de reposição urgente e patrimônio total. Use para tomada de decisão sobre compras e liquidações.',
+      onGenerate: handleGerencialPDF,
+    },
+    {
+      key: 'clientes' as PdfKey,
+      icon: Users,
+      color: 'text-emerald-400',
+      bg:   'bg-emerald-500/10',
+      title: 'Clientes & Fidelidade',
+      tag: 'Clientes',
+      desc: 'Lista completa de clientes com número de visitas, última visita, gasto total, ticket médio, saldo de pontos e validade. Identifica clientes inativos há 30+ dias. Use para campanhas de reativação e gestão do programa de fidelidade.',
+      onGenerate: handleClientesPDF,
+    },
+    {
+      key: 'pdv' as PdfKey,
+      icon: Store,
+      color: 'text-cyan-400',
+      bg:   'bg-cyan-500/10',
+      title: 'PDV — Ponto de Venda',
+      tag: 'Vendas',
+      desc: 'Desempenho de vendas do período escolhido: receita total, custo, margem, top produtos, formas de pagamento e evolução dia a dia. Use para análise de períodos específicos, fechamento semanal ou comparativo de campanhas.',
+      control: (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-400">Últimos</span>
+          <input
+            type="number" min={1} max={365} value={diasPdv}
+            onChange={e => setDiasPdv(Math.max(1, Math.min(365, Number(e.target.value))))}
+            className="input py-0.5 px-2 text-xs w-16 text-center"
+          />
+          <span className="text-xs text-gray-400">dias</span>
+        </div>
+      ),
+      onGenerate: handlePdvPDF,
+    },
+    {
+      key: 'comandas' as PdfKey,
+      icon: ClipboardList,
+      color: 'text-rose-400',
+      bg:   'bg-rose-500/10',
+      title: 'Comandas Abertas',
+      tag: 'Operação',
+      desc: 'Snapshot de todas as comandas atualmente em aberto com cliente, mesa, valor, itens e há quantos dias está aberta (alerta vermelho para 3+ dias). Use para identificar mesas esquecidas, cobranças pendentes e controle do caixa em aberto.',
+      control: (
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-400">Abertas nos últimos</span>
+          <input
+            type="number" min={0} max={365} value={diasComandas}
+            onChange={e => setDiasComandas(Math.max(0, Math.min(365, Number(e.target.value))))}
+            className="input py-0.5 px-2 text-xs w-16 text-center"
+          />
+          <span className="text-xs text-gray-400">dias (0 = todas)</span>
+        </div>
+      ),
+      onGenerate: handleComandasPDF,
+    },
+  ]
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -312,10 +419,8 @@ export default function RelatoriosPage() {
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <BarChart2 className="w-6 h-6 text-brand-400" /> Relatórios
           </h1>
-          <p className="text-gray-400 text-sm mt-0.5">Vendas por categoria e situação do crediário</p>
+          <p className="text-gray-400 text-sm mt-0.5">Análise de vendas, estoque e clientes</p>
         </div>
-
-        {/* Seletor de período */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <select value={mes} onChange={e => setMes(Number(e.target.value))} className="input py-1.5 text-sm max-w-[130px]">
             {MESES.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
@@ -326,43 +431,55 @@ export default function RelatoriosPage() {
         </div>
       </div>
 
-      {/* Exportar PDF */}
-      <div className="card flex flex-wrap items-center gap-4">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white">Exportar PDF</p>
-          <p className="text-xs text-gray-500">Relatórios formatados para impressão</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={handleFinanceiroPDF}
-            disabled={pdfLoading !== null}
-            className="btn-secondary flex items-center gap-1.5 text-sm"
-          >
-            {pdfLoading === 'financeiro'
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <FileText className="w-4 h-4" />}
-            Financeiro ({MESES[mes - 1].slice(0, 3)} {ano})
-          </button>
-          <button
-            onClick={handleOperacionalPDF}
-            disabled={pdfLoading !== null}
-            className="btn-secondary flex items-center gap-1.5 text-sm"
-          >
-            {pdfLoading === 'operacional'
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <Package className="w-4 h-4" />}
-            Estoque Operacional
-          </button>
-          <button
-            onClick={handleGerencialPDF}
-            disabled={pdfLoading !== null}
-            className="btn-secondary flex items-center gap-1.5 text-sm"
-          >
-            {pdfLoading === 'gerencial'
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <BarChart className="w-4 h-4" />}
-            Estoque Gerencial
-          </button>
+      {/* Grid de relatórios PDF */}
+      <div>
+        <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-3">
+          Exportar PDF
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {reports.map(r => {
+            const Icon = r.icon
+            const loading = pdfLoading === r.key
+            return (
+              <div key={r.key as string} className="card flex flex-col gap-3">
+                {/* Topo do card */}
+                <div className="flex items-start gap-3">
+                  <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', r.bg)}>
+                    <Icon className={clsx('w-4 h-4', r.color)} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold text-white text-sm">{r.title}</p>
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 bg-surface-700 px-1.5 py-0.5 rounded">
+                        {r.tag}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">{r.desc}</p>
+                  </div>
+                </div>
+
+                {/* Controle + botão */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-surface-600">
+                  <div>{r.control ?? <span />}</div>
+                  <button
+                    onClick={r.onGenerate}
+                    disabled={pdfLoading !== null}
+                    className={clsx(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0',
+                      pdfLoading !== null
+                        ? 'opacity-50 cursor-not-allowed bg-surface-700 text-gray-400'
+                        : 'bg-brand-600 hover:bg-brand-500 text-white'
+                    )}
+                  >
+                    {loading
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Gerando...</>
+                      : <><FileText className="w-3.5 h-3.5" /> Gerar PDF</>
+                    }
+                  </button>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
