@@ -274,6 +274,7 @@ public class UserService : IUserService
         Email           = user.Email,
         Cpf             = user.Cpf,
         WhatsApp        = user.WhatsApp,
+        ProfileImageUrl = user.ProfileImageUrl,
         Role            = user.Role,
         PointsBalance   = IsExpired(user) ? 0 : user.PointsBalance,
         PointsExpiresAt = user.PointsExpiresAt,
