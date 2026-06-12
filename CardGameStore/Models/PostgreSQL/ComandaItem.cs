@@ -69,6 +69,13 @@ public class ComandaItem
     [Column("unit_price_in_cents")]
     public int UnitPriceInCents { get; set; }
 
+    /// <summary>
+    /// Custo unitário do produto no momento da adição (snapshot imutável).
+    /// Congelado para que alterações futuras de custo não distorçam o histórico financeiro.
+    /// </summary>
+    [Column("cost_price_snapshot_in_cents")]
+    public int CostPriceSnapshotInCents { get; set; }
+
     // -------------------------------------------------------------------------
     // Quantidade e total
     // -------------------------------------------------------------------------

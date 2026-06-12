@@ -167,18 +167,19 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync()
             ?? throw new InvalidOperationException("Comanda ativa não encontrada para este usuário.");
 
-        var (itemName, priceInCents) = await ResolveItemAsync(request);
+        var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
 
         var item = new ComandaItem
         {
-            ComandaId        = comanda.Id,
-            ProductId        = request.ProductId,
-            CardCacheId      = request.CardCacheId,
-            ItemNameSnapshot = itemName,
-            UnitPriceInCents = priceInCents,
-            Quantity         = request.Quantity,
-            SubtotalInCents  = priceInCents * request.Quantity,
-            AddedByUserId    = userId,
+            ComandaId                = comanda.Id,
+            ProductId                = request.ProductId,
+            CardCacheId              = request.CardCacheId,
+            ItemNameSnapshot         = itemName,
+            UnitPriceInCents         = priceInCents,
+            CostPriceSnapshotInCents = costInCents,
+            Quantity                 = request.Quantity,
+            SubtotalInCents          = priceInCents * request.Quantity,
+            AddedByUserId            = userId,
         };
 
         // _db.Add ensures EntityState.Added; navigation fixup populates comanda.Items.
@@ -218,18 +219,19 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
-        var (itemName, priceInCents) = await ResolveItemAsync(request);
+        var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
 
         var item = new ComandaItem
         {
-            ComandaId        = comanda.Id,
-            ProductId        = request.ProductId,
-            CardCacheId      = request.CardCacheId,
-            ItemNameSnapshot = itemName,
-            UnitPriceInCents = priceInCents,
-            Quantity         = request.Quantity,
-            SubtotalInCents  = priceInCents * request.Quantity,
-            AddedByUserId    = adminId,
+            ComandaId                = comanda.Id,
+            ProductId                = request.ProductId,
+            CardCacheId              = request.CardCacheId,
+            ItemNameSnapshot         = itemName,
+            UnitPriceInCents         = priceInCents,
+            CostPriceSnapshotInCents = costInCents,
+            Quantity                 = request.Quantity,
+            SubtotalInCents          = priceInCents * request.Quantity,
+            AddedByUserId            = adminId,
         };
 
         _db.Add(item);
@@ -509,10 +511,13 @@ public class ComandaService : IComandaService
                                  && paymentMethod != PaymentPontos
                                  && paymentMethod != PaymentCashback)
         {
-            var valorPago   = comanda.TotalInCents; // já é o netTotal
+            var valorPago    = comanda.TotalInCents; // já é o netTotal
             var pontosGanhos = valorPago / 100; // 1 ponto por real
             if (pontosGanhos > 0)
             {
+                // Zera saldo expirado antes de somar para evitar "ressurreição" de pontos vencidos
+                if (comanda.User.PointsExpiresAt.HasValue && comanda.User.PointsExpiresAt.Value < DateTime.UtcNow)
+                    comanda.User.PointsBalance = 0;
                 comanda.User.PointsBalance  += pontosGanhos;
                 comanda.User.PointsExpiresAt = DateTime.UtcNow.AddDays(30);
                 _logger.LogInformation(
@@ -555,6 +560,16 @@ public class ComandaService : IComandaService
                 .Where(p => p.Id == item.ProductId!.Value)
                 .ExecuteUpdateAsync(s => s.SetProperty(
                     p => p.StockQuantity, p => p.StockQuantity + item.Quantity));
+        }
+
+        // Devolve pontos que o cliente havia aplicado nesta comanda
+        if (comanda.PointsApplied > 0 && comanda.User != null)
+        {
+            comanda.User.PointsBalance += comanda.PointsApplied;
+            comanda.User.UpdatedAt      = DateTime.UtcNow;
+            _logger.LogInformation(
+                "Comanda {Id} cancelada — {Pts} pontos devolvidos ao usuário {UserId}.",
+                comandaId, comanda.PointsApplied, comanda.UserId);
         }
 
         comanda.Status   = ComandaStatus.Cancelada;
@@ -724,13 +739,13 @@ public class ComandaService : IComandaService
     /// Resolve nome e preço do item. Se vier ProductId, busca do banco e ignora
     /// o que o cliente enviou — nunca confiar em preço vindo da requisição.
     /// </summary>
-    private async Task<(string name, int priceInCents)> ResolveItemAsync(AddItemToComandaRequest request)
+    private async Task<(string name, int priceInCents, int costInCents)> ResolveItemAsync(AddItemToComandaRequest request)
     {
         if (!request.ProductId.HasValue)
         {
             if (string.IsNullOrWhiteSpace(request.ItemName))
                 throw new ArgumentException("Nome do item é obrigatório para itens sem produto cadastrado.");
-            return (request.ItemName, request.UnitPriceInCents);
+            return (request.ItemName, request.UnitPriceInCents, 0);
         }
 
         var product = await _db.Products.FindAsync(request.ProductId.Value)
@@ -757,7 +772,7 @@ public class ComandaService : IComandaService
         // Mantém o objeto local sincronizado para o SaveChanges final
         product.StockQuantity -= request.Quantity;
         var effectivePrice = product.IsOnPromo ? product.DiscountPriceInCents!.Value : product.PriceInCents;
-        return (product.Name, effectivePrice);
+        return (product.Name, effectivePrice, product.CostPriceInCents);
     }
 
     private static ComandaDto MapToDto(Comanda comanda) => new()

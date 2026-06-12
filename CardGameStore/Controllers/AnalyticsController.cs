@@ -281,13 +281,13 @@ public class AnalyticsController : ControllerBase
                 i.ItemNameSnapshot,
                 i.UnitPriceInCents,
                 i.Quantity,
-                ProductCostPriceInCents = i.Product!.CostPriceInCents,
+                i.CostPriceSnapshotInCents,
                 ComandaClosedAt = i.Comanda!.ClosedAt,
             })
             .ToListAsync();
 
         var custo = itens
-            .Sum(i => (decimal)i.ProductCostPriceInCents * i.Quantity) / 100m;
+            .Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m;
 
         var margem       = receita - custo;
         var margemPercent = receita > 0 ? Math.Round(margem / receita * 100, 1) : 0;
@@ -322,7 +322,7 @@ public class AnalyticsController : ControllerBase
 
             var cDia = itens
                 .Where(i => i.ComandaClosedAt >= dIni && i.ComandaClosedAt < dFim)
-                .Sum(i => (decimal)i.ProductCostPriceInCents * i.Quantity) / 100m;
+                .Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m;
 
             diaDia.Add(new DiaFinanceiroDto
             {
@@ -384,7 +384,7 @@ public class AnalyticsController : ControllerBase
             .Select(g =>
             {
                 var r = g.Sum(i => (decimal)i.UnitPriceInCents * i.Quantity) / 100m;
-                var c = g.Sum(i => (decimal)i.ProductCostPriceInCents * i.Quantity) / 100m;
+                var c = g.Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m;
                 return new TopProductFinDto
                 {
                     Nome    = g.Key,

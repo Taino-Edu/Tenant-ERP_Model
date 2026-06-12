@@ -217,6 +217,9 @@ public class VendaAvulsaService : IVendaAvulsaService
             var pontosGanhos = finalTotal / 100; // 1 ponto por real
             if (pontosGanhos > 0)
             {
+                // Zera saldo expirado antes de somar para evitar "ressurreição" de pontos vencidos
+                if (user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow)
+                    user.PointsBalance = 0;
                 user.PointsBalance   += pontosGanhos;
                 user.PointsExpiresAt  = DateTime.UtcNow.AddDays(30);
                 user.UpdatedAt        = DateTime.UtcNow;
