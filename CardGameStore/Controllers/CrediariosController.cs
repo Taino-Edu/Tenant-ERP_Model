@@ -357,9 +357,15 @@ public class CrediariosController : ControllerBase
         if (crediario == null)
             return NotFound(new { Message = "Crediário não encontrado." });
 
-        // Remove pagamentos filhos primeiro (FK Restrict impede deletar com filhos)
-        if (crediario.Pagamentos.Any())
-            _db.PagamentosCrediario.RemoveRange(crediario.Pagamentos);
+        // Impede deleção se há qualquer pagamento registrado.
+        // Um crediário com pagamento representa dinheiro já recebido — apagá-lo
+        // removeria o histórico financeiro sem desfazer a receita original.
+        if (crediario.ValorPagoEmCentavos > 0)
+            return BadRequest(new
+            {
+                Message = $"Não é possível excluir este crediário pois já possui R$ {crediario.ValorPagoEmCentavos / 100m:N2} registrados como pagos. " +
+                          "Exclua apenas crediários sem nenhum pagamento registrado."
+            });
 
         _db.Crediarios.Remove(crediario);
         await _db.SaveChangesAsync();
