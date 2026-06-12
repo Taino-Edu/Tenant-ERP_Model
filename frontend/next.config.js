@@ -21,7 +21,10 @@ const nextConfig = {
       { protocol: 'https', hostname: 'product-images.tcgplayer.com' },
       // Imagens de upload local (dev) e Oracle Cloud (produção)
       { protocol: 'http',  hostname: 'localhost' },
-      { protocol: 'http',  hostname: '*.**.**.***' }, // qualquer IP público
+      // IP do servidor: configure UPLOAD_HOSTNAME no ambiente (ex: 193.123.45.67)
+      ...(process.env.UPLOAD_HOSTNAME
+        ? [{ protocol: 'https', hostname: process.env.UPLOAD_HOSTNAME }]
+        : []),
     ],
   },
   // Proxy para a API em desenvolvimento (evita CORS)

@@ -41,6 +41,7 @@ public class TcgController : ControllerBase
         if (string.IsNullOrWhiteSpace(name))
             return BadRequest(new { Message = "Parâmetro 'name' é obrigatório." });
 
+        pageSize = Math.Clamp(pageSize, 1, 100);
         var result = await _tcgService.SearchCardsByNameAsync(name, game, page, pageSize);
         return Ok(result);
     }

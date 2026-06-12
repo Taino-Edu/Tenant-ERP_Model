@@ -3,12 +3,20 @@
 // PUT    /api/category/{id}  → atualiza (Admin)
 // DELETE /api/category/{id}  → remove (Admin)
 
+using System.ComponentModel.DataAnnotations;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CardGameStore.Controllers;
+
+public record CategoryRequest(
+    [Required][MaxLength(100)] string Name,
+    [MaxLength(10)]            string? Emoji,
+    int  DisplayOrder,
+    bool IsActive
+);
 
 [ApiController]
 [Route("api/category")]
@@ -25,18 +33,34 @@ public class CategoryController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> Create([FromBody] ProductCategory category)
+    public async Task<IActionResult> Create([FromBody] CategoryRequest req)
     {
-        category.Id = Guid.NewGuid();
-        category.CreatedAt = DateTime.UtcNow;
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var category = new ProductCategory
+        {
+            Id           = Guid.NewGuid(),
+            Name         = req.Name.Trim(),
+            Emoji        = req.Emoji?.Trim(),
+            DisplayOrder = req.DisplayOrder,
+            IsActive     = req.IsActive,
+            CreatedAt    = DateTime.UtcNow,
+        };
         return Ok(await _service.CreateAsync(category));
     }
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] ProductCategory category)
+    public async Task<IActionResult> Update(Guid id, [FromBody] CategoryRequest req)
     {
-        category.Id = id;
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var category = new ProductCategory
+        {
+            Id           = id,
+            Name         = req.Name.Trim(),
+            Emoji        = req.Emoji?.Trim(),
+            DisplayOrder = req.DisplayOrder,
+            IsActive     = req.IsActive,
+        };
         return Ok(await _service.UpdateAsync(category));
     }
 

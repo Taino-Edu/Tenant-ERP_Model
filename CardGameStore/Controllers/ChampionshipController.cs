@@ -576,7 +576,8 @@ public class AdminRegisterRequest
 }
 
 /// <summary>Request para inscrição em campeonato (deck é opcional).</summary>
-public record RegisterChampionshipRequest(string? DeckName);
+public record RegisterChampionshipRequest(
+    [property: System.ComponentModel.DataAnnotations.MaxLength(200)] string? DeckName);
 
 /// <summary>Request para definir colocação de participante.</summary>
 public record SetPlacementRequest(int Placement);

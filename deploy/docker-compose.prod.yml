@@ -73,7 +73,7 @@ services:
       ASPNETCORE_URLS: http://+:5000
       # Banco de dados
       ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_USER:-cardgame_user};Password=${POSTGRES_PASSWORD}"
-      MongoDbSettings__ConnectionString: "mongodb://mongo:27017"
+      MongoDbSettings__ConnectionString: "mongodb://${MONGO_USER:-mongo_admin}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin"
       MongoDbSettings__DatabaseName: "cardgamestore_cache"
       # JWT
       JwtSettings__SecretKey: "${JWT_SECRET}"
@@ -149,6 +149,9 @@ services:
   mongo:
     image: mongo:7-jammy
     container_name: santuarionerd_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_USER:-mongo_admin}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}"
     volumes:
       - mongo_data:/data/db
     networks:
