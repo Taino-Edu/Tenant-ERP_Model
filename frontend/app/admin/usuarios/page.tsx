@@ -320,6 +320,14 @@ export default function UsuariosPage() {
                   } ${insight?.inativo30 ? 'border-amber-500/20' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                      {u.profileImageUrl ? (
+                        <img src={u.profileImageUrl} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 mt-0.5 ring-1 ring-surface-600" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-brand-600/25 flex items-center justify-center shrink-0 mt-0.5 ring-1 ring-surface-600">
+                          <span className="text-xs font-bold text-brand-300 leading-none">{u.name[0]?.toUpperCase()}</span>
+                        </div>
+                      )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-white text-sm">{u.name}</p>
@@ -358,6 +366,7 @@ export default function UsuariosPage() {
                         )}
                       </div>
                     </div>
+                    </div>{/* flex items-start gap-2.5 */}
                     <div className="flex flex-col items-end gap-1">
                       <PointsBadge user={u} />
                       {u.balanceInCents > 0 && (
@@ -386,8 +395,19 @@ export default function UsuariosPage() {
             <div className="card space-y-5">
               {/* Dados do cliente */}
               <div>
-                <p className="text-xs text-gray-500 mb-1">Cliente selecionado</p>
-                <p className="font-bold text-white text-lg">{selected.name}</p>
+                <div className="flex items-center gap-3 mb-3">
+                  {selected.profileImageUrl ? (
+                    <img src={selected.profileImageUrl} alt="" className="w-14 h-14 rounded-full object-cover shrink-0 ring-2 ring-surface-600" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-brand-600/25 flex items-center justify-center shrink-0 ring-2 ring-surface-600">
+                      <span className="text-xl font-black text-brand-300 leading-none">{selected.name[0]?.toUpperCase()}</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-white text-base leading-tight truncate">{selected.name}</p>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold mt-0.5">Cliente selecionado</p>
+                  </div>
+                </div>
                 {selected.cpf && <p className="text-xs text-gray-500">CPF: {selected.cpf}</p>}
                 {selected.whatsApp && (
                   <a
