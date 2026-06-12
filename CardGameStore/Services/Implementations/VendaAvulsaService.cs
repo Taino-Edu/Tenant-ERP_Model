@@ -215,7 +215,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             if (pontosGanhos > 0)
             {
                 user.PointsBalance   += pontosGanhos;
-                user.PointsExpiresAt  = DateTime.UtcNow.AddYears(1);
+                user.PointsExpiresAt  = DateTime.UtcNow.AddDays(30);
                 user.UpdatedAt        = DateTime.UtcNow;
                 _logger.LogInformation(
                     "Usuário {UserId} ganhou {Pontos} pontos em venda avulsa {VendaId}.",

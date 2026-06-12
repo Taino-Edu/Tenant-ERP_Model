@@ -514,7 +514,7 @@ public class ComandaService : IComandaService
             if (pontosGanhos > 0)
             {
                 comanda.User.PointsBalance  += pontosGanhos;
-                comanda.User.PointsExpiresAt = DateTime.UtcNow.AddYears(1);
+                comanda.User.PointsExpiresAt = DateTime.UtcNow.AddDays(30);
                 _logger.LogInformation(
                     "Usuário {UserId} ganhou {Pontos} pontos na comanda {ComandaId}.",
                     comanda.UserId, pontosGanhos, comandaId);
