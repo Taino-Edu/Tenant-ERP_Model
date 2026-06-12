@@ -3,12 +3,15 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   relatorioApi, RelatorioVendasDto, RelatorioCategoria,
   RelatorioCrediarioDto, DevedorDto, PagamentoMesDto,
+  analyticsApi, productApi, categoryApi,
 } from '@/lib/api'
+import { gerarRelatorioPDF } from '@/lib/relatorio'
+import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import toast from 'react-hot-toast'
 import {
   BarChart2, ChevronDown, ChevronUp, Loader2, Package,
   TrendingUp, ShoppingCart, CreditCard, AlertTriangle,
-  CheckCircle, DollarSign, Phone,
+  CheckCircle, DollarSign, Phone, FileText, BarChart,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -246,14 +249,60 @@ function AbaCrediario({ mes, ano }: { mes: number; ano: number }) {
 // ── Página principal ──────────────────────────────────────────────────────────
 
 type Aba = 'vendas' | 'crediario'
+type PdfKey = 'financeiro' | 'operacional' | 'gerencial' | null
 
 export default function RelatoriosPage() {
   const hoje = new Date()
   const [mes, setMes] = useState(hoje.getMonth() + 1)
   const [ano, setAno] = useState(hoje.getFullYear())
   const [aba, setAba] = useState<Aba>('vendas')
+  const [pdfLoading, setPdfLoading] = useState<PdfKey>(null)
 
   const anos = Array.from({ length: 3 }, (_, i) => hoje.getFullYear() - i)
+
+  const handleFinanceiroPDF = useCallback(async () => {
+    setPdfLoading('financeiro')
+    try {
+      const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`
+      const fim    = new Date(ano, mes, 0).toISOString().split('T')[0]
+      const { data } = await analyticsApi.financeiro(inicio, fim)
+      await gerarRelatorioPDF(data, { inicio, fim })
+    } catch {
+      toast.error('Erro ao gerar relatório financeiro')
+    } finally {
+      setPdfLoading(null)
+    }
+  }, [mes, ano])
+
+  const handleOperacionalPDF = useCallback(async () => {
+    setPdfLoading('operacional')
+    try {
+      const [{ data: products }, { data: categories }] = await Promise.all([
+        productApi.list(),
+        categoryApi.list(),
+      ])
+      await gerarRelatorioOperacional(products, categories)
+    } catch {
+      toast.error('Erro ao gerar relatório operacional')
+    } finally {
+      setPdfLoading(null)
+    }
+  }, [])
+
+  const handleGerencialPDF = useCallback(async () => {
+    setPdfLoading('gerencial')
+    try {
+      const [{ data: products }, { data: categories }] = await Promise.all([
+        productApi.list(),
+        categoryApi.list(),
+      ])
+      await gerarRelatorioGerencial(products, categories)
+    } catch {
+      toast.error('Erro ao gerar relatório gerencial')
+    } finally {
+      setPdfLoading(null)
+    }
+  }, [])
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -274,6 +323,46 @@ export default function RelatoriosPage() {
           <select value={ano} onChange={e => setAno(Number(e.target.value))} className="input py-1.5 text-sm w-[80px]">
             {anos.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
+        </div>
+      </div>
+
+      {/* Exportar PDF */}
+      <div className="card flex flex-wrap items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white">Exportar PDF</p>
+          <p className="text-xs text-gray-500">Relatórios formatados para impressão</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleFinanceiroPDF}
+            disabled={pdfLoading !== null}
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+          >
+            {pdfLoading === 'financeiro'
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <FileText className="w-4 h-4" />}
+            Financeiro ({MESES[mes - 1].slice(0, 3)} {ano})
+          </button>
+          <button
+            onClick={handleOperacionalPDF}
+            disabled={pdfLoading !== null}
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+          >
+            {pdfLoading === 'operacional'
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Package className="w-4 h-4" />}
+            Estoque Operacional
+          </button>
+          <button
+            onClick={handleGerencialPDF}
+            disabled={pdfLoading !== null}
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+          >
+            {pdfLoading === 'gerencial'
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <BarChart className="w-4 h-4" />}
+            Estoque Gerencial
+          </button>
         </div>
       </div>
 
