@@ -30,6 +30,10 @@ public class VendaAvulsa
     public Guid   SoldByAdminId   { get; set; }
     public string SoldByAdminName { get; set; } = string.Empty;
 
+    /// <summary>Cliente identificado no momento da venda (nullable — vendas anônimas não têm UserId).</summary>
+    public Guid?   UserId   { get; set; }
+    public string? UserName { get; set; }
+
     public int DiscountPercent { get; set; } = 0;
     public int DiscountInCents { get; set; } = 0;
 

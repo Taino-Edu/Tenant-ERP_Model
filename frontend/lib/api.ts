@@ -372,10 +372,50 @@ export interface AdminCreateUserRequest {
   password?: string
 }
 
+// ── Histórico de cliente ──────────────────────────────────────────────────────
+
+export interface ClienteHistoricoComandaItem {
+  itemName: string; quantity: number; unitPriceInReais: number; subtotalInReais: number
+}
+export interface ClienteHistoricoComanda {
+  id: string; status: string; totalInReais: number
+  paymentMethod: string | null; secondPaymentMethod: string | null
+  openedAt: string; closedAt: string | null; tableIdentifier: string | null
+  items: ClienteHistoricoComandaItem[]
+}
+export interface ClienteHistoricoVendaAvulsaItem {
+  productName: string; quantity: number; unitPriceInReais: number; subtotalInReais: number
+}
+export interface ClienteHistoricoVendaAvulsa {
+  id: string; totalInReais: number; paymentMethod: string; soldAt: string
+  items: ClienteHistoricoVendaAvulsaItem[]
+}
+export interface ClienteHistoricoCrediario {
+  id: string; valorEmReais: number; saldoRestante: number
+  status: string; vencido: boolean
+  dataAbertura: string; dataVencimento: string; dataPagamento: string | null
+  observacao: string | null
+}
+export interface ClienteHistoricoCampeonato {
+  championshipId: string; championshipName: string; game: string
+  status: string; startDate: string; playerNumber: number
+  deckName: string | null; placement: number | null; registeredAt: string
+}
+export interface ClienteHistoricoDto {
+  userId: string; userName: string
+  totalVisitas: number; totalGasto: number
+  primeiraVisita: string | null; ultimaVisita: string | null
+  comandas: ClienteHistoricoComanda[]
+  vendasAvulsas: ClienteHistoricoVendaAvulsa[]
+  crediarios: ClienteHistoricoCrediario[]
+  campeonatos: ClienteHistoricoCampeonato[]
+}
+
 export const userApi = {
   list:      (search?: string) => api.get<UserSummary[]>('/api/user', { params: { search } }),
   getById:   (id: string)      => api.get<UserSummary>(`/api/user/${id}`),
   me:        ()                => api.get<UserProfile>('/api/user/me'),
+  historico: (id: string)      => api.get<ClienteHistoricoDto>(`/api/user/${id}/historico`),
   addPoints: (id: string, points: number, reason?: string) =>
     api.post<UserSummary>(`/api/user/${id}/points`, { points, reason }),
   adjustBalance: (id: string, amountInCents: number, reason?: string) =>

@@ -111,3 +111,87 @@ public class AdminResetPasswordRequest
     [MaxLength(100)]
     public string NewPassword { get; set; } = string.Empty;
 }
+
+// ─── Histórico de cliente ─────────────────────────────────────────────────────
+
+public class ClienteHistoricoDto
+{
+    public Guid    UserId   { get; set; }
+    public string  UserName { get; set; } = string.Empty;
+
+    // Totalizadores
+    public int     TotalVisitas     { get; set; }
+    public decimal TotalGasto       { get; set; }
+    public DateTime? PrimeiraVisita { get; set; }
+    public DateTime? UltimaVisita   { get; set; }
+
+    // Listas
+    public List<ComandaHistoricoDto>     Comandas      { get; set; } = new();
+    public List<VendaAvulsaHistoricoDto> VendasAvulsas { get; set; } = new();
+    public List<CrediariosHistoricoDto>  Crediarios    { get; set; } = new();
+    public List<CampeonatoHistoricoDto>  Campeonatos   { get; set; } = new();
+}
+
+public class ComandaHistoricoDto
+{
+    public Guid     Id             { get; set; }
+    public string   Status         { get; set; } = string.Empty;
+    public decimal  TotalInReais   { get; set; }
+    public string?  PaymentMethod  { get; set; }
+    public string?  SecondPaymentMethod { get; set; }
+    public DateTime OpenedAt       { get; set; }
+    public DateTime? ClosedAt      { get; set; }
+    public string?  TableIdentifier { get; set; }
+    public List<ComandaItemHistoricoDto> Items { get; set; } = new();
+}
+
+public class ComandaItemHistoricoDto
+{
+    public string  ItemName         { get; set; } = string.Empty;
+    public int     Quantity         { get; set; }
+    public decimal UnitPriceInReais { get; set; }
+    public decimal SubtotalInReais  { get; set; }
+}
+
+public class VendaAvulsaHistoricoDto
+{
+    public string   Id            { get; set; } = string.Empty;
+    public decimal  TotalInReais  { get; set; }
+    public string   PaymentMethod { get; set; } = string.Empty;
+    public DateTime SoldAt        { get; set; }
+    public List<VendaAvulsaItemHistoricoDto> Items { get; set; } = new();
+}
+
+public class VendaAvulsaItemHistoricoDto
+{
+    public string  ProductName      { get; set; } = string.Empty;
+    public int     Quantity         { get; set; }
+    public decimal UnitPriceInReais { get; set; }
+    public decimal SubtotalInReais  { get; set; }
+}
+
+public class CrediariosHistoricoDto
+{
+    public Guid      Id              { get; set; }
+    public decimal   ValorEmReais    { get; set; }
+    public decimal   SaldoRestante   { get; set; }
+    public string    Status          { get; set; } = string.Empty;
+    public bool      Vencido         { get; set; }
+    public DateTime  DataAbertura    { get; set; }
+    public DateTime  DataVencimento  { get; set; }
+    public DateTime? DataPagamento   { get; set; }
+    public string?   Observacao      { get; set; }
+}
+
+public class CampeonatoHistoricoDto
+{
+    public Guid     ChampionshipId   { get; set; }
+    public string   ChampionshipName { get; set; } = string.Empty;
+    public string   Game             { get; set; } = string.Empty;
+    public string   Status           { get; set; } = string.Empty;
+    public DateTime StartDate        { get; set; }
+    public int      PlayerNumber     { get; set; }
+    public string?  DeckName         { get; set; }
+    public int?     Placement        { get; set; }
+    public DateTime RegisteredAt     { get; set; }
+}

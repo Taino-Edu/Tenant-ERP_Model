@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { userApi, crediarioApi, analyticsApi, CrediariosDto, UserSummary, ClienteInsightDto } from '@/lib/api'
+import { userApi, crediarioApi, analyticsApi, CrediariosDto, UserSummary, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, Phone, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX } from 'lucide-react'
+import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, Trophy, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
 // ── Modal: Novo Cliente ───────────────────────────────────────────────────────
@@ -134,6 +134,266 @@ function RedefinirSenhaModal({ user, onClose }: { user: UserSummary; onClose: ()
   )
 }
 
+// ── Helper: label de forma de pagamento ───────────────────────────────────────
+const pmLabel = (v: string | null) =>
+  PAYMENT_METHODS.find(p => p.value === v)?.label ?? v ?? '—'
+
+// ── Drawer: Histórico do cliente ───────────────────────────────────────────────
+function HistoricoDrawer({ user, onClose }: { user: UserSummary; onClose: () => void }) {
+  const [data, setData]     = useState<ClienteHistoricoDto | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [tab, setTab]       = useState<'comandas' | 'pdv' | 'crediarios' | 'campeonatos'>('comandas')
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setLoading(true)
+    userApi.historico(user.id)
+      .then(r => setData(r.data))
+      .catch(() => toast.error('Erro ao carregar histórico'))
+      .finally(() => setLoading(false))
+  }, [user.id])
+
+  function toggle(id: string) {
+    setExpanded(prev => {
+      const s = new Set(prev)
+      s.has(id) ? s.delete(id) : s.add(id)
+      return s
+    })
+  }
+
+  const fmt  = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString('pt-BR')
+  const fmtDateTime = (d: string) => new Date(d).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+
+  const statusColor: Record<string, string> = {
+    Aberta: 'text-yellow-400', EmAndamento: 'text-blue-400',
+    Fechada: 'text-green-400', Cancelada: 'text-gray-500',
+    Aberto: 'text-orange-400', Pago: 'text-green-400',
+    Planejado: 'text-gray-400', Inscricoes: 'text-blue-400',
+    EmAndamento2: 'text-blue-400', Finalizado: 'text-green-400', Cancelado: 'text-gray-500',
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      {/* overlay */}
+      <div className="flex-1 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+      {/* drawer */}
+      <div className="w-full max-w-2xl bg-surface-900 border-l border-surface-600 flex flex-col shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-surface-600 shrink-0">
+          {user.profileImageUrl ? (
+            <img src={user.profileImageUrl} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-surface-600 shrink-0" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-brand-600/25 flex items-center justify-center shrink-0 ring-2 ring-surface-600">
+              <span className="text-sm font-black text-brand-300">{user.name[0]?.toUpperCase()}</span>
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-white text-base leading-tight truncate">{user.name}</p>
+            <p className="text-xs text-gray-400">Histórico completo</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
+          </div>
+        ) : !data ? (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            <p className="text-sm">Erro ao carregar histórico</p>
+          </div>
+        ) : (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-5 py-4 border-b border-surface-600 shrink-0">
+              <div className="text-center">
+                <p className="text-2xl font-black text-brand-400">{data.totalVisitas}</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Visitas</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-black text-accent-gold">{fmt(data.totalGasto)}</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Total Gasto</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-white">{data.primeiraVisita ? fmtDate(data.primeiraVisita) : '—'}</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">1ª Visita</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-white">{data.ultimaVisita ? fmtDate(data.ultimaVisita) : '—'}</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Última Visita</p>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 px-5 py-3 border-b border-surface-600 shrink-0 overflow-x-auto">
+              {([
+                { key: 'comandas',    label: 'Comandas',   icon: <ShoppingBag className="w-3.5 h-3.5" />, count: data.comandas.length },
+                { key: 'pdv',         label: 'Caixa (PDV)', icon: <ShoppingCart className="w-3.5 h-3.5" />, count: data.vendasAvulsas.length },
+                { key: 'crediarios',  label: 'Crediário',  icon: <CreditCard className="w-3.5 h-3.5" />, count: data.crediarios.length },
+                { key: 'campeonatos', label: 'Campeonatos', icon: <Trophy className="w-3.5 h-3.5" />, count: data.campeonatos.length },
+              ] as const).map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all shrink-0 ${
+                    tab === t.key ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-surface-700'
+                  }`}
+                >
+                  {t.icon} {t.label}
+                  {t.count > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${tab === t.key ? 'bg-white/20' : 'bg-surface-600 text-gray-300'}`}>
+                      {t.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+
+              {/* Comandas */}
+              {tab === 'comandas' && (
+                data.comandas.length === 0
+                  ? <Empty text="Nenhuma comanda encontrada" />
+                  : data.comandas.map(c => (
+                    <div key={c.id} className="card text-sm">
+                      <div className="flex items-center justify-between gap-2 cursor-pointer" onClick={() => toggle(c.id)}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`font-semibold ${statusColor[c.status] ?? 'text-gray-400'}`}>{c.status}</span>
+                            {c.tableIdentifier && <span className="text-xs text-gray-500">· {c.tableIdentifier}</span>}
+                            {c.paymentMethod && <span className="text-xs text-gray-400">· {pmLabel(c.paymentMethod)}</span>}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5">{fmtDateTime(c.openedAt)}{c.closedAt && ` → ${fmtDateTime(c.closedAt)}`}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-bold text-accent-gold">{fmt(c.totalInReais)}</span>
+                          {expanded.has(c.id) ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                        </div>
+                      </div>
+                      {expanded.has(c.id) && c.items.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-surface-600 space-y-1.5">
+                          {c.items.map((item, i) => (
+                            <div key={i} className="flex justify-between text-xs text-gray-400">
+                              <span>{item.quantity}× {item.itemName}</span>
+                              <span className="text-gray-300">{fmt(item.subtotalInReais)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+              )}
+
+              {/* PDV */}
+              {tab === 'pdv' && (
+                data.vendasAvulsas.length === 0
+                  ? <Empty text="Nenhuma venda no caixa encontrada" sub="Vendas são rastreadas a partir da atualização v1.6" />
+                  : data.vendasAvulsas.map(v => (
+                    <div key={v.id} className="card text-sm">
+                      <div className="flex items-center justify-between gap-2 cursor-pointer" onClick={() => toggle(v.id)}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-400">{pmLabel(v.paymentMethod)}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{fmtDateTime(v.soldAt)}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-bold text-accent-gold">{fmt(v.totalInReais)}</span>
+                          {expanded.has(v.id) ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                        </div>
+                      </div>
+                      {expanded.has(v.id) && v.items.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-surface-600 space-y-1.5">
+                          {v.items.map((item, i) => (
+                            <div key={i} className="flex justify-between text-xs text-gray-400">
+                              <span>{item.quantity}× {item.productName}</span>
+                              <span className="text-gray-300">{fmt(item.subtotalInReais)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))
+              )}
+
+              {/* Crediários */}
+              {tab === 'crediarios' && (
+                data.crediarios.length === 0
+                  ? <Empty text="Nenhum crediário encontrado" />
+                  : data.crediarios.map(c => (
+                    <div key={c.id} className={`card text-sm ${c.vencido ? 'border-red-500/20' : ''}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`font-semibold ${c.vencido ? 'text-red-400' : statusColor[c.status] ?? 'text-gray-400'}`}>
+                              {c.vencido ? 'Vencido' : c.status}
+                            </span>
+                            <span className="text-xs text-gray-500">Abertura: {fmtDate(c.dataAbertura)}</span>
+                          </div>
+                          {c.observacao && <p className="text-xs text-gray-500 mt-0.5 truncate">{c.observacao}</p>}
+                          {c.dataPagamento && <p className="text-xs text-green-400 mt-0.5">Pago em {fmtDate(c.dataPagamento)}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-accent-gold">{fmt(c.valorEmReais)}</p>
+                          {c.status === 'Aberto' && c.saldoRestante !== c.valorEmReais && (
+                            <p className="text-xs text-orange-400">Restante: {fmt(c.saldoRestante)}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+              )}
+
+              {/* Campeonatos */}
+              {tab === 'campeonatos' && (
+                data.campeonatos.length === 0
+                  ? <Empty text="Não participou de campeonatos" />
+                  : data.campeonatos.map(c => (
+                    <div key={c.championshipId} className="card text-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-white truncate">{c.championshipName}</p>
+                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            <span className="text-xs text-gray-500">{c.game}</span>
+                            <span className="text-xs text-gray-500">· {fmtDate(c.startDate)}</span>
+                            <span className={`text-xs ${statusColor[c.status] ?? 'text-gray-400'}`}>· {c.status}</span>
+                          </div>
+                          {c.deckName && <p className="text-xs text-gray-400 mt-0.5">Deck: {c.deckName}</p>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-gray-500">Nº {c.playerNumber}</p>
+                          {c.placement && (
+                            <p className={`text-sm font-bold ${c.placement === 1 ? 'text-yellow-400' : c.placement === 2 ? 'text-gray-300' : c.placement === 3 ? 'text-orange-400' : 'text-gray-400'}`}>
+                              {c.placement === 1 ? '🥇' : c.placement === 2 ? '🥈' : c.placement === 3 ? '🥉' : `${c.placement}º`}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+              )}
+
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Empty({ text, sub }: { text: string; sub?: string }) {
+  return (
+    <div className="py-16 flex flex-col items-center justify-center text-gray-500 gap-2">
+      <p className="text-sm">{text}</p>
+      {sub && <p className="text-xs text-gray-600">{sub}</p>}
+    </div>
+  )
+}
+
 export default function UsuariosPage() {
   const [users, setUsers]           = useState<UserSummary[]>([])
   const [crediarios, setCrediarios] = useState<Record<string, CrediariosDto>>({})
@@ -148,6 +408,7 @@ export default function UsuariosPage() {
   const [adjustingBalance, setAdjustingBalance] = useState(false)
   const [showNovoCliente, setShowNovoCliente] = useState(false)
   const [showRedefinirSenha, setShowRedefinirSenha] = useState(false)
+  const [showHistorico, setShowHistorico]     = useState(false)
   const [tabUsuarios, setTabUsuarios]         = useState<'todos' | 'inativos'>('todos')
   const [insights, setInsights]               = useState<ClienteInsightDto[]>([])
 
@@ -239,6 +500,12 @@ export default function UsuariosPage() {
         <RedefinirSenhaModal
           user={selected}
           onClose={() => setShowRedefinirSenha(false)}
+        />
+      )}
+      {showHistorico && selected && (
+        <HistoricoDrawer
+          user={selected}
+          onClose={() => setShowHistorico(false)}
         />
       )}
 
@@ -423,12 +690,20 @@ export default function UsuariosPage() {
                   </a>
                 )}
                 {selected.email && <p className="text-xs text-gray-500 mt-0.5">{selected.email}</p>}
-                <button
-                  onClick={() => setShowRedefinirSenha(true)}
-                  className="btn-secondary mt-2 text-xs py-1.5 px-3 w-full justify-center"
-                >
-                  <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
-                </button>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <button
+                    onClick={() => setShowHistorico(true)}
+                    className="btn-secondary text-xs py-1.5 px-3 justify-center"
+                  >
+                    <History className="w-3.5 h-3.5" /> Ver Histórico
+                  </button>
+                  <button
+                    onClick={() => setShowRedefinirSenha(true)}
+                    className="btn-secondary text-xs py-1.5 px-3 justify-center"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
+                  </button>
+                </div>
               </div>
 
               {/* Pontos */}

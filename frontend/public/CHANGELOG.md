@@ -1,5 +1,19 @@
 # Changelog — Santuário Nerd
 
+## [v1.6.0] — 2026-06-15
+
+### Adicionado
+- **Histórico de cliente** na área de usuários: acesse comandas, vendas no caixa (PDV), crediários e campeonatos de cada cliente em um único painel
+- Vendas avulsas no caixa agora vinculam o cliente identificado, permitindo rastreamento futuro no histórico
+- Estatísticas do cliente: total de visitas, total gasto, primeira e última visita
+
+### Corrigido
+- **Crediário**: itens de todas as comandas acumuladas agora aparecem corretamente no painel de crediário — antes apenas a primeira comanda aparecia
+- **Venda Avulsa (mobile)**: barra fixa no rodapé do celular com total e botão "Finalizar" sem precisar rolar a página
+- **Crediário**: overflow de DateTime ao calcular período de itens de crediário aberto (erro 500 no servidor)
+
+---
+
 ## [v1.5.0] — 2026-06-12
 
 ### Adicionado

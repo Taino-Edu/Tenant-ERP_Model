@@ -11,10 +11,13 @@
 // PUT    /api/user/{id}/reset-password → Admin redefine senha do cliente
 // =============================================================================
 
+using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Controllers;
 
@@ -24,13 +27,17 @@ namespace CardGameStore.Controllers;
 [Produces("application/json")]
 public class UserController : ControllerBase
 {
-    private readonly IUserService  _service;
-    private readonly IAuditService _audit;
+    private readonly IUserService        _service;
+    private readonly IAuditService       _audit;
+    private readonly AppDbContext        _db;
+    private readonly IVendaAvulsaService _vendaService;
 
-    public UserController(IUserService service, IAuditService audit)
+    public UserController(IUserService service, IAuditService audit, AppDbContext db, IVendaAvulsaService vendaService)
     {
-        _service = service;
-        _audit   = audit;
+        _service      = service;
+        _audit        = audit;
+        _db           = db;
+        _vendaService = vendaService;
     }
 
     /// <summary>Lista todos os clientes ativos. Admin pode buscar por nome/CPF/WhatsApp.</summary>
@@ -222,6 +229,120 @@ public class UserController : ControllerBase
         {
             return NotFound(new { Message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Histórico completo de um cliente: comandas, vendas avulsas, crediários e campeonatos.
+    /// GET /api/user/{id}/historico
+    /// </summary>
+    [HttpGet("{id:guid}/historico")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ClienteHistoricoDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetHistorico(Guid id)
+    {
+        var user = await _db.Users.FindAsync(id);
+        if (user == null) return NotFound(new { Message = "Usuário não encontrado." });
+
+        // Comandas
+        var comandas = await _db.Comandas
+            .Include(c => c.Items)
+            .Where(c => c.UserId == id)
+            .OrderByDescending(c => c.OpenedAt)
+            .ToListAsync();
+
+        // Crediários
+        var crediarios = await _db.Crediarios
+            .Where(c => c.UserId == id)
+            .OrderByDescending(c => c.DataAbertura)
+            .ToListAsync();
+
+        // Campeonatos
+        var campeonatos = await _db.ChampionshipParticipants
+            .Include(p => p.Championship)
+            .Where(p => p.UserId == id)
+            .OrderByDescending(p => p.Championship.StartDate)
+            .ToListAsync();
+
+        // Vendas avulsas (apenas as que têm UserId — vendas com cliente identificado a partir de agora)
+        var vendasAvulsas = await _vendaService.GetByUserAsync(id);
+
+        // Estatísticas de visitas (comandas fechadas = visita à loja)
+        var visitasClosed = comandas.Where(c => c.Status == ComandaStatus.Fechada).ToList();
+        var totalGasto    = visitasClosed.Sum(c => c.TotalInCents) / 100m
+                          + vendasAvulsas.Sum(v => v.TotalInReais);
+
+        var historico = new ClienteHistoricoDto
+        {
+            UserId       = user.Id,
+            UserName     = user.Name,
+            TotalVisitas  = visitasClosed.Count,
+            TotalGasto    = totalGasto,
+            PrimeiraVisita = visitasClosed.MinBy(c => c.ClosedAt)?.ClosedAt,
+            UltimaVisita   = visitasClosed.MaxBy(c => c.ClosedAt)?.ClosedAt,
+
+            Comandas = comandas.Select(c => new ComandaHistoricoDto
+            {
+                Id              = c.Id,
+                Status          = c.Status.ToString(),
+                TotalInReais    = c.TotalInCents / 100m,
+                PaymentMethod   = c.PaymentMethod,
+                SecondPaymentMethod = c.SecondPaymentMethod,
+                OpenedAt        = c.OpenedAt,
+                ClosedAt        = c.ClosedAt,
+                TableIdentifier = c.TableIdentifier,
+                Items           = c.Items.Select(i => new ComandaItemHistoricoDto
+                {
+                    ItemName         = i.ItemNameSnapshot,
+                    Quantity         = i.Quantity,
+                    UnitPriceInReais = i.UnitPriceInCents / 100m,
+                    SubtotalInReais  = i.SubtotalInCents / 100m,
+                }).ToList(),
+            }).ToList(),
+
+            VendasAvulsas = vendasAvulsas.Select(v => new VendaAvulsaHistoricoDto
+            {
+                Id           = v.Id,
+                TotalInReais = v.TotalInReais,
+                PaymentMethod = v.PaymentMethod,
+                SoldAt       = v.SoldAt,
+                Items        = v.Items.Select(i => new VendaAvulsaItemHistoricoDto
+                {
+                    ProductName      = i.ProductName,
+                    Quantity         = i.Quantity,
+                    UnitPriceInReais = i.UnitPriceInReais,
+                    SubtotalInReais  = i.SubtotalInReais,
+                }).ToList(),
+            }).ToList(),
+
+            Crediarios = crediarios.Select(c => new CrediariosHistoricoDto
+            {
+                Id             = c.Id,
+                ValorEmReais   = c.ValorEmReais,
+                SaldoRestante  = c.SaldoRestanteEmReais,
+                Status         = c.Status.ToString(),
+                Vencido        = c.Vencido,
+                DataAbertura   = c.DataAbertura,
+                DataVencimento = c.DataVencimento,
+                DataPagamento  = c.DataPagamento,
+                Observacao     = c.Observacao,
+            }).ToList(),
+
+            Campeonatos = campeonatos.Select(p => new CampeonatoHistoricoDto
+            {
+                ChampionshipId   = p.ChampionshipId,
+                ChampionshipName = p.Championship.Name,
+                Game             = p.Championship.Game,
+                Status           = p.Championship.Status.ToString(),
+                StartDate        = p.Championship.StartDate,
+                PlayerNumber     = p.PlayerNumber,
+                DeckName         = p.DeckName,
+                Placement        = p.Placement,
+                RegisteredAt     = p.RegisteredAt,
+            }).ToList(),
+        };
+
+        return Ok(historico);
     }
 
     private Guid GetUserId()

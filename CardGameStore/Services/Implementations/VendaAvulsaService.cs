@@ -94,6 +94,14 @@ public class VendaAvulsaService : IVendaAvulsaService
         var finalTotal = total - discountInCents;
 
         // ── 3. Persistir evento de caixa no MongoDB ──────────────────────────────
+        // Resolve nome do cliente: prioriza nome explícito, depois busca no banco pelo userId
+        string? clientNameResolved = string.IsNullOrWhiteSpace(request.ClientName) ? null : request.ClientName.Trim();
+        if (clientNameResolved == null && request.UserId.HasValue)
+        {
+            var usr = await _db.Users.FindAsync(request.UserId.Value);
+            clientNameResolved = usr?.Name;
+        }
+
         var venda = new VendaAvulsa
         {
             Items           = vendaItems,
@@ -101,7 +109,9 @@ public class VendaAvulsaService : IVendaAvulsaService
             DiscountPercent = request.DiscountPercent,
             DiscountInCents = discountInCents,
             PaymentMethod   = request.PaymentMethod,
-            ClientName      = string.IsNullOrWhiteSpace(request.ClientName) ? null : request.ClientName.Trim(),
+            ClientName      = clientNameResolved,
+            UserId          = request.UserId,
+            UserName        = clientNameResolved,
             SoldAt          = DateTime.UtcNow,
             SoldByAdminId   = adminId,
             SoldByAdminName = adminName,
@@ -263,6 +273,16 @@ public class VendaAvulsaService : IVendaAvulsaService
             .SortByDescending(v => v.SoldAt)
             .ToListAsync();
 
+        return vendas.Select(MapToDto);
+    }
+
+    public async Task<IEnumerable<VendaAvulsaDto>> GetByUserAsync(Guid userId)
+    {
+        var filter = Builders<VendaAvulsa>.Filter.Eq(v => v.UserId, userId);
+        var vendas = await _collection
+            .Find(filter)
+            .SortByDescending(v => v.SoldAt)
+            .ToListAsync();
         return vendas.Select(MapToDto);
     }
 

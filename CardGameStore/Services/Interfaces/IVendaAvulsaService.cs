@@ -15,4 +15,7 @@ public interface IVendaAvulsaService
 
     /// <summary>Retorna todas as vendas avulsas de um dia específico (fuso de Brasília). Padrão: hoje BR.</summary>
     Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime? date = null);
+
+    /// <summary>Retorna todas as vendas avulsas vinculadas a um cliente específico.</summary>
+    Task<IEnumerable<VendaAvulsaDto>> GetByUserAsync(Guid userId);
 }
