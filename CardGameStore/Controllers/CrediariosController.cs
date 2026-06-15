@@ -413,7 +413,7 @@ public class CrediariosController : ControllerBase
         if (todasComandas != null)
         {
             var inicio = c.DataAbertura.AddSeconds(-60);
-            var fim    = (c.DataPagamento ?? DateTime.MaxValue).AddSeconds(60);
+            var fim    = c.DataPagamento.HasValue ? c.DataPagamento.Value.AddDays(1) : DateTime.MaxValue;
             fromComanda = todasComandas
                 .Where(cmd => cmd.ClosedAt.HasValue
                            && cmd.ClosedAt.Value >= inicio
