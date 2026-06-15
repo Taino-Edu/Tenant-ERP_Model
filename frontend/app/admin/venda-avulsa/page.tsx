@@ -541,7 +541,8 @@ export default function VendaAvulsaPage() {
 
       {/* ── Tab: Nova Venda ────────────────────────────────────────────────── */}
       {tab === 'venda' && (
-        <div className="flex flex-col md:flex-row gap-4 sm:gap-6 flex-1 min-h-0 md:h-[calc(100vh-200px)]">
+        <>
+        <div className="flex flex-col md:flex-row gap-4 sm:gap-6 flex-1 min-h-0 md:h-[calc(100vh-200px)] pb-20 md:pb-0">
 
           {/* Catálogo */}
           <div className="flex-1 flex flex-col min-w-0 gap-3">
@@ -895,6 +896,28 @@ export default function VendaAvulsaPage() {
 
           </div>
         </div>
+
+        {/* Barra sticky mobile — finalizar sem precisar rolar */}
+        {cart.length > 0 && (
+          <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
+            <div className="bg-surface-800 border-t border-surface-600 shadow-[0_-4px_24px_rgba(0,0,0,0.5)] px-4 py-3 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] text-gray-400 leading-none mb-0.5">
+                  {cart.reduce((s, i) => s + i.quantity, 0)}{' '}
+                  {cart.reduce((s, i) => s + i.quantity, 0) === 1 ? 'item' : 'itens'}
+                </p>
+                <p className="text-xl font-bold text-accent-gold leading-none">{fmt(total / 100)}</p>
+              </div>
+              <button
+                onClick={openPayModal}
+                className="btn-success px-5 py-2.5 text-sm font-bold shrink-0 flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" /> Finalizar
+              </button>
+            </div>
+          </div>
+        )}
+        </>
       )}
     </div>
   )
