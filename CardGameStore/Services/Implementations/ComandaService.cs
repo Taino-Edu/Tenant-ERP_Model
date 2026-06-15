@@ -531,6 +531,23 @@ public class ComandaService : IComandaService
                 if (!string.IsNullOrWhiteSpace(observacao))
                     crediarioExistente.Observacao = observacao;
 
+                // Snapshot dos itens desta comanda no JSON — sem isso, os itens
+                // acumulados nunca aparecem na tela (só o primeiro ComandaId é lido via FK).
+                var novosItens = comanda.Items.Select(i => new ItemCrediarioDto
+                {
+                    ItemName         = i.ItemNameSnapshot,
+                    Quantity         = i.Quantity,
+                    UnitPriceInReais = i.UnitPriceInCents / 100m,
+                    SubtotalInReais  = i.SubtotalInCents  / 100m,
+                }).ToList();
+
+                var itensAtuais = string.IsNullOrWhiteSpace(crediarioExistente.ItensJson)
+                    ? new System.Collections.Generic.List<ItemCrediarioDto>()
+                    : System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.List<ItemCrediarioDto>>(crediarioExistente.ItensJson)
+                      ?? new System.Collections.Generic.List<ItemCrediarioDto>();
+                itensAtuais.AddRange(novosItens);
+                crediarioExistente.ItensJson = System.Text.Json.JsonSerializer.Serialize(itensAtuais);
+
                 _logger.LogInformation(
                     "Comanda {ComandaId} acumulada no crediário {CredId} do usuário {UserId} — +R$ {Valor:N2}, novo total R$ {Total:N2}",
                     comandaId, crediarioExistente.Id, comanda.UserId,
