@@ -111,7 +111,6 @@ public class CrediariosController : ControllerBase
         var query = _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
-            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) &&
@@ -122,7 +121,9 @@ public class CrediariosController : ControllerBase
             .OrderByDescending(c => c.DataAbertura)
             .ToListAsync();
 
-        return Ok(crediarios.Select(MapToDto).ToList());
+        var userIds = crediarios.Select(c => c.UserId).Distinct().ToList();
+        var comandas = await CarregarComandasCrediario(userIds);
+        return Ok(crediarios.Select(c => MapToDto(c, comandas.GetValueOrDefault(c.UserId))).ToList());
     }
 
     // -------------------------------------------------------------------------
@@ -135,12 +136,13 @@ public class CrediariosController : ControllerBase
         var crediarios = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
-            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .Where(c => c.UserId == userId)
             .OrderByDescending(c => c.DataAbertura)
             .ToListAsync();
 
-        return Ok(crediarios.Select(MapToDto).ToList());
+        var comandas = await CarregarComandasCrediario(new List<Guid> { userId });
+        var listaComandas = comandas.GetValueOrDefault(userId);
+        return Ok(crediarios.Select(c => MapToDto(c, listaComandas)).ToList());
     }
 
     // -------------------------------------------------------------------------
@@ -153,14 +155,14 @@ public class CrediariosController : ControllerBase
         var crediario = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
-            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .Where(c => c.UserId == userId && c.Status == CrediariosStatus.Aberto)
             .FirstOrDefaultAsync();
 
         if (crediario == null)
             return NotFound(new { Message = "Nenhum crediário em aberto." });
 
-        return Ok(MapToDto(crediario));
+        var comandas = await CarregarComandasCrediario(new List<Guid> { userId });
+        return Ok(MapToDto(crediario, comandas.GetValueOrDefault(userId)));
     }
 
     // -------------------------------------------------------------------------
@@ -173,12 +175,29 @@ public class CrediariosController : ControllerBase
         var lista  = await _db.Crediarios
             .Include(c => c.User)
             .Include(c => c.Pagamentos)
-            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
             .Where(c => c.UserId == userId)
             .OrderByDescending(c => c.DataAbertura)
             .ToListAsync();
 
-        return Ok(lista.Select(MapToDto).ToList());
+        var comandas = await CarregarComandasCrediario(new List<Guid> { userId });
+        var listaComandas = comandas.GetValueOrDefault(userId);
+        return Ok(lista.Select(c => MapToDto(c, listaComandas)).ToList());
+    }
+
+    // ── Carrega todas as comandas pagas com crediário para uma lista de usuários ──
+    private async Task<Dictionary<Guid, List<Comanda>>> CarregarComandasCrediario(List<Guid> userIds)
+    {
+        var all = await _db.Comandas
+            .Include(c => c.Items)
+            .Where(c => userIds.Contains(c.UserId)
+                     && c.PaymentMethod == "Crediario"
+                     && c.Status == ComandaStatus.Fechada
+                     && c.ClosedAt != null)
+            .ToListAsync();
+
+        return all
+            .GroupBy(c => c.UserId)
+            .ToDictionary(g => g.Key, g => g.ToList());
     }
 
     // -------------------------------------------------------------------------
@@ -380,25 +399,52 @@ public class CrediariosController : ControllerBase
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static CrediariosDto MapToDto(Crediario c)
+    // todasComandas: todas as comandas com PaymentMethod=Crediario deste usuário,
+    // filtradas aqui pelo período do crediário — cobre histórico e novos acúmulos.
+    private static CrediariosDto MapToDto(Crediario c, List<Comanda>? todasComandas = null)
     {
         var agora   = DateTime.UtcNow;
         var vencido = c.Status == CrediariosStatus.Aberto && c.DataVencimento < agora;
         var dias    = (int)Math.Round((c.DataVencimento - agora).TotalDays);
 
-        // Combina itens da comanda vinculada + itens de venda avulsa (frente de caixa).
-        // Um crediário pode acumular de ambas as origens — exibe tudo junto.
-        var fromComanda = c.Comanda?.Items
-            .OrderBy(i => i.AddedAt)
-            .Select(i => new ItemCrediarioDto
-            {
-                ItemName         = i.ItemNameSnapshot,
-                Quantity         = i.Quantity,
-                UnitPriceInReais = i.UnitPriceInCents / 100m,
-                SubtotalInReais  = i.SubtotalInCents  / 100m,
-            })
-            .ToList() ?? new List<ItemCrediarioDto>();
+        // Itens de comandas: busca TODAS do período (não só a primeira via FK).
+        // Pequeno buffer de 60s em cada extremo para cobrir diferenças de relógio.
+        List<ItemCrediarioDto> fromComanda;
+        if (todasComandas != null)
+        {
+            var inicio = c.DataAbertura.AddSeconds(-60);
+            var fim    = (c.DataPagamento ?? DateTime.MaxValue).AddSeconds(60);
+            fromComanda = todasComandas
+                .Where(cmd => cmd.ClosedAt.HasValue
+                           && cmd.ClosedAt.Value >= inicio
+                           && cmd.ClosedAt.Value <= fim)
+                .SelectMany(cmd => cmd.Items)
+                .OrderBy(i => i.AddedAt)
+                .Select(i => new ItemCrediarioDto
+                {
+                    ItemName         = i.ItemNameSnapshot,
+                    Quantity         = i.Quantity,
+                    UnitPriceInReais = i.UnitPriceInCents / 100m,
+                    SubtotalInReais  = i.SubtotalInCents  / 100m,
+                })
+                .ToList();
+        }
+        else
+        {
+            fromComanda = c.Comanda?.Items
+                .OrderBy(i => i.AddedAt)
+                .Select(i => new ItemCrediarioDto
+                {
+                    ItemName         = i.ItemNameSnapshot,
+                    Quantity         = i.Quantity,
+                    UnitPriceInReais = i.UnitPriceInCents / 100m,
+                    SubtotalInReais  = i.SubtotalInCents  / 100m,
+                })
+                .ToList() ?? new List<ItemCrediarioDto>();
+        }
 
+        // Itens de venda avulsa (frente de caixa) ficam em ItensJson — esses
+        // nunca entram em Comandas, então não há risco de duplicata.
         var fromJson = string.IsNullOrWhiteSpace(c.ItensJson)
             ? new List<ItemCrediarioDto>()
             : JsonSerializer.Deserialize<List<ItemCrediarioDto>>(c.ItensJson)
