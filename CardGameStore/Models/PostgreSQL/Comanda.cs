@@ -64,6 +64,15 @@ public class Comanda
     [Column("payment_method")]
     public string? PaymentMethod { get; set; }
 
+    /// <summary>Segundo método de pagamento (quando há split: ex. Cashback + Dinheiro).</summary>
+    [MaxLength(30)]
+    [Column("second_payment_method")]
+    public string? SecondPaymentMethod { get; set; }
+
+    /// <summary>Valor pago pelo segundo método, em centavos. Zero quando não há split.</summary>
+    [Column("second_payment_amount_in_cents")]
+    public int SecondPaymentAmountInCents { get; set; }
+
     // -------------------------------------------------------------------------
     // Campeonato (opcional) — comanda pode estar vinculada a um torneio
     // -------------------------------------------------------------------------

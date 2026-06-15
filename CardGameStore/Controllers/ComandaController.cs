@@ -159,10 +159,12 @@ public class ComandaController : ControllerBase
     {
         try
         {
-            var adminId = GetUserId();
-            var method  = request?.PaymentMethod ?? "Dinheiro";
-            var obs     = request?.Observacao;
-            var result  = await _service.CloseComandaAsync(id, adminId, method, obs);
+            var adminId    = GetUserId();
+            var method     = request?.PaymentMethod ?? "Dinheiro";
+            var obs        = request?.Observacao;
+            var method2    = request?.SecondPaymentMethod;
+            var amount2    = request?.SecondPaymentAmountInCents ?? 0;
+            var result     = await _service.CloseComandaAsync(id, adminId, method, obs, method2, amount2);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

@@ -44,10 +44,12 @@ public class ComandaDto
     public string            Status          { get; set; } = string.Empty;
     public decimal           TotalInReais    { get; set; }
     public int               PointsApplied   { get; set; }
-    public DateTime          OpenedAt        { get; set; }
-    public DateTime?         ClosedAt        { get; set; }
-    public string?           PaymentMethod   { get; set; }
-    public List<ComandaItemDto> Items        { get; set; } = new();
+    public DateTime          OpenedAt                    { get; set; }
+    public DateTime?         ClosedAt                    { get; set; }
+    public string?           PaymentMethod               { get; set; }
+    public string?           SecondPaymentMethod         { get; set; }
+    public int               SecondPaymentAmountInCents  { get; set; }
+    public List<ComandaItemDto> Items                    { get; set; } = new();
 
     /// <summary>Saldo de pontos do cliente — exibido na modal de fechamento.</summary>
     public int  UserPointsBalance  { get; set; }
@@ -84,14 +86,20 @@ public class AdminOpenComandaRequest
 public class CloseComandaRequest
 {
     /// <summary>
-    /// Forma de pagamento. Valores aceitos:
-    /// Dinheiro | Pix | CartaoCredito | CartaoDebito | Crediario
+    /// Forma de pagamento principal. Valores aceitos:
+    /// Dinheiro | Pix | CartaoCredito | CartaoDebito | Crediario | Pontos | Cashback
     /// </summary>
     [Required]
     public string PaymentMethod { get; set; } = "Dinheiro";
 
     /// <summary>Observação opcional (ex: "troco de R$50,00").</summary>
     public string? Observacao { get; set; }
+
+    /// <summary>Segundo método de pagamento para split (Cashback, Pontos, Dinheiro, Pix, etc.).</summary>
+    public string? SecondPaymentMethod { get; set; }
+
+    /// <summary>Valor pago pelo segundo método em centavos. Zero = sem split.</summary>
+    public int SecondPaymentAmountInCents { get; set; } = 0;
 }
 
 public class ComandaItemDto

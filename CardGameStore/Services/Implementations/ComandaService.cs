@@ -167,6 +167,42 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync()
             ?? throw new InvalidOperationException("Comanda ativa não encontrada para este usuário.");
 
+        // Agrupa com item existente de mesmo produto (evita linhas duplicadas)
+        if (request.ProductId.HasValue)
+        {
+            var existing = comanda.Items.FirstOrDefault(i => i.ProductId == request.ProductId.Value);
+            if (existing != null)
+            {
+                var upd = await _db.Products
+                    .Where(p => p.Id == request.ProductId.Value && p.StockQuantity >= request.Quantity)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockQuantity, p => p.StockQuantity - request.Quantity));
+                if (upd == 0)
+                {
+                    var p = await _db.Products.FindAsync(request.ProductId.Value);
+                    throw new InvalidOperationException($"Estoque insuficiente para '{p?.Name ?? "produto"}'.");
+                }
+                var addedSubtotal        = existing.UnitPriceInCents * request.Quantity;
+                existing.Quantity       += request.Quantity;
+                existing.SubtotalInCents += addedSubtotal;
+                comanda.TotalInCents    += addedSubtotal;
+                comanda.Status           = ComandaStatus.EmAndamento;
+                await _db.SaveChangesAsync();
+                await _hub.Clients.Group(ComandaHub.AdminGroup)
+                    .SendAsync("ComandaUpdated", new ComandaUpdateEvent
+                    {
+                        ComandaId       = comanda.Id,
+                        UserId          = userId,
+                        UserName        = comanda.User?.Name ?? string.Empty,
+                        TableIdentifier = comanda.TableIdentifier,
+                        TotalInReais    = comanda.TotalInReais,
+                        Status          = comanda.Status.ToString(),
+                        LastItemAdded   = existing.ItemNameSnapshot,
+                        UpdatedAt       = DateTime.UtcNow,
+                    });
+                return MapToDto(comanda);
+            }
+        }
+
         var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
 
         var item = new ComandaItem
@@ -218,6 +254,44 @@ public class ComandaService : IComandaService
             .Include(c => c.User)
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
+
+        // Agrupa com item existente de mesmo produto (evita linhas duplicadas)
+        if (request.ProductId.HasValue)
+        {
+            var existing = comanda.Items.FirstOrDefault(i => i.ProductId == request.ProductId.Value);
+            if (existing != null)
+            {
+                var upd = await _db.Products
+                    .Where(p => p.Id == request.ProductId.Value && p.StockQuantity >= request.Quantity)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockQuantity, p => p.StockQuantity - request.Quantity));
+                if (upd == 0)
+                {
+                    var p = await _db.Products.FindAsync(request.ProductId.Value);
+                    throw new InvalidOperationException($"Estoque insuficiente para '{p?.Name ?? "produto"}'.");
+                }
+                var addedSubtotal        = existing.UnitPriceInCents * request.Quantity;
+                existing.Quantity       += request.Quantity;
+                existing.SubtotalInCents += addedSubtotal;
+                comanda.TotalInCents    += addedSubtotal;
+                comanda.Status           = ComandaStatus.EmAndamento;
+                await _db.SaveChangesAsync();
+                await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+                    .SendAsync("ItemAddedByAdmin", new { ItemName = existing.ItemNameSnapshot, NewTotalInReais = comanda.TotalInReais });
+                await _hub.Clients.Group(ComandaHub.AdminGroup)
+                    .SendAsync("ComandaUpdated", new ComandaUpdateEvent
+                    {
+                        ComandaId       = comanda.Id,
+                        UserId          = comanda.UserId,
+                        UserName        = comanda.User?.Name ?? string.Empty,
+                        TableIdentifier = comanda.TableIdentifier,
+                        TotalInReais    = comanda.TotalInReais,
+                        Status          = comanda.Status.ToString(),
+                        LastItemAdded   = existing.ItemNameSnapshot,
+                        UpdatedAt       = DateTime.UtcNow,
+                    });
+                return MapToDto(comanda);
+            }
+        }
 
         var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
 
@@ -392,7 +466,7 @@ public class ComandaService : IComandaService
         return dto;
     }
 
-    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null)
+    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0)
     {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -401,8 +475,45 @@ public class ComandaService : IComandaService
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
         // Total líquido: desconta pontos que o cliente já pré-pagou via ApplyPoints.
-        // Após o fechamento, TotalInCents passa a refletir este valor líquido.
         var netTotal = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+
+        // ── Split payment: valida e processa segundo método ───────────────────
+        var hasSecond = secondPaymentAmountInCents > 0 && !string.IsNullOrEmpty(secondPaymentMethod);
+        if (hasSecond && secondPaymentAmountInCents >= netTotal)
+            throw new InvalidOperationException("O valor do segundo pagamento não pode cobrir o total inteiro. Selecione apenas o método principal.");
+
+        var primaryAmt = hasSecond ? netTotal - secondPaymentAmountInCents : netTotal;
+
+        if (hasSecond)
+        {
+            if (comanda.User == null)
+                throw new InvalidOperationException("Usuário não encontrado para processar segundo pagamento.");
+
+            if (secondPaymentMethod == PaymentCashback)
+            {
+                if (comanda.User.BalanceInCents < secondPaymentAmountInCents)
+                    throw new InvalidOperationException(
+                        $"Saldo de cashback insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, solicitado R$ {secondPaymentAmountInCents / 100m:N2}.");
+                comanda.User.BalanceInCents -= secondPaymentAmountInCents;
+                comanda.User.UpdatedAt       = DateTime.UtcNow;
+                _logger.LogInformation("Split: R$ {Val:N2} de cashback aplicado na comanda {Id}.", secondPaymentAmountInCents / 100m, comandaId);
+            }
+            else if (secondPaymentMethod == PaymentPontos)
+            {
+                if (comanda.User.PointsExpiresAt.HasValue && comanda.User.PointsExpiresAt.Value < DateTime.UtcNow)
+                    throw new InvalidOperationException("Os pontos do cliente estão expirados.");
+                if (comanda.User.PointsBalance < secondPaymentAmountInCents)
+                    throw new InvalidOperationException(
+                        $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, solicitado {secondPaymentAmountInCents} pts.");
+                comanda.User.PointsBalance -= secondPaymentAmountInCents;
+                comanda.User.UpdatedAt      = DateTime.UtcNow;
+                _logger.LogInformation("Split: {Pts} pontos aplicados na comanda {Id}.", secondPaymentAmountInCents, comandaId);
+            }
+            // Métodos físicos (Dinheiro/Pix/Cartão) como segundo: apenas registra, sem ação
+
+            comanda.SecondPaymentMethod        = secondPaymentMethod;
+            comanda.SecondPaymentAmountInCents = secondPaymentAmountInCents;
+        }
 
         // ── Crediário ─────────────────────────────────────────────────────────
         if (paymentMethod == PaymentCrediario)
@@ -414,25 +525,24 @@ public class ComandaService : IComandaService
 
             if (crediarioExistente != null)
             {
-                // Acumula no crediário já aberto (cliente com conta corrente/aba)
-                crediarioExistente.ValorEmCentavos += netTotal; // líquido: já desconta pontos aplicados
+                // Acumula no crediário já aberto; valor = apenas a parcela principal
+                crediarioExistente.ValorEmCentavos += primaryAmt;
                 crediarioExistente.DataVencimento   = vencimento;
                 if (!string.IsNullOrWhiteSpace(observacao))
                     crediarioExistente.Observacao = observacao;
 
                 _logger.LogInformation(
-                    "Comanda {ComandaId} acumulada no crediário {CredId} do usuário {UserId} — novo total R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
+                    "Comanda {ComandaId} acumulada no crediário {CredId} do usuário {UserId} — +R$ {Valor:N2}, novo total R$ {Total:N2}",
                     comandaId, crediarioExistente.Id, comanda.UserId,
-                    crediarioExistente.ValorEmCentavos / 100m, vencimento);
+                    primaryAmt / 100m, crediarioExistente.ValorEmCentavos / 100m);
             }
             else
             {
-                // Cria novo crediário
                 var crediario = new Crediario
                 {
                     UserId           = comanda.UserId,
                     ComandaId        = comanda.Id,
-                    ValorEmCentavos  = netTotal, // líquido: já desconta pontos aplicados
+                    ValorEmCentavos  = primaryAmt,
                     DataAbertura     = DateTime.UtcNow,
                     DataVencimento   = vencimento,
                     Status           = CrediariosStatus.Aberto,
@@ -445,7 +555,6 @@ public class ComandaService : IComandaService
                     "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
                     crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
 
-                // Envia email em background com escopo próprio (evita uso de Scoped service após dispose)
                 if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
                 {
                     var emailAddr  = comanda.User.Email;
@@ -462,60 +571,62 @@ public class ComandaService : IComandaService
             }
         }
 
-        // ── Pontos como pagamento ─────────────────────────────────────────────
+        // ── Pontos como pagamento principal ───────────────────────────────────
         if (paymentMethod == PaymentPontos)
         {
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado.");
 
-            var totalRestante = netTotal; // restante após pontos pré-aplicados pelo cliente
-            if (comanda.User.PointsBalance < totalRestante)
+            if (comanda.User.PointsBalance < primaryAmt)
                 throw new InvalidOperationException(
-                    $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, faltam {totalRestante} pts.");
+                    $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, faltam {primaryAmt} pts.");
 
-            comanda.User.PointsBalance -= totalRestante;
+            comanda.User.PointsBalance -= primaryAmt;
             comanda.User.UpdatedAt      = DateTime.UtcNow;
             _logger.LogInformation(
                 "Comanda {Id} quitada com {Pts} pontos do usuário {UserId}. Saldo restante: {Saldo}",
-                comandaId, totalRestante, comanda.UserId, comanda.User.PointsBalance);
+                comandaId, primaryAmt, comanda.UserId, comanda.User.PointsBalance);
         }
 
-        // ── Cashback como pagamento ───────────────────────────────────────────
+        // ── Cashback como pagamento principal ─────────────────────────────────
         if (paymentMethod == PaymentCashback)
         {
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado.");
 
-            var totalRestante = netTotal; // restante após pontos pré-aplicados pelo cliente
-            if (comanda.User.BalanceInCents < totalRestante)
+            if (comanda.User.BalanceInCents < primaryAmt)
                 throw new InvalidOperationException(
-                    $"Saldo insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, falta R$ {totalRestante / 100m:N2}.");
+                    $"Saldo insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, falta R$ {primaryAmt / 100m:N2}.");
 
-            comanda.User.BalanceInCents -= totalRestante;
+            comanda.User.BalanceInCents -= primaryAmt;
             comanda.User.UpdatedAt       = DateTime.UtcNow;
             _logger.LogInformation(
                 "Comanda {Id} quitada com R$ {Valor:N2} de cashback do usuário {UserId}. Saldo restante: R$ {Saldo:N2}",
-                comandaId, totalRestante / 100m, comanda.UserId, comanda.User.BalanceInCents / 100m);
+                comandaId, primaryAmt / 100m, comanda.UserId, comanda.User.BalanceInCents / 100m);
         }
 
-        // Grava o total líquido (o que o cliente efetivamente pagou, após desconto de pontos)
+        // Grava o total líquido (o que o cliente efetivamente pagou, após desconto de pontos pré-aplicados)
         comanda.TotalInCents  = netTotal;
         comanda.Status        = ComandaStatus.Fechada;
         comanda.ClosedAt      = DateTime.UtcNow;
         comanda.PaymentMethod = paymentMethod;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
-        // Regra: 1 ponto por R$1 gasto. TotalInCents já é líquido aqui.
-        // Não acumula pontos quando o próprio pagamento é via pontos ou cashback
+        // Não acumula quando o pagamento principal é via pontos, cashback ou crediário.
+        // Com split: ganha pontos apenas sobre a parcela paga em dinheiro/pix/cartão.
         if (comanda.User != null && paymentMethod != PaymentCrediario
                                  && paymentMethod != PaymentPontos
                                  && paymentMethod != PaymentCashback)
         {
-            var valorPago    = comanda.TotalInCents; // já é o netTotal
-            var pontosGanhos = valorPago / 100; // 1 ponto por real
+            // Base para acúmulo: exclui parcela paga em cashback/pontos no segundo método
+            var baseParaPontos = hasSecond &&
+                (secondPaymentMethod == PaymentCashback || secondPaymentMethod == PaymentPontos)
+                ? primaryAmt
+                : netTotal;
+
+            var pontosGanhos = baseParaPontos / 100;
             if (pontosGanhos > 0)
             {
-                // Zera saldo expirado antes de somar para evitar "ressurreição" de pontos vencidos
                 if (comanda.User.PointsExpiresAt.HasValue && comanda.User.PointsExpiresAt.Value < DateTime.UtcNow)
                     comanda.User.PointsBalance = 0;
                 comanda.User.PointsBalance  += pontosGanhos;
@@ -777,20 +888,22 @@ public class ComandaService : IComandaService
 
     private static ComandaDto MapToDto(Comanda comanda) => new()
     {
-        Id                  = comanda.Id,
-        UserId              = comanda.UserId,
-        UserName            = comanda.User?.Name ?? string.Empty,
-        TableIdentifier     = comanda.TableIdentifier,
-        Status              = comanda.Status.ToString(),
-        TotalInReais        = comanda.TotalInReais,
-        PointsApplied       = comanda.PointsApplied,
-        OpenedAt            = comanda.OpenedAt,
-        ClosedAt            = comanda.ClosedAt,
-        PaymentMethod       = comanda.PaymentMethod,
-        UserPointsBalance   = comanda.User?.PointsBalance  ?? 0,
-        UserBalanceInCents  = comanda.User?.BalanceInCents ?? 0,
-        ProfileImageUrl     = comanda.User?.ProfileImageUrl,
-        Items               = comanda.Items.Select(i => new ComandaItemDto
+        Id                         = comanda.Id,
+        UserId                     = comanda.UserId,
+        UserName                   = comanda.User?.Name ?? string.Empty,
+        TableIdentifier            = comanda.TableIdentifier,
+        Status                     = comanda.Status.ToString(),
+        TotalInReais               = comanda.TotalInReais,
+        PointsApplied              = comanda.PointsApplied,
+        OpenedAt                   = comanda.OpenedAt,
+        ClosedAt                   = comanda.ClosedAt,
+        PaymentMethod              = comanda.PaymentMethod,
+        SecondPaymentMethod        = comanda.SecondPaymentMethod,
+        SecondPaymentAmountInCents = comanda.SecondPaymentAmountInCents,
+        UserPointsBalance          = comanda.User?.PointsBalance  ?? 0,
+        UserBalanceInCents         = comanda.User?.BalanceInCents ?? 0,
+        ProfileImageUrl            = comanda.User?.ProfileImageUrl,
+        Items                      = comanda.Items.Select(i => new ComandaItemDto
         {
             Id               = i.Id,
             ItemNameSnapshot = i.ItemNameSnapshot,

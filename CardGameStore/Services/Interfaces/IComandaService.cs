@@ -33,8 +33,9 @@ public interface IComandaService
     /// <summary>
     /// Fecha a comanda (pagamento recebido).
     /// Se paymentMethod == "Crediario", cria um Crediario e envia email ao cliente.
+    /// Suporta split payment: secondPaymentMethod + secondPaymentAmountInCents.
     /// </summary>
-    Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null);
+    Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0);
 
     /// <summary>Cancela a comanda sem cobrança.</summary>
     Task<ComandaDto> CancelComandaAsync(Guid comandaId, Guid adminId);

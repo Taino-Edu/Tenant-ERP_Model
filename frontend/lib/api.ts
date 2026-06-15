@@ -70,6 +70,8 @@ export interface ComandaDto {
   totalInReais: number; pointsApplied: number
   openedAt: string; closedAt?: string
   paymentMethod: string | null
+  secondPaymentMethod: string | null
+  secondPaymentAmountInCents: number
   items: ComandaItemDto[]
   /** Saldo de pontos do cliente (para exibir na modal de fechamento). */
   userPointsBalance: number
@@ -236,8 +238,8 @@ export const comandaApi = {
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
   updateItem:   (id: string, itemId: string, quantity: number) =>
     api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
-  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string) =>
-    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao }),
+  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0) =>
+    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
   adminOpen:    (userId: string, tableIdentifier?: string) =>
     api.post<ComandaDto>('/api/comanda/admin-open', { userId, tableIdentifier }),
