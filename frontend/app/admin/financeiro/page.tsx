@@ -281,7 +281,7 @@ function FormasPagamentoSection({ formas }: { formas: FormaPagamentoTotalDto[] }
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                 <input
-                  className="input pl-8 py-1.5 text-xs w-40"
+                  className="input pl-8 py-1.5 text-xs w-full sm:w-40"
                   placeholder="Buscar cliente..."
                   value={searchCliente}
                   onChange={e => setSearch(e.target.value)}
@@ -699,11 +699,11 @@ export default function FinanceiroPage() {
           {/* Custom inline — sem scroll */}
           {preset === 'custom' && (
             <div className="flex items-center gap-2 flex-wrap">
-              <input type="date" className="input py-1.5 text-sm w-36"
+              <input type="date" className="input py-1.5 text-sm w-full sm:w-36"
                 value={inicio} max={fim}
                 onChange={e => setInicio(e.target.value)} />
               <span className="text-gray-500 text-sm">até</span>
-              <input type="date" className="input py-1.5 text-sm w-36"
+              <input type="date" className="input py-1.5 text-sm w-full sm:w-36"
                 value={fim} min={inicio} max={toDateInput(new Date())}
                 onChange={e => setFim(e.target.value)} />
               <button

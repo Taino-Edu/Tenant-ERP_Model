@@ -231,7 +231,7 @@ export default function ClientePage() {
       {confirmItem && (
         <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/50 backdrop-blur-sm"
           onClick={() => setConfirmItem(null)}>
-          <div className="w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl"
+          <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl"
             style={{ backgroundColor: C.white }}
             onClick={e => e.stopPropagation()}>
             {confirmItem.imageUrl && (

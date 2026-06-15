@@ -797,7 +797,7 @@ export default function VendaAvulsaPage() {
                   </div>
 
                   {/* Opções de pagamento */}
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {PAYMENT_METHODS.map(m => (
                       <button
                         key={m.value}

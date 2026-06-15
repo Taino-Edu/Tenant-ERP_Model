@@ -1384,7 +1384,7 @@ export default function DashboardPage() {
             value={histData}
             max={brToday()}
             onChange={e => setHistData(e.target.value)}
-            className="input text-sm w-40 py-1.5"
+            className="input text-sm w-full sm:w-40 py-1.5"
           />
         )}
 
@@ -1392,7 +1392,7 @@ export default function DashboardPage() {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
-              className="input pl-9 text-sm w-56"
+              className="input pl-9 text-sm w-full sm:w-56"
               placeholder="Buscar por cliente..."
               value={search}
               onChange={e => setSearch(e.target.value)}
