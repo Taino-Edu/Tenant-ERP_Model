@@ -1134,9 +1134,19 @@ export default function DashboardPage() {
     { key: 'Cashback',      label: 'Cashback',   color: 'text-purple-400' },
   ].map(pm => ({
     ...pm,
-    total: fechadas
-      .filter(c => c.paymentMethod === pm.key)
-      .reduce((s, c) => s + c.totalInReais, 0),
+    // Para split payment, calcula o valor real de cada método:
+    // primaryAmt = (total - pontos descontados) - valor do segundo método
+    // secondAmt  = secondPaymentAmountInCents / 100
+    total: fechadas.reduce((sum, c) => {
+      const net        = c.totalInReais - c.pointsApplied / 100
+      const hasSecond  = !!c.secondPaymentMethod && c.secondPaymentAmountInCents > 0
+      const secondAmt  = c.secondPaymentAmountInCents / 100
+      const primaryAmt = hasSecond ? net - secondAmt : net
+      let contrib = 0
+      if (c.paymentMethod       === pm.key) contrib += primaryAmt
+      if (c.secondPaymentMethod === pm.key) contrib += secondAmt
+      return sum + contrib
+    }, 0),
   })).filter(pm => pm.total > 0)
 
   const filtered = comandas.filter(c =>
@@ -1471,6 +1481,7 @@ export default function DashboardPage() {
                               <span>·</span>
                               <span className="text-gray-400 font-medium">
                                 {COMANDA_PAYMENT_METHODS.find(m => m.value === c.paymentMethod)?.label ?? c.paymentMethod}
+                                {c.secondPaymentMethod && ` + ${COMANDA_PAYMENT_METHODS.find(m => m.value === c.secondPaymentMethod)?.label ?? c.secondPaymentMethod}`}
                               </span>
                             </>
                           )}
@@ -1506,6 +1517,33 @@ export default function DashboardPage() {
                         <span>Total</span>
                         <span className="text-accent-gold">{fmt(c.totalInReais)}</span>
                       </div>
+                      {c.status === 'Fechada' && c.paymentMethod && (() => {
+                        const net        = c.totalInReais - c.pointsApplied / 100
+                        const hasSecond  = !!c.secondPaymentMethod && c.secondPaymentAmountInCents > 0
+                        const secondAmt  = c.secondPaymentAmountInCents / 100
+                        const primaryAmt = hasSecond ? net - secondAmt : net
+                        const pmLabel    = (key: string) => COMANDA_PAYMENT_METHODS.find(m => m.value === key)?.label ?? key
+                        return (
+                          <div className="space-y-0.5 pt-1">
+                            {c.pointsApplied > 0 && (
+                              <div className="flex justify-between text-xs text-gray-500">
+                                <span>Desconto pontos</span>
+                                <span className="text-amber-400">− {fmt(c.pointsApplied / 100)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between text-xs text-gray-500">
+                              <span>{pmLabel(c.paymentMethod)}</span>
+                              <span>{fmt(primaryAmt)}</span>
+                            </div>
+                            {hasSecond && (
+                              <div className="flex justify-between text-xs text-gray-500">
+                                <span>{pmLabel(c.secondPaymentMethod!)}</span>
+                                <span>{fmt(secondAmt)}</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )}
                 </div>

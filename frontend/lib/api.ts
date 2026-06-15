@@ -128,13 +128,14 @@ export interface Championship {
   id: string; name: string; game: string; status: string
   startDate: string; entryFeeInCents: number; entryFeeInReais: number; maxParticipants: number | null
   description?: string | null; participantCount?: number
+  preInscricaoCount?: number; listaEsperaCount?: number
   registrationDeadline?: string | null; endDate?: string | null
   imageUrl?: string | null; podioJson?: string | null
   participants?: ChampionshipParticipant[]
 }
 
 export interface ChampionshipPreInscricao {
-  id: string; nome: string; whatsApp: string; createdAt: string
+  id: string; nome: string; whatsApp: string; isListaEspera?: boolean; createdAt: string
 }
 
 export interface PodioItem { lugar: number; nome: string }
@@ -557,6 +558,7 @@ export interface TransacaoFinDto {
   cliente: string | null
   valor: number
   data: string
+  nota?: string | null   // ex.: "+ Cashback R$ 19,00" para split payment
 }
 
 export interface FormaPagamentoTotalDto {

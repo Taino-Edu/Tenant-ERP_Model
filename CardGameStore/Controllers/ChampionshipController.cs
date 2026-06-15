@@ -400,7 +400,7 @@ public class ChampionshipController : ControllerBase
 
         var pi = await _service.AddPreInscricaoAsync(id, request.Nome, request.WhatsApp);
         _logger.LogInformation("Pré-inscrição recebida para campeonato {Id}: {Nome}", id, request.Nome);
-        return StatusCode(201, new PreInscricaoDto { Id = pi.Id, Nome = pi.Nome, WhatsApp = pi.WhatsApp, CreatedAt = pi.CreatedAt });
+        return StatusCode(201, new PreInscricaoDto { Id = pi.Id, Nome = pi.Nome, WhatsApp = pi.WhatsApp, IsListaEspera = pi.IsListaEspera, CreatedAt = pi.CreatedAt });
     }
 
     /// <summary>Lista pré-inscrições de um campeonato (Admin).</summary>
@@ -410,7 +410,7 @@ public class ChampionshipController : ControllerBase
     public async Task<IActionResult> GetPreInscricoes(Guid id)
     {
         var list = await _service.GetPreInscricoesAsync(id);
-        return Ok(list.Select(p => new PreInscricaoDto { Id = p.Id, Nome = p.Nome, WhatsApp = p.WhatsApp, CreatedAt = p.CreatedAt }));
+        return Ok(list.Select(p => new PreInscricaoDto { Id = p.Id, Nome = p.Nome, WhatsApp = p.WhatsApp, IsListaEspera = p.IsListaEspera, CreatedAt = p.CreatedAt }));
     }
 
     // -------------------------------------------------------------------------
@@ -462,6 +462,8 @@ public class ChampionshipController : ControllerBase
         EntryFeeInReais      = ch.EntryFeeInCents / 100m,
         Status               = ch.Status.ToString(),
         ParticipantCount     = ch.Participants?.Count ?? 0,
+        PreInscricaoCount    = ch.PreInscricoes?.Count(p => !p.IsListaEspera)  ?? 0,
+        ListaEsperaCount     = ch.PreInscricoes?.Count(p =>  p.IsListaEspera) ?? 0,
         CreatedAt            = ch.CreatedAt,
         ImageUrl             = ch.ImageUrl,
         PodioJson            = ch.PodioJson,
@@ -509,6 +511,8 @@ public class ChampionshipDto
     public decimal   EntryFeeInReais      { get; init; }
     public string    Status               { get; init; } = string.Empty;
     public int       ParticipantCount     { get; init; }
+    public int       PreInscricaoCount    { get; init; }
+    public int       ListaEsperaCount     { get; init; }
     public DateTime  CreatedAt            { get; init; }
     public string?   ImageUrl             { get; init; }
     public string?   PodioJson            { get; init; }
@@ -597,10 +601,11 @@ public class PreInscricaoRequest
 /// <summary>DTO de pré-inscrição retornado ao frontend.</summary>
 public class PreInscricaoDto
 {
-    public Guid     Id        { get; init; }
-    public string   Nome      { get; init; } = string.Empty;
-    public string   WhatsApp  { get; init; } = string.Empty;
-    public DateTime CreatedAt { get; init; }
+    public Guid     Id            { get; init; }
+    public string   Nome          { get; init; } = string.Empty;
+    public string   WhatsApp      { get; init; } = string.Empty;
+    public bool     IsListaEspera { get; init; }
+    public DateTime CreatedAt     { get; init; }
 }
 
 /// <summary>Request para salvar o pódio de um campeonato.</summary>

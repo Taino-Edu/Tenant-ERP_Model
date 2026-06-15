@@ -21,7 +21,10 @@ public class ChampionshipService : IChampionshipService
     }
 
     public async Task<Championship?> GetByIdAsync(Guid id) =>
-        await _db.Championships.Include(c => c.Participants).FirstOrDefaultAsync(c => c.Id == id);
+        await _db.Championships
+            .Include(c => c.Participants)
+            .Include(c => c.PreInscricoes)
+            .FirstOrDefaultAsync(c => c.Id == id);
 
     public async Task<Championship> UpdateAsync(Championship championship)
     {
@@ -33,12 +36,13 @@ public class ChampionshipService : IChampionshipService
     public async Task<IEnumerable<Championship>> GetUpcomingAsync() =>
         await _db.Championships
             .Include(c => c.Participants)
+            .Include(c => c.PreInscricoes)
             .Where(c => c.Status == ChampionshipStatus.Planejado || c.Status == ChampionshipStatus.Inscricoes)
             .OrderBy(c => c.StartDate).ToListAsync();
 
     public async Task<IEnumerable<Championship>> GetAllAsync(string? search = null)
     {
-        var query = _db.Championships.Include(c => c.Participants).AsQueryable();
+        var query = _db.Championships.Include(c => c.Participants).Include(c => c.PreInscricoes).AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(c => c.Name.ToLower().Contains(search.ToLower()) ||
                                      c.Game.ToLower().Contains(search.ToLower()));
@@ -128,7 +132,21 @@ public class ChampionshipService : IChampionshipService
 
     public async Task<ChampionshipPreInscricao> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp)
     {
-        var pi = new ChampionshipPreInscricao { ChampionshipId = championshipId, Nome = nome, WhatsApp = whatsApp };
+        bool isListaEspera = false;
+        var ch = await _db.Championships.Include(c => c.PreInscricoes).FirstOrDefaultAsync(c => c.Id == championshipId);
+        if (ch?.MaxParticipants.HasValue == true)
+        {
+            var confirmedCount = ch.PreInscricoes.Count(p => !p.IsListaEspera);
+            isListaEspera = confirmedCount >= ch.MaxParticipants.Value;
+        }
+
+        var pi = new ChampionshipPreInscricao
+        {
+            ChampionshipId = championshipId,
+            Nome           = nome,
+            WhatsApp       = whatsApp,
+            IsListaEspera  = isListaEspera,
+        };
         _db.ChampionshipPreInscricoes.Add(pi);
         await _db.SaveChangesAsync();
         return pi;

@@ -113,6 +113,8 @@ public class TransacaoFinDto
     public string? Cliente { get; set; }
     public decimal Valor   { get; set; }
     public DateTime Data   { get; set; }
+    /// <summary>Nota opcional exibida no drill-down (ex.: "+ Cashback R$19,00").</summary>
+    public string? Nota    { get; set; }
 
     /// <summary>Usado internamente no agrupamento — não serializado.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

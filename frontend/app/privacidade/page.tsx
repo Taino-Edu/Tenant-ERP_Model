@@ -9,8 +9,8 @@ import type { Metadata } from 'next'
 import ThemeToggle from '@/components/ThemeToggle'
 
 export const metadata: Metadata = {
-  title: 'PolÃ­tica de Privacidade â€” SantuÃ¡rio Nerd',
-  description: 'Saiba como a SantuÃ¡rio Nerd coleta, usa e protege seus dados pessoais em conformidade com a LGPD.',
+  title: 'Politica de Privacidade â€” SantuÃ¡rio Nerd',
+  description: 'Saiba como a Santuario Nerd coleta, usa e protege seus dados pessoais em conformidade com a LGPD.',
 }
 
 export default function PrivacidadePage() {
@@ -58,8 +58,8 @@ export default function PrivacidadePage() {
               <strong>Controlador dos dados:</strong><br />
               SantuÃ¡rio Nerd â€” SÃ£o JosÃ© do Rio Preto, SP<br />
               E-mail:{' '}
-              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
-                contato@santuarionerd.com.br
+              <a href="mailto:santuarionerd@gmail.com" className="text-[#42B6EE] underline">
+                santuarionerd@gmail.com
               </a>
             </p>
           </section>
@@ -72,7 +72,7 @@ export default function PrivacidadePage() {
               <li><strong>CPF</strong> â€” identificaÃ§Ã£o Ãºnica e prevenÃ§Ã£o de fraudes no crediÃ¡rio</li>
               <li><strong>WhatsApp</strong> â€” contato e login rÃ¡pido via QR Code</li>
               <li><strong>E-mail</strong> â€” confirmaÃ§Ãµes, notificaÃ§Ãµes e recuperaÃ§Ã£o de senha</li>
-              <li><strong>HistÃ³rico de comandas e compras</strong> â€” gestÃ£o do crediÃ¡rio e pontos</li>
+              <li><strong>Historico de comandas e compras</strong> ea” gestão do crediario e pontos</li>
               <li><strong>ParticipaÃ§Ã£o em campeonatos</strong> â€” nome do deck, colocaÃ§Ã£o</li>
               <li><strong>Saldo de pontos</strong> â€” programa de fidelidade</li>
               <li><strong>EndereÃ§o IP (hash SHA-256)</strong> â€” seguranÃ§a e prevenÃ§Ã£o de abusos; nunca armazenamos o IP em texto puro</li>

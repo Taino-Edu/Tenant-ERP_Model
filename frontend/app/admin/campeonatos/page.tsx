@@ -4,7 +4,7 @@ import { championshipApi, userApi, uploadApi, Championship, ChampionshipParticip
 import toast from 'react-hot-toast'
 import {
   Trophy, Plus, Users, Swords, X, Check, Loader2,
-  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus, Edit2, MessageCircle, Award,
+  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus, Edit2, MessageCircle, Award, Link2,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -748,6 +748,16 @@ function ChampionshipCard({
             </button>
           ))}
           <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/campeonato/${c.id}`
+                navigator.clipboard.writeText(url).then(() => toast.success('Link copiado!'))
+              }}
+              className="text-xs px-3 py-1.5 rounded-lg font-medium bg-surface-700 text-gray-300 hover:bg-surface-600 border border-surface-500 transition-colors flex items-center gap-1.5"
+              title="Copiar link público de inscrição"
+            >
+              <Link2 className="w-3.5 h-3.5" /> Link
+            </button>
             {onEdit && (
               <button
                 onClick={() => onEdit(c)}

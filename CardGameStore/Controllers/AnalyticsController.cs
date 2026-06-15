@@ -337,18 +337,61 @@ public class AnalyticsController : ControllerBase
         var comandasPeriodo = await _db.Comandas
             .Include(c => c.User)
             .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada && c.PaymentMethod != null)
-            .Select(c => new { c.PaymentMethod, c.TotalInCents, c.ClosedAt, ClienteNome = c.User != null ? c.User.Name : null })
+            .Select(c => new
+            {
+                c.PaymentMethod,
+                c.TotalInCents,
+                c.PointsApplied,
+                c.SecondPaymentMethod,
+                c.SecondPaymentAmountInCents,
+                c.ClosedAt,
+                ClienteNome = c.User != null ? c.User.Name : null,
+            })
             .ToListAsync();
 
-        // Transações combinadas (comanda + avulsa) para agrupamento e drill-down
+        // Para split payment, gera uma transação por forma de pagamento com o valor correto.
+        // Ex.: R$20 total, R$1 Débito + R$19 Cashback → duas entradas separadas.
+        static string fmtReais(decimal v) => $"R$ {v:F2}".Replace('.', ',');
         var transacoesComanda = comandasPeriodo
-            .Select(c => new TransacaoFinDto
+            .SelectMany(c =>
             {
-                Origem     = "Comanda",
-                Cliente    = c.ClienteNome,
-                Valor      = Math.Round(c.TotalInCents / 100m, 2),
-                Data       = c.ClosedAt!.Value,
-                Forma      = c.PaymentMethod!,
+                var net        = c.TotalInCents - c.PointsApplied;
+                var hasSecond  = !string.IsNullOrEmpty(c.SecondPaymentMethod) && c.SecondPaymentAmountInCents > 0;
+                var secondAmt  = hasSecond ? c.SecondPaymentAmountInCents : 0;
+                var primaryAmt = Math.Max(0, net - secondAmt);
+
+                var label2nd = hasSecond
+                    ? $"+ {c.SecondPaymentMethod} {fmtReais(secondAmt / 100m)}"
+                    : null;
+                var label1st = hasSecond
+                    ? $"+ {c.PaymentMethod} {fmtReais(primaryAmt / 100m)}"
+                    : null;
+
+                var list = new List<TransacaoFinDto>
+                {
+                    new()
+                    {
+                        Origem  = "Comanda",
+                        Cliente = c.ClienteNome,
+                        Valor   = Math.Round(primaryAmt / 100m, 2),
+                        Data    = c.ClosedAt!.Value,
+                        Nota    = label2nd,
+                        Forma   = c.PaymentMethod!,
+                    }
+                };
+                if (hasSecond)
+                {
+                    list.Add(new TransacaoFinDto
+                    {
+                        Origem  = "Comanda",
+                        Cliente = c.ClienteNome,
+                        Valor   = Math.Round(secondAmt / 100m, 2),
+                        Data    = c.ClosedAt!.Value,
+                        Nota    = label1st,
+                        Forma   = c.SecondPaymentMethod!,
+                    });
+                }
+                return list;
             });
 
         var avulsasPeriodo = todasVendas

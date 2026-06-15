@@ -21,6 +21,7 @@ export default function PerfilPage() {
   const [loading,        setLoading]        = useState(true)
   const [expanded,       setExpanded]       = useState<string | null>(null)
   const [tab,            setTab]            = useState<'pontos' | 'historico' | 'torneios' | 'crediario'>('pontos')
+  const [isUploading,    setIsUploading]    = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -31,7 +32,6 @@ export default function PerfilPage() {
     ]).finally(() => setLoading(false))
   }, [])
 
-  // Crediário aberto (se houver)
   const crediario = crediarios.find(c => c.status === 'Aberto' || c.status === 'Vencido') ?? null
 
   const agora = new Date()
@@ -49,9 +49,6 @@ export default function PerfilPage() {
     router.push('/')
   }
 
-  const isExpired = profile?.pointsExpired
-  const [isUploading, setIsUploading] = useState(false)
-
   async function handleAvatarClick() {
     document.getElementById('avatar-upload')?.click()
   }
@@ -59,12 +56,10 @@ export default function PerfilPage() {
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-
     if (file.size > 5 * 1024 * 1024) {
       toast.error('A imagem deve ter no máximo 5MB.')
       return
     }
-
     setIsUploading(true)
     try {
       const { data } = await authApi.uploadProfileImage(file)
@@ -74,287 +69,346 @@ export default function PerfilPage() {
       toast.error(err.response?.data?.message || 'Erro ao enviar imagem.')
     } finally {
       setIsUploading(false)
-      // Limpa o input para permitir upload da mesma foto novamente se necessário
       e.target.value = ''
     }
   }
 
+  const isExpired = profile?.pointsExpired
+
+  const tabs = [
+    { id: 'pontos',    icon: Star,    label: 'Pontos'   },
+    { id: 'historico', icon: Receipt, label: 'Histórico' },
+    { id: 'torneios',  icon: Trophy,  label: 'Torneios' },
+    { id: 'crediario', icon: Wallet,  label: 'Dívida'   },
+  ] as const
+
   return (
-    <div className="min-h-screen bg-surface-900 pb-20 text-white font-sans">
-      
-      {/* ── HEADER ────────────────────────────────────────────────── */}
-      <header className="bg-surface-800 border-b border-surface-700 px-6 py-5 sticky top-0 z-20 backdrop-blur-md">
-        <div className="max-w-lg mx-auto flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <Toaster position="bottom-center" toastOptions={{ style: { background: '#fff', color: '#1a1a2e', border: '1px solid #e5e7eb' } }} />
+
+      {/* ── HEADER GRADIENTE ── */}
+      <header className="relative pb-20 pt-safe"
+        style={{ background: 'linear-gradient(160deg, #29B5E8 0%, #1A6DB5 60%, #1352A2 100%)' }}>
+
+        {/* Nuvens decorativas */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+          <div className="absolute top-4 left-2 w-20 h-6 bg-white/20 rounded-full blur-md" />
+          <div className="absolute top-8 left-16 w-32 h-5 bg-white/15 rounded-full blur-md" />
+          <div className="absolute top-3 right-4 w-24 h-6 bg-white/20 rounded-full blur-md" />
+        </div>
+
+        {/* Barra de navegação */}
+        <div className="relative flex items-center justify-between px-5 pt-12 pb-4 max-w-lg mx-auto">
           <button
             onClick={() => router.back()}
-            className="p-3 -ml-3 text-gray-400 hover:text-white transition-colors active:scale-90"
+            className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-white/30 transition-colors active:scale-90"
             aria-label="Voltar"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
-          <h1 className="text-sm font-black uppercase tracking-[0.2em]">
-            Minha Conta
-          </h1>
-          <button onClick={handleLogout} className="p-2 -mr-2 text-gray-400 hover:text-accent-red transition-colors">
-            <LogOut className="w-5 h-5" />
+          <h1 className="text-sm font-black text-white uppercase tracking-[0.2em]">Minha Conta</h1>
+          <button
+            onClick={handleLogout}
+            className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white hover:bg-red-400/60 transition-colors"
+            aria-label="Sair"
+          >
+            <LogOut className="w-4 h-4" />
           </button>
+        </div>
+
+        {/* Avatar + nome (centro do header) */}
+        <div className="relative flex flex-col items-center px-4 max-w-lg mx-auto">
+          <input
+            type="file" id="avatar-upload"
+            accept="image/jpeg, image/png, image/webp"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <button
+            onClick={handleAvatarClick}
+            disabled={isUploading}
+            className="relative w-20 h-20 rounded-full shadow-xl overflow-hidden group ring-4 ring-white/40 hover:ring-white/70 transition-all"
+          >
+            {isUploading ? (
+              <div className="w-full h-full bg-[#1A6DB5] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-white" />
+              </div>
+            ) : profile?.profileImageUrl ? (
+              <>
+                <img
+                  src={`${process.env.NEXT_PUBLIC_API_URL || 'https://santuarionerd.tech'}${profile.profileImageUrl}`}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                  crossOrigin="anonymous"
+                />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-white">Editar</span>
+                </div>
+              </>
+            ) : (
+              <div className="w-full h-full bg-[#1A6DB5] flex items-center justify-center">
+                <User className="w-9 h-9 text-white/80" />
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-white">Editar</span>
+                </div>
+              </div>
+            )}
+          </button>
+
+          {!loading && (
+            <div className="mt-3 text-center">
+              <h2 className="text-lg font-black text-white leading-tight">
+                {profile?.name ?? getUserName() ?? 'Visitante'}
+              </h2>
+              <div className="flex flex-col items-center gap-1 mt-1">
+                {profile?.email && (
+                  <span className="flex items-center gap-1.5 text-[11px] text-white/70 font-medium">
+                    <Mail className="w-3 h-3" /> {profile.email}
+                  </span>
+                )}
+                {profile?.whatsApp && (
+                  <span className="flex items-center gap-1.5 text-[11px] text-white/70 font-medium">
+                    <Phone className="w-3 h-3" /> {profile.whatsApp}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-8 space-y-6">
-        
+      {/* ── CARD PRINCIPAL (sobrepõe o header) ── */}
+      <div className="flex-1 -mt-12 bg-gray-50 rounded-t-[2rem] relative z-10 px-4 pt-6 pb-20 max-w-lg mx-auto w-full">
+
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
-            <p className="text-sm text-gray-500 font-medium text-center">Consultando registros...</p>
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <Loader2 className="w-8 h-8 text-[#42B6EE]" />
+            <p className="text-sm text-gray-400 font-semibold">Consultando registros...</p>
           </div>
         ) : (
           <>
-            {/* ── PERFIL / AVATAR ── */}
-            <section className="bg-gradient-to-b from-surface-800 to-surface-900 border border-surface-600 rounded-3xl p-8 text-center shadow-xl">
-              <input 
-                type="file" 
-                id="avatar-upload" 
-                accept="image/jpeg, image/png, image/webp" 
-                className="hidden" 
-                onChange={handleFileChange}
-              />
-              <button 
-                onClick={handleAvatarClick}
-                disabled={isUploading}
-                className="relative w-20 h-20 bg-brand-500/10 border-2 border-brand-500/30 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_20px_rgba(66,182,238,0.15)] hover:scale-105 hover:border-brand-500 transition-all cursor-pointer group overflow-hidden"
-              >
-                {isUploading ? (
-                  <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
-                ) : profile?.profileImageUrl ? (
-                  <>
-                    <img 
-                      src={`${process.env.NEXT_PUBLIC_API_URL || 'https://santuarionerd.tech'}${profile.profileImageUrl}`} 
-                      alt="Avatar" 
-                      className="w-full h-full object-cover" 
-                      crossOrigin="anonymous"
-                    />
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-white">Editar</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <User className="w-10 h-10 text-brand-500" />
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-white">Editar</span>
-                    </div>
-                  </>
-                )}
-              </button>
-              <h2 className="text-xl font-bold text-white">{profile?.name ?? getUserName() ?? 'Visitante'}</h2>
-              <div className="flex flex-col gap-1 mt-2">
-                {profile?.email && (
-                  <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
-                    <Mail className="w-3 h-3" /> {profile.email}
-                  </div>
-                )}
-                {profile?.whatsApp && (
-                  <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
-                    <Phone className="w-3 h-3" /> {profile.whatsApp}
-                  </div>
+            {/* ── STATS RÁPIDOS ── */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <p className="text-[10px] font-black text-[#42B6EE] uppercase tracking-wider mb-1">Pontos Nerd</p>
+                <p className="text-2xl font-black text-gray-900">{profile?.pointsBalance ?? 0}</p>
+                {isExpired && (
+                  <p className="text-[9px] text-red-500 font-bold mt-0.5 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Expirado
+                  </p>
                 )}
               </div>
-            </section>
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <p className="text-[10px] font-black text-[#42B6EE] uppercase tracking-wider mb-1">Gasto no Mês</p>
+                <p className="text-2xl font-black text-gray-900">
+                  R$ {consumoMensal.toFixed(2).replace('.', ',')}
+                </p>
+              </div>
+            </div>
 
-            {/* ── TABS NAVEGAÇÃO ── */}
-            <nav className="flex bg-surface-800 p-1 rounded-2xl border border-surface-600 gap-1">
-              {[
-                { id: 'pontos', icon: Star, label: 'Pontos' },
-                { id: 'historico', icon: Receipt, label: 'Histórico' },
-                { id: 'torneios', icon: Trophy, label: 'Torneios' },
-                { id: 'crediario', icon: Wallet, label: 'Dívida' },
-              ].map((t) => (
+            {/* ── TABS ── */}
+            <nav className="flex bg-white border border-gray-100 shadow-sm p-1 rounded-2xl gap-1 mb-5 sticky top-4 z-20">
+              {tabs.map((t) => (
                 <button
                   key={t.id}
-                  onClick={() => setTab(t.id as any)}
+                  onClick={() => setTab(t.id)}
                   className={clsx(
-                    "flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all",
-                    tab === t.id ? "bg-brand-500 text-white shadow-lg" : "text-gray-500 hover:text-gray-300"
+                    'flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all',
+                    tab === t.id
+                      ? 'text-white shadow-md'
+                      : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                   )}
+                  style={tab === t.id ? { background: 'linear-gradient(135deg, #29B5E8, #1A6DB5)' } : {}}
                 >
-                  <t.icon className={clsx("w-5 h-5 mb-1", tab === t.id ? "text-white" : "text-gray-400")} />
-                  <span className="text-[10px] font-bold uppercase tracking-tighter">{t.label}</span>
+                  <t.icon className={clsx('w-4 h-4 mb-1', tab === t.id ? 'text-white' : 'text-gray-400')} />
+                  <span className="text-[10px] font-black uppercase tracking-tight">{t.label}</span>
                 </button>
               ))}
             </nav>
 
-            {/* ── CONTEÚDO DAS TABS ── */}
-            <div className="space-y-4">
-              
-              {/* TAB: PONTOS */}
-              {tab === 'pontos' && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <div className="bg-surface-800 border border-surface-600 rounded-2xl p-6 relative overflow-hidden">
-                    <Star className="absolute -right-4 -bottom-4 w-24 h-24 text-white opacity-[0.03]" />
-                    <p className="text-xs font-bold text-brand-500 uppercase tracking-widest mb-1">Saldo de Experiência</p>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-4xl font-black">{profile?.pointsBalance ?? 0}</span>
-                      <span className="text-gray-500 font-bold uppercase text-xs tracking-widest">Pontos</span>
-                    </div>
-                    {isExpired && (
-                      <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400 text-xs">
-                        <AlertCircle className="w-4 h-4 shrink-0" />
-                        Seus pontos expiraram. Continue frequentando para ganhar novos!
-                      </div>
-                    )}
+            {/* ── TAB: PONTOS ── */}
+            {tab === 'pontos' && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm relative overflow-hidden">
+                  <Star className="absolute -right-4 -bottom-4 w-24 h-24 text-[#42B6EE] opacity-[0.06]" />
+                  <p className="text-xs font-black text-[#42B6EE] uppercase tracking-widest mb-1">Saldo de Experiência</p>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black text-gray-900">{profile?.pointsBalance ?? 0}</span>
+                    <span className="text-gray-400 font-bold uppercase text-xs tracking-widest">Pontos</span>
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-surface-800 border border-surface-600 rounded-2xl p-4">
-                      <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Gasto no Mês</p>
-                      <p className="text-lg font-bold">R$ {consumoMensal.toFixed(2).replace('.', ',')}</p>
+                  {isExpired && (
+                    <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-500 text-xs font-medium">
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                      Seus pontos expiraram. Continue frequentando para ganhar novos!
                     </div>
-                    <div className="bg-surface-800 border border-surface-600 rounded-2xl p-4">
-                      <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Status</p>
-                      <p className="text-lg font-bold flex items-center gap-1.5 text-accent-green">
-                        <ShieldCheck className="w-4 h-4" /> Ativo
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TAB: HISTÓRICO */}
-              {tab === 'historico' && (
-                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  {history.length === 0 ? (
-                    <div className="text-center py-12 text-gray-400">
-                      <Clock className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                      <p className="text-sm italic text-center">Nenhum registro encontrado...</p>
-                    </div>
-                  ) : (
-                    history.map(c => {
-                      const open = expanded === c.id
-                      return (
-                        <div key={c.id} className="bg-surface-800 border border-surface-600 rounded-2xl overflow-hidden group">
-                          <button 
-                            onClick={() => setExpanded(open ? null : c.id)}
-                            className="w-full p-4 flex items-center justify-between hover:bg-surface-700/50 transition-colors"
-                          >
-                            <div className="flex items-center gap-3 text-left">
-                              <div className="w-10 h-10 rounded-xl bg-surface-900 flex items-center justify-center border border-surface-600 group-hover:border-brand-500/30 transition-colors">
-                                <Receipt className="w-5 h-5 text-gray-500" />
-                              </div>
-                              <div>
-                                <p className="text-sm font-bold text-white">Comanda {c.closedAt ? new Date(c.closedAt).toLocaleDateString('pt-BR') : 'Ativa'}</p>
-                                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-tighter">{c.items.length} itens • {c.status}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-black text-accent-green">R$ {c.totalInReais.toFixed(2).replace('.', ',')}</span>
-                              {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                            </div>
-                          </button>
-                          {open && (
-                            <div className="px-4 pb-4 border-t border-surface-700 bg-surface-900/50 space-y-2 pt-3">
-                              {c.items.map((item, idx) => (
-                                <div key={idx} className="flex justify-between items-center text-xs">
-                                  <span className="text-gray-400 font-medium">{item.quantity}x {item.itemNameSnapshot}</span>
-                                  <span className="text-gray-300 font-bold">R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })
                   )}
                 </div>
-              )}
 
-              {/* TAB: TORNEIOS */}
-              {tab === 'torneios' && (
-                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  {participations.length === 0 ? (
-                    <div className="text-center py-12 text-gray-400">
-                      <Trophy className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                      <p className="text-sm italic text-center">Você ainda não entrou em batalhas...</p>
+                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                      <ShieldCheck className="w-5 h-5 text-emerald-500" />
                     </div>
-                  ) : (
-                    participations.map(p => (
-                      <div key={p.participationId} className="bg-surface-800 border border-surface-600 rounded-2xl p-5 space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-xs font-bold text-brand-500 uppercase tracking-widest">{p.game}</p>
-                            <h3 className="text-lg font-bold text-white leading-tight">{p.championshipName}</h3>
-                          </div>
-                          <div className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black text-emerald-400 uppercase">
-                            Inscrito
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 pt-2 border-t border-surface-600">
-                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <CalendarClock className="w-3.5 h-3.5" />
-                            {new Date(p.startDate).toLocaleDateString('pt-BR')}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <Coins className="w-3.5 h-3.5" />
-                            R$ {p.entryFeeInReais.toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              )}
-
-              {/* TAB: CREDIÁRIO */}
-              {tab === 'crediario' && (
-                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  {!crediario ? (
-                    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-3xl p-8 text-center space-y-4">
-                      <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto">
-                        <ShieldCheck className="w-8 h-8 text-emerald-400" />
-                      </div>
-                      <div className="space-y-1">
-                        <p className="font-bold text-white text-lg">Tudo limpo!</p>
-                        <p className="text-gray-500 text-sm">Você não possui dívidas ativas no santuário.</p>
-                      </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Status</p>
+                      <p className="text-sm font-black text-emerald-500">Ativo</p>
                     </div>
-                  ) : (
-                    <div className="bg-red-500/5 border border-red-500/10 rounded-3xl p-8 text-center space-y-6">
-                      <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto animate-pulse">
-                        <Wallet className="w-8 h-8 text-red-400" />
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-xs font-black text-red-500 uppercase tracking-widest">Dívida Pendente</p>
-                        <p className="text-4xl font-black text-white">R$ {crediario.saldoRestanteEmReais.toFixed(2).replace('.', ',')}</p>
-                      </div>
-                      <div className="p-4 bg-black/20 rounded-2xl flex flex-col gap-2">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500 uppercase font-bold">Vencimento</span>
-                          <span className="text-red-400 font-bold">{new Date(crediario.dataVencimento).toLocaleDateString('pt-BR')}</span>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-gray-400 italic text-center">
-                        * Compareça ao balcão para quitar sua dívida com o Maikon.
+                  </div>
+                  {profile && profile.balanceInCents > 0 && (
+                    <div className="text-right">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Cashback</p>
+                      <p className="text-sm font-black text-emerald-500">
+                        R$ {(profile.balanceInCents / 100).toFixed(2).replace('.', ',')}
                       </p>
                     </div>
                   )}
                 </div>
-              )}
+              </div>
+            )}
 
-            </div>
+            {/* ── TAB: HISTÓRICO ── */}
+            {tab === 'historico' && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {history.length === 0 ? (
+                  <div className="bg-white border border-gray-100 rounded-2xl py-14 text-center shadow-sm">
+                    <Clock className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                    <p className="text-sm text-gray-400 italic">Nenhum registro encontrado...</p>
+                  </div>
+                ) : (
+                  history.map(c => {
+                    const open = expanded === c.id
+                    return (
+                      <div key={c.id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
+                        <button
+                          onClick={() => setExpanded(open ? null : c.id)}
+                          className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 text-left">
+                            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100">
+                              <Receipt className="w-5 h-5 text-[#42B6EE]" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-gray-900">
+                                Comanda {c.closedAt ? new Date(c.closedAt).toLocaleDateString('pt-BR') : 'Ativa'}
+                              </p>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
+                                {c.items.length} itens • {c.status}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-black text-emerald-500 text-sm">
+                              R$ {c.totalInReais.toFixed(2).replace('.', ',')}
+                            </span>
+                            {open
+                              ? <ChevronUp className="w-4 h-4 text-gray-400" />
+                              : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                          </div>
+                        </button>
+                        {open && (
+                          <div className="px-4 pb-4 border-t border-gray-100 bg-gray-50 space-y-2 pt-3">
+                            {c.items.map((item, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-xs">
+                                <span className="text-gray-500 font-medium">{item.quantity}x {item.itemNameSnapshot}</span>
+                                <span className="text-gray-700 font-bold">R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+
+            {/* ── TAB: TORNEIOS ── */}
+            {tab === 'torneios' && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {participations.length === 0 ? (
+                  <div className="bg-white border border-gray-100 rounded-2xl py-14 text-center shadow-sm">
+                    <Trophy className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                    <p className="text-sm text-gray-400 italic">Você ainda não entrou em batalhas...</p>
+                  </div>
+                ) : (
+                  participations.map(p => (
+                    <div key={p.participationId} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-[11px] font-black text-[#42B6EE] uppercase tracking-widest">{p.game}</p>
+                          <h3 className="text-base font-black text-gray-900 leading-tight mt-0.5">{p.championshipName}</h3>
+                        </div>
+                        <div className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-[10px] font-black text-emerald-600 uppercase shrink-0">
+                          Inscrito
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+                          <CalendarClock className="w-3.5 h-3.5 text-[#42B6EE]" />
+                          {new Date(p.startDate).toLocaleDateString('pt-BR')}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+                          <Coins className="w-3.5 h-3.5 text-[#42B6EE]" />
+                          R$ {p.entryFeeInReais.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* ── TAB: CREDIÁRIO ── */}
+            {tab === 'crediario' && (
+              <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {!crediario ? (
+                  <div className="bg-white border border-gray-100 rounded-2xl p-8 text-center shadow-sm space-y-4">
+                    <div className="w-16 h-16 bg-emerald-50 border border-emerald-100 rounded-full flex items-center justify-center mx-auto">
+                      <ShieldCheck className="w-8 h-8 text-emerald-500" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-black text-gray-900 text-lg">Tudo limpo!</p>
+                      <p className="text-gray-400 text-sm">Você não possui dívidas ativas no santuário.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white border border-red-100 rounded-2xl p-8 text-center shadow-sm space-y-5">
+                    <div className="w-16 h-16 bg-red-50 border border-red-100 rounded-full flex items-center justify-center mx-auto animate-pulse">
+                      <Wallet className="w-8 h-8 text-red-500" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-black text-red-500 uppercase tracking-widest">Dívida Pendente</p>
+                      <p className="text-4xl font-black text-gray-900">
+                        R$ {crediario.saldoRestanteEmReais.toFixed(2).replace('.', ',')}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-2xl">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500 font-bold uppercase">Vencimento</span>
+                        <span className="text-red-500 font-bold">
+                          {new Date(crediario.dataVencimento).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-gray-400 italic">
+                      * Compareça ao balcão para quitar sua dívida com o Maikon.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
-      </main>
-
-      <Toaster position="bottom-center" />
+      </div>
     </div>
   )
 }
 
 function Loader2({ className }: { className?: string }) {
   return (
-    <svg className={clsx("animate-spin", className)} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    <svg className={clsx('animate-spin', className)} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
     </svg>
   )
 }

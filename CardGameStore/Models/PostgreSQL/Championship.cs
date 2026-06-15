@@ -113,6 +113,9 @@ public class ChampionshipPreInscricao
     [Required, MaxLength(30)] [Column("whatsapp")]
     public string WhatsApp { get; set; } = string.Empty;
 
+    [Column("is_lista_espera")]
+    public bool IsListaEspera { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

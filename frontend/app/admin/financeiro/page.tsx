@@ -368,6 +368,7 @@ function FormasPagamentoSection({ formas }: { formas: FormaPagamentoTotalDto[] }
                               <p className="text-[10px] text-gray-500">
                                 {t.origem === 'Comanda' ? 'Mesa' : 'Balcão'} ·{' '}
                                 {new Date(t.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                {t.nota && <span className="ml-1 text-amber-500">{t.nota}</span>}
                               </p>
                             </div>
                           </div>

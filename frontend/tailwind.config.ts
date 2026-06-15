@@ -15,8 +15,8 @@ const config: Config = {
           200: '#B3DEF4',
           300: '#7EC8EC',
           400: '#5BBDE8',
-          500: '#42B6EE', // primary — azul Santuário Nerd
-          600: '#1A9BD2', // primary darker
+          500: '#3EC2F2', // primary — azul Santuário Nerd
+          600: '#1AAFD9', // primary darker
           700: '#167AAB',
           800: '#186288',
           900: '#1A5170',
@@ -30,7 +30,7 @@ const config: Config = {
           400: '#3a3a47', // Muted bg
         },
         accent: {
-          gold:   '#FFE646',
+          gold:   '#FFE45E',
           green:  '#00F0A8',
           red:    '#FF3B30',
           blue:   '#3b82f6',
@@ -38,6 +38,7 @@ const config: Config = {
         }
       },
       fontFamily: {
+        sans: ['var(--font-nunito)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
       animation: {
