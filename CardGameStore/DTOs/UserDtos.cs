@@ -121,6 +121,12 @@ public class AdminResetPasswordRequest
     public string NewPassword { get; set; } = string.Empty;
 }
 
+public class AtualizarPerfilOperadorRequest
+{
+    /// <summary>ID do perfil a atribuir, ou null para desatribuir.</summary>
+    public Guid? PerfilId { get; set; }
+}
+
 // ─── Histórico de cliente ─────────────────────────────────────────────────────
 
 public class ClienteHistoricoDto

@@ -444,6 +444,10 @@ export const userApi = {
     api.post<UserSummary>('/api/user', data),
   adminResetPassword: (id: string, newPassword: string) =>
     api.put(`/api/user/${id}/reset-password`, { newPassword }),
+  adminUpdatePerfil: (id: string, perfilId: string | null) =>
+    api.put<UserSummary>(`/api/user/${id}/perfil`, { perfilId }),
+  adminDelete: (id: string) =>
+    api.delete(`/api/user/${id}`),
   // LGPD — Direitos do titular
   updateMe:  (data: UpdateMeRequest) => api.put<UserProfile>('/api/user/me', data),
   deleteMe:  ()                      => api.delete('/api/user/me'),

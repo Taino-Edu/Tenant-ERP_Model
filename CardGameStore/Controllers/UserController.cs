@@ -9,11 +9,14 @@
 // POST   /api/user/{id}/points      → adiciona pontos (Admin)
 // POST   /api/user/{id}/balance     → ajusta saldo (Admin)
 // PUT    /api/user/{id}/reset-password → Admin redefine senha do cliente
+// PUT    /api/user/{id}/perfil         → Admin atribui/remove perfil de operador
+// DELETE /api/user/{id}               → Admin exclui operador
 // =============================================================================
 
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -343,6 +346,81 @@ public class UserController : ControllerBase
         };
 
         return Ok(historico);
+    }
+
+    // =========================================================================
+    // ADMIN — Atribuir / remover perfil de operador
+    // =========================================================================
+
+    /// <summary>Muda o perfil de acesso de um operador. Envie perfilId=null para desatribuir.</summary>
+    [HttpPut("{id:guid}/perfil")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(UserSummaryDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> AtualizarPerfil(Guid id, [FromBody] AtualizarPerfilOperadorRequest request)
+    {
+        var user = await _db.Users.Include(u => u.Perfil).FirstOrDefaultAsync(u => u.Id == id);
+        if (user == null)
+            return NotFound(new { Message = "Usuário não encontrado." });
+
+        if (user.Role != "Operator")
+            return BadRequest(new { Message = "Apenas operadores podem ter perfil atribuído." });
+
+        if (request.PerfilId.HasValue)
+        {
+            var perfil = await _db.Perfis.FindAsync(request.PerfilId.Value);
+            if (perfil == null)
+                return NotFound(new { Message = "Perfil não encontrado." });
+            user.PerfilId  = perfil.Id;
+            user.Perfil    = perfil;
+        }
+        else
+        {
+            user.PerfilId = null;
+            user.Perfil   = null;
+        }
+
+        user.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("AtualizouPerfilOperador", "User", id.ToString(),
+            $"{{\"perfilId\":\"{request.PerfilId}\"}}",
+            HttpContext);
+
+        return Ok(UserService.MapToSummary(user));
+    }
+
+    // =========================================================================
+    // ADMIN — Excluir operador
+    // =========================================================================
+
+    /// <summary>Remove permanentemente um operador do sistema.</summary>
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> DeleteUser(Guid id)
+    {
+        var adminId = GetUserId();
+        if (adminId == id)
+            return BadRequest(new { Message = "Você não pode excluir a própria conta por aqui." });
+
+        var user = await _db.Users.FindAsync(id);
+        if (user == null)
+            return NotFound(new { Message = "Usuário não encontrado." });
+
+        if (user.Role == "Admin")
+            return BadRequest(new { Message = "Contas de administrador não podem ser excluídas." });
+
+        _db.Users.Remove(user);
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync("ExcluiuUsuario", "User", id.ToString(),
+            $"{{\"nome\":\"{user.Name}\",\"role\":\"{user.Role}\"}}",
+            HttpContext);
+
+        return NoContent();
     }
 
     private Guid GetUserId()

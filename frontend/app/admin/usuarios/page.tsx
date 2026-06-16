@@ -162,6 +162,146 @@ function NovoOperadorModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   )
 }
 
+// ── Modal: Editar Operador (perfil + excluir) ─────────────────────────────────
+function EditarOperadorModal({
+  op,
+  onClose,
+  onSaved,
+  onDeleted,
+}: {
+  op: UserSummary
+  onClose: () => void
+  onSaved: (updated: UserSummary) => void
+  onDeleted: () => void
+}) {
+  const [perfis,      setPerfis]      = useState<PerfilDto[]>([])
+  const [perfilId,    setPerfilId]    = useState<string>(op.perfilId ?? '')
+  const [saving,      setSaving]      = useState(false)
+  const [deleting,    setDeleting]    = useState(false)
+  const [confirmDel,  setConfirmDel]  = useState(false)
+  const [error,       setError]       = useState<string | null>(null)
+
+  useEffect(() => {
+    perfisApi.list().then(r => setPerfis(r.data)).catch(() => {})
+  }, [])
+
+  async function handleSavePerfil() {
+    setSaving(true)
+    setError(null)
+    try {
+      const { data } = await userApi.adminUpdatePerfil(op.id, perfilId || null)
+      toast.success('Perfil atualizado!')
+      onSaved(data)
+      onClose()
+    } catch {
+      setError('Erro ao atualizar perfil. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    setError(null)
+    try {
+      await userApi.adminDelete(op.id)
+      toast.success(`Operador ${op.name} excluído.`)
+      onDeleted()
+      onClose()
+    } catch (err: any) {
+      setError(err?.response?.data?.message ?? 'Erro ao excluir operador.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+          <h2 className="font-bold text-white text-lg flex items-center gap-2">
+            <UserCog className="w-5 h-5 text-brand-400" /> Editar Operador
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div>
+            <p className="text-white font-semibold">{op.name}</p>
+            <p className="text-xs text-gray-400">{op.email}</p>
+          </div>
+
+          {/* Perfil */}
+          <div>
+            <label className="label">Perfil de acesso</label>
+            <select
+              className="input"
+              value={perfilId}
+              onChange={e => setPerfilId(e.target.value)}
+            >
+              <option value="">Sem perfil (sem acesso)</option>
+              {perfis.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.nome} ({p.permissoes.length} permissões)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
+              Cancelar
+            </button>
+            <button
+              onClick={handleSavePerfil}
+              disabled={saving}
+              className="btn-primary flex-1 justify-center"
+            >
+              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : 'Salvar perfil'}
+            </button>
+          </div>
+
+          {/* Zona de exclusão */}
+          <div className="border-t border-surface-500 pt-4">
+            {!confirmDel ? (
+              <button
+                onClick={() => setConfirmDel(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+              >
+                <UserX className="w-4 h-4" /> Excluir operador
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-red-400 text-center">
+                  Confirmar exclusão de <strong>{op.name}</strong>? Esta ação não pode ser desfeita.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmDel(false)}
+                    className="btn-secondary flex-1 justify-center text-sm"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserX className="w-4 h-4" />}
+                    {deleting ? 'Excluindo...' : 'Excluir'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Modal: Redefinir Senha ────────────────────────────────────────────────────
 function RedefinirSenhaModal({ user, onClose }: { user: UserSummary; onClose: () => void }) {
   const [senha, setSenha]     = useState('')
@@ -491,6 +631,7 @@ export default function UsuariosPage() {
   const [showNovoOperador, setShowNovoOperador] = useState(false)
   const [showRedefinirSenha, setShowRedefinirSenha] = useState(false)
   const [showHistorico, setShowHistorico]     = useState(false)
+  const [editandoOperador, setEditandoOperador] = useState<UserSummary | null>(null)
   const [tabSection, setTabSection]           = useState<'clientes' | 'operadores'>('clientes')
   const [tabUsuarios, setTabUsuarios]         = useState<'todos' | 'inativos'>('todos')
   const [insights, setInsights]               = useState<ClienteInsightDto[]>([])
@@ -606,6 +747,14 @@ export default function UsuariosPage() {
           onClose={() => setShowHistorico(false)}
         />
       )}
+      {editandoOperador && (
+        <EditarOperadorModal
+          op={editandoOperador}
+          onClose={() => setEditandoOperador(null)}
+          onSaved={updated => setOperators(prev => prev.map(o => o.id === updated.id ? updated : o))}
+          onDeleted={() => setOperators(prev => prev.filter(o => o.id !== editandoOperador.id))}
+        />
+      )}
 
       {/* Header */}
       <div className="mb-4 sm:mb-6 flex items-center justify-between flex-wrap gap-3">
@@ -675,12 +824,20 @@ export default function UsuariosPage() {
                   ) : (
                     <span className="text-xs text-red-400">⚠ Sem perfil atribuído</span>
                   )}
-                  <button
-                    onClick={() => { setSelected(op); setShowRedefinirSenha(true) }}
-                    className="btn-secondary text-xs py-1 w-full justify-center"
-                  >
-                    <KeyRound className="w-3 h-3" /> Redefinir Senha
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setEditandoOperador(op)}
+                      className="btn-secondary text-xs py-1 justify-center"
+                    >
+                      <UserCog className="w-3 h-3" /> Editar
+                    </button>
+                    <button
+                      onClick={() => { setSelected(op); setShowRedefinirSenha(true) }}
+                      className="btn-secondary text-xs py-1 justify-center"
+                    >
+                      <KeyRound className="w-3 h-3" /> Senha
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

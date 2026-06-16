@@ -279,7 +279,7 @@ public class UserService : IUserService
     private static int GetEffectivePoints(User user) =>
         IsExpired(user) ? 0 : user.PointsBalance;
 
-    private static UserSummaryDto MapToSummary(User user) => new()
+    public static UserSummaryDto MapToSummary(User user) => new()
     {
         Id              = user.Id,
         Name            = user.Name,
