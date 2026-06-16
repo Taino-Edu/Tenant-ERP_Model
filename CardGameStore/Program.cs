@@ -350,10 +350,22 @@ using (var scope = app.Services.CreateScope())
         await db.Database.EnsureCreatedAsync();
         logger.LogInformation("Banco pronto.");
 
-        // Adiciona colunas novas em tabelas existentes (EnsureCreated não faz ALTER TABLE)
+        // Cria tabelas/colunas novas que EnsureCreated não alcança em bancos já existentes.
+        // EnsureCreated retorna false sem alterar nada se já existirem tabelas no banco,
+        // por isso usamos DDL explícito com IF NOT EXISTS para tornar o startup idempotente.
         if (!useSqlite)
         {
             await db.Database.ExecuteSqlRawAsync(@"
+                CREATE TABLE IF NOT EXISTS perfis (
+                    id                  UUID         NOT NULL DEFAULT gen_random_uuid(),
+                    nome                VARCHAR(100) NOT NULL,
+                    permissoes_json     TEXT         NOT NULL DEFAULT '[]',
+                    criado_por_admin_id UUID         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+                    criado_em           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    atualizado_em       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    CONSTRAINT pk_perfis PRIMARY KEY (id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_perfis_nome ON perfis (nome);
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS perfil_id UUID REFERENCES perfis(id) ON DELETE SET NULL;
             ");
         }
