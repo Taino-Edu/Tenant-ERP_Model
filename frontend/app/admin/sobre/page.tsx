@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import {
   Info, Tag, Calendar, CheckCircle, Wrench, Zap,
-  BookOpen, ChevronDown, ChevronUp,
+  BookOpen, ChevronDown, ChevronUp, FileDown,
   LayoutDashboard, ShoppingBag, ShoppingCart, Package,
   Users, CreditCard, Trophy, BarChart2, Layers, Megaphone,
 } from 'lucide-react'
+import Link from 'next/link'
 
 // ── Minimal Markdown Renderer ──────────────────────────────────────────────────
 
@@ -353,9 +354,16 @@ export default function SobrePage() {
           <h1 className="text-xl font-bold text-white">Sobre o Sistema</h1>
           <p className="text-sm text-gray-500 mt-0.5">Santuário Nerd — Plataforma de Gestão</p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-3">
           <Tag className="w-4 h-4 text-brand-400" />
           <span className="text-sm font-mono font-semibold text-brand-400">{version}</span>
+          <Link
+            href="/admin/manual"
+            target="_blank"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 border border-brand-500/20 text-brand-400 hover:bg-brand-500/20 transition-colors"
+          >
+            <FileDown className="w-3.5 h-3.5" /> Manual PDF
+          </Link>
         </div>
       </div>
 
