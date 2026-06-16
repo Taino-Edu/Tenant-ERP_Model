@@ -394,7 +394,11 @@ public class UserController : ControllerBase
     // ADMIN — Excluir operador
     // =========================================================================
 
-    /// <summary>Remove permanentemente um operador do sistema.</summary>
+    /// <summary>
+    /// Remove ou anonimiza um usuário.
+    /// — Customer: anonimização LGPD (preserva histórico financeiro).
+    /// — Operator: exclusão permanente.
+    /// </summary>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(204)]
@@ -413,10 +417,20 @@ public class UserController : ControllerBase
         if (user.Role == "Admin")
             return BadRequest(new { Message = "Contas de administrador não podem ser excluídas." });
 
+        if (user.Role == "Customer")
+        {
+            // LGPD Art. 18 VI — dados pessoais removidos, histórico financeiro preservado
+            await _audit.LogAsync("AnonimizouCliente", "User", id.ToString(),
+                $"{{\"nome\":\"{user.Name}\",\"motivo\":\"SolicitacaoAdmin\"}}",
+                HttpContext);
+            await _service.AnonimizarAsync(id);
+            return NoContent();
+        }
+
         _db.Users.Remove(user);
         await _db.SaveChangesAsync();
 
-        await _audit.LogAsync("ExcluiuUsuario", "User", id.ToString(),
+        await _audit.LogAsync("ExcluiuOperador", "User", id.ToString(),
             $"{{\"nome\":\"{user.Name}\",\"role\":\"{user.Role}\"}}",
             HttpContext);
 

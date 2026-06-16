@@ -360,11 +360,13 @@ const pmLabel = (v: string | null) =>
   PAYMENT_METHODS.find(p => p.value === v)?.label ?? v ?? '—'
 
 // ── Drawer: Histórico do cliente ───────────────────────────────────────────────
-function HistoricoDrawer({ user, onClose }: { user: UserSummary; onClose: () => void }) {
-  const [data, setData]     = useState<ClienteHistoricoDto | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [tab, setTab]       = useState<'comandas' | 'pdv' | 'crediarios' | 'campeonatos'>('comandas')
+function HistoricoDrawer({ user, onClose, onAnonimized }: { user: UserSummary; onClose: () => void; onAnonimized: () => void }) {
+  const [data, setData]         = useState<ClienteHistoricoDto | null>(null)
+  const [loading, setLoading]   = useState(true)
+  const [tab, setTab]           = useState<'comandas' | 'pdv' | 'crediarios' | 'campeonatos'>('comandas')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [confirmAnon, setConfirmAnon] = useState(false)
+  const [anonimizing, setAnonimizing] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -380,6 +382,21 @@ function HistoricoDrawer({ user, onClose }: { user: UserSummary; onClose: () => 
       s.has(id) ? s.delete(id) : s.add(id)
       return s
     })
+  }
+
+  async function handleAnonimize() {
+    setAnonimizing(true)
+    try {
+      await userApi.adminDelete(user.id)
+      toast.success('Dados do cliente anonimizados (LGPD)')
+      onAnonimized()
+      onClose()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao anonimizar')
+      setConfirmAnon(false)
+    } finally {
+      setAnonimizing(false)
+    }
   }
 
   const fmt  = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`
@@ -414,9 +431,37 @@ function HistoricoDrawer({ user, onClose }: { user: UserSummary; onClose: () => 
             <p className="font-bold text-white text-base leading-tight truncate">{user.name}</p>
             <p className="text-xs text-gray-400">Histórico completo</p>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {confirmAnon ? (
+              <>
+                <span className="text-xs text-red-400 font-medium">Confirmar anonimização?</span>
+                <button
+                  onClick={handleAnonimize}
+                  disabled={anonimizing}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition-colors disabled:opacity-60"
+                >
+                  {anonimizing ? 'Aguarde...' : 'Sim, apagar'}
+                </button>
+                <button
+                  onClick={() => setConfirmAnon(false)}
+                  className="p-1 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setConfirmAnon(true)}
+                title="Anonimizar dados (LGPD)"
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/30 transition-colors"
+              >
+                <UserX className="w-3.5 h-3.5" /> LGPD
+              </button>
+            )}
+            <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -745,6 +790,7 @@ export default function UsuariosPage() {
         <HistoricoDrawer
           user={selected}
           onClose={() => setShowHistorico(false)}
+          onAnonimized={() => { fetchUsers(); setSelected(null) }}
         />
       )}
       {editandoOperador && (
