@@ -21,7 +21,7 @@ namespace CardGameStore.Controllers;
 
 [ApiController]
 [Route("api/perfis")]
-[Authorize(Policy = "AdminOnly")]
+[Authorize(Roles = "Admin")]
 [Produces("application/json")]
 public class PerfisController : ControllerBase
 {
