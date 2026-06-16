@@ -1,5 +1,20 @@
 # Changelog — Santuário Nerd
 
+## [v1.7.0] — 2026-06-16
+
+### Adicionado
+- **Sistema de Perfis de Acesso**: admin cria perfis nomeados (ex: Caixa, Estoquista) com checklist de 14 permissões e os atribui a operadores
+- **Aba Operadores** na tela de usuários: cadastro de operadores com e-mail, senha e perfil atribuído
+- **Sidebar dinâmica**: operadores veem apenas as seções permitidas pelo seu perfil
+- **Renovação automática de sessão**: token renovado silenciosamente a cada 45 min, evitando desconexão por inatividade
+- **Manual do usuário** na página Sobre: 9 módulos explicados com seções expansíveis
+
+### Corrigido
+- Pontos de fidelidade não são mais acumulados quando cashback é usado em qualquer parte do pagamento (método principal ou secundário)
+- Operadores redirecionados corretamente para o painel admin ao fazer login (antes iam para a tela de cliente)
+
+---
+
 ## [v1.6.0] — 2026-06-15
 
 ### Adicionado
