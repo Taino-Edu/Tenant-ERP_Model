@@ -5,6 +5,7 @@
 
 import Link from 'next/link'
 import ThemeToggle from '@/components/ThemeToggle'
+import { LegalActions } from '@/components/LegalActions'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -22,7 +23,8 @@ export default function TermosPage() {
             <span className="text-[#42B6EE]">Santuário</span>
             <span> Nerd</span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <LegalActions />
             <span className="text-sm text-gray-400 hidden sm:block">José Bonifácio, SP</span>
             <ThemeToggle compact />
           </div>

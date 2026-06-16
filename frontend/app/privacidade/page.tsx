@@ -7,6 +7,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import ThemeToggle from '@/components/ThemeToggle'
+import { LegalActions } from '@/components/LegalActions'
 
 export const metadata: Metadata = {
   title: 'Política de Privacidade — Santuário Nerd',
@@ -23,7 +24,8 @@ export default function PrivacidadePage() {
           <Link href="/" className="flex items-center gap-1 text-2xl font-bold">
             <span className="text-[#42B6EE]">Santuário</span><span> Nerd</span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <LegalActions />
             <span className="text-sm text-gray-400 hidden sm:block">José Bonifácio, SP</span>
             <ThemeToggle compact />
           </div>
