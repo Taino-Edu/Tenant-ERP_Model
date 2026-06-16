@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { isLoggedIn, isAdmin } from '@/lib/auth'
+import { getRole } from '@/lib/auth'
 import { championshipApi, productApi, announcementApi, Championship, Product, AnnouncementDto } from '@/lib/api'
 import Link from 'next/link'
 import {
@@ -51,8 +51,8 @@ export default function LandingPage() {
     const saved = localStorage.getItem('landing-theme')
     if (saved === 'dark') setIsDark(true)
 
-    if (isLoggedIn()) {
-      router.replace(isAdmin() ? '/admin/dashboard' : '/cliente')
+    if (getRole() === 'Customer') {
+      router.replace('/cliente')
       return
     }
     Promise.allSettled([
