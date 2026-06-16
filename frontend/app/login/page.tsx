@@ -20,7 +20,7 @@ export default function LoginPage() {
       const { data } = await authApi.login(email, password)
       saveAuth(data)
       toast.success(`Bem-vindo, ${data.userName}!`)
-      router.push(data.role === 'Admin' ? '/admin/dashboard' : '/cliente')
+      router.push(data.role === 'Customer' ? '/cliente' : '/admin/dashboard')
     } catch {
       toast.error('E-mail ou senha inválidos.')
     } finally {
