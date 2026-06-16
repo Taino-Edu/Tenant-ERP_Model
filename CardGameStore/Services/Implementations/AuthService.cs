@@ -143,20 +143,31 @@ public class AuthService : IAuthService
 
     private async Task<AuthResponse> GenerateAuthResponseAsync(User user, Guid? comandaId = null)
     {
-        var accessToken  = GenerateJwt(user);
+        // Carrega perfil do Operator para incluir permissões no JWT
+        string[]? permissions = null;
+        if (user.Role == UserRole.Operator && user.PerfilId.HasValue)
+        {
+            var perfil = await _db.Perfis.FindAsync(user.PerfilId.Value);
+            if (perfil != null)
+            {
+                try { permissions = System.Text.Json.JsonSerializer.Deserialize<string[]>(perfil.PermissoesJson); }
+                catch { permissions = []; }
+            }
+        }
+
+        var accessToken  = GenerateJwt(user, permissions);
         var refreshToken = GenerateRefreshToken();
         var expiresAt    = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenExpirationMinutes);
 
-        // Persiste o refresh token
         user.RefreshToken       = refreshToken;
         user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(_jwt.RefreshTokenExpirationDays);
         user.UpdatedAt          = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
-        return new AuthResponse(accessToken, refreshToken, expiresAt, user.Role, user.Name, user.Id, comandaId);
+        return new AuthResponse(accessToken, refreshToken, expiresAt, user.Role, user.Name, user.Id, comandaId, permissions);
     }
 
-    private string GenerateJwt(User user)
+    private string GenerateJwt(User user, string[]? permissions = null)
     {
         var key     = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.SecretKey));
         var creds   = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -171,6 +182,9 @@ public class AuthService : IAuthService
 
         if (!string.IsNullOrEmpty(user.Email))
             claims.Add(new(JwtRegisteredClaimNames.Email, user.Email));
+
+        if (permissions != null && permissions.Length > 0)
+            claims.Add(new("permissions", System.Text.Json.JsonSerializer.Serialize(permissions)));
 
         var token = new JwtSecurityToken(
             issuer:             _jwt.Issuer,

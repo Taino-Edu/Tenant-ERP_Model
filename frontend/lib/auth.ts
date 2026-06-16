@@ -10,23 +10,34 @@ import Cookies from 'js-cookie'
 import { AuthResponse } from './api'
 
 export function saveAuth(auth: AuthResponse) {
-  // Não salvar accessToken nem refreshToken — vêm como HttpOnly cookies do backend.
-  // Salvar apenas metadados da sessão para uso na interface.
   Cookies.set('userRole',  auth.role,     { expires: 30 })
   Cookies.set('userName',  auth.userName, { expires: 30 })
   Cookies.set('userId',    auth.userId,   { expires: 30 })
+  if (auth.permissions)
+    Cookies.set('userPermissions', JSON.stringify(auth.permissions), { expires: 30 })
+  else
+    Cookies.remove('userPermissions')
 }
 
 export function clearAuth() {
-  // Remove apenas os metadados da UI — o backend limpa os HttpOnly cookies no logout.
-  ;['userRole', 'userName', 'userId'].forEach(k => Cookies.remove(k))
+  ;['userRole', 'userName', 'userId', 'userPermissions'].forEach(k => Cookies.remove(k))
 }
 
-export function getRole():     string  { return Cookies.get('userRole') || '' }
-export function getUserName(): string  { return Cookies.get('userName') || '' }
-export function getUserId():   string  { return Cookies.get('userId')   || '' }
-export function isAdmin():     boolean { return getRole() === 'Admin' }
+export function getRole():        string    { return Cookies.get('userRole') || '' }
+export function getUserName():    string    { return Cookies.get('userName') || '' }
+export function getUserId():      string    { return Cookies.get('userId')   || '' }
+export function isAdmin():        boolean   { return getRole() === 'Admin' }
+export function isOperator():     boolean   { return getRole() === 'Operator' }
+export function isLoggedIn():     boolean   { return !!Cookies.get('userRole') }
 
-// isLoggedIn verifica se há metadados de sessão.
-// A validade real do token é verificada pelo backend a cada requisição.
-export function isLoggedIn():  boolean { return !!Cookies.get('userRole') }
+export function getPermissions(): string[] {
+  try {
+    const raw = Cookies.get('userPermissions')
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+}
+
+export function hasPermission(perm: string): boolean {
+  if (isAdmin()) return true
+  return getPermissions().includes(perm)
+}

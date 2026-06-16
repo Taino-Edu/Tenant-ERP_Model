@@ -44,9 +44,9 @@ public class UserController : ControllerBase
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(IEnumerable<UserSummaryDto>), 200)]
-    public async Task<IActionResult> GetAll([FromQuery] string? search)
+    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] string? role)
     {
-        var users = await _service.GetAllAsync(search);
+        var users = await _service.GetAllAsync(search, role);
         return Ok(users);
     }
 

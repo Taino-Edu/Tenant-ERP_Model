@@ -16,6 +16,8 @@ public class UserSummaryDto
     public string?  WhatsApp        { get; set; }
     public string?  ProfileImageUrl { get; set; }
     public string   Role            { get; set; } = string.Empty;
+    public Guid?    PerfilId        { get; set; }
+    public string?  PerfilNome      { get; set; }
     public int      PointsBalance   { get; set; }
     public DateTime? PointsExpiresAt { get; set; }
     public bool     PointsExpired   { get; set; }
@@ -80,7 +82,7 @@ public class UpdateMeRequest
     public string? WhatsApp { get; set; }
 }
 
-/// <summary>Request para o Admin criar uma conta de cliente.</summary>
+/// <summary>Request para o Admin criar uma conta de cliente ou operador.</summary>
 public class AdminCreateUserRequest
 {
     [Required]
@@ -97,10 +99,17 @@ public class AdminCreateUserRequest
     [MaxLength(255)]
     public string? Email { get; set; }
 
-    /// <summary>Senha inicial (opcional). Se não informada, o cliente precisará de "esqueci minha senha".</summary>
+    /// <summary>Senha inicial (opcional para Customer; obrigatória para Operator).</summary>
     [MinLength(8)]
     [MaxLength(100)]
     public string? Password { get; set; }
+
+    /// <summary>"Customer" (padrão) ou "Operator".</summary>
+    [MaxLength(20)]
+    public string? Role { get; set; }
+
+    /// <summary>ID do perfil de permissões (somente para Operator).</summary>
+    public Guid? PerfilId { get; set; }
 }
 
 /// <summary>Request para o Admin redefinir a senha de um cliente.</summary>

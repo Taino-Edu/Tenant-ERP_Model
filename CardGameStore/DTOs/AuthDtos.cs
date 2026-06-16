@@ -118,7 +118,9 @@ public record AuthResponse(
     /// ID da comanda ativa — preenchido apenas no quick-login (cliente via QR Code).
     /// Null no login completo do Admin.
     /// </summary>
-    Guid?    ComandaId = null
+    Guid?    ComandaId   = null,
+    /// <summary>Permissões do Operator. Null para Admin e Customer.</summary>
+    string[]? Permissions = null
 );
 
 /// <summary>
@@ -126,9 +128,10 @@ public record AuthResponse(
 /// Os tokens trafegam exclusivamente como cookies HttpOnly (proteção XSS).
 /// </summary>
 public record SafeAuthResponse(
-    DateTime ExpiresAt,
-    string   Role,
-    string   UserName,
-    Guid     UserId,
-    Guid?    ComandaId = null
+    DateTime  ExpiresAt,
+    string    Role,
+    string    UserName,
+    Guid      UserId,
+    Guid?     ComandaId   = null,
+    string[]? Permissions = null
 );

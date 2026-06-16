@@ -1,11 +1,29 @@
+'use client'
 import Sidebar from '@/components/admin/Sidebar'
 import AiChatWidget from '@/components/admin/AiChatWidget'
 import { Toaster } from 'react-hot-toast'
-import type { Metadata } from 'next'
+import { useEffect } from 'react'
+import { api } from '@/lib/api'
+import { saveAuth } from '@/lib/auth'
 
-export const metadata: Metadata = { title: { default: 'Admin', template: '%s — CardGameStore Admin' } }
+// Renova o token silenciosamente a cada 45 min para evitar desconexão por inatividade.
+const REFRESH_INTERVAL_MS = 45 * 60 * 1000
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await api.post('/api/auth/refresh', {})
+        if (res.data) saveAuth(res.data)
+      } catch {
+        // Se falhar, o interceptor cuida do redirect para /login na próxima chamada
+      }
+    }
+
+    const id = setInterval(refresh, REFRESH_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [])
+
   return (
     <div className="flex min-h-screen bg-surface-900">
       <Sidebar />

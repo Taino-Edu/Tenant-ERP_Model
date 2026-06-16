@@ -117,8 +117,7 @@ public class AuthController : ControllerBase
             var response = await _authService.LoginAsync(request);
             _logger.LogInformation("Login bem-sucedido para {Email}", request.Email);
             SetAuthCookies(response.AccessToken, response.RefreshToken);
-            // Tokens enviados apenas via cookies HttpOnly — body não expõe credenciais
-            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId, Permissions: response.Permissions));
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -162,7 +161,7 @@ public class AuthController : ControllerBase
                 "Quick-login realizado: {Name} | Mesa: {Table} | Comanda: {ComandaId}",
                 request.Name, request.TableIdentifier, response.ComandaId);
             SetAuthCookies(response.AccessToken, response.RefreshToken);
-            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId, response.ComandaId));
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId, response.ComandaId, response.Permissions));
         }
         catch (ArgumentException ex)
         {
@@ -212,7 +211,7 @@ public class AuthController : ControllerBase
             var response = await _authService.RefreshTokenAsync(tokenRequest);
             // Renova os cookies com os novos tokens
             SetAuthCookies(response.AccessToken, response.RefreshToken);
-            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId, Permissions: response.Permissions));
         }
         catch (UnauthorizedAccessException ex)
         {

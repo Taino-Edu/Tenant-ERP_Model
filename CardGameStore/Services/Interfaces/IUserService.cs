@@ -9,7 +9,7 @@ namespace CardGameStore.Services.Interfaces;
 public interface IUserService
 {
     /// <summary>Lista todos os usuários ativos (Admin).</summary>
-    Task<IEnumerable<UserSummaryDto>> GetAllAsync(string? search = null);
+    Task<IEnumerable<UserSummaryDto>> GetAllAsync(string? search = null, string? role = null);
 
     /// <summary>Retorna um usuário pelo ID (Admin).</summary>
     Task<UserSummaryDto?> GetByIdAsync(Guid id);

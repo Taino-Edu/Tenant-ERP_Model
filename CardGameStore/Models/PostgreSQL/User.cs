@@ -157,6 +157,21 @@ public class User
     // Navegação (relacionamentos)
     // -------------------------------------------------------------------------
 
+    // -------------------------------------------------------------------------
+    // Perfil de operador (apenas para Role == Operator)
+    // -------------------------------------------------------------------------
+
+    /// <summary>Perfil de permissões atribuído pelo Admin. Nulo para Admin e Customer.</summary>
+    [Column("perfil_id")]
+    public Guid? PerfilId { get; set; }
+
+    [ForeignKey(nameof(PerfilId))]
+    public Perfil? Perfil { get; set; }
+
+    // -------------------------------------------------------------------------
+    // Navegação (relacionamentos)
+    // -------------------------------------------------------------------------
+
     /// <summary>Comandas abertas ou históricas deste usuário.</summary>
     public ICollection<Comanda> Comandas { get; set; } = new List<Comanda>();
 
@@ -171,5 +186,6 @@ public class User
 public static class UserRole
 {
     public const string Admin    = "Admin";
+    public const string Operator = "Operator";
     public const string Customer = "Customer";
 }

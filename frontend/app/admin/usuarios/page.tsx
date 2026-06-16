@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { userApi, crediarioApi, analyticsApi, CrediariosDto, UserSummary, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS } from '@/lib/api'
+import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSummary, PerfilDto, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, Trophy, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
+import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, Trophy, ChevronDown, ChevronUp, TrendingUp, UserCog, Shield } from 'lucide-react'
 import Link from 'next/link'
 
 // ── Modal: Novo Cliente ───────────────────────────────────────────────────────
@@ -73,6 +73,87 @@ function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSucce
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando...</> : <><UserPlus className="w-4 h-4" /> Criar Cliente</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal: Novo Operador ──────────────────────────────────────────────────────
+function NovoOperadorModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [nome, setNome]       = useState('')
+  const [email, setEmail]     = useState('')
+  const [senha, setSenha]     = useState('')
+  const [perfilId, setPerfilId] = useState('')
+  const [perfis, setPerfis]   = useState<PerfilDto[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    perfisApi.list().then(r => setPerfis(r.data)).catch(() => {})
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nome.trim()) { toast.error('Nome é obrigatório'); return }
+    if (!email.trim()) { toast.error('E-mail é obrigatório para operadores'); return }
+    if (senha.length < 8) { toast.error('Senha deve ter no mínimo 8 caracteres'); return }
+    setLoading(true)
+    try {
+      await userApi.adminCreate({
+        name: nome.trim(), email: email.trim(),
+        password: senha, role: 'Operator',
+        perfilId: perfilId || undefined,
+      })
+      toast.success(`Operador ${nome} criado!`)
+      onSuccess()
+      onClose()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao criar operador')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+          <h2 className="font-bold text-white text-lg flex items-center gap-2">
+            <UserCog className="w-5 h-5 text-brand-400" /> Novo Operador
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          <div>
+            <label className="label">Nome completo *</label>
+            <input className="input" placeholder="Maria da Silva" value={nome} onChange={e => setNome(e.target.value)} required />
+          </div>
+          <div>
+            <label className="label">E-mail *</label>
+            <input type="email" className="input" placeholder="maria@loja.com" value={email} onChange={e => setEmail(e.target.value)} required />
+          </div>
+          <div>
+            <label className="label">Senha *</label>
+            <input type="password" className="input" placeholder="Mínimo 8 caracteres" value={senha} onChange={e => setSenha(e.target.value)} minLength={8} required />
+          </div>
+          <div>
+            <label className="label">Perfil de acesso</label>
+            <select className="input" value={perfilId} onChange={e => setPerfilId(e.target.value)}>
+              <option value="">Sem perfil (sem acesso)</option>
+              {perfis.map(p => (
+                <option key={p.id} value={p.id}>{p.nome} ({p.permissoes.length} permissões)</option>
+              ))}
+            </select>
+            {perfis.length === 0 && (
+              <p className="text-xs text-amber-400 mt-1">⚠ Nenhum perfil criado ainda. Crie perfis em <strong>Perfis de Acesso</strong> primeiro.</p>
+            )}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando...</> : <><UserCog className="w-4 h-4" /> Criar Operador</>}
             </button>
           </div>
         </form>
@@ -406,11 +487,14 @@ export default function UsuariosPage() {
   const [balanceAmount, setBalanceAmount] = useState('')
   const [balanceReason, setBalanceReason] = useState('')
   const [adjustingBalance, setAdjustingBalance] = useState(false)
-  const [showNovoCliente, setShowNovoCliente] = useState(false)
+  const [showNovoCliente, setShowNovoCliente]   = useState(false)
+  const [showNovoOperador, setShowNovoOperador] = useState(false)
   const [showRedefinirSenha, setShowRedefinirSenha] = useState(false)
   const [showHistorico, setShowHistorico]     = useState(false)
+  const [tabSection, setTabSection]           = useState<'clientes' | 'operadores'>('clientes')
   const [tabUsuarios, setTabUsuarios]         = useState<'todos' | 'inativos'>('todos')
   const [insights, setInsights]               = useState<ClienteInsightDto[]>([])
+  const [operators, setOperators]             = useState<UserSummary[]>([])
 
   const fetchUsers = useCallback(async (q?: string) => {
     setLoading(true)
@@ -431,10 +515,18 @@ export default function UsuariosPage() {
     }
   }, [])
 
+  const fetchOperators = useCallback(async () => {
+    try {
+      const res = await userApi.list(undefined, 'Operator')
+      setOperators(res.data)
+    } catch {}
+  }, [])
+
   useEffect(() => {
     fetchUsers()
+    fetchOperators()
     analyticsApi.clientes().then(r => setInsights(r.data)).catch(() => {})
-  }, [fetchUsers])
+  }, [fetchUsers, fetchOperators])
 
   // Busca ao digitar (debounce simples)
   useEffect(() => {
@@ -496,6 +588,12 @@ export default function UsuariosPage() {
           onSuccess={u => setUsers(prev => [u, ...prev])}
         />
       )}
+      {showNovoOperador && (
+        <NovoOperadorModal
+          onClose={() => setShowNovoOperador(false)}
+          onSuccess={fetchOperators}
+        />
+      )}
       {showRedefinirSenha && selected && (
         <RedefinirSenhaModal
           user={selected}
@@ -513,19 +611,84 @@ export default function UsuariosPage() {
       <div className="mb-4 sm:mb-6 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Users className="w-6 h-6 text-brand-400" /> Clientes & Cashback
+            <Users className="w-6 h-6 text-brand-400" /> Clientes & Equipe
           </h1>
-          <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes, pontos Maikon e cashback</p>
+          <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes, pontos Maikon, cashback e operadores</p>
         </div>
+        <div className="flex gap-2">
+          {tabSection === 'clientes' && (
+            <button onClick={() => setShowNovoCliente(true)} className="btn-primary whitespace-nowrap">
+              <UserPlus className="w-4 h-4" /> Novo Cliente
+            </button>
+          )}
+          {tabSection === 'operadores' && (
+            <button onClick={() => setShowNovoOperador(true)} className="btn-primary whitespace-nowrap">
+              <UserCog className="w-4 h-4" /> Novo Operador
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Tab principal: Clientes / Operadores */}
+      <div className="flex gap-1 bg-surface-800 p-1 rounded-xl mb-4 w-fit">
         <button
-          onClick={() => setShowNovoCliente(true)}
-          className="btn-primary whitespace-nowrap"
+          onClick={() => setTabSection('clientes')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tabSection === 'clientes' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
         >
-          <UserPlus className="w-4 h-4" /> Novo Cliente
+          <Users className="w-4 h-4" /> Clientes
+        </button>
+        <button
+          onClick={() => setTabSection('operadores')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tabSection === 'operadores' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+        >
+          <UserCog className="w-4 h-4" /> Operadores
+          {operators.length > 0 && <span className="text-xs bg-surface-600 text-gray-300 px-1.5 py-0.5 rounded-full">{operators.length}</span>}
         </button>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:h-[calc(100vh-180px)]">
+      {/* ── Lista de Operadores ──────────────────────────────────────────────────── */}
+      {tabSection === 'operadores' && (
+        <div className="space-y-3">
+          {operators.length === 0 ? (
+            <div className="card py-16 flex flex-col items-center gap-3 text-gray-500">
+              <UserCog className="w-10 h-10 opacity-30" />
+              <p className="text-sm">Nenhum operador cadastrado.</p>
+              <p className="text-xs text-gray-600">Crie operadores para dar acesso ao painel com permissões limitadas.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {operators.map(op => (
+                <div key={op.id} className="card p-4 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-brand-500/15 border border-brand-500/20 flex items-center justify-center shrink-0">
+                      <UserCog className="w-5 h-5 text-brand-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-white text-sm truncate">{op.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{op.email}</p>
+                    </div>
+                  </div>
+                  {op.perfilNome ? (
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-brand-500/10 text-brand-400 border border-brand-500/20">
+                      <Shield className="w-3 h-3" /> {op.perfilNome}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-red-400">⚠ Sem perfil atribuído</span>
+                  )}
+                  <button
+                    onClick={() => { setSelected(op); setShowRedefinirSenha(true) }}
+                    className="btn-secondary text-xs py-1 w-full justify-center"
+                  >
+                    <KeyRound className="w-3 h-3" /> Redefinir Senha
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tabSection === 'clientes' && <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:h-[calc(100vh-280px)]">
 
         {/* ── Lista de clientes ──────────────────────────────────────────────── */}
         <div className="flex-1 flex flex-col min-w-0">
@@ -822,7 +985,7 @@ export default function UsuariosPage() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

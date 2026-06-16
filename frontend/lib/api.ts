@@ -56,12 +56,10 @@ api.interceptors.response.use(
 // ── Tipagens ──────────────────────────────────────────────────────────────────
 
 export interface AuthResponse {
-  // accessToken e refreshToken são opcionais pois o backend os envia como
-  // cookies HttpOnly. O JSON de resposta os inclui para compatibilidade, mas
-  // o frontend não deve armazená-los — o browser gerencia os cookies.
   accessToken?: string; refreshToken?: string; expiresAt: string
   role: string; userName: string; userId: string
-  comandaId?: string  // Preenchido apenas no quick-login (cliente via QR Code)
+  comandaId?: string
+  permissions?: string[]
 }
 
 export interface ComandaDto {
@@ -148,6 +146,7 @@ export interface ChampionshipParticipant {
 export interface UserSummary {
   id: string; name: string; email: string | null
   cpf: string | null; whatsApp: string | null; role: string; profileImageUrl: string | null
+  perfilId: string | null; perfilNome: string | null
   pointsBalance: number; pointsExpiresAt: string | null
   pointsExpired: boolean; balanceInCents: number; isActive: boolean; createdAt: string
 }
@@ -370,6 +369,26 @@ export interface AdminCreateUserRequest {
   whatsApp?: string
   email?: string
   password?: string
+  role?: string
+  perfilId?: string
+}
+
+export interface PerfilDto {
+  id: string
+  nome: string
+  permissoes: string[]
+  criadoEm: string
+  atualizadoEm: string
+  totalUsuarios: number
+}
+
+export const perfisApi = {
+  list:       ()                                    => api.get<PerfilDto[]>('/api/perfis'),
+  permissoes: ()                                    => api.get<{ key: string; label: string }[]>('/api/perfis/permissoes'),
+  create:     (nome: string, permissoes: string[])  => api.post<PerfilDto>('/api/perfis', { nome, permissoes }),
+  update:     (id: string, data: { nome?: string; permissoes?: string[] }) =>
+    api.put<PerfilDto>(`/api/perfis/${id}`, data),
+  delete:     (id: string)                          => api.delete(`/api/perfis/${id}`),
 }
 
 // ── Histórico de cliente ──────────────────────────────────────────────────────
@@ -412,7 +431,7 @@ export interface ClienteHistoricoDto {
 }
 
 export const userApi = {
-  list:      (search?: string) => api.get<UserSummary[]>('/api/user', { params: { search } }),
+  list:      (search?: string, role?: string) => api.get<UserSummary[]>('/api/user', { params: { search, role } }),
   getById:   (id: string)      => api.get<UserSummary>(`/api/user/${id}`),
   me:        ()                => api.get<UserProfile>('/api/user/me'),
   historico: (id: string)      => api.get<ClienteHistoricoDto>(`/api/user/${id}/historico`),

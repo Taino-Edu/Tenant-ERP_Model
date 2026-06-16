@@ -11,6 +11,7 @@ using CardGameStore.Configuration;
 using CardGameStore.Data;
 using CardGameStore.HealthChecks;
 using CardGameStore.Hubs;
+using CardGameStore.Middleware;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -349,6 +350,14 @@ using (var scope = app.Services.CreateScope())
         await db.Database.EnsureCreatedAsync();
         logger.LogInformation("Banco pronto.");
 
+        // Adiciona colunas novas em tabelas existentes (EnsureCreated não faz ALTER TABLE)
+        if (!useSqlite)
+        {
+            await db.Database.ExecuteSqlRawAsync(@"
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS perfil_id UUID REFERENCES perfis(id) ON DELETE SET NULL;
+            ");
+        }
+
         // Seed: cria o admin se não existir
         if (!db.Users.Any(u => u.Email == "admin@cardgamestore.com.br"))
         {
@@ -427,6 +436,7 @@ app.UseRateLimiter();
 app.UseRequestTimeouts();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseOperatorPermissions();
 
 app.MapControllers();
 app.MapHub<ComandaHub>("/hubs/comanda");
@@ -453,12 +463,5 @@ app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks
 })
 .AllowAnonymous()
 .DisableRateLimiting();
-
-// Aplica migrations pendentes automaticamente na inicialização
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
-}
 
 app.Run();

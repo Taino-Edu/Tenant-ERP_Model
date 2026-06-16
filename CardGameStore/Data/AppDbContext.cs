@@ -31,6 +31,7 @@ public class AppDbContext : DbContext
     public DbSet<Announcement>            Announcements            { get; set; }
     public DbSet<Crediario>               Crediarios               { get; set; }
     public DbSet<PagamentoCrediario>      PagamentosCrediario      { get; set; }
+    public DbSet<Perfil>                  Perfis                   { get; set; }
 
     // ── LGPD — Compliance e privacidade ──────────────────────────────────────
     public DbSet<LgpdRequest>   LgpdRequests   { get; set; }
@@ -174,6 +175,21 @@ public class AppDbContext : DbContext
             entity.HasOne(p => p.Comanda)
                   .WithMany()
                   .HasForeignKey(p => p.ComandaId)
+                  .OnDelete(DeleteBehavior.SetNull)
+                  .IsRequired(false);
+        });
+
+        // =====================================================================
+        // PERFIL
+        // =====================================================================
+        modelBuilder.Entity<Perfil>(entity =>
+        {
+            entity.HasIndex(p => p.Nome)
+                  .HasDatabaseName("ix_perfis_nome");
+
+            entity.HasMany(p => p.Users)
+                  .WithOne(u => u.Perfil)
+                  .HasForeignKey(u => u.PerfilId)
                   .OnDelete(DeleteBehavior.SetNull)
                   .IsRequired(false);
         });

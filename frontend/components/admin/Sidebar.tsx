@@ -1,13 +1,14 @@
 'use client'
+import React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { clearAuth, getUserName } from '@/lib/auth'
+import { clearAuth, getUserName, getRole, hasPermission } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info,
+  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -16,66 +17,81 @@ const sections = [
   {
     label: 'Operacional',
     items: [
-      { href: '/admin/dashboard',    label: 'Painel Geral',    icon: LayoutDashboard, badge: 'LIVE' },
-      { href: '/admin/venda-avulsa', label: 'Frente de Caixa', icon: ShoppingBag },
-      { href: '/admin/qrcodes',      label: 'Gatilhos QR Code', icon: QrCode },
+      { href: '/admin/dashboard',    label: 'Painel Geral',    icon: LayoutDashboard, badge: 'LIVE', perm: 'dashboard' },
+      { href: '/admin/venda-avulsa', label: 'Frente de Caixa', icon: ShoppingBag,                    perm: 'pdv' },
+      { href: '/admin/qrcodes',      label: 'Gatilhos QR Code', icon: QrCode,                         perm: 'qrcodes' },
     ],
   },
   {
     label: 'Gestão & Loja',
     items: [
-      { href: '/admin/usuarios',    label: 'Clientes',     icon: Users },
-      { href: '/admin/crediario',   label: 'Crediário',    icon: CreditCard },
-      { href: '/admin/estoque',     label: 'Estoque',      icon: Package },
-      { href: '/admin/financeiro',  label: 'Financeiro',   icon: TrendingUp },
-      { href: '/admin/relatorios',  label: 'Relatórios',   icon: BarChart2 },
-      { href: '/admin/categorias',  label: 'Categorias',   icon: Tag },
-      { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone },
-      { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search },
-      { href: '/admin/campeonatos', label: 'Campeonatos',  icon: Trophy },
+      { href: '/admin/usuarios',    label: 'Clientes',     icon: Users,       perm: 'usuarios' },
+      { href: '/admin/crediario',   label: 'Crediário',    icon: CreditCard,  perm: 'crediario' },
+      { href: '/admin/estoque',     label: 'Estoque',      icon: Package,     perm: 'estoque' },
+      { href: '/admin/financeiro',  label: 'Financeiro',   icon: TrendingUp,  perm: 'financeiro' },
+      { href: '/admin/relatorios',  label: 'Relatórios',   icon: BarChart2,   perm: 'relatorios' },
+      { href: '/admin/categorias',  label: 'Categorias',   icon: Tag,         perm: 'categorias' },
+      { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,   perm: 'anuncios' },
+      { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search,      perm: 'cartas' },
+      { href: '/admin/campeonatos', label: 'Campeonatos',  icon: Trophy,      perm: 'campeonatos' },
+    ],
+  },
+  {
+    label: 'Administração',
+    adminOnly: true,
+    items: [
+      { href: '/admin/perfis', label: 'Perfis de Acesso', icon: UserCog, perm: null },
     ],
   },
   {
     label: 'Compliance',
     items: [
-      { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield },
-      { href: '/admin/sobre', label: 'Sobre o Sistema',   icon: Info },
+      { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield, perm: 'lgpd' },
+      { href: '/admin/sobre', label: 'Sobre o Sistema',   icon: Info,   perm: null },
     ],
   },
 ]
 
 function NavItems({ pathname, onClose }: { pathname: string; onClose?: () => void }) {
+  const role = getRole()
+  const isAdmin = role === 'Admin'
+
   return (
     <nav className="flex-1 flex flex-col gap-1 px-3 pb-6 overflow-y-auto">
-      {sections.map(({ label, items }) => (
-        <div key={label} className="mb-2">
-          <p className="text-[10px] uppercase text-gray-500 font-bold mt-3 mb-1 px-4 tracking-wider">
-            {label}
-          </p>
-          {items.map(({ href, label: itemLabel, icon: Icon, badge }) => {
-            const active = pathname.startsWith(href)
-            return (
-              <Link
-                key={href}
-                href={href}
-                onClick={onClose}
-                className={clsx(
-                  'flex items-center gap-4 w-full px-4 py-3 rounded-xl font-medium text-sm transition-all duration-150 group nav-item',
-                  active ? 'nav-item-active' : 'text-gray-500 hover:bg-surface-700 hover:text-white'
-                )}
-              >
-                <Icon className={clsx('w-5 h-5 shrink-0', active ? 'text-brand-500' : 'text-gray-500 group-hover:text-gray-300')} />
-                <span className={clsx('flex-1 nav-item-label', active && 'font-semibold')}>{itemLabel}</span>
-                {badge && (
-                  <span className="text-[10px] bg-accent-green/20 text-accent-green border border-accent-green/30 px-1.5 py-0.5 rounded-full font-bold animate-pulse-slow">
-                    {badge}
-                  </span>
-                )}
-              </Link>
-            )
-          })}
-        </div>
-      ))}
+      {sections.map(({ label, items, adminOnly }) => {
+        if (adminOnly && !isAdmin) return null
+        const visibleItems = items.filter(({ perm }) => perm === null || hasPermission(perm))
+        if (visibleItems.length === 0) return null
+        return (
+          <div key={label} className="mb-2">
+            <p className="text-[10px] uppercase text-gray-500 font-bold mt-3 mb-1 px-4 tracking-wider">
+              {label}
+            </p>
+            {visibleItems.map(({ href, label: itemLabel, icon: Icon, badge }: { href: string; label: string; icon: React.ElementType; perm: string | null; badge?: string }) => {
+              const active = pathname.startsWith(href)
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={onClose}
+                  className={clsx(
+                    'flex items-center gap-4 w-full px-4 py-3 rounded-xl font-medium text-sm transition-all duration-150 group nav-item',
+                    active ? 'nav-item-active' : 'text-gray-500 hover:bg-surface-700 hover:text-white'
+                  )}
+                >
+                  <Icon className={clsx('w-5 h-5 shrink-0', active ? 'text-brand-500' : 'text-gray-500 group-hover:text-gray-300')} />
+                  <span className={clsx('flex-1 nav-item-label', active && 'font-semibold')}>{itemLabel}</span>
+                  {badge && (
+                    <span className="text-[10px] bg-accent-green/20 text-accent-green border border-accent-green/30 px-1.5 py-0.5 rounded-full font-bold animate-pulse-slow">
+                      {badge}
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        )
+      })}
     </nav>
   )
 }
@@ -94,6 +110,9 @@ export default function Sidebar() {
     router.push('/login')
   }
 
+  const role = getRole()
+  const roleLabel = role === 'Admin' ? 'Admin' : role === 'Operator' ? 'Operador' : role
+
   const footer = (
     <div className="px-3 py-4 border-t border-surface-500">
       <div className="flex items-center gap-3 bg-surface-700 p-3 rounded-xl border border-surface-500 mb-2">
@@ -102,7 +121,7 @@ export default function Sidebar() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white truncate">{getUserName() || 'Admin'}</p>
-          <span className="badge-admin text-[10px]">Admin</span>
+          <span className="badge-admin text-[10px]">{roleLabel}</span>
         </div>
       </div>
       {/* Link para a página pública da loja */}

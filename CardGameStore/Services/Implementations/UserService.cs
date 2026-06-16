@@ -21,10 +21,11 @@ public class UserService : IUserService
         _logger = logger;
     }
 
-    public async Task<IEnumerable<UserSummaryDto>> GetAllAsync(string? search = null)
+    public async Task<IEnumerable<UserSummaryDto>> GetAllAsync(string? search = null, string? role = null)
     {
         var query = _db.Users
-            .Where(u => u.IsActive && u.Role == UserRole.Customer)
+            .Include(u => u.Perfil)
+            .Where(u => u.IsActive && (role == null ? u.Role == UserRole.Customer : u.Role == role))
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -216,13 +217,24 @@ public class UserService : IUserService
                 throw new InvalidOperationException($"Já existe um cadastro com o e-mail {request.Email}.");
         }
 
+        var role = request.Role == UserRole.Operator ? UserRole.Operator : UserRole.Customer;
+
+        if (role == UserRole.Operator)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email))
+                throw new InvalidOperationException("E-mail é obrigatório para Operadores.");
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new InvalidOperationException("Senha é obrigatória para Operadores.");
+        }
+
         var user = new User
         {
             Name      = request.Name.Trim(),
             Cpf       = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim(),
             WhatsApp  = string.IsNullOrWhiteSpace(request.WhatsApp) ? null : request.WhatsApp.Trim(),
             Email     = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim().ToLowerInvariant(),
-            Role      = UserRole.Customer,
+            Role      = role,
+            PerfilId  = role == UserRole.Operator ? request.PerfilId : null,
             IsActive  = true,
             ConsentAt = DateTime.UtcNow,
         };
@@ -276,6 +288,8 @@ public class UserService : IUserService
         WhatsApp        = user.WhatsApp,
         ProfileImageUrl = user.ProfileImageUrl,
         Role            = user.Role,
+        PerfilId        = user.PerfilId,
+        PerfilNome      = user.Perfil?.Nome,
         PointsBalance   = IsExpired(user) ? 0 : user.PointsBalance,
         PointsExpiresAt = user.PointsExpiresAt,
         PointsExpired   = IsExpired(user),
