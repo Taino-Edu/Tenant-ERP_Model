@@ -1,7 +1,7 @@
 // =============================================================================
 // privacidade/page.tsx — Política de Privacidade da Santuário Nerd
-// Conforme LGPD (Lei 13.709/2018) — São José do Rio Preto, SP
-// Versão 1.1 — tema claro/escuro + seção de IA expandida
+// Conforme LGPD (Lei 13.709/2018) — José Bonifácio, SP
+// Versão 1.2 — junho/2026
 // =============================================================================
 
 import Link from 'next/link'
@@ -24,7 +24,7 @@ export default function PrivacidadePage() {
             <span className="text-[#42B6EE]">Santuário</span><span> Nerd</span>
           </Link>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-400 hidden sm:block">São José do Rio Preto, SP</span>
+            <span className="text-sm text-gray-400 hidden sm:block">José Bonifácio, SP</span>
             <ThemeToggle compact />
           </div>
         </div>
@@ -36,7 +36,7 @@ export default function PrivacidadePage() {
         <div className="mb-10 pb-6" style={{ borderBottom: '1px solid var(--border-color)' }}>
           <h1 className="text-3xl font-bold mb-2">Política de Privacidade</h1>
           <p className="text-sm" style={{ color: 'var(--text-faint)' }}>
-            Última atualização: <strong>Maio de 2026</strong> — Versão 1.1
+            Última atualização: <strong>Junho de 2026</strong> — Versão 1.2
           </p>
           <p className="mt-3 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
             Esta Política descreve como a <strong>Santuário Nerd</strong> coleta, utiliza, armazena e protege
@@ -51,15 +51,15 @@ export default function PrivacidadePage() {
           <section>
             <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>1. Quem Somos</h2>
             <p>
-              A <strong>Santuário Nerd</strong> é uma loja de card games em <strong>São José do Rio Preto, SP</strong>.
+              A <strong>Santuário Nerd</strong> é uma loja de card games em <strong>José Bonifácio, SP</strong>.
               Operamos um sistema digital de comandas, campeonatos, crediário e programa de pontos para nossos clientes.
             </p>
             <p className="mt-2">
               <strong>Controlador dos dados:</strong><br />
-              Santuário Nerd — São José do Rio Preto, SP<br />
+              Santuário Nerd — José Bonifácio, SP<br />
               E-mail:{' '}
-              <a href="mailto:santuarionerd@gmail.com" className="text-[#42B6EE] underline">
-                santuarionerd@gmail.com
+              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
+                contato@santuarionerd.com.br
               </a>
             </p>
           </section>
@@ -74,7 +74,7 @@ export default function PrivacidadePage() {
               <li><strong>E-mail</strong> — confirmações, notificações e recuperação de senha</li>
               <li><strong>Histórico de comandas e compras</strong> — gestão do crediário e pontos</li>
               <li><strong>Participação em campeonatos</strong> — nome do deck, colocação</li>
-              <li><strong>Saldo de pontos</strong> — programa de fidelidade</li>
+              <li><strong>Saldo de pontos e cashback</strong> — programa de fidelidade</li>
               <li><strong>Endereço IP (hash SHA-256)</strong> — segurança e prevenção de abusos; nunca armazenamos o IP em texto puro</li>
             </ul>
           </section>
@@ -85,12 +85,11 @@ export default function PrivacidadePage() {
             <ul className="list-disc list-inside space-y-1 ml-2">
               <li>Identificar e autenticar usuários no sistema</li>
               <li>Gerenciar comandas, pedidos e pagamentos (inclusive crediário)</li>
-              <li>Administrar o programa de pontos e fidelidade</li>
+              <li>Administrar o programa de pontos e cashback</li>
               <li>Processar inscrições e resultados de campeonatos</li>
               <li>Enviar comunicações transacionais (crediário, campeonatos, redefinição de senha)</li>
-              <li>Cumprir obrigações legais e fiscais (retenção de 5 anos conforme legislação)</li>
+              <li>Cumprir obrigações legais e fiscais</li>
               <li>Prevenir fraudes e garantir a segurança do sistema</li>
-              <li>Gerar análises internas e anônimas para melhoria dos serviços</li>
             </ul>
           </section>
 
@@ -105,53 +104,9 @@ export default function PrivacidadePage() {
             </ul>
           </section>
 
-          {/* 5. Inteligência Artificial */}
+          {/* 5. Compartilhamento */}
           <section>
-            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>5. Uso de Inteligência Artificial</h2>
-            <p className="mb-3">
-              Utilizamos o serviço <strong>Google Gemini 2.0 Flash</strong> (Google LLC) como assistente
-              de análise de negócios acessível exclusivamente pelos <strong>administradores da loja</strong>.
-              Clientes <strong>não interagem</strong> diretamente com a IA.
-            </p>
-            <p className="mb-3">
-              <strong>O que a IA faz:</strong> responde perguntas do administrador sobre o desempenho
-              da loja (vendas, estoque, crediário) com base nos dados internos do sistema.
-            </p>
-            <p className="mb-3">
-              <strong>Proteção de dados na IA:</strong>
-            </p>
-            <ul className="list-disc list-inside space-y-2 ml-2 mb-3">
-              <li>
-                <strong>Anonimização obrigatória:</strong> antes de qualquer dado ser enviado ao Gemini,
-                nomes de clientes são substituídos por identificadores neutros ("Cliente #1", "Cliente #2" etc.).
-                CPF, e-mail e WhatsApp <strong>nunca são enviados</strong> à IA.
-              </li>
-              <li>
-                <strong>Dados enviados:</strong> apenas valores financeiros agregados, datas e categorias
-                — sem informação que permita identificar individualmente qualquer pessoa.
-              </li>
-              <li>
-                <strong>Finalidade exclusiva:</strong> os dados são enviados somente para gerar respostas
-                sobre o negócio e <strong>não são usados pelo Google para treinar modelos</strong>
-                (conforme os Termos da API do Google AI Studio).
-              </li>
-              <li>
-                <strong>Sem armazenamento pela IA:</strong> o Gemini não retém as informações entre sessões.
-                Cada consulta é processada de forma independente.
-              </li>
-            </ul>
-            <p>
-              Para mais informações sobre as práticas de privacidade do Google, consulte:{' '}
-              <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer"
-                className="text-[#42B6EE] underline">
-                policies.google.com/privacy
-              </a>.
-            </p>
-          </section>
-
-          {/* 6. Outros terceiros */}
-          <section>
-            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>6. Outros Compartilhamentos</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>5. Compartilhamento de Dados</h2>
             <p className="mb-2">Não vendemos nem alugamos seus dados. Compartilhamos apenas com:</p>
             <ul className="list-disc list-inside space-y-2 ml-2">
               <li>
@@ -168,9 +123,9 @@ export default function PrivacidadePage() {
             </ul>
           </section>
 
-          {/* 7. Seus direitos */}
+          {/* 6. Seus direitos */}
           <section>
-            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>7. Seus Direitos (LGPD Art. 18)</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>6. Seus Direitos (LGPD Art. 18)</h2>
             <ul className="list-disc list-inside space-y-2 ml-2">
               <li><strong>Acesso:</strong> saber quais dados possuímos sobre você</li>
               <li><strong>Retificação:</strong> corrigir dados incompletos, inexatos ou desatualizados</li>
@@ -182,7 +137,7 @@ export default function PrivacidadePage() {
             <p className="mt-3">
               Acesse{' '}
               <Link href="/lgpd" className="text-[#42B6EE] underline font-medium">
-                santuarionerd.tech/lgpd
+                o formulário LGPD
               </Link>
               {' '}para exercer seus direitos ou envie e-mail para{' '}
               <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
@@ -192,9 +147,9 @@ export default function PrivacidadePage() {
             </p>
           </section>
 
-          {/* 8. Retenção */}
+          {/* 7. Retenção */}
           <section>
-            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>8. Retenção de Dados</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>7. Retenção de Dados</h2>
             <p>
               Mantemos seus dados pelo tempo necessário para as finalidades descritas, ou conforme exigido
               por lei. Dados de crediário e compras podem ser retidos por até <strong>5 anos</strong> para
@@ -203,23 +158,23 @@ export default function PrivacidadePage() {
             </p>
           </section>
 
-          {/* 9. Segurança */}
+          {/* 8. Segurança */}
           <section>
-            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>9. Segurança</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>8. Segurança</h2>
             <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>Senhas armazenadas com hash BCrypt (fator 12) — nunca em texto puro</li>
-              <li>Tokens de sessão com curta validade (60 min) e rotação automática</li>
+              <li>Senhas armazenadas com hash BCrypt — nunca em texto puro</li>
+              <li>Tokens de sessão com curta validade (60 min) e renovação automática</li>
               <li>Cookies HttpOnly e SameSite=Strict — inacessíveis a scripts maliciosos</li>
               <li>Endereços IP armazenados exclusivamente como hash SHA-256</li>
               <li>HTTPS em todos os ambientes de produção</li>
-              <li>Trilha de auditoria imutável de todos os acessos a dados sensíveis</li>
-              <li>Limite de tentativas de login (rate limiting) para prevenção de força bruta</li>
+              <li>Trilha de auditoria de todos os acessos a dados sensíveis</li>
+              <li>Limite de tentativas de login para prevenção de força bruta</li>
             </ul>
           </section>
 
-          {/* 10. Cookies */}
+          {/* 9. Cookies */}
           <section>
-            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>10. Cookies</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>9. Cookies</h2>
             <ul className="list-disc list-inside space-y-2 ml-2">
               <li>
                 <strong>Cookies essenciais:</strong> necessários para autenticação e segurança da sessão.
@@ -230,20 +185,17 @@ export default function PrivacidadePage() {
                 (tema claro/escuro). Podem ser limpos nas configurações do navegador.
               </li>
             </ul>
-            <p className="mt-2">
-              Ao utilizar nosso sistema, você concorda com os cookies essenciais conforme descrito.
-            </p>
           </section>
 
-          {/* 11. Contato */}
+          {/* 10. Contato */}
           <section>
-            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>11. Contato e Reclamações</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>10. Contato e Reclamações</h2>
             <p>
               <strong>E-mail:</strong>{' '}
               <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
                 contato@santuarionerd.com.br
               </a><br />
-              <strong>Endereço:</strong> Santuário Nerd — São José do Rio Preto, SP
+              <strong>Endereço:</strong> Santuário Nerd — José Bonifácio, SP
             </p>
             <p className="mt-2">
               Insatisfeito com nossa resposta? Registre reclamação na{' '}
@@ -254,9 +206,9 @@ export default function PrivacidadePage() {
             </p>
           </section>
 
-          {/* 12. Alterações */}
+          {/* 11. Alterações */}
           <section>
-            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>12. Alterações desta Política</h2>
+            <h2 className="text-xl font-bold mb-3" style={{ color: 'var(--text-primary)' }}>11. Alterações desta Política</h2>
             <p>
               Podemos atualizar esta Política periodicamente. Quando realizarmos alterações relevantes,
               notificaremos os usuários cadastrados por e-mail e atualizaremos a data de "última atualização".

@@ -135,7 +135,7 @@ export default function DocumentoLgpdPage() {
         {/* Cabeçalho */}
         <div style={{ borderBottom: '2px solid #111', paddingBottom: 16, marginBottom: 24 }}>
           <p style={{ margin: 0, fontSize: 11, color: '#666', letterSpacing: 1, textTransform: 'uppercase' }}>
-            Santuário Nerd — São José do Rio Preto, SP
+            Santuário Nerd — José Bonifácio, SP
           </p>
           <h1 style={{ margin: '8px 0 4px', fontSize: 22, fontWeight: 700, color: '#111' }}>
             Relatório de Dados Pessoais
@@ -243,7 +243,7 @@ export default function DocumentoLgpdPage() {
             Os dados apresentados refletem o estado atual do cadastro no momento da geração.
           </p>
           <p style={{ margin: '6px 0 0' }}>
-            <strong>Controlador:</strong> Santuário Nerd — São José do Rio Preto, SP |{' '}
+            <strong>Controlador:</strong> Santuário Nerd — José Bonifácio, SP |{' '}
             <strong>E-mail:</strong> privacidade@softnerd.com.br
           </p>
         </div>

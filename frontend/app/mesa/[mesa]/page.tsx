@@ -45,7 +45,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <p><strong className="text-gray-900">Seus direitos:</strong> Acesso, correção ou exclusão a qualquer momento pelo painel do cliente.</p>
-          <p className="text-[10px] text-gray-400 italic">Responsável: Santuário Nerd — São José do Rio Preto, SP.</p>
+          <p className="text-[10px] text-gray-400 italic">Responsável: Santuário Nerd — José Bonifácio, SP.</p>
         </div>
         <div className="p-5 border-t border-gray-100">
           <button onClick={onClose} className="w-full py-4 font-black text-gray-900 rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-md"
