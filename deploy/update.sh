@@ -23,9 +23,9 @@ git pull origin main
 # Copia .env para pasta deploy
 cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
 
-# Rebuild e redeploy
+# Rebuild e redeploy — CACHEBUST força o Docker a recompilar o Next.js
 cd "$APP_DIR/deploy"
-docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml build --build-arg CACHEBUST="$(date +%s)"
 docker compose -f docker-compose.prod.yml up -d
 
 # Limpa imagens antigas
