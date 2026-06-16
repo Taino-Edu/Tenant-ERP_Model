@@ -616,15 +616,14 @@ public class ComandaService : IComandaService
         comanda.PaymentMethod = paymentMethod;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
-        // Não acumula quando o pagamento principal é via pontos, cashback ou crediário.
-        // Com split: ganha pontos apenas sobre a parcela paga em dinheiro/pix/cartão.
+        // Não acumula quando qualquer parte do pagamento usa cashback, pontos ou crediário.
         if (comanda.User != null && paymentMethod != PaymentCrediario
                                  && paymentMethod != PaymentPontos
-                                 && paymentMethod != PaymentCashback)
+                                 && paymentMethod != PaymentCashback
+                                 && secondPaymentMethod != PaymentCashback)
         {
-            // Base para acúmulo: exclui parcela paga em cashback/pontos no segundo método
-            var baseParaPontos = hasSecond &&
-                (secondPaymentMethod == PaymentCashback || secondPaymentMethod == PaymentPontos)
+            // Base para acúmulo: exclui parcela paga em pontos no segundo método
+            var baseParaPontos = (hasSecond && secondPaymentMethod == PaymentPontos)
                 ? primaryAmt
                 : netTotal;
 
