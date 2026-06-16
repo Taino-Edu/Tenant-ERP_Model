@@ -276,6 +276,8 @@ public class LgpdController : ControllerBase
                 RespondedAt    = r.RespondedAt,
                 IsOverdue      = agora > r.Deadline && r.Status != "Concluido" && r.Status != "Negado",
                 IsUrgent       = (r.Deadline - agora).TotalDays < 3 && r.Status != "Concluido" && r.Status != "Negado",
+                TemAnexo       = r.AnexoDados != null,
+                AnexoNome      = r.AnexoNome,
             })
             .ToListAsync();
 
@@ -313,7 +315,6 @@ public class LgpdController : ControllerBase
 
         await _db.SaveChangesAsync();
 
-        // Registra no audit log
         await _audit.LogAsync(
             action:      "RespondeuSolicitacaoLgpd",
             entityType:  "LgpdRequest",
@@ -322,10 +323,8 @@ public class LgpdController : ControllerBase
             httpContext: HttpContext
         );
 
-        // Notifica o solicitante por email se a solicitação foi concluída ou negada
         if (dto.Status is "Concluido" or "Negado")
         {
-            // HtmlEncoder evita injeção de HTML malicioso no corpo do e-mail
             await _email.SendLgpdResponseAsync(
                 toEmail:     req.RequesterEmail,
                 toName:      req.RequesterName,
@@ -351,6 +350,189 @@ public class LgpdController : ControllerBase
             RespondedAt    = req.RespondedAt,
             IsOverdue      = agora > req.Deadline && req.Status != "Concluido" && req.Status != "Negado",
             IsUrgent       = (req.Deadline - agora).TotalDays < 3 && req.Status != "Concluido" && req.Status != "Negado",
+            TemAnexo       = req.AnexoDados != null,
+            AnexoNome      = req.AnexoNome,
+        });
+    }
+
+    // =========================================================================
+    // ADMIN — Upload de anexo
+    // =========================================================================
+
+    /// <summary>Anexa um arquivo (PDF, imagem, documento) a uma solicitação LGPD. Máx 10 MB.</summary>
+    [HttpPost("requests/{id}/attachment")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> UploadAttachment(string id, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest(new { Message = "Nenhum arquivo enviado." });
+
+        const long maxBytes = 10L * 1024 * 1024;
+        if (file.Length > maxBytes)
+            return BadRequest(new { Message = "O arquivo não pode exceder 10 MB." });
+
+        var extensoesPermitidas = new[] { ".pdf", ".jpg", ".jpeg", ".png", ".docx", ".doc", ".txt" };
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!extensoesPermitidas.Contains(ext))
+            return BadRequest(new { Message = "Tipo de arquivo não permitido. Use PDF, imagem ou documento Word." });
+
+        var req = await _db.LgpdRequests.FindAsync(id);
+        if (req == null)
+            return NotFound(new { Message = "Solicitação não encontrada." });
+
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms);
+
+        req.AnexoNome  = Path.GetFileName(file.FileName);
+        req.AnexoDados = ms.ToArray();
+        await _db.SaveChangesAsync();
+
+        await _audit.LogAsync(
+            action:      "AnexouArquivoLgpd",
+            entityType:  "LgpdRequest",
+            entityId:    req.Id,
+            details:     $"{{\"arquivo\":\"{req.AnexoNome}\",\"bytes\":{req.AnexoDados.Length}}}",
+            httpContext: HttpContext
+        );
+
+        return Ok(new { AnexoNome = req.AnexoNome, Tamanho = req.AnexoDados.Length });
+    }
+
+    // =========================================================================
+    // ADMIN — Download de anexo
+    // =========================================================================
+
+    /// <summary>Faz download do arquivo anexado a uma solicitação LGPD.</summary>
+    [HttpGet("requests/{id}/attachment")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> DownloadAttachment(string id)
+    {
+        var req = await _db.LgpdRequests
+            .AsNoTracking()
+            .Select(r => new { r.Id, r.AnexoNome, r.AnexoDados })
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (req == null || req.AnexoDados == null)
+            return NotFound(new { Message = "Nenhum anexo encontrado para esta solicitação." });
+
+        var ext         = Path.GetExtension(req.AnexoNome ?? "").ToLowerInvariant();
+        var contentType = ext switch
+        {
+            ".pdf"  => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png"  => "image/png",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc"  => "application/msword",
+            ".txt"  => "text/plain",
+            _       => "application/octet-stream",
+        };
+
+        return File(req.AnexoDados, contentType, req.AnexoNome ?? "anexo");
+    }
+
+    // =========================================================================
+    // ADMIN — Relatório de dados do titular (para Acesso / Portabilidade)
+    // =========================================================================
+
+    /// <summary>
+    /// Gera relatório estruturado dos dados pessoais do titular para atender
+    /// solicitações de Acesso (Art. 18, II) ou Portabilidade (Art. 18, V).
+    /// </summary>
+    [HttpGet("requests/{id}/relatorio")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GerarRelatorio(string id)
+    {
+        var lgpdReq = await _db.LgpdRequests.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id);
+        if (lgpdReq == null)
+            return NotFound(new { Message = "Solicitação não encontrada." });
+
+        var user = await _db.Users
+            .AsNoTracking()
+            .Include(u => u.Comandas)
+            .FirstOrDefaultAsync(u => u.Cpf == lgpdReq.RequesterCpf);
+
+        var geradoEm = DateTime.UtcNow;
+
+        object dadosCadastrais;
+        object[] historico;
+        object saldos;
+
+        if (user != null)
+        {
+            dadosCadastrais = new
+            {
+                nome           = user.Name,
+                cpf            = lgpdReq.RequesterCpf,
+                email          = user.Email,
+                whatsapp       = user.WhatsApp,
+                cadastradoEm   = user.CreatedAt.ToString("dd/MM/yyyy HH:mm"),
+                ultimaAtualizacao = user.UpdatedAt.ToString("dd/MM/yyyy HH:mm"),
+                consentimento  = user.ConsentAt.HasValue
+                    ? user.ConsentAt.Value.ToString("dd/MM/yyyy HH:mm")
+                    : "Não registrado",
+                status         = user.IsActive ? "Ativo" : "Inativo",
+            };
+
+            var comandasFechadas = user.Comandas
+                .Where(c => c.Status == Models.PostgreSQL.ComandaStatus.Fechada)
+                .OrderByDescending(c => c.ClosedAt)
+                .Take(50)
+                .Select(c => new
+                {
+                    protocolo    = c.Id,
+                    abertura     = c.OpenedAt.ToString("dd/MM/yyyy HH:mm"),
+                    fechamento   = c.ClosedAt.HasValue ? c.ClosedAt.Value.ToString("dd/MM/yyyy HH:mm") : "-",
+                    pagamento    = c.PaymentMethod ?? "-",
+                })
+                .ToArray();
+
+            historico = (object[])comandasFechadas;
+
+            saldos = new
+            {
+                pontos           = user.PointsBalance,
+                pontosExpiraEm   = user.PointsExpiresAt.HasValue
+                    ? user.PointsExpiresAt.Value.ToString("dd/MM/yyyy")
+                    : "—",
+                cashbackReais    = user.BalanceInReais,
+            };
+        }
+        else
+        {
+            dadosCadastrais = new
+            {
+                nome     = lgpdReq.RequesterName,
+                cpf      = lgpdReq.RequesterCpf,
+                email    = lgpdReq.RequesterEmail,
+                nota     = "Titular não encontrado na base de dados com este CPF.",
+            };
+            historico = [];
+            saldos    = new { nota = "Sem dados cadastrados." };
+        }
+
+        await _audit.LogAsync(
+            action:      "GerarRelatorioLgpd",
+            entityType:  "LgpdRequest",
+            entityId:    lgpdReq.Id,
+            details:     $"{{\"tipo\":\"{lgpdReq.RequestType}\"}}",
+            httpContext: HttpContext
+        );
+
+        return Ok(new
+        {
+            protocolo       = lgpdReq.Id,
+            tipoSolicitacao = lgpdReq.RequestType,
+            geradoEm        = geradoEm.ToString("dd/MM/yyyy HH:mm"),
+            dadosCadastrais,
+            historicoComandasFechadas = historico,
+            saldos,
         });
     }
 

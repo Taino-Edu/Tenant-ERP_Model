@@ -91,6 +91,19 @@ public class LgpdRequest
     public DateTime Deadline { get; set; } = DateTime.UtcNow.AddDays(15);
 
     // -------------------------------------------------------------------------
+    // Anexo (arquivo opcional vinculado à resposta)
+    // -------------------------------------------------------------------------
+
+    /// <summary>Nome original do arquivo anexado pelo admin (null se não houver).</summary>
+    [MaxLength(255)]
+    [Column("anexo_nome")]
+    public string? AnexoNome { get; set; }
+
+    /// <summary>Conteúdo binário do arquivo (BYTEA no PostgreSQL). Limite: 10 MB.</summary>
+    [Column("anexo_dados")]
+    public byte[]? AnexoDados { get; set; }
+
+    // -------------------------------------------------------------------------
     // Navegação
     // -------------------------------------------------------------------------
 

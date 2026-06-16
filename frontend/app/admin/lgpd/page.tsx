@@ -4,9 +4,10 @@
 // Aba 1: Requisições LGPD | Aba 2: Audit Log
 // =============================================================================
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '@/lib/api'
-import { Shield, FileText, Clock, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Shield, FileText, Clock, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, Download, FileDown } from 'lucide-react'
+import Link from 'next/link'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +25,8 @@ interface LgpdRequest {
   respondedAt: string | null
   isOverdue: boolean
   isUrgent: boolean
+  temAnexo: boolean
+  anexoNome: string | null
 }
 
 interface AuditLog {
@@ -99,10 +102,19 @@ function RespondModal({
   onClose: () => void
   onSaved:  () => void
 }) {
-  const [status,   setStatus]   = useState('EmAnalise')
-  const [response, setResponse] = useState(request.adminResponse ?? '')
-  const [loading,  setLoading]  = useState(false)
-  const [error,    setError]    = useState<string | null>(null)
+  const [status,       setStatus]       = useState(request.status === 'Recebido' ? 'EmAnalise' : request.status)
+  const [response,     setResponse]     = useState(request.adminResponse ?? '')
+  const [loading,      setLoading]      = useState(false)
+  const [error,        setError]        = useState<string | null>(null)
+  const [saved,        setSaved]        = useState(request.status !== 'Recebido')
+
+  // Anexo
+  const [file,         setFile]         = useState<File | null>(null)
+  const [uploading,    setUploading]    = useState(false)
+  const [uploadError,  setUploadError]  = useState<string | null>(null)
+  const [uploadOk,     setUploadOk]     = useState(request.temAnexo)
+  const [anexoNome,    setAnexoNome]    = useState<string | null>(request.anexoNome)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   async function handleSave() {
     if (!response.trim()) { setError('A resposta é obrigatória.'); return }
@@ -110,6 +122,7 @@ function RespondModal({
     setLoading(true)
     try {
       await api.put(`/api/lgpd/requests/${request.id}/respond`, { status, adminResponse: response })
+      setSaved(true)
       onSaved()
     } catch {
       setError('Erro ao salvar resposta. Tente novamente.')
@@ -118,10 +131,39 @@ function RespondModal({
     }
   }
 
+  async function handleUpload() {
+    if (!file) return
+    setUploadError(null)
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await api.post<{ anexoNome: string }>(`/api/lgpd/requests/${request.id}/attachment`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setAnexoNome(res.data.anexoNome)
+      setUploadOk(true)
+      setFile(null)
+      if (fileRef.current) fileRef.current.value = ''
+    } catch {
+      setUploadError('Erro ao enviar arquivo. Verifique o tamanho (máx 10 MB) e tente novamente.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function handleDownload() {
+    window.open(`/api/lgpd/requests/${request.id}/attachment`, '_blank')
+  }
+
+  const isReadOnly = request.status === 'Concluido' || request.status === 'Negado'
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="bg-surface-800 rounded-2xl shadow-2xl border border-surface-500 w-full max-w-lg p-6">
-        <h3 className="text-lg font-bold text-white mb-1">Responder Solicitação</h3>
+      <div className="bg-surface-800 rounded-2xl shadow-2xl border border-surface-500 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <h3 className="text-lg font-bold text-white mb-1">
+          {isReadOnly ? 'Ver Resposta' : 'Responder Solicitação'}
+        </h3>
         <p className="text-xs text-gray-400 mb-4 font-mono"># {request.id}</p>
 
         <div className="grid grid-cols-2 gap-3 text-sm mb-4">
@@ -143,11 +185,12 @@ function RespondModal({
         )}
 
         <div className="mb-3">
-          <label className="block text-xs text-gray-400 mb-1">Novo status</label>
+          <label className="block text-xs text-gray-400 mb-1">Status</label>
           <select
             value={status}
             onChange={e => setStatus(e.target.value)}
-            className="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+            disabled={isReadOnly}
+            className="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-60"
           >
             <option value="EmAnalise">Em Análise</option>
             <option value="Concluido">Concluído</option>
@@ -157,37 +200,83 @@ function RespondModal({
 
         <div className="mb-4">
           <label className="block text-xs text-gray-400 mb-1">
-            Resposta formal <span className="text-red-400">*</span>
+            Resposta formal {!isReadOnly && <span className="text-red-400">*</span>}
           </label>
           <textarea
             value={response}
             onChange={e => setResponse(e.target.value)}
             rows={5}
             maxLength={4000}
-            className="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-gray-500"
+            disabled={isReadOnly}
+            className="w-full bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-gray-500 disabled:opacity-60"
             placeholder="Descreva a resposta formal ao titular dos dados..."
           />
-          <p className="text-xs text-gray-500 mt-1">{response.length}/4000 caracteres</p>
+          {!isReadOnly && <p className="text-xs text-gray-500 mt-1">{response.length}/4000 caracteres</p>}
         </div>
 
-        {error && (
-          <p className="text-sm text-red-400 mb-3">{error}</p>
-        )}
+        {/* ── Seção de anexo ─────────────────────────────────────── */}
+        <div className="border border-surface-500 rounded-xl p-4 mb-4">
+          <p className="text-xs font-semibold text-gray-300 flex items-center gap-1.5 mb-3">
+            <Paperclip className="w-3.5 h-3.5" />
+            Documento anexado
+          </p>
+
+          {uploadOk && anexoNome ? (
+            <div className="flex items-center justify-between bg-surface-700 rounded-lg px-3 py-2">
+              <span className="text-xs text-green-400 truncate max-w-[200px]">{anexoNome}</span>
+              <button
+                onClick={handleDownload}
+                className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors ml-2 shrink-0"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Baixar
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 mb-2">Nenhum anexo ainda.</p>
+          )}
+
+          <div className="mt-3 flex flex-col gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.docx,.doc,.txt"
+              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              className="text-xs text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-surface-600 file:text-white hover:file:bg-surface-500"
+            />
+            {file && (
+              <button
+                onClick={handleUpload}
+                disabled={uploading}
+                className="flex items-center gap-1.5 self-start px-3 py-1.5 bg-surface-600 hover:bg-surface-500 text-white text-xs rounded-lg disabled:opacity-50 transition-colors"
+              >
+                <Paperclip className="w-3.5 h-3.5" />
+                {uploading ? 'Enviando...' : `Anexar "${file.name}"`}
+              </button>
+            )}
+            {uploadError && <p className="text-xs text-red-400">{uploadError}</p>}
+            {uploadOk && !uploadError && <p className="text-xs text-green-400">Arquivo salvo com sucesso.</p>}
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-red-400 mb-3">{error}</p>}
 
         <div className="flex gap-2 justify-end">
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
           >
-            Cancelar
+            {isReadOnly ? 'Fechar' : 'Cancelar'}
           </button>
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="px-5 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Salvando...' : 'Salvar resposta'}
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              className="px-5 py-2 bg-brand-500 text-white text-sm font-medium rounded-lg hover:bg-brand-600 disabled:opacity-50 transition-colors"
+            >
+              {loading ? 'Salvando...' : 'Salvar resposta'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -363,14 +452,36 @@ export default function LgpdAdminPage() {
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <button
-                              onClick={() => setResponding(req)}
-                              className="text-xs text-brand-400 hover:text-brand-300 font-medium transition-colors"
-                            >
-                              {req.status === 'Concluido' || req.status === 'Negado'
-                                ? 'Ver resposta'
-                                : 'Responder'}
-                            </button>
+                            <div className="flex flex-col gap-1.5">
+                              <button
+                                onClick={() => setResponding(req)}
+                                className="text-xs text-brand-400 hover:text-brand-300 font-medium transition-colors text-left"
+                              >
+                                {req.status === 'Concluido' || req.status === 'Negado'
+                                  ? 'Ver resposta'
+                                  : 'Responder'}
+                              </button>
+                              {(req.requestType === 'Acesso' || req.requestType === 'Portabilidade') && (
+                                <Link
+                                  href={`/admin/lgpd/documento/${req.id}`}
+                                  target="_blank"
+                                  className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                                >
+                                  <FileDown className="w-3 h-3" />
+                                  Gerar relatório
+                                </Link>
+                              )}
+                              {req.temAnexo && (
+                                <a
+                                  href={`/api/lgpd/requests/${req.id}/attachment`}
+                                  target="_blank"
+                                  className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                                >
+                                  <Paperclip className="w-3 h-3" />
+                                  {req.anexoNome ?? 'Anexo'}
+                                </a>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}

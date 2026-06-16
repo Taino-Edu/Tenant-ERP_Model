@@ -87,8 +87,10 @@ public class LgpdRequestAdminDto
     public DateTime  CreatedAt      { get; set; }
     public DateTime  Deadline       { get; set; }
     public DateTime? RespondedAt    { get; set; }
-    public bool      IsOverdue      { get; set; }   // prazo vencido
-    public bool      IsUrgent       { get; set; }   // prazo vence em menos de 3 dias
+    public bool      IsOverdue      { get; set; }
+    public bool      IsUrgent       { get; set; }
+    public bool      TemAnexo       { get; set; }
+    public string?   AnexoNome      { get; set; }
 }
 
 // ── Audit Log ─────────────────────────────────────────────────────────────────
