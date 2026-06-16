@@ -28,6 +28,7 @@ export default function LandingPage() {
   const [annModal,      setAnnModal]      = useState<AnnouncementDto | null>(null)
   const [mobileMenu,    setMobileMenu]    = useState(false)
   const [isDark,        setIsDark]        = useState(false)
+  const [showAllProducts, setShowAllProducts] = useState(false)
 
   const C = isDark ? {
     bg: '#121215', card: '#1A1A1F', cardAlt: '#1E1E24',
@@ -57,12 +58,12 @@ export default function LandingPage() {
     }
     Promise.allSettled([
       championshipApi.list().then(r =>
-        setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 4))
+        setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 8))
       ),
       productApi.list().then(r => {
         const visible  = r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnSite !== false)
         const featured = visible.filter(p => p.isFeatured)
-        setProducts(featured.length > 0 ? featured.slice(0, 8) : visible.slice(0, 8))
+        setProducts(featured.length > 0 ? [...featured, ...visible.filter(p => !p.isFeatured)] : visible)
       }),
       announcementApi.visible().then(r => setAnnouncements(r.data)),
     ]).finally(() => setLoading(false))
@@ -301,12 +302,58 @@ export default function LandingPage() {
               <Package className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: C.navy }} />
               <p className="font-medium opacity-50" style={{ color: C.navy }}>Produtos em breve.</p>
             </div>
+          ) : showAllProducts ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+                {products.map(p => (
+                  <ProductCard key={p.id} product={p} onClick={() => setProductModal(p)} C={C} />
+                ))}
+              </div>
+              <div className="flex justify-center mt-8">
+                <button
+                  onClick={() => setShowAllProducts(false)}
+                  className="text-sm font-bold px-6 py-2.5 rounded-xl border transition-all hover:opacity-80"
+                  style={{ color: C.text, borderColor: C.border }}>
+                  Ver menos
+                </button>
+              </div>
+            </>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-              {products.map(p => (
-                <ProductCard key={p.id} product={p} onClick={() => setProductModal(p)} C={C} />
-              ))}
-            </div>
+            <>
+              {/* Carrossel lateral */}
+              <div className="relative -mx-5 px-5">
+                <div
+                  className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                  {products.map(p => (
+                    <div key={p.id} className="snap-start shrink-0 w-40 sm:w-48">
+                      <ProductCard product={p} onClick={() => setProductModal(p)} C={C} />
+                    </div>
+                  ))}
+                  {/* Card final "Ver todos" */}
+                  <div className="snap-start shrink-0 w-40 sm:w-48 flex items-center justify-center">
+                    <button
+                      onClick={() => setShowAllProducts(true)}
+                      className="flex flex-col items-center justify-center gap-3 w-full h-full min-h-[220px] rounded-2xl border-2 border-dashed transition-all hover:opacity-80"
+                      style={{ borderColor: C.blue, color: C.blue }}>
+                      <ChevronRight className="w-8 h-8" />
+                      <span className="text-xs font-black text-center leading-snug px-2">
+                        Ver todos<br />{products.length} produtos
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-center mt-4">
+                <button
+                  onClick={() => setShowAllProducts(true)}
+                  className="flex items-center gap-2 text-sm font-black px-6 py-2.5 rounded-xl transition-all active:scale-95"
+                  style={{ backgroundColor: C.blue, color: '#fff', boxShadow: `0 4px 16px rgba(62,194,242,0.25)` }}>
+                  Ver todos os {products.length} produtos <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </>
           )}
         </div>
       </section>
