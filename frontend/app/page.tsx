@@ -63,7 +63,7 @@ export default function LandingPage() {
       productApi.list().then(r => {
         const visible  = r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnSite !== false)
         const featured = visible.filter(p => p.isFeatured)
-        setProducts(featured.length > 0 ? [...featured, ...visible.filter(p => !p.isFeatured)] : visible)
+        setProducts(featured.length > 0 ? featured : visible)
       }),
       announcementApi.visible().then(r => setAnnouncements(r.data)),
     ]).finally(() => setLoading(false))
