@@ -65,9 +65,16 @@ export default function LandingPage() {
         const featured = visible.filter(p => p.isFeatured)
         setProducts(featured.length > 0 ? featured : visible)
       }),
-      announcementApi.visible().then(r => setAnnouncements(r.data)),
+      announcementApi.visible().then(r => setAnnouncements(r.data.sort((a, b) => {
+        const aB = a.title.startsWith('[BANNER]') ? -1 : 1
+        const bB = b.title.startsWith('[BANNER]') ? -1 : 1
+        return aB - bB
+      }))),
     ]).finally(() => setLoading(false))
   }, [router])
+
+  const heroBanner = announcements.find(a => a.title.startsWith('[BANNER]') && a.imageUrl)
+  const visibleAnnouncements = announcements.filter(a => !a.title.startsWith('[BANNER]'))
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: C.bg, color: C.navy }}>
@@ -154,30 +161,45 @@ export default function LandingPage() {
       )}
 
       {/* ── HERO ───────────────────────────────────────────────────────── */}
-      <section className="relative pt-16 overflow-hidden" style={{ backgroundColor: NAVY }}>
+      <section
+        className="relative pt-16 overflow-hidden"
+        style={{
+          backgroundColor: NAVY,
+          ...(heroBanner?.imageUrl ? {
+            backgroundImage: `url(${heroBanner.imageUrl})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          } : {}),
+        }}
+      >
+        {/* Overlay escuro quando há banner */}
+        {heroBanner?.imageUrl && (
+          <div className="absolute inset-0 bg-black/60" />
+        )}
 
-        <div className="relative max-w-6xl mx-auto px-5 py-20 md:py-24">
-          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12">
+        <div className="relative z-10 max-w-6xl mx-auto px-5 py-20 md:py-24">
+          <div className={`flex flex-col items-center gap-8 md:gap-12 ${heroBanner?.imageUrl ? 'md:flex-col text-center' : 'md:flex-row'}`}>
 
             {/* Texto */}
-            <div className="flex-1 text-center md:text-left">
+            <div className={`flex-1 text-center ${heroBanner?.imageUrl ? '' : 'md:text-left'}`}>
               <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full mb-6 border"
                 style={{ color: C.blue, borderColor: `${C.blue}40`, backgroundColor: `${C.blue}15` }}>
                 Card Games &amp; Campeonatos · José Bonifácio — SP
               </div>
 
               <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-5 tracking-tight text-white">
-                <span style={{ color: C.blue }}>Santuário Nerd</span><br />
+                <span style={{ color: '#FFE45E' }}>Santuário</span>{' '}
+                <span style={{ color: '#3EC2F2' }}>Nerd</span><br />
                 Card Games &amp;<br />
                 Campeonatos
               </h1>
 
-              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: 'rgba(255,255,255,0.65)' }}>
+              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed mx-auto" style={{ color: 'rgba(255,255,255,0.65)' }}>
                 Produtos, torneios e a melhor experiência TCG da região.
                 Acumule pontos, compre na mesa e participe de campeonatos.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
+              <div className={`flex flex-col sm:flex-row gap-3 justify-center ${heroBanner?.imageUrl ? '' : 'md:justify-start'}`}>
                 <a href="#eventos"
                   className="inline-flex items-center justify-center gap-2 font-black px-7 py-3.5 rounded-xl transition-all active:scale-95"
                   style={{ backgroundColor: C.yellow, color: NAVY, boxShadow: `0 8px 28px rgba(255,228,94,0.22)` }}>
@@ -191,29 +213,31 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Mascote */}
-            <div className="relative shrink-0">
-              <img
-                src="/logo-maikon.png"
-                alt="Mascote Maikon"
-                className="w-48 sm:w-56 md:w-64 h-auto object-contain drop-shadow-[0_16px_40px_rgba(0,0,0,0.4)]"
-              />
-            </div>
+            {/* Mascote — só aparece sem banner */}
+            {!heroBanner?.imageUrl && (
+              <div className="relative shrink-0">
+                <img
+                  src="/logo-maikon.png"
+                  alt="Mascote Maikon"
+                  className="w-48 sm:w-56 md:w-64 h-auto object-contain drop-shadow-[0_16px_40px_rgba(0,0,0,0.4)]"
+                />
+              </div>
+            )}
           </div>
         </div>
       </section>
 
       {/* ── ANÚNCIOS (gerenciados pelo admin) ──────────────────────────── */}
-      {announcements.length > 0 && (
+      {visibleAnnouncements.length > 0 && (
         <section className="px-5 pb-8 max-w-6xl mx-auto">
           <div className={
-            announcements.length === 1
+            visibleAnnouncements.length === 1
               ? 'grid grid-cols-1'
-              : announcements.length === 2
+              : visibleAnnouncements.length === 2
                 ? 'grid grid-cols-1 sm:grid-cols-2 gap-4'
                 : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
           }>
-            {announcements.map(a => (
+            {visibleAnnouncements.map(a => (
               <button
                 key={a.id}
                 onClick={() => setAnnModal(a)}
@@ -221,14 +245,14 @@ export default function LandingPage() {
                 style={{ backgroundColor: C.card, borderColor: C.border }}
               >
                 {a.imageUrl ? (
-                  <div className={`w-full overflow-hidden ${announcements.length === 1 ? 'h-56 md:h-72' : 'h-44'}`}>
+                  <div className={`w-full overflow-hidden ${visibleAnnouncements.length === 1 ? 'h-56 md:h-72' : 'h-44'}`}>
                     <img
                       src={a.imageUrl} alt={a.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                   </div>
                 ) : (
-                  <div className={`w-full flex items-center justify-center ${announcements.length === 1 ? 'h-36' : 'h-44'}`}
+                  <div className={`w-full flex items-center justify-center ${visibleAnnouncements.length === 1 ? 'h-36' : 'h-44'}`}
                     style={{ background: `linear-gradient(135deg, ${C.blue}18, ${C.card})` }}>
                     <span className="text-5xl font-black opacity-20" style={{ color: C.blue }}>!</span>
                   </div>
