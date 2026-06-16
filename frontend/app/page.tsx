@@ -65,16 +65,12 @@ export default function LandingPage() {
         const featured = visible.filter(p => p.isFeatured)
         setProducts(featured.length > 0 ? featured : visible)
       }),
-      announcementApi.visible().then(r => setAnnouncements(r.data.sort((a, b) => {
-        const aB = a.title.startsWith('[BANNER]') ? -1 : 1
-        const bB = b.title.startsWith('[BANNER]') ? -1 : 1
-        return aB - bB
-      }))),
+      announcementApi.visible().then(r => setAnnouncements(r.data)),
     ]).finally(() => setLoading(false))
   }, [router])
 
-  const heroBanner = announcements.find(a => a.title.startsWith('[BANNER]') && a.imageUrl)
-  const visibleAnnouncements = announcements.filter(a => !a.title.startsWith('[BANNER]'))
+  const heroBanner = announcements.find(a => a.type === 'Banner' && a.imageUrl)
+  const visibleAnnouncements = announcements.filter(a => a.type !== 'Banner')
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: C.bg, color: C.navy }}>

@@ -87,7 +87,7 @@ function AnnouncementForm({
         <div>
           <ImageUpload
             label="Imagem do anúncio"
-            hint="Banner: 1200×400px · Aviso: 600×300px"
+            hint="Banner hero: 1920×600px · Aviso: 600×300px"
             currentUrl={imageUrl || null}
             onUpload={url => setImageUrl(url)}
           />
