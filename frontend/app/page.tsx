@@ -169,7 +169,7 @@ export default function LandingPage() {
 
             {/* Texto */}
             <div className="flex-1 text-center md:text-left">
-              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed text-white" style={{ color: '#ffffff' }}>
+              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: '#ffffff' }}>
                 Produtos, torneios e a melhor experiência TCG da região.
                 Acumule pontos, compre na mesa e participe de campeonatos.
               </p>
