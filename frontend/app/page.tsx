@@ -169,9 +169,9 @@ export default function LandingPage() {
 
             {/* Texto */}
             <div className="flex-1 text-center md:text-left">
-              <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-4 tracking-tight">
-                <span style={{ color: '#FFE45E' }}>Santuário</span>{' '}
-                <span style={{ color: '#3EC2F2' }}>Nerd</span>
+              <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-4 tracking-tight" style={{ color: '#ffffff' }}>
+                Card Games &amp;<br />
+                Campeonatos
               </h1>
 
               <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed text-white">
