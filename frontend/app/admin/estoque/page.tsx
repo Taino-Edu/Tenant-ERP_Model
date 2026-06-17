@@ -387,7 +387,14 @@ export default function EstoquePage() {
               {filtered.map(p => (
                 <tr key={p.id} className="hover:bg-surface-600/30 transition-colors">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-white">{p.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-white">{p.name}</p>
+                      {p.isPreVenda && (
+                        <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded text-white shrink-0" style={{ backgroundColor: '#7C3AED' }}>
+                          Pré-venda
+                        </span>
+                      )}
+                    </div>
                     {p.description && <p className="text-xs text-gray-500 truncate max-w-[200px]">{p.description}</p>}
                   </td>
                   <td className="px-4 py-3">

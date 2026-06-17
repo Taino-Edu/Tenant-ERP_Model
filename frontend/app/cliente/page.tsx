@@ -47,7 +47,13 @@ function ProductCard({ p, adding, onAdd }: {
           ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
           : <Package className="w-10 h-10 opacity-20" style={{ color: C.blue2 }} />
         }
-        {p.isOnPromo && !unavailable && (
+        {p.isPreVenda && !unavailable && (
+          <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md text-white"
+            style={{ backgroundColor: '#7C3AED' }}>
+            Pré-venda
+          </span>
+        )}
+        {!p.isPreVenda && p.isOnPromo && !unavailable && (
           <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md text-white"
             style={{ backgroundColor: '#FF3B3B' }}>
             Promoção

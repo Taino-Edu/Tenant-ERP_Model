@@ -615,6 +615,16 @@ export default function VendaAvulsaPage() {
                           {inCart.quantity}
                         </span>
                       )}
+                      {p.isPreVenda && (
+                        <span className="inline-block mb-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: '#7C3AED' }}>
+                          Pré-venda
+                        </span>
+                      )}
+                      {!p.isPreVenda && p.isOnPromo && (
+                        <span className="inline-block mb-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: '#EF4444' }}>
+                          Promoção
+                        </span>
+                      )}
                       <p className="text-xs text-gray-500 mb-1">{p.category}</p>
                       <p className="text-sm font-medium text-white leading-tight line-clamp-2">{p.name}</p>
                       <div className="flex items-center justify-between mt-2">
