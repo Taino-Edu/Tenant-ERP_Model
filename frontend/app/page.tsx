@@ -77,7 +77,7 @@ export default function LandingPage() {
 
       {/* ── NAVBAR ─────────────────────────────────────────────────────── */}
       <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center"
-        style={{ backgroundColor: '#071320', backdropFilter: 'blur(16px)' }}>
+        style={{ backgroundColor: '#0F3460', backdropFilter: 'blur(16px)' }}>
         <div className="w-full max-w-6xl mx-auto px-5 flex items-center justify-between">
 
           {/* Logo */}
@@ -86,35 +86,33 @@ export default function LandingPage() {
           </div>
 
           {/* Links desktop */}
-          <div className="hidden md:flex items-center gap-7 text-sm font-medium" style={{ color: 'rgba(255,255,255,0.70)' }}>
-            <a href="#eventos"  className="hover:text-white transition-colors">Torneios</a>
-            <a href="#produtos" className="hover:text-white transition-colors">Produtos</a>
-            <a href="#pontos"   className="hover:text-white transition-colors">Pontos</a>
+          <div className="hidden md:flex items-center gap-7 text-sm font-medium text-white">
+            <a href="#eventos"  className="hover:opacity-80 transition-opacity">Torneios</a>
+            <a href="#produtos" className="hover:opacity-80 transition-opacity">Produtos</a>
+            <a href="#pontos"   className="hover:opacity-80 transition-opacity">Pontos</a>
           </div>
 
           {/* Toggle tema */}
           <button onClick={toggleDark} title={isDark ? 'Modo claro' : 'Modo escuro'}
-            className="hidden md:flex p-2 rounded-xl transition-colors hover:bg-white/10"
-            style={{ color: 'rgba(255,255,255,0.70)' }}>
+            className="hidden md:flex p-2 rounded-xl transition-colors hover:bg-white/10 text-white">
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
           {/* Ações desktop */}
           <div className="hidden md:flex items-center gap-2">
             <Link href="/entrar"
-              className="text-sm px-4 py-2 rounded-xl border transition-colors hover:border-white/30 hover:text-white"
-              style={{ color: 'rgba(255,255,255,0.70)', borderColor: 'rgba(255,255,255,0.25)' }}>
+              className="text-sm px-4 py-2 rounded-xl border border-white/30 text-white transition-colors hover:bg-white/10">
               Minha Conta
             </Link>
             <a href="#eventos"
-              className="text-sm font-black px-5 py-2 rounded-xl transition-all active:scale-95 shadow-lg"
-              style={{ backgroundColor: C.blue, color: '#fff', boxShadow: `0 4px 20px rgba(62,194,242,0.3)` }}>
+              className="text-sm font-black px-5 py-2 rounded-xl transition-all active:scale-95"
+              style={{ backgroundColor: C.yellow, color: NAVY }}>
               Ver Eventos
             </a>
           </div>
 
           {/* Hamburger mobile */}
-          <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: 'rgba(255,255,255,0.70)' }}>
+          <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2 text-white">
             <div className="space-y-1.5">
               <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
               <span className={`block w-5 h-0.5 bg-current transition-opacity ${mobileMenu ? 'opacity-0' : ''}`} />
