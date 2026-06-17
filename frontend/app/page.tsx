@@ -76,51 +76,51 @@ export default function LandingPage() {
     <div className="min-h-screen" style={{ backgroundColor: C.bg, color: C.navy }}>
 
       {/* ── NAVBAR ─────────────────────────────────────────────────────── */}
-      <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center"
+      <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center relative"
         style={{ backgroundColor: '#0F3460', backdropFilter: 'blur(16px)' }}>
+
+        {/* Marca centralizada absolutamente */}
+        <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
+          <span className="font-black text-2xl leading-none" style={{ color: '#ffffff' }}>Santuário Nerd</span>
+        </div>
+
         <div className="w-full max-w-6xl mx-auto px-5 flex items-center justify-between">
 
-          {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <span className="font-black text-lg leading-none" style={{ color: '#ffffff' }}>Santuário Nerd</span>
-          </div>
-
-          {/* Links desktop */}
-          <div className="hidden md:flex items-center gap-7 text-sm font-medium" style={{ color: '#ffffff' }}>
+          {/* Links desktop — esquerda */}
+          <div className="hidden md:flex items-center gap-7 text-sm font-medium">
             <a href="#eventos"  style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Torneios</a>
             <a href="#produtos" style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Produtos</a>
             <a href="#pontos"   style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Pontos</a>
           </div>
 
-          {/* Toggle tema */}
-          <button onClick={toggleDark} title={isDark ? 'Modo claro' : 'Modo escuro'}
-            className="hidden md:flex p-2 rounded-xl transition-colors hover:bg-white/10"
-            style={{ color: '#ffffff' }}>
-            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
+          {/* Espaço mobile esquerda */}
+          <div className="md:hidden" />
 
-          {/* Ações desktop */}
-          <div className="hidden md:flex items-center gap-2">
+          {/* Ações direita */}
+          <div className="flex items-center gap-2">
+            <button onClick={toggleDark} title={isDark ? 'Modo claro' : 'Modo escuro'}
+              className="p-2 rounded-xl transition-colors hover:bg-white/10"
+              style={{ color: '#ffffff' }}>
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
             <Link href="/entrar"
-              className="text-sm px-4 py-2 rounded-xl border transition-colors hover:bg-white/10"
+              className="hidden md:block text-sm px-4 py-2 rounded-xl border transition-colors hover:bg-white/10"
               style={{ color: '#ffffff', borderColor: 'rgba(255,255,255,0.40)' }}>
               Minha Conta
             </Link>
             <a href="#eventos"
-              className="text-sm font-black px-5 py-2 rounded-xl transition-all active:scale-95"
+              className="hidden md:block text-sm font-black px-5 py-2 rounded-xl transition-all active:scale-95"
               style={{ backgroundColor: C.yellow, color: NAVY }}>
               Ver Eventos
             </a>
+            <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: '#ffffff' }}>
+              <div className="space-y-1.5">
+                <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
+                <span className={`block w-5 h-0.5 bg-current transition-opacity ${mobileMenu ? 'opacity-0' : ''}`} />
+                <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? '-rotate-45 -translate-y-2' : ''}`} />
+              </div>
+            </button>
           </div>
-
-          {/* Hamburger mobile */}
-          <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: '#ffffff' }}>
-            <div className="space-y-1.5">
-              <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
-              <span className={`block w-5 h-0.5 bg-current transition-opacity ${mobileMenu ? 'opacity-0' : ''}`} />
-              <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? '-rotate-45 -translate-y-2' : ''}`} />
-            </div>
-          </button>
         </div>
       </nav>
 
