@@ -71,7 +71,7 @@ export default function LandingPage() {
       const maxLeft = el.scrollWidth - el.clientWidth
       const next = el.scrollLeft + cardW
       el.scrollTo({ left: next >= maxLeft ? 0 : next, behavior: 'smooth' })
-    }, 3000)
+    }, 1500)
     return () => clearInterval(interval)
   }, [products])
 
