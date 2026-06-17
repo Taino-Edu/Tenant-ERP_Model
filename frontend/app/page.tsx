@@ -82,26 +82,28 @@ export default function LandingPage() {
 
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <span className="font-black text-lg text-white leading-none">Santuário Nerd</span>
+            <span className="font-black text-lg leading-none" style={{ color: '#ffffff' }}>Santuário Nerd</span>
           </div>
 
           {/* Links desktop */}
-          <div className="hidden md:flex items-center gap-7 text-sm font-medium text-white">
-            <a href="#eventos"  className="hover:opacity-80 transition-opacity">Torneios</a>
-            <a href="#produtos" className="hover:opacity-80 transition-opacity">Produtos</a>
-            <a href="#pontos"   className="hover:opacity-80 transition-opacity">Pontos</a>
+          <div className="hidden md:flex items-center gap-7 text-sm font-medium" style={{ color: '#ffffff' }}>
+            <a href="#eventos"  style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Torneios</a>
+            <a href="#produtos" style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Produtos</a>
+            <a href="#pontos"   style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Pontos</a>
           </div>
 
           {/* Toggle tema */}
           <button onClick={toggleDark} title={isDark ? 'Modo claro' : 'Modo escuro'}
-            className="hidden md:flex p-2 rounded-xl transition-colors hover:bg-white/10 text-white">
+            className="hidden md:flex p-2 rounded-xl transition-colors hover:bg-white/10"
+            style={{ color: '#ffffff' }}>
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
 
           {/* Ações desktop */}
           <div className="hidden md:flex items-center gap-2">
             <Link href="/entrar"
-              className="text-sm px-4 py-2 rounded-xl border border-white/30 text-white transition-colors hover:bg-white/10">
+              className="text-sm px-4 py-2 rounded-xl border transition-colors hover:bg-white/10"
+              style={{ color: '#ffffff', borderColor: 'rgba(255,255,255,0.40)' }}>
               Minha Conta
             </Link>
             <a href="#eventos"
@@ -112,7 +114,7 @@ export default function LandingPage() {
           </div>
 
           {/* Hamburger mobile */}
-          <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2 text-white">
+          <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: '#ffffff' }}>
             <div className="space-y-1.5">
               <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
               <span className={`block w-5 h-0.5 bg-current transition-opacity ${mobileMenu ? 'opacity-0' : ''}`} />
