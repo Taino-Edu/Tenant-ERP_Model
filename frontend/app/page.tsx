@@ -167,10 +167,6 @@ export default function LandingPage() {
 
             {/* Texto */}
             <div className="flex-1 text-center md:text-left">
-              <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: C.blue }}>
-                Card Games &amp; Campeonatos · José Bonifácio — SP
-              </p>
-
               <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-4 tracking-tight">
                 <span style={{ color: '#FFE45E' }}>Santuário</span>{' '}
                 <span style={{ color: '#3EC2F2' }}>Nerd</span>
