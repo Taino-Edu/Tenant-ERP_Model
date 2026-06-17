@@ -29,6 +29,7 @@ export default function LandingPage() {
   const [mobileMenu,    setMobileMenu]    = useState(false)
   const [isDark,        setIsDark]        = useState(false)
   const [showAllProducts, setShowAllProducts] = useState(false)
+  const [navVisible,    setNavVisible]    = useState(true)
 
   const C = isDark ? {
     bg: '#121215', card: '#1A1A1F', cardAlt: '#1E1E24',
@@ -47,6 +48,17 @@ export default function LandingPage() {
     setIsDark(next)
     localStorage.setItem('landing-theme', next ? 'dark' : 'light')
   }
+
+  useEffect(() => {
+    let lastY = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      setNavVisible(y < 80 || y < lastY)
+      lastY = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   useEffect(() => {
     const saved = localStorage.getItem('landing-theme')
@@ -76,8 +88,8 @@ export default function LandingPage() {
     <div className="min-h-screen" style={{ backgroundColor: C.bg, color: C.navy }}>
 
       {/* ── NAVBAR ─────────────────────────────────────────────────────── */}
-      <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center relative"
-        style={{ backgroundColor: '#0F3460', backdropFilter: 'blur(16px)' }}>
+      <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center relative transition-transform duration-300"
+        style={{ backgroundColor: '#0F3460', backdropFilter: 'blur(16px)', transform: navVisible ? 'translateY(0)' : 'translateY(-100%)' }}>
 
         {/* Marca centralizada absolutamente */}
         <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
@@ -169,6 +181,10 @@ export default function LandingPage() {
 
             {/* Texto */}
             <div className="flex-1 text-center md:text-left">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-black mb-4 leading-tight">
+                <span style={{ color: C.yellow }}>Santuário</span>{' '}
+                <span style={{ color: C.blue }}>Nerd</span>
+              </h1>
               <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: '#ffffff' }}>
                 Produtos, torneios e a melhor experiência TCG da região.
                 Acumule pontos, compre na mesa e participe de campeonatos.
