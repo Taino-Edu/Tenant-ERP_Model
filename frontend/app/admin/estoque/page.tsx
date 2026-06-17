@@ -220,6 +220,24 @@ function ProductModal({
                 ].join(' ')} />
               </div>
             </label>
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">🕐 Pré-venda</p>
+                <p className="text-xs text-[var(--text-muted)]">Item disponível para pedido, entrega no lançamento</p>
+              </div>
+              <div
+                onClick={() => set('isPreVenda', !form.isPreVenda)}
+                className={[
+                  'relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0',
+                  form.isPreVenda ? 'bg-purple-500' : 'bg-surface-600',
+                ].join(' ')}
+              >
+                <span className={[
+                  'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                  form.isPreVenda ? 'translate-x-4' : 'translate-x-0',
+                ].join(' ')} />
+              </div>
+            </label>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>

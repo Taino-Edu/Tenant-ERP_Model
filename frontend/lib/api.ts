@@ -88,7 +88,7 @@ export interface Product {
   barcode: string | null
   priceInCents: number; costPriceInCents: number; stockQuantity: number; minimumStock: number
   discountPriceInCents: number | null; discountPriceInReais: number | null; isOnPromo: boolean
-  isActive: boolean; isFeatured: boolean; showOnSite: boolean; imageUrl: string | null
+  isActive: boolean; isFeatured: boolean; showOnSite: boolean; isPreVenda: boolean; imageUrl: string | null
   isLowStock: boolean; priceInReais: number; costPriceInReais: number
   marginInReais: number; marginPercent: number
   updatedAt: string; createdAt: string

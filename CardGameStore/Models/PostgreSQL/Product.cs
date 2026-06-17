@@ -93,6 +93,10 @@ public class Product
     [Column("discount_price_in_cents")]
     public int? DiscountPriceInCents { get; set; }
 
+    /// <summary>Se true, exibe badge "Pré-venda" — item disponível para pedido mas entregue só no lançamento.</summary>
+    [Column("is_pre_venda")]
+    public bool IsPreVenda { get; set; } = false;
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

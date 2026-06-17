@@ -178,14 +178,7 @@ export default function LandingPage() {
 
             {/* Texto */}
             <div className={`flex-1 text-center ${heroBanner?.imageUrl ? '' : 'md:text-left'}`}>
-              <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest px-3 py-1.5 rounded-full mb-6 border"
-                style={{ color: C.blue, borderColor: `${C.blue}40`, backgroundColor: `${C.blue}15` }}>
-                Card Games &amp; Campeonatos · José Bonifácio — SP
-              </div>
-
               <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-5 tracking-tight text-white">
-                <span style={{ color: '#FFE45E' }}>Santuário</span>{' '}
-                <span style={{ color: '#3EC2F2' }}>Nerd</span><br />
                 Card Games &amp;<br />
                 Campeonatos
               </h1>
@@ -710,7 +703,13 @@ function ProductCard({ product: p, onClick, C }: { product: Product; onClick: ()
               <Package className="w-10 h-10 opacity-20 text-white" />
             </div>
         }
-        {p.isOnPromo && (
+        {p.isPreVenda && (
+          <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+            style={{ backgroundColor: '#7C3AED', color: '#fff' }}>
+            Pré-venda
+          </span>
+        )}
+        {p.isOnPromo && !p.isPreVenda && (
           <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
             style={{ backgroundColor: '#FF3B3B', color: '#fff' }}>
             Promoção
@@ -826,7 +825,15 @@ function ProductModal({ product: p, onClose, C }: { product: Product; onClose: (
           </div>
         )}
         <div className="p-5 pb-8 sm:pb-5">
-          <p className="text-xs uppercase tracking-wide mb-1 font-medium" style={{ color: C.text }}>{p.category}</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-xs uppercase tracking-wide font-medium" style={{ color: C.text }}>{p.category}</p>
+            {p.isPreVenda && (
+              <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+                style={{ backgroundColor: '#7C3AED', color: '#fff' }}>
+                Pré-venda
+              </span>
+            )}
+          </div>
           <h3 className="text-lg font-black text-white leading-snug mb-2">{p.name}</h3>
           {p.description && (
             <p className="text-sm mb-4 leading-relaxed" style={{ color: C.text }}>{p.description}</p>
