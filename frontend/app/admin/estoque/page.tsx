@@ -266,7 +266,7 @@ export default function EstoquePage() {
   const fetch = async () => {
     setLoading(true)
     try {
-      const [prodRes, catRes] = await Promise.all([productApi.list(), categoryApi.list()])
+      const [prodRes, catRes] = await Promise.all([productApi.listAdmin(), categoryApi.list()])
       setProducts(prodRes.data)
       setCategories(catRes.data)
     } catch { toast.error('Erro ao carregar produtos') }

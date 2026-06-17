@@ -10,6 +10,7 @@ namespace CardGameStore.Services.Interfaces;
 public interface IProductService
 {
     Task<IEnumerable<Product>> GetAllActiveAsync();
+    Task<IEnumerable<Product>> GetAllForAdminAsync();
     Task<IEnumerable<Product>> GetByCategoryAsync(string category);
     Task<Product?>             GetByIdAsync(Guid id);
     Task<Product?>             GetByBarcodeAsync(string barcode);

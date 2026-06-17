@@ -348,6 +348,7 @@ export const vendaAvulsaApi = {
 
 export const productApi = {
   list:        (category?: string) => api.get<Product[]>('/api/product', { params: { category } }),
+  listAdmin:   ()                  => api.get<Product[]>('/api/product/admin'),
   get:         (id: string)         => api.get<Product>(`/api/product/${id}`),
   getByBarcode:(barcode: string)    => api.get<Product>(`/api/product/barcode/${encodeURIComponent(barcode)}`),
   create:      (p: Partial<Product>) => api.post<Product>('/api/product', p),

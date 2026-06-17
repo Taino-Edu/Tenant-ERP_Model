@@ -39,6 +39,16 @@ public class ProductController : ControllerBase
         return Ok(products);
     }
 
+    /// <summary>Lista TODOS os produtos ativos (incluindo ocultos do site). Só Admin/Operator.</summary>
+    [HttpGet("admin")]
+    [Authorize(Roles = "Admin,Operator")]
+    [ProducesResponseType(typeof(IEnumerable<Product>), 200)]
+    public async Task<IActionResult> GetAllAdmin()
+    {
+        var products = await _service.GetAllForAdminAsync();
+        return Ok(products);
+    }
+
     /// <summary>Busca produto por ID.</summary>
     [HttpGet("{id:guid}")]
     [AllowAnonymous]

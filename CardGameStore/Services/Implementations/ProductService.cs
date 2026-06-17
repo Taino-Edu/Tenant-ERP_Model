@@ -16,6 +16,9 @@ public class ProductService : IProductService
     public async Task<IEnumerable<Product>> GetAllActiveAsync() =>
         await _db.Products.Where(p => p.IsActive && p.ShowOnSite).OrderBy(p => p.Name).ToListAsync();
 
+    public async Task<IEnumerable<Product>> GetAllForAdminAsync() =>
+        await _db.Products.Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+
     public async Task<IEnumerable<Product>> GetByCategoryAsync(string category) =>
         await _db.Products.Where(p => p.IsActive && p.ShowOnSite && p.Category == category).ToListAsync();
 
