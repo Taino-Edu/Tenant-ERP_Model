@@ -82,7 +82,6 @@ export default function LandingPage() {
 
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-8 w-auto object-contain" />
             <span className="font-black text-lg text-white leading-none">Santuário Nerd</span>
           </div>
 
