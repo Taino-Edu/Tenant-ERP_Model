@@ -67,11 +67,8 @@ function HeroBannerCard({
           {/* Preview com overlay igual ao site */}
           <div className="relative rounded-xl overflow-hidden" style={{ height: 180 }}>
             <img src={banner.imageUrl} alt="Banner atual" className="w-full h-full object-cover" />
-            <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.60)' }} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 pointer-events-none">
-              <span className="text-xs text-white/60 uppercase tracking-widest">Pré-visualização</span>
-              <span className="text-white font-black text-lg">Santuário Nerd</span>
-              <span className="text-white/70 text-xs">Produtos, torneios e a melhor experiência TCG da região.</span>
+            <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg pointer-events-none">
+              Pré-visualização
             </div>
             {!banner.isActive && (
               <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-lg">

@@ -172,7 +172,7 @@ export default function LandingPage() {
         className="relative pt-16 overflow-hidden"
         style={{
           background: heroBanner?.imageUrl
-            ? `linear-gradient(rgba(0,0,0,0.60), rgba(0,0,0,0.60)), url(${heroBanner.imageUrl}) center/cover no-repeat`
+            ? `url(${heroBanner.imageUrl}) center/cover no-repeat`
             : 'linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)',
         }}
       >
