@@ -76,8 +76,8 @@ export default function LandingPage() {
     <div className="min-h-screen" style={{ backgroundColor: C.bg, color: C.navy }}>
 
       {/* ── NAVBAR ─────────────────────────────────────────────────────── */}
-      <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center border-b"
-        style={{ backgroundColor: NAVY, backdropFilter: 'blur(16px)', borderColor: 'rgba(255,255,255,0.10)' }}>
+      <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center"
+        style={{ backgroundColor: '#071320', backdropFilter: 'blur(16px)' }}>
         <div className="w-full max-w-6xl mx-auto px-5 flex items-center justify-between">
 
           {/* Logo */}
@@ -159,35 +159,31 @@ export default function LandingPage() {
       <section
         className="relative pt-16 overflow-hidden"
         style={{
-          backgroundColor: NAVY,
-          ...(heroBanner?.imageUrl ? {
-            backgroundImage: `url(${heroBanner.imageUrl})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          } : {}),
+          background: heroBanner?.imageUrl
+            ? `linear-gradient(rgba(0,0,0,0.60), rgba(0,0,0,0.60)), url(${heroBanner.imageUrl}) center/cover no-repeat`
+            : 'linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)',
         }}
       >
-        {/* Overlay escuro quando há banner */}
-        {heroBanner?.imageUrl && (
-          <div className="absolute inset-0 bg-black/60" />
-        )}
-
         <div className="relative z-10 max-w-6xl mx-auto px-5 py-20 md:py-24">
-          <div className={`flex flex-col items-center gap-8 md:gap-12 ${heroBanner?.imageUrl ? 'md:flex-col text-center' : 'md:flex-row'}`}>
+          <div className="flex flex-col items-center gap-8 md:gap-12 md:flex-row">
 
             {/* Texto */}
-            <div className={`flex-1 text-center ${heroBanner?.imageUrl ? '' : 'md:text-left'}`}>
+            <div className="flex-1 text-center md:text-left">
+              <p className="text-xs font-black uppercase tracking-widest mb-3" style={{ color: C.blue }}>
+                Card Games &amp; Campeonatos · José Bonifácio — SP
+              </p>
+
               <h1 className="text-4xl sm:text-5xl md:text-[3.75rem] font-black leading-[1.05] mb-4 tracking-tight">
                 <span style={{ color: '#FFE45E' }}>Santuário</span>{' '}
                 <span style={{ color: '#3EC2F2' }}>Nerd</span>
               </h1>
 
-              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: 'rgba(255,255,255,0.75)' }}>
+              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed text-white">
                 Produtos, torneios e a melhor experiência TCG da região.
                 Acumule pontos, compre na mesa e participe de campeonatos.
               </p>
 
-              <div className={`flex flex-col sm:flex-row gap-3 justify-center ${heroBanner?.imageUrl ? '' : 'md:justify-start'}`}>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
                 <a href="#eventos"
                   className="inline-flex items-center justify-center gap-2 font-black px-7 py-3.5 rounded-xl transition-all active:scale-95"
                   style={{ backgroundColor: C.yellow, color: NAVY, boxShadow: `0 8px 28px rgba(255,228,94,0.22)` }}>
@@ -195,22 +191,20 @@ export default function LandingPage() {
                 </a>
                 <a href="#produtos"
                   className="inline-flex items-center justify-center gap-2 font-semibold px-7 py-3.5 rounded-xl border transition-all hover:border-white/30 hover:text-white"
-                  style={{ borderColor: 'rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.70)' }}>
+                  style={{ borderColor: 'rgba(255,255,255,0.35)', color: 'rgba(255,255,255,0.85)' }}>
                   <ShoppingBag className="w-5 h-5" /> Ver Produtos
                 </a>
               </div>
             </div>
 
-            {/* Mascote — só aparece sem banner */}
-            {!heroBanner?.imageUrl && (
-              <div className="relative shrink-0">
-                <img
-                  src="/logo-maikon.png"
-                  alt="Mascote Maikon"
-                  className="w-48 sm:w-56 md:w-64 h-auto object-contain drop-shadow-[0_16px_40px_rgba(0,0,0,0.4)]"
-                />
-              </div>
-            )}
+            {/* Mascote — sempre visível */}
+            <div className="relative shrink-0">
+              <img
+                src="/logo-maikon.png"
+                alt="Mascote Maikon"
+                className="w-48 sm:w-56 md:w-72 h-auto object-contain drop-shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
+              />
+            </div>
           </div>
         </div>
       </section>
