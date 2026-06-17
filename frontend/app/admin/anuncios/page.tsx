@@ -1,23 +1,109 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { announcementApi, AnnouncementDto, ANNOUNCEMENT_TYPES } from '@/lib/api'
+import { announcementApi, AnnouncementDto } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, Eye, EyeOff, Megaphone, Edit2, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, Megaphone, Edit2, Loader2, ImageIcon, X } from 'lucide-react'
 import clsx from 'clsx'
 import ImageUpload from '@/components/admin/ImageUpload'
 
 const TYPE_LABELS: Record<string, string> = {
-  Banner:   '🖼 Banner',
   Aviso:    '📢 Aviso',
   Destaque: '⭐ Destaque',
 }
 
 const TYPE_COLORS: Record<string, string> = {
-  Banner:   'bg-blue-500/20 text-blue-400 border-blue-500/30',
   Aviso:    'bg-amber-500/20 text-amber-400 border-amber-500/30',
   Destaque: 'bg-brand-500/20 text-brand-300 border-brand-500/30',
 }
 
+/* ── Banner do Hero ──────────────────────────────────────────────────────── */
+function HeroBannerCard({
+  banner, onUpload, onDelete, onToggle,
+}: {
+  banner:   AnnouncementDto | null
+  onUpload: (url: string) => Promise<void>
+  onDelete: () => Promise<void>
+  onToggle: () => Promise<void>
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [deleting,  setDeleting]  = useState(false)
+
+  async function handleUpload(url: string) {
+    setUploading(true)
+    try { await onUpload(url) } finally { setUploading(false) }
+  }
+
+  async function handleDelete() {
+    if (!confirm('Remover o banner do hero?')) return
+    setDeleting(true)
+    try { await onDelete() } finally { setDeleting(false) }
+  }
+
+  return (
+    <div className="card space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-bold text-white flex items-center gap-2">
+            <ImageIcon className="w-5 h-5 text-blue-400" /> Banner do Hero
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Imagem de fundo da seção principal da landing page. Recomendado: 1920×600px.
+          </p>
+        </div>
+        {banner && (
+          <div className="flex items-center gap-2">
+            <button onClick={onToggle} className="btn-secondary p-2" title={banner.isActive ? 'Desativar' : 'Ativar'}>
+              {banner.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            </button>
+            <button onClick={handleDelete} disabled={deleting} className="btn-danger p-2" title="Remover banner">
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {banner?.imageUrl ? (
+        <div className="space-y-3">
+          {/* Preview com overlay igual ao site */}
+          <div className="relative rounded-xl overflow-hidden" style={{ height: 180 }}>
+            <img src={banner.imageUrl} alt="Banner atual" className="w-full h-full object-cover" />
+            <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.60)' }} />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 pointer-events-none">
+              <span className="text-xs text-white/60 uppercase tracking-widest">Pré-visualização</span>
+              <span className="text-white font-black text-lg">Santuário Nerd</span>
+              <span className="text-white/70 text-xs">Produtos, torneios e a melhor experiência TCG da região.</span>
+            </div>
+            {!banner.isActive && (
+              <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-lg">
+                Inativo (não aparece no site)
+              </div>
+            )}
+          </div>
+          {/* Trocar imagem */}
+          <ImageUpload
+            label="Trocar imagem do banner"
+            hint="Recomendado: 1920×600px"
+            currentUrl={banner.imageUrl}
+            onUpload={handleUpload}
+          />
+        </div>
+      ) : (
+        <div className="border-2 border-dashed border-surface-500 rounded-xl p-8 text-center space-y-3">
+          <ImageIcon className="w-10 h-10 text-gray-500 mx-auto" />
+          <p className="text-gray-400 text-sm">Nenhum banner ativo. O hero exibe o gradiente padrão.</p>
+          <ImageUpload
+            label="Enviar banner"
+            hint="Recomendado: 1920×600px"
+            currentUrl={null}
+            onUpload={handleUpload}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Formulário de anúncio (Aviso / Destaque) ────────────────────────────── */
 function AnnouncementForm({
   initial, onSave, onCancel,
 }: {
@@ -29,7 +115,7 @@ function AnnouncementForm({
   const [body,      setBody]      = useState(initial?.body      ?? '')
   const [imageUrl,  setImageUrl]  = useState(initial?.imageUrl  ?? '')
   const [linkUrl,   setLinkUrl]   = useState(initial?.linkUrl   ?? '')
-  const [type,      setType]      = useState(initial?.type      ?? 'Aviso')
+  const [type,      setType]      = useState(initial?.type && initial.type !== 'Banner' ? initial.type : 'Aviso')
   const [expiresAt, setExpiresAt] = useState(
     initial?.expiresAt ? new Date(initial.expiresAt).toISOString().slice(0, 16) : ''
   )
@@ -62,9 +148,8 @@ function AnnouncementForm({
         <div>
           <label className="label">Tipo</label>
           <select className="input" value={type} onChange={e => setType(e.target.value)}>
-            {ANNOUNCEMENT_TYPES.map(t => (
-              <option key={t} value={t}>{TYPE_LABELS[t]}</option>
-            ))}
+            <option value="Aviso">📢 Aviso</option>
+            <option value="Destaque">⭐ Destaque</option>
           </select>
         </div>
         <div>
@@ -86,8 +171,8 @@ function AnnouncementForm({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <ImageUpload
-            label="Imagem do anúncio"
-            hint="Banner hero: 1920×600px · Aviso: 600×300px"
+            label="Imagem do anúncio (opcional)"
+            hint="600×300px"
             currentUrl={imageUrl || null}
             onUpload={url => setImageUrl(url)}
           />
@@ -108,6 +193,7 @@ function AnnouncementForm({
   )
 }
 
+/* ── Página principal ────────────────────────────────────────────────────── */
 export default function AnunciosPage() {
   const [items,   setItems]   = useState<AnnouncementDto[]>([])
   const [loading, setLoading] = useState(true)
@@ -126,6 +212,39 @@ export default function AnunciosPage() {
 
   useEffect(() => { load() }, [])
 
+  const banner = items.find(a => a.type === 'Banner') ?? null
+  const announcements = items.filter(a => a.type !== 'Banner')
+
+  /* ── Banner actions ── */
+  async function handleBannerUpload(url: string) {
+    if (banner) {
+      await announcementApi.update(banner.id, { imageUrl: url, isActive: true })
+      toast.success('Banner atualizado!')
+    } else {
+      await announcementApi.create({
+        title: 'Banner Hero', body: null, imageUrl: url, linkUrl: null,
+        type: 'Banner', isActive: true, expiresAt: null,
+      } as Parameters<typeof announcementApi.create>[0])
+      toast.success('Banner ativado!')
+    }
+    load()
+  }
+
+  async function handleBannerDelete() {
+    if (!banner) return
+    await announcementApi.delete(banner.id)
+    toast.success('Banner removido.')
+    load()
+  }
+
+  async function handleBannerToggle() {
+    if (!banner) return
+    await announcementApi.update(banner.id, { isActive: !banner.isActive })
+    toast.success(banner.isActive ? 'Banner desativado.' : 'Banner ativado.')
+    load()
+  }
+
+  /* ── Announcement actions ── */
   async function handleCreate(data: Omit<AnnouncementDto, 'id' | 'createdAt'>) {
     await announcementApi.create(data as Parameters<typeof announcementApi.create>[0])
     toast.success('Anúncio criado!')
@@ -155,38 +274,58 @@ export default function AnunciosPage() {
   const editing = typeof form === 'string' ? items.find(a => a.id === form) : undefined
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
+
+      {/* ── Cabeçalho ── */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Megaphone className="w-6 h-6 text-brand-400" /> Anúncios
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">Banners, avisos e destaques exibidos na landing page</p>
+          <p className="text-gray-500 text-sm mt-0.5">Banner do hero e avisos exibidos na landing page</p>
         </div>
-        {!form && (
-          <button onClick={() => setForm('new')} className="btn-primary">
-            <Plus className="w-4 h-4" /> Novo anúncio
-          </button>
-        )}
       </div>
 
-      {form === 'new' && (
-        <AnnouncementForm onSave={handleCreate} onCancel={() => setForm(null)} />
-      )}
-
+      {/* ── Banner do Hero (card dedicado) ── */}
       {loading ? (
-        <div className="flex justify-center py-16">
+        <div className="card flex justify-center py-10">
           <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : items.length === 0 ? (
-        <div className="card text-center py-12">
-          <Megaphone className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-500">Nenhum anúncio criado ainda.</p>
-          <p className="text-gray-400 text-sm mt-1">Crie banners, avisos e destaques para a landing page.</p>
-        </div>
       ) : (
+        <HeroBannerCard
+          banner={banner}
+          onUpload={handleBannerUpload}
+          onDelete={handleBannerDelete}
+          onToggle={handleBannerToggle}
+        />
+      )}
+
+      {/* ── Avisos e Destaques ── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-white flex items-center gap-2">
+            <Megaphone className="w-4 h-4 text-brand-400" /> Avisos &amp; Destaques
+          </h2>
+          {!form && (
+            <button onClick={() => setForm('new')} className="btn-primary">
+              <Plus className="w-4 h-4" /> Novo anúncio
+            </button>
+          )}
+        </div>
+
+        {form === 'new' && (
+          <AnnouncementForm onSave={handleCreate} onCancel={() => setForm(null)} />
+        )}
+
+        {!loading && announcements.length === 0 && !form && (
+          <div className="card text-center py-10">
+            <Megaphone className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-500">Nenhum aviso ou destaque criado ainda.</p>
+          </div>
+        )}
+
         <div className="space-y-3">
-          {items.map(item => (
+          {announcements.map(item => (
             form === item.id ? (
               <AnnouncementForm
                 key={item.id}
@@ -228,7 +367,7 @@ export default function AnunciosPage() {
             )
           ))}
         </div>
-      )}
+      </div>
     </div>
   )
 }
