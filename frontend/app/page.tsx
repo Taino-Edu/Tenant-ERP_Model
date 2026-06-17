@@ -756,11 +756,15 @@ function AnnouncementModal({ ann, onClose, C }: { ann: AnnouncementDto; onClose:
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
       onClick={onClose}>
-      <div className="relative w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl border"
+      <div className="relative w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl border border-b-0 sm:border-b"
         style={{ backgroundColor: C.card, borderColor: C.border }}
         onClick={e => e.stopPropagation()}>
+        {/* Handle visual — mobile only */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full opacity-30" style={{ backgroundColor: C.navy }} />
+        </div>
         <button onClick={onClose}
           className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 hover:bg-black/80 transition">
           <X className="w-4 h-4 text-white" />
@@ -768,7 +772,7 @@ function AnnouncementModal({ ann, onClose, C }: { ann: AnnouncementDto; onClose:
         {ann.imageUrl && (
           <img src={ann.imageUrl} alt={ann.title} className="w-full max-h-64 object-cover" />
         )}
-        <div className="p-6">
+        <div className="p-6 pb-8 sm:pb-6">
           <h3 className="text-xl font-black text-white leading-snug">{ann.title}</h3>
           {ann.body && (
             <p className="text-sm mt-3 leading-relaxed whitespace-pre-wrap" style={{ color: C.text }}>{ann.body}</p>
@@ -799,25 +803,29 @@ function ProductModal({ product: p, onClose, C }: { product: Product; onClose: (
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
       onClick={onClose}>
-      <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl border"
+      <div className="relative w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl border border-b-0 sm:border-b"
         style={{ backgroundColor: C.card, borderColor: C.border }}
         onClick={e => e.stopPropagation()}>
+        {/* Handle visual — mobile only */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full opacity-30" style={{ backgroundColor: C.navy }} />
+        </div>
         <button onClick={onClose}
           className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 hover:bg-black/80 transition">
           <X className="w-4 h-4 text-white" />
         </button>
         {p.imageUrl ? (
-          <div className="w-full aspect-square" style={{ backgroundColor: C.cardAlt }}>
+          <div className="w-full aspect-[4/3] sm:aspect-square" style={{ backgroundColor: C.cardAlt }}>
             <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-4" />
           </div>
         ) : (
-          <div className="w-full aspect-square flex items-center justify-center" style={{ backgroundColor: C.cardAlt }}>
+          <div className="w-full aspect-[4/3] sm:aspect-square flex items-center justify-center" style={{ backgroundColor: C.cardAlt }}>
             <Package className="w-12 h-12 opacity-20 text-white" />
           </div>
         )}
-        <div className="p-5">
+        <div className="p-5 pb-8 sm:pb-5">
           <p className="text-xs uppercase tracking-wide mb-1 font-medium" style={{ color: C.text }}>{p.category}</p>
           <h3 className="text-lg font-black text-white leading-snug mb-2">{p.name}</h3>
           {p.description && (
@@ -872,9 +880,13 @@ function RegisterModal({ championship, onClose, C }: { championship: Championshi
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl shadow-2xl border p-6"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm">
+      <div className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl border border-b-0 sm:border-b p-6 pb-8 sm:pb-6"
         style={{ backgroundColor: C.card, borderColor: C.border }}>
+        {/* Handle visual — mobile only */}
+        <div className="flex justify-center -mt-3 mb-4 sm:hidden">
+          <div className="w-10 h-1 rounded-full opacity-30" style={{ backgroundColor: C.navy }} />
+        </div>
         <div className="flex items-start justify-between mb-5">
           <div>
             <h3 className="font-black text-lg" style={{ color: C.navy }}>Inscrição</h3>
