@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getRole } from '@/lib/auth'
 import { championshipApi, productApi, announcementApi, Championship, Product, AnnouncementDto } from '@/lib/api'
@@ -29,6 +29,8 @@ export default function LandingPage() {
   const [mobileMenu,    setMobileMenu]    = useState(false)
   const [isDark,        setIsDark]        = useState(false)
   const [navVisible,    setNavVisible]    = useState(true)
+  const carouselRef   = useRef<HTMLDivElement>(null)
+  const carouselPaused = useRef(false)
 
   const C = isDark ? {
     bg: '#121215', card: '#1A1A1F', cardAlt: '#1E1E24',
@@ -58,6 +60,20 @@ export default function LandingPage() {
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  useEffect(() => {
+    if (!products.length) return
+    const el = carouselRef.current
+    if (!el) return
+    const interval = setInterval(() => {
+      if (carouselPaused.current) return
+      const cardW = 192 + 12 // w-48 + gap-3
+      const maxLeft = el.scrollWidth - el.clientWidth
+      const next = el.scrollLeft + cardW
+      el.scrollTo({ left: next >= maxLeft ? 0 : next, behavior: 'smooth' })
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [products])
 
   useEffect(() => {
     const saved = localStorage.getItem('landing-theme')
@@ -317,11 +333,15 @@ export default function LandingPage() {
           ) : (
             <>
               {/* Carrossel lateral */}
-              <div className="relative -mx-5 px-5">
-                <div
-                  className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory"
-                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                >
+              <div
+                ref={carouselRef}
+                className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                onMouseEnter={() => { carouselPaused.current = true }}
+                onMouseLeave={() => { carouselPaused.current = false }}
+                onTouchStart={() => { carouselPaused.current = true }}
+                onTouchEnd={() => { setTimeout(() => { carouselPaused.current = false }, 2000) }}
+              >
                   {products.map(p => (
                     <div key={p.id} className="snap-start shrink-0 w-40 sm:w-48">
                       <ProductCard product={p} onClick={() => setProductModal(p)} C={C} />
@@ -339,7 +359,6 @@ export default function LandingPage() {
                       </span>
                     </Link>
                   </div>
-                </div>
               </div>
               <div className="flex justify-center mt-4">
                 <Link
