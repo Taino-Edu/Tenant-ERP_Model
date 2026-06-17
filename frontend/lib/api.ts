@@ -89,6 +89,7 @@ export interface Product {
   priceInCents: number; costPriceInCents: number; stockQuantity: number; minimumStock: number
   discountPriceInCents: number | null; discountPriceInReais: number | null; isOnPromo: boolean
   isActive: boolean; isFeatured: boolean; showOnSite: boolean; isPreVenda: boolean; imageUrl: string | null
+  imageUrls: string[]; fullDescription: string | null
   isLowStock: boolean; priceInReais: number; costPriceInReais: number
   marginInReais: number; marginPercent: number
   updatedAt: string; createdAt: string

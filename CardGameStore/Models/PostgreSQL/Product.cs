@@ -78,6 +78,14 @@ public class Product
     [Column("image_url")]
     public string? ImageUrl { get; set; }
 
+    /// <summary>Imagens adicionais do produto (galeria). Armazenadas como array de URLs.</summary>
+    [Column("image_urls", TypeName = "text[]")]
+    public string[] ImageUrls { get; set; } = Array.Empty<string>();
+
+    /// <summary>Descrição longa do produto — exibida na página de detalhe (estilo ML).</summary>
+    [Column("full_description")]
+    public string? FullDescription { get; set; }
+
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 

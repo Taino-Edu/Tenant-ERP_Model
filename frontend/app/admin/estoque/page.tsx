@@ -172,16 +172,48 @@ function ProductModal({
             </div>
           </div>
           <div>
-            <label className="label">Descrição</label>
-            <input className="input" value={form.description ?? ''} onChange={e => set('description', e.target.value)} placeholder="Opcional" />
+            <label className="label">Descrição curta</label>
+            <textarea className="input min-h-[72px] resize-y" value={form.description ?? ''} onChange={e => set('description', e.target.value)} placeholder="Resumo exibido no card (ex: Booster box Scarlet & Violet)" />
+          </div>
+          <div>
+            <label className="label">Descrição completa <span className="text-gray-500 font-normal">(página do produto)</span></label>
+            <textarea className="input min-h-[120px] resize-y" value={form.fullDescription ?? ''} onChange={e => set('fullDescription', e.target.value || null)} placeholder="Detalhes, conteúdo da caixa, edição, idioma..." />
           </div>
           <div>
             <ImageUpload
-              label="Imagem do produto"
+              label="Foto principal"
               hint="600×600px recomendado · fundo transparente (PNG)"
               currentUrl={form.imageUrl ?? null}
               onUpload={url => set('imageUrl', url || null)}
             />
+          </div>
+          {/* Galeria extra */}
+          <div className="space-y-2">
+            <label className="label">Fotos adicionais <span className="text-gray-500 font-normal">(galeria na página do produto)</span></label>
+            <div className="grid grid-cols-2 gap-3">
+              {(form.imageUrls ?? []).map((url, i) => (
+                <div key={i} className="relative rounded-xl overflow-hidden border border-surface-600 bg-surface-700 group" style={{ aspectRatio: '1' }}>
+                  <img src={url} alt={`Foto ${i + 1}`} className="w-full h-full object-contain p-2" />
+                  <button
+                    type="button"
+                    onClick={() => set('imageUrls', (form.imageUrls ?? []).filter((_, j) => j !== i))}
+                    className="absolute top-1.5 right-1.5 w-6 h-6 bg-red-600/80 hover:bg-red-600 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+              {(form.imageUrls ?? []).length < 6 && (
+                <div className="border-2 border-dashed border-surface-500 rounded-xl" style={{ aspectRatio: '1' }}>
+                  <ImageUpload
+                    label=""
+                    hint=""
+                    currentUrl={null}
+                    onUpload={url => { if (url) set('imageUrls', [...(form.imageUrls ?? []), url]) }}
+                  />
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-500">Máximo 6 fotos adicionais</p>
           </div>
           <div className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3 space-y-3">
             <label className="flex items-center justify-between gap-3 cursor-pointer">

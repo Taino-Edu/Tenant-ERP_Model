@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { productApi, Product } from '@/lib/api'
 import Link from 'next/link'
 import {
-  Package, ShoppingBag, X, ChevronLeft,
+  Package, ShoppingBag, ChevronLeft,
   Sun, Moon, Search, Tag,
 } from 'lucide-react'
 
@@ -25,10 +25,10 @@ function ProductBadge({ p }: { p: Product }) {
   return null
 }
 
-function ProductCard({ p, onClick, C }: { p: Product; onClick: () => void; C: Theme }) {
+function ProductCard({ p, C }: { p: Product; C: Theme }) {
   return (
-    <button
-      onClick={onClick}
+    <Link
+      href={`/produtos/${p.id}`}
       className="relative text-left rounded-2xl overflow-hidden border transition-all hover:scale-[1.02] active:scale-95 flex flex-col"
       style={{ backgroundColor: C.card, borderColor: C.border }}
     >
@@ -60,67 +60,7 @@ function ProductCard({ p, onClick, C }: { p: Product; onClick: () => void; C: Th
           </span>
         </div>
       </div>
-    </button>
-  )
-}
-
-function ProductModal({ p, onClose, C }: { p: Product; onClose: () => void; C: Theme }) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [onClose])
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="relative w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl overflow-hidden max-h-[90vh] flex flex-col"
-        style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-        <button onClick={onClose}
-          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-colors"
-          style={{ backgroundColor: C.bg, color: C.navy }}>
-          <X className="w-4 h-4" />
-        </button>
-        {p.imageUrl && (
-          <div className="w-full h-56 shrink-0 overflow-hidden" style={{ backgroundColor: C.bg }}>
-            <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-4" />
-          </div>
-        )}
-        <div className="p-5 overflow-y-auto">
-          <div className="flex gap-2 mb-2 flex-wrap">
-            {p.isPreVenda && (
-              <span className="text-[9px] font-black uppercase tracking-wide px-2 py-1 rounded text-white" style={{ backgroundColor: '#7C3AED' }}>Pré-venda</span>
-            )}
-            {!p.isPreVenda && p.isOnPromo && (
-              <span className="text-[9px] font-black uppercase tracking-wide px-2 py-1 rounded text-white" style={{ backgroundColor: '#EF4444' }}>Promoção</span>
-            )}
-            <span className="text-[9px] font-bold uppercase tracking-wide px-2 py-1 rounded border" style={{ color: C.text, borderColor: C.border }}>{p.category}</span>
-          </div>
-          <h2 className="text-xl font-black leading-tight mb-1" style={{ color: C.navy }}>{p.name}</h2>
-          {p.description && <p className="text-sm leading-relaxed mb-4" style={{ color: C.text }}>{p.description}</p>}
-          <div className="flex items-baseline gap-3 mb-4">
-            {p.isOnPromo && p.discountPriceInReais != null ? (
-              <>
-                <span className="text-2xl font-black" style={{ color: '#EF4444' }}>{fmt(p.discountPriceInReais)}</span>
-                <span className="text-sm line-through" style={{ color: C.muted }}>{fmt(p.priceInReais)}</span>
-              </>
-            ) : (
-              <span className="text-2xl font-black" style={{ color: C.blue }}>{fmt(p.priceInReais)}</span>
-            )}
-          </div>
-          <p className="text-xs mb-4" style={{ color: p.stockQuantity > 0 ? C.text : '#EF4444' }}>
-            {p.stockQuantity > 0 ? `${p.stockQuantity} unidades disponíveis` : 'Produto esgotado'}
-          </p>
-          <a
-            href={`https://wa.me/5517997633103?text=${encodeURIComponent(`Olá! Tenho interesse no produto: ${p.name}`)}`}
-            target="_blank" rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-black text-sm transition-all active:scale-95"
-            style={{ backgroundColor: '#25D366', color: '#fff' }}>
-            Falar no WhatsApp
-          </a>
-        </div>
-      </div>
-    </div>
+    </Link>
   )
 }
 
@@ -129,7 +69,6 @@ export default function ProdutosPage() {
   const [loading,  setLoading]  = useState(true)
   const [search,   setSearch]   = useState('')
   const [catFilter, setCatFilter] = useState<string | null>(null)
-  const [modal,    setModal]    = useState<Product | null>(null)
   const [isDark,   setIsDark]   = useState(false)
 
   const C: Theme = isDark ? {
@@ -252,7 +191,7 @@ export default function ProdutosPage() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                   {items.map(p => (
-                    <ProductCard key={p.id} p={p} onClick={() => setModal(p)} C={C} />
+                    <ProductCard key={p.id} p={p} C={C} />
                   ))}
                 </div>
               </section>
@@ -261,7 +200,6 @@ export default function ProdutosPage() {
         )}
       </div>
 
-      {modal && <ProductModal p={modal} onClose={() => setModal(null)} C={C} />}
     </div>
   )
 }

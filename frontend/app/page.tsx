@@ -902,6 +902,11 @@ function ProductModal({ product: p, onClose, C }: { product: Product; onClose: (
               <Package className="w-4 h-4" /> {p.stockQuantity} em estoque
             </span>
           </div>
+          <Link href={`/produtos/${p.id}`}
+            className="mt-4 flex items-center justify-center gap-2 w-full py-3 rounded-xl font-black text-sm transition-all active:scale-95"
+            style={{ backgroundColor: C.blue, color: '#fff' }}>
+            <ChevronRight className="w-4 h-4" /> Ver página completa
+          </Link>
         </div>
       </div>
     </div>
