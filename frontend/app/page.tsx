@@ -333,15 +333,29 @@ export default function LandingPage() {
           ) : (
             <>
               {/* Carrossel lateral */}
-              <div
-                ref={carouselRef}
-                className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                onMouseEnter={() => { carouselPaused.current = true }}
-                onMouseLeave={() => { carouselPaused.current = false }}
-                onTouchStart={() => { carouselPaused.current = true }}
-                onTouchEnd={() => { setTimeout(() => { carouselPaused.current = false }, 2000) }}
-              >
+              <div className="relative group">
+                {/* Seta esquerda */}
+                <button
+                  onClick={() => {
+                    carouselPaused.current = true
+                    carouselRef.current?.scrollBy({ left: -204, behavior: 'smooth' })
+                    setTimeout(() => { carouselPaused.current = false }, 1500)
+                  }}
+                  className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 w-9 h-9 rounded-full items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ backgroundColor: C.card, border: `1px solid ${C.border}`, color: C.navy }}>
+                  <ChevronRight className="w-4 h-4 rotate-180" />
+                </button>
+
+                {/* Scroll */}
+                <div
+                  ref={carouselRef}
+                  className="flex gap-3 overflow-x-auto pb-3 snap-x snap-mandatory"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                  onMouseEnter={() => { carouselPaused.current = true }}
+                  onMouseLeave={() => { carouselPaused.current = false }}
+                  onTouchStart={() => { carouselPaused.current = true }}
+                  onTouchEnd={() => { setTimeout(() => { carouselPaused.current = false }, 2000) }}
+                >
                   {products.map(p => (
                     <div key={p.id} className="snap-start shrink-0 w-40 sm:w-48">
                       <ProductCard product={p} onClick={() => setProductModal(p)} C={C} />
@@ -359,8 +373,37 @@ export default function LandingPage() {
                       </span>
                     </Link>
                   </div>
+                </div>
+
+                {/* Seta direita */}
+                <button
+                  onClick={() => {
+                    carouselPaused.current = true
+                    carouselRef.current?.scrollBy({ left: 204, behavior: 'smooth' })
+                    setTimeout(() => { carouselPaused.current = false }, 1500)
+                  }}
+                  className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 w-9 h-9 rounded-full items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ backgroundColor: C.card, border: `1px solid ${C.border}`, color: C.navy }}>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
-              <div className="flex justify-center mt-4">
+
+              {/* Indicadores + botão */}
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex gap-1.5">
+                  {products.slice(0, 8).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        carouselPaused.current = true
+                        carouselRef.current?.scrollTo({ left: i * 204, behavior: 'smooth' })
+                        setTimeout(() => { carouselPaused.current = false }, 1500)
+                      }}
+                      className="w-1.5 h-1.5 rounded-full transition-all"
+                      style={{ backgroundColor: C.blue, opacity: 0.3 }}
+                    />
+                  ))}
+                </div>
                 <Link
                   href="/produtos"
                   className="flex items-center gap-2 text-sm font-black px-6 py-2.5 rounded-xl transition-all active:scale-95"
