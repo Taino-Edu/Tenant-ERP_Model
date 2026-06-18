@@ -118,6 +118,13 @@ export default function LandingPage() {
             <a href="#eventos"  style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Torneios</a>
             <a href="#produtos" style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Produtos</a>
             <a href="#pontos"   style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">Pontos</a>
+            <button
+              onClick={() => (document.querySelector('[vw-access-button]') as HTMLElement | null)?.click()}
+              title="Acessibilidade em Libras"
+              className="text-sm font-medium hover:opacity-80 transition-opacity"
+              style={{ color: '#ffffff' }}>
+              Libras
+            </button>
           </div>
 
           {/* Espaço mobile esquerda */}
@@ -125,13 +132,6 @@ export default function LandingPage() {
 
           {/* Ações direita */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => (document.querySelector('[vw-access-button]') as HTMLElement | null)?.click()}
-              title="Acessibilidade em Libras"
-              className="p-2 rounded-xl transition-colors hover:bg-white/10 text-xs font-bold"
-              style={{ color: '#ffffff' }}>
-              Libras
-            </button>
             <button onClick={toggleDark} title={isDark ? 'Modo claro' : 'Modo escuro'}
               className="p-2 rounded-xl transition-colors hover:bg-white/10"
               style={{ color: '#ffffff' }}>
