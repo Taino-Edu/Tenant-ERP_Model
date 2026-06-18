@@ -24,10 +24,10 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   icons: {
     icon: [
-      { url: '/logo-maikon.png', type: 'image/png' },
+      { url: '/icon-maskable.svg', type: 'image/svg' },
     ],
-    apple: '/logo-maikon.png',
-    shortcut: '/logo-maikon.png',
+    apple: '/icon-maskable.svg',
+    shortcut: '/icon-maskable.svg',
   },
   appleWebApp: {
     capable: true,

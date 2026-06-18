@@ -567,6 +567,37 @@ export default function ClientePage() {
           </>
         )}
       </main>
+
+      {/* Barra sticky — total visível enquanto navega pelos produtos */}
+      {comanda && comanda.items.length > 0 && comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
+        <div className="fixed bottom-0 left-0 right-0 z-40">
+          <div className="max-w-lg mx-auto px-4 pb-4">
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="w-full flex items-center justify-between rounded-2xl px-5 py-3.5 shadow-[0_-4px_24px_rgba(12,61,90,0.18)]"
+              style={{ backgroundColor: C.navy, border: `1.5px solid ${C.border}` }}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShoppingCart className="w-4 h-4" style={{ color: C.yellow }} />
+                <div className="text-left">
+                  <p className="text-[10px] font-black uppercase tracking-widest leading-none" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                    {comanda.items.length} {comanda.items.length === 1 ? 'item' : 'itens'}
+                  </p>
+                  <p className="text-base font-black leading-tight text-white">
+                    R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs font-black" style={{ color: C.yellow }}>
+                Ver comanda
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                </svg>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
