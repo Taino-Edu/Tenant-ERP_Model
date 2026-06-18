@@ -87,6 +87,18 @@ public class VendaAvulsaController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Preenche o custo (UnitCostInCents) em itens de vendas avulsas antigas que ficaram com custo = 0.
+    /// Usa o custo atual de cada produto no PostgreSQL como referência.
+    /// </summary>
+    [HttpPost("backfill-costs")]
+    [ProducesResponseType(typeof(object), 200)]
+    public async Task<IActionResult> BackfillCosts()
+    {
+        var total = await _service.BackfillCostsAsync();
+        return Ok(new { itensAtualizados = total, mensagem = $"{total} item(s) de venda avulsa atualizados com custo." });
+    }
+
     private Guid GetUserId()
     {
         var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);

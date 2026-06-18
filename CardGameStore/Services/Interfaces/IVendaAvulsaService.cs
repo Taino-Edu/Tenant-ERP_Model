@@ -18,4 +18,10 @@ public interface IVendaAvulsaService
 
     /// <summary>Retorna todas as vendas avulsas vinculadas a um cliente específico.</summary>
     Task<IEnumerable<VendaAvulsaDto>> GetByUserAsync(Guid userId);
+
+    /// <summary>
+    /// Preenche UnitCostInCents=0 em itens de vendas avulsas usando o custo atual do produto no PostgreSQL.
+    /// Retorna quantos itens foram atualizados.
+    /// </summary>
+    Task<int> BackfillCostsAsync();
 }

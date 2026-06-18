@@ -345,6 +345,8 @@ export const vendaAvulsaApi = {
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/recent', { params: { limit } }),
   byDate: (date: string) =>
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/by-date', { params: { date } }),
+  backfillCosts: () =>
+    api.post<{ itensAtualizados: number; mensagem: string }>('/api/venda-avulsa/backfill-costs'),
 }
 
 export const productApi = {

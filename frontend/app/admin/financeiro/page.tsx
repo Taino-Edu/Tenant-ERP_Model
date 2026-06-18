@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { analyticsApi, FinanceiroDto, FormaPagamentoTotalDto } from '@/lib/api'
+import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import toast from 'react-hot-toast'
 import {
@@ -509,8 +509,9 @@ export default function FinanceiroPage() {
   const [inicio,    setInicio]    = useState(getRange('mes').inicio)
   const [fim,       setFim]       = useState(getRange('mes').fim)
   const [data,      setData]      = useState<FinanceiroDto | null>(null)
-  const [loading,   setLoading]   = useState(true)
-  const [exporting, setExporting] = useState(false)
+  const [loading,     setLoading]     = useState(true)
+  const [exporting,   setExporting]   = useState(false)
+  const [backfilling, setBackfilling] = useState(false)
   const [kpiModal,   setKpiModal]   = useState<string | null>(null)
   const [targetPct,  setTargetPct]  = useState(40)
   const [tableView,  setTableView]  = useState<'simples' | 'analise'>('analise')
@@ -666,6 +667,27 @@ export default function FinanceiroPage() {
           >
             <Printer className="w-4 h-4" />
             {exporting ? 'Gerando...' : 'Exportar PDF'}
+          </button>
+          <button
+            onClick={async () => {
+              if (backfilling) return
+              setBackfilling(true)
+              try {
+                const r = await vendaAvulsaApi.backfillCosts()
+                toast.success(r.data.mensagem)
+                load(inicio, fim)
+              } catch {
+                toast.error('Erro ao corrigir custos históricos')
+              } finally {
+                setBackfilling(false)
+              }
+            }}
+            disabled={backfilling}
+            title="Preenche custo zero em vendas avulsas antigas usando o custo atual dos produtos"
+            className="btn-secondary text-sm print:hidden"
+          >
+            <RefreshCw className={`w-4 h-4 ${backfilling ? 'animate-spin' : ''}`} />
+            {backfilling ? 'Corrigindo...' : 'Corrigir custos'}
           </button>
           <button onClick={() => load(inicio, fim)} disabled={loading} className="btn-secondary text-sm">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />

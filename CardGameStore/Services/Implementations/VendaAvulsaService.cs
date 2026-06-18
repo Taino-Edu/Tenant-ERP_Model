@@ -287,6 +287,46 @@ public class VendaAvulsaService : IVendaAvulsaService
         return vendas.Select(MapToDto);
     }
 
+    public async Task<int> BackfillCostsAsync()
+    {
+        // Carrega todos os produtos com custo > 0 de uma vez para evitar N queries
+        var produtos = await _db.Products
+            .Where(p => p.CostPriceInCents > 0)
+            .Select(p => new { p.Id, p.CostPriceInCents })
+            .ToListAsync();
+
+        var custoMap = produtos.ToDictionary(p => p.Id, p => p.CostPriceInCents);
+
+        // Busca todas as vendas avulsas (sem limite — backfill é operação administrativa)
+        var todasVendas = await _collection.Find(Builders<VendaAvulsa>.Filter.Empty).ToListAsync();
+
+        var totalAtualizados = 0;
+
+        foreach (var venda in todasVendas)
+        {
+            var modificou = false;
+            foreach (var item in venda.Items)
+            {
+                if (item.UnitCostInCents == 0 && custoMap.TryGetValue(item.ProductId, out var custo))
+                {
+                    item.UnitCostInCents = custo;
+                    totalAtualizados++;
+                    modificou = true;
+                }
+            }
+
+            if (modificou)
+            {
+                await _collection.ReplaceOneAsync(
+                    Builders<VendaAvulsa>.Filter.Eq(v => v.Id, venda.Id),
+                    venda);
+            }
+        }
+
+        _logger.LogInformation("BackfillCosts: {N} item(s) de venda avulsa atualizados com custo.", totalAtualizados);
+        return totalAtualizados;
+    }
+
     private static VendaAvulsaDto MapToDto(VendaAvulsa v) => new()
     {
         Id              = v.Id,
