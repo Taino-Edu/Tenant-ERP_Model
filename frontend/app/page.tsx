@@ -232,12 +232,13 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Mascote — sempre visível */}
-            <div className="relative shrink-0">
+            {/* Logo principal */}
+            <div className="relative shrink-0 w-full max-w-xs sm:max-w-sm md:max-w-md">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/logo-maikon.png"
-                alt="Mascote Maikon"
-                className="w-48 sm:w-56 md:w-72 h-auto object-contain drop-shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
+                src="/logo-santuario.svg"
+                alt="Santuário Nerd"
+                className="w-full h-auto object-contain drop-shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
               />
             </div>
           </div>
