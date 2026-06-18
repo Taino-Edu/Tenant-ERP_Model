@@ -919,14 +919,35 @@ export default function VendaAvulsaPage() {
           </div>
         </div>
 
-        {/* Barra sticky mobile — finalizar sem precisar rolar */}
+        {/* Barra sticky — desconto rápido + finalizar */}
         {cart.length > 0 && (
           <div className="fixed bottom-0 left-0 right-0 z-50">
+            <div className="bg-surface-900/95 backdrop-blur-sm border-t border-surface-700 px-4 py-1.5 flex items-center gap-2">
+              <Tag className="w-3 h-3 text-gray-500 shrink-0" />
+              <span className="text-[11px] text-gray-400 shrink-0">Desconto</span>
+              <div className="flex gap-1 ml-auto">
+                {[0, 5, 10, 15, 20].map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setDiscount(d)}
+                    className={clsx(
+                      'px-2 h-6 rounded text-[11px] font-bold border transition-all',
+                      discountPct === d
+                        ? 'bg-accent-green/20 border-accent-green/50 text-accent-green'
+                        : 'bg-surface-700 border-surface-500 text-gray-400'
+                    )}
+                  >
+                    {d === 0 ? '—' : `${d}%`}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="bg-surface-800 border-t border-surface-600 shadow-[0_-4px_24px_rgba(0,0,0,0.5)] px-4 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <p className="text-[11px] text-gray-400 leading-none mb-0.5">
                   {cart.reduce((s, i) => s + i.quantity, 0)}{' '}
                   {cart.reduce((s, i) => s + i.quantity, 0) === 1 ? 'item' : 'itens'}
+                  {discountPct > 0 && <span className="text-accent-green ml-1">· −{discountPct}%</span>}
                 </p>
                 <p className="text-xl font-bold text-accent-gold leading-none">{fmt(total / 100)}</p>
               </div>

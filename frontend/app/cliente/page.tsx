@@ -6,7 +6,7 @@ import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
-  Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight
+  Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight, ChevronDown
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -113,6 +113,7 @@ export default function ClientePage() {
   const [searchQuery,  setSearchQuery]  = useState('')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [confirmItem,  setConfirmItem]  = useState<Product | null>(null)
+  const [showComandaSheet, setShowComandaSheet] = useState(false)
 
   const fetchComanda = useCallback(async () => {
     try {
@@ -568,35 +569,84 @@ export default function ClientePage() {
         )}
       </main>
 
-      {/* Barra sticky — total visível enquanto navega pelos produtos */}
-      {comanda && comanda.items.length > 0 && comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
-        <div className="fixed bottom-0 left-0 right-0 z-40">
-          <div className="max-w-lg mx-auto px-4 pb-4">
-            <button
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              className="w-full flex items-center justify-between rounded-2xl px-5 py-3.5 shadow-[0_-4px_24px_rgba(12,61,90,0.18)]"
-              style={{ backgroundColor: C.navy, border: `1.5px solid ${C.border}` }}
-            >
-              <div className="flex items-center gap-2.5">
-                <ShoppingCart className="w-4 h-4" style={{ color: C.yellow }} />
-                <div className="text-left">
-                  <p className="text-[10px] font-black uppercase tracking-widest leading-none" style={{ color: 'rgba(255,255,255,0.55)' }}>
-                    {comanda.items.length} {comanda.items.length === 1 ? 'item' : 'itens'}
-                  </p>
-                  <p className="text-base font-black leading-tight text-white">
+      {/* Bottom sheet flutuante — comanda resumida */}
+      {comanda && comanda.items.length > 0 && (
+        <>
+          {/* Overlay */}
+          {showComandaSheet && (
+            <div
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+              onClick={() => setShowComandaSheet(false)}
+            />
+          )}
+
+          {/* Sheet */}
+          <div
+            className="fixed bottom-0 left-0 right-0 z-50 transition-transform duration-300 ease-out"
+            style={{ transform: showComandaSheet ? 'translateY(0)' : 'translateY(calc(100% - 64px))' }}
+          >
+            <div className="max-w-lg mx-auto">
+              {/* Handle — clique para abrir/fechar */}
+              <button
+                onClick={() => setShowComandaSheet(v => !v)}
+                className="w-full flex items-center justify-between px-5 py-4 rounded-t-3xl shadow-[0_-4px_24px_rgba(12,61,90,0.22)]"
+                style={{ backgroundColor: C.navy }}
+              >
+                <div className="flex items-center gap-3">
+                  <ShoppingCart className="w-4 h-4 shrink-0" style={{ color: C.yellow }} />
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase tracking-widest leading-none"
+                      style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      {comanda.items.length} {comanda.items.length === 1 ? 'item' : 'itens'}
+                    </p>
+                    <p className="text-base font-black leading-tight text-white">
+                      R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
+                    </p>
+                  </div>
+                </div>
+                <ChevronDown
+                  className="w-5 h-5 transition-transform duration-300"
+                  style={{
+                    color: C.yellow,
+                    transform: showComandaSheet ? 'rotate(0deg)' : 'rotate(180deg)',
+                  }}
+                />
+              </button>
+
+              {/* Conteúdo da comanda */}
+              <div className="max-h-72 overflow-y-auto px-5 pt-4 pb-6" style={{ backgroundColor: C.white }}>
+                <div className="space-y-3">
+                  {comanda.items.map((item, idx) => (
+                    <div key={item.id}>
+                      <div className="flex justify-between items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold leading-tight truncate" style={{ color: C.navy }}>
+                            {item.itemNameSnapshot}
+                          </p>
+                          <p className="text-xs mt-0.5 font-medium" style={{ color: C.muted }}>
+                            {item.quantity}× R$ {item.unitPriceInReais.toFixed(2).replace('.', ',')}
+                          </p>
+                        </div>
+                        <span className="font-black text-sm shrink-0" style={{ color: C.blue2 }}>
+                          R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                      {idx < comanda.items.length - 1 && (
+                        <div className="mt-3 border-b" style={{ borderColor: C.border }} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between items-center mt-4 pt-4 border-t" style={{ borderColor: C.border }}>
+                  <span className="font-black text-xs uppercase tracking-wide" style={{ color: C.muted }}>Total</span>
+                  <span className="text-2xl font-black" style={{ color: C.navy }}>
                     R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
-                  </p>
+                  </span>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-xs font-black" style={{ color: C.yellow }}>
-                Ver comanda
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                </svg>
-              </div>
-            </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
