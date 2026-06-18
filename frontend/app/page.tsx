@@ -206,11 +206,35 @@ export default function LandingPage() {
         </div>
       )}
 
-      {/* ── HERO ───────────────────────────────────────────────────────── */}
+      {/* ── HERO + CAROUSEL DE FUNDO ───────────────────────────────────── */}
       <section
         className="relative pt-16 overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)' }}
+        onMouseEnter={() => { bannerPaused.current = true }}
+        onMouseLeave={() => { bannerPaused.current = false }}
+        onTouchStart={() => { bannerPaused.current = true }}
+        onTouchEnd={() => { bannerPaused.current = false }}
       >
+        {/* Fundo: banners rotativos ou gradiente padrão */}
+        {heroBanners.length > 0 ? (
+          <>
+            {heroBanners.map((banner, i) => (
+              <div
+                key={banner.id}
+                className="absolute inset-0 transition-opacity duration-1000"
+                style={{ opacity: i === bannerIdx ? 1 : 0 }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={banner.imageUrl!} alt="" className="w-full h-full object-cover" />
+              </div>
+            ))}
+            {/* Overlay escuro para garantir legibilidade do texto sobre qualquer imagem */}
+            <div className="absolute inset-0 bg-black/55" />
+          </>
+        ) : (
+          <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)' }} />
+        )}
+
+        {/* Conteúdo do hero — por cima do fundo */}
         <div className="relative z-10 max-w-6xl mx-auto px-5 py-20 md:py-24">
           <div className="flex flex-col items-center gap-8 md:gap-12 md:flex-row">
 
@@ -250,86 +274,47 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-      </section>
 
-      {/* ── CAROUSEL DE BANNERS ────────────────────────────────────────── */}
-      {heroBanners.length > 0 && (
-        <section
-          className="relative w-full overflow-hidden"
-          style={{ height: 'clamp(180px, 38vw, 460px)', background: '#0A1628' }}
-          onMouseEnter={() => { bannerPaused.current = true }}
-          onMouseLeave={() => { bannerPaused.current = false }}
-          onTouchStart={() => { bannerPaused.current = true }}
-          onTouchEnd={() => { bannerPaused.current = false }}
-        >
-          {/* Slides */}
-          {heroBanners.map((banner, i) => (
-            <div
-              key={banner.id}
-              className="absolute inset-0 transition-opacity duration-700"
-              style={{ opacity: i === bannerIdx ? 1 : 0, pointerEvents: i === bannerIdx ? 'auto' : 'none' }}
+        {/* Setas prev/next — só com múltiplos banners */}
+        {heroBanners.length > 1 && (
+          <>
+            <button
+              onClick={() => setBannerIdx(i => (i - 1 + heroBanners.length) % heroBanners.length)}
+              className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+              style={{ background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(6px)' }}
+              aria-label="Banner anterior"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={banner.imageUrl!}
-                alt={banner.title ?? 'Banner'}
-                className="w-full h-full object-cover"
+              <ChevronLeft className="w-5 h-5 text-white" />
+            </button>
+            <button
+              onClick={() => setBannerIdx(i => (i + 1) % heroBanners.length)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+              style={{ background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(6px)' }}
+              aria-label="Próximo banner"
+            >
+              <ChevronRight className="w-5 h-5 text-white" />
+            </button>
+          </>
+        )}
+
+        {/* Dots — só com múltiplos banners */}
+        {heroBanners.length > 1 && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+            {heroBanners.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setBannerIdx(i)}
+                className="h-1.5 rounded-full transition-all duration-300"
+                style={{
+                  width: i === bannerIdx ? '24px' : '6px',
+                  background: i === bannerIdx ? '#FFE45E' : 'rgba(255,255,255,0.45)',
+                }}
+                aria-label={`Ir para banner ${i + 1}`}
               />
-              {/* Gradiente + legenda */}
-              {(banner.title || banner.body) && (
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-6 pb-10 pt-8">
-                  {banner.title && (
-                    <p className="text-white font-black text-lg md:text-2xl drop-shadow">{banner.title}</p>
-                  )}
-                  {banner.body && (
-                    <p className="text-white/80 text-sm md:text-base mt-1 drop-shadow">{banner.body}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-
-          {/* Setas prev/next */}
-          {heroBanners.length > 1 && (
-            <>
-              <button
-                onClick={() => setBannerIdx(i => (i - 1 + heroBanners.length) % heroBanners.length)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
-                style={{ background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(6px)' }}
-                aria-label="Banner anterior"
-              >
-                <ChevronLeft className="w-5 h-5 text-white" />
-              </button>
-              <button
-                onClick={() => setBannerIdx(i => (i + 1) % heroBanners.length)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
-                style={{ background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(6px)' }}
-                aria-label="Próximo banner"
-              >
-                <ChevronRight className="w-5 h-5 text-white" />
-              </button>
-            </>
-          )}
-
-          {/* Dots */}
-          {heroBanners.length > 1 && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
-              {heroBanners.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setBannerIdx(i)}
-                  className="h-1.5 rounded-full transition-all duration-300"
-                  style={{
-                    width: i === bannerIdx ? '24px' : '6px',
-                    background: i === bannerIdx ? '#FFE45E' : 'rgba(255,255,255,0.45)',
-                  }}
-                  aria-label={`Ir para banner ${i + 1}`}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* ── ANÚNCIOS (gerenciados pelo admin) ──────────────────────────── */}
       {visibleAnnouncements.length > 0 && (
