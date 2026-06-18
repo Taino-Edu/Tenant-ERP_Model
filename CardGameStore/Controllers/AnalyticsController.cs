@@ -296,8 +296,8 @@ public class AnalyticsController : ControllerBase
 
         var custo = custoComandas + custoAvulsa;
 
-        var margem       = receita - custo;
-        var margemPercent = receita > 0 ? Math.Round(margem / receita * 100, 1) : 0;
+        var margem        = receita - custo;
+        var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
 
         // ── Crediários em aberto (saldo real = total - já pago) ──────────────
         var crediarios = await _db.Crediarios
