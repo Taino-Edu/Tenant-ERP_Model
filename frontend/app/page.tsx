@@ -7,7 +7,7 @@ import Link from 'next/link'
 import {
   Trophy, ShoppingBag, Star, Calendar, Users,
   X, MessageCircle, CheckCircle, Package,
-  CreditCard, Award, QrCode, Shield, ChevronRight,
+  CreditCard, Award, QrCode, Shield, ChevronRight, ChevronLeft,
   Sun, Moon, Mail,
 } from 'lucide-react'
 
@@ -29,8 +29,13 @@ export default function LandingPage() {
   const [mobileMenu,    setMobileMenu]    = useState(false)
   const [isDark,        setIsDark]        = useState(false)
   const [navVisible,    setNavVisible]    = useState(true)
+  const [bannerIdx,    setBannerIdx]  = useState(0)
   const carouselRef   = useRef<HTMLDivElement>(null)
   const carouselPaused = useRef(false)
+  const bannerPaused   = useRef(false)
+
+  const heroBanners          = announcements.filter(a => a.type === 'Banner' && a.imageUrl)
+  const visibleAnnouncements = announcements.filter(a => a.type !== 'Banner')
 
   const C = isDark ? {
     bg: '#121215', card: '#1A1A1F', cardAlt: '#1E1E24',
@@ -76,6 +81,15 @@ export default function LandingPage() {
   }, [products])
 
   useEffect(() => {
+    if (heroBanners.length <= 1) return
+    const interval = setInterval(() => {
+      if (!bannerPaused.current)
+        setBannerIdx(i => (i + 1) % heroBanners.length)
+    }, 3500)
+    return () => clearInterval(interval)
+  }, [heroBanners.length])
+
+  useEffect(() => {
     const saved = localStorage.getItem('landing-theme')
     if (saved === 'dark') setIsDark(true)
 
@@ -95,9 +109,6 @@ export default function LandingPage() {
       announcementApi.visible().then(r => setAnnouncements(r.data)),
     ]).finally(() => setLoading(false))
   }, [router])
-
-  const heroBanner = announcements.find(a => a.type === 'Banner' && a.imageUrl)
-  const visibleAnnouncements = announcements.filter(a => a.type !== 'Banner')
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: C.bg, color: C.navy }}>
@@ -198,11 +209,7 @@ export default function LandingPage() {
       {/* ── HERO ───────────────────────────────────────────────────────── */}
       <section
         className="relative pt-16 overflow-hidden"
-        style={{
-          background: heroBanner?.imageUrl
-            ? `url(${heroBanner.imageUrl}) center/cover no-repeat`
-            : 'linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)',
-        }}
+        style={{ background: 'linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)' }}
       >
         <div className="relative z-10 max-w-6xl mx-auto px-5 py-20 md:py-24">
           <div className="flex flex-col items-center gap-8 md:gap-12 md:flex-row">
@@ -244,6 +251,85 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── CAROUSEL DE BANNERS ────────────────────────────────────────── */}
+      {heroBanners.length > 0 && (
+        <section
+          className="relative w-full overflow-hidden"
+          style={{ height: 'clamp(180px, 38vw, 460px)', background: '#0A1628' }}
+          onMouseEnter={() => { bannerPaused.current = true }}
+          onMouseLeave={() => { bannerPaused.current = false }}
+          onTouchStart={() => { bannerPaused.current = true }}
+          onTouchEnd={() => { bannerPaused.current = false }}
+        >
+          {/* Slides */}
+          {heroBanners.map((banner, i) => (
+            <div
+              key={banner.id}
+              className="absolute inset-0 transition-opacity duration-700"
+              style={{ opacity: i === bannerIdx ? 1 : 0, pointerEvents: i === bannerIdx ? 'auto' : 'none' }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={banner.imageUrl!}
+                alt={banner.title ?? 'Banner'}
+                className="w-full h-full object-cover"
+              />
+              {/* Gradiente + legenda */}
+              {(banner.title || banner.body) && (
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-6 pb-10 pt-8">
+                  {banner.title && (
+                    <p className="text-white font-black text-lg md:text-2xl drop-shadow">{banner.title}</p>
+                  )}
+                  {banner.body && (
+                    <p className="text-white/80 text-sm md:text-base mt-1 drop-shadow">{banner.body}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Setas prev/next */}
+          {heroBanners.length > 1 && (
+            <>
+              <button
+                onClick={() => setBannerIdx(i => (i - 1 + heroBanners.length) % heroBanners.length)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+                style={{ background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(6px)' }}
+                aria-label="Banner anterior"
+              >
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+              <button
+                onClick={() => setBannerIdx(i => (i + 1) % heroBanners.length)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full flex items-center justify-center transition-colors"
+                style={{ background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(6px)' }}
+                aria-label="Próximo banner"
+              >
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            </>
+          )}
+
+          {/* Dots */}
+          {heroBanners.length > 1 && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
+              {heroBanners.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setBannerIdx(i)}
+                  className="h-1.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: i === bannerIdx ? '24px' : '6px',
+                    background: i === bannerIdx ? '#FFE45E' : 'rgba(255,255,255,0.45)',
+                  }}
+                  aria-label={`Ir para banner ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── ANÚNCIOS (gerenciados pelo admin) ──────────────────────────── */}
       {visibleAnnouncements.length > 0 && (
