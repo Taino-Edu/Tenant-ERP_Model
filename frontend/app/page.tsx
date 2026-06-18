@@ -343,7 +343,11 @@ export default function LandingPage() {
                 key={a.id}
                 onClick={() => setAnnModal(a)}
                 className="absolute inset-0 w-full text-left transition-opacity duration-600"
-                style={{ opacity: i === annIdx ? 1 : 0, pointerEvents: i === annIdx ? 'auto' : 'none' }}
+                style={{
+                  opacity: i === annIdx ? 1 : 0,
+                  pointerEvents: i === annIdx ? 'auto' : 'none',
+                  background: 'linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)',
+                }}
               >
                 {a.imageUrl ? (
                   <>
