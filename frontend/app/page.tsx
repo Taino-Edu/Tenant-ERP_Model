@@ -30,9 +30,11 @@ export default function LandingPage() {
   const [isDark,        setIsDark]        = useState(false)
   const [navVisible,    setNavVisible]    = useState(true)
   const [bannerIdx,    setBannerIdx]  = useState(0)
+  const [annIdx,       setAnnIdx]     = useState(0)
   const carouselRef   = useRef<HTMLDivElement>(null)
   const carouselPaused = useRef(false)
   const bannerPaused   = useRef(false)
+  const annPaused      = useRef(false)
 
   const heroBanners          = announcements.filter(a => a.type === 'Banner' && a.imageUrl)
   const visibleAnnouncements = announcements.filter(a => a.type !== 'Banner')
@@ -88,6 +90,15 @@ export default function LandingPage() {
     }, 3500)
     return () => clearInterval(interval)
   }, [heroBanners.length])
+
+  useEffect(() => {
+    if (visibleAnnouncements.length <= 1) return
+    const interval = setInterval(() => {
+      if (!annPaused.current)
+        setAnnIdx(i => (i + 1) % visibleAnnouncements.length)
+    }, 4000)
+    return () => clearInterval(interval)
+  }, [visibleAnnouncements.length])
 
   useEffect(() => {
     const saved = localStorage.getItem('landing-theme')
@@ -316,43 +327,93 @@ export default function LandingPage() {
         )}
       </section>
 
-      {/* ── ANÚNCIOS (gerenciados pelo admin) ──────────────────────────── */}
+      {/* ── CARROSSEL DE AVISOS & DESTAQUES ────────────────────────────── */}
       {visibleAnnouncements.length > 0 && (
-        <section className="px-5 pb-8 max-w-6xl mx-auto">
-          <div className={
-            visibleAnnouncements.length === 1
-              ? 'grid grid-cols-1'
-              : visibleAnnouncements.length === 2
-                ? 'grid grid-cols-1 sm:grid-cols-2 gap-4'
-                : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
-          }>
-            {visibleAnnouncements.map(a => (
+        <section className="px-5 py-8 max-w-6xl mx-auto">
+          <div
+            className="relative overflow-hidden rounded-2xl"
+            style={{ height: 'clamp(220px, 36vw, 420px)' }}
+            onMouseEnter={() => { annPaused.current = true }}
+            onMouseLeave={() => { annPaused.current = false }}
+            onTouchStart={() => { annPaused.current = true }}
+            onTouchEnd={() => { annPaused.current = false }}
+          >
+            {visibleAnnouncements.map((a, i) => (
               <button
                 key={a.id}
                 onClick={() => setAnnModal(a)}
-                className="text-left rounded-2xl overflow-hidden border group cursor-pointer transition-all"
-                style={{ backgroundColor: C.card, borderColor: C.border }}
+                className="absolute inset-0 w-full text-left transition-opacity duration-600"
+                style={{ opacity: i === annIdx ? 1 : 0, pointerEvents: i === annIdx ? 'auto' : 'none' }}
               >
                 {a.imageUrl ? (
-                  <div className={`w-full overflow-hidden ${visibleAnnouncements.length === 1 ? 'h-56 md:h-72' : 'h-44'}`}>
-                    <img
-                      src={a.imageUrl} alt={a.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  </div>
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={a.imageUrl} alt={a.title} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 px-6 pb-6">
+                      <span className="inline-block text-xs font-black uppercase tracking-widest mb-2 px-2 py-0.5 rounded"
+                        style={{ background: a.type === 'Destaque' ? C.blue : C.yellow, color: a.type === 'Destaque' ? '#fff' : NAVY }}>
+                        {a.type === 'Destaque' ? 'Destaque' : 'Aviso'}
+                      </span>
+                      <p className="text-white font-black text-xl md:text-3xl leading-tight drop-shadow">{a.title}</p>
+                      {a.body && <p className="text-white/80 text-sm md:text-base mt-1.5 line-clamp-2 drop-shadow">{a.body}</p>}
+                      <p className="text-xs mt-3 font-bold" style={{ color: C.yellow }}>Ver mais →</p>
+                    </div>
+                  </>
                 ) : (
-                  <div className={`w-full flex items-center justify-center ${visibleAnnouncements.length === 1 ? 'h-36' : 'h-44'}`}
-                    style={{ background: `linear-gradient(135deg, ${C.blue}18, ${C.card})` }}>
-                    <span className="text-5xl font-black opacity-20" style={{ color: C.blue }}>!</span>
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-8 text-center"
+                    style={{ background: `linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)` }}>
+                    <span className="inline-block text-xs font-black uppercase tracking-widest px-3 py-1 rounded"
+                      style={{ background: a.type === 'Destaque' ? C.blue : C.yellow, color: a.type === 'Destaque' ? '#fff' : NAVY }}>
+                      {a.type === 'Destaque' ? 'Destaque' : 'Aviso'}
+                    </span>
+                    <p className="text-white font-black text-2xl md:text-4xl leading-tight">{a.title}</p>
+                    {a.body && <p className="text-white/70 text-sm md:text-lg max-w-lg leading-relaxed">{a.body}</p>}
+                    <p className="text-xs font-bold" style={{ color: C.yellow }}>Ver mais →</p>
                   </div>
                 )}
-                <div className="p-4">
-                  <p className="font-black text-sm leading-snug" style={{ color: C.navy }}>{a.title}</p>
-                  {a.body && <p className="text-xs mt-1.5 line-clamp-2 leading-relaxed" style={{ color: C.text }}>{a.body}</p>}
-                  <p className="text-xs mt-2 font-bold" style={{ color: C.blue }}>Ver mais →</p>
-                </div>
               </button>
             ))}
+
+            {/* Setas prev/next */}
+            {visibleAnnouncements.length > 1 && (
+              <>
+                <button
+                  onClick={e => { e.stopPropagation(); setAnnIdx(i => (i - 1 + visibleAnnouncements.length) % visibleAnnouncements.length) }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                  style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
+                  aria-label="Anúncio anterior"
+                >
+                  <ChevronLeft className="w-4 h-4 text-white" />
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); setAnnIdx(i => (i + 1) % visibleAnnouncements.length) }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                  style={{ background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(6px)' }}
+                  aria-label="Próximo anúncio"
+                >
+                  <ChevronRight className="w-4 h-4 text-white" />
+                </button>
+              </>
+            )}
+
+            {/* Dots */}
+            {visibleAnnouncements.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
+                {visibleAnnouncements.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={e => { e.stopPropagation(); setAnnIdx(i) }}
+                    className="h-1.5 rounded-full transition-all duration-300"
+                    style={{
+                      width: i === annIdx ? '24px' : '6px',
+                      background: i === annIdx ? C.yellow : 'rgba(255,255,255,0.45)',
+                    }}
+                    aria-label={`Ir para anúncio ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </section>
       )}
