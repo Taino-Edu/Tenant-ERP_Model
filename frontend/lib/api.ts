@@ -497,6 +497,8 @@ export const championshipApi = {
     api.post<ChampionshipPreInscricao>(`/api/championship/${id}/preinscricoes`, { nome, whatsApp }),
   getPreInscricoes: (id: string) =>
     api.get<ChampionshipPreInscricao[]>(`/api/championship/${id}/preinscricoes`),
+  deletePreInscricao: (championshipId: string, preInscricaoId: string) =>
+    api.delete(`/api/championship/${championshipId}/preinscricoes/${preInscricaoId}`),
   setPodio:         (id: string, podioJson: string) =>
     api.patch(`/api/championship/${id}/podio`, { podioJson }),
 }

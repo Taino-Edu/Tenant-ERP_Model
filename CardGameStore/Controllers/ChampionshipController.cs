@@ -413,6 +413,16 @@ public class ChampionshipController : ControllerBase
         return Ok(list.Select(p => new PreInscricaoDto { Id = p.Id, Nome = p.Nome, WhatsApp = p.WhatsApp, IsListaEspera = p.IsListaEspera, CreatedAt = p.CreatedAt }));
     }
 
+    /// <summary>Remove uma pré-inscrição (Admin — recusar ou após confirmar manualmente).</summary>
+    [HttpDelete("{id:guid}/preinscricoes/{preInscricaoId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(204)]
+    public async Task<IActionResult> DeletePreInscricao(Guid id, Guid preInscricaoId)
+    {
+        await _service.DeletePreInscricaoAsync(preInscricaoId);
+        return NoContent();
+    }
+
     // -------------------------------------------------------------------------
     // PÓDIO — apenas Admin
     // -------------------------------------------------------------------------

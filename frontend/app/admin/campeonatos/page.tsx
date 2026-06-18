@@ -301,17 +301,24 @@ function EditChampionshipModal({ championship, onClose, onSave }: {
 }
 
 // ── Modal: Adicionar Participante ─────────────────────────────────────────────
-function AddParticipantModal({ championshipId, onClose, onAdded }: {
+function AddParticipantModal({ championshipId, onClose, onAdded, initialName, onConfirmedPreInscricao }: {
   championshipId: string
   onClose: () => void
   onAdded: () => void
+  initialName?: string
+  onConfirmedPreInscricao?: () => Promise<void>
 }) {
-  const [search, setSearch]     = useState('')
+  const [search, setSearch]     = useState(initialName ?? '')
   const [results, setResults]   = useState<{ id: string; name: string; cpf?: string }[]>([])
   const [selected, setSelected] = useState<{ id: string; name: string } | null>(null)
   const [deckName, setDeckName] = useState('')
   const [saving, setSaving]     = useState(false)
   const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    if (initialName && initialName.length >= 2) handleSearch(initialName)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function handleSearch(q: string) {
     setSearch(q)
@@ -337,6 +344,7 @@ function AddParticipantModal({ championshipId, onClose, onAdded }: {
     setSaving(true)
     try {
       await championshipApi.adminRegister(championshipId, selected.id, deckName || undefined)
+      if (onConfirmedPreInscricao) await onConfirmedPreInscricao()
       toast.success(`${selected.name} inscrito com sucesso!`)
       onAdded()
       onClose()
@@ -450,6 +458,7 @@ function ChampionshipCard({
   const [preInscricoes, setPreInscricoes] = useState<ChampionshipPreInscricao[]>([])
   const [loadingP, setLoadingP]           = useState(false)
   const [showAdd, setShowAdd]             = useState(false)
+  const [confirmingPI, setConfirmingPI]   = useState<ChampionshipPreInscricao | null>(null)
 
   // Pódio
   const parsedPodio = (): [string, string, string] => {
@@ -480,6 +489,15 @@ function ChampionshipCard({
   async function toggleExpand() {
     if (!expanded) await loadAll()
     setExpanded(v => !v)
+  }
+
+  async function handleDeletePreInscricao(pi: ChampionshipPreInscricao) {
+    try {
+      await championshipApi.deletePreInscricao(c.id, pi.id)
+      setPreInscricoes(prev => prev.filter(x => x.id !== pi.id))
+    } catch {
+      toast.error('Erro ao remover pré-inscrição')
+    }
   }
 
   async function handleRemove(p: ChampionshipParticipant) {
@@ -523,6 +541,15 @@ function ChampionshipCard({
           championshipId={c.id}
           onClose={() => setShowAdd(false)}
           onAdded={() => { loadAll(); onParticipantChange() }}
+        />
+      )}
+      {confirmingPI && (
+        <AddParticipantModal
+          championshipId={c.id}
+          initialName={confirmingPI.nome}
+          onClose={() => setConfirmingPI(null)}
+          onAdded={() => { loadAll(); onParticipantChange() }}
+          onConfirmedPreInscricao={() => handleDeletePreInscricao(confirmingPI)}
         />
       )}
 
@@ -675,7 +702,7 @@ function ChampionshipCard({
                       <p className="text-center text-sm text-gray-400 py-4">Nenhuma pré-inscrição recebida</p>
                     ) : (
                       preInscricoes.map(pi => (
-                        <div key={pi.id} className="flex items-center gap-3 bg-surface-800 rounded-lg px-3 py-2">
+                        <div key={pi.id} className="flex items-center gap-2 bg-surface-800 rounded-lg px-3 py-2">
                           <div className="w-7 h-7 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
                             <span className="text-amber-400 text-xs font-bold">{pi.nome[0]}</span>
                           </div>
@@ -683,14 +710,31 @@ function ChampionshipCard({
                             <p className="text-sm font-medium text-white truncate">{pi.nome}</p>
                             <p className="text-xs text-gray-500">{pi.whatsApp}</p>
                           </div>
+                          {pi.isListaEspera && (
+                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 shrink-0">Espera</span>
+                          )}
                           <a
                             href={`https://wa.me/${pi.whatsApp.replace(/\D/g, '')}`}
                             target="_blank" rel="noreferrer"
                             className="text-accent-green hover:text-green-300 shrink-0"
                             title="Contatar no WhatsApp"
                           >
-                            <MessageCircle className="w-4 h-4" />
+                            <MessageCircle className="w-3.5 h-3.5" />
                           </a>
+                          <button
+                            onClick={() => setConfirmingPI(pi)}
+                            className="w-6 h-6 rounded-md bg-emerald-500/20 hover:bg-emerald-500/40 flex items-center justify-center text-emerald-400 transition-colors shrink-0"
+                            title="Confirmar inscrição"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePreInscricao(pi)}
+                            className="w-6 h-6 rounded-md bg-red-500/20 hover:bg-red-500/40 flex items-center justify-center text-red-400 transition-colors shrink-0"
+                            title="Recusar / remover"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))
                     )}
@@ -716,6 +760,30 @@ function ChampionshipCard({
                         />
                       </div>
                     ))}
+                    {/* Lista rápida de participantes para clicar e preencher */}
+                    {participants.length > 0 && (
+                      <div className="bg-surface-800 rounded-xl p-3 space-y-2">
+                        <p className="text-[10px] font-bold uppercase text-gray-500 tracking-wider">Participantes — clique para colocar no pódio</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {participants.map(p => (
+                            <button
+                              key={p.id}
+                              onClick={() => {
+                                const emptyIdx = podioNames.findIndex(n => !n.trim())
+                                if (emptyIdx !== -1) {
+                                  const updated: [string, string, string] = [...podioNames] as [string, string, string]
+                                  updated[emptyIdx] = p.userName
+                                  setPodioNames(updated)
+                                }
+                              }}
+                              className="text-xs px-2.5 py-1 rounded-lg bg-surface-600 hover:bg-brand-500/30 text-gray-300 hover:text-white border border-surface-500 hover:border-brand-500/50 transition-colors"
+                            >
+                              #{p.playerNumber} {p.userName}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <button
                       onClick={handleSavePodio}
                       disabled={savingPodio}

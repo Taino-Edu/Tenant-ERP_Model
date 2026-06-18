@@ -157,6 +157,12 @@ public class ChampionshipService : IChampionshipService
             .Where(p => p.ChampionshipId == championshipId)
             .OrderBy(p => p.CreatedAt).ToListAsync();
 
+    public async Task DeletePreInscricaoAsync(Guid preInscricaoId)
+    {
+        var pi = await _db.ChampionshipPreInscricoes.FindAsync(preInscricaoId);
+        if (pi != null) { _db.ChampionshipPreInscricoes.Remove(pi); await _db.SaveChangesAsync(); }
+    }
+
     public async Task SetPodioAsync(Guid championshipId, string podioJson)
     {
         var ch = await _db.Championships.FindAsync(championshipId)
