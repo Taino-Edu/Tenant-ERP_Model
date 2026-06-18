@@ -1,13 +1,14 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto, championshipApi, MyParticipation } from '@/lib/api'
 import { getUserName, clearAuth } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   Star, User, Phone, CreditCard, Clock, AlertCircle, ArrowLeft, LogOut,
   CheckCircle, Wallet, CalendarClock, Receipt, ChevronDown, ChevronUp,
-  ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail
+  ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail, Settings
 } from 'lucide-react'
 import clsx from 'clsx'
 import toast, { Toaster } from 'react-hot-toast'
@@ -397,6 +398,22 @@ export default function PerfilPage() {
                 )}
               </div>
             )}
+            {/* ── CONFIGURAÇÕES ── */}
+            <Link
+              href="/cliente/configuracoes"
+              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mt-4 hover:bg-gray-50 transition-colors active:scale-[0.98]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center">
+                  <Settings className="w-5 h-5 text-[#42B6EE]" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-900">Configurações</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">IA, sons e preferências</p>
+                </div>
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-300 -rotate-90" />
+            </Link>
           </>
         )}
       </div>

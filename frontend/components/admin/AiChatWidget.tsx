@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react'
 import { BrainCircuit, X, Send, Loader2, ChevronDown, Sparkles } from 'lucide-react'
 import { aiApi } from '@/lib/api'
+import { usePreferences } from '@/hooks/usePreferences'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -20,7 +21,15 @@ const SUGGESTIONS = [
 const BTN_SIZE = 52
 const STORAGE_KEY = 'ai-btn-pos'
 
+const CORNER_STYLES: Record<string, { bottom?: number | string; top?: number | string; left?: number | string; right?: number | string }> = {
+  'bottom-right': { bottom: 20, right: 16 },
+  'bottom-left':  { bottom: 20, left:  16 },
+  'top-right':    { top:    16, right: 16 },
+  'top-left':     { top:    16, left:  16 },
+}
+
 export default function AiChatWidget() {
+  const { prefs } = usePreferences()
   const [open,     setOpen]     = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input,    setInput]    = useState('')
@@ -249,29 +258,37 @@ export default function AiChatWidget() {
         </div>
       )}
 
-      {/* ── Botão flutuante (arrastável) ─────────────────────────────────────── */}
-      {pos && (
+      {/* ── Botão flutuante ─────────────────────────────────────────────────── */}
+      {prefs.aiButton.mode === 'fixed' ? (
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="fixed z-50 flex items-center justify-center rounded-full shadow-lg transition-colors hover:brightness-110 active:brightness-90"
+          style={{
+            ...CORNER_STYLES[prefs.aiButton.corner] ?? CORNER_STYLES['bottom-right'],
+            width: BTN_SIZE, height: BTN_SIZE,
+            background: open ? '#4c1d95' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+            boxShadow: '0 4px 24px rgba(109, 40, 217, 0.6)',
+          }}
+          aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}>
+          {open ? <ChevronDown size={22} className="text-white" /> : <BrainCircuit size={22} className="text-white" />}
+        </button>
+      ) : pos ? (
         <button
           onPointerDown={onPointerDown}
           onClick={handleClick}
           className="fixed z-50 flex items-center justify-center rounded-full shadow-lg transition-colors hover:brightness-110 active:brightness-90 touch-none select-none"
           style={{
-            left:       pos.x,
-            top:        pos.y,
-            width:      BTN_SIZE,
-            height:     BTN_SIZE,
+            left: pos.x, top: pos.y,
+            width: BTN_SIZE, height: BTN_SIZE,
             background: open ? '#4c1d95' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-            boxShadow:  '0 4px 24px rgba(109, 40, 217, 0.6)',
-            cursor:     'grab',
+            boxShadow: '0 4px 24px rgba(109, 40, 217, 0.6)',
+            cursor: 'grab',
           }}
           aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}
           title="Assistente IA — arraste para reposicionar">
-          {open
-            ? <ChevronDown size={22} className="text-white" />
-            : <BrainCircuit size={22} className="text-white" />
-          }
+          {open ? <ChevronDown size={22} className="text-white" /> : <BrainCircuit size={22} className="text-white" />}
         </button>
-      )}
+      ) : null}
     </>
   )
 }

@@ -3,8 +3,51 @@
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace CardGameStore.DTOs;
+
+// ── Preferências ─────────────────────────────────────────────────────────────
+
+public class AiButtonPrefs
+{
+    [JsonPropertyName("mode")]
+    public string Mode { get; set; } = "draggable"; // "draggable" | "fixed"
+
+    [JsonPropertyName("corner")]
+    public string Corner { get; set; } = "bottom-right"; // "bottom-right" | "bottom-left" | "top-right" | "top-left"
+}
+
+public class NotificationPrefs
+{
+    [JsonPropertyName("soundEnabled")]
+    public bool SoundEnabled { get; set; } = true;
+
+    [JsonPropertyName("browserEnabled")]
+    public bool BrowserEnabled { get; set; } = true;
+}
+
+public class PdvPrefs
+{
+    [JsonPropertyName("defaultDiscount")]
+    public int DefaultDiscount { get; set; } = 0; // 0, 5, 10, 15, 20
+}
+
+/// <summary>Preferências completas do usuário.</summary>
+public class UserPreferencesDto
+{
+    [JsonPropertyName("aiButton")]
+    public AiButtonPrefs AiButton { get; set; } = new();
+
+    [JsonPropertyName("notifications")]
+    public NotificationPrefs Notifications { get; set; } = new();
+
+    [JsonPropertyName("pdv")]
+    public PdvPrefs Pdv { get; set; } = new();
+}
+
+/// <summary>Request para atualizar preferências (corpo idêntico ao DTO).</summary>
+public class UpdatePreferencesRequest : UserPreferencesDto { }
 
 /// <summary>Retorno resumido de um usuário (para listagem admin).</summary>
 public class UserSummaryDto

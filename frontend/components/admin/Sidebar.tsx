@@ -8,7 +8,7 @@ import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog,
+  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -48,6 +48,12 @@ const sections = [
     items: [
       { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield, perm: 'lgpd' },
       { href: '/admin/sobre', label: 'Sobre o Sistema',   icon: Info,   perm: null },
+    ],
+  },
+  {
+    label: 'Pessoal',
+    items: [
+      { href: '/admin/configuracoes', label: 'Configurações', icon: Settings, perm: null },
     ],
   },
 ]

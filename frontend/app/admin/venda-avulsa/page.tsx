@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, Product, VendaAvulsaDto, UserSummary } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
+import { usePreferences } from '@/hooks/usePreferences'
 import toast from 'react-hot-toast'
 import {
   ShoppingBag, Plus, Minus, Trash2, User, CheckCircle, RotateCcw,
@@ -282,6 +283,7 @@ const PAYMENT_ICONS = PAYMENT_ICONS_INNER
 const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 
 export default function VendaAvulsaPage() {
+  const { prefs } = usePreferences()
   const [tab, setTab]               = useState<'venda' | 'historico'>('venda')
   const [products, setProducts]     = useState<Product[]>([])
   const [cart, setCart]             = useState<CartItem[]>([])
@@ -293,7 +295,7 @@ export default function VendaAvulsaPage() {
   const [clientDropdown, setClientDropdown] = useState(false)
   const [clientLoading, setClientLoading]   = useState(false)
   const [payment, setPayment]       = useState<string>(PAYMENT_METHODS[0].value)
-  const [discountPct, setDiscount]  = useState(0)
+  const [discountPct, setDiscount]  = useState(() => prefs.pdv.defaultDiscount)
   const [received, setReceived]     = useState('')
   const [loading, setLoading]       = useState(true)
   const [submitting, setSubmitting] = useState(false)

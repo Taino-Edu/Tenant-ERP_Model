@@ -13,6 +13,7 @@
 // DELETE /api/user/{id}               → Admin exclui operador
 // =============================================================================
 
+using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -346,6 +347,43 @@ public class UserController : ControllerBase
         };
 
         return Ok(historico);
+    }
+
+    // =========================================================================
+    // Preferências pessoais
+    // =========================================================================
+
+    private static readonly JsonSerializerOptions _jsonOpts = new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>Retorna as preferências do usuário logado.</summary>
+    [HttpGet("me/preferences")]
+    [ProducesResponseType(typeof(UserPreferencesDto), 200)]
+    public async Task<IActionResult> GetPreferences()
+    {
+        var user = await _db.Users.FindAsync(GetUserId());
+        if (user == null) return NotFound();
+
+        var prefs = string.IsNullOrWhiteSpace(user.PreferencesJson)
+            ? new UserPreferencesDto()
+            : JsonSerializer.Deserialize<UserPreferencesDto>(user.PreferencesJson, _jsonOpts)
+              ?? new UserPreferencesDto();
+
+        return Ok(prefs);
+    }
+
+    /// <summary>Salva as preferências do usuário logado.</summary>
+    [HttpPut("me/preferences")]
+    [ProducesResponseType(typeof(UserPreferencesDto), 200)]
+    public async Task<IActionResult> UpdatePreferences([FromBody] UpdatePreferencesRequest request)
+    {
+        var user = await _db.Users.FindAsync(GetUserId());
+        if (user == null) return NotFound();
+
+        user.PreferencesJson = JsonSerializer.Serialize(request, _jsonOpts);
+        user.UpdatedAt       = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(request);
     }
 
     // =========================================================================

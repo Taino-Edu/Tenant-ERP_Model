@@ -159,6 +159,18 @@ export interface UserProfile {
   pointsExpired: boolean; balanceInCents: number; createdAt: string
 }
 
+export interface UserPreferences {
+  aiButton:      { mode: 'draggable' | 'fixed'; corner: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' }
+  notifications: { soundEnabled: boolean; browserEnabled: boolean }
+  pdv:           { defaultDiscount: 0 | 5 | 10 | 15 | 20 }
+}
+
+export const DEFAULT_PREFERENCES: UserPreferences = {
+  aiButton:      { mode: 'draggable', corner: 'bottom-right' },
+  notifications: { soundEnabled: true, browserEnabled: true },
+  pdv:           { defaultDiscount: 0 },
+}
+
 // ── Funções de API ────────────────────────────────────────────────────────────
 
 export interface CpfLookupResponse { name: string; hasPassword: boolean }
@@ -455,6 +467,9 @@ export const userApi = {
   // LGPD — Direitos do titular
   updateMe:  (data: UpdateMeRequest) => api.put<UserProfile>('/api/user/me', data),
   deleteMe:  ()                      => api.delete('/api/user/me'),
+  // Preferências pessoais
+  getPreferences:    ()                        => api.get<UserPreferences>('/api/user/me/preferences'),
+  updatePreferences: (data: UserPreferences)   => api.put<UserPreferences>('/api/user/me/preferences', data),
 }
 
 export const tcgApi = {

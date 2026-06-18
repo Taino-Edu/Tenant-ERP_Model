@@ -123,6 +123,14 @@ public class User
     public decimal BalanceInReais => BalanceInCents / 100m;
 
     // -------------------------------------------------------------------------
+    // Preferências do usuário (JSON livre)
+    // -------------------------------------------------------------------------
+
+    /// <summary>Configurações pessoais salvas como JSON (botão IA, sons, desconto padrão, etc.).</summary>
+    [Column("preferences_json")]
+    public string? PreferencesJson { get; set; }
+
+    // -------------------------------------------------------------------------
     // Auditoria
     // -------------------------------------------------------------------------
 
