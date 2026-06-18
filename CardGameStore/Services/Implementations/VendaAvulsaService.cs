@@ -307,7 +307,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             var modificou = false;
             foreach (var item in venda.Items)
             {
-                if (item.UnitCostInCents == 0 && custoMap.TryGetValue(item.ProductId, out var custo))
+                if (custoMap.TryGetValue(item.ProductId, out var custo) && item.UnitCostInCents != custo)
                 {
                     item.UnitCostInCents = custo;
                     totalAtualizados++;
