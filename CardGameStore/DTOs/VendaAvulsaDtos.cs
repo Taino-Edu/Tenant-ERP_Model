@@ -55,4 +55,5 @@ public class VendaAvulsaItemDto
     public int     Quantity         { get; set; }
     public decimal UnitPriceInReais { get; set; }
     public decimal SubtotalInReais  { get; set; }
+    public int     UnitCostInCents  { get; set; }
 }

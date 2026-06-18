@@ -52,9 +52,12 @@ public class VendaAvulsaItem
     public int     Quantity         { get; set; }
     public int     UnitPriceInCents { get; set; }
     public int     SubtotalInCents  { get; set; }
+    public int     UnitCostInCents  { get; set; }
 
     [BsonIgnore]
     public decimal SubtotalInReais => SubtotalInCents / 100m;
+    [BsonIgnore]
+    public decimal TotalCostInReais => UnitCostInCents * Quantity / 100m;
 }
 
 /// <summary>Constantes de forma de pagamento aceitas no sistema.</summary>

@@ -87,6 +87,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 Quantity         = reqItem.Quantity,
                 UnitPriceInCents = effectivePrice,
                 SubtotalInCents  = subtotal,
+                UnitCostInCents  = product.CostPriceInCents,
             });
         }
 
@@ -303,6 +304,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             Quantity         = i.Quantity,
             UnitPriceInReais = i.UnitPriceInCents / 100m,
             SubtotalInReais  = i.SubtotalInReais,
+            UnitCostInCents  = i.UnitCostInCents,
         }).ToList(),
     };
 }

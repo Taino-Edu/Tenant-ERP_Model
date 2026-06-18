@@ -286,8 +286,15 @@ public class AnalyticsController : ControllerBase
             })
             .ToListAsync();
 
-        var custo = itens
+        var custoComandas = itens
             .Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m;
+
+        var custoAvulsa = todasVendas
+            .Where(v => v.SoldAt >= ini && v.SoldAt < end)
+            .SelectMany(v => v.Items)
+            .Sum(i => (decimal)i.UnitCostInCents * i.Quantity) / 100m;
+
+        var custo = custoComandas + custoAvulsa;
 
         var margem       = receita - custo;
         var margemPercent = receita > 0 ? Math.Round(margem / receita * 100, 1) : 0;
@@ -320,15 +327,20 @@ public class AnalyticsController : ControllerBase
                 .Where(v => v.SoldAt >= dIni && v.SoldAt < dFim)
                 .Sum(v => (decimal)v.TotalInCents) / 100m;
 
-            var cDia = itens
+            var cComandaDia = itens
                 .Where(i => i.ComandaClosedAt >= dIni && i.ComandaClosedAt < dFim)
                 .Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m;
 
+            var cAvulsaDia = todasVendas
+                .Where(v => v.SoldAt >= dIni && v.SoldAt < dFim)
+                .SelectMany(v => v.Items)
+                .Sum(i => (decimal)i.UnitCostInCents * i.Quantity) / 100m;
+
             diaDia.Add(new DiaFinanceiroDto
             {
-                Dia     = dBr.ToString("dd/MM"), // exibe data BR (não UTC)
+                Dia     = dBr.ToString("dd/MM"),
                 Receita = Math.Round(rComanda + rAvulsa, 2),
-                Custo   = Math.Round(cDia, 2),
+                Custo   = Math.Round(cComandaDia + cAvulsaDia, 2),
             });
         }
 
