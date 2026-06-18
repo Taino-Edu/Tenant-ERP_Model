@@ -621,12 +621,12 @@ export default function VendaAvulsaPage() {
                         </span>
                       )}
                       {p.isPreVenda && (
-                        <span className="inline-block mb-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: '#7C3AED' }}>
+                        <span className="inline-block mb-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ backgroundColor: '#7C3AED', color: '#fff' }}>
                           Pré-venda
                         </span>
                       )}
                       {!p.isPreVenda && p.isOnPromo && (
-                        <span className="inline-block mb-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: '#EF4444' }}>
+                        <span className="inline-block mb-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ backgroundColor: '#EF4444', color: '#fff' }}>
                           Promoção
                         </span>
                       )}

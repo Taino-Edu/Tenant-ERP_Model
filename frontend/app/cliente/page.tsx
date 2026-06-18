@@ -48,14 +48,14 @@ function ProductCard({ p, adding, onAdd }: {
           : <Package className="w-10 h-10 opacity-20" style={{ color: C.blue2 }} />
         }
         {p.isPreVenda && !unavailable && (
-          <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md text-white"
-            style={{ backgroundColor: '#7C3AED' }}>
+          <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+            style={{ backgroundColor: '#7C3AED', color: '#fff' }}>
             Pré-venda
           </span>
         )}
         {!p.isPreVenda && p.isOnPromo && !unavailable && (
-          <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md text-white"
-            style={{ backgroundColor: '#FF3B3B' }}>
+          <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+            style={{ backgroundColor: '#FF3B3B', color: '#fff' }}>
             Promoção
           </span>
         )}
