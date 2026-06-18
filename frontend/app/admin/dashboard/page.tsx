@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { comandaApi, userApi, productApi, analyticsApi, ComandaDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto } from '@/lib/api'
+import { comandaApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, ComandaDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto } from '@/lib/api'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
 import { tocarSom, notificarBrowser, pedirPermissaoNotificacao, incrementBadge, clearBadge } from '@/lib/notificacoes'
@@ -10,7 +10,7 @@ import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
   History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode, Camera,
-  AlertTriangle, DollarSign, BarChart2, Trophy, Medal, Star, FolderOpen, Package,
+  AlertTriangle, DollarSign, BarChart2, Trophy, Medal, Star, FolderOpen, Package, Shield, MessageCircle,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -956,6 +956,8 @@ export default function DashboardPage() {
   const [ranking, setRanking]     = useState<ClienteInsightDto[]>([])
   const [openModal, setOpenModal] = useState(false)
   const [expandedHist, setExpandedHist] = useState<string | null>(null)
+  const [pendingPI, setPendingPI]       = useState(0)
+  const [pendingLgpd, setPendingLgpd]   = useState<LgpdRequestDto[]>([])
   const prevCountRef              = useRef(0)
   const knownIdsRef               = useRef<Set<string>>(new Set())
 
@@ -1003,6 +1005,11 @@ export default function DashboardPage() {
       setAllProducts(prods)
     }).catch(() => {})
     analyticsApi.clientes().then(r => setRanking(r.data.filter(c => c.gastoTotal > 0).slice(0, 5))).catch(() => {})
+    championshipApi.listAll().then(r => {
+      const total = r.data.reduce((s, c) => s + (c.preInscricaoCount ?? 0), 0)
+      setPendingPI(total)
+    }).catch(() => {})
+    lgpdAdminApi.list('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -1271,6 +1278,9 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Coluna direita: Top Clientes + Avisos */}
+        <div className="flex flex-col gap-5">
+
         {/* Ranking de clientes — sempre visível */}
         <div className="card">
           <div className="flex items-center justify-between mb-3">
@@ -1337,6 +1347,56 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Widget: Avisos rápidos */}
+        <div className="card space-y-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Avisos</p>
+
+          {/* Pré-inscrições campeonatos */}
+          <a href="/admin/campeonatos"
+            className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors group">
+            <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+              pendingPI > 0 ? 'bg-amber-500/15' : 'bg-surface-600')}>
+              <MessageCircle className={clsx('w-4 h-4', pendingPI > 0 ? 'text-amber-400' : 'text-gray-500')} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white">Pré-inscrições</p>
+              <p className="text-xs text-gray-500">Campeonatos pendentes</p>
+            </div>
+            <span className={clsx('text-sm font-bold tabular-nums',
+              pendingPI > 0 ? 'text-amber-400' : 'text-gray-600')}>
+              {pendingPI}
+            </span>
+          </a>
+
+          {/* LGPD */}
+          <a href="/admin/lgpd"
+            className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors group">
+            <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+              pendingLgpd.some(r => r.isOverdue) ? 'bg-red-500/15'
+              : pendingLgpd.length > 0 ? 'bg-brand-500/15'
+              : 'bg-surface-600')}>
+              <Shield className={clsx('w-4 h-4',
+                pendingLgpd.some(r => r.isOverdue) ? 'text-red-400'
+                : pendingLgpd.length > 0 ? 'text-brand-400'
+                : 'text-gray-500')} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white">LGPD</p>
+              <p className="text-xs text-gray-500">
+                {pendingLgpd.some(r => r.isOverdue) ? 'Solicitação vencida!' : 'Solicitações pendentes'}
+              </p>
+            </div>
+            <span className={clsx('text-sm font-bold tabular-nums',
+              pendingLgpd.some(r => r.isOverdue) ? 'text-red-400'
+              : pendingLgpd.length > 0 ? 'text-brand-400'
+              : 'text-gray-600')}>
+              {pendingLgpd.length}
+            </span>
+          </a>
+        </div>
+
+        </div>{/* fim coluna direita */}
       </div>
 
       {/* Breakdown por pagamento — só aparece quando há histórico */}
