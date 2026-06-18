@@ -8,6 +8,7 @@ const LOCAL_KEY = 'user-preferences'
 function mergeWithDefaults(partial: Partial<UserPreferences>): UserPreferences {
   return {
     aiButton:      { ...DEFAULT_PREFERENCES.aiButton,      ...(partial.aiButton      ?? {}) },
+    vlibras:       { ...DEFAULT_PREFERENCES.vlibras,       ...(partial.vlibras       ?? {}) },
     notifications: { ...DEFAULT_PREFERENCES.notifications, ...(partial.notifications ?? {}) },
     pdv:           { ...DEFAULT_PREFERENCES.pdv,           ...(partial.pdv           ?? {}) },
   }

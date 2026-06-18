@@ -4,6 +4,7 @@ import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
+import VLibrasController from '@/components/VLibrasController'
 
 const nunito = Nunito({
   subsets: ['latin'],
@@ -73,6 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             `
           }}
         />
+        <VLibrasController />
         {children}
         {/* Rodapé com links legais (LGPD) — não aparece no painel admin */}
         <Footer />

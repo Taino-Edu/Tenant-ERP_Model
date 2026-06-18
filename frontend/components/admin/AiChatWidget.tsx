@@ -149,6 +149,8 @@ export default function AiChatWidget() {
       : { left, top:    pos.y + BTN_SIZE + 12,             bottom: 'auto' }
   })() : { bottom: 80, right: 16 }
 
+  if (!prefs.aiButton.enabled) return null
+
   return (
     <>
       {/* ── Painel ──────────────────────────────────────────────────────────── */}

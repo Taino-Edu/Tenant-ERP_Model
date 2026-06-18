@@ -1,6 +1,6 @@
 'use client'
 import { usePreferences } from '@/hooks/usePreferences'
-import { Settings, BrainCircuit, Bell, Tag, Check, Loader2 } from 'lucide-react'
+import { Settings, BrainCircuit, Bell, Tag, Check, Loader2, Accessibility } from 'lucide-react'
 import clsx from 'clsx'
 import toast, { Toaster } from 'react-hot-toast'
 import { UserPreferences } from '@/lib/api'
@@ -80,26 +80,64 @@ export default function ConfiguracoesPage() {
 
       {/* ── Botão IA ── */}
       <Section title="Assistente IA" icon={<BrainCircuit className="w-5 h-5 text-violet-400" />}>
-        <Row label="Botão arrastável" desc="Permite arrastar o botão para qualquer lugar da tela">
-          <Toggle value={prefs.aiButton.mode === 'draggable'} onChange={v => set('aiButton', { mode: v ? 'draggable' : 'fixed' })} />
+        <Row label="Ativar chat IA" desc="Exibe o botão flutuante do assistente">
+          <Toggle value={prefs.aiButton.enabled} onChange={v => set('aiButton', { enabled: v })} />
         </Row>
 
-        {prefs.aiButton.mode === 'fixed' && (
+        {prefs.aiButton.enabled && (
+          <>
+            <Row label="Botão arrastável" desc="Arraste o botão para qualquer lugar da tela">
+              <Toggle value={prefs.aiButton.mode === 'draggable'} onChange={v => set('aiButton', { mode: v ? 'draggable' : 'fixed' })} />
+            </Row>
+
+            {prefs.aiButton.mode === 'fixed' && (
+              <div>
+                <p className="text-xs text-gray-400 mb-2">Posição fixa</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {CORNERS.map(c => (
+                    <button
+                      key={c.value}
+                      onClick={() => set('aiButton', { corner: c.value })}
+                      className={clsx(
+                        'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-all',
+                        prefs.aiButton.corner === c.value
+                          ? 'bg-violet-600/20 border-violet-500/60 text-violet-300'
+                          : 'bg-surface-700 border-surface-500 text-gray-400'
+                      )}
+                    >
+                      {prefs.aiButton.corner === c.value && <Check className="w-3.5 h-3.5" />}
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </Section>
+
+      {/* ── VLibras ── */}
+      <Section title="VLibras (Acessibilidade)" icon={<Accessibility className="w-5 h-5 text-blue-400" />}>
+        <Row label="Ativar VLibras" desc="Exibe o botão de tradução em Libras">
+          <Toggle value={prefs.vlibras.enabled} onChange={v => set('vlibras', { enabled: v })} />
+        </Row>
+
+        {prefs.vlibras.enabled && (
           <div>
-            <p className="text-xs text-gray-400 mb-2">Posição fixa</p>
+            <p className="text-xs text-gray-400 mb-2">Posição na tela</p>
             <div className="grid grid-cols-2 gap-2">
               {CORNERS.map(c => (
                 <button
                   key={c.value}
-                  onClick={() => set('aiButton', { corner: c.value })}
+                  onClick={() => set('vlibras', { corner: c.value })}
                   className={clsx(
                     'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-all',
-                    prefs.aiButton.corner === c.value
-                      ? 'bg-violet-600/20 border-violet-500/60 text-violet-300'
+                    prefs.vlibras.corner === c.value
+                      ? 'bg-blue-600/20 border-blue-500/60 text-blue-300'
                       : 'bg-surface-700 border-surface-500 text-gray-400'
                   )}
                 >
-                  {prefs.aiButton.corner === c.value && <Check className="w-3.5 h-3.5" />}
+                  {prefs.vlibras.corner === c.value && <Check className="w-3.5 h-3.5" />}
                   {c.label}
                 </button>
               ))}

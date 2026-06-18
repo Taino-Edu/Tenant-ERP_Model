@@ -11,11 +11,15 @@ namespace CardGameStore.DTOs;
 
 public class AiButtonPrefs
 {
-    [JsonPropertyName("mode")]
-    public string Mode { get; set; } = "draggable"; // "draggable" | "fixed"
+    [JsonPropertyName("mode")]    public string Mode    { get; set; } = "draggable";
+    [JsonPropertyName("corner")]  public string Corner  { get; set; } = "bottom-right";
+    [JsonPropertyName("enabled")] public bool   Enabled { get; set; } = true;
+}
 
-    [JsonPropertyName("corner")]
-    public string Corner { get; set; } = "bottom-right"; // "bottom-right" | "bottom-left" | "top-right" | "top-left"
+public class VLibrasPrefs
+{
+    [JsonPropertyName("enabled")] public bool   Enabled { get; set; } = true;
+    [JsonPropertyName("corner")]  public string Corner  { get; set; } = "bottom-right";
 }
 
 public class NotificationPrefs
@@ -36,14 +40,10 @@ public class PdvPrefs
 /// <summary>Preferências completas do usuário.</summary>
 public class UserPreferencesDto
 {
-    [JsonPropertyName("aiButton")]
-    public AiButtonPrefs AiButton { get; set; } = new();
-
-    [JsonPropertyName("notifications")]
-    public NotificationPrefs Notifications { get; set; } = new();
-
-    [JsonPropertyName("pdv")]
-    public PdvPrefs Pdv { get; set; } = new();
+    [JsonPropertyName("aiButton")]      public AiButtonPrefs     AiButton      { get; set; } = new();
+    [JsonPropertyName("vlibras")]       public VLibrasPrefs      Vlibras       { get; set; } = new();
+    [JsonPropertyName("notifications")] public NotificationPrefs Notifications { get; set; } = new();
+    [JsonPropertyName("pdv")]           public PdvPrefs          Pdv           { get; set; } = new();
 }
 
 /// <summary>Request para atualizar preferências (corpo idêntico ao DTO).</summary>

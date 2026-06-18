@@ -1,6 +1,6 @@
 'use client'
 import { usePreferences } from '@/hooks/usePreferences'
-import { Settings, BrainCircuit, Bell, Check, Loader2, ArrowLeft } from 'lucide-react'
+import { Settings, BrainCircuit, Bell, Check, Loader2, ArrowLeft, Accessibility } from 'lucide-react'
 import clsx from 'clsx'
 import toast, { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
@@ -78,11 +78,21 @@ export default function ClienteConfiguracoesPage() {
 
             <div className="flex items-center justify-between">
               <div>
+                <p className="text-sm font-bold" style={{ color: C.navy }}>Ativar chat IA</p>
+                <p className="text-xs mt-0.5" style={{ color: C.muted }}>Exibe o botão flutuante do assistente</p>
+              </div>
+              <Toggle value={prefs.aiButton.enabled} onChange={v => set('aiButton', { enabled: v })} />
+            </div>
+
+            {prefs.aiButton.enabled && (
+            <div className="flex items-center justify-between">
+              <div>
                 <p className="text-sm font-bold" style={{ color: C.navy }}>Botão arrastável</p>
                 <p className="text-xs mt-0.5" style={{ color: C.muted }}>Arraste o botão para qualquer canto</p>
               </div>
               <Toggle value={prefs.aiButton.mode === 'draggable'} onChange={v => set('aiButton', { mode: v ? 'draggable' : 'fixed' })} />
             </div>
+            )}
 
             {prefs.aiButton.mode === 'fixed' && (
               <div>
@@ -100,6 +110,45 @@ export default function ClienteConfiguracoesPage() {
                       }}
                     >
                       {prefs.aiButton.corner === c.value && <Check className="w-3.5 h-3.5" />}
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* VLibras */}
+          <div className="rounded-2xl p-5 space-y-4"
+            style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 10px rgba(12,61,90,0.06)' }}>
+            <h2 className="font-black text-sm flex items-center gap-2" style={{ color: C.navy }}>
+              <Accessibility className="w-4 h-4 text-blue-500" /> VLibras
+            </h2>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold" style={{ color: C.navy }}>Ativar VLibras</p>
+                <p className="text-xs mt-0.5" style={{ color: C.muted }}>Tradução em Língua Brasileira de Sinais</p>
+              </div>
+              <Toggle value={prefs.vlibras.enabled} onChange={v => set('vlibras', { enabled: v })} />
+            </div>
+
+            {prefs.vlibras.enabled && (
+              <div>
+                <p className="text-xs font-bold mb-2" style={{ color: C.muted }}>Posição na tela</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {CORNERS.map(c => (
+                    <button
+                      key={c.value}
+                      onClick={() => set('vlibras', { corner: c.value })}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold transition-all"
+                      style={{
+                        backgroundColor: prefs.vlibras.corner === c.value ? `${C.blue}18` : C.bg,
+                        border: `1.5px solid ${prefs.vlibras.corner === c.value ? C.blue : C.border}`,
+                        color: prefs.vlibras.corner === c.value ? C.blue2 : C.muted,
+                      }}
+                    >
+                      {prefs.vlibras.corner === c.value && <Check className="w-3.5 h-3.5" />}
                       {c.label}
                     </button>
                   ))}

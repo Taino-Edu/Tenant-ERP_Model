@@ -159,14 +159,18 @@ export interface UserProfile {
   pointsExpired: boolean; balanceInCents: number; createdAt: string
 }
 
+type PrefCorner = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
+
 export interface UserPreferences {
-  aiButton:      { mode: 'draggable' | 'fixed'; corner: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left' }
+  aiButton:      { mode: 'draggable' | 'fixed'; corner: PrefCorner; enabled: boolean }
+  vlibras:       { enabled: boolean; corner: PrefCorner }
   notifications: { soundEnabled: boolean; browserEnabled: boolean }
   pdv:           { defaultDiscount: 0 | 5 | 10 | 15 | 20 }
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
-  aiButton:      { mode: 'draggable', corner: 'bottom-right' },
+  aiButton:      { mode: 'draggable', corner: 'bottom-right', enabled: true },
+  vlibras:       { enabled: true, corner: 'bottom-right' },
   notifications: { soundEnabled: true, browserEnabled: true },
   pdv:           { defaultDiscount: 0 },
 }
