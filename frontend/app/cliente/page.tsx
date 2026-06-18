@@ -165,7 +165,9 @@ export default function ClientePage() {
       const { data } = await comandaApi.addItem(comanda.id, {
         productId: product.id,
         itemName: product.name,
-        unitPriceInCents: product.priceInCents,
+        unitPriceInCents: product.isOnPromo && product.discountPriceInCents != null
+          ? product.discountPriceInCents
+          : product.priceInCents,
         quantity: 1,
       })
       setComanda(data)

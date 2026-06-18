@@ -379,7 +379,12 @@ export default function VendaAvulsaPage() {
     setShowPayModal(false)
   }
 
-  const subtotal = cart.reduce((s, i) => s + i.product.priceInCents * i.quantity, 0)
+  const subtotal = cart.reduce((s, i) => {
+    const price = i.product.isOnPromo && i.product.discountPriceInCents != null
+      ? i.product.discountPriceInCents
+      : i.product.priceInCents
+    return s + price * i.quantity
+  }, 0)
 
   const discountCents = Math.round(subtotal * discountPct / 100)
 
@@ -628,9 +633,16 @@ export default function VendaAvulsaPage() {
                       <p className="text-xs text-gray-500 mb-1">{p.category}</p>
                       <p className="text-sm font-medium text-white leading-tight line-clamp-2">{p.name}</p>
                       <div className="flex items-center justify-between mt-2">
-                        <p className="text-accent-gold font-bold text-sm">
-                          {fmt(p.priceInReais)}
-                        </p>
+                        <div>
+                          {p.isOnPromo && p.discountPriceInReais != null ? (
+                            <div className="flex items-baseline gap-1.5">
+                              <p className="text-accent-gold font-bold text-sm">{fmt(p.discountPriceInReais)}</p>
+                              <p className="text-xs line-through text-gray-500">{fmt(p.priceInReais)}</p>
+                            </div>
+                          ) : (
+                            <p className="text-accent-gold font-bold text-sm">{fmt(p.priceInReais)}</p>
+                          )}
+                        </div>
                         <span className="text-xs text-gray-400">{p.stockQuantity} un.</span>
                       </div>
                     </button>
@@ -730,7 +742,7 @@ export default function VendaAvulsaPage() {
                           </button>
                         </div>
                         <span className="text-accent-gold font-bold text-sm font-mono">
-                          {fmt(product.priceInCents * quantity / 100)}
+                          {fmt((product.isOnPromo && product.discountPriceInCents != null ? product.discountPriceInCents : product.priceInCents) * quantity / 100)}
                         </span>
                       </div>
                     </div>
