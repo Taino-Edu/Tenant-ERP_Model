@@ -2,102 +2,20 @@
 import { useEffect, useState } from 'react'
 import { announcementApi, AnnouncementDto } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, Eye, EyeOff, Megaphone, Edit2, Loader2, ImageIcon, X } from 'lucide-react'
+import { Plus, Trash2, Eye, EyeOff, Megaphone, Edit2, Loader2, ImageIcon, Images } from 'lucide-react'
 import clsx from 'clsx'
 import ImageUpload from '@/components/admin/ImageUpload'
 
 const TYPE_LABELS: Record<string, string> = {
   Aviso:    '📢 Aviso',
   Destaque: '⭐ Destaque',
+  Banner:   '🖼️ Banner',
 }
 
 const TYPE_COLORS: Record<string, string> = {
   Aviso:    'bg-amber-500/20 text-amber-400 border-amber-500/30',
   Destaque: 'bg-brand-500/20 text-brand-300 border-brand-500/30',
-}
-
-/* ── Banner do Hero ──────────────────────────────────────────────────────── */
-function HeroBannerCard({
-  banner, onUpload, onDelete, onToggle,
-}: {
-  banner:   AnnouncementDto | null
-  onUpload: (url: string) => Promise<void>
-  onDelete: () => Promise<void>
-  onToggle: () => Promise<void>
-}) {
-  const [uploading, setUploading] = useState(false)
-  const [deleting,  setDeleting]  = useState(false)
-
-  async function handleUpload(url: string) {
-    setUploading(true)
-    try { await onUpload(url) } finally { setUploading(false) }
-  }
-
-  async function handleDelete() {
-    if (!confirm('Remover o banner do hero?')) return
-    setDeleting(true)
-    try { await onDelete() } finally { setDeleting(false) }
-  }
-
-  return (
-    <div className="card space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-bold text-white flex items-center gap-2">
-            <ImageIcon className="w-5 h-5 text-blue-400" /> Banner do Hero
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Imagem de fundo da seção principal da landing page. Recomendado: 1920×600px.
-          </p>
-        </div>
-        {banner && (
-          <div className="flex items-center gap-2">
-            <button onClick={onToggle} className="btn-secondary p-2" title={banner.isActive ? 'Desativar' : 'Ativar'}>
-              {banner.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-            </button>
-            <button onClick={handleDelete} disabled={deleting} className="btn-danger p-2" title="Remover banner">
-              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {banner?.imageUrl ? (
-        <div className="space-y-3">
-          {/* Preview com overlay igual ao site */}
-          <div className="relative rounded-xl overflow-hidden" style={{ height: 180 }}>
-            <img src={banner.imageUrl} alt="Banner atual" className="w-full h-full object-cover" />
-            <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg pointer-events-none">
-              Pré-visualização
-            </div>
-            {!banner.isActive && (
-              <div className="absolute top-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-lg">
-                Inativo (não aparece no site)
-              </div>
-            )}
-          </div>
-          {/* Trocar imagem */}
-          <ImageUpload
-            label="Trocar imagem do banner"
-            hint="Recomendado: 1920×600px"
-            currentUrl={banner.imageUrl}
-            onUpload={handleUpload}
-          />
-        </div>
-      ) : (
-        <div className="border-2 border-dashed border-surface-500 rounded-xl p-8 text-center space-y-3">
-          <ImageIcon className="w-10 h-10 text-gray-500 mx-auto" />
-          <p className="text-gray-400 text-sm">Nenhum banner ativo. O hero exibe o gradiente padrão.</p>
-          <ImageUpload
-            label="Enviar banner"
-            hint="Recomendado: 1920×600px"
-            currentUrl={null}
-            onUpload={handleUpload}
-          />
-        </div>
-      )}
-    </div>
-  )
+  Banner:   'bg-blue-500/20 text-blue-300 border-blue-500/30',
 }
 
 /* ── Formulário de anúncio (Aviso / Destaque) ────────────────────────────── */
@@ -195,6 +113,7 @@ export default function AnunciosPage() {
   const [items,   setItems]   = useState<AnnouncementDto[]>([])
   const [loading, setLoading] = useState(true)
   const [form,    setForm]    = useState<'new' | string | null>(null)
+  const [addingBanner, setAddingBanner] = useState(false)
 
   async function load() {
     try {
@@ -209,35 +128,36 @@ export default function AnunciosPage() {
 
   useEffect(() => { load() }, [])
 
-  const banner = items.find(a => a.type === 'Banner') ?? null
+  const banners       = items.filter(a => a.type === 'Banner')
   const announcements = items.filter(a => a.type !== 'Banner')
 
   /* ── Banner actions ── */
-  async function handleBannerUpload(url: string) {
-    if (banner) {
-      await announcementApi.update(banner.id, { imageUrl: url, isActive: true })
-      toast.success('Banner atualizado!')
-    } else {
+  async function handleAddBanner(url: string) {
+    setAddingBanner(true)
+    try {
       await announcementApi.create({
-        title: 'Banner Hero', body: null, imageUrl: url, linkUrl: null,
+        title: 'Banner', body: null, imageUrl: url, linkUrl: null,
         type: 'Banner', isActive: true, expiresAt: null,
       } as Parameters<typeof announcementApi.create>[0])
-      toast.success('Banner ativado!')
+      toast.success('Banner adicionado ao carrossel!')
+      load()
+    } catch {
+      toast.error('Erro ao adicionar banner.')
+    } finally {
+      setAddingBanner(false)
     }
-    load()
   }
 
-  async function handleBannerDelete() {
-    if (!banner) return
-    await announcementApi.delete(banner.id)
+  async function handleBannerDelete(id: string) {
+    if (!confirm('Remover este banner do carrossel?')) return
+    await announcementApi.delete(id)
     toast.success('Banner removido.')
-    load()
+    setItems(prev => prev.filter(a => a.id !== id))
   }
 
-  async function handleBannerToggle() {
-    if (!banner) return
-    await announcementApi.update(banner.id, { isActive: !banner.isActive })
-    toast.success(banner.isActive ? 'Banner desativado.' : 'Banner ativado.')
+  async function handleBannerToggle(b: AnnouncementDto) {
+    await announcementApi.update(b.id, { isActive: !b.isActive, expiresAt: b.expiresAt })
+    toast.success(b.isActive ? 'Banner desativado.' : 'Banner ativado.')
     load()
   }
 
@@ -257,7 +177,7 @@ export default function AnunciosPage() {
   }
 
   async function handleToggle(item: AnnouncementDto) {
-    await announcementApi.update(item.id, { isActive: !item.isActive })
+    await announcementApi.update(item.id, { isActive: !item.isActive, expiresAt: item.expiresAt })
     setItems(prev => prev.map(a => a.id === item.id ? { ...a, isActive: !a.isActive } : a))
   }
 
@@ -279,23 +199,69 @@ export default function AnunciosPage() {
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Megaphone className="w-6 h-6 text-brand-400" /> Anúncios
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">Banner do hero e avisos exibidos na landing page</p>
+          <p className="text-gray-500 text-sm mt-0.5">Carrossel de banners e avisos exibidos na landing page</p>
         </div>
       </div>
 
-      {/* ── Banner do Hero (card dedicado) ── */}
-      {loading ? (
-        <div className="card flex justify-center py-10">
-          <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      {/* ── Carrossel de Banners ── */}
+      <div className="card space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-bold text-white flex items-center gap-2">
+              <Images className="w-5 h-5 text-blue-400" /> Carrossel de Banners
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Imagens exibidas em rotação logo abaixo do hero. Recomendado: 1920×600px.
+            </p>
+          </div>
+          <div className="shrink-0">
+            <ImageUpload
+              label={addingBanner ? 'Enviando…' : 'Adicionar banner'}
+              hint="1920×600px"
+              currentUrl={null}
+              onUpload={handleAddBanner}
+            />
+          </div>
         </div>
-      ) : (
-        <HeroBannerCard
-          banner={banner}
-          onUpload={handleBannerUpload}
-          onDelete={handleBannerDelete}
-          onToggle={handleBannerToggle}
-        />
-      )}
+
+        {loading ? (
+          <div className="flex justify-center py-6">
+            <div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : banners.length === 0 ? (
+          <div className="border-2 border-dashed border-surface-500 rounded-xl p-8 text-center">
+            <ImageIcon className="w-10 h-10 text-gray-500 mx-auto mb-2" />
+            <p className="text-gray-400 text-sm">Nenhum banner. O hero exibe o gradiente padrão.</p>
+            <p className="text-gray-600 text-xs mt-1">Clique em &quot;Adicionar banner&quot; para enviar a primeira imagem.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {banners.map(b => (
+              <div key={b.id} className={clsx('flex items-center gap-3 rounded-xl border p-3', !b.isActive && 'opacity-50', 'border-surface-600 bg-surface-700/30')}>
+                {b.imageUrl && (
+                  <img src={b.imageUrl} alt="Banner" className="w-32 h-16 object-cover rounded-lg shrink-0 bg-surface-600" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <span className="badge border text-xs bg-blue-500/20 text-blue-300 border-blue-500/30">
+                    🖼️ Banner
+                  </span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {b.isActive ? '✅ Ativo no carrossel' : '❌ Desativado (não aparece)'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => handleBannerToggle(b)} className="btn-secondary p-2" title={b.isActive ? 'Desativar' : 'Ativar'}>
+                    {b.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  </button>
+                  <button onClick={() => handleBannerDelete(b.id)} className="btn-danger p-2" title="Remover">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── Avisos e Destaques ── */}
       <div className="space-y-4">
@@ -341,8 +307,9 @@ export default function AnunciosPage() {
                       {TYPE_LABELS[item.type] ?? item.type}
                     </span>
                     {item.expiresAt && (
-                      <span className="text-xs text-gray-500">
-                        Expira: {new Date(item.expiresAt).toLocaleDateString('pt-BR')}
+                      <span className={clsx('text-xs', new Date(item.expiresAt) < new Date() ? 'text-red-400' : 'text-gray-500')}>
+                        {new Date(item.expiresAt) < new Date() ? '⏰ Expirou: ' : 'Expira: '}
+                        {new Date(item.expiresAt).toLocaleString('pt-BR')}
                       </span>
                     )}
                   </div>

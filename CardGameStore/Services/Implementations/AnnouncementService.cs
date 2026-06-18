@@ -62,9 +62,9 @@ public class AnnouncementService : IAnnouncementService
         if (request.Body     != null) ann.Body     = request.Body.Trim();
         if (request.ImageUrl != null) ann.ImageUrl = request.ImageUrl.Trim();
         if (request.LinkUrl  != null) ann.LinkUrl  = request.LinkUrl.Trim();
-        if (request.IsActive  .HasValue) ann.IsActive  = request.IsActive.Value;
-        if (request.ExpiresAt .HasValue) ann.ExpiresAt = request.ExpiresAt;
-        if (request.Type      .HasValue) ann.Type      = request.Type.Value;
+        if (request.IsActive.HasValue) ann.IsActive = request.IsActive.Value;
+        if (request.Type    .HasValue) ann.Type    = request.Type.Value;
+        ann.ExpiresAt = request.ExpiresAt; // null = sem expiração; sempre atualiza para permitir limpeza
         ann.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
