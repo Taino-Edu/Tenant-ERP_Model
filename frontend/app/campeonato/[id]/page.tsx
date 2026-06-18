@@ -107,6 +107,7 @@ export default function ChampionshipPublicPage() {
             ? `${data.nome}, você foi adicionado(a) à lista de espera! Entraremos em contato pelo WhatsApp.`
             : `${data.nome}, sua pré-inscrição foi confirmada! Entraremos em contato pelo WhatsApp.`,
         })
+        window.scrollTo({ top: 0, behavior: 'smooth' })
         // Atualiza contagem local
         setCh(prev => prev ? {
           ...prev,
@@ -156,8 +157,21 @@ export default function ChampionshipPublicPage() {
   return (
     <div className="min-h-screen bg-surface-900 text-white">
 
-      {/* Banner */}
-      <div className="relative w-full h-48 sm:h-64 bg-surface-800 overflow-hidden">
+      {/* Navbar fixa — voltar + branding */}
+      <nav className="fixed top-0 inset-x-0 z-50 h-14 flex items-center px-4 gap-3 bg-surface-900/90 backdrop-blur-md border-b border-surface-700">
+        <button
+          onClick={() => window.history.length > 1 ? window.history.back() : (window.location.href = '/')}
+          className="flex items-center gap-1.5 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Voltar
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-brand-400 truncate">Santuário Nerd</p>
+        </div>
+      </nav>
+
+      {/* Banner — mt-14 para cair abaixo da navbar fixa */}
+      <div className="relative w-full h-48 sm:h-64 bg-surface-800 overflow-hidden mt-14">
         {ch.imageUrl
           ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -169,17 +183,10 @@ export default function ChampionshipPublicPage() {
           )
         }
         <div className="absolute inset-0 bg-gradient-to-t from-surface-900 via-surface-900/60 to-transparent" />
-
-        {/* Branding no topo */}
-        <div className="absolute top-4 left-4">
-          <span className="text-xs font-bold text-brand-400 bg-surface-900/80 px-2 py-1 rounded-lg backdrop-blur-sm">
-            SoftNerd
-          </span>
-        </div>
       </div>
 
       {/* Conteúdo */}
-      <div className="max-w-lg mx-auto px-4 pb-16 -mt-8 relative z-10 space-y-5">
+      <div className="max-w-lg mx-auto px-4 pb-32 -mt-8 relative z-10 space-y-5">
 
         {/* Cabeçalho */}
         <div>
@@ -266,7 +273,7 @@ export default function ChampionshipPublicPage() {
 
         {/* Resultado de inscrição bem-sucedida */}
         {result?.ok && (
-          <div className={`rounded-xl p-5 border text-center space-y-2 ${
+          <div className={`rounded-xl p-5 border text-center space-y-3 ${
             result.listaEspera
               ? 'bg-amber-500/10 border-amber-500/30'
               : 'bg-green-500/10 border-green-500/30'
@@ -279,6 +286,12 @@ export default function ChampionshipPublicPage() {
               {result.listaEspera ? 'Lista de espera' : 'Pré-inscrição confirmada!'}
             </p>
             <p className="text-sm text-gray-300 leading-relaxed">{result.msg}</p>
+            <Link
+              href="/"
+              className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-400 hover:text-brand-300 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" /> Voltar ao início
+            </Link>
           </div>
         )}
 

@@ -125,6 +125,13 @@ export default function LandingPage() {
 
           {/* Ações direita */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => (document.querySelector('[vw-access-button]') as HTMLElement | null)?.click()}
+              title="Acessibilidade em Libras"
+              className="p-2 rounded-xl transition-colors hover:bg-white/10 text-xs font-bold"
+              style={{ color: '#ffffff' }}>
+              Libras
+            </button>
             <button onClick={toggleDark} title={isDark ? 'Modo claro' : 'Modo escuro'}
               className="p-2 rounded-xl transition-colors hover:bg-white/10"
               style={{ color: '#ffffff' }}>
@@ -172,6 +179,12 @@ export default function LandingPage() {
               style={{ color: 'rgba(255,255,255,0.70)', borderColor: 'rgba(255,255,255,0.25)' }}>
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               {isDark ? 'Claro' : 'Escuro'}
+            </button>
+            <button
+              onClick={() => { (document.querySelector('[vw-access-button]') as HTMLElement | null)?.click(); setMobileMenu(false) }}
+              className="px-4 py-2.5 text-sm rounded-xl border font-bold hover:text-white transition-colors"
+              style={{ color: 'rgba(255,255,255,0.70)', borderColor: 'rgba(255,255,255,0.25)' }}>
+              Libras
             </button>
             <a href="#eventos" onClick={() => setMobileMenu(false)}
               className="flex-1 text-center py-2.5 text-sm rounded-xl font-black"

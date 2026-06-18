@@ -1005,11 +1005,11 @@ export default function DashboardPage() {
       setAllProducts(prods)
     }).catch(() => {})
     analyticsApi.clientes().then(r => setRanking(r.data.filter(c => c.gastoTotal > 0).slice(0, 5))).catch(() => {})
-    championshipApi.listAll().then(r => {
+    championshipApi.list().then(r => {
       const total = r.data.reduce((s, c) => s + (c.preInscricaoCount ?? 0), 0)
       setPendingPI(total)
     }).catch(() => {})
-    lgpdAdminApi.list('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
+    lgpdAdminApi.listRequests('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
   }, [])
 
   useEffect(() => {

@@ -135,6 +135,9 @@
   .admin-main {
     background: radial-gradient(circle at top right, var(--bg-card), var(--bg-primary));
   }
+
+  /* VLibras — oculto por padrão; toggle explícito pelo botão Libras na navbar */
+  [vw-access-button] { display: none !important; }
 }
 
 /* ── Overrides de tema claro para classes Tailwind fixas ──────────────────── */
