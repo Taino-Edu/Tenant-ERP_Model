@@ -653,7 +653,7 @@ export default function VendaAvulsaPage() {
           </div>
 
           {/* Carrinho */}
-          <div className="w-full md:w-80 flex flex-col gap-3 md:shrink-0">
+          <div className="w-full md:w-80 flex flex-col gap-3 md:shrink-0 md:sticky md:top-4 md:self-start">
 
             {/* Cliente */}
             <div className="card">
@@ -697,7 +697,7 @@ export default function VendaAvulsaPage() {
             </div>
 
             {/* Itens */}
-            <div className="card flex-1 flex flex-col min-h-0">
+            <div className="card flex flex-col">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-semibold text-white flex items-center gap-2 text-sm">
                   <Receipt className="w-4 h-4 text-brand-400" /> Itens
@@ -710,12 +710,12 @@ export default function VendaAvulsaPage() {
               </div>
 
               {cart.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-2">
+                <div className="py-6 flex flex-col items-center justify-center text-gray-400 gap-2">
                   <ShoppingBag className="w-8 h-8" />
                   <p className="text-xs">Clique nos produtos para adicionar</p>
                 </div>
               ) : (
-                <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                <div className="max-h-[320px] overflow-y-auto space-y-2 pr-0.5">
                   {cart.map(({ product, quantity }) => (
                     <div key={product.id} className="bg-surface-800 rounded-lg p-2.5">
                       <div className="flex items-start justify-between gap-2 mb-2">

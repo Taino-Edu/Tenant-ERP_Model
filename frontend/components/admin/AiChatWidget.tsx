@@ -17,14 +17,36 @@ const SUGGESTIONS = [
   'Quantas comandas estão abertas agora?',
 ]
 
+const BTN_SIZE = 52
+const STORAGE_KEY = 'ai-btn-pos'
+
 export default function AiChatWidget() {
   const [open,     setOpen]     = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input,    setInput]    = useState('')
   const [loading,  setLoading]  = useState(false)
+  const [pos,      setPos]      = useState<{ x: number; y: number } | null>(null)
 
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef  = useRef<HTMLTextAreaElement>(null)
+  const bottomRef  = useRef<HTMLDivElement>(null)
+  const inputRef   = useRef<HTMLTextAreaElement>(null)
+  const posRef     = useRef({ x: 0, y: 0 })
+  const isDragging = useRef(false)
+
+  // Inicializa posição no cliente (evita SSR mismatch)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const p = JSON.parse(saved) as { x: number; y: number }
+        posRef.current = p
+        setPos(p)
+        return
+      }
+    } catch {}
+    const p = { x: window.innerWidth - BTN_SIZE - 16, y: window.innerHeight - BTN_SIZE - 20 }
+    posRef.current = p
+    setPos(p)
+  }, [])
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
@@ -40,14 +62,51 @@ export default function AiChatWidget() {
     if (open) setTimeout(() => inputRef.current?.focus(), 100)
   }, [open])
 
+  // ── Drag ────────────────────────────────────────────────────────────────────
+  function onPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    const startX = e.clientX
+    const startY = e.clientY
+    const origX  = posRef.current.x
+    const origY  = posRef.current.y
+    isDragging.current = false
+
+    function onMove(ev: PointerEvent) {
+      const dx = ev.clientX - startX
+      const dy = ev.clientY - startY
+      if (!isDragging.current && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+        isDragging.current = true
+      }
+      if (isDragging.current) {
+        const newX = Math.max(4, Math.min(window.innerWidth  - BTN_SIZE - 4, origX + dx))
+        const newY = Math.max(4, Math.min(window.innerHeight - BTN_SIZE - 4, origY + dy))
+        posRef.current = { x: newX, y: newY }
+        setPos({ x: newX, y: newY })
+      }
+    }
+
+    function onUp() {
+      if (isDragging.current) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(posRef.current))
+      }
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup',   onUp)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup',   onUp)
+  }
+
+  function handleClick() {
+    if (!isDragging.current) setOpen(o => !o)
+  }
+
+  // ── Chat ────────────────────────────────────────────────────────────────────
   async function send(text?: string) {
     const msg = (text ?? input).trim()
     if (!msg || loading) return
-
     setInput('')
     setMessages(prev => [...prev, { role: 'user', text: msg }])
     setLoading(true)
-
     try {
       const { data } = await aiApi.chat(msg)
       setMessages(prev => [...prev, {
@@ -68,12 +127,25 @@ export default function AiChatWidget() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
+  // Painel aparece acima do botão, encostado na borda mais próxima
+  const panelStyle = pos ? (() => {
+    const panelW  = 400
+    const panelH  = Math.min(window.innerHeight * 0.72, 520)
+    const spaceAbove = pos.y
+    const openTop  = spaceAbove > panelH + 12
+
+    const left = Math.max(8, Math.min(pos.x, window.innerWidth - panelW - 8))
+    return openTop
+      ? { left, bottom: window.innerHeight - pos.y + 12,  top: 'auto'  }
+      : { left, top:    pos.y + BTN_SIZE + 12,             bottom: 'auto' }
+  })() : { bottom: 80, right: 16 }
+
   return (
     <>
       {/* ── Painel ──────────────────────────────────────────────────────────── */}
       {open && (
-        <div className="fixed bottom-24 right-4 z-50 flex flex-col w-[340px] sm:w-[400px] rounded-2xl shadow-2xl overflow-hidden"
-             style={{ background: '#111117', border: '1px solid #303040', maxHeight: '72vh' }}>
+        <div className="fixed z-50 flex flex-col w-[340px] sm:w-[400px] rounded-2xl shadow-2xl overflow-hidden"
+             style={{ ...panelStyle, background: '#111117', border: '1px solid #303040', maxHeight: '72vh' }}>
 
           {/* Cabeçalho */}
           <div className="flex items-center justify-between px-4 py-3"
@@ -171,28 +243,35 @@ export default function AiChatWidget() {
               </button>
             </div>
             <p className="text-[10px] text-gray-600 mt-1.5 text-center">
-              Enter para enviar · Shift+Enter nova linha
+              Enter para enviar · Shift+Enter nova linha · arraste para mover
             </p>
           </div>
         </div>
       )}
 
-      {/* ── Botão flutuante ───────────────────────────────────────────────── */}
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="fixed bottom-5 right-4 z-50 flex items-center justify-center rounded-full shadow-lg transition-all hover:scale-105 active:scale-95"
-        style={{
-          background: open ? '#4c1d95' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-          width: '52px', height: '52px',
-          boxShadow: '0 4px 24px rgba(109, 40, 217, 0.6)',
-        }}
-        aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}
-        title="Assistente IA">
-        {open
-          ? <ChevronDown size={22} className="text-white" />
-          : <BrainCircuit size={22} className="text-white" />
-        }
-      </button>
+      {/* ── Botão flutuante (arrastável) ─────────────────────────────────────── */}
+      {pos && (
+        <button
+          onPointerDown={onPointerDown}
+          onClick={handleClick}
+          className="fixed z-50 flex items-center justify-center rounded-full shadow-lg transition-colors hover:brightness-110 active:brightness-90 touch-none select-none"
+          style={{
+            left:       pos.x,
+            top:        pos.y,
+            width:      BTN_SIZE,
+            height:     BTN_SIZE,
+            background: open ? '#4c1d95' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
+            boxShadow:  '0 4px 24px rgba(109, 40, 217, 0.6)',
+            cursor:     'grab',
+          }}
+          aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}
+          title="Assistente IA — arraste para reposicionar">
+          {open
+            ? <ChevronDown size={22} className="text-white" />
+            : <BrainCircuit size={22} className="text-white" />
+          }
+        </button>
+      )}
     </>
   )
 }
