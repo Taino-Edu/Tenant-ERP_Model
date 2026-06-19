@@ -324,7 +324,7 @@ function VendaWizard({
 
   // Pagamento dividido (segundo método)
   const [splitEnabled, setSplit] = useState(false)
-  const [secondPayment, setSecondPayment] = useState<string>(SECOND_PAYMENT_METHODS[0].value)
+  const [secondPayment, setSecondPayment] = useState<string>(PAYMENT_METHODS[1].value)
   const [secondAmountStr, setSecondAmountStr] = useState('')
 
   useEffect(() => {
@@ -721,23 +721,48 @@ function VendaWizard({
 
               {/* Formas de pagamento */}
               <div>
-                <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                  <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento
+                <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">
+                  {splitEnabled ? 'Pagamento principal (restante)' : 'Forma de pagamento'}
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-1 gap-2">
                   {PAYMENT_METHODS.map(m => (
                     <button
                       key={m.value}
-                      onClick={() => { setPayment(m.value); setReceived('') }}
+                      onClick={() => {
+                        setPayment(m.value)
+                        setReceived('')
+                        if (splitEnabled && m.value === secondPayment)
+                          setSecondPayment(PAYMENT_METHODS.find(p => p.value !== m.value)?.value ?? 'Dinheiro')
+                      }}
                       className={clsx(
-                        'flex flex-col items-center gap-1 px-1 py-2.5 rounded-xl text-[10px] font-medium border transition-all',
+                        'flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all text-left',
                         payment === m.value
-                          ? 'bg-brand-600/25 border-brand-500/60 text-white'
-                          : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                          ? m.value === 'Crediario'
+                            ? 'bg-amber-500/10 border-amber-500/50 text-amber-300'
+                            : 'bg-brand-600/20 border-brand-500/50 text-brand-300'
+                          : 'border-surface-500 text-gray-400 hover:border-surface-400 hover:text-gray-200'
                       )}
                     >
                       {PAYMENT_ICONS[m.value]}
-                      <span className="leading-tight text-center">{m.label}</span>
+                      <span className="flex-1">{m.label}</span>
+                      {splitEnabled && payment === m.value && primaryAmountCents > 0 && (
+                        <span className="text-xs font-mono text-white">
+                          {fmt(primaryAmountCents / 100)}
+                        </span>
+                      )}
+                      {!splitEnabled && m.value === 'Crediario' && (
+                        <span className="text-xs text-amber-400/70 font-normal">acumula no saldo</span>
+                      )}
+                      {!splitEnabled && m.value === 'Cashback' && selectedUser && selectedUser.balanceInCents > 0 && (
+                        <span className="text-xs text-emerald-400/70 font-normal">
+                          R$ {(selectedUser.balanceInCents / 100).toFixed(2).replace('.', ',')} disp.
+                        </span>
+                      )}
+                      {!splitEnabled && m.value === 'Pontos' && selectedUser && selectedUser.pointsBalance > 0 && (
+                        <span className="text-xs text-amber-400/70 font-normal">
+                          {selectedUser.pointsBalance} pts disp.
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -749,54 +774,45 @@ function VendaWizard({
                   type="button"
                   onClick={() => { setSplit(v => !v); setSecondAmountStr('') }}
                   className={clsx(
-                    'w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-medium transition-all',
+                    'w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all',
                     splitEnabled
-                      ? 'bg-brand-600/20 border-brand-500/50 text-brand-300'
-                      : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                      ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
+                      : 'border-surface-500 text-gray-500 hover:border-surface-400 hover:text-gray-300'
                   )}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Wallet className="w-3.5 h-3.5" />
-                    Dividir pagamento (Cashback / Pontos)
+                  <span className="flex items-center gap-2">
+                    <CreditCard className="w-3.5 h-3.5" />
+                    Dividir em dois métodos de pagamento
                   </span>
-                  <span className={clsx(
-                    'w-8 h-4 rounded-full transition-all relative flex items-center',
-                    splitEnabled ? 'bg-brand-500' : 'bg-surface-500'
+                  <span className={clsx('w-4 h-4 rounded border flex items-center justify-center text-xs shrink-0',
+                    splitEnabled ? 'bg-brand-500 border-brand-500 text-white' : 'border-surface-400'
                   )}>
-                    <span className={clsx(
-                      'absolute w-3 h-3 rounded-full bg-white shadow transition-all',
-                      splitEnabled ? 'left-4' : 'left-0.5'
-                    )} />
+                    {splitEnabled && '✓'}
                   </span>
                 </button>
 
                 {splitEnabled && (
-                  <div className="mt-2 space-y-2">
-                    <div className="flex gap-2">
-                      {SECOND_PAYMENT_METHODS
+                  <div className="mt-2 bg-surface-800 rounded-xl p-3 space-y-3">
+                    <p className="text-xs text-gray-400 font-medium">Segundo pagamento</p>
+                    <select
+                      value={secondPayment}
+                      onChange={e => setSecondPayment(e.target.value)}
+                      className="input text-sm w-full"
+                    >
+                      {PAYMENT_METHODS
                         .filter(m => m.value !== payment)
                         .map(m => (
-                          <button
-                            key={m.value}
-                            type="button"
-                            onClick={() => setSecondPayment(m.value)}
-                            className={clsx(
-                              'flex-1 py-1.5 px-2 rounded-lg text-xs font-medium border transition-all',
-                              secondPayment === m.value
-                                ? 'bg-brand-600/25 border-brand-500/60 text-white'
-                                : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
-                            )}
-                          >
-                            {m.label}
-                          </button>
+                          <option key={m.value} value={m.value}>{m.label}</option>
                         ))
                       }
-                    </div>
-                    <div className="flex items-center gap-2">
+                    </select>
+                    <div>
+                      <label className="text-xs text-gray-500 mb-1 block">Valor (R$)</label>
+                      <div className="flex items-center gap-2">
                       <input
                         type="number" min="0.01" step="0.01"
                         className="input text-sm flex-1"
-                        placeholder="Valor em R$"
+                        placeholder="0,00"
                         value={secondAmountStr}
                         onChange={e => setSecondAmountStr(e.target.value)}
                         autoFocus
@@ -806,6 +822,7 @@ function VendaWizard({
                           resto: <span className="text-white font-mono">{fmt(primaryAmountCents / 100)}</span>
                         </span>
                       )}
+                      </div>
                     </div>
                     {secondAmountCents >= total && secondAmountStr !== '' && (
                       <p className="text-xs text-red-400">Valor do segundo pagamento deve ser menor que o total.</p>

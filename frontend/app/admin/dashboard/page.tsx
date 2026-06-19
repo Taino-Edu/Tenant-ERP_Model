@@ -963,6 +963,22 @@ function ComandaCard({
   )
 }
 
+function usePersistentPanel(key: string, defaultOpen = true): [boolean, () => void] {
+  const [open, setOpen] = useState(() => {
+    if (typeof window === 'undefined') return defaultOpen
+    try {
+      const v = localStorage.getItem(`dash_panel_${key}`)
+      return v === null ? defaultOpen : v === 'true'
+    } catch { return defaultOpen }
+  })
+  const toggle = () => setOpen(v => {
+    const next = !v
+    try { localStorage.setItem(`dash_panel_${key}`, String(next)) } catch {}
+    return next
+  })
+  return [open, toggle]
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -983,6 +999,12 @@ export default function DashboardPage() {
   const [openModal, setOpenModal] = useState(false)
   const [finOpen, setFinOpen] = useState(false)
   const [expandedHist, setExpandedHist] = useState<string | null>(null)
+  const [panelPrevisao,     togglePanelPrevisao]     = usePersistentPanel('previsao')
+  const [panelPatrimonio,   togglePanelPatrimonio]   = usePersistentPanel('patrimonio')
+  const [panelClientes,     togglePanelClientes]     = usePersistentPanel('clientes')
+  const [panelProdutos,     togglePanelProdutos]     = usePersistentPanel('produtos')
+  const [panelLgpd,         togglePanelLgpd]         = usePersistentPanel('lgpd')
+  const [panelPreInscricoes,togglePanelPreInscricoes]= usePersistentPanel('preinscricoes')
   const [pendingPI, setPendingPI]       = useState(0)
   const [pendingLgpd, setPendingLgpd]   = useState<LgpdRequestDto[]>([])
   const prevCountRef              = useRef(0)
@@ -1329,13 +1351,20 @@ export default function DashboardPage() {
       {/* Previsão financeira do mês */}
       {prevFin && (
         <div className="card">
-          <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={togglePanelPrevisao}
+            className="w-full flex items-center justify-between"
+          >
             <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-brand-400" /> Previsão financeira —{' '}
               {new Date().toLocaleString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' })}
             </h3>
-            <span className="text-xs text-gray-500">{prevFin.diasRestantes} dias restantes</span>
-          </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500">{prevFin.diasRestantes} dias restantes</span>
+              {panelPrevisao ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </div>
+          </button>
+          {panelPrevisao && <div className="mt-4 pt-4 border-t border-surface-600">
           <div className="flex flex-wrap gap-6 items-end mb-4">
             <div>
               <p className="text-2xl font-bold text-accent-gold">{fmt(prevFin.projecaoMes)}</p>
@@ -1360,63 +1389,63 @@ export default function DashboardPage() {
               style={{ width: `${prevFin.percentual * 100}%` }}
             />
           </div>
+          </div>}
         </div>
       )}
 
-      {/* Patrimônio + Top Clientes + Avisos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* Linha: Patrimônio | Top Clientes | LGPD */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
-        {/* Coluna esquerda: patrimônio */}
+        {/* Patrimônio compact */}
         {allProducts.length > 0 && (
-            <div className="card flex flex-col">
-              <div className="flex items-center justify-between mb-4">
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <button onClick={togglePanelPatrimonio} className="flex items-center gap-2 flex-1 text-left">
                 <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-emerald-400" /> Patrimônio em Estoque
+                  <Package className="w-4 h-4 text-emerald-400" /> Patrimônio
                 </h3>
-                <a href="/admin/estoque" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
-                  Ver estoque →
-                </a>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="bg-surface-800 rounded-xl p-3">
-                  <p className="text-xs text-gray-500 mb-1">Custo total</p>
-                  <p className="text-base font-bold text-white font-mono">{fmt(patrimonioCusto)}</p>
-                </div>
-                <div className="bg-surface-800 rounded-xl p-3">
-                  <p className="text-xs text-gray-500 mb-1">Valor de venda</p>
-                  <p className="text-base font-bold text-accent-gold font-mono">{fmt(patrimonioVenda)}</p>
-                </div>
-                <div className="bg-surface-800 rounded-xl p-3">
-                  <p className="text-xs text-gray-500 mb-1">Lucro potencial</p>
-                  <p className={`text-base font-bold font-mono ${lucroEstoque >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {fmt(lucroEstoque)}
-                  </p>
-                </div>
-                <div className="bg-surface-800 rounded-xl p-3">
-                  <p className="text-xs text-gray-500 mb-1">Total de peças</p>
-                  <p className="text-base font-bold text-brand-400 font-mono">{totalPecas.toLocaleString('pt-BR')}</p>
-                </div>
-              </div>
+                {panelPatrimonio ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+              </button>
+              <a href="/admin/estoque" className="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-2">→</a>
             </div>
-          )}
-
-        {/* Coluna direita: Top Clientes + Avisos */}
-        <div className="flex flex-col gap-5">
-
-        {/* Ranking de clientes — sempre visível */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-              <Trophy className="w-4 h-4 text-accent-gold" /> Top Clientes
-            </h3>
-            <a href="/admin/usuarios" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
-              Ver todos →
-            </a>
+            {panelPatrimonio && (
+              <div className="mt-3 space-y-1.5">
+                <div className="flex justify-between items-center text-xs py-1 border-b border-surface-600">
+                  <span className="text-gray-500">Custo total</span>
+                  <span className="text-white font-mono font-bold">{fmt(patrimonioCusto)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-1 border-b border-surface-600">
+                  <span className="text-gray-500">Valor venda</span>
+                  <span className="text-accent-gold font-mono font-bold">{fmt(patrimonioVenda)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-1 border-b border-surface-600">
+                  <span className="text-gray-500">Margem</span>
+                  <span className={clsx('font-mono font-bold', lucroEstoque >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmt(lucroEstoque)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs py-1">
+                  <span className="text-gray-500">Total peças</span>
+                  <span className="text-brand-400 font-mono font-bold">{totalPecas.toLocaleString('pt-BR')}</span>
+                </div>
+              </div>
+            )}
           </div>
-          {ranking.length === 0 ? (
+        )}
+
+        {/* Top Clientes */}
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <button onClick={togglePanelClientes} className="flex items-center gap-2 flex-1 text-left">
+              <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-accent-gold" /> Top Clientes
+              </h3>
+              {panelClientes ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+            <a href="/admin/usuarios" className="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-3">Ver todos →</a>
+          </div>
+          {panelClientes && (ranking.length === 0 ? (
             <p className="text-xs text-gray-500 py-4 text-center">Nenhuma compra registrada ainda</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 mt-3">
               {ranking.map((c, i) => {
                 const medalColor = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-400'
                 const MedalIcon  = i === 0 ? Star : i <= 2 ? Medal : Trophy
@@ -1431,32 +1460,21 @@ export default function DashboardPage() {
                           <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">inativo</span>
                         )}
                         {c.pontosVencemEm !== null && c.pontos > 0 && c.pontosVencemEm <= 14 && (
-                          <span className={clsx(
-                            'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
-                            c.pontosVencemEm < 0
-                              ? 'bg-red-500/15 text-red-400 border-red-500/20'
-                              : 'bg-orange-500/15 text-orange-400 border-orange-500/20'
+                          <span className={clsx('text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
+                            c.pontosVencemEm < 0 ? 'bg-red-500/15 text-red-400 border-red-500/20' : 'bg-orange-500/15 text-orange-400 border-orange-500/20'
                           )}>
-                            {c.pontosVencemEm < 0
-                              ? `${c.pontos}pts vencidos`
-                              : `${c.pontos}pts vencem em ${c.pontosVencemEm}d`}
+                            {c.pontosVencemEm < 0 ? `${c.pontos}pts vencidos` : `${c.pontos}pts vencem em ${c.pontosVencemEm}d`}
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-accent-gold font-mono">{fmt(c.gastoTotal)}</p>
-                      </div>
+                      <p className="text-sm font-bold text-accent-gold font-mono">{fmt(c.gastoTotal)}</p>
                       {c.whatsApp && (
-                        <a
-                          href={`https://wa.me/${c.whatsApp.replace(/\D/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <a href={`https://wa.me/${c.whatsApp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
                           onClick={e => e.stopPropagation()}
                           className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 transition-colors"
-                          title={`WhatsApp: ${c.whatsApp}`}
-                        >
+                          title={`WhatsApp: ${c.whatsApp}`}>
                           <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
                             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                           </svg>
@@ -1467,77 +1485,92 @@ export default function DashboardPage() {
                 )
               })}
             </div>
+          ))}
+        </div>
+
+        {/* LGPD */}
+        <div className="card">
+          <button onClick={togglePanelLgpd} className="w-full flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+              <Shield className="w-4 h-4 text-brand-400" /> LGPD
+            </h3>
+            {panelLgpd ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+          </button>
+          {panelLgpd && (
+            <a href="/admin/lgpd" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
+              <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                pendingLgpd.some(r => r.isOverdue) ? 'bg-red-500/15' : pendingLgpd.length > 0 ? 'bg-brand-500/15' : 'bg-surface-600')}>
+                <Shield className={clsx('w-4 h-4',
+                  pendingLgpd.some(r => r.isOverdue) ? 'text-red-400' : pendingLgpd.length > 0 ? 'text-brand-400' : 'text-gray-500')} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">Solicitações LGPD</p>
+                <p className="text-xs text-gray-500">
+                  {pendingLgpd.some(r => r.isOverdue) ? 'Solicitação vencida!' : 'Pendentes de resposta'}
+                </p>
+              </div>
+              <span className={clsx('text-sm font-bold tabular-nums',
+                pendingLgpd.some(r => r.isOverdue) ? 'text-red-400' : pendingLgpd.length > 0 ? 'text-brand-400' : 'text-gray-600')}>
+                {pendingLgpd.length}
+              </span>
+            </a>
           )}
         </div>
+
+      </div>
+
+      {/* Linha: Top Produtos | Pré-inscrições */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
         {/* Top produtos — 7 dias */}
         {fin7d && fin7d.topProdutos.length > 0 && (
           <div className="card">
-            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2 mb-3">
-              <Star className="w-4 h-4 text-accent-gold" /> Top produtos (7 dias)
-            </h3>
-            <div className="space-y-1">
-              {fin7d.topProdutos.slice(0, 5).map((p, i) => (
-                <div key={p.nome} className="flex items-center gap-2 py-1.5 border-b border-surface-600 last:border-0">
-                  <span className="text-xs text-gray-600 w-3.5 shrink-0">{i + 1}</span>
-                  <span className="text-sm text-gray-300 flex-1 truncate">{p.nome}</span>
-                  <span className="text-xs text-gray-500 shrink-0">{p.qtd}un</span>
-                  <span className="text-sm font-bold text-accent-gold shrink-0">{fmt(p.receita)}</span>
-                </div>
-              ))}
-            </div>
+            <button onClick={togglePanelProdutos} className="w-full flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                <Star className="w-4 h-4 text-accent-gold" /> Top produtos (7 dias)
+              </h3>
+              {panelProdutos ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+            {panelProdutos && (
+              <div className="space-y-1 mt-3">
+                {fin7d.topProdutos.slice(0, 5).map((p, i) => (
+                  <div key={p.nome} className="flex items-center gap-2 py-1.5 border-b border-surface-600 last:border-0">
+                    <span className="text-xs text-gray-600 w-3.5 shrink-0">{i + 1}</span>
+                    <span className="text-sm text-gray-300 flex-1 truncate">{p.nome}</span>
+                    <span className="text-xs text-gray-500 shrink-0">{p.qtd}un</span>
+                    <span className="text-sm font-bold text-accent-gold shrink-0">{fmt(p.receita)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Widget: Avisos rápidos */}
-        <div className="card space-y-2">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Avisos</p>
-
-          {/* Pré-inscrições campeonatos */}
-          <a href="/admin/campeonatos"
-            className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors group">
-            <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-              pendingPI > 0 ? 'bg-amber-500/15' : 'bg-surface-600')}>
-              <MessageCircle className={clsx('w-4 h-4', pendingPI > 0 ? 'text-amber-400' : 'text-gray-500')} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">Pré-inscrições</p>
-              <p className="text-xs text-gray-500">Campeonatos pendentes</p>
-            </div>
-            <span className={clsx('text-sm font-bold tabular-nums',
-              pendingPI > 0 ? 'text-amber-400' : 'text-gray-600')}>
-              {pendingPI}
-            </span>
-          </a>
-
-          {/* LGPD */}
-          <a href="/admin/lgpd"
-            className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors group">
-            <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-              pendingLgpd.some(r => r.isOverdue) ? 'bg-red-500/15'
-              : pendingLgpd.length > 0 ? 'bg-brand-500/15'
-              : 'bg-surface-600')}>
-              <Shield className={clsx('w-4 h-4',
-                pendingLgpd.some(r => r.isOverdue) ? 'text-red-400'
-                : pendingLgpd.length > 0 ? 'text-brand-400'
-                : 'text-gray-500')} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">LGPD</p>
-              <p className="text-xs text-gray-500">
-                {pendingLgpd.some(r => r.isOverdue) ? 'Solicitação vencida!' : 'Solicitações pendentes'}
-              </p>
-            </div>
-            <span className={clsx('text-sm font-bold tabular-nums',
-              pendingLgpd.some(r => r.isOverdue) ? 'text-red-400'
-              : pendingLgpd.length > 0 ? 'text-brand-400'
-              : 'text-gray-600')}>
-              {pendingLgpd.length}
-            </span>
-          </a>
+        {/* Pré-inscrições campeonatos */}
+        <div className="card">
+          <button onClick={togglePanelPreInscricoes} className="w-full flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+              <MessageCircle className="w-4 h-4 text-amber-400" /> Pré-inscrições
+            </h3>
+            {panelPreInscricoes ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+          </button>
+          {panelPreInscricoes && (
+            <a href="/admin/campeonatos" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
+              <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                pendingPI > 0 ? 'bg-amber-500/15' : 'bg-surface-600')}>
+                <MessageCircle className={clsx('w-4 h-4', pendingPI > 0 ? 'text-amber-400' : 'text-gray-500')} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white">Campeonatos</p>
+                <p className="text-xs text-gray-500">Pré-inscrições pendentes</p>
+              </div>
+              <span className={clsx('text-sm font-bold tabular-nums', pendingPI > 0 ? 'text-amber-400' : 'text-gray-600')}>
+                {pendingPI}
+              </span>
+            </a>
+          )}
         </div>
 
-        </div>{/* fim coluna direita */}
       </div>
 
       {/* Breakdown por pagamento — só aparece quando há histórico */}
