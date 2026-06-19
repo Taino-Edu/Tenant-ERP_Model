@@ -19,8 +19,14 @@ public class VendaAvulsa
 
     public int TotalInCents { get; set; }
 
-    /// <summary>Pix | Dinheiro | CartaoCredito | CartaoDebito</summary>
+    /// <summary>Pix | Dinheiro | CartaoCredito | CartaoDebito | Crediario | Pontos | Cashback</summary>
     public string PaymentMethod { get; set; } = CardGameStore.Models.MongoDB.PaymentMethod.Pix;
+
+    /// <summary>Segundo método (Cashback ou Pontos) quando o pagamento é dividido. Nullable.</summary>
+    public string? SecondPaymentMethod { get; set; }
+
+    /// <summary>Valor pago no segundo método em centavos. Zero quando não há divisão.</summary>
+    public int SecondPaymentAmountInCents { get; set; } = 0;
 
     public string? ClientName { get; set; }
 

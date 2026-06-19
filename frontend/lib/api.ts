@@ -230,6 +230,8 @@ export interface VendaAvulsaDto {
   id: string
   clientName: string | null
   paymentMethod: string
+  secondPaymentMethod: string | null
+  secondPaymentAmountInCents: number
   totalInReais: number
   discountPercent: number
   discountInReais: number
@@ -256,6 +258,12 @@ export const PAYMENT_METHODS = [
 
 // Métodos que requerem cliente cadastrado selecionado
 export const PAYMENT_NEEDS_USER = ['Crediario', 'Pontos', 'Cashback'] as const
+
+// Métodos disponíveis como segundo pagamento (complemento via carteira do cliente)
+export const SECOND_PAYMENT_METHODS = [
+  { value: 'Cashback', label: 'Cashback (Saldo)' },
+  { value: 'Pontos',   label: 'Pontos de Fidelidade' },
+] as const
 
 export const comandaApi = {
   dashboard:    () => api.get<ComandaDto[]>('/api/comanda/dashboard'),
@@ -366,9 +374,15 @@ export const vendaAvulsaApi = {
     paymentMethod: string,
     items: { productId: string; quantity: number }[],
     discountPercent = 0,
-    userId?: string,   // necessário para Crediario, Pontos, Cashback
+    userId?: string,
+    secondPaymentMethod?: string | null,
+    secondPaymentAmountInCents = 0,
   ) =>
-    api.post<VendaAvulsaDto>('/api/venda-avulsa', { clientName, paymentMethod, items, discountPercent, userId }),
+    api.post<VendaAvulsaDto>('/api/venda-avulsa', {
+      clientName, paymentMethod, items, discountPercent, userId,
+      secondPaymentMethod: secondPaymentMethod || null,
+      secondPaymentAmountInCents,
+    }),
   recent: (limit = 50) =>
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/recent', { params: { limit } }),
   byDate: (date: string) =>

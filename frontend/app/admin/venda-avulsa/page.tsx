@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, Product, VendaAvulsaDto, UserSummary } from '@/lib/api'
+import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, VendaAvulsaDto, UserSummary } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import { usePreferences } from '@/hooks/usePreferences'
 import toast from 'react-hot-toast'
@@ -322,6 +322,11 @@ function VendaWizard({
   const [received, setReceived] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  // Pagamento dividido (segundo método)
+  const [splitEnabled, setSplit] = useState(false)
+  const [secondPayment, setSecondPayment] = useState<string>(SECOND_PAYMENT_METHODS[0].value)
+  const [secondAmountStr, setSecondAmountStr] = useState('')
+
   useEffect(() => {
     if (step === 2) setTimeout(() => searchRef.current?.focus(), 80)
   }, [step])
@@ -378,11 +383,15 @@ function VendaWizard({
       ? i.product.discountPriceInCents : i.product.priceInCents
     return s + price * i.quantity
   }, 0)
-  const discountCents  = Math.round(subtotal * discountPct / 100)
-  const total          = subtotal - discountCents
-  const receivedCents  = Math.round(parseFloat(received.replace(',', '.') || '0') * 100)
-  const troco          = receivedCents - total
-  const needsUser      = (PAYMENT_NEEDS_USER as readonly string[]).includes(payment)
+  const discountCents     = Math.round(subtotal * discountPct / 100)
+  const total             = subtotal - discountCents
+  const receivedCents     = Math.round(parseFloat(received.replace(',', '.') || '0') * 100)
+  const troco             = receivedCents - total
+  const secondAmountCents = splitEnabled ? Math.round(parseFloat(secondAmountStr.replace(',', '.') || '0') * 100) : 0
+  const primaryAmountCents = total - secondAmountCents
+  const splitValid        = !splitEnabled || (secondAmountCents > 0 && secondAmountCents < total)
+  const secondNeedsUser   = splitEnabled && (PAYMENT_NEEDS_USER as readonly string[]).includes(secondPayment)
+  const needsUser         = (PAYMENT_NEEDS_USER as readonly string[]).includes(payment) || secondNeedsUser
 
   const categories = useMemo(() => [...new Set(products.map(p => p.category))].sort(), [products])
   const filtered = products.filter(p => {
@@ -397,6 +406,7 @@ function VendaWizard({
 
   const submitRaw = useCallback(async () => {
     if (cart.length === 0) { toast.error('Adicione pelo menos um produto.'); return }
+    if (!splitValid) { toast.error('Valor do segundo pagamento inválido.'); return }
     setSubmitting(true)
     try {
       const { data } = await vendaAvulsaApi.register(
@@ -405,6 +415,8 @@ function VendaWizard({
         cart.map(i => ({ productId: i.product.id, quantity: i.quantity })),
         discountPct,
         selectedUserId ?? undefined,
+        splitEnabled ? secondPayment : null,
+        splitEnabled ? secondAmountCents : 0,
       )
       onComplete(data)
       toast.success('Venda registrada!')
@@ -412,7 +424,7 @@ function VendaWizard({
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao registrar venda.')
     } finally { setSubmitting(false) }
-  }, [cart, clientName, payment, discountPct, selectedUserId, onComplete])
+  }, [cart, clientName, payment, discountPct, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid])
 
   const handleSubmit = useThrottle(submitRaw, 2000)
 
@@ -712,7 +724,7 @@ function VendaWizard({
                 <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
                   <CreditCard className="w-3.5 h-3.5" /> Forma de pagamento
                 </p>
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {PAYMENT_METHODS.map(m => (
                     <button
                       key={m.value}
@@ -731,11 +743,102 @@ function VendaWizard({
                 </div>
               </div>
 
+              {/* Segundo método de pagamento */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => { setSplit(v => !v); setSecondAmountStr('') }}
+                  className={clsx(
+                    'w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-medium transition-all',
+                    splitEnabled
+                      ? 'bg-brand-600/20 border-brand-500/50 text-brand-300'
+                      : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Wallet className="w-3.5 h-3.5" />
+                    Dividir pagamento (Cashback / Pontos)
+                  </span>
+                  <span className={clsx(
+                    'w-8 h-4 rounded-full transition-all relative flex items-center',
+                    splitEnabled ? 'bg-brand-500' : 'bg-surface-500'
+                  )}>
+                    <span className={clsx(
+                      'absolute w-3 h-3 rounded-full bg-white shadow transition-all',
+                      splitEnabled ? 'left-4' : 'left-0.5'
+                    )} />
+                  </span>
+                </button>
+
+                {splitEnabled && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex gap-2">
+                      {SECOND_PAYMENT_METHODS
+                        .filter(m => m.value !== payment)
+                        .map(m => (
+                          <button
+                            key={m.value}
+                            type="button"
+                            onClick={() => setSecondPayment(m.value)}
+                            className={clsx(
+                              'flex-1 py-1.5 px-2 rounded-lg text-xs font-medium border transition-all',
+                              secondPayment === m.value
+                                ? 'bg-brand-600/25 border-brand-500/60 text-white'
+                                : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                            )}
+                          >
+                            {m.label}
+                          </button>
+                        ))
+                      }
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min="0.01" step="0.01"
+                        className="input text-sm flex-1"
+                        placeholder="Valor em R$"
+                        value={secondAmountStr}
+                        onChange={e => setSecondAmountStr(e.target.value)}
+                        autoFocus
+                      />
+                      {secondAmountCents > 0 && secondAmountCents < total && (
+                        <span className="text-xs text-gray-400 shrink-0">
+                          resto: <span className="text-white font-mono">{fmt(primaryAmountCents / 100)}</span>
+                        </span>
+                      )}
+                    </div>
+                    {secondAmountCents >= total && secondAmountStr !== '' && (
+                      <p className="text-xs text-red-400">Valor do segundo pagamento deve ser menor que o total.</p>
+                    )}
+                    {selectedUser && secondPayment === 'Cashback' && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <span>Saldo disponível:</span>
+                        <span className={clsx('font-bold', selectedUser.balanceInCents > 0 ? 'text-accent-green' : 'text-red-400')}>
+                          R$ {(selectedUser.balanceInCents / 100).toFixed(2).replace('.', ',')}
+                        </span>
+                      </div>
+                    )}
+                    {selectedUser && secondPayment === 'Pontos' && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <span>Pontos disponíveis:</span>
+                        <span className={clsx('font-bold', selectedUser.pointsBalance > 0 ? 'text-amber-400' : 'text-red-400')}>
+                          {selectedUser.pointsBalance} pts
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {needsUser && !selectedUserId && (
                 <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2.5 text-xs text-amber-400">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                   <span>
-                    <strong>{payment === 'Crediario' ? 'Crediário' : payment}</strong> exige cliente cadastrado.
+                    <strong>
+                      {payment === 'Crediario' ? 'Crediário' :
+                       (PAYMENT_NEEDS_USER as readonly string[]).includes(payment) ? payment :
+                       secondPayment === 'Cashback' ? 'Cashback' : 'Pontos'}
+                    </strong> exige cliente cadastrado.
                     Volte e selecione um cliente.
                   </span>
                 </div>
@@ -814,7 +917,7 @@ function VendaWizard({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={submitting || (needsUser && !selectedUserId)}
+                disabled={submitting || (needsUser && !selectedUserId) || !splitValid}
                 className="btn-success flex-1 justify-center text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting

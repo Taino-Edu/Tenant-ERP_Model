@@ -94,6 +94,23 @@ public class VendaAvulsaService : IVendaAvulsaService
         var discountInCents = (int)Math.Round(total * request.DiscountPercent / 100.0);
         var finalTotal = total - discountInCents;
 
+        // ── Validação do segundo método de pagamento ──────────────────────────
+        var secondPm  = string.IsNullOrWhiteSpace(request.SecondPaymentMethod) ? null : request.SecondPaymentMethod;
+        var secondAmt = secondPm != null ? request.SecondPaymentAmountInCents : 0;
+
+        if (secondPm != null)
+        {
+            if (secondAmt <= 0 || secondAmt >= finalTotal)
+                throw new InvalidOperationException("Valor do segundo pagamento deve ser positivo e menor que o total.");
+            if (secondPm == request.PaymentMethod)
+                throw new InvalidOperationException("O segundo método de pagamento não pode ser igual ao principal.");
+            if (secondPm is PaymentMethod.Cashback or PaymentMethod.Pontos && !request.UserId.HasValue)
+                throw new InvalidOperationException("Cashback e Pontos como segundo pagamento exigem um cliente cadastrado selecionado.");
+        }
+
+        // Valor cobrado pelo método principal (total menos a parcela do segundo método)
+        var primaryAmt = finalTotal - secondAmt;
+
         // ── 3. Persistir evento de caixa no MongoDB ──────────────────────────────
         // Resolve nome do cliente: prioriza nome explícito, depois busca no banco pelo userId
         string? clientNameResolved = string.IsNullOrWhiteSpace(request.ClientName) ? null : request.ClientName.Trim();
@@ -105,24 +122,29 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         var venda = new VendaAvulsa
         {
-            Items           = vendaItems,
-            TotalInCents    = finalTotal,
-            DiscountPercent = request.DiscountPercent,
-            DiscountInCents = discountInCents,
-            PaymentMethod   = request.PaymentMethod,
-            ClientName      = clientNameResolved,
-            UserId          = request.UserId,
-            UserName        = clientNameResolved,
-            SoldAt          = DateTime.UtcNow,
-            SoldByAdminId   = adminId,
-            SoldByAdminName = adminName,
+            Items                      = vendaItems,
+            TotalInCents               = finalTotal,
+            DiscountPercent            = request.DiscountPercent,
+            DiscountInCents            = discountInCents,
+            PaymentMethod              = request.PaymentMethod,
+            SecondPaymentMethod        = secondPm,
+            SecondPaymentAmountInCents = secondAmt,
+            ClientName                 = clientNameResolved,
+            UserId                     = request.UserId,
+            UserName                   = clientNameResolved,
+            SoldAt                     = DateTime.UtcNow,
+            SoldByAdminId              = adminId,
+            SoldByAdminName            = adminName,
         };
 
         await _collection.InsertOneAsync(venda);
 
+        var paymentSummary = secondPm != null
+            ? $"{request.PaymentMethod} + {secondPm} (R$ {secondAmt / 100m:N2})"
+            : request.PaymentMethod;
         _logger.LogInformation(
             "Venda avulsa {Id} registrada por {Admin}: {Count} item(ns), R$ {Total:F2} (desconto {Disc}%), {Payment}",
-            venda.Id, adminName, vendaItems.Count, finalTotal / 100m, request.DiscountPercent, request.PaymentMethod);
+            venda.Id, adminName, vendaItems.Count, finalTotal / 100m, request.DiscountPercent, paymentSummary);
 
         // ── Pós-venda: operações que dependem de cliente cadastrado ──────────────
         var pm = request.PaymentMethod;
@@ -153,7 +175,6 @@ public class VendaAvulsaService : IVendaAvulsaService
 
                 if (crediarioExistente != null)
                 {
-                    // Acumula itens anteriores + novos no JSON
                     var itensAtuais = string.IsNullOrWhiteSpace(crediarioExistente.ItensJson)
                         ? new List<ItemCrediarioDto>()
                         : JsonSerializer.Deserialize<List<ItemCrediarioDto>>(crediarioExistente.ItensJson)
@@ -161,7 +182,7 @@ public class VendaAvulsaService : IVendaAvulsaService
 
                     itensAtuais.AddRange(novosItens);
                     crediarioExistente.ItensJson        = JsonSerializer.Serialize(itensAtuais);
-                    crediarioExistente.ValorEmCentavos += finalTotal;
+                    crediarioExistente.ValorEmCentavos += primaryAmt;
                     crediarioExistente.DataVencimento   = vencimento;
                     _logger.LogInformation(
                         "Venda avulsa acumulada no crediário {CredId} do usuário {UserId} — novo total R$ {Valor:N2}",
@@ -173,7 +194,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                     {
                         UserId           = userId,
                         ComandaId        = null,
-                        ValorEmCentavos  = finalTotal,
+                        ValorEmCentavos  = primaryAmt,
                         DataAbertura     = DateTime.UtcNow,
                         DataVencimento   = vencimento,
                         Status           = CrediariosStatus.Aberto,
@@ -184,7 +205,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                     _db.Crediarios.Add(crediario);
                     _logger.LogInformation(
                         "Crediário {CredId} criado para usuário {UserId} via venda avulsa — R$ {Valor:N2}",
-                        crediario.Id, userId, finalTotal / 100m);
+                        crediario.Id, userId, primaryAmt / 100m);
                 }
             }
             else if (pm == PaymentMethod.Pontos)
@@ -192,27 +213,47 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow)
                     throw new InvalidOperationException("Os pontos deste cliente estão expirados.");
 
-                if (user.PointsBalance < finalTotal)
+                if (user.PointsBalance < primaryAmt)
                     throw new InvalidOperationException(
-                        $"Saldo de pontos insuficiente. Cliente tem {user.PointsBalance} pts, venda custa {finalTotal} pts.");
+                        $"Saldo de pontos insuficiente. Cliente tem {user.PointsBalance} pts, método principal custa {primaryAmt} pts.");
 
-                user.PointsBalance -= finalTotal;
+                user.PointsBalance -= primaryAmt;
                 user.UpdatedAt      = DateTime.UtcNow;
                 _logger.LogInformation(
-                    "Usuário {UserId} usou {Pts} pontos em venda avulsa. Saldo restante: {Saldo}",
-                    userId, finalTotal, user.PointsBalance);
+                    "Usuário {UserId} usou {Pts} pontos (principal) em venda avulsa. Saldo restante: {Saldo}",
+                    userId, primaryAmt, user.PointsBalance);
             }
             else if (pm == PaymentMethod.Cashback)
             {
-                if (user.BalanceInCents < finalTotal)
+                if (user.BalanceInCents < primaryAmt)
                     throw new InvalidOperationException(
-                        $"Saldo insuficiente. Cliente tem R$ {user.BalanceInCents / 100m:N2}, venda custa R$ {finalTotal / 100m:N2}.");
+                        $"Saldo insuficiente. Cliente tem R$ {user.BalanceInCents / 100m:N2}, método principal custa R$ {primaryAmt / 100m:N2}.");
 
-                user.BalanceInCents -= finalTotal;
+                user.BalanceInCents -= primaryAmt;
                 user.UpdatedAt       = DateTime.UtcNow;
                 _logger.LogInformation(
-                    "Usuário {UserId} usou R$ {Valor:N2} de cashback em venda avulsa. Saldo restante: R$ {Saldo:N2}",
-                    userId, finalTotal / 100m, user.BalanceInCents / 100m);
+                    "Usuário {UserId} usou R$ {Valor:N2} de cashback (principal) em venda avulsa. Saldo restante: R$ {Saldo:N2}",
+                    userId, primaryAmt / 100m, user.BalanceInCents / 100m);
+            }
+
+            // Aplica o segundo método de pagamento (Cashback ou Pontos como complemento)
+            if (secondPm == PaymentMethod.Cashback)
+            {
+                if (user.BalanceInCents < secondAmt)
+                    throw new InvalidOperationException(
+                        $"Saldo cashback insuficiente para o segundo pagamento. Disponível: R$ {user.BalanceInCents / 100m:N2}.");
+                user.BalanceInCents -= secondAmt;
+                user.UpdatedAt       = DateTime.UtcNow;
+                _logger.LogInformation("Usuário {UserId} usou R$ {Amt:N2} de cashback como segundo pagamento.", userId, secondAmt / 100m);
+            }
+            else if (secondPm == PaymentMethod.Pontos)
+            {
+                if (user.PointsBalance < secondAmt)
+                    throw new InvalidOperationException(
+                        $"Saldo de pontos insuficiente para o segundo pagamento. Disponível: {user.PointsBalance} pts.");
+                user.PointsBalance -= secondAmt;
+                user.UpdatedAt      = DateTime.UtcNow;
+                _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
             }
 
             await _db.SaveChangesAsync();
@@ -220,15 +261,34 @@ public class VendaAvulsaService : IVendaAvulsaService
         else if (request.UserId.HasValue)
         {
             // Pagamento normal (Pix / Dinheiro / Cartão) com cliente identificado
-            // → acumula pontos de fidelidade: 1 ponto por R$1 gasto
             var userId = request.UserId.Value;
             var user   = await _db.Users.FindAsync(userId)
                 ?? throw new InvalidOperationException("Cliente não encontrado.");
 
-            var pontosGanhos = finalTotal / 100; // 1 ponto por real
+            // Aplica o segundo método de pagamento se houver
+            if (secondPm == PaymentMethod.Cashback)
+            {
+                if (user.BalanceInCents < secondAmt)
+                    throw new InvalidOperationException(
+                        $"Saldo cashback insuficiente para o segundo pagamento. Disponível: R$ {user.BalanceInCents / 100m:N2}.");
+                user.BalanceInCents -= secondAmt;
+                user.UpdatedAt       = DateTime.UtcNow;
+                _logger.LogInformation("Usuário {UserId} usou R$ {Amt:N2} de cashback como segundo pagamento.", userId, secondAmt / 100m);
+            }
+            else if (secondPm == PaymentMethod.Pontos)
+            {
+                if (user.PointsBalance < secondAmt)
+                    throw new InvalidOperationException(
+                        $"Saldo de pontos insuficiente para o segundo pagamento. Disponível: {user.PointsBalance} pts.");
+                user.PointsBalance -= secondAmt;
+                user.UpdatedAt      = DateTime.UtcNow;
+                _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
+            }
+
+            // Acumula pontos de fidelidade: 1 ponto por R$1 gasto (baseado no total da compra)
+            var pontosGanhos = finalTotal / 100;
             if (pontosGanhos > 0)
             {
-                // Zera saldo expirado antes de somar para evitar "ressurreição" de pontos vencidos
                 if (user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow)
                     user.PointsBalance = 0;
                 user.PointsBalance   += pontosGanhos;
@@ -237,8 +297,9 @@ public class VendaAvulsaService : IVendaAvulsaService
                 _logger.LogInformation(
                     "Usuário {UserId} ganhou {Pontos} pontos em venda avulsa {VendaId}.",
                     userId, pontosGanhos, venda.Id);
-                await _db.SaveChangesAsync();
             }
+
+            await _db.SaveChangesAsync();
         }
 
         return MapToDto(venda);
@@ -329,15 +390,17 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     private static VendaAvulsaDto MapToDto(VendaAvulsa v) => new()
     {
-        Id              = v.Id,
-        ClientName      = v.ClientName,
-        PaymentMethod   = v.PaymentMethod,
-        TotalInReais    = v.TotalInReais,
-        DiscountPercent = v.DiscountPercent,
-        DiscountInReais = v.DiscountInReais,
-        SoldAt          = v.SoldAt,
-        SoldByAdminName = v.SoldByAdminName,
-        Items           = v.Items.Select(i => new VendaAvulsaItemDto
+        Id                         = v.Id,
+        ClientName                 = v.ClientName,
+        PaymentMethod              = v.PaymentMethod,
+        SecondPaymentMethod        = v.SecondPaymentMethod,
+        SecondPaymentAmountInCents = v.SecondPaymentAmountInCents,
+        TotalInReais               = v.TotalInReais,
+        DiscountPercent            = v.DiscountPercent,
+        DiscountInReais            = v.DiscountInReais,
+        SoldAt                     = v.SoldAt,
+        SoldByAdminName            = v.SoldByAdminName,
+        Items                      = v.Items.Select(i => new VendaAvulsaItemDto
         {
             ProductName      = i.ProductName,
             ProductCategory  = i.ProductCategory,

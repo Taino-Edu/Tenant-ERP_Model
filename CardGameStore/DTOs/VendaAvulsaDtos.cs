@@ -22,7 +22,14 @@ public class VendaAvulsaRequest
     [Required, MinLength(1)]
     public List<VendaAvulsaItemRequest> Items { get; set; } = new();
 
-    public bool IsPaymentMethodValid() => Models.MongoDB.PaymentMethod.IsValid(PaymentMethod);
+    public string? SecondPaymentMethod { get; set; }
+
+    [Range(0, int.MaxValue)]
+    public int SecondPaymentAmountInCents { get; set; } = 0;
+
+    public bool IsPaymentMethodValid() =>
+        Models.MongoDB.PaymentMethod.IsValid(PaymentMethod) &&
+        (SecondPaymentMethod == null || Models.MongoDB.PaymentMethod.IsValid(SecondPaymentMethod));
 }
 
 public class VendaAvulsaItemRequest
@@ -36,16 +43,18 @@ public class VendaAvulsaItemRequest
 
 public class VendaAvulsaDto
 {
-    public string              Id              { get; set; } = string.Empty;
-    public string?             ClientName      { get; set; }
-    public string              PaymentMethod   { get; set; } = string.Empty;
-    public decimal             TotalInReais    { get; set; }
-    public int                 TotalInCents    => (int)(TotalInReais * 100);
-    public DateTime            SoldAt          { get; set; }
-    public string              SoldByAdminName { get; set; } = string.Empty;
-    public int                 DiscountPercent { get; set; }
-    public decimal             DiscountInReais { get; set; }
-    public List<VendaAvulsaItemDto> Items      { get; set; } = new();
+    public string              Id                         { get; set; } = string.Empty;
+    public string?             ClientName                 { get; set; }
+    public string              PaymentMethod              { get; set; } = string.Empty;
+    public string?             SecondPaymentMethod        { get; set; }
+    public int                 SecondPaymentAmountInCents { get; set; }
+    public decimal             TotalInReais               { get; set; }
+    public int                 TotalInCents               => (int)(TotalInReais * 100);
+    public DateTime            SoldAt                     { get; set; }
+    public string              SoldByAdminName            { get; set; } = string.Empty;
+    public int                 DiscountPercent            { get; set; }
+    public decimal             DiscountInReais            { get; set; }
+    public List<VendaAvulsaItemDto> Items                 { get; set; } = new();
 }
 
 public class VendaAvulsaItemDto
