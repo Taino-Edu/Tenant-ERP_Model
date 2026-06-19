@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { userApi, UserPreferences, DEFAULT_PREFERENCES } from '@/lib/api'
+import { isLoggedIn } from '@/lib/auth'
 
 const LOCAL_KEY = 'user-preferences'
 
@@ -26,13 +27,20 @@ export function usePreferences() {
       try { setPrefs(mergeWithDefaults(JSON.parse(cached))) } catch {}
     }
 
+    // Usuários anônimos usam apenas o cache/default — o endpoint /api/user/me/preferences
+    // exige autenticação; chamar sem login faria o interceptor redirecionar para /login.
+    if (!isLoggedIn()) {
+      setLoading(false)
+      return
+    }
+
     userApi.getPreferences()
       .then(({ data }) => {
         const merged = mergeWithDefaults(data)
         setPrefs(merged)
         localStorage.setItem(LOCAL_KEY, JSON.stringify(merged))
       })
-      .catch(() => {}) // usa o default/cache se não autenticado
+      .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
