@@ -20,14 +20,14 @@ const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
 
 // ── Mini gráfico de barras (últimos 7 dias) ───────────────────────────────────
-function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
+function MiniBarChart({ dias, open, onToggle }: { dias: FinanceiroDto['diaDia']; open: boolean; onToggle: () => void }) {
   const [hovered, setHovered] = useState<number | null>(null)
   if (!dias || dias.length === 0) return null
 
   const maxVal  = Math.max(...dias.map(d => d.receita), 1)
   const avgVal  = dias.reduce((s, d) => s + d.receita, 0) / dias.length
   const lastIdx = dias.length - 1
-  const BAR_H   = 120
+  const BAR_H   = 60
 
   function barClass(receita: number, i: number) {
     const isToday = i === lastIdx
@@ -43,59 +43,50 @@ function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between mb-4">
+      <button onClick={onToggle} className="w-full flex items-center justify-between">
         <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-brand-400" /> Receita — últimos 7 dias
         </h3>
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-2 text-[10px] text-gray-500">
-            <span className="w-2 h-2 rounded-sm bg-accent-gold inline-block" />melhor
-            <span className="w-2 h-2 rounded-sm bg-accent-green inline-block ml-1" />acima
-            <span className="w-2 h-2 rounded-sm bg-brand-600 inline-block ml-1" />normal
-            <span className="w-2 h-2 rounded-sm bg-red-400 inline-block ml-1" />abaixo
-          </div>
-          <a href="/admin/financeiro" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
+          <a href="/admin/financeiro" onClick={e => e.stopPropagation()} className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
             Ver relatório →
           </a>
+          {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
         </div>
-      </div>
+      </button>
 
-      <div className="flex items-end gap-1.5" style={{ height: `${BAR_H}px` }}>
-        {dias.map((d, i) => {
-          const barH    = Math.max(4, Math.round((d.receita / maxVal) * BAR_H))
-          const isHov   = hovered === i
-          const isToday = i === lastIdx
-          return (
-            <div
-              key={d.dia}
-              className="flex-1 relative cursor-pointer"
-              style={{ height: `${barH}px` }}
-              onMouseEnter={() => setHovered(i)}
-              onMouseLeave={() => setHovered(null)}
-            >
-              {isHov && (
-                <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-surface-700 border border-surface-500 rounded px-2 py-1 text-xs text-white whitespace-nowrap z-10 pointer-events-none">
-                  {isToday ? 'Hoje' : d.dia.slice(5).replace('-', '/')}: {fmt(d.receita)}
-                </div>
-              )}
+      {open && <>
+        <div className="flex items-end gap-1.5 mt-3" style={{ height: `${BAR_H}px` }}>
+          {dias.map((d, i) => {
+            const barH    = Math.max(3, Math.round((d.receita / maxVal) * BAR_H))
+            const isHov   = hovered === i
+            const isToday = i === lastIdx
+            return (
               <div
-                className={`w-full h-full rounded-t transition-all duration-150 ${barClass(d.receita, i)} ${isHov ? 'opacity-70' : ''}`}
-              />
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="flex gap-1.5 mt-1.5">
-        {dias.map((d, i) => (
-          <span
-            key={d.dia}
-            className={`flex-1 text-center text-[9px] leading-none ${i === lastIdx ? 'text-brand-400 font-semibold' : 'text-gray-500'}`}
-          >
-            {i === lastIdx ? 'hoje' : d.dia.slice(8)}
-          </span>
-        ))}
-      </div>
+                key={d.dia}
+                className="flex-1 relative cursor-pointer"
+                style={{ height: `${barH}px` }}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered(null)}
+              >
+                {isHov && (
+                  <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-surface-700 border border-surface-500 rounded px-2 py-1 text-xs text-white whitespace-nowrap z-10 pointer-events-none">
+                    {isToday ? 'Hoje' : d.dia.slice(5).replace('-', '/')}: {fmt(d.receita)}
+                  </div>
+                )}
+                <div className={`w-full h-full rounded-t transition-all duration-150 ${barClass(d.receita, i)} ${isHov ? 'opacity-70' : ''}`} />
+              </div>
+            )
+          })}
+        </div>
+        <div className="flex gap-1.5 mt-1">
+          {dias.map((d, i) => (
+            <span key={d.dia} className={`flex-1 text-center text-[9px] leading-none ${i === lastIdx ? 'text-brand-400 font-semibold' : 'text-gray-500'}`}>
+              {i === lastIdx ? 'hoje' : d.dia.slice(8)}
+            </span>
+          ))}
+        </div>
+      </>}
     </div>
   )
 }
@@ -999,6 +990,7 @@ export default function DashboardPage() {
   const [openModal, setOpenModal] = useState(false)
   const [finOpen, setFinOpen] = useState(false)
   const [expandedHist, setExpandedHist] = useState<string | null>(null)
+  const [panelGrafico,      togglePanelGrafico]      = usePersistentPanel('grafico')
   const [panelPrevisao,     togglePanelPrevisao]     = usePersistentPanel('previsao')
   const [panelPatrimonio,   togglePanelPatrimonio]   = usePersistentPanel('patrimonio')
   const [panelClientes,     togglePanelClientes]     = usePersistentPanel('clientes')
@@ -1346,7 +1338,7 @@ export default function DashboardPage() {
       )}
 
       {/* Gráfico Receita — largura total */}
-      {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
+      {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} open={panelGrafico} onToggle={togglePanelGrafico} />}
 
       {/* Previsão financeira do mês */}
       {prevFin && (
