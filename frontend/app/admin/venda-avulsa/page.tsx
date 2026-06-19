@@ -533,14 +533,14 @@ function VendaWizard({
                     <button
                       key={u.id}
                       onClick={() => selectClient(u)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-surface-600 transition-colors text-left border-b border-surface-600 last:border-0"
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition-colors text-left border-b border-surface-600 last:border-0 text-white"
                     >
                       <div className="w-7 h-7 rounded-full bg-brand-600/20 flex items-center justify-center shrink-0">
                         <User className="w-3.5 h-3.5 text-brand-400" />
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-white truncate">{u.name}</p>
-                        {u.cpf && <p className="text-[10px] text-gray-500">{u.cpf}</p>}
+                        {u.cpf && <p className="text-[10px] text-gray-400">{u.cpf}</p>}
                       </div>
                     </button>
                   ))}

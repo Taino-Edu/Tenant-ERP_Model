@@ -383,8 +383,10 @@ function AdminOpenModal({
                 key={u.id}
                 onClick={() => setSelected(u)}
                 className={clsx(
-                  'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
-                  selected?.id === u.id ? 'bg-brand-600/20 border-l-2 border-brand-500' : 'hover:bg-surface-600'
+                  'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors text-white',
+                  selected?.id === u.id
+                    ? 'bg-brand-500/25 border-l-2 border-brand-400'
+                    : 'hover:bg-white/5'
                 )}
               >
                 <div className="w-8 h-8 rounded-full bg-brand-600/20 flex items-center justify-center text-brand-400 font-bold text-sm shrink-0">
@@ -392,7 +394,7 @@ function AdminOpenModal({
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-white truncate">{u.name}</p>
-                  {u.email && <p className="text-xs text-gray-500 truncate">{u.email}</p>}
+                  {u.email && <p className="text-xs text-gray-400 truncate">{u.email}</p>}
                 </div>
                 {selected?.id === u.id && <CheckCircle className="w-4 h-4 text-brand-400 ml-auto shrink-0" />}
               </button>
