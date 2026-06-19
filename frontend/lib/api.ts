@@ -6,6 +6,7 @@
 // de tokens no frontend, evitando exposição via JavaScript (proteção XSS).
 // =============================================================================
 import axios from 'axios'
+import { clearAuth } from './auth'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -43,9 +44,20 @@ api.interceptors.response.use(
         // Re-tenta a requisição original — o novo accessToken já está no cookie
         return api(original)
       } catch {
-        // Refresh falhou — redireciona para login (guarda contra loop de redirect)
+        // Refresh falhou — redireciona de acordo com o tipo de página:
+        //   /admin/*  → /login   (painel de gestão)
+        //   /cliente/* → /entrar (área do cliente)
+        //   demais    → limpa cookies e fica na página (QR code, campeonatos, etc.)
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          window.location.href = '/login'
+          const path = window.location.pathname
+          clearAuth()
+          if (path.startsWith('/admin')) {
+            window.location.href = '/login'
+          } else if (path.startsWith('/cliente')) {
+            window.location.href = '/entrar'
+          }
+          // Páginas públicas (/mesa, /campeonato, /produtos…): só limpa os cookies,
+          // o usuário continua na mesma página sem redirecionamento.
         }
       }
     }
