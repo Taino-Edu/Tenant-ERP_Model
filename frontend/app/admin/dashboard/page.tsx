@@ -27,7 +27,7 @@ function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   const BAR_H = 110
 
   return (
-    <div className="card w-[360px]">
+    <div className="card">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-brand-400" /> Receita — últimos 7 dias
@@ -1237,14 +1237,14 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Gráfico 7 dias + Ranking lado a lado em telas grandes */}
+      {/* Gráfico Receita — largura total */}
+      {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
+
+      {/* Patrimônio + Top Clientes + Avisos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-        {/* Coluna esquerda: gráfico + patrimônio */}
-        <div className="flex flex-col gap-5">
-          {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
-
-          {allProducts.length > 0 && (
+        {/* Coluna esquerda: patrimônio */}
+        {allProducts.length > 0 && (
             <div className="card flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
@@ -1276,7 +1276,6 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
-        </div>
 
         {/* Coluna direita: Top Clientes + Avisos */}
         <div className="flex flex-col gap-5">
