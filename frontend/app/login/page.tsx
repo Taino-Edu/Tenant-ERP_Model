@@ -5,6 +5,7 @@ import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
 import toast, { Toaster } from 'react-hot-toast'
 import { KeyRound, Mail, Loader2, Eye, EyeOff } from 'lucide-react'
+import Link from 'next/link'
 
 export default function LoginPage() {
   const router  = useRouter()
@@ -89,9 +90,17 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Clientes acessam via QR Code nas mesas
-        </p>
+        <div className="text-center mt-6 space-y-1">
+          <p className="text-xs text-gray-400">
+            Clientes acessam via QR Code nas mesas
+          </p>
+          <p className="text-xs text-gray-500">
+            É cliente?{' '}
+            <Link href="/entrar" className="text-brand-400 hover:text-brand-300 transition-colors">
+              Acesse a área do cliente
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )
