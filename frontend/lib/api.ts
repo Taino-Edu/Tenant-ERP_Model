@@ -173,11 +173,31 @@ export interface UserProfile {
 
 type PrefCorner = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
 
+export type DashChartScheme = 'default' | 'blue' | 'neon'
+export type DashRefreshInterval = 15 | 30 | 60 | 0
+
+export interface DashboardPanels {
+  finHoje:       boolean
+  grafico:       boolean
+  previsao:      boolean
+  patrimonio:    boolean
+  clientes:      boolean
+  produtos:      boolean
+  lgpd:          boolean
+  preInscricoes: boolean
+}
+
 export interface UserPreferences {
   aiButton:      { mode: 'draggable' | 'fixed'; corner: PrefCorner; enabled: boolean }
   vlibras:       { enabled: boolean; corner: PrefCorner }
   notifications: { soundEnabled: boolean; browserEnabled: boolean }
   pdv:           { defaultDiscount: 0 | 5 | 10 | 15 | 20 }
+  dashboard:     { refreshInterval: DashRefreshInterval; chartScheme: DashChartScheme; panels: DashboardPanels }
+}
+
+export const DEFAULT_DASHBOARD_PANELS: DashboardPanels = {
+  finHoje: true, grafico: true, previsao: true, patrimonio: true,
+  clientes: true, produtos: true, lgpd: true, preInscricoes: true,
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -185,6 +205,7 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   vlibras:       { enabled: true, corner: 'bottom-right' },
   notifications: { soundEnabled: true, browserEnabled: true },
   pdv:           { defaultDiscount: 0 },
+  dashboard:     { refreshInterval: 30, chartScheme: 'default', panels: DEFAULT_DASHBOARD_PANELS },
 }
 
 // ── Funções de API ────────────────────────────────────────────────────────────

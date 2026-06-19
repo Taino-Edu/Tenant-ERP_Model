@@ -1,9 +1,9 @@
 'use client'
 import { usePreferences } from '@/hooks/usePreferences'
-import { Settings, BrainCircuit, Bell, Tag, Check, Loader2, Accessibility } from 'lucide-react'
+import { Settings, BrainCircuit, Bell, Tag, Check, Loader2, Accessibility, LayoutDashboard, RotateCcw } from 'lucide-react'
 import clsx from 'clsx'
 import toast, { Toaster } from 'react-hot-toast'
-import { UserPreferences } from '@/lib/api'
+import { UserPreferences, DashboardPanels, DEFAULT_DASHBOARD_PANELS } from '@/lib/api'
 
 const CORNERS = [
   { value: 'bottom-right', label: 'Inferior direito' },
@@ -176,6 +176,104 @@ export default function ConfiguracoesPage() {
             ))}
           </div>
         </Row>
+      </Section>
+
+      {/* ── Dashboard ── */}
+      <Section title="Dashboard" icon={<LayoutDashboard className="w-5 h-5 text-brand-400" />}>
+
+        {/* Atualização automática */}
+        <Row label="Atualização automática" desc="Intervalo para buscar novos dados das comandas">
+          <div className="flex gap-1">
+            {([15, 30, 60, 0] as const).map(v => (
+              <button
+                key={v}
+                onClick={() => set('dashboard', { refreshInterval: v })}
+                className={clsx(
+                  'px-3 h-8 rounded text-xs font-bold border transition-all',
+                  prefs.dashboard.refreshInterval === v
+                    ? 'bg-brand-600/20 border-brand-500/60 text-brand-300'
+                    : 'bg-surface-700 border-surface-500 text-gray-400'
+                )}
+              >
+                {v === 0 ? 'Manual' : v === 60 ? '1min' : `${v}s`}
+              </button>
+            ))}
+          </div>
+        </Row>
+
+        {/* Cores do gráfico */}
+        <div>
+          <p className="text-sm font-medium text-white mb-1">Cores do gráfico de receita</p>
+          <p className="text-xs text-gray-500 mb-2">Esquema de cores das barras dos últimos 7 dias</p>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { value: 'default', label: 'Padrão',   colors: ['bg-accent-gold','bg-accent-green','bg-brand-600','bg-red-400'] },
+              { value: 'blue',    label: 'Azul',      colors: ['bg-cyan-300','bg-brand-400','bg-brand-600','bg-blue-900'] },
+              { value: 'neon',    label: 'Neon',      colors: ['bg-violet-400','bg-emerald-400','bg-fuchsia-500','bg-orange-500'] },
+            ] as const).map(s => (
+              <button
+                key={s.value}
+                onClick={() => set('dashboard', { chartScheme: s.value })}
+                className={clsx(
+                  'flex flex-col items-center gap-2 p-3 rounded-xl border transition-all',
+                  prefs.dashboard.chartScheme === s.value
+                    ? 'bg-brand-600/20 border-brand-500/50'
+                    : 'bg-surface-700 border-surface-500 hover:border-surface-400'
+                )}
+              >
+                <div className="flex gap-1 items-end h-6">
+                  {s.colors.map((c, i) => (
+                    <div key={i} className={clsx('w-3 rounded-t', c)} style={{ height: `${[24,16,20,10][i]}px` }} />
+                  ))}
+                </div>
+                <span className="text-xs text-gray-400">{s.label}</span>
+                {prefs.dashboard.chartScheme === s.value && <Check className="w-3 h-3 text-brand-400" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Painéis visíveis */}
+        <div>
+          <p className="text-sm font-medium text-white mb-1">Painéis visíveis</p>
+          <p className="text-xs text-gray-500 mb-3">Oculta permanentemente painéis que você não usa</p>
+          <div className="space-y-2">
+            {([
+              { key: 'finHoje',       label: 'Detalhe financeiro hoje' },
+              { key: 'grafico',       label: 'Gráfico de receita (7 dias)' },
+              { key: 'previsao',      label: 'Previsão financeira do mês' },
+              { key: 'patrimonio',    label: 'Patrimônio em estoque' },
+              { key: 'clientes',      label: 'Top Clientes' },
+              { key: 'produtos',      label: 'Top Produtos (7 dias)' },
+              { key: 'lgpd',          label: 'LGPD' },
+              { key: 'preInscricoes', label: 'Pré-inscrições campeonatos' },
+            ] as { key: keyof DashboardPanels; label: string }[]).map(({ key, label }) => (
+              <Row key={key} label={label}>
+                <Toggle
+                  value={prefs.dashboard.panels[key]}
+                  onChange={v => set('dashboard', { panels: { ...prefs.dashboard.panels, [key]: v } })}
+                />
+              </Row>
+            ))}
+          </div>
+        </div>
+
+        {/* Reset layout */}
+        <div className="pt-2 border-t border-surface-600">
+          <Row label="Resetar layout" desc="Reabre todos os painéis colapsados (preferência local)">
+            <button
+              onClick={() => {
+                const keys = ['grafico','previsao','patrimonio','clientes','produtos','lgpd','preinscricoes','finHoje']
+                keys.forEach(k => localStorage.removeItem(`dash_panel_${k}`))
+                toast.success('Layout resetado!', { duration: 2000 })
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-surface-500 text-gray-400 hover:border-surface-400 hover:text-gray-200 transition-all"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Resetar
+            </button>
+          </Row>
+        </div>
+
       </Section>
     </div>
   )

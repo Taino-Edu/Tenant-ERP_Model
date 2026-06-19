@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { comandaApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, ComandaDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto } from '@/lib/api'
+import { comandaApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, ComandaDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme } from '@/lib/api'
+import { usePreferences } from '@/hooks/usePreferences'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
 import { tocarSom, notificarBrowser, pedirPermissaoNotificacao, incrementBadge, clearBadge } from '@/lib/notificacoes'
@@ -20,10 +21,17 @@ const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
 
 // ── Mini gráfico de barras (últimos 7 dias) ───────────────────────────────────
-function MiniBarChart({ dias, open, onToggle }: { dias: FinanceiroDto['diaDia']; open: boolean; onToggle: () => void }) {
+const CHART_SCHEMES: Record<DashChartScheme, { melhor: string; acima: string; normal: string; abaixo: string; hoje: string }> = {
+  default: { melhor: 'bg-accent-gold', acima: 'bg-accent-green', normal: 'bg-brand-600', abaixo: 'bg-red-400',    hoje: 'bg-brand-400'   },
+  blue:    { melhor: 'bg-cyan-300',    acima: 'bg-brand-400',    normal: 'bg-brand-600', abaixo: 'bg-blue-900',   hoje: 'bg-cyan-400'    },
+  neon:    { melhor: 'bg-violet-400',  acima: 'bg-emerald-400',  normal: 'bg-fuchsia-500', abaixo: 'bg-orange-500', hoje: 'bg-violet-300' },
+}
+
+function MiniBarChart({ dias, open, onToggle, scheme }: { dias: FinanceiroDto['diaDia']; open: boolean; onToggle: () => void; scheme: DashChartScheme }) {
   const [hovered, setHovered] = useState<number | null>(null)
   if (!dias || dias.length === 0) return null
 
+  const colors  = CHART_SCHEMES[scheme] ?? CHART_SCHEMES.default
   const maxVal  = Math.max(...dias.map(d => d.receita), 1)
   const avgVal  = dias.reduce((s, d) => s + d.receita, 0) / dias.length
   const lastIdx = dias.length - 1
@@ -33,12 +41,12 @@ function MiniBarChart({ dias, open, onToggle }: { dias: FinanceiroDto['diaDia'];
     const isToday = i === lastIdx
     const isMax   = receita === maxVal && receita > 0
     const ratio   = avgVal > 0 ? receita / avgVal : 1
-    if (isToday && isMax) return 'bg-accent-gold'
-    if (isToday)          return 'bg-brand-400'
-    if (isMax)            return 'bg-accent-gold'
-    if (ratio >= 1.15)    return 'bg-accent-green'
-    if (ratio <= 0.6)     return 'bg-red-400'
-    return 'bg-brand-600'
+    if (isToday && isMax) return colors.melhor
+    if (isToday)          return colors.hoje
+    if (isMax)            return colors.melhor
+    if (ratio >= 1.15)    return colors.acima
+    if (ratio <= 0.6)     return colors.abaixo
+    return colors.normal
   }
 
   return (
@@ -973,6 +981,8 @@ function usePersistentPanel(key: string, defaultOpen = true): [boolean, () => vo
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const { prefs } = usePreferences()
+  const dp = prefs.dashboard
   const [tab, setTab]             = useState<'ativas' | 'historico'>('ativas')
   const [comandas, setComandas]   = useState<ComandaDto[]>([])
   const [history, setHistory]     = useState<ComandaDto[]>([])
@@ -1090,8 +1100,8 @@ export default function DashboardPage() {
       hub.onreconnected(() => { setConnected(true); fetchComandas() })
     }).catch(() => setConnected(false))
 
-    // ── Polling de segurança — garante dados frescos mesmo se evento falhar ──
-    // Roda a cada 30s; se hub caiu, tenta reconectar também
+    // Polling de segurança — intervalo configurável pelo usuário (0 = manual)
+    const intervalMs = (dp.refreshInterval || 30) * 1000
     const poll = setInterval(async () => {
       const { HubConnectionState } = await import('@microsoft/signalr')
       const hub = (await import('@/lib/signalr')).getComandaHub()
@@ -1099,7 +1109,7 @@ export default function DashboardPage() {
         try { await hub.start(); setConnected(true) } catch { /* ignora */ }
       }
       fetchComandas()
-    }, 30_000)
+    }, intervalMs)
 
     // Limpa badge quando admin foca na aba
     const onFocus = () => clearBadge()
@@ -1271,7 +1281,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Detalhe financeiro hoje — accordion */}
-      {finHoje && (
+      {dp.panels.finHoje && finHoje && (
         <div className="card">
           <button
             onClick={() => setFinOpen(v => !v)}
@@ -1338,10 +1348,10 @@ export default function DashboardPage() {
       )}
 
       {/* Gráfico Receita — largura total */}
-      {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} open={panelGrafico} onToggle={togglePanelGrafico} />}
+      {dp.panels.grafico && fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} open={panelGrafico} onToggle={togglePanelGrafico} scheme={dp.chartScheme} />}
 
       {/* Previsão financeira do mês */}
-      {prevFin && (
+      {dp.panels.previsao && prevFin && (
         <div className="card">
           <button
             onClick={togglePanelPrevisao}
@@ -1389,7 +1399,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
         {/* Patrimônio compact */}
-        {allProducts.length > 0 && (
+        {dp.panels.patrimonio && allProducts.length > 0 && (
           <div className="card">
             <div className="flex items-center justify-between">
               <button onClick={togglePanelPatrimonio} className="flex items-center gap-2 flex-1 text-left">
@@ -1424,7 +1434,7 @@ export default function DashboardPage() {
         )}
 
         {/* Top Clientes */}
-        <div className="card">
+        {dp.panels.clientes && <div className="card">
           <div className="flex items-center justify-between">
             <button onClick={togglePanelClientes} className="flex items-center gap-2 flex-1 text-left">
               <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
@@ -1478,10 +1488,10 @@ export default function DashboardPage() {
               })}
             </div>
           ))}
-        </div>
+        </div>}
 
         {/* LGPD */}
-        <div className="card">
+        {dp.panels.lgpd && <div className="card">
           <button onClick={togglePanelLgpd} className="w-full flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
               <Shield className="w-4 h-4 text-brand-400" /> LGPD
@@ -1507,7 +1517,7 @@ export default function DashboardPage() {
               </span>
             </a>
           )}
-        </div>
+        </div>}
 
       </div>
 
@@ -1515,7 +1525,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
         {/* Top produtos — 7 dias */}
-        {fin7d && fin7d.topProdutos.length > 0 && (
+        {dp.panels.produtos && fin7d && fin7d.topProdutos.length > 0 && (
           <div className="card">
             <button onClick={togglePanelProdutos} className="w-full flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
@@ -1539,7 +1549,7 @@ export default function DashboardPage() {
         )}
 
         {/* Pré-inscrições campeonatos */}
-        <div className="card">
+        {dp.panels.preInscricoes && <div className="card">
           <button onClick={togglePanelPreInscricoes} className="w-full flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
               <MessageCircle className="w-4 h-4 text-amber-400" /> Pré-inscrições
@@ -1561,7 +1571,7 @@ export default function DashboardPage() {
               </span>
             </a>
           )}
-        </div>
+        </div>}
 
       </div>
 

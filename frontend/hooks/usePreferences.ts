@@ -1,17 +1,23 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { userApi, UserPreferences, DEFAULT_PREFERENCES } from '@/lib/api'
+import { userApi, UserPreferences, DEFAULT_PREFERENCES, DEFAULT_DASHBOARD_PANELS } from '@/lib/api'
 import { isLoggedIn } from '@/lib/auth'
 
 const LOCAL_KEY = 'user-preferences'
 
 function mergeWithDefaults(partial: Partial<UserPreferences>): UserPreferences {
+  const dash: Partial<UserPreferences['dashboard']> = partial.dashboard ?? {}
   return {
     aiButton:      { ...DEFAULT_PREFERENCES.aiButton,      ...(partial.aiButton      ?? {}) },
     vlibras:       { ...DEFAULT_PREFERENCES.vlibras,       ...(partial.vlibras       ?? {}) },
     notifications: { ...DEFAULT_PREFERENCES.notifications, ...(partial.notifications ?? {}) },
     pdv:           { ...DEFAULT_PREFERENCES.pdv,           ...(partial.pdv           ?? {}) },
+    dashboard:     {
+      ...DEFAULT_PREFERENCES.dashboard,
+      ...dash,
+      panels: { ...DEFAULT_DASHBOARD_PANELS, ...(dash.panels ?? {}) },
+    },
   }
 }
 
