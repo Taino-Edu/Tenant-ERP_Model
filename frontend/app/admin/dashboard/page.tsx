@@ -1245,7 +1245,7 @@ export default function DashboardPage() {
           {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
 
           {allProducts.length > 0 && (
-            <div className="card flex-1 flex flex-col">
+            <div className="card flex flex-col">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
                   <Package className="w-4 h-4 text-emerald-400" /> Patrimônio em Estoque
