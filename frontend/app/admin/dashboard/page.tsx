@@ -27,7 +27,7 @@ function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   const BAR_H = 110
 
   return (
-    <div className="card w-[360px] h-[220px]">
+    <div className="card w-[360px]">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-brand-400" /> Receita — últimos 7 dias
