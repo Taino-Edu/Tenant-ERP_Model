@@ -7,7 +7,7 @@ import { tocarSom, notificarBrowser, pedirPermissaoNotificacao, incrementBadge, 
 import CameraScanner from '@/components/CameraScanner'
 import toast from 'react-hot-toast'
 import {
-  Wifi, WifiOff, RefreshCw, Users, TrendingUp, Banknote,
+  Wifi, WifiOff, RefreshCw, Users, TrendingUp,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
   History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode, Camera,
   AlertTriangle, DollarSign, BarChart2, Trophy, Medal, Star, FolderOpen, Package, Shield, MessageCircle,
@@ -23,8 +23,23 @@ const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_
 function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   const [hovered, setHovered] = useState<number | null>(null)
   if (!dias || dias.length === 0) return null
-  const maxVal = Math.max(...dias.map(d => d.receita), 1)
-  const BAR_H = 110
+
+  const maxVal  = Math.max(...dias.map(d => d.receita), 1)
+  const avgVal  = dias.reduce((s, d) => s + d.receita, 0) / dias.length
+  const lastIdx = dias.length - 1
+  const BAR_H   = 120
+
+  function barClass(receita: number, i: number) {
+    const isToday = i === lastIdx
+    const isMax   = receita === maxVal && receita > 0
+    const ratio   = avgVal > 0 ? receita / avgVal : 1
+    if (isToday && isMax) return 'bg-accent-gold'
+    if (isToday)          return 'bg-brand-400'
+    if (isMax)            return 'bg-accent-gold'
+    if (ratio >= 1.15)    return 'bg-accent-green'
+    if (ratio <= 0.6)     return 'bg-red-400'
+    return 'bg-brand-600'
+  }
 
   return (
     <div className="card">
@@ -32,43 +47,52 @@ function MiniBarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
         <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
           <BarChart2 className="w-4 h-4 text-brand-400" /> Receita — últimos 7 dias
         </h3>
-        <a href="/admin/financeiro" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
-          Ver relatório completo →
-        </a>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 text-[10px] text-gray-500">
+            <span className="w-2 h-2 rounded-sm bg-accent-gold inline-block" />melhor
+            <span className="w-2 h-2 rounded-sm bg-accent-green inline-block ml-1" />acima
+            <span className="w-2 h-2 rounded-sm bg-brand-600 inline-block ml-1" />normal
+            <span className="w-2 h-2 rounded-sm bg-red-400 inline-block ml-1" />abaixo
+          </div>
+          <a href="/admin/financeiro" className="text-xs text-brand-400 hover:text-brand-300 transition-colors">
+            Ver relatório →
+          </a>
+        </div>
       </div>
 
-      {/* Barras ancoradas no bottom */}
       <div className="flex items-end gap-1.5" style={{ height: `${BAR_H}px` }}>
         {dias.map((d, i) => {
-          const barH = Math.max(4, Math.round((d.receita / maxVal) * BAR_H))
-          const isHovered = hovered === i
+          const barH    = Math.max(4, Math.round((d.receita / maxVal) * BAR_H))
+          const isHov   = hovered === i
+          const isToday = i === lastIdx
           return (
             <div
               key={d.dia}
-              className="flex-1 relative group cursor-pointer"
+              className="flex-1 relative cursor-pointer"
               style={{ height: `${barH}px` }}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered(null)}
             >
-              {/* Tooltip */}
-              {isHovered && (
+              {isHov && (
                 <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-surface-700 border border-surface-500 rounded px-2 py-1 text-xs text-white whitespace-nowrap z-10 pointer-events-none">
-                  {d.dia.slice(5).replace('-', '/')}: {fmt(d.receita)}
+                  {isToday ? 'Hoje' : d.dia.slice(5).replace('-', '/')}: {fmt(d.receita)}
                 </div>
               )}
               <div
-                className={`w-full h-full rounded-t transition-colors ${isHovered ? 'bg-brand-400' : 'bg-brand-600'}`}
+                className={`w-full h-full rounded-t transition-all duration-150 ${barClass(d.receita, i)} ${isHov ? 'opacity-70' : ''}`}
               />
             </div>
           )
         })}
       </div>
 
-      {/* Labels de data abaixo das barras */}
       <div className="flex gap-1.5 mt-1.5">
-        {dias.map(d => (
-          <span key={d.dia} className="flex-1 text-center text-[9px] text-gray-500 leading-none">
-            {d.dia.slice(8)}
+        {dias.map((d, i) => (
+          <span
+            key={d.dia}
+            className={`flex-1 text-center text-[9px] leading-none ${i === lastIdx ? 'text-brand-400 font-semibold' : 'text-gray-500'}`}
+          >
+            {i === lastIdx ? 'hoje' : d.dia.slice(8)}
           </span>
         ))}
       </div>
@@ -955,6 +979,7 @@ export default function DashboardPage() {
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [ranking, setRanking]     = useState<ClienteInsightDto[]>([])
   const [openModal, setOpenModal] = useState(false)
+  const [finOpen, setFinOpen] = useState(false)
   const [expandedHist, setExpandedHist] = useState<string | null>(null)
   const [pendingPI, setPendingPI]       = useState(0)
   const [pendingLgpd, setPendingLgpd]   = useState<LgpdRequestDto[]>([])
@@ -1128,6 +1153,22 @@ export default function DashboardPage() {
 
   const totalAberto  = comandas.reduce((s, c) => s + c.totalInReais, 0)
   const emAndamento  = comandas.filter(c => c.status === 'EmAndamento').length
+
+  const prevFin = fin7d && fin7d.diaDia.length > 0 ? (() => {
+    const hojeStr = brToday()
+    const diaAtual = parseInt(hojeStr.slice(8))
+    const now = new Date()
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+    const diasRestantes = daysInMonth - diaAtual
+    const n = fin7d.diaDia.length
+    const mediaDiaria = fin7d.receita / n
+    const projecaoMes = mediaDiaria * daysInMonth
+    const margemPct = fin7d.receita > 0 ? fin7d.margem / fin7d.receita : 0
+    const projecaoMargem = projecaoMes * margemPct
+    const realizadoEstimado = mediaDiaria * diaAtual
+    const percentual = Math.min(realizadoEstimado / projecaoMes, 1)
+    return { mediaDiaria, projecaoMes, projecaoMargem, diasRestantes, daysInMonth, percentual, diaAtual, realizadoEstimado, n }
+  })() : null
   const fechadas     = history.filter(c => c.status === 'Fechada')
   const totalFechado = fechadas.reduce((s, c) => s + c.totalInReais, 0)
 
@@ -1196,10 +1237,10 @@ export default function DashboardPage() {
       {/* Métricas ao vivo */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Comandas Ativas',  value: String(comandas.length),  icon: Users,          color: 'text-brand-400',   bg: 'bg-brand-600/10'   },
-          { label: 'Em Aberto',        value: fmt(totalAberto),          icon: Clock,          color: 'text-red-400',     bg: 'bg-red-500/10'     },
-          { label: 'Receita Hoje',     value: finHoje ? fmt(finHoje.receita) : '—', icon: DollarSign, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-          { label: 'Estoque Baixo',    value: String(lowStock),          icon: AlertTriangle,  color: lowStock > 0 ? 'text-red-400' : 'text-gray-400', bg: lowStock > 0 ? 'bg-red-500/10' : 'bg-surface-600' },
+          { label: 'Comandas Ativas',  value: String(comandas.length),                            icon: Users,         color: 'text-brand-400',   bg: 'bg-brand-600/10'  },
+          { label: 'Receita Hoje',    value: finHoje ? fmt(finHoje.receita) : '—',               icon: DollarSign,    color: 'text-accent-gold', bg: 'bg-amber-500/10'  },
+          { label: 'Em Aberto',       value: fmt(totalAberto),                                    icon: Clock,         color: 'text-orange-400',  bg: 'bg-orange-500/10' },
+          { label: 'Estoque Baixo',   value: String(lowStock),                                    icon: AlertTriangle, color: lowStock > 0 ? 'text-red-400' : 'text-gray-400', bg: lowStock > 0 ? 'bg-red-500/10' : 'bg-surface-600' },
         ].map(m => (
           <div key={m.label} className="card flex items-center gap-3 py-3">
             <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', m.bg)}>
@@ -1213,32 +1254,112 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* KPIs financeiros hoje — sempre visíveis quando finHoje carregou */}
+      {/* Detalhe financeiro hoje — accordion */}
       {finHoje && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {(() => {
+        <div className="card">
+          <button
+            onClick={() => setFinOpen(v => !v)}
+            className="w-full flex items-center justify-between"
+          >
+            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+              <BarChart2 className="w-4 h-4 text-brand-400" /> Detalhe financeiro hoje
+            </h3>
+            <div className="flex items-center gap-3">
+              <span className={clsx('text-sm font-bold', finHoje.margem >= 0 ? 'text-accent-green' : 'text-red-400')}>
+                Margem {fmt(finHoje.margem)}
+              </span>
+              {finOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </div>
+          </button>
+          {finOpen && (() => {
             const totalTx = (finHoje.pagamentosPorForma ?? []).reduce((s, f) => s + f.quantidade, 0)
             const ticketMedio = totalTx > 0 ? finHoje.receita / totalTx : 0
-            return [
-              { label: 'Receita Total',   value: fmt(finHoje.receita), icon: Banknote,   color: 'text-accent-gold' },
-              { label: 'Custo Hoje',     value: fmt(finHoje.custo),  icon: TrendingUp, color: 'text-red-400'     },
-              { label: 'Margem Hoje',    value: fmt(finHoje.margem), icon: TrendingUp, color: finHoje.margem >= 0 ? 'text-emerald-400' : 'text-red-400' },
-              { label: 'Ticket Médio',   value: fmt(ticketMedio),    icon: CreditCard, color: 'text-brand-400'   },
-            ]
-          })().map(m => (
-            <div key={m.label} className="card flex items-center gap-3 py-2.5">
-              <m.icon className={clsx('w-4 h-4 shrink-0', m.color)} />
-              <div className="min-w-0">
-                <p className={clsx('text-base font-bold font-mono truncate', m.color)}>{m.value}</p>
-                <p className="text-xs text-gray-500">{m.label}</p>
+            return (
+              <div className="mt-4 pt-4 border-t border-surface-600 animate-fade-in space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Receita total',  value: fmt(finHoje.receita),  color: 'text-accent-gold',  sub: finHoje.receitaComandas > 0 ? 'cmd + avulsa' : undefined },
+                    { label: 'CMV / Custo',    value: fmt(finHoje.custo),    color: 'text-red-400',      sub: undefined },
+                    { label: 'Margem bruta',   value: fmt(finHoje.margem),   color: finHoje.margem >= 0 ? 'text-accent-green' : 'text-red-400', sub: finHoje.receita > 0 ? `${((finHoje.margem / finHoje.receita) * 100).toFixed(1)}%` : undefined },
+                    { label: 'Ticket médio',   value: fmt(ticketMedio),      color: 'text-brand-400',    sub: totalTx > 0 ? `${totalTx} transações` : undefined },
+                  ].map(m => (
+                    <div key={m.label} className="bg-surface-800 rounded-xl p-3">
+                      <p className="text-xs text-gray-500 mb-1">{m.label}</p>
+                      <p className={clsx('text-base font-bold font-mono', m.color)}>{m.value}</p>
+                      {m.sub && <p className="text-[10px] text-gray-600 mt-0.5">{m.sub}</p>}
+                    </div>
+                  ))}
+                </div>
+                {finHoje.receitaComandas > 0 && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-surface-800 rounded-xl p-3">
+                      <p className="text-xs text-gray-500 mb-1">Receita comandas</p>
+                      <p className="text-base font-bold font-mono text-white">{fmt(finHoje.receitaComandas)}</p>
+                    </div>
+                    <div className="bg-surface-800 rounded-xl p-3">
+                      <p className="text-xs text-gray-500 mb-1">Receita avulsa</p>
+                      <p className="text-base font-bold font-mono text-white">{fmt(finHoje.receitaAvulsa)}</p>
+                    </div>
+                  </div>
+                )}
+                {(finHoje.pagamentosPorForma ?? []).filter(f => f.total > 0).length > 0 && (
+                  <div>
+                    <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">Formas de pagamento</p>
+                    <div className="flex flex-wrap gap-2">
+                      {finHoje.pagamentosPorForma.filter(f => f.total > 0).map(f => (
+                        <div key={f.forma} className="bg-surface-800 rounded-lg px-3 py-2 text-center">
+                          <p className="text-sm font-bold text-white">{fmt(f.total)}</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{f.forma}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })()}
         </div>
       )}
 
       {/* Gráfico Receita — largura total */}
       {fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} />}
+
+      {/* Previsão financeira do mês */}
+      {prevFin && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-brand-400" /> Previsão financeira —{' '}
+              {new Date().toLocaleString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' })}
+            </h3>
+            <span className="text-xs text-gray-500">{prevFin.diasRestantes} dias restantes</span>
+          </div>
+          <div className="flex flex-wrap gap-6 items-end mb-4">
+            <div>
+              <p className="text-2xl font-bold text-accent-gold">{fmt(prevFin.projecaoMes)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">projeção de receita</p>
+            </div>
+            <div>
+              <p className={clsx('text-sm font-semibold', prevFin.projecaoMargem >= 0 ? 'text-accent-green' : 'text-red-400')}>{fmt(prevFin.projecaoMargem)}</p>
+              <p className="text-xs text-gray-500 mt-0.5">projeção margem</p>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-brand-400">{fmt(prevFin.mediaDiaria)}<span className="text-xs font-normal text-gray-500">/dia</span></p>
+              <p className="text-xs text-gray-500 mt-0.5">média últimos {prevFin.n}d</p>
+            </div>
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+            <span>Estimado realizado: {fmt(prevFin.realizadoEstimado)}</span>
+            <span>{Math.round(prevFin.percentual * 100)}% do mês ({prevFin.diaAtual}/{prevFin.daysInMonth})</span>
+          </div>
+          <div className="h-2 rounded-full bg-surface-600 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-brand-600 to-brand-400 transition-all duration-500"
+              style={{ width: `${prevFin.percentual * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Patrimônio + Top Clientes + Avisos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1346,6 +1467,25 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Top produtos — 7 dias */}
+        {fin7d && fin7d.topProdutos.length > 0 && (
+          <div className="card">
+            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2 mb-3">
+              <Star className="w-4 h-4 text-accent-gold" /> Top produtos (7 dias)
+            </h3>
+            <div className="space-y-1">
+              {fin7d.topProdutos.slice(0, 5).map((p, i) => (
+                <div key={p.nome} className="flex items-center gap-2 py-1.5 border-b border-surface-600 last:border-0">
+                  <span className="text-xs text-gray-600 w-3.5 shrink-0">{i + 1}</span>
+                  <span className="text-sm text-gray-300 flex-1 truncate">{p.nome}</span>
+                  <span className="text-xs text-gray-500 shrink-0">{p.qtd}un</span>
+                  <span className="text-sm font-bold text-accent-gold shrink-0">{fmt(p.receita)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Widget: Avisos rápidos */}
         <div className="card space-y-2">
