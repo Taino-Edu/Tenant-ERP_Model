@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import toast from 'react-hot-toast'
@@ -516,6 +516,10 @@ export default function FinanceiroPage() {
   const [targetPct,  setTargetPct]  = useState(40)
   const [tableView,  setTableView]  = useState<'simples' | 'analise'>('analise')
   const [prevData,   setPrevData]   = useState<FinanceiroDto | null>(null)
+  const [filterPaymentMethod, setFilterPaymentMethod] = useState('')
+  const [topOrigemFilter, setTopOrigemFilter] = useState<'Todos' | 'Comanda' | 'PDV'>('Todos')
+  const [topCatFilter, setTopCatFilter] = useState<string | null>(null)
+  const [metaManualInput, setMetaManualInput] = useState('')
   const iniRef = useRef(inicio)
   const fimRef = useRef(fim)
 
@@ -529,9 +533,9 @@ export default function FinanceiroPage() {
     } catch { setPrevData(null) }
   }, [])
 
-  const load = useCallback(async (ini: string, f: string) => {
+  const load = useCallback(async (ini: string, f: string, pmFilter?: string) => {
     setLoading(true)
-    try   { const res = await analyticsApi.financeiro(ini, f); setData(res.data) }
+    try   { const res = await analyticsApi.financeiro(ini, f, pmFilter || undefined); setData(res.data) }
     catch { toast.error('Erro ao carregar dados financeiros') }
     finally { setLoading(false) }
   }, [])
@@ -544,7 +548,7 @@ export default function FinanceiroPage() {
       const { inicio: ini, fim: f } = getRange(p)
       setInicio(ini); setFim(f)
       iniRef.current = ini; fimRef.current = f
-      load(ini, f)
+      load(ini, f, filterPaymentMethod)
       if (p === 'mes') loadPrevMonth(ini)
       else setPrevData(null)
     }
@@ -552,7 +556,7 @@ export default function FinanceiroPage() {
 
   function applyCustom() {
     setPreset('custom')
-    load(inicio, fim)
+    load(inicio, fim, filterPaymentMethod)
   }
 
   const d = data
@@ -568,6 +572,27 @@ export default function FinanceiroPage() {
   // ── Dados dos modais de KPI ────────────────────────────────────────────────
   const totalTx = d ? d.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0) : 0
   const ticketMedio = totalTx > 0 && d ? d.receita / totalTx : 0
+
+  // ── Meta de faturamento ───────────────────────────────────────────────────
+  const metaAuto    = d && d.custo > 0 ? Math.round(d.custo / (1 - targetPct / 100) * 100) / 100 : 0
+  const metaFinal   = metaManualInput ? (parseFloat(metaManualInput.replace(',', '.')) || 0) : metaAuto
+  const metaPct     = metaFinal > 0 && d ? Math.min(100, (d.receita / metaFinal) * 100) : 0
+
+  // ── Top Produtos filtrados ────────────────────────────────────────────────
+  const topCats = useMemo(() => {
+    if (!d) return [] as string[]
+    return [...new Set(d.topProdutos.map(p => p.categoria).filter(Boolean))] as string[]
+  }, [d])
+
+  const topFiltered = useMemo((): typeof d extends null ? [] : NonNullable<typeof d>['topProdutos'] => {
+    if (!d) return []
+    return d.topProdutos.filter(p => {
+      if (topOrigemFilter === 'Comanda' && p.receitaComandas === 0 && p.qtdComandas === 0) return false
+      if (topOrigemFilter === 'PDV'     && p.receitaAvulsa   === 0 && p.qtdAvulsa   === 0) return false
+      if (topCatFilter && p.categoria !== topCatFilter) return false
+      return true
+    })
+  }, [d, topOrigemFilter, topCatFilter])
 
   const kpiModais: Record<string, {
     title: string; color: string; totalLabel: string
@@ -689,7 +714,7 @@ export default function FinanceiroPage() {
             <RefreshCw className={`w-4 h-4 ${backfilling ? 'animate-spin' : ''}`} />
             {backfilling ? 'Corrigindo...' : 'Corrigir custos'}
           </button>
-          <button onClick={() => load(inicio, fim)} disabled={loading} className="btn-secondary text-sm">
+          <button onClick={() => load(inicio, fim, filterPaymentMethod)} disabled={loading} className="btn-secondary text-sm">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
@@ -707,6 +732,27 @@ export default function FinanceiroPage() {
                 }`}
               >
                 {{ hoje: 'Hoje', '7d': '7 dias', mes: 'Este mês', custom: 'Personalizado' }[p]}
+              </button>
+            ))}
+          </div>
+
+          {/* Filtro de forma de pagamento */}
+          <div className="flex flex-wrap gap-1.5">
+            {['', 'Pix', 'Dinheiro', 'CartaoCredito', 'CartaoDebito', 'Crediario'].map(pm => (
+              <button
+                key={pm || 'all'}
+                onClick={() => {
+                  setFilterPaymentMethod(pm)
+                  load(inicio, fim, pm)
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                  filterPaymentMethod === pm
+                    ? 'bg-brand-600/30 border-brand-500 text-brand-200'
+                    : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500 hover:text-gray-200'
+                }`}
+              >
+                {pm ? FORMA_ICONS[pm] : null}
+                {pm ? (FORMA_LABELS[pm] ?? pm) : 'Todos'}
               </button>
             ))}
           </div>
@@ -880,6 +926,97 @@ export default function FinanceiroPage() {
             </div>
           )}
 
+          {/* ── Meta de Faturamento ─────────────────────────────────────────── */}
+          {d.receita > 0 && (
+            <div className="card p-0 overflow-hidden">
+              <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                  <h3 className="text-sm font-semibold text-gray-300">Meta de Faturamento</h3>
+                </div>
+                {/* Seletor margem alvo */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-gray-500">Margem alvo:</span>
+                  {[30, 40, 50, 60].map(pct => (
+                    <button key={pct} onClick={() => setTargetPct(pct)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                        targetPct === pct
+                          ? 'bg-brand-500/20 border-brand-500/60 text-brand-300'
+                          : 'bg-surface-700 border-surface-600 text-gray-400 hover:text-gray-200'
+                      }`}>
+                      {pct}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {/* Meta automática */}
+                  <div className="bg-surface-800 rounded-xl p-4 border border-surface-600">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Meta Automática</p>
+                    <p className="text-lg font-bold font-mono text-brand-400">{metaAuto > 0 ? fmt(metaAuto) : '—'}</p>
+                    <p className="text-[10px] text-gray-500 mt-1">Custo ÷ (1 − {targetPct}%) · baseada no CMV do período</p>
+                  </div>
+                  {/* Meta manual */}
+                  <div className="bg-surface-800 rounded-xl p-4 border border-surface-600">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Meta Manual</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-400 text-sm">R$</span>
+                      <input
+                        className="input py-1 text-sm font-mono flex-1 min-w-0"
+                        placeholder="Ex: 10000"
+                        value={metaManualInput}
+                        onChange={e => setMetaManualInput(e.target.value)}
+                        type="number" min="0" step="0.01"
+                      />
+                      {metaManualInput && (
+                        <button onClick={() => setMetaManualInput('')} className="text-gray-500 hover:text-gray-300 transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      {metaManualInput ? 'Meta manual ativa' : 'Vazio = usa meta automática'}
+                    </p>
+                  </div>
+                  {/* Realizado */}
+                  <div className="bg-surface-800 rounded-xl p-4 border border-surface-600">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">Realizado</p>
+                    <p className={`text-lg font-bold font-mono ${metaPct >= 100 ? 'text-emerald-400' : metaPct >= 75 ? 'text-brand-400' : metaPct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {fmt(d.receita)}
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                      Falta {metaFinal > d.receita ? fmt(metaFinal - d.receita) : 'Meta atingida!'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Barra de progresso */}
+                {metaFinal > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-400">Progresso em direção à meta de {fmt(metaFinal)}</span>
+                      <span className={`font-bold font-mono ${metaPct >= 100 ? 'text-emerald-400' : metaPct >= 75 ? 'text-brand-400' : metaPct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {metaPct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-3 bg-surface-700 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${metaPct >= 100 ? 'bg-emerald-500' : metaPct >= 75 ? 'bg-brand-500' : metaPct >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                        style={{ width: `${Math.min(100, metaPct)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-500">
+                      <span>R$ 0</span>
+                      {metaPct < 90 && <span style={{ marginLeft: `${Math.max(0, metaPct - 5)}%` }}>{fmt(d.receita)}</span>}
+                      <span>{fmt(metaFinal)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Gráfico + Donut */}
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="lg:col-span-3"><BarChart dias={d.diaDia} /></div>
@@ -894,68 +1031,117 @@ export default function FinanceiroPage() {
           {/* Top produtos */}
           {d.topProdutos.length > 0 && (
             <div className="card p-0 overflow-hidden">
-              <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-2">
-                  <Lightbulb className="w-4 h-4 text-yellow-400" />
-                  <h3 className="text-sm font-semibold text-gray-300">
-                    {tableView === 'analise' ? 'Top Produtos — Rentabilidade & Sugestão de Preço' : 'Top Produtos — Resumo de Vendas'}
-                  </h3>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                  {/* Toggle Simples / Análise */}
-                  <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
-                    <button
-                      onClick={() => setTableView('simples')}
-                      className={`px-3 py-1.5 transition-colors ${tableView === 'simples' ? 'bg-brand-600/30 text-brand-300' : 'text-gray-400 hover:text-gray-200'}`}
-                    >Simples</button>
-                    <button
-                      onClick={() => setTableView('analise')}
-                      className={`px-3 py-1.5 transition-colors border-l border-surface-600 ${tableView === 'analise' ? 'bg-brand-500/20 text-brand-300' : 'text-gray-400 hover:text-gray-200'}`}
-                    >Análise</button>
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-surface-500 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-yellow-400" />
+                    <h3 className="text-sm font-semibold text-gray-300">
+                      {tableView === 'analise' ? 'Top Produtos — Rentabilidade & Sugestão de Preço' : 'Top Produtos — Resumo de Vendas'}
+                    </h3>
                   </div>
-                  {/* Seletor de margem alvo — só no modo análise */}
-                  {tableView === 'analise' && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-gray-500">Meta:</span>
-                      {[30, 40, 50, 60].map(pct => (
-                        <button key={pct} onClick={() => setTargetPct(pct)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
-                            targetPct === pct
-                              ? 'bg-brand-500/20 border-brand-500/60 text-brand-300'
-                              : 'bg-surface-700 border-surface-600 text-gray-400 hover:text-gray-200'
-                          }`}>
-                          {pct}%
-                        </button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Toggle Simples / Análise */}
+                    <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
+                      <button
+                        onClick={() => setTableView('simples')}
+                        className={`px-3 py-1.5 transition-colors ${tableView === 'simples' ? 'bg-brand-600/30 text-brand-300' : 'text-gray-400 hover:text-gray-200'}`}
+                      >Simples</button>
+                      <button
+                        onClick={() => setTableView('analise')}
+                        className={`px-3 py-1.5 transition-colors border-l border-surface-600 ${tableView === 'analise' ? 'bg-brand-500/20 text-brand-300' : 'text-gray-400 hover:text-gray-200'}`}
+                      >Análise</button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Filtro por origem */}
+                <div className="flex flex-wrap gap-2 items-center">
+                  <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
+                    {(['Todos', 'Comanda', 'PDV'] as const).map(o => (
+                      <button
+                        key={o}
+                        onClick={() => setTopOrigemFilter(o)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 transition-colors ${o !== 'Todos' ? 'border-l border-surface-600' : ''} ${
+                          topOrigemFilter === o ? 'bg-brand-500/20 text-brand-300' : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        {o === 'Comanda' && <ShoppingCart className="w-3 h-3" />}
+                        {o === 'PDV'     && <Store        className="w-3 h-3" />}
+                        {o}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Chips de categoria */}
+                  {topCats.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      <button
+                        onClick={() => setTopCatFilter(null)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                          topCatFilter === null
+                            ? 'bg-surface-600 border-surface-400 text-white'
+                            : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                        }`}
+                      >Todas</button>
+                      {topCats.map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => setTopCatFilter(cat === topCatFilter ? null : cat)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                            topCatFilter === cat
+                              ? 'bg-brand-600/30 border-brand-500 text-brand-200'
+                              : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                          }`}
+                        >{cat}</button>
                       ))}
                     </div>
                   )}
+
+                  <span className="text-[11px] text-gray-500 ml-auto">
+                    {topFiltered.length} produto{topFiltered.length !== 1 ? 's' : ''}
+                    {(topOrigemFilter !== 'Todos' || topCatFilter) && ` filtrado${topFiltered.length !== 1 ? 's' : ''}`}
+                  </span>
                 </div>
               </div>
+
               <div className="overflow-x-auto">
                 {tableView === 'simples' ? (
                   <table className="w-full text-sm">
                     <thead className="bg-surface-800">
                       <tr className="text-left">
-                        {['#', 'Produto', 'Qtd', 'Receita Total', 'Preço Médio'].map(h => (
-                          <th key={h} className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold">{h}</th>
+                        {['#', 'Produto', 'Categoria', 'Qtd', 'Comanda', 'PDV', 'Receita'].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-500">
-                      {d.topProdutos.map((p, i) => {
-                        const precoMedio = p.qtd > 0 ? p.receita / p.qtd : 0
+                      {topFiltered.map((p, i) => {
+                        const qtdShow     = topOrigemFilter === 'Comanda' ? p.qtdComandas : topOrigemFilter === 'PDV' ? p.qtdAvulsa : p.qtd
+                        const receitaShow = topOrigemFilter === 'Comanda' ? p.receitaComandas : topOrigemFilter === 'PDV' ? p.receitaAvulsa : p.receita
                         return (
                           <tr key={p.nome} className="hover:bg-surface-600/20 transition-colors">
                             <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
-                            <td className="px-4 py-2.5 font-medium text-white max-w-[220px]">
+                            <td className="px-4 py-2.5 font-medium text-white max-w-[200px]">
                               <p className="truncate">{p.nome}</p>
                             </td>
-                            <td className="px-4 py-2.5 text-gray-300 text-xs font-mono font-semibold">{p.qtd}x</td>
-                            <td className="px-4 py-2.5 font-mono text-emerald-400 font-bold text-sm">
-                              {fmt(p.receita)}
+                            <td className="px-4 py-2.5">
+                              <span className="text-[10px] bg-surface-600 text-gray-300 px-2 py-0.5 rounded-full whitespace-nowrap">{p.categoria || '—'}</span>
                             </td>
-                            <td className="px-4 py-2.5 font-mono text-gray-200 text-xs">
-                              {precoMedio > 0 ? fmt(precoMedio) : '—'}
+                            <td className="px-4 py-2.5 text-gray-300 text-xs font-mono font-semibold">{qtdShow}x</td>
+                            <td className="px-4 py-2.5 text-brand-400 text-xs font-mono">
+                              {p.qtdComandas > 0 ? `${p.qtdComandas}x` : <span className="text-gray-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 text-amber-400 text-xs font-mono">
+                              {p.qtdAvulsa > 0 ? `${p.qtdAvulsa}x` : <span className="text-gray-600">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 font-mono text-emerald-400 font-bold text-sm">
+                              {fmt(receitaShow)}
+                              {topOrigemFilter === 'Todos' && p.receitaComandas > 0 && p.receitaAvulsa > 0 && (
+                                <p className="text-[10px] text-gray-500 font-normal">
+                                  <span className="text-brand-400/70">{fmt(p.receitaComandas)}</span> · <span className="text-amber-400/70">{fmt(p.receitaAvulsa)}</span>
+                                </p>
+                              )}
                             </td>
                           </tr>
                         )
@@ -967,29 +1153,33 @@ export default function FinanceiroPage() {
                     <thead className="bg-surface-800">
                       <tr className="text-left">
                         {['#', 'Produto', 'Qtd', 'Preço Médio', 'Custo Médio', 'Margem Atual', 'Sugestão', 'Ação'].map(h => (
-                          <th key={h} className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold">{h}</th>
+                          <th key={h} className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-500">
-                      {d.topProdutos.map((p, i) => {
-                        const precoMedio  = p.qtd > 0 ? p.receita / p.qtd : 0
-                        const custoMedio  = p.qtd > 0 ? p.custo   / p.qtd : 0
+                      {topFiltered.map((p, i) => {
+                        const qtdShow    = topOrigemFilter === 'Comanda' ? p.qtdComandas : topOrigemFilter === 'PDV' ? p.qtdAvulsa : p.qtd
+                        const recShow    = topOrigemFilter === 'Comanda' ? p.receitaComandas : topOrigemFilter === 'PDV' ? p.receitaAvulsa : p.receita
+                        const precoMedio  = qtdShow > 0 ? recShow / qtdShow : 0
+                        const custoMedio  = p.qtd > 0 ? p.custo / p.qtd : 0
                         const margemAtual = precoMedio > 0 && custoMedio > 0
                           ? ((precoMedio - custoMedio) / precoMedio) * 100
                           : null
-                        const precoSugerido = custoMedio > 0
-                          ? custoMedio / (1 - targetPct / 100)
-                          : null
+                        const precoSugerido = custoMedio > 0 ? custoMedio / (1 - targetPct / 100) : null
                         const diff = precoSugerido !== null ? precoSugerido - precoMedio : null
                         return (
                           <tr key={p.nome} className="hover:bg-white/5 transition-colors">
                             <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
                             <td className="px-4 py-2.5 font-medium text-white max-w-[180px]">
                               <p className="truncate">{p.nome}</p>
-                              <p className="text-[10px] text-gray-500 mt-0.5">{p.qtd}x vendido</p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] bg-surface-600 text-gray-400 px-1.5 py-0 rounded">{p.categoria || '—'}</span>
+                                {p.qtdComandas > 0 && <span className="text-[10px] text-brand-400/70">{p.qtdComandas}x cmd</span>}
+                                {p.qtdAvulsa > 0   && <span className="text-[10px] text-amber-400/70">{p.qtdAvulsa}x pdv</span>}
+                              </div>
                             </td>
-                            <td className="px-4 py-2.5 text-gray-400 text-xs">{p.qtd}x</td>
+                            <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{qtdShow}x</td>
                             <td className="px-4 py-2.5 font-mono text-gray-200 font-semibold text-xs">
                               {precoMedio > 0 ? fmt(precoMedio) : '—'}
                             </td>
@@ -1017,17 +1207,11 @@ export default function FinanceiroPage() {
                             <td className="px-4 py-2.5">
                               {diff !== null ? (
                                 Math.abs(diff) < 0.50 ? (
-                                  <span className="flex items-center gap-1 text-xs text-emerald-400">
-                                    <Minus className="w-3 h-3" /> Ok
-                                  </span>
+                                  <span className="flex items-center gap-1 text-xs text-emerald-400"><Minus className="w-3 h-3" /> Ok</span>
                                 ) : diff > 0 ? (
-                                  <span className="flex items-center gap-1 text-xs text-red-400 font-semibold">
-                                    <ArrowUp className="w-3 h-3" /> +{fmt(diff)}
-                                  </span>
+                                  <span className="flex items-center gap-1 text-xs text-red-400 font-semibold"><ArrowUp className="w-3 h-3" /> +{fmt(diff)}</span>
                                 ) : (
-                                  <span className="flex items-center gap-1 text-xs text-emerald-400">
-                                    <ArrowDown className="w-3 h-3" /> {fmt(diff)}
-                                  </span>
+                                  <span className="flex items-center gap-1 text-xs text-emerald-400"><ArrowDown className="w-3 h-3" /> {fmt(diff)}</span>
                                 )
                               ) : <span className="text-gray-600 text-xs">—</span>}
                             </td>
@@ -1038,13 +1222,13 @@ export default function FinanceiroPage() {
                   </table>
                 )}
                 {/* Legenda */}
-                {tableView === 'analise' && (
-                  <div className="px-4 py-3 border-t border-surface-600 flex flex-wrap gap-4 text-[11px] text-gray-500">
-                    <span><span className="text-gray-200 font-bold">Preço Médio</span> = Receita total ÷ Qtd vendida</span>
-                    <span><span className="text-brand-400 font-bold">Sugestão</span> = Custo Médio ÷ (1 − {targetPct}%) para atingir margem de {targetPct}%</span>
+                <div className="px-4 py-3 border-t border-surface-600 flex flex-wrap gap-4 text-[11px] text-gray-500">
+                  <span><span className="text-brand-400 font-bold">Comanda</span> = mesas · <span className="text-amber-400 font-bold">PDV</span> = balcão avulso</span>
+                  {tableView === 'analise' && <>
+                    <span><span className="text-brand-400 font-bold">Sugestão</span> = Custo Médio ÷ (1 − {targetPct}%)</span>
                     <span><ArrowUp className="w-3 h-3 text-red-400 inline" /> subir preço · <ArrowDown className="w-3 h-3 text-emerald-400 inline" /> pode baixar · <Minus className="w-3 h-3 text-emerald-400 inline" /> preço ok</span>
-                  </div>
-                )}
+                  </>}
+                </div>
               </div>
             </div>
           )}

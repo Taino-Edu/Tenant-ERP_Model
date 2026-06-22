@@ -683,8 +683,13 @@ export interface DiaFinanceiroDto {
 
 export interface TopProductFinDto {
   nome: string
+  categoria: string
   qtd: number
+  qtdComandas: number
+  qtdAvulsa: number
   receita: number
+  receitaComandas: number
+  receitaAvulsa: number
   custo: number
   margem: number
 }
@@ -721,8 +726,10 @@ export const analyticsApi = {
   dashboard: () => api.get('/api/analytics/dashboard'),
   clientes:  (apenasInativos = false) =>
     api.get<ClienteInsightDto[]>('/api/analytics/clientes', { params: { apenasInativos } }),
-  financeiro: (inicio?: string, fim?: string) =>
-    api.get<FinanceiroDto>('/api/analytics/financeiro', { params: { inicio, fim } }),
+  financeiro: (inicio?: string, fim?: string, filterPaymentMethod?: string) =>
+    api.get<FinanceiroDto>('/api/analytics/financeiro', {
+      params: { inicio, fim, filterPaymentMethod: filterPaymentMethod || undefined },
+    }),
 }
 
 // ── Relatórios de vendas por categoria ───────────────────────────────────────

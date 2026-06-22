@@ -89,11 +89,16 @@ public class DiaFinanceiroDto
 
 public class TopProductFinDto
 {
-    public string  Nome    { get; set; } = string.Empty;
-    public int     Qtd     { get; set; }
-    public decimal Receita { get; set; }
-    public decimal Custo   { get; set; }
-    public decimal Margem  { get; set; }
+    public string  Nome            { get; set; } = string.Empty;
+    public string  Categoria       { get; set; } = string.Empty;
+    public int     Qtd             { get; set; }
+    public int     QtdComandas     { get; set; }
+    public int     QtdAvulsa       { get; set; }
+    public decimal Receita         { get; set; }
+    public decimal ReceitaComandas { get; set; }
+    public decimal ReceitaAvulsa   { get; set; }
+    public decimal Custo           { get; set; }
+    public decimal Margem          { get; set; }
 }
 
 public class FormaPagamentoTotalDto

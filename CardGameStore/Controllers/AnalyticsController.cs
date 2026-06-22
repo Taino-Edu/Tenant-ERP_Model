@@ -246,32 +246,48 @@ public class AnalyticsController : ControllerBase
     [HttpGet("financeiro")]
     public async Task<ActionResult<FinanceiroDto>> GetFinanceiro(
         [FromQuery] DateTime? inicio,
-        [FromQuery] DateTime? fim)
+        [FromQuery] DateTime? fim,
+        [FromQuery] string?   filterPaymentMethod = null)
     {
-        // As datas chegam do frontend como datas locais de Brasília (ex: "2026-05-29").
-        // Convertemos para o intervalo UTC correto: dia BR inicia às 03:00 UTC (UTC-3).
         var agoraBr   = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
         var dataBrIni = inicio.HasValue ? inicio.Value.Date : new DateTime(agoraBr.Year, agoraBr.Month, 1);
         var dataBrFim = fim.HasValue    ? fim.Value.Date    : agoraBr.Date;
 
         var ini = BrDateToUtcStart(dataBrIni);
-        var end = BrDateToUtcStart(dataBrFim.AddDays(1)); // exclusivo: início do próximo dia BR em UTC
+        var end = BrDateToUtcStart(dataBrFim.AddDays(1));
 
-        // ── Receita de comandas no período ────────────────────────────────────
-        var receitaComandas = await _db.Comandas
-            .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada)
+        var hasPmFilter = !string.IsNullOrWhiteSpace(filterPaymentMethod);
+
+        // ── Comandas base query ───────────────────────────────────────────────
+        IQueryable<Comanda> comandasBaseQ = _db.Comandas
+            .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada);
+
+        if (hasPmFilter)
+            comandasBaseQ = comandasBaseQ.Where(c =>
+                c.PaymentMethod == filterPaymentMethod ||
+                c.SecondPaymentMethod == filterPaymentMethod);
+
+        // ── Receita de comandas ───────────────────────────────────────────────
+        var receitaComandas = await comandasBaseQ
             .SumAsync(c => (decimal)c.TotalInCents) / 100m;
 
-        // ── Receita de vendas avulsas (MongoDB) — filtra desde ini direto ────
-        var todasVendas   = (await _vendas.GetRecentAsync(2000, ini)).ToList();
-        var receitaAvulsa = todasVendas
-            .Where(v => v.SoldAt >= ini && v.SoldAt < end)
-            .Sum(v => (decimal)v.TotalInCents) / 100m;
+        // ── Vendas avulsas (MongoDB) ──────────────────────────────────────────
+        var todasVendas = (await _vendas.GetRecentAsync(2000, ini)).ToList();
+        var avulsasPeriodo = todasVendas
+            .Where(v => v.SoldAt >= ini && v.SoldAt < end);
+
+        if (hasPmFilter)
+            avulsasPeriodo = avulsasPeriodo.Where(v =>
+                v.PaymentMethod == filterPaymentMethod ||
+                v.SecondPaymentMethod == filterPaymentMethod);
+
+        var avulsasList = avulsasPeriodo.ToList();
+        var receitaAvulsa = avulsasList.Sum(v => (decimal)v.TotalInCents) / 100m;
 
         var receita = receitaComandas + receitaAvulsa;
 
-        // ── Custo: projeção mínima — sem Include(Comanda) completo ───────────
-        var itens = await _db.ComandaItems
+        // ── Itens de comanda — com categoria e método de pagamento do pai ─────
+        var itensRaw = await _db.ComandaItems
             .Where(i => i.Comanda!.ClosedAt >= ini
                      && i.Comanda.ClosedAt < end
                      && i.Comanda.Status == ComandaStatus.Fechada
@@ -282,31 +298,37 @@ public class AnalyticsController : ControllerBase
                 i.UnitPriceInCents,
                 i.Quantity,
                 i.CostPriceSnapshotInCents,
-                ComandaClosedAt = i.Comanda!.ClosedAt,
+                ComandaClosedAt          = i.Comanda!.ClosedAt,
+                ComandaPaymentMethod     = i.Comanda.PaymentMethod,
+                ComandaSecondPayment     = i.Comanda.SecondPaymentMethod,
+                Categoria                = i.Product!.Category,
             })
             .ToListAsync();
+
+        var itens = hasPmFilter
+            ? itensRaw.Where(i =>
+                i.ComandaPaymentMethod == filterPaymentMethod ||
+                i.ComandaSecondPayment == filterPaymentMethod).ToList()
+            : itensRaw;
 
         var custoComandas = itens
             .Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m;
 
-        var custoAvulsa = todasVendas
-            .Where(v => v.SoldAt >= ini && v.SoldAt < end)
+        var custoAvulsa = avulsasList
             .SelectMany(v => v.Items)
             .Sum(i => (decimal)i.UnitCostInCents * i.Quantity) / 100m;
 
         var custo = custoComandas + custoAvulsa;
-
         var margem        = receita - custo;
         var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
 
-        // ── Crediários em aberto (saldo real = total - já pago) ──────────────
+        // ── Crediários em aberto ──────────────────────────────────────────────
         var crediarios = await _db.Crediarios
             .Where(c => c.Status == CrediariosStatus.Aberto)
             .SumAsync(c => (decimal)(c.ValorEmCentavos - c.ValorPagoEmCentavos)) / 100m;
 
-        // ── Breakdown dia a dia — pré-carrega comandas para evitar N queries ──
-        var comandasDoPeriodo = await _db.Comandas
-            .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada)
+        // ── Breakdown dia a dia ───────────────────────────────────────────────
+        var comandasDoPeriodo = await comandasBaseQ
             .Select(c => new { c.ClosedAt, c.TotalInCents })
             .ToListAsync();
 
@@ -317,13 +339,13 @@ public class AnalyticsController : ControllerBase
         {
             var dBr  = dataBrIni.AddDays(d);
             var dIni = BrDateToUtcStart(dBr);
-            var dFim = BrDateToUtcStart(dBr.AddDays(1)); // exclusivo
+            var dFim = BrDateToUtcStart(dBr.AddDays(1));
 
             var rComanda = comandasDoPeriodo
                 .Where(c => c.ClosedAt >= dIni && c.ClosedAt < dFim)
                 .Sum(c => (decimal)c.TotalInCents) / 100m;
 
-            var rAvulsa = todasVendas
+            var rAvulsa = avulsasList
                 .Where(v => v.SoldAt >= dIni && v.SoldAt < dFim)
                 .Sum(v => (decimal)v.TotalInCents) / 100m;
 
@@ -331,7 +353,7 @@ public class AnalyticsController : ControllerBase
                 .Where(i => i.ComandaClosedAt >= dIni && i.ComandaClosedAt < dFim)
                 .Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m;
 
-            var cAvulsaDia = todasVendas
+            var cAvulsaDia = avulsasList
                 .Where(v => v.SoldAt >= dIni && v.SoldAt < dFim)
                 .SelectMany(v => v.Items)
                 .Sum(i => (decimal)i.UnitCostInCents * i.Quantity) / 100m;
@@ -345,10 +367,9 @@ public class AnalyticsController : ControllerBase
         }
 
         // ── Breakdown por forma de pagamento ─────────────────────────────────
-        // Comandas fechadas no período (com cliente para drill-down)
-        var comandasPeriodo = await _db.Comandas
+        var comandasPeriodo = await comandasBaseQ
             .Include(c => c.User)
-            .Where(c => c.ClosedAt >= ini && c.ClosedAt < end && c.Status == ComandaStatus.Fechada && c.PaymentMethod != null)
+            .Where(c => c.PaymentMethod != null)
             .Select(c => new
             {
                 c.PaymentMethod,
@@ -361,8 +382,6 @@ public class AnalyticsController : ControllerBase
             })
             .ToListAsync();
 
-        // Para split payment, gera uma transação por forma de pagamento com o valor correto.
-        // Ex.: R$20 total, R$1 Débito + R$19 Cashback → duas entradas separadas.
         static string fmtReais(decimal v) => $"R$ {v:F2}".Replace('.', ',');
         var transacoesComanda = comandasPeriodo
             .SelectMany(c =>
@@ -371,56 +390,33 @@ public class AnalyticsController : ControllerBase
                 var hasSecond  = !string.IsNullOrEmpty(c.SecondPaymentMethod) && c.SecondPaymentAmountInCents > 0;
                 var secondAmt  = hasSecond ? c.SecondPaymentAmountInCents : 0;
                 var primaryAmt = Math.Max(0, net - secondAmt);
-
-                var label2nd = hasSecond
-                    ? $"+ {c.SecondPaymentMethod} {fmtReais(secondAmt / 100m)}"
-                    : null;
-                var label1st = hasSecond
-                    ? $"+ {c.PaymentMethod} {fmtReais(primaryAmt / 100m)}"
-                    : null;
+                var label2nd   = hasSecond ? $"+ {c.SecondPaymentMethod} {fmtReais(secondAmt / 100m)}" : null;
+                var label1st   = hasSecond ? $"+ {c.PaymentMethod} {fmtReais(primaryAmt / 100m)}" : null;
 
                 var list = new List<TransacaoFinDto>
                 {
-                    new()
-                    {
-                        Origem  = "Comanda",
-                        Cliente = c.ClienteNome,
-                        Valor   = Math.Round(primaryAmt / 100m, 2),
-                        Data    = c.ClosedAt!.Value,
-                        Nota    = label2nd,
-                        Forma   = c.PaymentMethod!,
-                    }
+                    new() { Origem = "Comanda", Cliente = c.ClienteNome,
+                            Valor = Math.Round(primaryAmt / 100m, 2), Data = c.ClosedAt!.Value,
+                            Nota = label2nd, Forma = c.PaymentMethod! }
                 };
                 if (hasSecond)
-                {
                     list.Add(new TransacaoFinDto
                     {
-                        Origem  = "Comanda",
-                        Cliente = c.ClienteNome,
-                        Valor   = Math.Round(secondAmt / 100m, 2),
-                        Data    = c.ClosedAt!.Value,
-                        Nota    = label1st,
-                        Forma   = c.SecondPaymentMethod!,
+                        Origem = "Comanda", Cliente = c.ClienteNome,
+                        Valor = Math.Round(secondAmt / 100m, 2), Data = c.ClosedAt!.Value,
+                        Nota = label1st, Forma = c.SecondPaymentMethod!,
                     });
-                }
                 return list;
             });
 
-        var avulsasPeriodo = todasVendas
-            .Where(v => v.SoldAt >= ini && v.SoldAt < end)
-            .ToList();
-
-        var transacoesAvulsa = avulsasPeriodo
+        var transacoesAvulsa = avulsasList
             .Select(v => new TransacaoFinDto
             {
-                Origem     = "VendaAvulsa",
-                Cliente    = v.ClientName,
-                Valor      = Math.Round(v.TotalInCents / 100m, 2),
-                Data       = v.SoldAt,
-                Forma      = v.PaymentMethod,
+                Origem = "VendaAvulsa", Cliente = v.ClientName,
+                Valor = Math.Round(v.TotalInCents / 100m, 2), Data = v.SoldAt,
+                Forma = v.PaymentMethod,
             });
 
-        // Agrupa por forma e inclui transações individuais (drill-down)
         var todasFormas = transacoesComanda.Concat(transacoesAvulsa)
             .GroupBy(t => t.Forma)
             .Select(g => new FormaPagamentoTotalDto
@@ -433,35 +429,65 @@ public class AnalyticsController : ControllerBase
             .OrderByDescending(f => f.Total)
             .ToList();
 
-        // ── Top produtos com margem ───────────────────────────────────────────
-        var topProdutos = itens
+        // ── Top produtos: comandas + PDV com breakdown por origem ─────────────
+        var topDeComandas = itens
             .GroupBy(i => i.ItemNameSnapshot)
-            .Select(g =>
+            .ToDictionary(g => g.Key, g => new
             {
-                var r = g.Sum(i => (decimal)i.UnitPriceInCents * i.Quantity) / 100m;
-                var c = g.Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m;
-                return new TopProductFinDto
-                {
-                    Nome    = g.Key,
-                    Qtd     = g.Sum(i => i.Quantity),
-                    Receita = Math.Round(r, 2),
-                    Custo   = Math.Round(c, 2),
-                    Margem  = Math.Round(r - c, 2),
-                };
-            })
-            .OrderByDescending(t => t.Receita)
-            .Take(10)
-            .ToList();
+                Categoria   = g.First().Categoria,
+                Qtd         = g.Sum(i => i.Quantity),
+                Receita     = Math.Round(g.Sum(i => (decimal)i.UnitPriceInCents * i.Quantity) / 100m, 2),
+                Custo       = Math.Round(g.Sum(i => (decimal)i.CostPriceSnapshotInCents * i.Quantity) / 100m, 2),
+            });
+
+        var topDePdv = avulsasList
+            .SelectMany(v => v.Items)
+            .GroupBy(i => i.ProductName)
+            .ToDictionary(g => g.Key, g => new
+            {
+                Categoria = g.First().ProductCategory ?? "Outros",
+                Qtd       = g.Sum(i => i.Quantity),
+                Receita   = Math.Round(g.Sum(i => i.UnitPriceInReais * i.Quantity), 2),
+                Custo     = Math.Round(g.Sum(i => (decimal)i.UnitCostInCents * i.Quantity) / 100m, 2),
+            });
+
+        var todosNomes = topDeComandas.Keys.Union(topDePdv.Keys);
+
+        var topProdutos = todosNomes.Select(nome =>
+        {
+            topDeComandas.TryGetValue(nome, out var c);
+            topDePdv.TryGetValue(nome, out var a);
+            var recC = c?.Receita ?? 0m;
+            var recA = a?.Receita ?? 0m;
+            var tot  = recC + recA;
+            var cus  = (c?.Custo ?? 0m) + (a?.Custo ?? 0m);
+            return new TopProductFinDto
+            {
+                Nome            = nome,
+                Categoria       = c?.Categoria ?? a?.Categoria ?? "Outros",
+                Qtd             = (c?.Qtd ?? 0) + (a?.Qtd ?? 0),
+                QtdComandas     = c?.Qtd ?? 0,
+                QtdAvulsa       = a?.Qtd ?? 0,
+                Receita         = Math.Round(tot, 2),
+                ReceitaComandas = Math.Round(recC, 2),
+                ReceitaAvulsa   = Math.Round(recA, 2),
+                Custo           = Math.Round(cus, 2),
+                Margem          = Math.Round(tot - cus, 2),
+            };
+        })
+        .OrderByDescending(t => t.Receita)
+        .Take(30)
+        .ToList();
 
         return Ok(new FinanceiroDto
         {
-            Receita         = Math.Round(receita, 2),
-            ReceitaComandas = Math.Round(receitaComandas, 2),
-            ReceitaAvulsa   = Math.Round(receitaAvulsa, 2),
-            Custo           = Math.Round(custo, 2),
-            Margem          = Math.Round(margem, 2),
-            MargemPercent   = margemPercent,
-            Crediarios      = Math.Round(crediarios, 2),
+            Receita            = Math.Round(receita, 2),
+            ReceitaComandas    = Math.Round(receitaComandas, 2),
+            ReceitaAvulsa      = Math.Round(receitaAvulsa, 2),
+            Custo              = Math.Round(custo, 2),
+            Margem             = Math.Round(margem, 2),
+            MargemPercent      = margemPercent,
+            Crediarios         = Math.Round(crediarios, 2),
             DiaDia             = diaDia,
             TopProdutos        = topProdutos,
             PagamentosPorForma = todasFormas,
