@@ -1010,9 +1010,12 @@ export default function DashboardPage() {
   const [pendingPI, setPendingPI]       = useState(0)
   const [pendingLgpd, setPendingLgpd]   = useState<LgpdRequestDto[]>([])
   const [finProdutos, setFinProdutos]   = useState<FinanceiroDto | null>(null)
-  const [prodPeriodo, setProdPeriodo]   = useState<'7' | '30' | '0' | 'custom'>('7')
-  const [prodCustomDias, setProdCustomDias] = useState(14)
-  const [prodCustomInput, setProdCustomInput] = useState('14')
+  const [prodDe,  setProdDe]  = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 6)
+    return new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(d)
+  })
+  const [prodAte, setProdAte] = useState(brToday)
   const prevCountRef              = useRef(0)
   const knownIdsRef               = useRef<Set<string>>(new Set())
 
@@ -1067,20 +1070,12 @@ export default function DashboardPage() {
     lgpdAdminApi.listRequests('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
   }, [])
 
-  async function fetchProdutos(periodo: '7' | '30' | '0' | 'custom', customDias: number) {
+  async function fetchProdutos(de: string, ate: string) {
     try {
-      const hoje = brToday()
-      if (periodo === '0') {
-        const { data } = await analyticsApi.financeiro()
-        setFinProdutos(data)
-      } else {
-        const dias = periodo === 'custom' ? customDias : parseInt(periodo)
-        const ini = new Date()
-        ini.setDate(ini.getDate() - (dias - 1))
-        const iniStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(ini)
-        const { data } = await analyticsApi.financeiro(iniStr, hoje)
-        setFinProdutos(data)
-      }
+      const { data } = de || ate
+        ? await analyticsApi.financeiro(de || undefined, ate || undefined)
+        : await analyticsApi.financeiro()
+      setFinProdutos(data)
     } catch {}
   }
 
@@ -1781,9 +1776,9 @@ export default function DashboardPage() {
                 <button onClick={togglePanelProdutos} className="w-full flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
                     <Star className="w-4 h-4 text-accent-gold" />
-                    Top produtos&nbsp;
-                    <span className="text-accent-gold">
-                      {prodPeriodo === '7' ? '(7 dias)' : prodPeriodo === '30' ? '(30 dias)' : prodPeriodo === '0' ? '(geral)' : `(${prodCustomDias}d)`}
+                    Top produtos
+                    <span className="text-xs font-normal text-gray-500">
+                      {prodDe || prodAte ? `${prodDe || '…'} → ${prodAte || '…'}` : '(todos os tempos)'}
                     </span>
                   </h3>
                   {panelProdutos ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
@@ -1791,52 +1786,35 @@ export default function DashboardPage() {
 
                 {panelProdutos && (
                   <div className="mt-3 space-y-3">
-                    {/* Seletor de período */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {(['7', '30', '0'] as const).map(p => (
-                        <button
-                          key={p}
-                          onClick={() => { setProdPeriodo(p); fetchProdutos(p, prodCustomDias) }}
-                          className={clsx(
-                            'px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-colors',
-                            prodPeriodo === p
-                              ? 'bg-brand-500/20 text-brand-400 border border-brand-500/40'
-                              : 'bg-surface-700 text-gray-500 border border-surface-600 hover:text-gray-300'
-                          )}
-                        >
-                          {p === '7' ? '7d' : p === '30' ? '30d' : 'Geral'}
-                        </button>
-                      ))}
+                    {/* Seletor de período — calendário De/Até */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-500 shrink-0">De</span>
+                        <input
+                          type="date"
+                          value={prodDe}
+                          max={prodAte || brToday()}
+                          onChange={e => { setProdDe(e.target.value); fetchProdutos(e.target.value, prodAte) }}
+                          className="input text-xs py-1 w-32"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-500 shrink-0">Até</span>
+                        <input
+                          type="date"
+                          value={prodAte}
+                          max={brToday()}
+                          min={prodDe || undefined}
+                          onChange={e => { setProdAte(e.target.value); fetchProdutos(prodDe, e.target.value) }}
+                          className="input text-xs py-1 w-32"
+                        />
+                      </div>
                       <button
-                        onClick={() => { setProdPeriodo('custom'); fetchProdutos('custom', prodCustomDias) }}
-                        className={clsx(
-                          'px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-colors',
-                          prodPeriodo === 'custom'
-                            ? 'bg-brand-500/20 text-brand-400 border border-brand-500/40'
-                            : 'bg-surface-700 text-gray-500 border border-surface-600 hover:text-gray-300'
-                        )}
+                        onClick={() => { setProdDe(''); setProdAte(''); fetchProdutos('', '') }}
+                        className="px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-surface-700 text-gray-500 border border-surface-600 hover:text-gray-300 transition-colors"
                       >
-                        Personalizado
+                        Geral
                       </button>
-                      {prodPeriodo === 'custom' && (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={1}
-                            max={365}
-                            value={prodCustomInput}
-                            onChange={e => setProdCustomInput(e.target.value)}
-                            onBlur={() => {
-                              const v = Math.max(1, Math.min(365, parseInt(prodCustomInput) || 14))
-                              setProdCustomDias(v)
-                              setProdCustomInput(String(v))
-                              fetchProdutos('custom', v)
-                            }}
-                            className="w-14 px-2 py-0.5 rounded-lg text-xs text-center bg-surface-700 border border-surface-600 text-gray-300 focus:outline-none focus:border-brand-500"
-                          />
-                          <span className="text-xs text-gray-600">dias</span>
-                        </div>
-                      )}
                     </div>
 
                     {/* Lista */}
