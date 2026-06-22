@@ -297,7 +297,6 @@ export default function EstoquePage() {
   const [search, setSearch]         = useState('')
   const [modal, setModal]           = useState<Partial<Product> | null | undefined>(undefined)
   const [catFilter, setCatFilter]   = useState('')
-  const [activeTab, setActiveTab]   = useState<'estoque' | 'marketplace'>('estoque')
 
   const fetch = async () => {
     setLoading(true)
@@ -357,19 +356,6 @@ export default function EstoquePage() {
     catch { toast.error('Estoque insuficiente') }
   }
 
-  async function handleToggleMkt(p: Product) {
-    try {
-      const next = !p.showOnSite
-      await productApi.update(p.id, { ...p, showOnSite: next, isFeatured: next ? p.isFeatured : false })
-      fetch()
-    } catch { toast.error('Erro ao atualizar') }
-  }
-
-  async function handleToggleFeatured(p: Product) {
-    if (!p.showOnSite) return
-    try { await productApi.update(p.id, { ...p, isFeatured: !p.isFeatured }); fetch() }
-    catch { toast.error('Erro ao atualizar') }
-  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -382,23 +368,6 @@ export default function EstoquePage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Estoque</h1>
           <p className="text-gray-400 text-sm mt-0.5">{products.length} produtos cadastrados</p>
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Tabs */}
-          <div className="flex gap-1 p-1 bg-surface-800 rounded-xl border border-surface-500">
-            <button
-              onClick={() => setActiveTab('estoque')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${activeTab === 'estoque' ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-gray-200'}`}
-            >
-              Produtos
-            </button>
-            <button
-              onClick={() => setActiveTab('marketplace')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${activeTab === 'marketplace' ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-gray-200'}`}
-            >
-              🛍️ Marketplace
-            </button>
-          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={exportCsv} className="btn-secondary" title="Exportar CSV">
@@ -436,8 +405,8 @@ export default function EstoquePage() {
         </select>
       </div>
 
-      {/* Tabela — aba Estoque */}
-      {activeTab === 'estoque' && (loading ? (
+      {/* Tabela */}
+      {loading ? (
         <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
       ) : (
         <div className="card p-0 overflow-hidden">
@@ -527,73 +496,7 @@ export default function EstoquePage() {
           )}
           </div>
         </div>
-      ))}
-
-      {/* Aba Marketplace */}
-      {activeTab === 'marketplace' && (loading ? (
-        <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
-      ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-500">
-            Gerencie quais produtos aparecem na loja digital. As comandas e o PDV não são afetados por estas configurações.
-          </p>
-          <div className="card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm min-w-[500px]">
-                <thead className="bg-surface-800 border-b border-surface-500">
-                  <tr className="text-left">
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Produto</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Categoria</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Preço</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider text-center">No Marketplace</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider text-center">⭐ Destaque</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-surface-500">
-                  {filtered.map(p => (
-                    <tr key={p.id} className={`transition-colors ${p.showOnSite ? 'hover:bg-surface-600/30' : 'opacity-50 hover:opacity-70'}`}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-white">{p.name}</p>
-                        {p.isPreVenda && <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: '#7C3AED' }}>Pré-venda</span>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="badge bg-surface-600 text-gray-300 border-surface-500">{p.category}</span>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-gray-200 text-xs">
-                        R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleToggleMkt(p)}
-                          className={`relative w-10 h-6 rounded-full transition-colors mx-auto block ${p.showOnSite ? 'bg-brand-500' : 'bg-surface-500'}`}
-                        >
-                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${p.showOnSite ? 'translate-x-4' : 'translate-x-0'}`} />
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleToggleFeatured(p)}
-                          disabled={!p.showOnSite}
-                          title={!p.showOnSite ? 'Ative o marketplace primeiro' : ''}
-                          className={`relative w-10 h-6 rounded-full transition-colors mx-auto block disabled:cursor-not-allowed ${p.isFeatured ? 'bg-yellow-500' : 'bg-surface-500'}`}
-                        >
-                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${p.isFeatured ? 'translate-x-4' : 'translate-x-0'}`} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filtered.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
-                  <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                  Nenhum produto encontrado
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
+      )}
     </div>
   )
 }
