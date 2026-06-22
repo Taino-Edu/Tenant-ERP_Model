@@ -2,8 +2,8 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.7.0'
-const DATA = '16/06/2026'
+const VERSION = 'v1.7.1'
+const DATA = '22/06/2026'
 
 const SECOES = [
   {
@@ -11,12 +11,16 @@ const SECOES = [
     titulo: 'Dashboard',
     cor: '#00F0A8',
     itens: [
-      { t: 'Visão geral financeira', d: 'Mostra o faturamento do dia, semana e mês. Os cartões no topo resumem receita, ticket médio e número de vendas.' },
-      { t: 'Gráfico de receita', d: 'Barras diárias dos últimos 30 dias. Passe o mouse sobre a barra para ver o valor exato do dia.' },
-      { t: 'Comandas abertas', d: 'Lista em tempo real das comandas que ainda estão abertas. Clique em qualquer uma para ir direto ao painel de comandas.' },
-      { t: 'Top produtos', d: 'Ranking dos itens mais vendidos no período selecionado.' },
+      { t: 'Comandas em destaque', d: 'Ao abrir o dashboard, as comandas ativas aparecem imediatamente, sem scroll. Os 4 KPIs no topo (comandas ativas, receita do dia, valor em aberto, estoque baixo) ficam sempre visíveis.' },
+      { t: 'Tab Ativas', d: 'Lista em tempo real de todas as comandas abertas, com busca por cliente e botão para abrir nova comanda.' },
+      { t: 'Tab Histórico', d: 'Comandas fechadas e canceladas do dia selecionado. Inclui breakdown por forma de pagamento no topo.' },
+      { t: 'Tab Análises', d: 'Painéis financeiros colapsáveis: detalhe do dia, gráfico de receita 7 dias, previsão do mês, patrimônio, top clientes, LGPD e pré-inscrições. Cada painel mantém estado aberto/fechado entre visitas.' },
+      { t: 'Atualização automática', d: 'Intervalo configurável: 15s, 30s, 1 minuto ou manual. Também recebe eventos em tempo real via SignalR.' },
     ],
-    dicas: ['O dashboard atualiza sozinho a cada vez que você abre a página.'],
+    dicas: [
+      'Quais painéis aparecem na tab Análises é controlado em Configurações → Dashboard.',
+      'O esquema de cores do gráfico (Padrão, Azul, Neon) é configurável por usuário.',
+    ],
   },
   {
     num: '02',
@@ -40,14 +44,16 @@ const SECOES = [
     titulo: 'Venda Avulsa — Frente de Caixa (PDV)',
     cor: '#4ADE80',
     itens: [
-      { t: 'Quando usar', d: 'Para vendas rápidas no balcão, sem precisar de QR Code ou comanda. Ideal para clientes que chegam e pagam na hora.' },
-      { t: 'Adicionar produtos', d: 'Pesquise o produto pelo nome ou escaneie o código de barras. Ajuste a quantidade e clique em adicionar.' },
-      { t: 'Selecionar cliente (opcional)', d: 'Se o cliente é cadastrado, selecione-o para vincular a venda. Isso acumula pontos automaticamente e permite Crediário, Pontos e Cashback.' },
-      { t: 'Finalizar venda', d: 'Escolha a forma de pagamento e confirme. No celular, use a barra fixa no rodapé para finalizar sem rolar a tela.' },
-      { t: 'Desconto', d: 'Aplique desconto percentual antes de finalizar. O sistema mostra o valor original e o valor com desconto.' },
+      { t: 'Quando usar', d: 'Para vendas rápidas no balcão, sem QR Code. Ideal para clientes que chegam e pagam na hora.' },
+      { t: 'Wizard 3 etapas', d: 'O PDV guia você por: 1) selecionar cliente, 2) adicionar produtos, 3) escolher pagamento. Navegue livremente entre etapas sem perder o carrinho.' },
+      { t: 'Adicionar produtos', d: 'Pesquise pelo nome, use código de barras ou a câmera do celular para escanear. Ajuste a quantidade antes de adicionar.' },
+      { t: 'Barra flutuante', d: 'Total e botão de finalizar sempre visíveis no rodapé, em qualquer etapa. Inclui desconto rápido embutido — sem precisar navegar entre abas.' },
+      { t: 'Desconto rápido', d: 'Aplique desconto percentual diretamente na barra flutuante. O desconto padrão é pré-configurável nas Preferências.' },
+      { t: 'Split de pagamento', d: 'Selecione uma segunda forma de pagamento e informe o valor. O saldo restante é calculado automaticamente.' },
+      { t: 'Analytics do PDV', d: 'Histórico com gráfico de pico de horário, top produtos vendidos no período e breakdown por forma de pagamento.' },
     ],
     dicas: [
-      'Vendas avulsas com cliente identificado ficam no histórico do cliente.',
+      'O desconto padrão (0 a 20%) pode ser pré-configurado em Configurações → Frente de Caixa.',
       'Sem cliente selecionado, a venda é anônima — aparece apenas nos relatórios gerais.',
     ],
   },
@@ -154,9 +160,27 @@ const SECOES = [
     cor: '#FB7185',
     itens: [
       { t: 'Criar anúncio', d: 'Vá em Anúncios → Novo. Escolha o tipo, escreva o texto, adicione imagem e defina data de expiração se necessário.' },
+      { t: 'Banners do hero', d: 'Aparecem como fundo rotativo do hero da landing page. Cadastre múltiplos banners para rotação automática.' },
+      { t: 'Avisos e destaques', d: 'Carrossel rotativo abaixo do hero com setas de navegação. Pausa automaticamente ao tocar.' },
       { t: 'Expiração automática', d: 'Defina uma data de expiração e o anúncio some automaticamente. Útil para promoções com prazo.' },
       { t: 'Catálogo TCG', d: 'Catálogo integrado de cartas (Pokémon, Magic, etc.) com preços de mercado. Pesquise por nome e adicione diretamente na comanda.' },
-      { t: 'Preços do catálogo', d: 'Os preços são referência de mercado — você define o preço final na comanda.' },
+    ],
+  },
+  {
+    num: '11',
+    titulo: 'Configurações e Preferências',
+    cor: '#94A3B8',
+    itens: [
+      { t: 'Preferências por perfil', d: 'Cada usuário tem configurações salvas no servidor. Mudanças refletem em todos os dispositivos e são aplicadas em tempo real, sem recarregar a página.' },
+      { t: 'Assistente IA', d: 'Ative/desative o chat IA. Escolha entre botão arrastável (posição salva entre sessões) ou fixo em um dos 4 cantos da tela.' },
+      { t: 'VLibras — Acessibilidade', d: 'Ative/desative o widget de tradução em Libras e defina em qual canto da tela ele aparece.' },
+      { t: 'Dashboard — Painéis', d: 'Controle quais painéis aparecem na tab Análises: detalhe financeiro, gráfico 7 dias, previsão do mês, patrimônio, top clientes, LGPD e pré-inscrições.' },
+      { t: 'Dashboard — Intervalo e cores', d: 'Configure o intervalo de atualização automática (15s, 30s, 1min ou manual) e o esquema de cores do gráfico (Padrão, Azul, Neon).' },
+      { t: 'Frente de Caixa — Desconto padrão', d: 'Pré-selecione o desconto padrão (0 a 20%) que aparece ao abrir uma nova venda no PDV.' },
+    ],
+    dicas: [
+      'Todas as mudanças são aplicadas em tempo real — sem precisar recarregar a página.',
+      'Use "Resetar layout" nas configurações do Dashboard para reabrir todos os painéis colapsados.',
     ],
   },
 ]

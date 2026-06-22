@@ -5,7 +5,7 @@ import {
   Info, Tag, Calendar, CheckCircle, Wrench, Zap,
   BookOpen, ChevronDown, ChevronUp, FileDown,
   LayoutDashboard, ShoppingBag, ShoppingCart, Package,
-  Users, CreditCard, Trophy, BarChart2, Layers, Megaphone,
+  Users, CreditCard, Trophy, BarChart2, Layers, Megaphone, Settings,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -127,12 +127,16 @@ const MANUAL: ManualSection[] = [
     title: 'Dashboard',
     color: 'text-brand-400',
     steps: [
-      { title: 'Visão geral financeira', desc: 'Mostra o faturamento do dia, semana e mês. Os cartões no topo resumem receita, ticket médio e número de vendas.' },
-      { title: 'Gráfico de receita', desc: 'Barras diárias dos últimos 30 dias. Passe o mouse sobre a barra para ver o valor exato do dia.' },
-      { title: 'Comandas abertas', desc: 'Lista em tempo real das comandas que ainda estão abertas. Clique em qualquer uma para ir direto ao painel de comandas.' },
-      { title: 'Top produtos', desc: 'Ranking dos itens mais vendidos no período selecionado.' },
+      { title: 'Comandas em destaque', desc: 'Ao abrir o dashboard, as comandas ativas aparecem imediatamente — sem precisar rolar a página. Os 4 KPIs no topo (comandas ativas, receita do dia, valor em aberto, estoque baixo) ficam sempre visíveis.' },
+      { title: 'Tab Ativas', desc: 'Lista em tempo real de todas as comandas abertas. Use a busca para filtrar por cliente.' },
+      { title: 'Tab Histórico', desc: 'Comandas fechadas e canceladas do dia. Inclui breakdown por forma de pagamento no topo.' },
+      { title: 'Tab Análises', desc: 'Todos os painéis financeiros: detalhe do dia, gráfico de receita 7 dias, previsão do mês, patrimônio em estoque, top clientes, LGPD e pré-inscrições de campeonatos. Cada painel é colapsável individualmente.' },
+      { title: 'Atualização automática', desc: 'Intervalo configurável nas Preferências (15s, 30s, 1min ou manual). Também conecta via SignalR para receber eventos em tempo real.' },
     ],
-    tips: ['O dashboard atualiza sozinho a cada vez que você abre a página.'],
+    tips: [
+      'Quais painéis aparecem na tab Análises é controlado pelas Configurações → Dashboard.',
+      'O esquema de cores do gráfico (Padrão, Azul, Neon) também é configurável por usuário.',
+    ],
   },
   {
     icon: <ShoppingBag className="w-4 h-4" />,
@@ -157,14 +161,16 @@ const MANUAL: ManualSection[] = [
     color: 'text-emerald-400',
     steps: [
       { title: 'Quando usar', desc: 'Para vendas rápidas no balcão, sem precisar de QR Code ou comanda. Ideal para clientes que chegam e pagam na hora.' },
-      { title: 'Adicionar produtos', desc: 'Pesquise o produto pelo nome ou escaneie o código de barras. Ajuste a quantidade e clique em adicionar.' },
-      { title: 'Selecionar cliente (opcional)', desc: 'Se o cliente é cadastrado, selecione-o para vincular a venda. Isso acumula pontos Maikon automaticamente e permite Crediário, Pontos e Cashback.' },
-      { title: 'Finalizar venda', desc: 'Escolha a forma de pagamento e confirme. No celular, use a barra fixa no rodapé para finalizar sem rolar a tela.' },
-      { title: 'Desconto', desc: 'Aplique desconto percentual antes de finalizar. O sistema mostra o valor original e o valor com desconto.' },
+      { title: 'Wizard 3 etapas', desc: 'O PDV guia você por três passos: 1) selecionar cliente, 2) adicionar produtos, 3) escolher pagamento. Navegue livremente entre as etapas sem perder o carrinho.' },
+      { title: 'Adicionar produtos', desc: 'Na etapa de itens, pesquise pelo nome ou escaneie o código de barras. A câmera pode ser usada para escanear direto do celular.' },
+      { title: 'Barra flutuante de finalização', desc: 'O total e o botão de finalizar ficam visíveis em todas as etapas numa barra fixa no rodapé. Inclui botão de desconto rápido sem precisar navegar entre abas.' },
+      { title: 'Desconto rápido', desc: 'Aplique desconto percentual diretamente na barra flutuante ou no bottom sheet da comanda. O sistema mostra o valor original e o valor com desconto em tempo real.' },
+      { title: 'Split de pagamento', desc: 'Na etapa de pagamento, selecione uma segunda forma e informe o valor — o saldo restante é calculado automaticamente.' },
+      { title: 'Analytics de vendas', desc: 'Após as vendas do dia, acesse o histórico do PDV com gráfico de pico de horário, top produtos vendidos e breakdown por forma de pagamento.' },
     ],
     tips: [
+      'O desconto padrão (0%, 5%, 10%, 15% ou 20%) pode ser pré-configurado nas Preferências → Frente de Caixa.',
       'Vendas avulsas com cliente identificado ficam no histórico do cliente.',
-      'Sem cliente selecionado, a venda é anônima — aparece apenas nos relatórios gerais.',
     ],
   },
   {
@@ -266,8 +272,25 @@ const MANUAL: ManualSection[] = [
     steps: [
       { title: 'Criar anúncio', desc: 'Vá em Anúncios → Novo. Escolha o tipo (Banner, Aviso ou Destaque), escreva o texto e defina se tem imagem e data de expiração.' },
       { title: 'Banners', desc: 'Aparecem em destaque na área do cliente — ideal para promoções e eventos.' },
-      { title: 'Avisos', desc: 'Mensagens informativas que aparecem em menor destaque. Bom para horários especiais ou comunicados.' },
+      { title: 'Avisos e destaques', desc: 'Aparecem em carrossel rotativo abaixo do hero da landing page. Navegação por setas e pausa automática ao tocar.' },
       { title: 'Expiração automática', desc: 'Defina uma data de expiração e o anúncio some automaticamente. Útil para promoções com prazo.' },
+    ],
+  },
+  {
+    icon: <Settings className="w-4 h-4" />,
+    title: 'Configurações e Preferências',
+    color: 'text-gray-300',
+    steps: [
+      { title: 'Preferências por perfil', desc: 'Cada usuário tem suas próprias configurações salvas no servidor. Mudar em um dispositivo reflete em todos os outros automaticamente.' },
+      { title: 'Assistente IA', desc: 'Ative ou desative o chat IA flutuante. Escolha entre botão arrastável (posição salva) ou fixo em um dos 4 cantos da tela.' },
+      { title: 'VLibras (Acessibilidade)', desc: 'Ative ou desative o widget de tradução em Libras e escolha o canto da tela onde ele aparece.' },
+      { title: 'Dashboard — Painéis visíveis', desc: 'Escolha quais painéis aparecem na tab Análises: detalhe financeiro, gráfico, previsão, patrimônio, top clientes, LGPD, top produtos e pré-inscrições.' },
+      { title: 'Dashboard — Intervalo e cores', desc: 'Configure o intervalo de atualização automática (15s, 30s, 1min ou manual) e o esquema de cores do gráfico de receita.' },
+      { title: 'Frente de Caixa — Desconto padrão', desc: 'Pré-selecione o desconto padrão (0%, 5%, 10%, 15% ou 20%) que aparece ao abrir uma nova venda no PDV.' },
+    ],
+    tips: [
+      'Todas as mudanças nas configurações são aplicadas em tempo real — sem precisar recarregar a página.',
+      'Use "Resetar layout" nas configurações do Dashboard para reabrir todos os painéis colapsados.',
     ],
   },
 ]

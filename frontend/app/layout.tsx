@@ -5,6 +5,7 @@ import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
 import VLibrasController from '@/components/VLibrasController'
+import ClientProviders from '@/components/ClientProviders'
 
 const nunito = Nunito({
   subsets: ['latin'],
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        <ClientProviders>
         {/* Script VLibras — Acessibilidade (atributos customizados via spread para evitar erro TS) */}
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <div {...({ vw: 'true' } as any)} className="enabled">
@@ -82,6 +84,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <CookieBanner />
         {/* Botão flutuante de instalação PWA — aparece quando o Chrome suporta */}
         <PWAInstallButton />
+        </ClientProviders>
       </body>
     </html>
   )
