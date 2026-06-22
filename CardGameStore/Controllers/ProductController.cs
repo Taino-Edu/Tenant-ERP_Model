@@ -39,6 +39,16 @@ public class ProductController : ControllerBase
         return Ok(products);
     }
 
+    /// <summary>Lista todos os produtos ativos para comanda do cliente (sem filtro de marketplace).</summary>
+    [HttpGet("store")]
+    [Authorize]
+    [ProducesResponseType(typeof(IEnumerable<Product>), 200)]
+    public async Task<IActionResult> GetAllStore()
+    {
+        var products = await _service.GetAllForAdminAsync();
+        return Ok(products);
+    }
+
     /// <summary>Lista TODOS os produtos ativos (incluindo ocultos do site). Só Admin/Operator.</summary>
     [HttpGet("admin")]
     [Authorize(Roles = "Admin,Operator")]

@@ -129,7 +129,7 @@ export default function ClientePage() {
 
   useEffect(() => {
     fetchComanda()
-    productApi.list().then(r => setProducts(r.data)).catch(() => {})
+    productApi.listStore().then(r => setProducts(r.data)).catch(() => {})
     categoryApi.list().then(r => setCategories(r.data)).catch(() => {})
     userApi.me().then(r => setProfile(r.data)).catch(() => {})
 
