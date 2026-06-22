@@ -990,6 +990,17 @@ function AnnouncementModal({ ann, onClose, C }: { ann: AnnouncementDto; onClose:
 }
 
 function ProductModal({ product: p, onClose, C }: { product: Product; onClose: () => void; C: Theme }) {
+  const [imgIdx, setImgIdx] = useState(0)
+
+  const images = p.imageUrls && p.imageUrls.length > 0
+    ? p.imageUrls
+    : p.imageUrl ? [p.imageUrl] : []
+  const activeImg = images[imgIdx] ?? null
+
+  const discountPct = p.isOnPromo && p.discountPriceInReais != null
+    ? Math.round((1 - p.discountPriceInReais / p.priceInReais) * 100)
+    : null
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', h)
@@ -997,66 +1008,139 @@ function ProductModal({ product: p, onClose, C }: { product: Product; onClose: (
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm"
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm"
       onClick={onClose}>
-      <div className="relative w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl border border-b-0 sm:border-b"
+      <div className="relative w-full sm:max-w-2xl rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl border border-b-0 sm:border-b"
         style={{ backgroundColor: C.card, borderColor: C.border }}
         onClick={e => e.stopPropagation()}>
-        {/* Handle visual — mobile only */}
+
+        {/* Handle mobile */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div className="w-10 h-1 rounded-full opacity-30" style={{ backgroundColor: C.navy }} />
         </div>
+
+        {/* Fechar */}
         <button onClick={onClose}
-          className="absolute top-3 right-3 z-10 p-1.5 rounded-full bg-black/50 hover:bg-black/80 transition">
+          className="absolute top-3 right-3 z-20 p-1.5 rounded-full bg-black/50 hover:bg-black/80 transition">
           <X className="w-4 h-4 text-white" />
         </button>
-        {p.imageUrl ? (
-          <div className="w-full aspect-[4/3] sm:aspect-square" style={{ backgroundColor: C.cardAlt }}>
-            <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain p-4" />
-          </div>
-        ) : (
-          <div className="w-full aspect-[4/3] sm:aspect-square flex items-center justify-center" style={{ backgroundColor: C.cardAlt }}>
-            <Package className="w-12 h-12 opacity-20 text-white" />
-          </div>
-        )}
-        <div className="p-5 pb-8 sm:pb-5">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-xs uppercase tracking-wide font-medium" style={{ color: C.text }}>{p.category}</p>
-            {p.isPreVenda && (
-              <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
-                style={{ backgroundColor: '#7C3AED', color: '#fff' }}>
-                Pré-venda
-              </span>
+
+        <div className="sm:grid sm:grid-cols-[1fr_1fr]">
+
+          {/* ── Galeria ── */}
+          <div style={{ backgroundColor: C.cardAlt }}>
+            <div className="relative w-full aspect-square flex items-center justify-center p-4">
+              {activeImg
+                ? <img src={activeImg} alt={p.name} className="w-full h-full object-contain" />
+                : <Package className="w-16 h-16 opacity-20" style={{ color: C.navy }} />
+              }
+
+              {/* Badges */}
+              <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                {p.isPreVenda && (
+                  <span className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-lg"
+                    style={{ backgroundColor: '#7C3AED', color: '#fff' }}>Pré-venda</span>
+                )}
+                {p.isOnPromo && !p.isPreVenda && (
+                  <span className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-lg"
+                    style={{ backgroundColor: '#FF3B3B', color: '#fff' }}>Promoção</span>
+                )}
+                {p.isFeatured && !p.isOnPromo && !p.isPreVenda && (
+                  <span className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 rounded-lg"
+                    style={{ backgroundColor: '#F59E0B', color: '#fff' }}>Destaque</span>
+                )}
+              </div>
+
+              {/* % OFF */}
+              {discountPct != null && (
+                <div className="absolute top-3 right-3 w-11 h-11 rounded-full flex items-center justify-center font-black text-[11px] leading-none text-white"
+                  style={{ backgroundColor: '#FF3B3B' }}>
+                  -{discountPct}%
+                </div>
+              )}
+            </div>
+
+            {/* Thumbnails */}
+            {images.length > 1 && (
+              <div className="flex gap-2 px-4 pb-4 overflow-x-auto">
+                {images.map((img, i) => (
+                  <button key={i} onClick={() => setImgIdx(i)}
+                    className="shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition-all"
+                    style={{
+                      borderColor: i === imgIdx ? C.blue : 'transparent',
+                      backgroundColor: C.card,
+                      opacity: i === imgIdx ? 1 : 0.55,
+                    }}>
+                    <img src={img} alt="" className="w-full h-full object-contain p-1" />
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-          <h3 className="text-lg font-black text-white leading-snug mb-2">{p.name}</h3>
-          {p.description && (
-            <p className="text-sm mb-4 leading-relaxed" style={{ color: C.text }}>{p.description}</p>
-          )}
-          <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: C.border }}>
-            {p.isOnPromo && p.discountPriceInReais != null ? (
-              <div className="flex flex-col">
-                <span className="text-sm line-through" style={{ color: C.text }}>
+
+          {/* ── Info ── */}
+          <div className="p-5 pb-8 sm:pb-5 flex flex-col gap-3 sm:overflow-y-auto sm:max-h-[480px]">
+
+            {/* Categoria */}
+            <span className="inline-block self-start text-[10px] uppercase tracking-widest font-bold px-2.5 py-1 rounded-full"
+              style={{ backgroundColor: `${C.blue}20`, color: C.blue }}>
+              {p.category}
+            </span>
+
+            {/* Nome */}
+            <h3 className="text-xl font-black leading-snug" style={{ color: C.navy }}>{p.name}</h3>
+
+            {/* Descrição */}
+            {(p.fullDescription || p.description) && (
+              <p className="text-sm leading-relaxed" style={{ color: C.text }}>
+                {p.fullDescription || p.description}
+              </p>
+            )}
+
+            <div className="mt-auto pt-4 space-y-4 border-t" style={{ borderColor: C.border }}>
+
+              {/* Preço */}
+              {p.isOnPromo && p.discountPriceInReais != null ? (
+                <div className="flex items-end gap-3">
+                  <span className="text-3xl font-black leading-none" style={{ color: '#FF3B3B' }}>
+                    R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}
+                  </span>
+                  <span className="text-sm line-through mb-0.5" style={{ color: C.text }}>
+                    R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-3xl font-black" style={{ color: C.yellow }}>
                   R$ {p.priceInReais.toFixed(2).replace('.', ',')}
                 </span>
-                <span className="text-2xl font-black" style={{ color: '#FF3B3B' }}>
-                  R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}
-                </span>
+              )}
+
+              {/* Estoque */}
+              <div className="flex items-center gap-2">
+                {p.isLowStock ? (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                    <span className="text-sm font-bold" style={{ color: '#F59E0B' }}>
+                      Últimas {p.stockQuantity} unidade{p.stockQuantity !== 1 ? 's' : ''}!
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="text-sm" style={{ color: C.text }}>{p.stockQuantity} em estoque</span>
+                  </>
+                )}
               </div>
-            ) : (
-              <span className="text-2xl font-black" style={{ color: C.yellow }}>
-                R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-              </span>
-            )}
-            <span className="text-sm flex items-center gap-1" style={{ color: C.text }}>
-              <Package className="w-4 h-4" /> {p.stockQuantity} em estoque
-            </span>
+
+              {/* CTA */}
+              <Link href={`/produtos/${p.id}`}
+                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-black text-sm transition-all active:scale-95"
+                style={{ backgroundColor: C.blue, color: '#fff', boxShadow: `0 4px 16px ${C.blue}40` }}>
+                Ver produto completo <ChevronRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
-          <Link href={`/produtos/${p.id}`}
-            className="mt-4 flex items-center justify-center gap-2 w-full py-3 rounded-xl font-black text-sm transition-all active:scale-95"
-            style={{ backgroundColor: C.blue, color: '#fff' }}>
-            <ChevronRight className="w-4 h-4" /> Ver página completa
-          </Link>
+
         </div>
       </div>
     </div>
