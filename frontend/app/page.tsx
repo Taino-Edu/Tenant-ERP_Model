@@ -29,6 +29,7 @@ export default function LandingPage() {
   const [mobileMenu,    setMobileMenu]    = useState(false)
   const [isDark,        setIsDark]        = useState(false)
   const [navVisible,    setNavVisible]    = useState(true)
+  const [navHover,      setNavHover]      = useState(false)
   const [bannerIdx,    setBannerIdx]  = useState(0)
   const [annIdx,       setAnnIdx]     = useState(0)
   const carouselRef   = useRef<HTMLDivElement>(null)
@@ -125,8 +126,14 @@ export default function LandingPage() {
     <div className="min-h-screen" style={{ backgroundColor: C.bg, color: C.navy }}>
 
       {/* ── NAVBAR ─────────────────────────────────────────────────────── */}
+      {/* Trigger zone: permite hover revelar o nav mesmo quando escondido */}
+      <div className="fixed top-0 inset-x-0 h-3 z-[51]"
+        onMouseEnter={() => setNavHover(true)} />
+
       <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center relative transition-transform duration-300"
-        style={{ backgroundColor: '#0F3460', backdropFilter: 'blur(16px)', transform: navVisible ? 'translateY(0)' : 'translateY(-100%)' }}>
+        style={{ backgroundColor: '#0F3460', backdropFilter: 'blur(16px)', transform: (navVisible || navHover) ? 'translateY(0)' : 'translateY(-100%)' }}
+        onMouseEnter={() => setNavHover(true)}
+        onMouseLeave={() => setNavHover(false)}>
 
         {/* Marca centralizada absolutamente */}
         <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">

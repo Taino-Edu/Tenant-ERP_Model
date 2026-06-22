@@ -983,7 +983,7 @@ export default function FinanceiroPage() {
                           : null
                         const diff = precoSugerido !== null ? precoSugerido - precoMedio : null
                         return (
-                          <tr key={p.nome} className="hover:bg-surface-600/20 transition-colors">
+                          <tr key={p.nome} className="hover:bg-white/5 transition-colors">
                             <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
                             <td className="px-4 py-2.5 font-medium text-white max-w-[180px]">
                               <p className="truncate">{p.nome}</p>
@@ -993,17 +993,17 @@ export default function FinanceiroPage() {
                             <td className="px-4 py-2.5 font-mono text-gray-200 font-semibold text-xs">
                               {precoMedio > 0 ? fmt(precoMedio) : '—'}
                             </td>
-                            <td className="px-4 py-2.5 font-mono text-gray-400 text-xs">
+                            <td className="px-4 py-2.5 font-mono text-red-400 text-xs">
                               {custoMedio > 0 ? fmt(custoMedio) : <span className="text-gray-600">—</span>}
                             </td>
                             <td className="px-4 py-2.5">
                               {margemAtual !== null ? (
                                 <div className="flex items-center gap-2">
                                   <div className="w-12 h-1.5 bg-surface-600 rounded-full overflow-hidden">
-                                    <div className={`h-full rounded-full ${margemAtual >= targetPct ? 'bg-emerald-500' : margemAtual >= 0 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    <div className={`h-full rounded-full ${margemAtual >= targetPct ? 'bg-emerald-500' : margemAtual >= 0 ? 'bg-purple-500' : 'bg-red-500'}`}
                                       style={{ width: `${Math.min(100, Math.abs(margemAtual))}%` }} />
                                   </div>
-                                  <span className={`text-xs font-mono font-bold ${margemAtual >= targetPct ? 'text-emerald-400' : margemAtual >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                  <span className={`text-xs font-mono font-bold ${margemAtual >= targetPct ? 'text-emerald-400' : margemAtual >= 0 ? 'text-purple-400' : 'text-red-400'}`}>
                                     {margemAtual.toFixed(0)}%
                                   </span>
                                 </div>
