@@ -83,7 +83,7 @@ export default function ProdutosPage() {
     const saved = localStorage.getItem('landing-theme')
     if (saved === 'dark') setIsDark(true)
     productApi.list()
-      .then(r => setProducts(r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnSite !== false)))
+      .then(r => setProducts(r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnMarketplace !== false)))
       .finally(() => setLoading(false))
   }, [])
 

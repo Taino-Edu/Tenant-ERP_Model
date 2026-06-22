@@ -114,7 +114,7 @@ export default function LandingPage() {
         setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 8))
       ),
       productApi.list().then(r => {
-        const visible  = r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnSite !== false)
+        const visible  = r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnMarketplace !== false)
         const featured = visible.filter(p => p.isFeatured)
         setProducts(featured.length > 0 ? featured : visible)
       }),
