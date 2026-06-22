@@ -1263,22 +1263,18 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Métricas ao vivo — barra compacta */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Métricas ao vivo — barra slim */}
+      <div className="card py-2.5 px-4 flex items-center overflow-x-auto gap-0 divide-x divide-surface-600">
         {[
-          { label: 'Comandas Ativas',  value: String(comandas.length),                            icon: Users,         color: 'text-brand-400',   bg: 'bg-brand-600/10'  },
-          { label: 'Receita Hoje',    value: finHoje ? fmt(finHoje.receita) : '—',               icon: DollarSign,    color: 'text-accent-gold', bg: 'bg-amber-500/10'  },
-          { label: 'Em Aberto',       value: fmt(totalAberto),                                    icon: Clock,         color: 'text-orange-400',  bg: 'bg-orange-500/10' },
-          { label: 'Estoque Baixo',   value: String(lowStock),                                    icon: AlertTriangle, color: lowStock > 0 ? 'text-red-400' : 'text-gray-400', bg: lowStock > 0 ? 'bg-red-500/10' : 'bg-surface-600' },
-        ].map(m => (
-          <div key={m.label} className="card flex items-center gap-3 py-3">
-            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', m.bg)}>
-              <m.icon className={clsx('w-5 h-5', m.color)} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-lg font-bold text-white truncate">{m.value}</p>
-              <p className="text-xs text-gray-400">{m.label}</p>
-            </div>
+          { label: 'Ativas',        value: String(comandas.length),                 icon: Users,         color: 'text-brand-400'   },
+          { label: 'Receita hoje',  value: finHoje ? fmt(finHoje.receita) : '—',   icon: DollarSign,    color: 'text-accent-gold'  },
+          { label: 'Em aberto',     value: fmt(totalAberto),                         icon: Clock,         color: 'text-orange-400'   },
+          { label: 'Estoque baixo', value: String(lowStock),                         icon: AlertTriangle, color: lowStock > 0 ? 'text-red-400' : 'text-gray-500' },
+        ].map((m, i) => (
+          <div key={m.label} className={clsx('flex items-center gap-2 shrink-0', i === 0 ? 'pr-4' : 'px-4')}>
+            <m.icon className={clsx('w-3.5 h-3.5 shrink-0', m.color)} />
+            <span className={clsx('text-sm font-bold font-mono', m.color)}>{m.value}</span>
+            <span className="text-xs text-gray-500">{m.label}</span>
           </div>
         ))}
       </div>
@@ -1508,9 +1504,10 @@ export default function DashboardPage() {
 
       {/* ── Tab: Análises ────────────────────────────────────────────────────── */}
       {tab === 'analises' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
 
-          {/* Detalhe financeiro hoje */}
+          {/* ── Hoje ── */}
+          {dp.panels.finHoje && finHoje && <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest -mb-3">Hoje</p>}
           {dp.panels.finHoje && finHoje && (
             <div className="card">
               <button onClick={() => setFinOpen(v => !v)} className="w-full flex items-center justify-between">
@@ -1574,13 +1571,15 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* Gráfico Receita 7 dias */}
-          {dp.panels.grafico && fin7d && fin7d.diaDia.length > 1 && (
-            <MiniBarChart dias={fin7d.diaDia} open={panelGrafico} onToggle={togglePanelGrafico} scheme={dp.chartScheme} />
-          )}
-
-          {/* Previsão financeira do mês */}
-          {dp.panels.previsao && prevFin && (
+          {/* ── 7 dias / Mês ── */}
+          {(dp.panels.grafico || dp.panels.previsao) && (
+            <div>
+              <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest mb-3">7 dias / Mês</p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {dp.panels.grafico && fin7d && fin7d.diaDia.length > 1 && (
+                  <MiniBarChart dias={fin7d.diaDia} open={panelGrafico} onToggle={togglePanelGrafico} scheme={dp.chartScheme} />
+                )}
+                {dp.panels.previsao && prevFin && (
             <div className="card">
               <button onClick={togglePanelPrevisao} className="w-full flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
@@ -1622,8 +1621,14 @@ export default function DashboardPage() {
               )}
             </div>
           )}
+              </div>
+            </div>
+          )}
 
-          {/* Linha: Patrimônio | Top Clientes | LGPD */}
+          {/* ── Rankings & Alertas ── */}
+          {(dp.panels.patrimonio || dp.panels.clientes || dp.panels.lgpd) && (
+            <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest -mb-3">Rankings & alertas</p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
             {dp.panels.patrimonio && allProducts.length > 0 && (
@@ -1744,7 +1749,10 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Linha: Top Produtos | Pré-inscrições */}
+          {/* ── Produtos & Eventos ── */}
+          {(dp.panels.produtos || dp.panels.preInscricoes) && (
+            <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest -mb-3">Produtos & eventos</p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
             {dp.panels.produtos && fin7d && fin7d.topProdutos.length > 0 && (
