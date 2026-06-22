@@ -201,6 +201,11 @@ html.light {
   }
 }
 
+/* ── text-accent-gold: branco neutro no dark, escuro no light ─────────────── */
+/* bg-accent-gold (botões da landing) permanece amarelo — só o texto muda     */
+.text-accent-gold { color: #F3F4F6 !important; }
+html.light .text-accent-gold { color: #1e293b !important; }
+
 /* ── Animação scan de câmera ───────────────────────────────────────────────── */
 @keyframes scan-line {
   0%, 100% { top: 4px; }
@@ -230,7 +235,7 @@ html.light {
   .text-emerald-400 { color: #059669 !important; }
   .text-red-400     { color: #dc2626 !important; }
   .text-brand-400   { color: #7c3aed !important; }
-  .text-accent-gold { color: #D97706 !important; }
+  .text-accent-gold { color: #1e293b !important; }
 
   /* Tabelas */
   table { width: 100%; border-collapse: collapse; }

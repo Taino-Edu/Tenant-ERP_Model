@@ -463,7 +463,7 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
           {[
             { label: 'Total',      val: crediario.valorEmReais,         cls: 'text-gray-400' },
             { label: 'Pago',       val: crediario.valorPagoEmReais,     cls: 'text-accent-green' },
-            { label: 'Restante',   val: crediario.saldoRestanteEmReais, cls: 'text-amber-400' },
+            { label: 'Restante',   val: crediario.saldoRestanteEmReais, cls: 'text-gray-200' },
           ].map(({ label, val, cls }) => (
             <div key={label} className="bg-surface-700 rounded-xl px-3 py-2 text-center">
               <p className={clsx('text-base font-bold', cls)}>{fmt(val)}</p>
@@ -651,7 +651,7 @@ function CrediarioCard({
             {c.status !== 'Pago' && c.valorPagoEmReais > 0 ? (
               <>
                 <p className="text-xs text-gray-500">Restante</p>
-                <p className="text-xl font-bold text-amber-400">{fmt(c.saldoRestanteEmReais)}</p>
+                <p className="text-xl font-bold text-gray-200">{fmt(c.saldoRestanteEmReais)}</p>
                 <p className="text-xs text-gray-500 mt-0.5">de {fmt(c.valorEmReais)}</p>
               </>
             ) : (

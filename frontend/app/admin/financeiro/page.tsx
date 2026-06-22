@@ -910,7 +910,7 @@ export default function FinanceiroPage() {
                     >Simples</button>
                     <button
                       onClick={() => setTableView('analise')}
-                      className={`px-3 py-1.5 transition-colors border-l border-surface-600 ${tableView === 'analise' ? 'bg-yellow-500/20 text-yellow-300' : 'text-gray-400 hover:text-gray-200'}`}
+                      className={`px-3 py-1.5 transition-colors border-l border-surface-600 ${tableView === 'analise' ? 'bg-brand-500/20 text-brand-300' : 'text-gray-400 hover:text-gray-200'}`}
                     >Análise</button>
                   </div>
                   {/* Seletor de margem alvo — só no modo análise */}
@@ -921,7 +921,7 @@ export default function FinanceiroPage() {
                         <button key={pct} onClick={() => setTargetPct(pct)}
                           className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
                             targetPct === pct
-                              ? 'bg-yellow-500/20 border-yellow-500/60 text-yellow-300'
+                              ? 'bg-brand-500/20 border-brand-500/60 text-brand-300'
                               : 'bg-surface-700 border-surface-600 text-gray-400 hover:text-gray-200'
                           }`}>
                           {pct}%
@@ -954,7 +954,7 @@ export default function FinanceiroPage() {
                             <td className="px-4 py-2.5 font-mono text-emerald-400 font-bold text-sm">
                               {fmt(p.receita)}
                             </td>
-                            <td className="px-4 py-2.5 font-mono text-yellow-300 text-xs">
+                            <td className="px-4 py-2.5 font-mono text-gray-200 text-xs">
                               {precoMedio > 0 ? fmt(precoMedio) : '—'}
                             </td>
                           </tr>
@@ -990,7 +990,7 @@ export default function FinanceiroPage() {
                               <p className="text-[10px] text-gray-500 mt-0.5">{p.qtd}x vendido</p>
                             </td>
                             <td className="px-4 py-2.5 text-gray-400 text-xs">{p.qtd}x</td>
-                            <td className="px-4 py-2.5 font-mono text-yellow-300 font-semibold text-xs">
+                            <td className="px-4 py-2.5 font-mono text-gray-200 font-semibold text-xs">
                               {precoMedio > 0 ? fmt(precoMedio) : '—'}
                             </td>
                             <td className="px-4 py-2.5 font-mono text-gray-400 text-xs">
@@ -1040,7 +1040,7 @@ export default function FinanceiroPage() {
                 {/* Legenda */}
                 {tableView === 'analise' && (
                   <div className="px-4 py-3 border-t border-surface-600 flex flex-wrap gap-4 text-[11px] text-gray-500">
-                    <span><span className="text-yellow-300 font-bold">Preço Médio</span> = Receita total ÷ Qtd vendida</span>
+                    <span><span className="text-gray-200 font-bold">Preço Médio</span> = Receita total ÷ Qtd vendida</span>
                     <span><span className="text-brand-400 font-bold">Sugestão</span> = Custo Médio ÷ (1 − {targetPct}%) para atingir margem de {targetPct}%</span>
                     <span><ArrowUp className="w-3 h-3 text-red-400 inline" /> subir preço · <ArrowDown className="w-3 h-3 text-emerald-400 inline" /> pode baixar · <Minus className="w-3 h-3 text-emerald-400 inline" /> preço ok</span>
                   </div>
