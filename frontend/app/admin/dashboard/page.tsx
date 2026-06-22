@@ -983,7 +983,7 @@ function usePersistentPanel(key: string, defaultOpen = true): [boolean, () => vo
 export default function DashboardPage() {
   const { prefs } = usePreferences()
   const dp = prefs.dashboard
-  const [tab, setTab]             = useState<'ativas' | 'historico'>('ativas')
+  const [tab, setTab]             = useState<'ativas' | 'historico' | 'analises'>('ativas')
   const [comandas, setComandas]   = useState<ComandaDto[]>([])
   const [history, setHistory]     = useState<ComandaDto[]>([])
   const [histData, setHistData]   = useState(() => brToday())
@@ -1263,7 +1263,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Métricas ao vivo */}
+      {/* Métricas ao vivo — barra compacta */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Comandas Ativas',  value: String(comandas.length),                            icon: Users,         color: 'text-brand-400',   bg: 'bg-brand-600/10'  },
@@ -1283,322 +1283,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Detalhe financeiro hoje — accordion */}
-      {dp.panels.finHoje && finHoje && (
-        <div className="card">
-          <button
-            onClick={() => setFinOpen(v => !v)}
-            className="w-full flex items-center justify-between"
-          >
-            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-              <BarChart2 className="w-4 h-4 text-brand-400" /> Detalhe financeiro hoje
-            </h3>
-            <div className="flex items-center gap-3">
-              <span className={clsx('text-sm font-bold', finHoje.margem >= 0 ? 'text-accent-green' : 'text-red-400')}>
-                Margem {fmt(finHoje.margem)}
-              </span>
-              {finOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </div>
-          </button>
-          {finOpen && (() => {
-            const totalTx = (finHoje.pagamentosPorForma ?? []).reduce((s, f) => s + f.quantidade, 0)
-            const ticketMedio = totalTx > 0 ? finHoje.receita / totalTx : 0
-            return (
-              <div className="mt-4 pt-4 border-t border-surface-600 animate-fade-in space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { label: 'Receita total',  value: fmt(finHoje.receita),  color: 'text-accent-gold',  sub: finHoje.receitaComandas > 0 ? 'cmd + avulsa' : undefined },
-                    { label: 'CMV / Custo',    value: fmt(finHoje.custo),    color: 'text-red-400',      sub: undefined },
-                    { label: 'Margem bruta',   value: fmt(finHoje.margem),   color: finHoje.margem >= 0 ? 'text-accent-green' : 'text-red-400', sub: finHoje.receita > 0 ? `${((finHoje.margem / finHoje.receita) * 100).toFixed(1)}%` : undefined },
-                    { label: 'Ticket médio',   value: fmt(ticketMedio),      color: 'text-brand-400',    sub: totalTx > 0 ? `${totalTx} transações` : undefined },
-                  ].map(m => (
-                    <div key={m.label} className="bg-surface-800 rounded-xl p-3">
-                      <p className="text-xs text-gray-500 mb-1">{m.label}</p>
-                      <p className={clsx('text-base font-bold font-mono', m.color)}>{m.value}</p>
-                      {m.sub && <p className="text-[10px] text-gray-600 mt-0.5">{m.sub}</p>}
-                    </div>
-                  ))}
-                </div>
-                {finHoje.receitaComandas > 0 && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-surface-800 rounded-xl p-3">
-                      <p className="text-xs text-gray-500 mb-1">Receita comandas</p>
-                      <p className="text-base font-bold font-mono text-white">{fmt(finHoje.receitaComandas)}</p>
-                    </div>
-                    <div className="bg-surface-800 rounded-xl p-3">
-                      <p className="text-xs text-gray-500 mb-1">Receita avulsa</p>
-                      <p className="text-base font-bold font-mono text-white">{fmt(finHoje.receitaAvulsa)}</p>
-                    </div>
-                  </div>
-                )}
-                {(finHoje.pagamentosPorForma ?? []).filter(f => f.total > 0).length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">Formas de pagamento</p>
-                    <div className="flex flex-wrap gap-2">
-                      {finHoje.pagamentosPorForma.filter(f => f.total > 0).map(f => (
-                        <div key={f.forma} className="bg-surface-800 rounded-lg px-3 py-2 text-center">
-                          <p className="text-sm font-bold text-white">{fmt(f.total)}</p>
-                          <p className="text-[10px] text-gray-500 mt-0.5">{f.forma}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-        </div>
-      )}
-
-      {/* Gráfico Receita — largura total */}
-      {dp.panels.grafico && fin7d && fin7d.diaDia.length > 1 && <MiniBarChart dias={fin7d.diaDia} open={panelGrafico} onToggle={togglePanelGrafico} scheme={dp.chartScheme} />}
-
-      {/* Previsão financeira do mês */}
-      {dp.panels.previsao && prevFin && (
-        <div className="card">
-          <button
-            onClick={togglePanelPrevisao}
-            className="w-full flex items-center justify-between"
-          >
-            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-brand-400" /> Previsão financeira —{' '}
-              {new Date().toLocaleString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' })}
-            </h3>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500">{prevFin.diasRestantes} dias restantes</span>
-              {panelPrevisao ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </div>
-          </button>
-          {panelPrevisao && <div className="mt-4 pt-4 border-t border-surface-600">
-          <div className="flex flex-wrap gap-6 items-end mb-4">
-            <div>
-              <p className="text-2xl font-bold text-accent-gold">{fmt(prevFin.projecaoMes)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">projeção de receita</p>
-            </div>
-            <div>
-              <p className={clsx('text-sm font-semibold', prevFin.projecaoMargem >= 0 ? 'text-accent-green' : 'text-red-400')}>{fmt(prevFin.projecaoMargem)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">projeção margem</p>
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-brand-400">{fmt(prevFin.mediaDiaria)}<span className="text-xs font-normal text-gray-500">/dia</span></p>
-              <p className="text-xs text-gray-500 mt-0.5">média últimos {prevFin.n}d</p>
-            </div>
-          </div>
-          <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-            <span>Estimado realizado: {fmt(prevFin.realizadoEstimado)}</span>
-            <span>{Math.round(prevFin.percentual * 100)}% do mês ({prevFin.diaAtual}/{prevFin.daysInMonth})</span>
-          </div>
-          <div className="h-2 rounded-full bg-surface-600 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-brand-600 to-brand-400 transition-all duration-500"
-              style={{ width: `${prevFin.percentual * 100}%` }}
-            />
-          </div>
-          </div>}
-        </div>
-      )}
-
-      {/* Linha: Patrimônio | Top Clientes | LGPD */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-
-        {/* Patrimônio compact */}
-        {dp.panels.patrimonio && allProducts.length > 0 && (
-          <div className="card">
-            <div className="flex items-center justify-between">
-              <button onClick={togglePanelPatrimonio} className="flex items-center gap-2 flex-1 text-left">
-                <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-emerald-400" /> Patrimônio
-                </h3>
-                {panelPatrimonio ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-              </button>
-              <a href="/admin/estoque" className="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-2">→</a>
-            </div>
-            {panelPatrimonio && (
-              <div className="mt-3 space-y-1.5">
-                <div className="flex justify-between items-center text-xs py-1 border-b border-surface-600">
-                  <span className="text-gray-500">Custo total</span>
-                  <span className="text-white font-mono font-bold">{fmt(patrimonioCusto)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs py-1 border-b border-surface-600">
-                  <span className="text-gray-500">Valor venda</span>
-                  <span className="text-accent-gold font-mono font-bold">{fmt(patrimonioVenda)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs py-1 border-b border-surface-600">
-                  <span className="text-gray-500">Margem</span>
-                  <span className={clsx('font-mono font-bold', lucroEstoque >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmt(lucroEstoque)}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs py-1">
-                  <span className="text-gray-500">Total peças</span>
-                  <span className="text-brand-400 font-mono font-bold">{totalPecas.toLocaleString('pt-BR')}</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Top Clientes */}
-        {dp.panels.clientes && <div className="card">
-          <div className="flex items-center justify-between">
-            <button onClick={togglePanelClientes} className="flex items-center gap-2 flex-1 text-left">
-              <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-accent-gold" /> Top Clientes
-              </h3>
-              {panelClientes ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </button>
-            <a href="/admin/usuarios" className="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-3">Ver todos →</a>
-          </div>
-          {panelClientes && (ranking.length === 0 ? (
-            <p className="text-xs text-gray-500 py-4 text-center">Nenhuma compra registrada ainda</p>
-          ) : (
-            <div className="space-y-2 mt-3">
-              {ranking.map((c, i) => {
-                const medalColor = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-400'
-                const MedalIcon  = i === 0 ? Star : i <= 2 ? Medal : Trophy
-                return (
-                  <div key={c.userId} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors">
-                    <MedalIcon className={clsx('w-4 h-4 shrink-0', medalColor)} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{c.nome}</p>
-                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                        <span className="text-xs text-gray-500">{c.numVisitas} visita{c.numVisitas !== 1 ? 's' : ''} · {fmt(c.ticketMedio)}/visita</span>
-                        {c.inativo30 && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">inativo</span>
-                        )}
-                        {c.pontosVencemEm !== null && c.pontos > 0 && c.pontosVencemEm <= 14 && (
-                          <span className={clsx('text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
-                            c.pontosVencemEm < 0 ? 'bg-red-500/15 text-red-400 border-red-500/20' : 'bg-orange-500/15 text-orange-400 border-orange-500/20'
-                          )}>
-                            {c.pontosVencemEm < 0 ? `${c.pontos}pts vencidos` : `${c.pontos}pts vencem em ${c.pontosVencemEm}d`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <p className="text-sm font-bold text-accent-gold font-mono">{fmt(c.gastoTotal)}</p>
-                      {c.whatsApp && (
-                        <a href={`https://wa.me/${c.whatsApp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 transition-colors"
-                          title={`WhatsApp: ${c.whatsApp}`}>
-                          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                          </svg>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>}
-
-        {/* LGPD */}
-        {dp.panels.lgpd && <div className="card">
-          <button onClick={togglePanelLgpd} className="w-full flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-brand-400" /> LGPD
-            </h3>
-            {panelLgpd ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-          </button>
-          {panelLgpd && (
-            <a href="/admin/lgpd" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
-              <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                pendingLgpd.some(r => r.isOverdue) ? 'bg-red-500/15' : pendingLgpd.length > 0 ? 'bg-brand-500/15' : 'bg-surface-600')}>
-                <Shield className={clsx('w-4 h-4',
-                  pendingLgpd.some(r => r.isOverdue) ? 'text-red-400' : pendingLgpd.length > 0 ? 'text-brand-400' : 'text-gray-500')} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white">Solicitações LGPD</p>
-                <p className="text-xs text-gray-500">
-                  {pendingLgpd.some(r => r.isOverdue) ? 'Solicitação vencida!' : 'Pendentes de resposta'}
-                </p>
-              </div>
-              <span className={clsx('text-sm font-bold tabular-nums',
-                pendingLgpd.some(r => r.isOverdue) ? 'text-red-400' : pendingLgpd.length > 0 ? 'text-brand-400' : 'text-gray-600')}>
-                {pendingLgpd.length}
-              </span>
-            </a>
-          )}
-        </div>}
-
-      </div>
-
-      {/* Linha: Top Produtos | Pré-inscrições */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-        {/* Top produtos — 7 dias */}
-        {dp.panels.produtos && fin7d && fin7d.topProdutos.length > 0 && (
-          <div className="card">
-            <button onClick={togglePanelProdutos} className="w-full flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-                <Star className="w-4 h-4 text-accent-gold" /> Top produtos (7 dias)
-              </h3>
-              {panelProdutos ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-            </button>
-            {panelProdutos && (
-              <div className="space-y-1 mt-3">
-                {fin7d.topProdutos.slice(0, 5).map((p, i) => (
-                  <div key={p.nome} className="flex items-center gap-2 py-1.5 border-b border-surface-600 last:border-0">
-                    <span className="text-xs text-gray-600 w-3.5 shrink-0">{i + 1}</span>
-                    <span className="text-sm text-gray-300 flex-1 truncate">{p.nome}</span>
-                    <span className="text-xs text-gray-500 shrink-0">{p.qtd}un</span>
-                    <span className="text-sm font-bold text-accent-gold shrink-0">{fmt(p.receita)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Pré-inscrições campeonatos */}
-        {dp.panels.preInscricoes && <div className="card">
-          <button onClick={togglePanelPreInscricoes} className="w-full flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-              <MessageCircle className="w-4 h-4 text-amber-400" /> Pré-inscrições
-            </h3>
-            {panelPreInscricoes ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-          </button>
-          {panelPreInscricoes && (
-            <a href="/admin/campeonatos" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
-              <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                pendingPI > 0 ? 'bg-amber-500/15' : 'bg-surface-600')}>
-                <MessageCircle className={clsx('w-4 h-4', pendingPI > 0 ? 'text-amber-400' : 'text-gray-500')} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white">Campeonatos</p>
-                <p className="text-xs text-gray-500">Pré-inscrições pendentes</p>
-              </div>
-              <span className={clsx('text-sm font-bold tabular-nums', pendingPI > 0 ? 'text-amber-400' : 'text-gray-600')}>
-                {pendingPI}
-              </span>
-            </a>
-          )}
-        </div>}
-
-      </div>
-
-      {/* Breakdown por pagamento — só aparece quando há histórico */}
-      {tab === 'historico' && paymentBreakdown.length > 0 && (
-        <div className="card">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Fechamento por forma de pagamento</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            {paymentBreakdown.map(pm => (
-              <div key={pm.key} className="bg-surface-800 rounded-xl p-3 text-center">
-                <p className={`text-lg font-bold ${pm.color}`}>{fmt(pm.total)}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{pm.label}</p>
-              </div>
-            ))}
-            <div className="bg-surface-800 rounded-xl p-3 text-center border border-surface-500">
-              <p className="text-lg font-bold text-accent-gold">{fmt(totalFechado)}</p>
-              <p className="text-xs text-gray-500 mt-0.5">Total</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-      {/* Tabs */}
+      {/* Tabs + controles — logo após os KPIs, antes de qualquer conteúdo */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex gap-1 bg-surface-800 p-1 rounded-lg">
           <button
@@ -1614,6 +1299,13 @@ export default function DashboardPage() {
               tab === 'historico' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
           >
             <History className="w-4 h-4 inline mr-1.5" />Histórico
+          </button>
+          <button
+            onClick={() => setTab('analises')}
+            className={clsx('px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+              tab === 'analises' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
+          >
+            <BarChart2 className="w-4 h-4 inline mr-1.5" />Análises
           </button>
         </div>
 
@@ -1686,110 +1378,426 @@ export default function DashboardPage() {
             <p className="text-gray-400 font-medium">Nenhuma comanda encerrada neste dia</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {history.map(c => {
-              const isExpanded = expandedHist === c.id
-              return (
-                <div key={c.id} className="card">
-                  <button
-                    onClick={() => setExpandedHist(isExpanded ? null : c.id)}
-                    className="w-full flex items-center justify-between gap-4 text-left"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={clsx(
-                        'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                        c.status === 'Fechada' ? 'bg-accent-green/10' : 'bg-red-500/10'
-                      )}>
-                        {c.status === 'Fechada'
-                          ? <CheckCircle className="w-4 h-4 text-accent-green" />
-                          : <Trash2 className="w-4 h-4 text-red-400" />
-                        }
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{c.userName}</p>
-                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {c.closedAt
-                            ? new Date(c.closedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                            : '—'
-                          }
-                          <span>·</span>
-                          {c.items.length} {c.items.length === 1 ? 'item' : 'itens'}
-                          {c.paymentMethod && (
-                            <>
-                              <span>·</span>
-                              <span className="text-gray-400 font-medium">
-                                {COMANDA_PAYMENT_METHODS.find(m => m.value === c.paymentMethod)?.label ?? c.paymentMethod}
-                                {c.secondPaymentMethod && ` + ${COMANDA_PAYMENT_METHODS.find(m => m.value === c.secondPaymentMethod)?.label ?? c.secondPaymentMethod}`}
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      </div>
+          <div className="space-y-4">
+            {/* Breakdown por pagamento */}
+            {paymentBreakdown.length > 0 && (
+              <div className="card">
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Fechamento por forma de pagamento</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {paymentBreakdown.map(pm => (
+                    <div key={pm.key} className="bg-surface-800 rounded-xl p-3 text-center">
+                      <p className={`text-lg font-bold ${pm.color}`}>{fmt(pm.total)}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{pm.label}</p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <div className="text-right">
-                        <p className={clsx('font-bold', c.status === 'Fechada' ? 'text-accent-gold' : 'text-gray-500')}>
-                          {fmt(c.totalInReais)}
-                        </p>
-                        <p className={clsx('text-xs', c.status === 'Fechada' ? 'text-accent-green' : 'text-red-400')}>
-                          {c.status === 'Fechada' ? 'Fechada' : 'Cancelada'}
-                        </p>
-                      </div>
-                      {c.items.length > 0 && (
-                        isExpanded
-                          ? <ChevronUp className="w-4 h-4 text-gray-500" />
-                          : <ChevronDown className="w-4 h-4 text-gray-500" />
-                      )}
-                    </div>
-                  </button>
-
-                  {isExpanded && c.items.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-surface-600 space-y-1">
-                      {c.items.map(item => (
-                        <div key={item.id} className="flex items-center justify-between text-xs text-gray-300 py-0.5">
-                          <span className="flex-1 truncate">{item.quantity}× {item.itemNameSnapshot}</span>
-                          <span className="text-gray-500 ml-2 shrink-0">{fmt(item.subtotalInReais)}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between text-xs font-semibold text-gray-200 pt-1 border-t border-surface-600">
-                        <span>Total</span>
-                        <span className="text-accent-gold">{fmt(c.totalInReais)}</span>
-                      </div>
-                      {c.status === 'Fechada' && c.paymentMethod && (() => {
-                        const net        = c.totalInReais - c.pointsApplied / 100
-                        const hasSecond  = !!c.secondPaymentMethod && c.secondPaymentAmountInCents > 0
-                        const secondAmt  = c.secondPaymentAmountInCents / 100
-                        const primaryAmt = hasSecond ? net - secondAmt : net
-                        const pmLabel    = (key: string) => COMANDA_PAYMENT_METHODS.find(m => m.value === key)?.label ?? key
-                        return (
-                          <div className="space-y-0.5 pt-1">
-                            {c.pointsApplied > 0 && (
-                              <div className="flex justify-between text-xs text-gray-500">
-                                <span>Desconto pontos</span>
-                                <span className="text-amber-400">− {fmt(c.pointsApplied / 100)}</span>
-                              </div>
-                            )}
-                            <div className="flex justify-between text-xs text-gray-500">
-                              <span>{pmLabel(c.paymentMethod)}</span>
-                              <span>{fmt(primaryAmt)}</span>
-                            </div>
-                            {hasSecond && (
-                              <div className="flex justify-between text-xs text-gray-500">
-                                <span>{pmLabel(c.secondPaymentMethod!)}</span>
-                                <span>{fmt(secondAmt)}</span>
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })()}
-                    </div>
-                  )}
+                  ))}
+                  <div className="bg-surface-800 rounded-xl p-3 text-center border border-surface-500">
+                    <p className="text-lg font-bold text-accent-gold">{fmt(totalFechado)}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Total</p>
+                  </div>
                 </div>
-              )
-            })}
+              </div>
+            )}
+
+            {/* Lista de comandas */}
+            <div className="space-y-2">
+              {history.map(c => {
+                const isExpanded = expandedHist === c.id
+                return (
+                  <div key={c.id} className="card">
+                    <button
+                      onClick={() => setExpandedHist(isExpanded ? null : c.id)}
+                      className="w-full flex items-center justify-between gap-4 text-left"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={clsx(
+                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                          c.status === 'Fechada' ? 'bg-accent-green/10' : 'bg-red-500/10'
+                        )}>
+                          {c.status === 'Fechada'
+                            ? <CheckCircle className="w-4 h-4 text-accent-green" />
+                            : <Trash2 className="w-4 h-4 text-red-400" />
+                          }
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{c.userName}</p>
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {c.closedAt
+                              ? new Date(c.closedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                              : '—'
+                            }
+                            <span>·</span>
+                            {c.items.length} {c.items.length === 1 ? 'item' : 'itens'}
+                            {c.paymentMethod && (
+                              <>
+                                <span>·</span>
+                                <span className="text-gray-400 font-medium">
+                                  {COMANDA_PAYMENT_METHODS.find(m => m.value === c.paymentMethod)?.label ?? c.paymentMethod}
+                                  {c.secondPaymentMethod && ` + ${COMANDA_PAYMENT_METHODS.find(m => m.value === c.secondPaymentMethod)?.label ?? c.secondPaymentMethod}`}
+                                </span>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right">
+                          <p className={clsx('font-bold', c.status === 'Fechada' ? 'text-accent-gold' : 'text-gray-500')}>
+                            {fmt(c.totalInReais)}
+                          </p>
+                          <p className={clsx('text-xs', c.status === 'Fechada' ? 'text-accent-green' : 'text-red-400')}>
+                            {c.status === 'Fechada' ? 'Fechada' : 'Cancelada'}
+                          </p>
+                        </div>
+                        {c.items.length > 0 && (
+                          isExpanded
+                            ? <ChevronUp className="w-4 h-4 text-gray-500" />
+                            : <ChevronDown className="w-4 h-4 text-gray-500" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && c.items.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-surface-600 space-y-1">
+                        {c.items.map(item => (
+                          <div key={item.id} className="flex items-center justify-between text-xs text-gray-300 py-0.5">
+                            <span className="flex-1 truncate">{item.quantity}× {item.itemNameSnapshot}</span>
+                            <span className="text-gray-500 ml-2 shrink-0">{fmt(item.subtotalInReais)}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-xs font-semibold text-gray-200 pt-1 border-t border-surface-600">
+                          <span>Total</span>
+                          <span className="text-accent-gold">{fmt(c.totalInReais)}</span>
+                        </div>
+                        {c.status === 'Fechada' && c.paymentMethod && (() => {
+                          const net        = c.totalInReais - c.pointsApplied / 100
+                          const hasSecond  = !!c.secondPaymentMethod && c.secondPaymentAmountInCents > 0
+                          const secondAmt  = c.secondPaymentAmountInCents / 100
+                          const primaryAmt = hasSecond ? net - secondAmt : net
+                          const pmLabel    = (key: string) => COMANDA_PAYMENT_METHODS.find(m => m.value === key)?.label ?? key
+                          return (
+                            <div className="space-y-0.5 pt-1">
+                              {c.pointsApplied > 0 && (
+                                <div className="flex justify-between text-xs text-gray-500">
+                                  <span>Desconto pontos</span>
+                                  <span className="text-amber-400">− {fmt(c.pointsApplied / 100)}</span>
+                                </div>
+                              )}
+                              <div className="flex justify-between text-xs text-gray-500">
+                                <span>{pmLabel(c.paymentMethod)}</span>
+                                <span>{fmt(primaryAmt)}</span>
+                              </div>
+                              {hasSecond && (
+                                <div className="flex justify-between text-xs text-gray-500">
+                                  <span>{pmLabel(c.secondPaymentMethod!)}</span>
+                                  <span>{fmt(secondAmt)}</span>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         )
+      )}
+
+      {/* ── Tab: Análises ────────────────────────────────────────────────────── */}
+      {tab === 'analises' && (
+        <div className="space-y-4">
+
+          {/* Detalhe financeiro hoje */}
+          {dp.panels.finHoje && finHoje && (
+            <div className="card">
+              <button onClick={() => setFinOpen(v => !v)} className="w-full flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                  <BarChart2 className="w-4 h-4 text-brand-400" /> Detalhe financeiro hoje
+                </h3>
+                <div className="flex items-center gap-3">
+                  <span className={clsx('text-sm font-bold', finHoje.margem >= 0 ? 'text-accent-green' : 'text-red-400')}>
+                    Margem {fmt(finHoje.margem)}
+                  </span>
+                  {finOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                </div>
+              </button>
+              {finOpen && (() => {
+                const totalTx = (finHoje.pagamentosPorForma ?? []).reduce((s, f) => s + f.quantidade, 0)
+                const ticketMedio = totalTx > 0 ? finHoje.receita / totalTx : 0
+                return (
+                  <div className="mt-4 pt-4 border-t border-surface-600 animate-fade-in space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {[
+                        { label: 'Receita total',  value: fmt(finHoje.receita),  color: 'text-accent-gold',  sub: finHoje.receitaComandas > 0 ? 'cmd + avulsa' : undefined },
+                        { label: 'CMV / Custo',    value: fmt(finHoje.custo),    color: 'text-red-400',      sub: undefined },
+                        { label: 'Margem bruta',   value: fmt(finHoje.margem),   color: finHoje.margem >= 0 ? 'text-accent-green' : 'text-red-400', sub: finHoje.receita > 0 ? `${((finHoje.margem / finHoje.receita) * 100).toFixed(1)}%` : undefined },
+                        { label: 'Ticket médio',   value: fmt(ticketMedio),      color: 'text-brand-400',    sub: totalTx > 0 ? `${totalTx} transações` : undefined },
+                      ].map(m => (
+                        <div key={m.label} className="bg-surface-800 rounded-xl p-3">
+                          <p className="text-xs text-gray-500 mb-1">{m.label}</p>
+                          <p className={clsx('text-base font-bold font-mono', m.color)}>{m.value}</p>
+                          {m.sub && <p className="text-[10px] text-gray-600 mt-0.5">{m.sub}</p>}
+                        </div>
+                      ))}
+                    </div>
+                    {finHoje.receitaComandas > 0 && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-surface-800 rounded-xl p-3">
+                          <p className="text-xs text-gray-500 mb-1">Receita comandas</p>
+                          <p className="text-base font-bold font-mono text-white">{fmt(finHoje.receitaComandas)}</p>
+                        </div>
+                        <div className="bg-surface-800 rounded-xl p-3">
+                          <p className="text-xs text-gray-500 mb-1">Receita avulsa</p>
+                          <p className="text-base font-bold font-mono text-white">{fmt(finHoje.receitaAvulsa)}</p>
+                        </div>
+                      </div>
+                    )}
+                    {(finHoje.pagamentosPorForma ?? []).filter(f => f.total > 0).length > 0 && (
+                      <div>
+                        <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">Formas de pagamento</p>
+                        <div className="flex flex-wrap gap-2">
+                          {finHoje.pagamentosPorForma.filter(f => f.total > 0).map(f => (
+                            <div key={f.forma} className="bg-surface-800 rounded-lg px-3 py-2 text-center">
+                              <p className="text-sm font-bold text-white">{fmt(f.total)}</p>
+                              <p className="text-[10px] text-gray-500 mt-0.5">{f.forma}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
+          {/* Gráfico Receita 7 dias */}
+          {dp.panels.grafico && fin7d && fin7d.diaDia.length > 1 && (
+            <MiniBarChart dias={fin7d.diaDia} open={panelGrafico} onToggle={togglePanelGrafico} scheme={dp.chartScheme} />
+          )}
+
+          {/* Previsão financeira do mês */}
+          {dp.panels.previsao && prevFin && (
+            <div className="card">
+              <button onClick={togglePanelPrevisao} className="w-full flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-brand-400" /> Previsão financeira —{' '}
+                  {new Date().toLocaleString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' })}
+                </h3>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500">{prevFin.diasRestantes} dias restantes</span>
+                  {panelPrevisao ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                </div>
+              </button>
+              {panelPrevisao && (
+                <div className="mt-4 pt-4 border-t border-surface-600">
+                  <div className="flex flex-wrap gap-6 items-end mb-4">
+                    <div>
+                      <p className="text-2xl font-bold text-accent-gold">{fmt(prevFin.projecaoMes)}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">projeção de receita</p>
+                    </div>
+                    <div>
+                      <p className={clsx('text-sm font-semibold', prevFin.projecaoMargem >= 0 ? 'text-accent-green' : 'text-red-400')}>{fmt(prevFin.projecaoMargem)}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">projeção margem</p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-brand-400">{fmt(prevFin.mediaDiaria)}<span className="text-xs font-normal text-gray-500">/dia</span></p>
+                      <p className="text-xs text-gray-500 mt-0.5">média últimos {prevFin.n}d</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                    <span>Estimado realizado: {fmt(prevFin.realizadoEstimado)}</span>
+                    <span>{Math.round(prevFin.percentual * 100)}% do mês ({prevFin.diaAtual}/{prevFin.daysInMonth})</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-surface-600 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-brand-600 to-brand-400 transition-all duration-500"
+                      style={{ width: `${prevFin.percentual * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Linha: Patrimônio | Top Clientes | LGPD */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+            {dp.panels.patrimonio && allProducts.length > 0 && (
+              <div className="card">
+                <div className="flex items-center justify-between">
+                  <button onClick={togglePanelPatrimonio} className="flex items-center gap-2 flex-1 text-left">
+                    <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                      <Package className="w-4 h-4 text-emerald-400" /> Patrimônio
+                    </h3>
+                    {panelPatrimonio ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                  </button>
+                  <a href="/admin/estoque" className="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-2">→</a>
+                </div>
+                {panelPatrimonio && (
+                  <div className="mt-3 space-y-1.5">
+                    {[
+                      { label: 'Custo total',  value: fmt(patrimonioCusto),  color: 'text-white' },
+                      { label: 'Valor venda',  value: fmt(patrimonioVenda),  color: 'text-accent-gold' },
+                      { label: 'Margem',       value: fmt(lucroEstoque),     color: lucroEstoque >= 0 ? 'text-emerald-400' : 'text-red-400' },
+                      { label: 'Total peças',  value: totalPecas.toLocaleString('pt-BR'), color: 'text-brand-400' },
+                    ].map(r => (
+                      <div key={r.label} className="flex justify-between items-center text-xs py-1 border-b border-surface-600 last:border-0">
+                        <span className="text-gray-500">{r.label}</span>
+                        <span className={clsx('font-mono font-bold', r.color)}>{r.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {dp.panels.clientes && (
+              <div className="card">
+                <div className="flex items-center justify-between">
+                  <button onClick={togglePanelClientes} className="flex items-center gap-2 flex-1 text-left">
+                    <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                      <Trophy className="w-4 h-4 text-accent-gold" /> Top Clientes
+                    </h3>
+                    {panelClientes ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                  </button>
+                  <a href="/admin/usuarios" className="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-3">Ver todos →</a>
+                </div>
+                {panelClientes && (ranking.length === 0 ? (
+                  <p className="text-xs text-gray-500 py-4 text-center">Nenhuma compra registrada ainda</p>
+                ) : (
+                  <div className="space-y-2 mt-3">
+                    {ranking.map((c, i) => {
+                      const medalColor = i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-gray-400'
+                      const MedalIcon  = i === 0 ? Star : i <= 2 ? Medal : Trophy
+                      return (
+                        <div key={c.userId} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-surface-800 hover:bg-surface-700 transition-colors">
+                          <MedalIcon className={clsx('w-4 h-4 shrink-0', medalColor)} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{c.nome}</p>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                              <span className="text-xs text-gray-500">{c.numVisitas} visita{c.numVisitas !== 1 ? 's' : ''} · {fmt(c.ticketMedio)}/visita</span>
+                              {c.inativo30 && (
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/20">inativo</span>
+                              )}
+                              {c.pontosVencemEm !== null && c.pontos > 0 && c.pontosVencemEm <= 14 && (
+                                <span className={clsx('text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
+                                  c.pontosVencemEm < 0 ? 'bg-red-500/15 text-red-400 border-red-500/20' : 'bg-orange-500/15 text-orange-400 border-orange-500/20'
+                                )}>
+                                  {c.pontosVencemEm < 0 ? `${c.pontos}pts vencidos` : `${c.pontos}pts vencem em ${c.pontosVencemEm}d`}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <p className="text-sm font-bold text-accent-gold font-mono">{fmt(c.gastoTotal)}</p>
+                            {c.whatsApp && (
+                              <a href={`https://wa.me/${c.whatsApp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 transition-colors"
+                                title={`WhatsApp: ${c.whatsApp}`}>
+                                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                </svg>
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {dp.panels.lgpd && (
+              <div className="card">
+                <button onClick={togglePanelLgpd} className="w-full flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-brand-400" /> LGPD
+                  </h3>
+                  {panelLgpd ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                </button>
+                {panelLgpd && (
+                  <a href="/admin/lgpd" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
+                    <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                      pendingLgpd.some(r => r.isOverdue) ? 'bg-red-500/15' : pendingLgpd.length > 0 ? 'bg-brand-500/15' : 'bg-surface-600')}>
+                      <Shield className={clsx('w-4 h-4',
+                        pendingLgpd.some(r => r.isOverdue) ? 'text-red-400' : pendingLgpd.length > 0 ? 'text-brand-400' : 'text-gray-500')} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white">Solicitações LGPD</p>
+                      <p className="text-xs text-gray-500">
+                        {pendingLgpd.some(r => r.isOverdue) ? 'Solicitação vencida!' : 'Pendentes de resposta'}
+                      </p>
+                    </div>
+                    <span className={clsx('text-sm font-bold tabular-nums',
+                      pendingLgpd.some(r => r.isOverdue) ? 'text-red-400' : pendingLgpd.length > 0 ? 'text-brand-400' : 'text-gray-600')}>
+                      {pendingLgpd.length}
+                    </span>
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Linha: Top Produtos | Pré-inscrições */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+            {dp.panels.produtos && fin7d && fin7d.topProdutos.length > 0 && (
+              <div className="card">
+                <button onClick={togglePanelProdutos} className="w-full flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                    <Star className="w-4 h-4 text-accent-gold" /> Top produtos (7 dias)
+                  </h3>
+                  {panelProdutos ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                </button>
+                {panelProdutos && (
+                  <div className="space-y-1 mt-3">
+                    {fin7d.topProdutos.slice(0, 5).map((p, i) => (
+                      <div key={p.nome} className="flex items-center gap-2 py-1.5 border-b border-surface-600 last:border-0">
+                        <span className="text-xs text-gray-600 w-3.5 shrink-0">{i + 1}</span>
+                        <span className="text-sm text-gray-300 flex-1 truncate">{p.nome}</span>
+                        <span className="text-xs text-gray-500 shrink-0">{p.qtd}un</span>
+                        <span className="text-sm font-bold text-accent-gold shrink-0">{fmt(p.receita)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {dp.panels.preInscricoes && (
+              <div className="card">
+                <button onClick={togglePanelPreInscricoes} className="w-full flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4 text-amber-400" /> Pré-inscrições
+                  </h3>
+                  {panelPreInscricoes ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                </button>
+                {panelPreInscricoes && (
+                  <a href="/admin/campeonatos" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
+                    <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                      pendingPI > 0 ? 'bg-amber-500/15' : 'bg-surface-600')}>
+                      <MessageCircle className={clsx('w-4 h-4', pendingPI > 0 ? 'text-amber-400' : 'text-gray-500')} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white">Campeonatos</p>
+                      <p className="text-xs text-gray-500">Pré-inscrições pendentes</p>
+                    </div>
+                    <span className={clsx('text-sm font-bold tabular-nums', pendingPI > 0 ? 'text-amber-400' : 'text-gray-600')}>
+                      {pendingPI}
+                    </span>
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+
+        </div>
       )}
     </div>
   )
