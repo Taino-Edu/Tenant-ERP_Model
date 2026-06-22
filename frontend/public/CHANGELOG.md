@@ -1,5 +1,27 @@
 # Changelog — Santuário Nerd
 
+## [v1.7.1] — 2026-06-22
+
+### Adicionado
+- **Sistema de preferências por perfil**: VLibras, chat IA, intervalo de atualização do dashboard, painéis visíveis e desconto padrão do PDV configuráveis por usuário — mudanças aplicadas em tempo real sem recarregar a página
+- **Dashboard redesenho**: 3 tabs (Ativas / Histórico / Análises) — comandas aparecem imediatamente ao abrir o painel, sem scroll
+- **Tab Análises no dashboard**: painéis financeiros colapsáveis com persistência individual, esquema de cores do gráfico (Padrão, Azul, Neon) e intervalo de atualização automática configuráveis
+- **PDV — Wizard 3 etapas**: fluxo guiado (cliente → itens → pagamento) com analytics integrados de pico de horário, top produtos e formas de pagamento usadas
+- **PDV — Barra flutuante de finalização**: visível em todas as etapas, com desconto rápido embutido e total atualizado em tempo real
+- **PDV — Segundo pagamento livre**: valor do segundo método pode ser qualquer valor (antes era calculado automaticamente pelo saldo restante)
+- **Carrossel de banners**: rotação automática com setas de navegação na seção de avisos/destaques e no hero da landing page
+- **Campeonatos**: confirmação de pré-inscrições recebidas pela landing page + pódio com lista completa de participantes
+- **Chat IA**: botão arrastável com posição salva entre sessões, posição fixa configurável por canto da tela
+
+### Corrigido
+- Preferências exigiam F5 para serem aplicadas — agora propagam via Context React em tempo real para todos os componentes
+- Margem financeira exibida como % sobre custo (padrão de mercado), não em reais absolutos
+- Intervalo de polling do dashboard recria o timer imediatamente ao ser alterado nas configurações
+- Interceptor de API redireciona por contexto (/admin → /login, /cliente → /entrar) em vez de sempre ir para /login
+- Custo de vendas avulsas históricas corrigido via backfill automático
+
+---
+
 ## [v1.7.0] — 2026-06-16
 
 ### Adicionado
