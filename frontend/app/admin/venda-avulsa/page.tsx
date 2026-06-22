@@ -972,7 +972,7 @@ export default function VendaAvulsaPage() {
   )
 
   useEffect(() => {
-    productApi.list()
+    productApi.listAdmin()
       .then(r => setProducts(r.data.filter(p => p.isActive && p.stockQuantity > 0)))
       .catch(() => toast.error('Erro ao carregar produtos'))
       .finally(() => setLoading(false))

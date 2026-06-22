@@ -218,11 +218,14 @@ function ProductModal({
           <div className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3 space-y-3">
             <label className="flex items-center justify-between gap-3 cursor-pointer">
               <div>
-                <p className="text-sm font-medium text-[var(--text-primary)]">Mostrar no site público</p>
-                <p className="text-xs text-[var(--text-muted)]">Desmarcado: produto não aparece na loja</p>
+                <p className="text-sm font-medium text-[var(--text-primary)]">🛍️ Marketplace</p>
+                <p className="text-xs text-[var(--text-muted)]">Aparece na loja digital (marketplace)</p>
               </div>
               <div
-                onClick={() => set('showOnSite', !(form.showOnSite ?? true))}
+                onClick={() => {
+                  const next = !(form.showOnSite ?? true)
+                  setForm(f => ({ ...f, showOnSite: next, ...(!next ? { isFeatured: false } : {}) }))
+                }}
                 className={[
                   'relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0',
                   (form.showOnSite ?? true) ? 'bg-brand-500' : 'bg-surface-600',
@@ -410,7 +413,7 @@ export default function EstoquePage() {
           <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-surface-800 border-b border-surface-500">
               <tr className="text-left">
-                {['Produto', 'Categoria', 'Cód. Barras', 'Custo', 'Venda', 'Margem', 'Estoque', 'Ações'].map(h => (
+                {['Produto', 'Categoria', 'Cód. Barras', 'Custo', 'Venda', 'Margem', 'Estoque', 'Mkt', 'Ações'].map(h => (
                   <th key={h} className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -456,6 +459,19 @@ export default function EstoquePage() {
                       <button onClick={() => handleStock(p.id, +1)} className="w-6 h-6 rounded bg-surface-600 hover:bg-emerald-600/30 text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center text-lg leading-none">+</button>
                       {p.isLowStock && <AlertTriangle className="w-3.5 h-3.5 text-red-400" aria-label="Estoque baixo" />}
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          const next = !p.showOnSite
+                          await productApi.update(p.id, { showOnSite: next, ...(!next ? { isFeatured: false } : {}) })
+                          fetch()
+                        } catch { toast.error('Erro ao atualizar') }
+                      }}
+                      title={p.showOnSite ? 'No marketplace — clique para remover' : 'Fora do marketplace — clique para adicionar'}
+                      className={`text-base transition-opacity ${p.showOnSite ? 'opacity-100' : 'opacity-25'}`}
+                    >🛍️</button>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
