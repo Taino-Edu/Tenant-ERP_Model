@@ -1100,8 +1100,20 @@ export default function DashboardPage() {
       hub.onreconnected(() => { setConnected(true); fetchComandas() })
     }).catch(() => setConnected(false))
 
-    // Polling de segurança — intervalo configurável pelo usuário (0 = manual)
-    const intervalMs = (dp.refreshInterval || 30) * 1000
+    // Limpa badge quando admin foca na aba
+    const onFocus = () => clearBadge()
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      stopHub()
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [fetchComandas, fetchHistory])
+
+  // Polling separado — reage em tempo real quando o usuário muda o intervalo nas configurações
+  useEffect(() => {
+    if (dp.refreshInterval === 0) return
+    const intervalMs = dp.refreshInterval * 1000
     const poll = setInterval(async () => {
       const { HubConnectionState } = await import('@microsoft/signalr')
       const hub = (await import('@/lib/signalr')).getComandaHub()
@@ -1110,17 +1122,8 @@ export default function DashboardPage() {
       }
       fetchComandas()
     }, intervalMs)
-
-    // Limpa badge quando admin foca na aba
-    const onFocus = () => clearBadge()
-    window.addEventListener('focus', onFocus)
-
-    return () => {
-      clearInterval(poll)
-      stopHub()
-      window.removeEventListener('focus', onFocus)
-    }
-  }, [fetchComandas, fetchHistory])
+    return () => clearInterval(poll)
+  }, [dp.refreshInterval, fetchComandas])
 
   useEffect(() => {
     if (tab === 'historico') fetchHistory(histData)
