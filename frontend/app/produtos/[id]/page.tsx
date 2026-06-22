@@ -188,11 +188,11 @@ export default function ProductPage() {
 
             {/* Detalhes técnicos */}
             <div className="rounded-2xl border divide-y text-sm" style={{ backgroundColor: C.card, borderColor: C.border }}>
-              {[
+              {([
                 ['Categoria', product.category],
                 ['Disponibilidade', product.stockQuantity > 0 ? 'Em estoque' : 'Esgotado'],
                 product.barcode ? ['Código', product.barcode] : null,
-              ].filter(Boolean).map(([label, value]) => (
+              ].filter(Boolean) as string[][]).map(([label, value]) => (
                 <div key={label as string} className="flex items-center justify-between px-5 py-3">
                   <span style={{ color: C.muted }}>{label}</span>
                   <span className="font-semibold" style={{ color: C.navy }}>{value}</span>

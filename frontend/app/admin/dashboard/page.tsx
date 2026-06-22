@@ -1009,6 +1009,10 @@ export default function DashboardPage() {
   const [panelPreInscricoes,togglePanelPreInscricoes]= usePersistentPanel('preinscricoes')
   const [pendingPI, setPendingPI]       = useState(0)
   const [pendingLgpd, setPendingLgpd]   = useState<LgpdRequestDto[]>([])
+  const [finProdutos, setFinProdutos]   = useState<FinanceiroDto | null>(null)
+  const [prodPeriodo, setProdPeriodo]   = useState<'7' | '30' | '0' | 'custom'>('7')
+  const [prodCustomDias, setProdCustomDias] = useState(14)
+  const [prodCustomInput, setProdCustomInput] = useState('14')
   const prevCountRef              = useRef(0)
   const knownIdsRef               = useRef<Set<string>>(new Set())
 
@@ -1049,7 +1053,7 @@ export default function DashboardPage() {
     const ini7s = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(ini7d)
 
     analyticsApi.financeiro(hoje, hoje).then(r => setFinHoje(r.data)).catch(() => {})
-    analyticsApi.financeiro(ini7s, hoje).then(r => setFin7d(r.data)).catch(() => {})
+    analyticsApi.financeiro(ini7s, hoje).then(r => { setFin7d(r.data); setFinProdutos(r.data) }).catch(() => {})
     productApi.list().then(r => {
       const prods = r.data.filter(p => p.isActive)
       setLowStock(prods.filter(p => p.isLowStock).length)
@@ -1062,6 +1066,23 @@ export default function DashboardPage() {
     }).catch(() => {})
     lgpdAdminApi.listRequests('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
   }, [])
+
+  async function fetchProdutos(periodo: '7' | '30' | '0' | 'custom', customDias: number) {
+    try {
+      const hoje = brToday()
+      if (periodo === '0') {
+        const { data } = await analyticsApi.financeiro()
+        setFinProdutos(data)
+      } else {
+        const dias = periodo === 'custom' ? customDias : parseInt(periodo)
+        const ini = new Date()
+        ini.setDate(ini.getDate() - (dias - 1))
+        const iniStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(ini)
+        const { data } = await analyticsApi.financeiro(iniStr, hoje)
+        setFinProdutos(data)
+      }
+    } catch {}
+  }
 
   useEffect(() => {
     fetchComandas()
@@ -1755,24 +1776,84 @@ export default function DashboardPage() {
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-            {dp.panels.produtos && fin7d && fin7d.topProdutos.length > 0 && (
+            {dp.panels.produtos && (
               <div className="card">
                 <button onClick={togglePanelProdutos} className="w-full flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-                    <Star className="w-4 h-4 text-accent-gold" /> Top produtos (7 dias)
+                    <Star className="w-4 h-4 text-accent-gold" />
+                    Top produtos&nbsp;
+                    <span className="text-accent-gold">
+                      {prodPeriodo === '7' ? '(7 dias)' : prodPeriodo === '30' ? '(30 dias)' : prodPeriodo === '0' ? '(geral)' : `(${prodCustomDias}d)`}
+                    </span>
                   </h3>
                   {panelProdutos ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
                 </button>
+
                 {panelProdutos && (
-                  <div className="space-y-1 mt-3">
-                    {fin7d.topProdutos.slice(0, 5).map((p, i) => (
-                      <div key={p.nome} className="flex items-center gap-2 py-1.5 border-b border-surface-600 last:border-0">
-                        <span className="text-xs text-gray-600 w-3.5 shrink-0">{i + 1}</span>
-                        <span className="text-sm text-gray-300 flex-1 truncate">{p.nome}</span>
-                        <span className="text-xs text-gray-500 shrink-0">{p.qtd}un</span>
-                        <span className="text-sm font-bold text-accent-gold shrink-0">{fmt(p.receita)}</span>
+                  <div className="mt-3 space-y-3">
+                    {/* Seletor de período */}
+                    <div className="flex flex-wrap gap-1.5">
+                      {(['7', '30', '0'] as const).map(p => (
+                        <button
+                          key={p}
+                          onClick={() => { setProdPeriodo(p); fetchProdutos(p, prodCustomDias) }}
+                          className={clsx(
+                            'px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-colors',
+                            prodPeriodo === p
+                              ? 'bg-brand-500/20 text-brand-400 border border-brand-500/40'
+                              : 'bg-surface-700 text-gray-500 border border-surface-600 hover:text-gray-300'
+                          )}
+                        >
+                          {p === '7' ? '7d' : p === '30' ? '30d' : 'Geral'}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => { setProdPeriodo('custom'); fetchProdutos('custom', prodCustomDias) }}
+                        className={clsx(
+                          'px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-colors',
+                          prodPeriodo === 'custom'
+                            ? 'bg-brand-500/20 text-brand-400 border border-brand-500/40'
+                            : 'bg-surface-700 text-gray-500 border border-surface-600 hover:text-gray-300'
+                        )}
+                      >
+                        Personalizado
+                      </button>
+                      {prodPeriodo === 'custom' && (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={prodCustomInput}
+                            onChange={e => setProdCustomInput(e.target.value)}
+                            onBlur={() => {
+                              const v = Math.max(1, Math.min(365, parseInt(prodCustomInput) || 14))
+                              setProdCustomDias(v)
+                              setProdCustomInput(String(v))
+                              fetchProdutos('custom', v)
+                            }}
+                            className="w-14 px-2 py-0.5 rounded-lg text-xs text-center bg-surface-700 border border-surface-600 text-gray-300 focus:outline-none focus:border-brand-500"
+                          />
+                          <span className="text-xs text-gray-600">dias</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Lista */}
+                    {finProdutos && finProdutos.topProdutos.length > 0 ? (
+                      <div className="space-y-1">
+                        {finProdutos.topProdutos.slice(0, 5).map((p, i) => (
+                          <div key={p.nome} className="flex items-center gap-2 py-1.5 border-b border-surface-600 last:border-0">
+                            <span className="text-xs text-gray-600 w-3.5 shrink-0">{i + 1}</span>
+                            <span className="text-sm text-gray-300 flex-1 truncate">{p.nome}</span>
+                            <span className="text-xs text-gray-500 shrink-0">{p.qtd}un</span>
+                            <span className="text-sm font-bold text-accent-gold shrink-0">{fmt(p.receita)}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <p className="text-xs text-gray-600 text-center py-3">Nenhum produto no período</p>
+                    )}
                   </div>
                 )}
               </div>
