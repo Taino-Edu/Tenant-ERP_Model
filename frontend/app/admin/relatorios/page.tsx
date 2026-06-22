@@ -278,7 +278,7 @@ export default function RelatoriosPage() {
   const handleOperacionalPDF = useCallback(async () => {
     setPdfLoading('operacional')
     try {
-      const [{ data: products }, { data: categories }] = await Promise.all([productApi.list(), categoryApi.list()])
+      const [{ data: products }, { data: categories }] = await Promise.all([productApi.listAdmin(), categoryApi.list()])
       await gerarRelatorioOperacional(products, categories)
     } catch { toast.error('Erro ao gerar PDF operacional') }
     finally { setPdfLoading(null) }
@@ -287,7 +287,7 @@ export default function RelatoriosPage() {
   const handleGerencialPDF = useCallback(async () => {
     setPdfLoading('gerencial')
     try {
-      const [{ data: products }, { data: categories }] = await Promise.all([productApi.list(), categoryApi.list()])
+      const [{ data: products }, { data: categories }] = await Promise.all([productApi.listAdmin(), categoryApi.list()])
       await gerarRelatorioGerencial(products, categories)
     } catch { toast.error('Erro ao gerar PDF gerencial') }
     finally { setPdfLoading(null) }

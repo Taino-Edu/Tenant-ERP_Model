@@ -131,7 +131,7 @@ function AddItemModal({
   const barcodeRef                      = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    productApi.list()
+    productApi.listAdmin()
       .then(r => setProducts(r.data.filter(p => p.isActive && p.stockQuantity > 0)))
       .catch(() => toast.error('Erro ao carregar produtos'))
       .finally(() => setLoading(false))
@@ -1057,7 +1057,7 @@ export default function DashboardPage() {
 
     analyticsApi.financeiro(hoje, hoje).then(r => setFinHoje(r.data)).catch(() => {})
     analyticsApi.financeiro(ini7s, hoje).then(r => { setFin7d(r.data); setFinProdutos(r.data) }).catch(() => {})
-    productApi.list().then(r => {
+    productApi.listAdmin().then(r => {
       const prods = r.data.filter(p => p.isActive)
       setLowStock(prods.filter(p => p.isLowStock).length)
       setAllProducts(prods)

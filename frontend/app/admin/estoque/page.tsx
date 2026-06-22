@@ -360,14 +360,14 @@ export default function EstoquePage() {
   async function handleToggleMkt(p: Product) {
     try {
       const next = !p.showOnSite
-      await productApi.update(p.id, { showOnSite: next, ...(!next ? { isFeatured: false } : {}) })
+      await productApi.update(p.id, { ...p, showOnSite: next, isFeatured: next ? p.isFeatured : false })
       fetch()
     } catch { toast.error('Erro ao atualizar') }
   }
 
   async function handleToggleFeatured(p: Product) {
     if (!p.showOnSite) return
-    try { await productApi.update(p.id, { isFeatured: !p.isFeatured }); fetch() }
+    try { await productApi.update(p.id, { ...p, isFeatured: !p.isFeatured }); fetch() }
     catch { toast.error('Erro ao atualizar') }
   }
 
@@ -497,7 +497,7 @@ export default function EstoquePage() {
                       onClick={async () => {
                         try {
                           const next = !p.showOnSite
-                          await productApi.update(p.id, { showOnSite: next, ...(!next ? { isFeatured: false } : {}) })
+                          await productApi.update(p.id, { ...p, showOnSite: next, isFeatured: next ? p.isFeatured : false })
                           fetch()
                         } catch { toast.error('Erro ao atualizar') }
                       }}
