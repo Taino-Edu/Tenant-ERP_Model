@@ -14,13 +14,13 @@ public class ProductService : IProductService
     public ProductService(AppDbContext db) { _db = db; }
 
     public async Task<IEnumerable<Product>> GetAllActiveAsync() =>
-        await _db.Products.Where(p => p.IsActive && p.ShowOnSite).OrderBy(p => p.Name).ToListAsync();
+        await _db.Products.Where(p => p.IsActive && p.ShowOnMarketplace).OrderBy(p => p.Name).ToListAsync();
 
     public async Task<IEnumerable<Product>> GetAllForAdminAsync() =>
         await _db.Products.Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
 
     public async Task<IEnumerable<Product>> GetByCategoryAsync(string category) =>
-        await _db.Products.Where(p => p.IsActive && p.ShowOnSite && p.Category == category).ToListAsync();
+        await _db.Products.Where(p => p.IsActive && p.ShowOnMarketplace && p.Category == category).ToListAsync();
 
     public async Task<Product?> GetByIdAsync(Guid id) =>
         await _db.Products.FindAsync(id);

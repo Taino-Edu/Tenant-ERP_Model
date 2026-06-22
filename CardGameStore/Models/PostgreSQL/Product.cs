@@ -97,6 +97,10 @@ public class Product
     [Column("show_on_site")]
     public bool ShowOnSite { get; set; } = true;
 
+    /// <summary>Se true, o produto aparece na loja digital (marketplace). Independente do PDV/comandas.</summary>
+    [Column("show_on_marketplace")]
+    public bool ShowOnMarketplace { get; set; } = true;
+
     /// <summary>Preço promocional em centavos. Quando preenchido, exibe badge "Promoção" e preço riscado.</summary>
     [Column("discount_price_in_cents")]
     public int? DiscountPriceInCents { get; set; }

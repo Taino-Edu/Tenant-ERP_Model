@@ -218,14 +218,11 @@ function ProductModal({
           <div className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3 space-y-3">
             <label className="flex items-center justify-between gap-3 cursor-pointer">
               <div>
-                <p className="text-sm font-medium text-[var(--text-primary)]">🛍️ Marketplace</p>
-                <p className="text-xs text-[var(--text-muted)]">Aparece na loja digital (marketplace)</p>
+                <p className="text-sm font-medium text-[var(--text-primary)]">Mostrar no site</p>
+                <p className="text-xs text-[var(--text-muted)]">Aparece na página pública do site</p>
               </div>
               <div
-                onClick={() => {
-                  const next = !(form.showOnSite ?? true)
-                  setForm(f => ({ ...f, showOnSite: next, ...(!next ? { isFeatured: false } : {}) }))
-                }}
+                onClick={() => set('showOnSite', !(form.showOnSite ?? true))}
                 className={[
                   'relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0',
                   (form.showOnSite ?? true) ? 'bg-brand-500' : 'bg-surface-600',
@@ -234,6 +231,27 @@ function ProductModal({
                 <span className={[
                   'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
                   (form.showOnSite ?? true) ? 'translate-x-4' : 'translate-x-0',
+                ].join(' ')} />
+              </div>
+            </label>
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">🛍️ Marketplace</p>
+                <p className="text-xs text-[var(--text-muted)]">Aparece na loja digital — desmarcado: some do marketplace, continua nas comandas</p>
+              </div>
+              <div
+                onClick={() => {
+                  const next = !(form.showOnMarketplace ?? true)
+                  setForm(f => ({ ...f, showOnMarketplace: next, ...(!next ? { isFeatured: false } : {}) }))
+                }}
+                className={[
+                  'relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0',
+                  (form.showOnMarketplace ?? true) ? 'bg-brand-500' : 'bg-surface-600',
+                ].join(' ')}
+              >
+                <span className={[
+                  'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                  (form.showOnMarketplace ?? true) ? 'translate-x-4' : 'translate-x-0',
                 ].join(' ')} />
               </div>
             </label>
@@ -465,13 +483,13 @@ export default function EstoquePage() {
                     <button
                       onClick={async () => {
                         try {
-                          const next = !p.showOnSite
-                          await productApi.update(p.id, { ...p, showOnSite: next, isFeatured: next ? p.isFeatured : false })
+                          const next = !p.showOnMarketplace
+                          await productApi.update(p.id, { ...p, showOnMarketplace: next, isFeatured: next ? p.isFeatured : false })
                           fetch()
                         } catch { toast.error('Erro ao atualizar') }
                       }}
-                      title={p.showOnSite ? 'No marketplace — clique para remover' : 'Fora do marketplace — clique para adicionar'}
-                      className={`text-base transition-opacity ${p.showOnSite ? 'opacity-100' : 'opacity-25'}`}
+                      title={p.showOnMarketplace ? 'No marketplace — clique para remover' : 'Fora do marketplace — clique para adicionar'}
+                      className={`text-base transition-opacity ${p.showOnMarketplace ? 'opacity-100' : 'opacity-25'}`}
                     >🛍️</button>
                   </td>
                   <td className="px-4 py-3">
