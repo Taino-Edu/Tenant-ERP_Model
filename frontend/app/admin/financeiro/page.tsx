@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto } from '@/lib/api'
+import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto, PagamentoCrediarioPeriodoDto } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import toast from 'react-hot-toast'
 import {
@@ -653,14 +653,42 @@ export default function FinanceiroPage() {
       ),
     },
     crediarios: {
-      title: 'Crediários em Aberto',
+      title: 'Crediário — Recebimentos no Período',
       color: 'yellow',
-      totalLabel: fmt(d.crediarios),
-      points: [], // sem granularidade diária
+      totalLabel: d.recebidoCrediario > 0 ? fmt(d.recebidoCrediario) : 'R$ 0,00',
+      points: [],
       extra: (
-        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-sm text-amber-300">
-          Valor total em aberto a receber de clientes com crediário.
-          Gerencie em <a href="/admin/crediario" className="underline">Gestão de Crediários</a>.
+        <div className="space-y-3">
+          {/* Saldo em aberto */}
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between">
+            <span className="text-xs text-amber-300">Saldo total em aberto</span>
+            <span className="text-sm font-bold font-mono text-amber-400">{fmt(d.crediarios)}</span>
+          </div>
+          {/* Lista de pagamentos no período */}
+          {d.pagamentosCrediarioPeriodo.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center py-2">Nenhum pagamento de crediário neste período.</p>
+          ) : (
+            <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+              <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-1">
+                {d.pagamentosCrediarioPeriodo.length} pagamento{d.pagamentosCrediarioPeriodo.length !== 1 ? 's' : ''} recebido{d.pagamentosCrediarioPeriodo.length !== 1 ? 's' : ''}
+              </p>
+              {d.pagamentosCrediarioPeriodo.map((p: PagamentoCrediarioPeriodoDto, i: number) => (
+                <div key={i} className="flex items-center justify-between bg-surface-700 rounded-lg px-3 py-2 text-xs">
+                  <div className="min-w-0">
+                    <p className="text-white font-medium truncate">{p.clienteNome}</p>
+                    <p className="text-gray-500">
+                      {p.formaPagamento} · {new Date(p.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      {p.observacao && <span className="ml-1 text-amber-500">{p.observacao}</span>}
+                    </p>
+                  </div>
+                  <span className="font-bold font-mono text-emerald-400 shrink-0 ml-3">{fmt(p.valorEmReais)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <a href="/admin/crediario" className="block text-center text-xs text-brand-400 hover:text-brand-300 transition-colors">
+            Gerenciar crediários →
+          </a>
         </div>
       ),
     },
@@ -814,7 +842,7 @@ export default function FinanceiroPage() {
                 <KpiCard label="Custo estimado"     value={fmt(d.custo)}       sub="Clique para detalhar por produto"               color="red"    icon={ShoppingBag}  onClick={() => setKpiModal('custo')}      change={pctChange(d.custo,      prevData?.custo      ?? 0)} />
                 <KpiCard label="Margem média"        value={`${d.margemPercent.toFixed(1)}%`} sub={`${fmt(d.margem)} sobre custo`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} change={pctChange(d.margemPercent, prevData?.margemPercent ?? 0)} />
                 <KpiCard label="Ticket médio"       value={fmt(ticketMedio)}   sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  color="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')}     change={pctChange(ticketMedio,  prevTicket)} />
-                <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}  sub="A receber"                                      color="yellow" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} change={pctChange(d.crediarios, prevData?.crediarios ?? 0)} />
+                <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}  sub={d.recebidoCrediario > 0 ? `Recebido no período: ${fmt(d.recebidoCrediario)}` : 'A receber · clique para detalhar'} color="yellow" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} change={pctChange(d.crediarios, prevData?.crediarios ?? 0)} />
               </div>
             )
           })()}

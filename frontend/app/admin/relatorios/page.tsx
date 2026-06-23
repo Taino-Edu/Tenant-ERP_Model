@@ -7,7 +7,7 @@ import {
 } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
-import { gerarRelatorioClientes, gerarRelatorioPDV, gerarRelatorioComandas } from '@/lib/relatorio-admin'
+import { gerarRelatorioClientes, gerarRelatorioPDV, gerarRelatorioComandas, gerarRelatorioCrediario } from '@/lib/relatorio-admin'
 import toast from 'react-hot-toast'
 import {
   BarChart2, ChevronDown, ChevronUp, Loader2, Package,
@@ -251,7 +251,7 @@ function AbaCrediario({ mes, ano }: { mes: number; ano: number }) {
 // ── Página principal ──────────────────────────────────────────────────────────
 
 type Aba    = 'vendas' | 'crediario'
-type PdfKey = 'financeiro' | 'operacional' | 'gerencial' | 'clientes' | 'pdv' | 'comandas' | null
+type PdfKey = 'financeiro' | 'operacional' | 'gerencial' | 'clientes' | 'pdv' | 'comandas' | 'crediario' | null
 
 export default function RelatoriosPage() {
   const hoje = new Date()
@@ -324,6 +324,15 @@ export default function RelatoriosPage() {
     } catch { toast.error('Erro ao gerar PDF de comandas') }
     finally { setPdfLoading(null) }
   }, [diasComandas])
+
+  const handleCrediarioPDF = useCallback(async () => {
+    setPdfLoading('crediario')
+    try {
+      const { data } = await relatorioApi.crediario(mes, ano)
+      await gerarRelatorioCrediario(data)
+    } catch { toast.error('Erro ao gerar PDF de crediário') }
+    finally { setPdfLoading(null) }
+  }, [mes, ano])
 
   // ── Cards de relatório ──────────────────────────────────────────────────────
   const reports = [
@@ -411,6 +420,19 @@ export default function RelatoriosPage() {
         </div>
       ),
       onGenerate: handleComandasPDF,
+    },
+    {
+      key: 'crediario' as PdfKey,
+      icon: CreditCard,
+      color: 'text-amber-400',
+      bg:   'bg-amber-500/10',
+      title: 'Crediário',
+      tag: 'Crediário',
+      desc: 'Situação atual de todos os crediários em aberto (quem deve, quanto, se está vencido) e histórico completo de pagamentos recebidos no mês — data, cliente, valor e forma de pagamento. Use para cobrança, fechamento mensal e auditoria de recebíveis.',
+      control: (
+        <span className="text-xs text-gray-400">{MESES[mes - 1]} {ano}</span>
+      ),
+      onGenerate: handleCrediarioPDF,
     },
   ]
 

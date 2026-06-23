@@ -702,6 +702,15 @@ export interface TransacaoFinDto {
   nota?: string | null   // ex.: "+ Cashback R$ 19,00" para split payment
 }
 
+export interface PagamentoCrediarioPeriodoDto {
+  clienteNome: string
+  clienteWhatsApp: string | null
+  valorEmReais: number
+  formaPagamento: string
+  observacao: string | null
+  createdAt: string
+}
+
 export interface FormaPagamentoTotalDto {
   forma: string
   total: number
@@ -717,9 +726,11 @@ export interface FinanceiroDto {
   margem: number
   margemPercent: number
   crediarios: number
+  recebidoCrediario: number
   diaDia: DiaFinanceiroDto[]
   topProdutos: TopProductFinDto[]
   pagamentosPorForma: FormaPagamentoTotalDto[]
+  pagamentosCrediarioPeriodo: PagamentoCrediarioPeriodoDto[]
 }
 
 export const analyticsApi = {

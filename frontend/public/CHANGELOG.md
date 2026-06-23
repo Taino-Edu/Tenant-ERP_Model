@@ -1,5 +1,13 @@
 # Changelog — Santuário Nerd
 
+## [v1.7.3] — 2026-06-22
+
+### Adicionado
+- **Financeiro — Crediários recebidos no período**: o card "Crediários abertos" agora exibe no sub-texto o total recebido no período filtrado; ao clicar abre modal com lista detalhada de cada pagamento (cliente, valor, forma de pagamento, horário e observação)
+- **Relatório PDF de Crediário**: novo PDF disponível na tela de Relatórios — mostra situação atual de todos os devedores (saldo, dias em atraso, vencimento, WhatsApp) e tabela completa de pagamentos recebidos no mês com subtotal ao final
+
+---
+
 ## [v1.7.2] — 2026-06-22
 
 ### Corrigido

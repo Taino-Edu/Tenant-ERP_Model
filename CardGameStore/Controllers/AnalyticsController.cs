@@ -479,18 +479,39 @@ public class AnalyticsController : ControllerBase
         .Take(30)
         .ToList();
 
+        // ── Pagamentos de crediário recebidos no período ──────────────────────
+        var pgtoCrediarioPeriodo = await _db.PagamentosCrediario
+            .Include(p => p.Crediario).ThenInclude(c => c.User)
+            .Where(p => p.CreatedAt >= ini && p.CreatedAt < end)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+
+        var recebidoCrediario = pgtoCrediarioPeriodo.Sum(p => p.ValorEmReais);
+
+        var pagamentosCrediarioPeriodo = pgtoCrediarioPeriodo.Select(p => new PagamentoCrediarioPeriodoDto
+        {
+            ClienteNome     = p.Crediario?.User?.Name ?? "—",
+            ClienteWhatsApp = p.Crediario?.User?.WhatsApp,
+            ValorEmReais    = p.ValorEmReais,
+            FormaPagamento  = p.FormaPagamento,
+            Observacao      = p.Observacao,
+            CreatedAt       = p.CreatedAt,
+        }).ToList();
+
         return Ok(new FinanceiroDto
         {
-            Receita            = Math.Round(receita, 2),
-            ReceitaComandas    = Math.Round(receitaComandas, 2),
-            ReceitaAvulsa      = Math.Round(receitaAvulsa, 2),
-            Custo              = Math.Round(custo, 2),
-            Margem             = Math.Round(margem, 2),
-            MargemPercent      = margemPercent,
-            Crediarios         = Math.Round(crediarios, 2),
-            DiaDia             = diaDia,
-            TopProdutos        = topProdutos,
-            PagamentosPorForma = todasFormas,
+            Receita                    = Math.Round(receita, 2),
+            ReceitaComandas            = Math.Round(receitaComandas, 2),
+            ReceitaAvulsa              = Math.Round(receitaAvulsa, 2),
+            Custo                      = Math.Round(custo, 2),
+            Margem                     = Math.Round(margem, 2),
+            MargemPercent              = margemPercent,
+            Crediarios                 = Math.Round(crediarios, 2),
+            RecebidoCrediario          = Math.Round(recebidoCrediario, 2),
+            DiaDia                     = diaDia,
+            TopProdutos                = topProdutos,
+            PagamentosPorForma         = todasFormas,
+            PagamentosCrediarioPeriodo = pagamentosCrediarioPeriodo,
         });
     }
 }

@@ -74,10 +74,22 @@ public class FinanceiroDto
     public decimal Custo            { get; set; } // custo dos produtos vendidos (R$)
     public decimal Margem           { get; set; } // receita - custo
     public decimal MargemPercent    { get; set; } // (margem / custo) * 100
-    public decimal Crediarios       { get; set; } // total em aberto nos crediários (R$)
-    public List<DiaFinanceiroDto>      DiaDia           { get; set; } = new();
-    public List<TopProductFinDto>      TopProdutos      { get; set; } = new();
-    public List<FormaPagamentoTotalDto> PagamentosPorForma { get; set; } = new();
+    public decimal Crediarios        { get; set; } // total em aberto nos crediários (R$)
+    public decimal RecebidoCrediario { get; set; } // total recebido de crediários no período
+    public List<DiaFinanceiroDto>               DiaDia                     { get; set; } = new();
+    public List<TopProductFinDto>               TopProdutos                { get; set; } = new();
+    public List<FormaPagamentoTotalDto>         PagamentosPorForma         { get; set; } = new();
+    public List<PagamentoCrediarioPeriodoDto>   PagamentosCrediarioPeriodo { get; set; } = new();
+}
+
+public class PagamentoCrediarioPeriodoDto
+{
+    public string   ClienteNome     { get; set; } = string.Empty;
+    public string?  ClienteWhatsApp { get; set; }
+    public decimal  ValorEmReais    { get; set; }
+    public string   FormaPagamento  { get; set; } = string.Empty;
+    public string?  Observacao      { get; set; }
+    public DateTime CreatedAt       { get; set; }
 }
 
 public class DiaFinanceiroDto

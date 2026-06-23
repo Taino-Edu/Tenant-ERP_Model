@@ -3,7 +3,7 @@
 // Mesmo padrão visual de relatorio.ts (fundo branco, tipografia limpa)
 // =============================================================================
 
-import { ClienteInsightDto, FinanceiroDto, ComandaDto } from './api'
+import { ClienteInsightDto, FinanceiroDto, ComandaDto, RelatorioCrediarioDto } from './api'
 
 async function getJsPDF() {
   const { default: jsPDF } = await import('jspdf')
@@ -341,4 +341,116 @@ export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: numbe
 
   addFooters(doc)
   doc.save(`comandas_abertas_${today().replace(/\//g, '-')}.pdf`)
+}
+
+// =============================================================================
+// 4. RELATÓRIO DE CREDIÁRIO — Situação atual + pagamentos do mês
+// =============================================================================
+const MESES_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+
+export async function gerarRelatorioCrediario(data: RelatorioCrediarioDto) {
+  const JsPDF = await getJsPDF()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any
+
+  const mesLabel = `${MESES_SHORT[data.mes - 1]}/${data.ano}`
+  const subtitle = `Situação atual · Pagamentos de ${mesLabel}`
+  let y = pageHeader(doc, 'Relatório de Crediário', subtitle)
+
+  // KPIs
+  y = kpiRow(doc, y, [
+    { label: 'Total em Aberto',      value: fmt(data.totalEmAbertoEmReais),   color: AMBER },
+    { label: 'Vencidos',             value: fmt(data.totalVencidoEmReais),     color: RED },
+    { label: `Recebido em ${mesLabel}`, value: fmt(data.recebidoNoMesEmReais), color: GREEN },
+    { label: 'Clientes em Aberto',   value: String(data.qtdAbertos) },
+  ])
+
+  // ── Devedores ──────────────────────────────────────────────────────────────
+  if (data.devedores.length > 0) {
+    y = sectionTitle(doc, y, 'Clientes com crediário em aberto')
+    ;(doc as any).autoTable({
+      startY: y,
+      head: [['Cliente', 'WhatsApp', 'Vencimento', 'Dias Atraso', 'Saldo Devedor']],
+      body: data.devedores.map(d => [
+        d.nome,
+        d.whatsApp ?? '—',
+        fmtDate(d.dataVencimento),
+        d.vencido ? `${d.diasAtraso}d` : '—',
+        fmt(d.saldoEmReais),
+      ]),
+      styles:      { fontSize: 8, cellPadding: 2.5, textColor: BLACK },
+      headStyles:  { fillColor: AMBER, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
+      alternateRowStyles: { fillColor: BGROW },
+      columnStyles: {
+        0: { cellWidth: 60 },
+        1: { cellWidth: 32 },
+        2: { cellWidth: 32, halign: 'center' },
+        3: { cellWidth: 24, halign: 'center' },
+        4: { halign: 'right' },
+      },
+      didParseCell(d: any) {
+        // Dias de atraso — vermelho se vencido
+        if (d.column.index === 3 && d.section === 'body' && d.cell.raw !== '—') {
+          d.cell.styles.textColor = RED
+          d.cell.styles.fontStyle = 'bold'
+        }
+        // Saldo devedor — vermelho se vencido (detectado pela linha)
+        if (d.column.index === 4 && d.section === 'body') {
+          d.cell.styles.fontStyle = 'bold'
+        }
+      },
+      margin: { left: ML, right: MR },
+    })
+    y = (doc as any).lastAutoTable.finalY + 8
+  }
+
+  // ── Pagamentos do mês ─────────────────────────────────────────────────────
+  if (data.pagamentosNoMes.length > 0) {
+    if (y > 220) { doc.addPage(); y = 20 }
+    y = sectionTitle(doc, y, `Pagamentos recebidos em ${mesLabel}`)
+    ;(doc as any).autoTable({
+      startY: y,
+      head: [['Data/Hora', 'Cliente', 'Forma de Pagamento', 'Observação', 'Valor']],
+      body: data.pagamentosNoMes.map(p => [
+        new Date(p.createdAt).toLocaleString('pt-BR', {
+          day: '2-digit', month: '2-digit', year: '2-digit',
+          hour: '2-digit', minute: '2-digit',
+        }),
+        p.clienteNome,
+        p.formaPagamento,
+        p.observacao ?? '—',
+        fmt(p.valorEmReais),
+      ]),
+      styles:      { fontSize: 8, cellPadding: 2.5, textColor: BLACK },
+      headStyles:  { fillColor: GREEN, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
+      alternateRowStyles: { fillColor: BGROW },
+      columnStyles: {
+        0: { cellWidth: 28, halign: 'center' },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 35 },
+        4: { halign: 'right', fontStyle: 'bold' },
+      },
+      didParseCell(d: any) {
+        if (d.column.index === 4 && d.section === 'body') {
+          d.cell.styles.textColor = GREEN
+        }
+      },
+      margin: { left: ML, right: MR },
+    })
+
+    // Subtotal
+    const lastY = (doc as any).lastAutoTable.finalY + 4
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9)
+    doc.setTextColor(...BLACK)
+    doc.text(`Total recebido em ${mesLabel}:`, PW - MR - 50, lastY, { align: 'left' })
+    doc.setTextColor(...GREEN)
+    doc.text(fmt(data.recebidoNoMesEmReais), PW - MR, lastY, { align: 'right' })
+  } else {
+    if (y > 240) { doc.addPage(); y = 20 }
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...LGRAY)
+    doc.text(`Nenhum pagamento registrado em ${mesLabel}.`, ML, y)
+  }
+
+  addFooters(doc)
+  doc.save(`crediario_${mesLabel.replace('/', '-')}_${today().replace(/\//g, '-')}.pdf`)
 }
