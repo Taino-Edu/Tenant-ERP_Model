@@ -388,6 +388,28 @@ public class VendaAvulsaService : IVendaAvulsaService
         return totalAtualizados;
     }
 
+    public async Task<VendaAvulsaDto> EditarPagamentoAsync(string id, EditarPagamentoVendaAvulsaRequest request)
+    {
+        if (!PaymentMethod.IsValid(request.PaymentMethod))
+            throw new ArgumentException($"Forma de pagamento inválida: {request.PaymentMethod}");
+
+        if (request.SecondPaymentMethod != null && !PaymentMethod.IsValid(request.SecondPaymentMethod))
+            throw new ArgumentException($"Segundo pagamento inválido: {request.SecondPaymentMethod}");
+
+        var filter = Builders<VendaAvulsa>.Filter.Eq(v => v.Id, id);
+        var update = Builders<VendaAvulsa>.Update
+            .Set(v => v.PaymentMethod,              request.PaymentMethod)
+            .Set(v => v.SecondPaymentMethod,        request.SecondPaymentMethod)
+            .Set(v => v.SecondPaymentAmountInCents, request.SecondPaymentAmountInCents);
+
+        var opts   = new FindOneAndUpdateOptions<VendaAvulsa> { ReturnDocument = ReturnDocument.After };
+        var result = await _collection.FindOneAndUpdateAsync(filter, update, opts)
+            ?? throw new KeyNotFoundException($"Venda avulsa {id} não encontrada.");
+
+        _logger.LogInformation("Pagamento da venda avulsa {Id} alterado para {PM}.", id, request.PaymentMethod);
+        return MapToDto(result);
+    }
+
     private static VendaAvulsaDto MapToDto(VendaAvulsa v) => new()
     {
         Id                         = v.Id,

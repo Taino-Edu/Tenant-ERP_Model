@@ -91,6 +91,23 @@ public class VendaAvulsaController : ControllerBase
     /// Preenche o custo (UnitCostInCents) em itens de vendas avulsas antigas que ficaram com custo = 0.
     /// Usa o custo atual de cada produto no PostgreSQL como referência.
     /// </summary>
+    /// <summary>Corrige a forma de pagamento de uma venda avulsa já registrada (Admin only).</summary>
+    [HttpPatch("{id}/pagamento")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(VendaAvulsaDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> EditarPagamento(string id, [FromBody] EditarPagamentoVendaAvulsaRequest request)
+    {
+        try
+        {
+            var result = await _service.EditarPagamentoAsync(id, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)   { return NotFound(new { Message = ex.Message }); }
+        catch (ArgumentException ex)      { return BadRequest(new { Message = ex.Message }); }
+    }
+
     [HttpPost("backfill-costs")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> BackfillCosts()

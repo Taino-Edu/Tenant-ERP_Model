@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, VendaAvulsaDto, UserSummary } from '@/lib/api'
+import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import { usePreferences } from '@/hooks/usePreferences'
 import toast from 'react-hot-toast'
@@ -8,7 +8,7 @@ import {
   ShoppingBag, Plus, Minus, User, CheckCircle, RotateCcw,
   Loader2, Receipt, PackageOpen, Banknote, CreditCard, QrCode,
   Tag, History, TrendingUp, Clock, FileText, AlertCircle, Star, Wallet, X,
-  BarChart2, ArrowRight, ChevronLeft,
+  BarChart2, ArrowRight, ChevronLeft, Pencil,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -183,8 +183,33 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
 
 // ── Modal de detalhes de uma venda ────────────────────────────────────────────
 
-function VendaDetailModal({ venda, onClose }: { venda: VendaAvulsaDto; onClose: () => void }) {
+function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto; onClose: () => void; onUpdate: (updated: VendaAvulsaDto) => void }) {
   const payLabel = PAYMENT_METHODS.find(m => m.value === venda.paymentMethod)?.label ?? venda.paymentMethod
+  const [editingPay, setEditingPay] = useState(false)
+  const [newPm,  setNewPm]  = useState(venda.paymentMethod)
+  const [newPm2, setNewPm2] = useState(venda.secondPaymentMethod ?? '')
+  const [pm2val, setPm2val] = useState(String(venda.secondPaymentAmountInCents / 100))
+  const [saving, setSaving] = useState(false)
+
+  async function handleSavePay() {
+    setSaving(true)
+    try {
+      const req: EditarPagamentoVendaAvulsaRequest = {
+        paymentMethod: newPm,
+        secondPaymentMethod: newPm2 || undefined,
+        secondPaymentAmountInCents: newPm2 ? Math.round(parseFloat(pm2val.replace(',', '.') || '0') * 100) : 0,
+      }
+      const { data } = await vendaAvulsaApi.editarPagamento(venda.id, req)
+      toast.success('Pagamento atualizado!')
+      onUpdate(data)
+      setEditingPay(false)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao atualizar pagamento.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div
@@ -257,6 +282,36 @@ function VendaDetailModal({ venda, onClose }: { venda: VendaAvulsaDto; onClose: 
           </div>
         </div>
 
+        {editingPay ? (
+          <div className="px-5 pb-5 space-y-3">
+            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Editar Pagamento</p>
+            <select value={newPm} onChange={e => setNewPm(e.target.value)}
+              className="w-full bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
+              {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
+            <div className="flex gap-2">
+              <select value={newPm2} onChange={e => setNewPm2(e.target.value)}
+                className="flex-1 bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
+                <option value="">Sem segundo pagamento</option>
+                {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+              {newPm2 && (
+                <input type="number" step="0.01" min="0" value={pm2val} onChange={e => setPm2val(e.target.value)}
+                  placeholder="Valor R$"
+                  className="w-28 bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm" />
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setEditingPay(false)} className="btn-secondary flex-1 justify-center text-sm">
+                Cancelar
+              </button>
+              <button onClick={handleSavePay} disabled={saving} className="btn-primary flex-1 justify-center text-sm">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        ) : (
         <div className="px-5 pb-5 flex gap-2">
           <button
             onClick={() => printReceiptPDF(venda, payLabel)}
@@ -264,10 +319,14 @@ function VendaDetailModal({ venda, onClose }: { venda: VendaAvulsaDto; onClose: 
           >
             <FileText className="w-4 h-4" /> Imprimir / PDF
           </button>
+          <button onClick={() => setEditingPay(true)} className="btn-secondary flex-1 justify-center text-sm">
+            <Pencil className="w-4 h-4" /> Pagamento
+          </button>
           <button onClick={onClose} className="btn-primary flex-1 justify-center text-sm">
             Fechar
           </button>
         </div>
+        )}
       </div>
     </div>
   )
@@ -1350,6 +1409,7 @@ export default function VendaAvulsaPage() {
           loading={histLoading}
           date={histDate}
           onDateChange={setHistDate}
+          onVendaUpdate={updated => setHistory(prev => prev.map(v => v.id === updated.id ? updated : v))}
         />
       )}
     </div>
@@ -1358,11 +1418,12 @@ export default function VendaAvulsaPage() {
 
 // ── Componente Histórico do Dia ───────────────────────────────────────────────
 
-function HistoricoTab({ history, loading, date, onDateChange }: {
+function HistoricoTab({ history, loading, date, onDateChange, onVendaUpdate }: {
   history: VendaAvulsaDto[]
   loading: boolean
   date: string
   onDateChange: (d: string) => void
+  onVendaUpdate: (updated: VendaAvulsaDto) => void
 }) {
   const [selectedVenda, setSelectedVenda] = useState<VendaAvulsaDto | null>(null)
 
@@ -1379,7 +1440,11 @@ function HistoricoTab({ history, loading, date, onDateChange }: {
     <div className="flex-1 overflow-y-auto space-y-4">
 
       {selectedVenda && (
-        <VendaDetailModal venda={selectedVenda} onClose={() => setSelectedVenda(null)} />
+        <VendaDetailModal
+          venda={selectedVenda}
+          onClose={() => setSelectedVenda(null)}
+          onUpdate={updated => { setSelectedVenda(updated); onVendaUpdate(updated) }}
+        />
       )}
 
       <div className="flex items-center gap-3 flex-wrap">

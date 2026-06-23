@@ -24,4 +24,7 @@ public interface IVendaAvulsaService
     /// Retorna quantos itens foram atualizados.
     /// </summary>
     Task<int> BackfillCostsAsync();
+
+    /// <summary>Corrige a forma de pagamento de uma venda avulsa já registrada (Admin only).</summary>
+    Task<VendaAvulsaDto> EditarPagamentoAsync(string id, EditarPagamentoVendaAvulsaRequest request);
 }

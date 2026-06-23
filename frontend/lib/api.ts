@@ -409,6 +409,12 @@ export const COMANDA_PAYMENT_METHODS = [
   { value: 'Cashback',      label: 'Cashback (Saldo)' },
 ] as const
 
+export interface EditarPagamentoVendaAvulsaRequest {
+  paymentMethod: string
+  secondPaymentMethod?: string
+  secondPaymentAmountInCents?: number
+}
+
 export const vendaAvulsaApi = {
   register: (
     clientName: string | null,
@@ -430,6 +436,8 @@ export const vendaAvulsaApi = {
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/by-date', { params: { date } }),
   backfillCosts: () =>
     api.post<{ itensAtualizados: number; mensagem: string }>('/api/venda-avulsa/backfill-costs'),
+  editarPagamento: (id: string, request: EditarPagamentoVendaAvulsaRequest) =>
+    api.patch<VendaAvulsaDto>(`/api/venda-avulsa/${id}/pagamento`, request),
 }
 
 export const productApi = {

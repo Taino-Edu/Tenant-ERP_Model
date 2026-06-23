@@ -57,6 +57,17 @@ public class VendaAvulsaDto
     public List<VendaAvulsaItemDto> Items                 { get; set; } = new();
 }
 
+public class EditarPagamentoVendaAvulsaRequest
+{
+    [Required]
+    public string PaymentMethod { get; set; } = Models.MongoDB.PaymentMethod.Pix;
+
+    public string? SecondPaymentMethod { get; set; }
+
+    [Range(0, int.MaxValue)]
+    public int SecondPaymentAmountInCents { get; set; } = 0;
+}
+
 public class VendaAvulsaItemDto
 {
     public string  ProductName      { get; set; } = string.Empty;
