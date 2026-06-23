@@ -148,15 +148,10 @@ export default function MesaPage() {
 
       {/* Cabeçalho */}
       <div className="relative pt-10 pb-2 px-6 text-center">
-        <div className="inline-flex items-center gap-2.5 justify-center">
-          <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-8 w-auto object-contain drop-shadow-md" />
-          <div className="text-left">
-            <h1 className="text-xl font-black text-white leading-none tracking-wide">Santuário Nerd</h1>
-            <p className="text-[9px] font-bold text-white/65 uppercase tracking-[0.22em] mt-0.5">
-              Seu Universo Geek Começa Aqui
-            </p>
-          </div>
-        </div>
+        <h1 className="text-xl font-black text-white leading-none tracking-wide">Santuário Nerd</h1>
+        <p className="text-[9px] font-bold text-white/65 uppercase tracking-[0.22em] mt-0.5">
+          Seu Universo Geek Começa Aqui
+        </p>
         <p className="text-[11px] text-white/55 mt-2 font-medium">Mesa {mesa}</p>
       </div>
 
