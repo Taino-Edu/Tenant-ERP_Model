@@ -9,7 +9,7 @@ import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
   Plus, History, DollarSign, X, Search, Pencil, Printer, Package, Trash2,
-  MessageCircle,
+  MessageCircle, RefreshCw,
 } from 'lucide-react'
 import { ItemCrediarioDto } from '@/lib/api'
 import clsx from 'clsx'
@@ -312,10 +312,11 @@ interface EditarModalProps {
 }
 
 function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProps) {
-  const [valor, setValor]       = useState(crediario.valorEmReais.toFixed(2).replace('.', ','))
-  const [obs, setObs]           = useState(crediario.observacao ?? '')
-  const [venc, setVenc]         = useState(crediario.dataVencimento.slice(0, 10))
-  const [loading, setLoading]   = useState(false)
+  const [valor, setValor]           = useState(crediario.valorEmReais.toFixed(2).replace('.', ','))
+  const [obs, setObs]               = useState(crediario.observacao ?? '')
+  const [venc, setVenc]             = useState(crediario.dataVencimento.slice(0, 10))
+  const [loading, setLoading]       = useState(false)
+  const [syncLoading, setSyncLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -336,6 +337,19 @@ function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProp
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao editar crediário')
     } finally { setLoading(false) }
+  }
+
+  async function handleRecarregarItens() {
+    setSyncLoading(true)
+    try {
+      await crediarioApi.editar(crediario.id, { limparItens: true })
+      toast.success('Itens recarregados das comandas!')
+      onSuccess()
+      onClose()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao recarregar itens')
+    } finally { setSyncLoading(false) }
   }
 
   return (
@@ -406,6 +420,21 @@ function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProp
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
                 : <><Pencil className="w-4 h-4" /> Salvar</>
+              }
+            </button>
+          </div>
+
+          {/* Recarregar itens das comandas (corrige ItensJson incompleto) */}
+          <div className="border-t border-surface-600 pt-3">
+            <button
+              type="button"
+              onClick={handleRecarregarItens}
+              disabled={syncLoading}
+              className="w-full text-xs text-gray-500 hover:text-gray-300 flex items-center justify-center gap-1.5 transition-colors"
+            >
+              {syncLoading
+                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Recarregando itens...</>
+                : <><RefreshCw className="w-3.5 h-3.5" /> Recarregar itens das comandas</>
               }
             </button>
           </div>
@@ -499,20 +528,6 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
             </div>
           ))}
         </div>
-
-        {/* Itens da dívida (compacto) */}
-        {crediario.itensComanda.length > 0 && (
-          <div className="px-6 pb-2">
-            <div className="bg-surface-900 rounded-xl border border-surface-600 divide-y divide-surface-600">
-              {crediario.itensComanda.map((item, idx) => (
-                <div key={idx} className="flex justify-between items-center px-3 py-1.5 text-xs">
-                  <span className="text-gray-400">{item.quantity}× {item.itemName}</span>
-                  <span className="text-accent-gold font-mono">R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">

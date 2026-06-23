@@ -330,6 +330,10 @@ public class CrediariosController : ControllerBase
             crediario.DataVencimento = request.DataVencimento.Value.ToUniversalTime();
         }
 
+        // Limpa ItensJson para forçar rebusca via date-range (corrige dados incompletos)
+        if (request.LimparItens)
+            crediario.ItensJson = null;
+
         await _db.SaveChangesAsync();
 
         _logger.LogInformation(

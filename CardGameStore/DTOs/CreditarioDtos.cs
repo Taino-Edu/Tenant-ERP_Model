@@ -118,6 +118,12 @@ public class EditarCrediarioRequest
 
     /// <summary>Nova data de vencimento. Se null, mantém a atual.</summary>
     public DateTime? DataVencimento { get; set; }
+
+    /// <summary>
+    /// Quando true, limpa o ItensJson forçando o MapToDto a rebuscar os itens
+    /// das comandas via date-range (útil para corrigir dados incompletos de migrações antigas).
+    /// </summary>
+    public bool LimparItens { get; set; } = false;
 }
 
 /// <summary>Body do endpoint POST /api/crediarios/{id}/pagamento (pagamento parcial).</summary>

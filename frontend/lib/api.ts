@@ -404,7 +404,7 @@ export const crediarioApi = {
     api.post<CrediariosDto>(`/api/crediarios/${id}/pagamento`, req),
   criarManual: (req: CriarCrediarioManualRequest) =>
     api.post<CrediariosDto>('/api/crediarios', req),
-  editar: (id: string, req: { valorEmCentavos?: number; observacao?: string; dataVencimento?: string }) =>
+  editar: (id: string, req: { valorEmCentavos?: number; observacao?: string; dataVencimento?: string; limparItens?: boolean }) =>
     api.patch<CrediariosDto>(`/api/crediarios/${id}`, req),
   deletar: (id: string) =>
     api.delete(`/api/crediarios/${id}`),
