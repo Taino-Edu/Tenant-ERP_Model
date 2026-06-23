@@ -60,4 +60,7 @@ public interface IComandaService
 
     /// <summary>Retorna as últimas comandas fechadas/canceladas do próprio usuário autenticado.</summary>
     Task<IEnumerable<ComandaDto>> GetUserHistoryAsync(Guid userId, int limit = 20);
+
+    /// <summary>Edita uma comanda fechada (Admin only): pagamento, itens, desconto, cliente.</summary>
+    Task<ComandaDto> EditarComandaFechadaAsync(Guid comandaId, Guid adminId, EditarComandaRequest request);
 }

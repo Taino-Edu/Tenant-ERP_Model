@@ -91,8 +91,27 @@ export interface ComandaDto {
 }
 
 export interface ComandaItemDto {
-  id: string; itemNameSnapshot: string; quantity: number
-  unitPriceInReais: number; subtotalInReais: number; addedAt: string
+  id: string; productId?: string | null; itemNameSnapshot: string; quantity: number
+  unitPriceInCents: number; unitPriceInReais: number; subtotalInReais: number; addedAt: string
+}
+
+export interface EditarItemRequest {
+  comandaItemId?: string
+  remover?: boolean
+  productId?: string
+  itemName: string
+  unitPriceInCents: number
+  quantity: number
+}
+
+export interface EditarComandaRequest {
+  paymentMethod?: string
+  secondPaymentMethod?: string
+  secondPaymentAmountInCents?: number
+  novoClienteId?: string
+  descontoEmCentavos?: number
+  notes?: string
+  itens?: EditarItemRequest[]
 }
 
 export interface Product {
@@ -299,6 +318,7 @@ export const comandaApi = {
   close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0) =>
     api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
+  editar:       (id: string, request: EditarComandaRequest) => api.put<ComandaDto>(`/api/comanda/${id}/editar`, request),
   adminOpen:    (userId: string, tableIdentifier?: string) =>
     api.post<ComandaDto>('/api/comanda/admin-open', { userId, tableIdentifier }),
   applyPoints:  (id: string, points: number) =>

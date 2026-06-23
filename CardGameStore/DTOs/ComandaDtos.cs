@@ -105,11 +105,43 @@ public class CloseComandaRequest
 public class ComandaItemDto
 {
     public Guid    Id                  { get; set; }
+    public Guid?   ProductId           { get; set; }
     public string  ItemNameSnapshot    { get; set; } = string.Empty;
     public int     Quantity            { get; set; }
+    public int     UnitPriceInCents    { get; set; }
     public decimal UnitPriceInReais    { get; set; }
     public decimal SubtotalInReais     { get; set; }
     public DateTime AddedAt            { get; set; }
+}
+
+// -------------------------------------------------------------------------
+// Edição de comanda fechada (Admin only)
+// -------------------------------------------------------------------------
+
+/// <summary>Request para editar uma comanda já fechada.</summary>
+public class EditarComandaRequest
+{
+    public string? PaymentMethod               { get; set; }
+    public string? SecondPaymentMethod         { get; set; }
+    public int?    SecondPaymentAmountInCents  { get; set; }
+    public Guid?   NovoClienteId              { get; set; }
+    public int?    DescontoEmCentavos          { get; set; }
+    public string? Notes                       { get; set; }
+    public List<EditarItemRequest>? Itens      { get; set; }
+}
+
+public class EditarItemRequest
+{
+    /// <summary>Id do item existente. Null = novo item.</summary>
+    public Guid?  ComandaItemId    { get; set; }
+
+    /// <summary>True = remover o item (devolve estoque).</summary>
+    public bool   Remover          { get; set; } = false;
+
+    public Guid?  ProductId        { get; set; }
+    public string ItemName         { get; set; } = string.Empty;
+    public int    UnitPriceInCents { get; set; }
+    public int    Quantity         { get; set; } = 1;
 }
 
 // -------------------------------------------------------------------------

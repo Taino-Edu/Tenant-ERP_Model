@@ -184,6 +184,24 @@ public class ComandaController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Edita uma comanda fechada: pagamento, itens, desconto, cliente (Admin only).</summary>
+    [HttpPut("{id:guid}/editar")]
+    [Authorize(Policy = "AdminOnly")]
+    [ProducesResponseType(typeof(ComandaDto), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> EditarComanda(Guid id, [FromBody] EditarComandaRequest request)
+    {
+        try
+        {
+            var adminId = GetUserId();
+            var result  = await _service.EditarComandaFechadaAsync(id, adminId, request);
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)   { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+    }
+
     /// <summary>Cliente aplica seus pontos para abater o total da comanda.</summary>
     [HttpPost("{id:guid}/apply-points")]
     [ProducesResponseType(typeof(ComandaDto), 200)]

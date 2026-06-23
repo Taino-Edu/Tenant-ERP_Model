@@ -889,6 +889,149 @@ public class ComandaService : IComandaService
         return (product.Name, effectivePrice, product.CostPriceInCents);
     }
 
+    // =========================================================================
+    // EDITAR COMANDA FECHADA — Admin only
+    // =========================================================================
+
+    public async Task<ComandaDto> EditarComandaFechadaAsync(Guid comandaId, Guid adminId, EditarComandaRequest request)
+    {
+        var comanda = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.Id == comandaId)
+            ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
+
+        if (comanda.Status != ComandaStatus.Fechada)
+            throw new InvalidOperationException("Somente comandas com status 'Fechada' podem ser editadas.");
+
+        // 1. Forma de pagamento
+        if (request.PaymentMethod != null)
+            comanda.PaymentMethod = request.PaymentMethod;
+
+        if (request.SecondPaymentMethod != null)
+            comanda.SecondPaymentMethod = request.SecondPaymentMethod == "" ? null : request.SecondPaymentMethod;
+
+        if (request.SecondPaymentAmountInCents.HasValue)
+            comanda.SecondPaymentAmountInCents = request.SecondPaymentAmountInCents.Value;
+
+        // 2. Desconto
+        if (request.DescontoEmCentavos.HasValue)
+            comanda.PointsApplied = Math.Max(0, request.DescontoEmCentavos.Value);
+
+        // 3. Observações
+        if (request.Notes != null)
+            comanda.Notes = request.Notes;
+
+        // 4. Trocar cliente
+        if (request.NovoClienteId.HasValue)
+        {
+            var existe = await _db.Users.AnyAsync(u => u.Id == request.NovoClienteId.Value && u.IsActive);
+            if (!existe) throw new InvalidOperationException("Cliente não encontrado ou inativo.");
+            comanda.UserId = request.NovoClienteId.Value;
+        }
+
+        // 5. Itens
+        if (request.Itens != null)
+        {
+            foreach (var req in request.Itens)
+            {
+                if (req.ComandaItemId.HasValue && req.Remover)
+                {
+                    var existing = comanda.Items.FirstOrDefault(i => i.Id == req.ComandaItemId.Value);
+                    if (existing != null)
+                    {
+                        if (existing.ProductId.HasValue)
+                            await _db.Products
+                                .Where(p => p.Id == existing.ProductId.Value)
+                                .ExecuteUpdateAsync(s => s
+                                    .SetProperty(p => p.StockQuantity, p => p.StockQuantity + existing.Quantity)
+                                    .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+                        _db.ComandaItems.Remove(existing);
+                        comanda.Items.Remove(existing);
+                    }
+                }
+                else if (req.ComandaItemId.HasValue)
+                {
+                    var existing = comanda.Items.FirstOrDefault(i => i.Id == req.ComandaItemId.Value);
+                    if (existing != null)
+                    {
+                        var delta = req.Quantity - existing.Quantity;
+                        if (delta != 0 && existing.ProductId.HasValue)
+                        {
+                            if (delta > 0)
+                            {
+                                var rows = await _db.Products
+                                    .Where(p => p.Id == existing.ProductId.Value && p.StockQuantity >= delta)
+                                    .ExecuteUpdateAsync(s => s
+                                        .SetProperty(p => p.StockQuantity, p => p.StockQuantity - delta)
+                                        .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+                                if (rows == 0)
+                                    throw new InvalidOperationException($"Estoque insuficiente para '{existing.ItemNameSnapshot}'.");
+                            }
+                            else
+                            {
+                                await _db.Products
+                                    .Where(p => p.Id == existing.ProductId.Value)
+                                    .ExecuteUpdateAsync(s => s
+                                        .SetProperty(p => p.StockQuantity, p => p.StockQuantity + (-delta))
+                                        .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+                            }
+                        }
+                        existing.Quantity         = req.Quantity;
+                        existing.UnitPriceInCents = req.UnitPriceInCents;
+                        existing.SubtotalInCents  = req.Quantity * req.UnitPriceInCents;
+                    }
+                }
+                else
+                {
+                    // Novo item
+                    if (req.ProductId.HasValue)
+                    {
+                        var rows = await _db.Products
+                            .Where(p => p.Id == req.ProductId.Value && p.IsActive && p.StockQuantity >= req.Quantity)
+                            .ExecuteUpdateAsync(s => s
+                                .SetProperty(p => p.StockQuantity, p => p.StockQuantity - req.Quantity)
+                                .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+                        if (rows == 0)
+                            throw new InvalidOperationException($"Estoque insuficiente ou produto inativo: '{req.ItemName}'.");
+                    }
+                    var novoItem = new ComandaItem
+                    {
+                        ComandaId        = comanda.Id,
+                        ProductId        = req.ProductId,
+                        ItemNameSnapshot = req.ItemName,
+                        UnitPriceInCents = req.UnitPriceInCents,
+                        Quantity         = req.Quantity,
+                        SubtotalInCents  = req.Quantity * req.UnitPriceInCents,
+                        AddedByUserId    = adminId,
+                    };
+                    _db.ComandaItems.Add(novoItem);
+                    comanda.Items.Add(novoItem);
+                }
+            }
+        }
+
+        await _db.SaveChangesAsync();
+
+        // Recalcula total a partir dos itens salvos
+        var totalItens = await _db.ComandaItems
+            .Where(i => i.ComandaId == comandaId)
+            .SumAsync(i => i.SubtotalInCents);
+        comanda.TotalInCents = Math.Max(0, totalItens - comanda.PointsApplied);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Comanda {Id} editada pelo admin {AdminId}.", comandaId, adminId);
+        await _hub.Clients.Group(ComandaHub.AdminGroup).SendAsync("ComandaAtualizada", comandaId);
+
+        // Recarrega com User para o MapToDto
+        var updated = await _db.Comandas
+            .Include(c => c.Items)
+            .Include(c => c.User)
+            .FirstAsync(c => c.Id == comandaId);
+
+        return MapToDto(updated);
+    }
+
     private static ComandaDto MapToDto(Comanda comanda) => new()
     {
         Id                         = comanda.Id,
@@ -909,8 +1052,10 @@ public class ComandaService : IComandaService
         Items                      = comanda.Items.Select(i => new ComandaItemDto
         {
             Id               = i.Id,
+            ProductId        = i.ProductId,
             ItemNameSnapshot = i.ItemNameSnapshot,
             Quantity         = i.Quantity,
+            UnitPriceInCents = i.UnitPriceInCents,
             UnitPriceInReais = i.UnitPriceInCents / 100m,
             SubtotalInReais  = i.SubtotalInReais,
             AddedAt          = i.AddedAt,
