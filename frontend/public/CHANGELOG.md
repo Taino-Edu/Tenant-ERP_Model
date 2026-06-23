@@ -1,5 +1,19 @@
 # Changelog — Santuário Nerd
 
+## [v1.7.5] — 2026-06-23
+
+### Adicionado
+- **Edição de comanda fechada (Admin)**: admin pode editar qualquer comanda já fechada — forma de pagamento, segundo pagamento, desconto, cliente e itens (adicionar, remover, alterar quantidade/preço); estoque é ajustado atomicamente e total recalculado automaticamente
+- **Badge PROMOÇÃO com cor inline**: letras brancas garantidas via `style` inline, evitando inconsistência de carregamento do Tailwind CSS
+- **Logo da mesa em moldura redonda**: tela de login agora exibe o mascote em container circular
+
+### Corrigido
+- **Modal de confirmação na comanda do cliente**: z-index elevado para `z-[60]` — não ficava mais escondido atrás do bottom sheet (`z-50`)
+- **Mascote removido do cabeçalho da mesa**: o círculo com logo foi removido do header da tela de mesa; mascote mantido flutuando abaixo do cabeçalho
+- **Segurança (5 vulnerabilidades)**: refresh token com hash SHA-256, COOKIE_SECURE sem bypass de env var, ProductService com update campo-a-campo e ajuste atômico de estoque com guard de negatividade
+
+---
+
 ## [v1.7.4] — 2026-06-22
 
 ### Adicionado
