@@ -52,11 +52,8 @@ public class AuthController : ControllerBase
     /// </summary>
     private void SetAuthCookies(string accessToken, string refreshToken)
     {
-        // COOKIE_SECURE=false permite testes em HTTP (ex: Oracle Free Tier sem HTTPS).
-        // Em produção com HTTPS (Hetzner + Cloudflare), remover essa variável ou setar true.
-        var secureCookies = !_env.IsDevelopment()
-            && !string.Equals(Environment.GetEnvironmentVariable("COOKIE_SECURE"), "false",
-                              StringComparison.OrdinalIgnoreCase);
+        // Secure = true em produção (HTTPS via Cloudflare). Em desenvolvimento HTTP local, false.
+        var secureCookies = !_env.IsDevelopment();
 
         var cookieOptions = new CookieOptions
         {

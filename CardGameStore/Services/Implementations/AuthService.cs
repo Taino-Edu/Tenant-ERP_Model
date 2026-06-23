@@ -95,7 +95,9 @@ public class AuthService : IAuthService
         }
         catch (DbUpdateException)
         {
-            // CPF duplicado por requisição concorrente — busca o usuário já criado
+            // CPF duplicado por requisição concorrente — descarta a entidade em estado inválido
+            // e busca o usuário já criado pela outra thread.
+            _db.ChangeTracker.Clear();
             user = await _db.Users.FirstOrDefaultAsync(u => u.Cpf == request.Cpf && u.IsActive);
             if (user == null) throw;
         }
@@ -112,8 +114,9 @@ public class AuthService : IAuthService
     // =========================================================================
     public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
+        var hashedToken = HashRefreshToken(request.RefreshToken);
         var user = await _db.Users.FirstOrDefaultAsync(
-            u => u.RefreshToken == request.RefreshToken && u.IsActive
+            u => u.RefreshToken == hashedToken && u.IsActive
         );
 
         if (user == null || user.RefreshTokenExpiry < DateTime.UtcNow)
@@ -159,7 +162,9 @@ public class AuthService : IAuthService
         var refreshToken = GenerateRefreshToken();
         var expiresAt    = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenExpirationMinutes);
 
-        user.RefreshToken       = refreshToken;
+        // Armazena somente o hash SHA-256 — o token bruto só sai no cookie HttpOnly.
+        // Se o banco for comprometido, os hashes não são diretamente utilizáveis.
+        user.RefreshToken       = HashRefreshToken(refreshToken);
         user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(_jwt.RefreshTokenExpirationDays);
         user.UpdatedAt          = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -205,6 +210,13 @@ public class AuthService : IAuthService
         rng.GetBytes(randomBytes);
         return Convert.ToBase64String(randomBytes);
     }
+
+    /// <summary>
+    /// Retorna SHA-256 hex do token — o que é persistido no banco.
+    /// O token bruto trafega apenas no cookie HttpOnly.
+    /// </summary>
+    private static string HashRefreshToken(string token) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
     // =========================================================================
     // ACESSO DO CLIENTE PELO SITE
