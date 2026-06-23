@@ -25,6 +25,8 @@ type FilterStatus = 'todos' | 'Aberto' | 'Pago'
 
 interface ItemForm { nome: string; qty: string; preco: string }
 
+const hoje = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+
 function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const [search, setSearch]         = useState('')
   const [results, setResults]       = useState<UserSummary[]>([])
@@ -33,6 +35,7 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
   const [showDrop, setShowDrop]     = useState(false)
   const [valor, setValor]           = useState('')
   const [obs, setObs]               = useState('')
+  const [dataAbertura, setDataAbertura] = useState(hoje())
   const [loading, setLoading]       = useState(false)
   const [itens, setItens]           = useState<ItemForm[]>([])
   const [novoItem, setNovoItem]     = useState<ItemForm>({ nome: '', qty: '1', preco: '' })
@@ -107,6 +110,7 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
         userId:          selected.id,
         valorEmCentavos: Math.round(valorNum * 100),
         observacao:      obs || undefined,
+        dataAbertura:    dataAbertura || undefined,
         itens:           itensDto,
       })
       toast.success(`Crediário de R$ ${valorNum.toFixed(2).replace('.', ',')} criado para ${selected.name}!`)
@@ -256,6 +260,20 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
             )}
           </div>
 
+          {/* Data da dívida */}
+          <div>
+            <label className="label flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" /> Data da dívida
+            </label>
+            <input
+              type="date"
+              value={dataAbertura}
+              onChange={e => setDataAbertura(e.target.value)}
+              className="input"
+            />
+            <p className="text-xs text-gray-400 mt-1">Quando a dívida foi gerada. O vencimento é calculado como data + 30 dias.</p>
+          </div>
+
           {/* Observação */}
           <div>
             <label className="label">Observação (opcional)</label>
@@ -267,7 +285,6 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
               className="input"
               maxLength={500}
             />
-            <p className="text-xs text-gray-400 mt-1">Se vazio: "Dívida anterior ao sistema". Vencimento padrão: 30 dias.</p>
           </div>
 
           <div className="flex gap-3 pt-2">

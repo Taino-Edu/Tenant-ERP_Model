@@ -92,6 +92,9 @@ public class CriarCrediarioManualRequest
     [MaxLength(500)]
     public string? Observacao { get; set; }
 
+    /// <summary>Data de abertura da dívida. Se null, usa a data atual.</summary>
+    public DateTime? DataAbertura { get; set; }
+
     /// <summary>Vencimento customizado. Se null, usa DataAbertura + 30 dias.</summary>
     public DateTime? DataVencimento { get; set; }
 

@@ -53,8 +53,11 @@ public class CrediariosController : ControllerBase
         if (usuario == null)
             return BadRequest(new { Message = "Cliente não encontrado." });
 
-        var adminId = GetUserId();
-        var agora   = DateTime.UtcNow;
+        var adminId    = GetUserId();
+        var agora      = DateTime.UtcNow;
+        var dataAbert  = request.DataAbertura.HasValue
+                             ? request.DataAbertura.Value.ToUniversalTime()
+                             : agora;
 
         // Serializa lista de itens se informada
         string? itensJson = null;
@@ -66,10 +69,10 @@ public class CrediariosController : ControllerBase
             UserId           = request.UserId,
             ComandaId        = null, // dívida manual — sem comanda de origem
             ValorEmCentavos  = request.ValorEmCentavos,
-            DataAbertura     = agora,
+            DataAbertura     = dataAbert,
             DataVencimento   = request.DataVencimento.HasValue
                                    ? request.DataVencimento.Value.ToUniversalTime()
-                                   : agora.AddDays(30),
+                                   : dataAbert.AddDays(30),
             Status           = CrediariosStatus.Aberto,
             Observacao       = string.IsNullOrWhiteSpace(request.Observacao)
                                    ? "Dívida anterior ao sistema"

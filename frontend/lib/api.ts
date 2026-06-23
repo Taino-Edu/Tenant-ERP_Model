@@ -375,7 +375,8 @@ export interface CriarCrediarioManualRequest {
   userId: string
   valorEmCentavos: number
   observacao?: string
-  dataVencimento?: string  // ISO string, opcional
+  dataAbertura?: string   // ISO string, opcional — data real da dívida
+  dataVencimento?: string // ISO string, opcional — se null usa dataAbertura + 30 dias
   itens?: ItemCrediarioDto[]
 }
 
