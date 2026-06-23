@@ -66,6 +66,16 @@ public class EditarPagamentoVendaAvulsaRequest
 
     [Range(0, int.MaxValue)]
     public int SecondPaymentAmountInCents { get; set; } = 0;
+
+    /// <summary>Nome do cliente (opcional). Null = mantém o atual.</summary>
+    public string? ClientName { get; set; }
+
+    /// <summary>True para limpar o nome do cliente.</summary>
+    public bool ClearClientName { get; set; } = false;
+
+    /// <summary>Desconto em centavos (opcional). Null = mantém o atual.</summary>
+    [Range(0, int.MaxValue)]
+    public int? DiscountInCents { get; set; }
 }
 
 public class VendaAvulsaItemDto

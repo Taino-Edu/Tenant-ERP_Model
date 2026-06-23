@@ -427,6 +427,9 @@ export interface EditarPagamentoVendaAvulsaRequest {
   paymentMethod: string
   secondPaymentMethod?: string
   secondPaymentAmountInCents?: number
+  clientName?: string
+  clearClientName?: boolean
+  discountInCents?: number
 }
 
 export const vendaAvulsaApi = {

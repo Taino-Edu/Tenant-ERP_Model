@@ -396,17 +396,39 @@ public class VendaAvulsaService : IVendaAvulsaService
         if (request.SecondPaymentMethod != null && !PaymentMethod.IsValid(request.SecondPaymentMethod))
             throw new ArgumentException($"Segundo pagamento inválido: {request.SecondPaymentMethod}");
 
-        var filter = Builders<VendaAvulsa>.Filter.Eq(v => v.Id, id);
-        var update = Builders<VendaAvulsa>.Update
+        // Busca a venda para calcular novo total se desconto mudar
+        var filter  = Builders<VendaAvulsa>.Filter.Eq(v => v.Id, id);
+        var current = await _collection.Find(filter).FirstOrDefaultAsync()
+            ?? throw new KeyNotFoundException($"Venda avulsa {id} não encontrada.");
+
+        var updateDef = Builders<VendaAvulsa>.Update
             .Set(v => v.PaymentMethod,              request.PaymentMethod)
             .Set(v => v.SecondPaymentMethod,        request.SecondPaymentMethod)
             .Set(v => v.SecondPaymentAmountInCents, request.SecondPaymentAmountInCents);
 
+        // Nome do cliente
+        if (request.ClearClientName)
+            updateDef = updateDef.Set(v => v.ClientName, (string?)null);
+        else if (!string.IsNullOrWhiteSpace(request.ClientName))
+            updateDef = updateDef.Set(v => v.ClientName, request.ClientName.Trim());
+
+        // Desconto — recalcula TotalInCents se mudar
+        if (request.DiscountInCents.HasValue)
+        {
+            var originalTotal = current.TotalInCents + current.DiscountInCents;
+            var newDiscount   = Math.Min(request.DiscountInCents.Value, originalTotal);
+            updateDef = updateDef
+                .Set(v => v.DiscountInCents,  newDiscount)
+                .Set(v => v.DiscountPercent,  0)
+                .Set(v => v.TotalInCents,     originalTotal - newDiscount);
+        }
+
         var opts   = new FindOneAndUpdateOptions<VendaAvulsa> { ReturnDocument = ReturnDocument.After };
-        var result = await _collection.FindOneAndUpdateAsync(filter, update, opts)
+        var result = await _collection.FindOneAndUpdateAsync(filter, updateDef, opts)
             ?? throw new KeyNotFoundException($"Venda avulsa {id} não encontrada.");
 
-        _logger.LogInformation("Pagamento da venda avulsa {Id} alterado para {PM}.", id, request.PaymentMethod);
+        _logger.LogInformation("Venda avulsa {Id} atualizada: pagamento={PM}, cliente={CN}, desconto={Desc}.",
+            id, request.PaymentMethod, result.ClientName, result.DiscountInCents);
         return MapToDto(result);
     }
 

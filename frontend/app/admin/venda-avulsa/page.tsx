@@ -186,26 +186,32 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
 function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto; onClose: () => void; onUpdate: (updated: VendaAvulsaDto) => void }) {
   const payLabel = PAYMENT_METHODS.find(m => m.value === venda.paymentMethod)?.label ?? venda.paymentMethod
   const [editingPay, setEditingPay] = useState(false)
-  const [newPm,  setNewPm]  = useState(venda.paymentMethod)
-  const [newPm2, setNewPm2] = useState(venda.secondPaymentMethod ?? '')
-  const [pm2val, setPm2val] = useState(String(venda.secondPaymentAmountInCents / 100))
-  const [saving, setSaving] = useState(false)
+  const [newPm,      setNewPm]      = useState(venda.paymentMethod)
+  const [newPm2,     setNewPm2]     = useState(venda.secondPaymentMethod ?? '')
+  const [pm2val,     setPm2val]     = useState(String(venda.secondPaymentAmountInCents / 100))
+  const [newClient,  setNewClient]  = useState(venda.clientName ?? '')
+  const [newDisc,    setNewDisc]    = useState(venda.discountInReais > 0 ? String(venda.discountInReais.toFixed(2).replace('.', ',')) : '')
+  const [saving,     setSaving]     = useState(false)
 
   async function handleSavePay() {
     setSaving(true)
     try {
+      const discVal = newDisc ? Math.round(parseFloat(newDisc.replace(',', '.') || '0') * 100) : undefined
       const req: EditarPagamentoVendaAvulsaRequest = {
-        paymentMethod: newPm,
-        secondPaymentMethod: newPm2 || undefined,
+        paymentMethod:              newPm,
+        secondPaymentMethod:        newPm2 || undefined,
         secondPaymentAmountInCents: newPm2 ? Math.round(parseFloat(pm2val.replace(',', '.') || '0') * 100) : 0,
+        clientName:                 newClient.trim() || undefined,
+        clearClientName:            newClient.trim() === '' && !!venda.clientName,
+        discountInCents:            discVal,
       }
       const { data } = await vendaAvulsaApi.editarPagamento(venda.id, req)
-      toast.success('Pagamento atualizado!')
+      toast.success('Venda atualizada!')
       onUpdate(data)
       setEditingPay(false)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao atualizar pagamento.')
+      toast.error(msg ?? 'Erro ao atualizar.')
     } finally {
       setSaving(false)
     }
@@ -284,24 +290,60 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
 
         {editingPay ? (
           <div className="px-5 pb-5 space-y-3">
-            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Editar Pagamento</p>
-            <select value={newPm} onChange={e => setNewPm(e.target.value)}
-              className="w-full bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
-              {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-            <div className="flex gap-2">
-              <select value={newPm2} onChange={e => setNewPm2(e.target.value)}
-                className="flex-1 bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
-                <option value="">Sem segundo pagamento</option>
+            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Editar Venda</p>
+
+            {/* Cliente */}
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Cliente (opcional)</label>
+              <input
+                type="text"
+                value={newClient}
+                onChange={e => setNewClient(e.target.value)}
+                placeholder="Nome do cliente..."
+                className="w-full bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm placeholder-gray-500"
+              />
+            </div>
+
+            {/* Desconto */}
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Desconto R$ (opcional)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={newDisc}
+                onChange={e => setNewDisc(e.target.value)}
+                placeholder="0,00"
+                className="w-full bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm placeholder-gray-500"
+              />
+            </div>
+
+            {/* Pagamento principal */}
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Forma de pagamento</label>
+              <select value={newPm} onChange={e => setNewPm(e.target.value)}
+                className="w-full bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
                 {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
-              {newPm2 && (
-                <input type="number" step="0.01" min="0" value={pm2val} onChange={e => setPm2val(e.target.value)}
-                  placeholder="Valor R$"
-                  className="w-28 bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm" />
-              )}
             </div>
-            <div className="flex gap-2">
+
+            {/* Segundo pagamento */}
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Segundo pagamento (opcional)</label>
+              <div className="flex gap-2">
+                <select value={newPm2} onChange={e => setNewPm2(e.target.value)}
+                  className="flex-1 bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
+                  <option value="">Nenhum</option>
+                  {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+                {newPm2 && (
+                  <input type="number" step="0.01" min="0" value={pm2val} onChange={e => setPm2val(e.target.value)}
+                    placeholder="Valor R$"
+                    className="w-28 bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm" />
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
               <button onClick={() => setEditingPay(false)} className="btn-secondary flex-1 justify-center text-sm">
                 Cancelar
               </button>
