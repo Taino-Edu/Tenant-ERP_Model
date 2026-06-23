@@ -236,11 +236,11 @@ export default function ClientePage() {
         style: { background: C.white, color: C.navy, border: `1px solid ${C.border}`, fontWeight: 600 }
       }} />
 
-      {/* Modal de confirmação */}
+      {/* Modal de confirmação — z-[60] fica acima do bottom sheet (z-50) */}
       {confirmItem && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 bg-black/50 backdrop-blur-sm"
+        <div className="fixed inset-0 z-[60] flex items-end justify-center px-4 pb-20 pt-4 bg-black/50 backdrop-blur-sm"
           onClick={() => setConfirmItem(null)}>
-          <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl"
+          <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-3xl shadow-2xl"
             style={{ backgroundColor: C.white }}
             onClick={e => e.stopPropagation()}>
             {confirmItem.imageUrl && (
