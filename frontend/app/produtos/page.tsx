@@ -15,12 +15,12 @@ function fmt(v: number) { return `R$ ${v.toFixed(2).replace('.', ',')}` }
 
 function ProductBadge({ p }: { p: Product }) {
   if (p.isPreVenda) return (
-    <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded text-white z-10"
-      style={{ backgroundColor: '#7C3AED' }}>Pré-venda</span>
+    <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded z-10"
+      style={{ backgroundColor: '#7C3AED', color: '#fff' }}>Pré-venda</span>
   )
   if (p.isOnPromo) return (
-    <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded text-white z-10"
-      style={{ backgroundColor: '#EF4444' }}>Promoção</span>
+    <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded z-10"
+      style={{ backgroundColor: '#EF4444', color: '#fff' }}>Promoção</span>
   )
   return null
 }
