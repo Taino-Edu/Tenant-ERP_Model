@@ -312,11 +312,41 @@ interface EditarModalProps {
 }
 
 function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProps) {
-  const [valor, setValor]           = useState(crediario.valorEmReais.toFixed(2).replace('.', ','))
-  const [obs, setObs]               = useState(crediario.observacao ?? '')
-  const [venc, setVenc]             = useState(crediario.dataVencimento.slice(0, 10))
-  const [loading, setLoading]       = useState(false)
-  const [syncLoading, setSyncLoading] = useState(false)
+  const [valor, setValor]     = useState(crediario.valorEmReais.toFixed(2).replace('.', ','))
+  const [obs, setObs]         = useState(crediario.observacao ?? '')
+  const [venc, setVenc]       = useState(crediario.dataVencimento.slice(0, 10))
+  const [loading, setLoading] = useState(false)
+
+  // Editor de itens
+  const [itens, setItens]           = useState<ItemCrediarioDto[]>(crediario.itensComanda)
+  const [itensEditado, setItensEditado] = useState(false)
+  const [novoNome, setNovoNome]     = useState('')
+  const [novoQtd, setNovoQtd]       = useState('1')
+  const [novoPreco, setNovoPreco]   = useState('')
+
+  function addItem() {
+    const qtd   = parseInt(novoQtd) || 1
+    const preco = parseFloat(novoPreco.replace(',', '.'))
+    if (!novoNome.trim() || isNaN(preco) || preco <= 0) {
+      toast.error('Preencha nome e preço corretamente')
+      return
+    }
+    setItens(prev => [...prev, {
+      itemName:        novoNome.trim(),
+      quantity:        qtd,
+      unitPriceInReais: preco,
+      subtotalInReais:  preco * qtd,
+    }])
+    setItensEditado(true)
+    setNovoNome('')
+    setNovoQtd('1')
+    setNovoPreco('')
+  }
+
+  function removeItem(idx: number) {
+    setItens(prev => prev.filter((_, i) => i !== idx))
+    setItensEditado(true)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -329,6 +359,7 @@ function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProp
         valorEmCentavos: Math.round(valorNum * 100),
         observacao:      obs || undefined,
         dataVencimento:  venc || undefined,
+        itens:           itensEditado ? itens : undefined,
       })
       toast.success('Crediário atualizado!')
       onSuccess()
@@ -339,24 +370,13 @@ function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProp
     } finally { setLoading(false) }
   }
 
-  async function handleRecarregarItens() {
-    setSyncLoading(true)
-    try {
-      await crediarioApi.editar(crediario.id, { limparItens: true })
-      toast.success('Itens recarregados das comandas!')
-      onSuccess()
-      onClose()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Erro ao recarregar itens')
-    } finally { setSyncLoading(false) }
-  }
+  const totalItens = itens.reduce((s, i) => s + i.subtotalInReais, 0)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500 shrink-0">
           <div>
             <h2 className="font-bold text-white text-lg flex items-center gap-2">
               <Pencil className="w-5 h-5 text-brand-400" /> Editar Crediário
@@ -368,75 +388,149 @@ function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProp
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          {/* Valor */}
-          <div>
-            <label className="label">Valor total da dívida (R$)</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              placeholder="0,00"
-              value={valor}
-              onChange={e => setValor(e.target.value)}
-              className="input"
-              required
-            />
-            {crediario.valorPagoEmReais > 0 && (
-              <p className="text-xs text-amber-400 mt-1">
-                Já pago: R$ {crediario.valorPagoEmReais.toFixed(2).replace('.', ',')} — o valor total não pode ser menor que isso.
-              </p>
-            )}
+        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1">
+          <div className="px-6 py-5 space-y-4">
+            {/* Valor + Vencimento lado a lado */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Valor total (R$)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={valor}
+                  onChange={e => setValor(e.target.value)}
+                  className="input"
+                  required
+                />
+                {crediario.valorPagoEmReais > 0 && (
+                  <p className="text-[10px] text-amber-400 mt-1">
+                    Já pago: R$ {crediario.valorPagoEmReais.toFixed(2).replace('.', ',')}
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="label">Vencimento</label>
+                <input type="date" value={venc} onChange={e => setVenc(e.target.value)} className="input" />
+              </div>
+            </div>
+
+            {/* Observação */}
+            <div>
+              <label className="label">Observação</label>
+              <input
+                type="text"
+                placeholder="Ex: Torneio de abril, comanda mesa 3..."
+                value={obs}
+                onChange={e => setObs(e.target.value)}
+                className="input"
+                maxLength={500}
+              />
+            </div>
+
+            {/* ── Editor de itens ── */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="label mb-0">
+                  Itens da dívida
+                  {itensEditado && <span className="text-brand-400 ml-1">*</span>}
+                </label>
+                {itens.length > 0 && (
+                  <span className="text-xs text-gray-500">
+                    total itens: R$ {totalItens.toFixed(2).replace('.', ',')}
+                  </span>
+                )}
+              </div>
+
+              {/* Lista de itens existentes */}
+              {itens.length > 0 ? (
+                <div className="bg-surface-900 rounded-xl border border-surface-600 divide-y divide-surface-700 mb-3 max-h-40 overflow-y-auto">
+                  {itens.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-3 py-2">
+                      <span className="text-xs text-gray-400 flex-1 truncate">
+                        {item.quantity}× {item.itemName}
+                      </span>
+                      <span className="text-xs text-accent-gold font-mono shrink-0">
+                        R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(idx)}
+                        className="text-red-500 hover:text-red-400 shrink-0 ml-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-600 mb-3 italic">Nenhum item cadastrado.</p>
+              )}
+
+              {/* Adicionar novo item */}
+              <div className="bg-surface-700 rounded-xl p-3 space-y-2">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Adicionar item</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nome do produto"
+                    value={novoNome}
+                    onChange={e => setNovoNome(e.target.value)}
+                    className="input text-sm flex-1"
+                    onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addItem())}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex flex-col gap-1 w-16">
+                    <span className="text-[10px] text-gray-500">Qtd</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={novoQtd}
+                      onChange={e => setNovoQtd(e.target.value)}
+                      className="input text-sm text-center"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 flex-1">
+                    <span className="text-[10px] text-gray-500">Preço unitário (R$)</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      value={novoPreco}
+                      onChange={e => setNovoPreco(e.target.value)}
+                      className="input text-sm"
+                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addItem())}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1 justify-end">
+                    <span className="text-[10px] text-gray-500 invisible">btn</span>
+                    <button
+                      type="button"
+                      onClick={addItem}
+                      className="btn-primary text-sm px-3 py-2 whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Vencimento */}
-          <div>
-            <label className="label">Data de vencimento</label>
-            <input
-              type="date"
-              value={venc}
-              onChange={e => setVenc(e.target.value)}
-              className="input"
-            />
-          </div>
-
-          {/* Observação */}
-          <div>
-            <label className="label">Observação</label>
-            <input
-              type="text"
-              placeholder="Ex: Corrigido — valor real da comanda"
-              value={obs}
-              onChange={e => setObs(e.target.value)}
-              className="input"
-              maxLength={500}
-            />
-          </div>
-
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
-              Cancelar
-            </button>
-            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
-              {loading
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
-                : <><Pencil className="w-4 h-4" /> Salvar</>
-              }
-            </button>
-          </div>
-
-          {/* Recarregar itens das comandas (corrige ItensJson incompleto) */}
-          <div className="border-t border-surface-600 pt-3">
-            <button
-              type="button"
-              onClick={handleRecarregarItens}
-              disabled={syncLoading}
-              className="w-full text-xs text-gray-500 hover:text-gray-300 flex items-center justify-center gap-1.5 transition-colors"
-            >
-              {syncLoading
-                ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Recarregando itens...</>
-                : <><RefreshCw className="w-3.5 h-3.5" /> Recarregar itens das comandas</>
-              }
-            </button>
+          {/* Footer fixo */}
+          <div className="px-6 pb-5 shrink-0">
+            <div className="flex gap-3">
+              <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
+                Cancelar
+              </button>
+              <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
+                {loading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
+                  : <><Pencil className="w-4 h-4" /> Salvar</>
+                }
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -124,6 +124,12 @@ public class EditarCrediarioRequest
     /// das comandas via date-range (útil para corrigir dados incompletos de migrações antigas).
     /// </summary>
     public bool LimparItens { get; set; } = false;
+
+    /// <summary>
+    /// Lista de itens editada manualmente pelo admin. Quando não-null, substitui o ItensJson inteiro.
+    /// Lista vazia [] = remove todos os itens. Null = não altera itens.
+    /// </summary>
+    public List<ItemCrediarioDto>? Itens { get; set; }
 }
 
 /// <summary>Body do endpoint POST /api/crediarios/{id}/pagamento (pagamento parcial).</summary>
