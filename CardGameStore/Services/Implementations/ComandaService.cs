@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
@@ -521,7 +522,9 @@ public class ComandaService : IComandaService
             if (crediarioExistenteId.HasValue)
             {
                 // Admin escolheu acumular em uma conta já aberta — sem renovar prazo
-                var existente = await _db.Crediarios.FindAsync(crediarioExistenteId.Value)
+                var existente = await _db.Crediarios
+                    .Include(cr => cr.Comanda).ThenInclude(cmd => cmd!.Items)
+                    .FirstOrDefaultAsync(cr => cr.Id == crediarioExistenteId.Value)
                     ?? throw new InvalidOperationException("Crediário selecionado não encontrado.");
 
                 if (existente.UserId != comanda.UserId)
@@ -533,6 +536,45 @@ public class ComandaService : IComandaService
                 existente.ValorEmCentavos += primaryAmt;
                 if (!string.IsNullOrWhiteSpace(observacao))
                     existente.Observacao = observacao;
+
+                // Serializa os itens da nova comanda em ItensJson para que o MapToDto
+                // os exiba corretamente sem depender de date-range.
+                // Na primeira acumulação: se a conta original tinha ComandaId, migra
+                // os itens da comanda original para ItensJson primeiro.
+                var novosItens = comanda.Items
+                    .OrderBy(i => i.AddedAt)
+                    .Select(i => new ItemCrediarioDto
+                    {
+                        ItemName         = i.ItemNameSnapshot,
+                        Quantity         = i.Quantity,
+                        UnitPriceInReais = i.UnitPriceInCents / 100m,
+                        SubtotalInReais  = i.SubtotalInCents  / 100m,
+                    }).ToList();
+
+                List<ItemCrediarioDto> itensAcumulados;
+                if (string.IsNullOrWhiteSpace(existente.ItensJson))
+                {
+                    // Primeira acumulação — migra itens da comanda original (se houver)
+                    var originais = existente.Comanda?.Items
+                        .OrderBy(i => i.AddedAt)
+                        .Select(i => new ItemCrediarioDto
+                        {
+                            ItemName         = i.ItemNameSnapshot,
+                            Quantity         = i.Quantity,
+                            UnitPriceInReais = i.UnitPriceInCents / 100m,
+                            SubtotalInReais  = i.SubtotalInCents  / 100m,
+                        }) ?? Enumerable.Empty<ItemCrediarioDto>();
+
+                    itensAcumulados = originais.Concat(novosItens).ToList();
+                }
+                else
+                {
+                    itensAcumulados = JsonSerializer.Deserialize<List<ItemCrediarioDto>>(existente.ItensJson)
+                        ?? new List<ItemCrediarioDto>();
+                    itensAcumulados.AddRange(novosItens);
+                }
+
+                existente.ItensJson = JsonSerializer.Serialize(itensAcumulados);
 
                 _logger.LogInformation(
                     "Comanda {CmdId} acumulada no crediário {CredId} do usuário {UserId} — +R$ {Valor:N2}, novo total R$ {Total:N2}",

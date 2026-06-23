@@ -443,11 +443,23 @@ public class CrediariosController : ControllerBase
         var vencido = c.Status == CrediariosStatus.Aberto && c.DataVencimento < agora;
         var dias    = (int)Math.Round((c.DataVencimento - agora).TotalDays);
 
-        // Itens de comandas: busca TODAS do período (não só a primeira via FK).
-        // Pequeno buffer de 60s em cada extremo para cobrir diferenças de relógio.
+        // Se ItensJson tem dados (acumulação manual ou multi-comanda), usa exclusivamente esses.
+        // Isso evita duplicatas quando items foram migrados para ItensJson durante acumulação.
+        // Caso contrário, busca pelos itens via ComandaId ou date-range (dados legados).
+        var fromJson = string.IsNullOrWhiteSpace(c.ItensJson)
+            ? new List<ItemCrediarioDto>()
+            : JsonSerializer.Deserialize<List<ItemCrediarioDto>>(c.ItensJson)
+              ?? new List<ItemCrediarioDto>();
+
         List<ItemCrediarioDto> fromComanda;
-        if (todasComandas != null)
+        if (fromJson.Count > 0)
         {
+            // Itens já estão em ItensJson — não faz lookup adicional
+            fromComanda = new List<ItemCrediarioDto>();
+        }
+        else if (todasComandas != null)
+        {
+            // Dados legados: busca todas as comandas do usuário no período do crediário
             var inicio = c.DataAbertura.AddSeconds(-60);
             var fim    = c.DataPagamento.HasValue ? c.DataPagamento.Value.AddDays(1) : DateTime.MaxValue;
             fromComanda = todasComandas
@@ -478,13 +490,6 @@ public class CrediariosController : ControllerBase
                 })
                 .ToList() ?? new List<ItemCrediarioDto>();
         }
-
-        // Itens de venda avulsa (frente de caixa) ficam em ItensJson — esses
-        // nunca entram em Comandas, então não há risco de duplicata.
-        var fromJson = string.IsNullOrWhiteSpace(c.ItensJson)
-            ? new List<ItemCrediarioDto>()
-            : JsonSerializer.Deserialize<List<ItemCrediarioDto>>(c.ItensJson)
-              ?? new List<ItemCrediarioDto>();
 
         var todosItens = fromComanda.Concat(fromJson).ToList();
 
