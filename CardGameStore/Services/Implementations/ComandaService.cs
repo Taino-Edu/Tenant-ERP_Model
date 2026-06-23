@@ -466,7 +466,7 @@ public class ComandaService : IComandaService
         return dto;
     }
 
-    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0)
+    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null)
     {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -515,39 +515,63 @@ public class ComandaService : IComandaService
             comanda.SecondPaymentAmountInCents = secondPaymentAmountInCents;
         }
 
-        // ── Crediário — cada comanda gera uma dívida própria com prazo de 30 dias ─
+        // ── Crediário ─────────────────────────────────────────────────────────────
         if (paymentMethod == PaymentCrediario)
         {
-            var vencimento = DateTime.UtcNow.AddDays(30);
-            var crediario  = new Crediario
+            if (crediarioExistenteId.HasValue)
             {
-                UserId           = comanda.UserId,
-                ComandaId        = comanda.Id,
-                ValorEmCentavos  = primaryAmt,
-                DataAbertura     = DateTime.UtcNow,
-                DataVencimento   = vencimento,
-                Status           = CrediariosStatus.Aberto,
-                AbertoPorAdminId = adminId,
-                Observacao       = observacao,
-            };
+                // Admin escolheu acumular em uma conta já aberta — sem renovar prazo
+                var existente = await _db.Crediarios.FindAsync(crediarioExistenteId.Value)
+                    ?? throw new InvalidOperationException("Crediário selecionado não encontrado.");
 
-            _db.Crediarios.Add(crediario);
-            _logger.LogInformation(
-                "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
-                crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
+                if (existente.UserId != comanda.UserId)
+                    throw new InvalidOperationException("O crediário selecionado não pertence ao cliente desta comanda.");
 
-            if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
+                if (existente.Status != CrediariosStatus.Aberto)
+                    throw new InvalidOperationException("O crediário selecionado já foi quitado.");
+
+                existente.ValorEmCentavos += primaryAmt;
+                if (!string.IsNullOrWhiteSpace(observacao))
+                    existente.Observacao = observacao;
+
+                _logger.LogInformation(
+                    "Comanda {CmdId} acumulada no crediário {CredId} do usuário {UserId} — +R$ {Valor:N2}, novo total R$ {Total:N2}",
+                    comandaId, existente.Id, comanda.UserId, primaryAmt / 100m, existente.ValorEmCentavos / 100m);
+            }
+            else
             {
-                var emailAddr  = comanda.User.Email;
-                var userName   = comanda.User.Name;
-                var valorReais = crediario.ValorEmReais;
-                var venc       = vencimento;
-                _ = Task.Run(async () =>
+                // Cria conta nova com prazo próprio de 30 dias
+                var vencimento = DateTime.UtcNow.AddDays(30);
+                var crediario  = new Crediario
                 {
-                    using var scope  = _scopeFactory.CreateScope();
-                    var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                    await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
-                });
+                    UserId           = comanda.UserId,
+                    ComandaId        = comanda.Id,
+                    ValorEmCentavos  = primaryAmt,
+                    DataAbertura     = DateTime.UtcNow,
+                    DataVencimento   = vencimento,
+                    Status           = CrediariosStatus.Aberto,
+                    AbertoPorAdminId = adminId,
+                    Observacao       = observacao,
+                };
+
+                _db.Crediarios.Add(crediario);
+                _logger.LogInformation(
+                    "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
+                    crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
+
+                if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
+                {
+                    var emailAddr  = comanda.User.Email;
+                    var userName   = comanda.User.Name;
+                    var valorReais = crediario.ValorEmReais;
+                    var venc       = vencimento;
+                    _ = Task.Run(async () =>
+                    {
+                        using var scope  = _scopeFactory.CreateScope();
+                        var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                        await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
+                    });
+                }
             }
         }
 

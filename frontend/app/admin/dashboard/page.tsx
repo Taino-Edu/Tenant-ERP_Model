@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { comandaApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest } from '@/lib/api'
+import { comandaApi, crediarioApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
@@ -439,6 +439,124 @@ const SECOND_PAYMENT_METHODS = [
   { value: 'CartaoCredito', label: 'Cartão de Crédito' },
   { value: 'CartaoDebito',  label: 'Cartão de Débito' },
 ]
+
+// ── Modal: escolher conta de crediário ───────────────────────────────────────
+
+function EscolherContaCrediarioModal({
+  userName,
+  contasAbertas,
+  valorNovo,
+  onEscolher,
+  onNova,
+  onCancel,
+}: {
+  userName:      string
+  contasAbertas: CrediariosDto[]
+  valorNovo:     number
+  onEscolher:    (crediarioId: string) => void
+  onNova:        () => void
+  onCancel:      () => void
+}) {
+  const [escolhido, setEscolhido] = useState<string | null>(null)
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-4 border-b border-surface-600">
+          <div>
+            <h2 className="font-bold text-white text-lg flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-amber-400" /> Conta de Crediário
+            </h2>
+            <p className="text-sm text-gray-400 mt-0.5">
+              {userName} já tem {contasAbertas.length} conta{contasAbertas.length > 1 ? 's' : ''} em aberto
+            </p>
+          </div>
+          <button onClick={onCancel} className="text-gray-500 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 py-4 space-y-3">
+          <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold">Adicionar a uma conta existente</p>
+
+          {contasAbertas.map(c => {
+            const sel = escolhido === c.id
+            return (
+              <button
+                key={c.id}
+                onClick={() => setEscolhido(sel ? null : c.id)}
+                className={clsx(
+                  'w-full text-left rounded-xl border px-4 py-3 transition-all',
+                  sel
+                    ? 'border-amber-400 bg-amber-400/10'
+                    : 'border-surface-500 bg-surface-700 hover:border-surface-400'
+                )}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-white">
+                    Saldo em aberto: <span className="text-accent-gold">{fmt(c.saldoRestanteEmReais)}</span>
+                    {c.vencido && <span className="ml-2 text-[10px] text-red-400 font-semibold">[VENCIDO]</span>}
+                  </span>
+                  <span className={clsx('w-4 h-4 rounded-full border-2 shrink-0',
+                    sel ? 'border-amber-400 bg-amber-400' : 'border-gray-500'
+                  )} />
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Vence {new Date(c.dataVencimento).toLocaleDateString('pt-BR')} ·{' '}
+                  {c.observacao ?? 'Sem observação'}
+                </p>
+                {sel && (
+                  <p className="text-xs text-amber-300 mt-1">
+                    Novo total: {fmt(c.saldoRestanteEmReais + valorNovo / 100)}
+                  </p>
+                )}
+              </button>
+            )
+          })}
+
+          <div className="border-t border-surface-600 pt-3">
+            <p className="text-xs text-gray-500 uppercase tracking-widest font-semibold mb-2">Ou criar conta nova</p>
+            <button
+              onClick={() => setEscolhido('__nova__')}
+              className={clsx(
+                'w-full text-left rounded-xl border px-4 py-3 transition-all',
+                escolhido === '__nova__'
+                  ? 'border-brand-400 bg-brand-400/10'
+                  : 'border-surface-500 bg-surface-700 hover:border-surface-400'
+              )}
+            >
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-white">Nova conta — prazo 30 dias</span>
+                <span className={clsx('w-4 h-4 rounded-full border-2 shrink-0',
+                  escolhido === '__nova__' ? 'border-brand-400 bg-brand-400' : 'border-gray-500'
+                )} />
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">Dívida independente com vencimento próprio</p>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex gap-3 px-6 pb-5">
+          <button onClick={onCancel} className="btn-secondary flex-1 justify-center">
+            Cancelar
+          </button>
+          <button
+            onClick={() => {
+              if (!escolhido) return
+              if (escolhido === '__nova__') onNova()
+              else onEscolher(escolhido)
+            }}
+            disabled={!escolhido}
+            className="btn-primary flex-1 justify-center"
+          >
+            <CheckCircle className="w-4 h-4" /> Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Modal: selecionar pagamento ao fechar comanda ────────────────────────────
 
@@ -1251,6 +1369,12 @@ export default function DashboardPage() {
   const [finOpen, setFinOpen] = useState(false)
   const [expandedHist, setExpandedHist] = useState<string | null>(null)
   const [editComanda, setEditComanda]   = useState<ComandaDto | null>(null)
+  // Crediário — escolha de conta ao fechar comanda
+  const [pendingClose, setPendingClose] = useState<{
+    id: string; pm: string; pm2?: string; amt2?: number
+    userId: string; userName: string; valorPrincipal: number
+  } | null>(null)
+  const [contasAbertas, setContasAbertas] = useState<CrediariosDto[]>([])
   const [histSearch,   setHistSearch]   = useState('')
   const [histHoraDe,   setHistHoraDe]   = useState('')
   const [histHoraAte,  setHistHoraAte]  = useState('')
@@ -1410,8 +1534,30 @@ export default function DashboardPage() {
   }
 
   async function handleClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) {
+    if (paymentMethod === 'Crediario') {
+      // Descobre o cliente da comanda
+      const comanda = comandas.find(c => c.id === id)
+      if (comanda?.userId) {
+        try {
+          const { data } = await crediarioApi.byUser(comanda.userId)
+          const abertas = data.filter(c => c.status === 'Aberto')
+          if (abertas.length > 0) {
+            // Calcula valor principal (total - segundo pagamento)
+            const totalCents = comanda.items.reduce((s, i) => s + i.unitPriceInCents * i.quantity, 0)
+            const valorPrincipal = totalCents - (secondAmountInCents ?? 0)
+            setPendingClose({ id, pm: paymentMethod, pm2: secondMethod, amt2: secondAmountInCents, userId: comanda.userId, userName: comanda.userName, valorPrincipal })
+            setContasAbertas(abertas)
+            return
+          }
+        } catch { /* se falhar na busca, fecha normalmente */ }
+      }
+    }
+    await executarClose(id, paymentMethod, secondMethod, secondAmountInCents)
+  }
+
+  async function executarClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, crediarioExistenteId?: string) {
     try {
-      await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents)
+      await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId)
       const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
       toast.success(label)
       fetchComandas()
@@ -2213,6 +2359,23 @@ export default function DashboardPage() {
           produtos={allProducts}
           onSave={handleEditar}
           onClose={() => setEditComanda(null)}
+        />
+      )}
+
+      {pendingClose && (
+        <EscolherContaCrediarioModal
+          userName={pendingClose.userName}
+          contasAbertas={contasAbertas}
+          valorNovo={pendingClose.valorPrincipal}
+          onEscolher={async (credId) => {
+            setPendingClose(null)
+            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, credId)
+          }}
+          onNova={async () => {
+            setPendingClose(null)
+            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2)
+          }}
+          onCancel={() => setPendingClose(null)}
         />
       )}
     </div>

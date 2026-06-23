@@ -100,6 +100,13 @@ public class CloseComandaRequest
 
     /// <summary>Valor pago pelo segundo método em centavos. Zero = sem split.</summary>
     public int SecondPaymentAmountInCents { get; set; } = 0;
+
+    /// <summary>
+    /// Quando PaymentMethod == Crediario, este campo indica se a dívida deve ser
+    /// adicionada a um crediário aberto existente (fornece o Id do crediário)
+    /// ou se deve criar uma nova conta (null = nova conta com prazo próprio de 30 dias).
+    /// </summary>
+    public Guid? CrediarioExistenteId { get; set; }
 }
 
 public class ComandaItemDto

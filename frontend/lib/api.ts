@@ -315,8 +315,8 @@ export const comandaApi = {
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
   updateItem:   (id: string, itemId: string, quantity: number) =>
     api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
-  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0) =>
-    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents }),
+  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string) =>
+    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
   editar:       (id: string, request: EditarComandaRequest) => api.put<ComandaDto>(`/api/comanda/${id}/editar`, request),
   adminOpen:    (userId: string, tableIdentifier?: string) =>
