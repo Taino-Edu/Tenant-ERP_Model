@@ -12,7 +12,9 @@ import {
 } from 'lucide-react'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function toDateInput(d: Date) { return d.toISOString().split('T')[0] }
+function toDateInput(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 function fmt(v: number) {
   return `R$ ${v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
 }

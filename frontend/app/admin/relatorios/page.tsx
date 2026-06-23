@@ -268,7 +268,8 @@ export default function RelatoriosPage() {
     setPdfLoading('financeiro')
     try {
       const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`
-      const fim    = new Date(ano, mes, 0).toISOString().split('T')[0]
+      const fimDate = new Date(ano, mes, 0)
+      const fim = `${fimDate.getFullYear()}-${String(fimDate.getMonth() + 1).padStart(2, '0')}-${String(fimDate.getDate()).padStart(2, '0')}`
       const { data } = await analyticsApi.financeiro(inicio, fim)
       await gerarRelatorioPDF(data, { inicio, fim })
     } catch { toast.error('Erro ao gerar PDF financeiro') }
@@ -305,8 +306,10 @@ export default function RelatoriosPage() {
   const handlePdvPDF = useCallback(async () => {
     setPdfLoading('pdv')
     try {
-      const fim    = new Date().toISOString().split('T')[0]
-      const inicio = new Date(Date.now() - diasPdv * 86_400_000).toISOString().split('T')[0]
+      const toLocal = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const fim    = toLocal(new Date())
+      const inicio = toLocal(new Date(Date.now() - diasPdv * 86_400_000))
       const { data } = await analyticsApi.financeiro(inicio, fim)
       await gerarRelatorioPDV(data, { inicio, fim, dias: diasPdv })
     } catch { toast.error('Erro ao gerar PDF PDV') }

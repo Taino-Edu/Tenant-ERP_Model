@@ -223,7 +223,7 @@ export async function gerarRelatorioPDV(
       body: data.topProdutos.slice(0, 20).map((p, i) => [
         String(i + 1), p.nome, String(p.qtd),
         fmt(p.receita), fmt(p.custo),
-        `${p.margem.toFixed(1)}%`,
+        p.receita > 0 ? `${((p.margem / p.receita) * 100).toFixed(1)}%` : '—',
       ]),
       styles:      { fontSize: 7.5, cellPadding: 2.5, textColor: BLACK },
       headStyles:  { fillColor: ACCENT, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
@@ -238,8 +238,10 @@ export async function gerarRelatorioPDV(
       didParseCell(d: any) {
         if (d.column.index === 5 && d.section === 'body') {
           const v = parseFloat(d.cell.raw)
-          d.cell.styles.textColor = v >= 0 ? GREEN : RED
-          d.cell.styles.fontStyle = 'bold'
+          if (!isNaN(v)) {
+            d.cell.styles.textColor = v >= 0 ? GREEN : RED
+            d.cell.styles.fontStyle = 'bold'
+          }
         }
       },
       margin: { left: ML, right: MR },

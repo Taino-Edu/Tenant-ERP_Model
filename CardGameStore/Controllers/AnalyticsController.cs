@@ -360,7 +360,7 @@ public class AnalyticsController : ControllerBase
 
             diaDia.Add(new DiaFinanceiroDto
             {
-                Dia     = dBr.ToString("dd/MM"),
+                Dia     = dBr.ToString("yyyy-MM-dd"),
                 Receita = Math.Round(rComanda + rAvulsa, 2),
                 Custo   = Math.Round(cComandaDia + cAvulsaDia, 2),
             });

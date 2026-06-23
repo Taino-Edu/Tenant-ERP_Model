@@ -25,6 +25,13 @@ namespace CardGameStore.Controllers;
 [Authorize(Policy = "AdminOnly")]
 public class RelatoriosController : ControllerBase
 {
+    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
+    private static TimeZoneInfo GetBrazilZone()
+    {
+        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
+        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
+    }
+
     private readonly AppDbContext                   _db;
     private readonly IMongoCollection<VendaAvulsa> _vendas;
 
@@ -42,12 +49,13 @@ public class RelatoriosController : ControllerBase
         [FromQuery] int mes = 0,
         [FromQuery] int ano = 0)
     {
-        var agora = DateTime.UtcNow;
-        if (mes <= 0 || mes > 12) mes = agora.Month;
-        if (ano <= 0)             ano = agora.Year;
+        var agoraBr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        if (mes <= 0 || mes > 12) mes = agoraBr.Month;
+        if (ano <= 0)             ano = agoraBr.Year;
 
-        var inicio = new DateTime(ano, mes, 1, 0, 0, 0, DateTimeKind.Utc);
-        var fim    = inicio.AddMonths(1);
+        var inicioLocal = new DateTime(ano, mes, 1);
+        var inicio = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(inicioLocal, DateTimeKind.Unspecified), BrazilZone);
+        var fim    = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(inicioLocal.AddMonths(1), DateTimeKind.Unspecified), BrazilZone);
 
         // Emojis das categorias cadastradas
         var categorias = await _db.ProductCategories
@@ -153,12 +161,13 @@ public class RelatoriosController : ControllerBase
         [FromQuery] int mes = 0,
         [FromQuery] int ano = 0)
     {
-        var agora = DateTime.UtcNow;
-        if (mes <= 0 || mes > 12) mes = agora.Month;
-        if (ano <= 0)             ano = agora.Year;
+        var agoraBr2 = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        if (mes <= 0 || mes > 12) mes = agoraBr2.Month;
+        if (ano <= 0)             ano = agoraBr2.Year;
 
-        var iniciomes = new DateTime(ano, mes, 1, 0, 0, 0, DateTimeKind.Utc);
-        var fimMes    = iniciomes.AddMonths(1);
+        var mesInicioLocal = new DateTime(ano, mes, 1);
+        var iniciomes = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(mesInicioLocal, DateTimeKind.Unspecified), BrazilZone);
+        var fimMes    = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(mesInicioLocal.AddMonths(1), DateTimeKind.Unspecified), BrazilZone);
 
         // ── 1. Todos os crediários abertos (situação atual) ───────────────────
         var abertos = await _db.Crediarios

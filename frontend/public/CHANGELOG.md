@@ -1,5 +1,15 @@
 # Changelog — Santuário Nerd
 
+## [v1.7.2] — 2026-06-22
+
+### Corrigido
+- **Financeiro — filtro "Hoje" zerado**: `toDateInput` usava `toISOString()` (UTC) em vez de data local — após 21h no Brasil o frontend mandava "amanhã" pro backend, resultando em dados zerados (exceto crediário, que não depende do filtro de data)
+- **Gráfico de receita sem labels**: backend retornava dia no formato `dd/MM` mas frontend aplicava `.slice(5)` esperando `yyyy-MM-dd` — labels ficavam em branco; corrigido para ISO no AnalyticsController
+- **PDFs de relatório com data incorreta**: funções de geração de PDF (Financeiro Mensal e PDV) usavam `toISOString()` para calcular início/fim, podendo retornar um dia a menos ou a mais por causa do UTC
+- **Relatório de vendas e crediário sem fuso horário**: RelatoriosController usava UTC puro — vendas após 21h no Brasil (00h UTC do dia seguinte) podiam cair no mês errado; corrigido para horário de Brasília igual ao AnalyticsController
+
+---
+
 ## [v1.7.1] — 2026-06-22
 
 ### Adicionado
