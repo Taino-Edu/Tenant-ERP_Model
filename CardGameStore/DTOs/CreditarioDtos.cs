@@ -128,9 +128,17 @@ public class RegistrarPagamentoRequest
     [Range(1, int.MaxValue, ErrorMessage = "O valor do pagamento deve ser maior que zero.")]
     public int ValorEmCentavos { get; set; }
 
-    /// <summary>Forma de pagamento usada (Dinheiro, Pix, CartaoCredito, CartaoDebito).</summary>
+    /// <summary>Forma de pagamento usada (Dinheiro, Pix, CartaoCredito, CartaoDebito, Pontos, Cashback).</summary>
     [MaxLength(50)]
     public string FormaPagamento { get; set; } = "Dinheiro";
+
+    /// <summary>Segundo método de pagamento (split). Null = não tem split.</summary>
+    [MaxLength(50)]
+    public string? SecondFormaPagamento { get; set; }
+
+    /// <summary>Valor do segundo método em centavos. Zero = sem split.</summary>
+    [Range(0, int.MaxValue)]
+    public int SecondValorEmCentavos { get; set; } = 0;
 
     /// <summary>Observação opcional.</summary>
     [MaxLength(500)]

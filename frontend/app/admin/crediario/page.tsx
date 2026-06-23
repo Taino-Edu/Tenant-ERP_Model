@@ -423,41 +423,48 @@ interface PagamentoModalProps {
 }
 
 function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) {
-  const [valor, setValor]           = useState('')
-  const [forma, setForma]           = useState('Dinheiro')
-  const [obs, setObs]               = useState('')
-  const [loading, setLoading]       = useState(false)
-
   const saldo = crediario.saldoRestanteEmReais
+
+  const [valor,   setValor]   = useState(saldo.toFixed(2).replace('.', ','))
+  const [forma,   setForma]   = useState('Dinheiro')
+  const [split,   setSplit]   = useState(false)
+  const [forma2,  setForma2]  = useState('Pix')
+  const [valor2,  setValor2]  = useState('')
+  const [obs,     setObs]     = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const valorNum  = parseFloat(valor.replace(',',  '.')) || 0
+  const valor2Num = parseFloat(valor2.replace(',', '.')) || 0
+  const totalPago = split ? valorNum + valor2Num : valorNum
+  const quita     = totalPago >= saldo - 0.005
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const valorNum = parseFloat(valor.replace(',', '.'))
-    if (isNaN(valorNum) || valorNum <= 0) {
-      toast.error('Informe um valor válido')
-      return
-    }
-    if (valorNum > saldo) {
-      toast.error(`Valor maior que o saldo restante (${fmt(saldo)})`)
+    if (valorNum <= 0) { toast.error('Informe um valor válido'); return }
+    if (split && valor2Num <= 0) { toast.error('Informe o valor do segundo método'); return }
+    if (totalPago > saldo + 0.005) {
+      toast.error(`Total (${fmt(totalPago)}) maior que o saldo restante (${fmt(saldo)})`)
       return
     }
 
-    const centavos = Math.round(valorNum * 100)
     setLoading(true)
     try {
-      await crediarioApi.registrarPagamento(crediario.id, centavos, forma, obs || undefined)
-      toast.success(valorNum >= saldo ? 'Crediário quitado!' : `Pagamento de ${fmt(valorNum)} registrado!`)
+      await crediarioApi.registrarPagamento(crediario.id, {
+        valorEmCentavos:       Math.round(valorNum * 100),
+        formaPagamento:        forma,
+        secondFormaPagamento:  split ? forma2 : undefined,
+        secondValorEmCentavos: split ? Math.round(valor2Num * 100) : undefined,
+        observacao:            obs || undefined,
+      })
+      toast.success(quita ? 'Crediário quitado!' : `Pagamento de ${fmt(totalPago)} registrado!`)
       onSuccess()
       onClose()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao registrar pagamento')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao registrar pagamento')
     } finally {
       setLoading(false)
     }
-  }
-
-  function preencherTotal() {
-    setValor(saldo.toFixed(2).replace('.', ','))
   }
 
   return (
@@ -467,9 +474,12 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
           <div>
             <h2 className="font-bold text-white text-lg flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-brand-400" /> Registrar Pagamento
+              <DollarSign className="w-5 h-5 text-accent-green" /> Registrar Pagamento
             </h2>
-            <p className="text-sm text-gray-400 mt-0.5">{crediario.userName}</p>
+            <p className="text-sm text-gray-400 mt-0.5">
+              {crediario.userName}
+              {crediario.observacao && <span className="text-gray-600"> · {crediario.observacao}</span>}
+            </p>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white">
             <X className="w-5 h-5" />
@@ -479,9 +489,9 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
         {/* Saldo info */}
         <div className="px-6 pt-4 pb-2 grid grid-cols-3 gap-3">
           {[
-            { label: 'Total',      val: crediario.valorEmReais,         cls: 'text-gray-400' },
-            { label: 'Pago',       val: crediario.valorPagoEmReais,     cls: 'text-accent-green' },
-            { label: 'Restante',   val: crediario.saldoRestanteEmReais, cls: 'text-gray-200' },
+            { label: 'Total',    val: crediario.valorEmReais,         cls: 'text-gray-400'    },
+            { label: 'Pago',     val: crediario.valorPagoEmReais,     cls: 'text-accent-green' },
+            { label: 'Restante', val: crediario.saldoRestanteEmReais, cls: 'text-accent-gold' },
           ].map(({ label, val, cls }) => (
             <div key={label} className="bg-surface-700 rounded-xl px-3 py-2 text-center">
               <p className={clsx('text-base font-bold', cls)}>{fmt(val)}</p>
@@ -490,43 +500,87 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
           ))}
         </div>
 
+        {/* Itens da dívida (compacto) */}
+        {crediario.itensComanda.length > 0 && (
+          <div className="px-6 pb-2">
+            <div className="bg-surface-900 rounded-xl border border-surface-600 divide-y divide-surface-600">
+              {crediario.itensComanda.map((item, idx) => (
+                <div key={idx} className="flex justify-between items-center px-3 py-1.5 text-xs">
+                  <span className="text-gray-400">{item.quantity}× {item.itemName}</span>
+                  <span className="text-accent-gold font-mono">R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+
+          {/* Método principal */}
           <div>
-            <label className="label">Valor pago</label>
+            <label className="label">{split ? 'Método 1' : 'Forma de pagamento'}</label>
             <div className="flex gap-2">
+              <select value={forma} onChange={e => setForma(e.target.value)} className="input flex-1">
+                {FORMAS_PAGAMENTO_CREDIARIO.map(f => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
               <input
                 type="text"
                 inputMode="decimal"
-                placeholder="0,00"
+                placeholder={split ? 'R$' : `${fmt(saldo)}`}
                 value={valor}
                 onChange={e => setValor(e.target.value)}
-                className="input flex-1"
+                className="input w-28 text-right"
                 required
               />
-              <button
-                type="button"
-                onClick={preencherTotal}
-                className="btn-secondary text-sm px-3 whitespace-nowrap"
-              >
-                Total ({fmt(saldo)})
-              </button>
             </div>
           </div>
 
-          <div>
-            <label className="label">Forma de pagamento</label>
-            <select
-              value={forma}
-              onChange={e => setForma(e.target.value)}
-              className="input"
-            >
-              {FORMAS_PAGAMENTO_CREDIARIO.map(f => (
-                <option key={f.value} value={f.value}>{f.label}</option>
-              ))}
-            </select>
-          </div>
+          {/* Split toggle */}
+          <button
+            type="button"
+            onClick={() => { setSplit(v => !v); setValor2('') }}
+            className={clsx(
+              'text-xs flex items-center gap-1.5 transition-colors',
+              split ? 'text-brand-400 hover:text-brand-300' : 'text-gray-500 hover:text-gray-300'
+            )}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            {split ? 'Remover segundo método' : 'Adicionar segundo método de pagamento'}
+          </button>
 
+          {/* Método secundário */}
+          {split && (
+            <div>
+              <label className="label">Método 2</label>
+              <div className="flex gap-2">
+                <select value={forma2} onChange={e => setForma2(e.target.value)} className="input flex-1">
+                  {FORMAS_PAGAMENTO_CREDIARIO.map(f => (
+                    <option key={f.value} value={f.value}>{f.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="R$"
+                  value={valor2}
+                  onChange={e => setValor2(e.target.value)}
+                  className="input w-28 text-right"
+                  required={split}
+                />
+              </div>
+              {valorNum > 0 && valor2Num > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Total: {fmt(totalPago)}
+                  {quita && <span className="text-accent-green ml-2">· Quita a dívida</span>}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Observação */}
           <div>
             <label className="label">Observação (opcional)</label>
             <input
@@ -539,14 +593,14 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
             />
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
               Cancelar
             </button>
             <button type="submit" disabled={loading} className="btn-success flex-1 justify-center">
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
-                : <><CheckCircle className="w-4 h-4" /> Confirmar</>
+                : <><CheckCircle className="w-4 h-4" /> {quita ? 'Quitar dívida' : 'Confirmar'}</>
               }
             </button>
           </div>
@@ -611,8 +665,8 @@ function CrediarioCard({
   onEditar: (c: CrediariosDto) => void
   onDeletar: (c: CrediariosDto) => void
 }) {
-  const [expandido, setExpandido]         = useState(false)
-  const [expandItens, setExpandItens]     = useState(false)
+  const [expandido,   setExpandido]   = useState(false)
+  const [expandItens, setExpandItens] = useState(compact) // auto-expande itens dentro do card de pessoa
 
   const progresso = c.valorEmReais > 0
     ? Math.min(100, (c.valorPagoEmReais / c.valorEmReais) * 100)

@@ -113,12 +113,17 @@ public class CrediariosController : ControllerBase
             .OrderBy(c => c.DataVencimento)
             .ToListAsync();
 
+        // Carrega comandas de crediário de todos os usuários para MapToDto conseguir resolver itens
+        var userIds        = crediarios.Select(c => c.UserId).Distinct().ToList();
+        var comandasPorUser = await CarregarComandasCrediario(userIds);
+
         var agora = DateTime.UtcNow;
         var grupos = crediarios
             .GroupBy(c => c.UserId)
             .Select(g =>
             {
-                var dividas = g.Select(c => MapToDto(c)).ToList();
+                var userComandas = comandasPorUser.GetValueOrDefault(g.Key);
+                var dividas = g.Select(c => MapToDto(c, userComandas)).ToList();
                 var user    = g.First().User;
                 return new CrediariosClienteDto
                 {
@@ -364,18 +369,32 @@ public class CrediariosController : ControllerBase
                 Message = $"Pagamento de R$ {request.ValorEmCentavos / 100m:N2} excede o saldo restante de R$ {saldoAtual / 100m:N2}."
             });
 
-        // Registra o pagamento parcial
+        // Registra o pagamento parcial (método principal)
         var pagamento = new PagamentoCrediario
         {
-            CrediarioId    = id,
+            CrediarioId     = id,
             ValorEmCentavos = request.ValorEmCentavos,
             FormaPagamento  = request.FormaPagamento,
             Observacao      = request.Observacao,
             AdminId         = adminId,
         };
         _db.PagamentosCrediario.Add(pagamento);
-
         crediario.ValorPagoEmCentavos += request.ValorEmCentavos;
+
+        // Segundo método (split) — registra como entrada separada
+        if (!string.IsNullOrWhiteSpace(request.SecondFormaPagamento) && request.SecondValorEmCentavos > 0)
+        {
+            var pagamento2 = new PagamentoCrediario
+            {
+                CrediarioId     = id,
+                ValorEmCentavos = request.SecondValorEmCentavos,
+                FormaPagamento  = request.SecondFormaPagamento,
+                Observacao      = request.Observacao,
+                AdminId         = adminId,
+            };
+            _db.PagamentosCrediario.Add(pagamento2);
+            crediario.ValorPagoEmCentavos += request.SecondValorEmCentavos;
+        }
 
         // Quita automaticamente se saldo chegou a zero (tolerância de 1 centavo para arredondamentos)
         if (crediario.SaldoRestanteEmCentavos <= 1)
