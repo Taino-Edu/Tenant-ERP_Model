@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import {
-  crediarioApi, userApi, CrediariosDto, PagamentoCrediarioDto,
+  crediarioApi, userApi, CrediariosDto, CrediariosClienteDto, PagamentoCrediarioDto,
   FORMAS_PAGAMENTO_CREDIARIO, UserSummary,
 } from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -9,6 +9,7 @@ import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
   Plus, History, DollarSign, X, Search, Pencil, Printer, Package, Trash2,
+  MessageCircle,
 } from 'lucide-react'
 import { ItemCrediarioDto } from '@/lib/api'
 import clsx from 'clsx'
@@ -582,11 +583,13 @@ function imprimirItens(c: CrediariosDto) {
 
 function CrediarioCard({
   c,
+  compact = false,
   onPagamento,
   onEditar,
   onDeletar,
 }: {
   c: CrediariosDto
+  compact?: boolean
   onPagamento: (c: CrediariosDto) => void
   onEditar: (c: CrediariosDto) => void
   onDeletar: (c: CrediariosDto) => void
@@ -599,7 +602,10 @@ function CrediarioCard({
     : 0
 
   return (
-    <div className={clsx('card', c.vencido && 'border-red-500/30')}>
+    <div className={clsx(
+      compact ? 'bg-surface-700 rounded-xl p-4 border border-surface-500' : 'card',
+      c.vencido && 'border-red-500/30'
+    )}>
       {/* Linha principal */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         {/* Ícone + info */}
@@ -619,10 +625,10 @@ function CrediarioCard({
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-white">{c.userName}</p>
+              {!compact && <p className="font-semibold text-white">{c.userName}</p>}
               <StatusBadge status={c.status} vencido={c.vencido} />
             </div>
-            {c.userEmail && (
+            {!compact && c.userEmail && (
               <p className="text-xs text-gray-500 mt-0.5">{c.userEmail}</p>
             )}
             <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
@@ -774,12 +780,109 @@ function CrediarioCard({
   )
 }
 
+// ── Card colapsável por cliente ───────────────────────────────────────────────
+
+function ClienteCrediarioCard({
+  grupo,
+  onPagamento,
+  onEditar,
+  onDeletar,
+}: {
+  grupo: CrediariosClienteDto
+  onPagamento: (c: CrediariosDto) => void
+  onEditar: (c: CrediariosDto) => void
+  onDeletar: (c: CrediariosDto) => void
+}) {
+  const [aberto, setAberto] = useState(grupo.temVencido)
+
+  const whatsUrl = grupo.userWhatsApp
+    ? `https://wa.me/55${grupo.userWhatsApp.replace(/\D/g, '')}`
+    : null
+
+  return (
+    <div className={clsx('card', grupo.temVencido && 'border-red-500/30')}>
+      {/* Cabeçalho da pessoa */}
+      <button
+        onClick={() => setAberto(v => !v)}
+        className="w-full flex items-center gap-3 text-left"
+      >
+        <div className={clsx(
+          'w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+          grupo.temVencido ? 'bg-red-500/10' : 'bg-amber-500/10'
+        )}>
+          {grupo.temVencido
+            ? <AlertTriangle className="w-5 h-5 text-red-400" />
+            : <User className="w-5 h-5 text-amber-400" />
+          }
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-bold text-white">{grupo.userName}</p>
+            {grupo.temVencido && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/20 font-semibold">
+                Com vencido
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {grupo.totalDividas} {grupo.totalDividas === 1 ? 'dívida' : 'dívidas'} · Próx. venc.{' '}
+            {new Date(grupo.proximoVencimento).toLocaleDateString('pt-BR')}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          {whatsUrl && (
+            <a
+              href={whatsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="p-1.5 text-green-400 hover:text-green-300 hover:bg-green-400/10 rounded-lg transition-colors"
+              title="Abrir WhatsApp"
+            >
+              <MessageCircle className="w-4 h-4" />
+            </a>
+          )}
+          <div className="text-right">
+            <p className="text-lg font-bold text-accent-gold">
+              {fmt(grupo.saldoTotal)}
+            </p>
+            <p className="text-[10px] text-gray-500">total em aberto</p>
+          </div>
+          {aberto
+            ? <ChevronUp className="w-4 h-4 text-gray-500" />
+            : <ChevronDown className="w-4 h-4 text-gray-500" />
+          }
+        </div>
+      </button>
+
+      {/* Dívidas individuais */}
+      {aberto && (
+        <div className="mt-4 space-y-3 border-t border-surface-600 pt-4">
+          {grupo.dividas.map(c => (
+            <CrediarioCard
+              key={c.id}
+              c={c}
+              compact
+              onPagamento={onPagamento}
+              onEditar={onEditar}
+              onDeletar={onDeletar}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function CrediarioPage() {
-  const [crediarios, setCrediarios] = useState<CrediariosDto[]>([])
-  const [filter, setFilter]         = useState<FilterStatus>('Aberto')
-  const [loading, setLoading]       = useState(true)
+  const [crediarios, setCrediarios]   = useState<CrediariosDto[]>([])
+  const [clienteGroups, setClienteGroups] = useState<CrediariosClienteDto[]>([])
+  const [filter, setFilter]           = useState<FilterStatus>('Aberto')
+  const [loading, setLoading]         = useState(true)
   const [modalCrediario, setModalCrediario]   = useState<CrediariosDto | null>(null)
   const [editarCrediario, setEditarCrediario] = useState<CrediariosDto | null>(null)
   const [showNovaDivida, setShowNovaDivida] = useState(false)
@@ -799,8 +902,15 @@ export default function CrediarioPage() {
   const fetchCrediarios = useCallback(async () => {
     setLoading(true)
     try {
-      const { data } = await crediarioApi.list(filter === 'todos' ? undefined : filter)
-      setCrediarios(data)
+      if (filter === 'Aberto') {
+        const { data } = await crediarioApi.porCliente()
+        setClienteGroups(data)
+        setCrediarios([])
+      } else {
+        const { data } = await crediarioApi.list(filter === 'todos' ? undefined : filter)
+        setCrediarios(data)
+        setClienteGroups([])
+      }
     } catch {
       toast.error('Erro ao carregar crediários')
     } finally {
@@ -810,12 +920,25 @@ export default function CrediarioPage() {
 
   useEffect(() => { fetchCrediarios() }, [fetchCrediarios])
 
-  const totais = {
-    abertos:     crediarios.filter(c => c.status === 'Aberto' || c.status === 'Vencido').length,
+  // KPIs: para 'Aberto' usa grupos, para outros usa lista flat
+  const totaisAbertos = clienteGroups.reduce((acc, g) => {
+    acc.saldo     += g.saldoTotal
+    acc.dividas   += g.totalDividas
+    acc.vencidos  += g.dividas.filter(d => d.vencido).length
+    return acc
+  }, { saldo: 0, dividas: 0, vencidos: 0 })
+
+  const totais = filter === 'Aberto' ? {
+    abertos:     totaisAbertos.dividas,
+    vencidos:    totaisAbertos.vencidos,
+    pagos:       0,
+    valorAberto: totaisAbertos.saldo,
+  } : {
+    abertos:     crediarios.filter(c => c.status === 'Aberto').length,
     vencidos:    crediarios.filter(c => c.vencido).length,
     pagos:       crediarios.filter(c => c.status === 'Pago').length,
     valorAberto: crediarios
-      .filter(c => c.status === 'Aberto' || c.status === 'Vencido')
+      .filter(c => c.status === 'Aberto')
       .reduce((s, c) => s + c.saldoRestanteEmReais, 0),
   }
 
@@ -907,6 +1030,27 @@ export default function CrediarioPage() {
         <div className="flex items-center justify-center py-24">
           <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
         </div>
+      ) : filter === 'Aberto' ? (
+        clienteGroups.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
+              <CreditCard className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-gray-400 font-medium">Nenhuma dívida em aberto</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {clienteGroups.map(g => (
+              <ClienteCrediarioCard
+                key={g.userId}
+                grupo={g}
+                onPagamento={setModalCrediario}
+                onEditar={setEditarCrediario}
+                onDeletar={handleDeletar}
+              />
+            ))}
+          </div>
+        )
       ) : crediarios.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">

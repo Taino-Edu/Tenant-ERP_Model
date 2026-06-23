@@ -53,12 +53,6 @@ public class CrediariosController : ControllerBase
         if (usuario == null)
             return BadRequest(new { Message = "Cliente não encontrado." });
 
-        // Bloqueia se já tem crediário aberto
-        var jaTemAberto = await _db.Crediarios
-            .AnyAsync(c => c.UserId == request.UserId && c.Status == CrediariosStatus.Aberto);
-        if (jaTemAberto)
-            return BadRequest(new { Message = "Este cliente já tem um crediário em aberto. Registre um pagamento antes de criar outro." });
-
         var adminId = GetUserId();
         var agora   = DateTime.UtcNow;
 
@@ -99,6 +93,48 @@ public class CrediariosController : ControllerBase
             crediario.Id, adminId, request.UserId, request.ValorEmCentavos / 100m);
 
         return Ok(MapToDto(saved));
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/crediarios/por-cliente — dívidas abertas agrupadas por pessoa
+    // -------------------------------------------------------------------------
+    [HttpGet("por-cliente")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<ActionResult<List<CrediariosClienteDto>>> GetPorCliente()
+    {
+        var crediarios = await _db.Crediarios
+            .Include(c => c.User)
+            .Include(c => c.Pagamentos)
+            .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
+            .Where(c => c.Status == CrediariosStatus.Aberto)
+            .OrderBy(c => c.DataVencimento)
+            .ToListAsync();
+
+        var agora = DateTime.UtcNow;
+        var grupos = crediarios
+            .GroupBy(c => c.UserId)
+            .Select(g =>
+            {
+                var dividas = g.Select(c => MapToDto(c)).ToList();
+                var user    = g.First().User;
+                return new CrediariosClienteDto
+                {
+                    UserId          = g.Key,
+                    UserName        = user?.Name   ?? string.Empty,
+                    UserEmail       = user?.Email,
+                    UserWhatsApp    = user?.WhatsApp,
+                    SaldoTotal      = dividas.Sum(d => d.SaldoRestanteEmReais),
+                    TotalDividas    = dividas.Count,
+                    TemVencido      = dividas.Any(d => d.Vencido),
+                    ProximoVencimento = g.Min(c => c.DataVencimento),
+                    Dividas         = dividas,
+                };
+            })
+            .OrderByDescending(g => g.TemVencido)
+            .ThenBy(g => g.ProximoVencimento)
+            .ToList();
+
+        return Ok(grupos);
     }
 
     // -------------------------------------------------------------------------

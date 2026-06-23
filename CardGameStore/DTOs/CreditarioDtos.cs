@@ -55,6 +55,20 @@ public class PagamentoCrediarioDto
     public DateTime CreatedAt      { get; set; }
 }
 
+/// <summary>Dívidas abertas de um cliente específico — usado em GET /api/crediarios/por-cliente.</summary>
+public class CrediariosClienteDto
+{
+    public Guid     UserId            { get; set; }
+    public string   UserName          { get; set; } = string.Empty;
+    public string?  UserEmail         { get; set; }
+    public string?  UserWhatsApp      { get; set; }
+    public decimal  SaldoTotal        { get; set; }
+    public int      TotalDividas      { get; set; }
+    public bool     TemVencido        { get; set; }
+    public DateTime ProximoVencimento { get; set; }
+    public List<CrediariosDto> Dividas { get; set; } = new();
+}
+
 /// <summary>Body do endpoint PUT /api/crediarios/{id}/pagar (quitação total).</summary>
 public class MarcarPagoRequest
 {

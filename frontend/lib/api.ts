@@ -379,6 +379,18 @@ export interface CriarCrediarioManualRequest {
   itens?: ItemCrediarioDto[]
 }
 
+export interface CrediariosClienteDto {
+  userId: string
+  userName: string
+  userEmail: string | null
+  userWhatsApp: string | null
+  saldoTotal: number
+  totalDividas: number
+  temVencido: boolean
+  proximoVencimento: string
+  dividas: CrediariosDto[]
+}
+
 export const crediarioApi = {
   list:        (status?: string) =>
     api.get<CrediariosDto[]>('/api/crediarios', { params: { status } }),
@@ -397,6 +409,8 @@ export const crediarioApi = {
     api.delete(`/api/crediarios/${id}`),
   meuHistorico: () =>
     api.get<CrediariosDto[]>('/api/crediarios/historico'),
+  porCliente: () =>
+    api.get<CrediariosClienteDto[]>('/api/crediarios/por-cliente'),
 }
 
 export const COMANDA_PAYMENT_METHODS = [

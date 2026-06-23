@@ -515,63 +515,39 @@ public class ComandaService : IComandaService
             comanda.SecondPaymentAmountInCents = secondPaymentAmountInCents;
         }
 
-        // ── Crediário ─────────────────────────────────────────────────────────
+        // ── Crediário — cada comanda gera uma dívida própria com prazo de 30 dias ─
         if (paymentMethod == PaymentCrediario)
         {
-            var crediarioExistente = await _db.Crediarios
-                .FirstOrDefaultAsync(c => c.UserId == comanda.UserId && c.Status == CrediariosStatus.Aberto);
-
             var vencimento = DateTime.UtcNow.AddDays(30);
-
-            if (crediarioExistente != null)
+            var crediario  = new Crediario
             {
-                // Acumula no crediário já aberto; valor = apenas a parcela principal
-                crediarioExistente.ValorEmCentavos += primaryAmt;
-                crediarioExistente.DataVencimento   = vencimento;
-                if (!string.IsNullOrWhiteSpace(observacao))
-                    crediarioExistente.Observacao = observacao;
+                UserId           = comanda.UserId,
+                ComandaId        = comanda.Id,
+                ValorEmCentavos  = primaryAmt,
+                DataAbertura     = DateTime.UtcNow,
+                DataVencimento   = vencimento,
+                Status           = CrediariosStatus.Aberto,
+                AbertoPorAdminId = adminId,
+                Observacao       = observacao,
+            };
 
-                // Os itens de TODAS as comandas do período são exibidos dinamicamente
-                // no MapToDto do CrediariosController via query em Comandas por UserId.
-                // Não salvamos em ItensJson aqui para evitar duplicatas com aquela query.
+            _db.Crediarios.Add(crediario);
+            _logger.LogInformation(
+                "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
+                crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
 
-                _logger.LogInformation(
-                    "Comanda {ComandaId} acumulada no crediário {CredId} do usuário {UserId} — +R$ {Valor:N2}, novo total R$ {Total:N2}",
-                    comandaId, crediarioExistente.Id, comanda.UserId,
-                    primaryAmt / 100m, crediarioExistente.ValorEmCentavos / 100m);
-            }
-            else
+            if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
             {
-                var crediario = new Crediario
+                var emailAddr  = comanda.User.Email;
+                var userName   = comanda.User.Name;
+                var valorReais = crediario.ValorEmReais;
+                var venc       = vencimento;
+                _ = Task.Run(async () =>
                 {
-                    UserId           = comanda.UserId,
-                    ComandaId        = comanda.Id,
-                    ValorEmCentavos  = primaryAmt,
-                    DataAbertura     = DateTime.UtcNow,
-                    DataVencimento   = vencimento,
-                    Status           = CrediariosStatus.Aberto,
-                    AbertoPorAdminId = adminId,
-                    Observacao       = observacao,
-                };
-
-                _db.Crediarios.Add(crediario);
-                _logger.LogInformation(
-                    "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
-                    crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
-
-                if (!string.IsNullOrWhiteSpace(comanda.User?.Email))
-                {
-                    var emailAddr  = comanda.User.Email;
-                    var userName   = comanda.User.Name;
-                    var valorReais = crediario.ValorEmReais;
-                    var venc       = vencimento;
-                    _ = Task.Run(async () =>
-                    {
-                        using var scope        = _scopeFactory.CreateScope();
-                        var emailService       = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                        await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
-                    });
-                }
+                    using var scope  = _scopeFactory.CreateScope();
+                    var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                    await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
+                });
             }
         }
 
