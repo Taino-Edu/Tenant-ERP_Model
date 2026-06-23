@@ -1000,6 +1000,9 @@ export default function DashboardPage() {
   const [openModal, setOpenModal] = useState(false)
   const [finOpen, setFinOpen] = useState(false)
   const [expandedHist, setExpandedHist] = useState<string | null>(null)
+  const [histSearch,   setHistSearch]   = useState('')
+  const [histHoraDe,   setHistHoraDe]   = useState('')
+  const [histHoraAte,  setHistHoraAte]  = useState('')
   const [panelGrafico,      togglePanelGrafico]      = usePersistentPanel('grafico')
   const [panelPrevisao,     togglePanelPrevisao]     = usePersistentPanel('previsao')
   const [panelPatrimonio,   togglePanelPatrimonio]   = usePersistentPanel('patrimonio')
@@ -1214,7 +1217,17 @@ export default function DashboardPage() {
     const percentual = Math.min(realizadoEstimado / projecaoMes, 1)
     return { mediaDiaria, projecaoMes, projecaoMargem, diasRestantes, daysInMonth, percentual, diaAtual, realizadoEstimado, n }
   })() : null
-  const fechadas     = history.filter(c => c.status === 'Fechada')
+  const filteredHistory = history.filter(c => {
+    if (histSearch && !c.userName.toLowerCase().includes(histSearch.toLowerCase())) return false
+    if ((histHoraDe || histHoraAte) && c.closedAt) {
+      const t = new Date(c.closedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' })
+      if (histHoraDe && t < histHoraDe) return false
+      if (histHoraAte && t > histHoraAte) return false
+    }
+    return true
+  })
+
+  const fechadas     = filteredHistory.filter(c => c.status === 'Fechada')
   const totalFechado = fechadas.reduce((s, c) => s + c.totalInReais, 0)
 
   const paymentBreakdown = [
@@ -1391,6 +1404,45 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Filtros do histórico */}
+            <div className="card py-2.5 px-3 flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-36">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                <input
+                  className="input pl-8 text-sm py-1.5 w-full"
+                  placeholder="Filtrar por nome..."
+                  value={histSearch}
+                  onChange={e => setHistSearch(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Clock className="w-3.5 h-3.5 text-gray-500" />
+                <input
+                  type="time"
+                  value={histHoraDe}
+                  onChange={e => setHistHoraDe(e.target.value)}
+                  className="input text-sm py-1.5 w-28"
+                  title="Horário de"
+                />
+                <span className="text-xs text-gray-500">até</span>
+                <input
+                  type="time"
+                  value={histHoraAte}
+                  onChange={e => setHistHoraAte(e.target.value)}
+                  className="input text-sm py-1.5 w-28"
+                  title="Horário até"
+                />
+              </div>
+              {(histSearch || histHoraDe || histHoraAte) && (
+                <button
+                  onClick={() => { setHistSearch(''); setHistHoraDe(''); setHistHoraAte('') }}
+                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors px-2.5 py-1.5 rounded-lg border border-surface-500 hover:border-surface-400 shrink-0"
+                >
+                  Limpar
+                </button>
+              )}
+            </div>
+
             {/* Breakdown por pagamento */}
             {paymentBreakdown.length > 0 && (
               <div className="card">
@@ -1412,7 +1464,14 @@ export default function DashboardPage() {
 
             {/* Lista de comandas */}
             <div className="space-y-2">
-              {history.map(c => {
+              {filteredHistory.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Search className="w-8 h-8 text-gray-600 mb-3" />
+                  <p className="text-gray-500 text-sm">Nenhuma comanda encontrada com esses filtros</p>
+                  <button onClick={() => { setHistSearch(''); setHistHoraDe(''); setHistHoraAte('') }} className="mt-2 text-xs text-brand-400 hover:text-brand-300 transition-colors">Limpar filtros</button>
+                </div>
+              )}
+              {filteredHistory.map(c => {
                 const isExpanded = expandedHist === c.id
                 return (
                   <div key={c.id} className="card">

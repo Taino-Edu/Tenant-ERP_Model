@@ -129,7 +129,7 @@ const MANUAL: ManualSection[] = [
     steps: [
       { title: 'Comandas em destaque', desc: 'Ao abrir o dashboard, as comandas ativas aparecem imediatamente — sem precisar rolar a página. Os 4 KPIs no topo (comandas ativas, receita do dia, valor em aberto, estoque baixo) ficam sempre visíveis.' },
       { title: 'Tab Ativas', desc: 'Lista em tempo real de todas as comandas abertas. Use a busca para filtrar por cliente.' },
-      { title: 'Tab Histórico', desc: 'Comandas fechadas e canceladas do dia. Inclui breakdown por forma de pagamento no topo.' },
+      { title: 'Tab Histórico', desc: 'Comandas fechadas e canceladas do dia. Inclui filtro por nome do cliente e por intervalo de horário (de HH:mm até HH:mm), além do breakdown por forma de pagamento calculado sobre os registros filtrados.' },
       { title: 'Tab Análises', desc: 'Todos os painéis financeiros: detalhe do dia, gráfico de receita 7 dias, previsão do mês, patrimônio em estoque, top clientes, LGPD e pré-inscrições de campeonatos. Cada painel é colapsável individualmente.' },
       { title: 'Atualização automática', desc: 'Intervalo configurável nas Preferências (15s, 30s, 1min ou manual). Também conecta via SignalR para receber eventos em tempo real.' },
     ],
@@ -219,6 +219,8 @@ const MANUAL: ManualSection[] = [
       { title: 'Registrar pagamento parcial', desc: 'Clique em "Registrar Pagamento" e informe o valor pago e a forma de pagamento. O saldo é atualizado automaticamente.' },
       { title: 'Quitar o crediário', desc: 'Quando o valor total for pago, clique em "Marcar como Pago". O cliente fica liberado para abrir um novo.' },
       { title: 'Crediário vencido', desc: 'Aparece em vermelho no painel quando passou dos 30 dias sem pagamento. Use para cobrar os clientes em atraso.' },
+      { title: 'Recebimentos no Financeiro', desc: 'Na tela Financeiro, o card de Crediários mostra no sub-texto o total recebido no período filtrado. Clique no card para ver a lista detalhada de cada pagamento: cliente, valor, forma de pagamento, horário e observação.' },
+      { title: 'PDF de Crediário', desc: 'Em Relatórios → Crediário, gere um PDF com a situação atual de todos os devedores (saldo, dias em atraso, vencimento, WhatsApp) e o histórico completo de pagamentos recebidos no mês selecionado.' },
     ],
     tips: [
       'O vencimento é renovado automaticamente sempre que o cliente faz um novo pagamento parcial.',
@@ -251,6 +253,7 @@ const MANUAL: ManualSection[] = [
       { title: 'Relatório de Clientes', desc: 'Lista todos os clientes com pontos, cashback e status de atividade. Ajuda a identificar quem está ativo e quem parou de visitar.' },
       { title: 'Comandas Abertas', desc: 'Mostra as comandas que estão há mais dias abertas. Útil para identificar clientes que ainda não fecharam a conta.' },
       { title: 'Relatório Financeiro', desc: 'Visão consolidada de receitas por período, formas de pagamento e ticket médio.' },
+      { title: 'Relatório de Crediário', desc: 'Lista todos os devedores atuais com saldo, dias em atraso, vencimento e WhatsApp (marcados em vermelho quando vencidos) e a tabela completa de pagamentos recebidos no mês, com subtotal ao final.' },
       { title: 'Exportar PDF', desc: 'Cada relatório tem botão de exportação em PDF para imprimir ou compartilhar.' },
     ],
   },

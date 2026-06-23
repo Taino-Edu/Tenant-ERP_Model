@@ -1,5 +1,13 @@
 # Changelog — Santuário Nerd
 
+## [v1.7.4] — 2026-06-22
+
+### Adicionado
+- **Histórico de comandas — filtros**: nova barra de filtros na tab Histórico do dashboard com busca por nome do cliente e intervalo de horário (de HH:mm até HH:mm); breakdown por forma de pagamento e total refletem os resultados filtrados
+- **Manual atualizado**: seções Dashboard (filtros do histórico), Crediário (recebimentos no financeiro + PDF) e Relatórios (relatório de crediário PDF) atualizadas na página Sobre
+
+---
+
 ## [v1.7.3] — 2026-06-22
 
 ### Adicionado
