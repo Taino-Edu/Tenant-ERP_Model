@@ -484,12 +484,12 @@ public class CrediariosController : ControllerBase
         List<ItemCrediarioDto> fromComanda;
         if (fromJson.Count > 0)
         {
-            // Itens já estão em ItensJson — não faz lookup adicional
+            // ItensJson definido manualmente — não faz lookup adicional
             fromComanda = new List<ItemCrediarioDto>();
         }
-        else if (todasComandas != null)
+        else if (c.ComandaId != null && todasComandas != null)
         {
-            // Dados legados: busca todas as comandas do usuário no período do crediário
+            // Crediário originado de comanda: busca itens pelo período
             var inicio = c.DataAbertura.AddSeconds(-60);
             var fim    = c.DataPagamento.HasValue ? c.DataPagamento.Value.AddDays(1) : DateTime.MaxValue;
             fromComanda = todasComandas
@@ -507,7 +507,7 @@ public class CrediariosController : ControllerBase
                 })
                 .ToList();
         }
-        else
+        else if (c.ComandaId != null)
         {
             fromComanda = c.Comanda?.Items
                 .OrderBy(i => i.AddedAt)
@@ -519,6 +519,11 @@ public class CrediariosController : ControllerBase
                     SubtotalInReais  = i.SubtotalInCents  / 100m,
                 })
                 .ToList() ?? new List<ItemCrediarioDto>();
+        }
+        else
+        {
+            // Crediário manual (ComandaId = null, ItensJson = null) — sem itens até admin adicionar
+            fromComanda = new List<ItemCrediarioDto>();
         }
 
         var todosItens = fromComanda.Concat(fromJson).ToList();
