@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSummary, PerfilDto, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, Trophy, ChevronDown, ChevronUp, TrendingUp, UserCog, Shield } from 'lucide-react'
+import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, Trophy, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
 import Link from 'next/link'
 
 // ── Modal: Novo Cliente ───────────────────────────────────────────────────────
@@ -681,6 +681,7 @@ export default function UsuariosPage() {
   const [tabUsuarios, setTabUsuarios]         = useState<'todos' | 'inativos'>('todos')
   const [insights, setInsights]               = useState<ClienteInsightDto[]>([])
   const [operators, setOperators]             = useState<UserSummary[]>([])
+  const [showMobileDetail, setShowMobileDetail] = useState(false)
 
   const fetchUsers = useCallback(async (q?: string) => {
     setLoading(true)
@@ -894,7 +895,7 @@ export default function UsuariosPage() {
       {tabSection === 'clientes' && <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:h-[calc(100vh-280px)]">
 
         {/* ── Lista de clientes ──────────────────────────────────────────────── */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className={`flex-1 flex flex-col min-w-0 ${showMobileDetail ? 'hidden md:flex' : ''}`}>
 
           {/* Tabs + Busca */}
           <div className="flex items-center gap-3 mb-4">
@@ -947,7 +948,7 @@ export default function UsuariosPage() {
                 return (
                 <button
                   key={u.id}
-                  onClick={() => setSelected(u)}
+                  onClick={() => { setSelected(u); setShowMobileDetail(true) }}
                   className={`w-full card text-left hover:border-brand-500/40 transition-all duration-150 ${
                     selected?.id === u.id ? 'border-brand-500/60 bg-brand-600/5' : ''
                   } ${insight?.inativo30 ? 'border-amber-500/20' : ''}`}
@@ -1018,7 +1019,15 @@ export default function UsuariosPage() {
         </div>
 
         {/* ── Painel de pontos ──────────────────────────────────────────────── */}
-        <div className="w-full md:w-80 md:shrink-0">
+        <div className={`${showMobileDetail ? '' : 'hidden md:block'} w-full md:w-80 md:shrink-0`}>
+          <div className="md:hidden mb-3">
+            <button
+              onClick={() => { setSelected(null); setShowMobileDetail(false) }}
+              className="flex items-center gap-1.5 text-sm text-brand-400 hover:text-brand-300 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> Voltar para lista
+            </button>
+          </div>
           {!selected ? (
             <div className="card h-full flex flex-col items-center justify-center text-gray-400 gap-3">
               <Star className="w-10 h-10" />

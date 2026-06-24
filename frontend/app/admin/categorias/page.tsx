@@ -182,7 +182,8 @@ export default function CategoriasPage() {
         </div>
       ) : (
         <div className="card p-0 overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[460px]">
             <thead className="bg-surface-800 border-b border-surface-500">
               <tr className="text-left">
                 {['', 'Categoria', 'Emoji', 'Ordem', 'Status', 'Ações'].map(h => (
@@ -230,6 +231,7 @@ export default function CategoriasPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

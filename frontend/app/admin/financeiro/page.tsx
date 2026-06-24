@@ -721,7 +721,7 @@ export default function FinanceiroPage() {
             className="btn-secondary text-sm print:hidden"
           >
             <Printer className="w-4 h-4" />
-            {exporting ? 'Gerando...' : 'Exportar PDF'}
+            <span className="hidden sm:inline">{exporting ? 'Gerando...' : 'Exportar PDF'}</span>
           </button>
           <button
             onClick={async () => {
@@ -742,7 +742,7 @@ export default function FinanceiroPage() {
             className="btn-secondary text-sm print:hidden"
           >
             <RefreshCw className={`w-4 h-4 ${backfilling ? 'animate-spin' : ''}`} />
-            {backfilling ? 'Corrigindo...' : 'Corrigir custos'}
+            <span className="hidden sm:inline">{backfilling ? 'Corrigindo...' : 'Corrigir custos'}</span>
           </button>
           <button onClick={() => load(inicio, fim, filterPaymentMethod)} disabled={loading} className="btn-secondary text-sm">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -752,7 +752,7 @@ export default function FinanceiroPage() {
 
       {/* ── Filtros ── sticky no topo */}
       <div className="sticky top-0 z-10 print:hidden">
-        <div className="card flex flex-wrap gap-3 items-center border-surface-500 shadow-xl">
+        <div className="card flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center border-surface-500 shadow-xl overflow-hidden">
           {/* Presets */}
           <div className="flex gap-1.5 flex-wrap">
             {(['hoje', '7d', 'mes', 'custom'] as Preset[]).map(p => (
@@ -767,7 +767,7 @@ export default function FinanceiroPage() {
           </div>
 
           {/* Filtro de forma de pagamento */}
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
             {['', 'Pix', 'Dinheiro', 'CartaoCredito', 'CartaoDebito', 'Crediario'].map(pm => (
               <button
                 key={pm || 'all'}

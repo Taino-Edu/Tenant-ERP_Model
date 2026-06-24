@@ -1454,6 +1454,18 @@ export default function VendaAvulsaPage() {
           onVendaUpdate={updated => setHistory(prev => prev.map(v => v.id === updated.id ? updated : v))}
         />
       )}
+
+      {/* Mobile FAB — Começar Venda */}
+      {tab === 'venda' && (
+        <button
+          onClick={() => setWizard(true)}
+          disabled={loading}
+          className="md:hidden fixed bottom-6 right-4 z-30 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-500 active:scale-95 flex items-center justify-center shadow-xl shadow-brand-600/40 disabled:opacity-50 transition-all"
+          aria-label="Começar venda"
+        >
+          <Plus className="w-6 h-6 text-white" />
+        </button>
+      )}
     </div>
   )
 }

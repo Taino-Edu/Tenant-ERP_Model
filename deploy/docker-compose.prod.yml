@@ -32,6 +32,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
     logging:
       driver: "json-file"
       options:
@@ -53,6 +58,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -105,6 +115,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -132,6 +147,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -157,6 +177,11 @@ services:
     networks:
       - cardgame_network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
     logging:
       driver: "json-file"
       options:

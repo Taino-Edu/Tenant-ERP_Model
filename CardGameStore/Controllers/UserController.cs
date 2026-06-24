@@ -243,16 +243,32 @@ public class UserController : ControllerBase
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(ClienteHistoricoDto), 200)]
     [ProducesResponseType(404)]
-    public async Task<IActionResult> GetHistorico(Guid id)
+    public async Task<IActionResult> GetHistorico(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 200) pageSize = 50;
+
         var user = await _db.Users.FindAsync(id);
         if (user == null) return NotFound(new { Message = "Usuário não encontrado." });
 
-        // Comandas
+        // Stats agregados diretamente no banco — não carrega todas as comandas em memória
+        var statsQuery = _db.Comandas
+            .Where(c => c.UserId == id && c.Status == ComandaStatus.Fechada);
+
+        var totalVisitas   = await statsQuery.CountAsync();
+        var totalGastoCmds = await statsQuery.SumAsync(c => (long)c.TotalInCents) / 100m;
+        var primeiraVisita = await statsQuery.MinAsync(c => (DateTime?)c.ClosedAt);
+        var ultimaVisita   = await statsQuery.MaxAsync(c => (DateTime?)c.ClosedAt);
+
+        var totalComandas = await _db.Comandas.CountAsync(c => c.UserId == id);
+
+        // Comandas paginadas
         var comandas = await _db.Comandas
             .Include(c => c.Items)
             .Where(c => c.UserId == id)
             .OrderByDescending(c => c.OpenedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         // Crediários
@@ -271,19 +287,19 @@ public class UserController : ControllerBase
         // Vendas avulsas (apenas as que têm UserId — vendas com cliente identificado a partir de agora)
         var vendasAvulsas = await _vendaService.GetByUserAsync(id);
 
-        // Estatísticas de visitas (comandas fechadas = visita à loja)
-        var visitasClosed = comandas.Where(c => c.Status == ComandaStatus.Fechada).ToList();
-        var totalGasto    = visitasClosed.Sum(c => c.TotalInCents) / 100m
-                          + vendasAvulsas.Sum(v => v.TotalInReais);
+        var totalGasto = totalGastoCmds + vendasAvulsas.Sum(v => v.TotalInReais);
 
         var historico = new ClienteHistoricoDto
         {
-            UserId       = user.Id,
-            UserName     = user.Name,
-            TotalVisitas  = visitasClosed.Count,
-            TotalGasto    = totalGasto,
-            PrimeiraVisita = visitasClosed.MinBy(c => c.ClosedAt)?.ClosedAt,
-            UltimaVisita   = visitasClosed.MaxBy(c => c.ClosedAt)?.ClosedAt,
+            UserId         = user.Id,
+            UserName       = user.Name,
+            TotalVisitas   = totalVisitas,
+            TotalGasto     = totalGasto,
+            PrimeiraVisita = primeiraVisita,
+            UltimaVisita   = ultimaVisita,
+            TotalComandas  = totalComandas,
+            Page           = page,
+            PageSize       = pageSize,
 
             Comandas = comandas.Select(c => new ComandaHistoricoDto
             {

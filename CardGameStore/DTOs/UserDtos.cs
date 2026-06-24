@@ -183,6 +183,11 @@ public class ClienteHistoricoDto
     public DateTime? PrimeiraVisita { get; set; }
     public DateTime? UltimaVisita   { get; set; }
 
+    // Paginação de comandas
+    public int TotalComandas { get; set; }
+    public int Page          { get; set; }
+    public int PageSize      { get; set; }
+
     // Listas
     public List<ComandaHistoricoDto>     Comandas      { get; set; } = new();
     public List<VendaAvulsaHistoricoDto> VendasAvulsas { get; set; } = new();

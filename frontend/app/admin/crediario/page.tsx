@@ -1062,6 +1062,7 @@ export default function CrediarioPage() {
   const [crediarios, setCrediarios]   = useState<CrediariosDto[]>([])
   const [clienteGroups, setClienteGroups] = useState<CrediariosClienteDto[]>([])
   const [filter, setFilter]           = useState<FilterStatus>('Aberto')
+  const [credSearch, setCredSearch]   = useState('')
   const [loading, setLoading]         = useState(true)
   const [modalCrediario, setModalCrediario]   = useState<CrediariosDto | null>(null)
   const [editarCrediario, setEditarCrediario] = useState<CrediariosDto | null>(null)
@@ -1121,6 +1122,14 @@ export default function CrediarioPage() {
       .filter(c => c.status === 'Aberto')
       .reduce((s, c) => s + c.saldoRestanteEmReais, 0),
   }
+
+  const credSearchLower = credSearch.toLowerCase()
+  const filteredGroups = credSearchLower
+    ? clienteGroups.filter(g => g.userName.toLowerCase().includes(credSearchLower))
+    : clienteGroups
+  const filteredCrediarios = credSearchLower
+    ? crediarios.filter(c => c.userName.toLowerCase().includes(credSearchLower))
+    : crediarios
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
@@ -1184,24 +1193,35 @@ export default function CrediarioPage() {
         ))}
       </div>
 
-      {/* Filtro */}
-      <div className="flex items-center gap-2">
-        <Filter className="w-4 h-4 text-gray-500" />
-        <div className="flex gap-1 bg-surface-800 p-1 rounded-lg">
-          {(['Aberto', 'Pago', 'todos'] as FilterStatus[]).map(f => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={clsx(
-                'px-4 py-1.5 rounded-md text-sm font-medium transition-all capitalize',
-                filter === f
-                  ? 'bg-brand-600 text-white'
-                  : 'text-gray-400 hover:text-gray-200'
-              )}
-            >
-              {f === 'todos' ? 'Todos' : f === 'Aberto' ? 'Em Aberto' : 'Quitados'}
-            </button>
-          ))}
+      {/* Filtro + Busca */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
+          <Filter className="w-4 h-4 text-gray-500" />
+          <div className="flex gap-1 bg-surface-800 p-1 rounded-lg">
+            {(['Aberto', 'Pago', 'todos'] as FilterStatus[]).map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={clsx(
+                  'px-4 py-1.5 rounded-md text-sm font-medium transition-all capitalize',
+                  filter === f
+                    ? 'bg-brand-600 text-white'
+                    : 'text-gray-400 hover:text-gray-200'
+                )}
+              >
+                {f === 'todos' ? 'Todos' : f === 'Aberto' ? 'Em Aberto' : 'Quitados'}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            className="input pl-9 w-full"
+            placeholder="Buscar por cliente..."
+            value={credSearch}
+            onChange={e => setCredSearch(e.target.value)}
+          />
         </div>
       </div>
 
@@ -1211,16 +1231,18 @@ export default function CrediarioPage() {
           <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : filter === 'Aberto' ? (
-        clienteGroups.length === 0 ? (
+        filteredGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
               <CreditCard className="w-8 h-8 text-gray-400" />
             </div>
-            <p className="text-gray-400 font-medium">Nenhuma dívida em aberto</p>
+            <p className="text-gray-400 font-medium">
+              {credSearch ? 'Nenhum cliente encontrado para essa busca' : 'Nenhuma dívida em aberto'}
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {clienteGroups.map(g => (
+            {filteredGroups.map(g => (
               <ClienteCrediarioCard
                 key={g.userId}
                 grupo={g}
@@ -1231,16 +1253,18 @@ export default function CrediarioPage() {
             ))}
           </div>
         )
-      ) : crediarios.length === 0 ? (
+      ) : filteredCrediarios.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
             <CreditCard className="w-8 h-8 text-gray-400" />
           </div>
-          <p className="text-gray-400 font-medium">Nenhum crediário encontrado</p>
+          <p className="text-gray-400 font-medium">
+            {credSearch ? 'Nenhum cliente encontrado para essa busca' : 'Nenhum crediário encontrado'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {crediarios.map(c => (
+          {filteredCrediarios.map(c => (
             <CrediarioCard
               key={c.id}
               c={c}

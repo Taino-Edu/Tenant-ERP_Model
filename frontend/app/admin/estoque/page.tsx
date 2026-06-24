@@ -409,7 +409,9 @@ export default function EstoquePage() {
       {loading ? (
         <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>
       ) : (
-        <div className="card p-0 overflow-hidden">
+        <>
+        {/* ── Desktop: tabela ── */}
+        <div className="hidden sm:block card p-0 overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-surface-800 border-b border-surface-500">
@@ -496,6 +498,81 @@ export default function EstoquePage() {
           )}
           </div>
         </div>
+
+        {/* ── Mobile: cards ── */}
+        <div className="sm:hidden space-y-2">
+          {filtered.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <Package className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+              Nenhum produto encontrado
+            </div>
+          ) : filtered.map(p => (
+            <div key={p.id} className="card p-3 space-y-2.5">
+              {/* Linha 1: nome + ações */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="font-medium text-white text-sm leading-tight">{p.name}</p>
+                    {p.isPreVenda && (
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded text-white shrink-0" style={{ backgroundColor: '#7C3AED' }}>Pré-venda</span>
+                    )}
+                    {p.isLowStock && (
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/20 flex items-center gap-0.5 shrink-0">
+                        <AlertTriangle className="w-2.5 h-2.5" /> Baixo
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <span className="badge bg-surface-600 text-gray-300 border-surface-500 text-[10px]">{p.category}</span>
+                    {p.barcode && <span className="text-[10px] font-mono text-gray-500">{p.barcode}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const next = !p.showOnMarketplace
+                        await productApi.update(p.id, { ...p, showOnMarketplace: next, isFeatured: next ? p.isFeatured : false })
+                        fetch()
+                      } catch { toast.error('Erro ao atualizar') }
+                    }}
+                    title={p.showOnMarketplace ? 'No marketplace' : 'Fora do marketplace'}
+                    className={`text-base px-1 transition-opacity ${p.showOnMarketplace ? 'opacity-100' : 'opacity-25'}`}
+                  >🛍️</button>
+                  <button onClick={() => setModal(p)} className="p-1.5 rounded hover:bg-brand-600/20 text-gray-500 hover:text-brand-400 transition-colors">
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => handleDeactivate(p.id, p.name)} className="p-1.5 rounded hover:bg-red-600/20 text-gray-500 hover:text-red-400 transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Linha 2: preço + custo + margem */}
+              <div className="flex items-center gap-3 text-xs flex-wrap">
+                <span className="text-accent-gold font-bold">R$ {p.priceInReais.toFixed(2).replace('.', ',')}</span>
+                {p.costPriceInCents > 0 && (
+                  <>
+                    <span className="text-gray-500">Custo: R$ {p.costPriceInReais.toFixed(2).replace('.', ',')}</span>
+                    <span className={p.marginInReais >= 0 ? 'text-emerald-400 font-semibold' : 'text-red-400 font-semibold'}>
+                      {p.marginPercent.toFixed(1)}%
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Linha 3: estoque */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Estoque:</span>
+                <button onClick={() => handleStock(p.id, -1)} className="w-7 h-7 rounded bg-surface-600 hover:bg-red-600/30 text-gray-400 hover:text-red-400 transition-colors flex items-center justify-center text-base leading-none">−</button>
+                <span className={`text-sm font-bold min-w-[1.5rem] text-center ${p.isLowStock ? 'text-red-400' : 'text-white'}`}>{p.stockQuantity}</span>
+                <button onClick={() => handleStock(p.id, +1)} className="w-7 h-7 rounded bg-surface-600 hover:bg-emerald-600/30 text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center text-base leading-none">+</button>
+                {p.description && <p className="text-[10px] text-gray-500 truncate ml-2 flex-1 min-w-0">{p.description}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+        </>
       )}
     </div>
   )

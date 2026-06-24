@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { comandaApi, crediarioApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
@@ -1612,13 +1612,18 @@ export default function DashboardPage() {
     }
   }
 
-  const patrimonioCusto  = allProducts.reduce((s, p) => s + p.costPriceInCents  * p.stockQuantity, 0) / 100
-  const patrimonioVenda  = allProducts.reduce((s, p) => s + p.priceInCents      * p.stockQuantity, 0) / 100
-  const lucroEstoque     = patrimonioVenda - patrimonioCusto
-  const totalPecas       = allProducts.reduce((s, p) => s + p.stockQuantity, 0)
+  const { patrimonioCusto, patrimonioVenda, lucroEstoque, totalPecas } = useMemo(() => {
+    const custo  = allProducts.reduce((s, p) => s + p.costPriceInCents  * p.stockQuantity, 0) / 100
+    const venda  = allProducts.reduce((s, p) => s + p.priceInCents      * p.stockQuantity, 0) / 100
+    const lucro  = venda - custo
+    const pecas  = allProducts.reduce((s, p) => s + p.stockQuantity, 0)
+    return { patrimonioCusto: custo, patrimonioVenda: venda, lucroEstoque: lucro, totalPecas: pecas }
+  }, [allProducts])
 
-  const totalAberto  = comandas.reduce((s, c) => s + c.totalInReais, 0)
-  const emAndamento  = comandas.filter(c => c.status === 'EmAndamento').length
+  const { totalAberto, emAndamento } = useMemo(() => ({
+    totalAberto: comandas.reduce((s, c) => s + c.totalInReais, 0),
+    emAndamento: comandas.filter(c => c.status === 'EmAndamento').length,
+  }), [comandas])
 
   const prevFin = fin7d && fin7d.diaDia.length > 0 ? (() => {
     const hojeStr = brToday()
@@ -1710,45 +1715,54 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Métricas ao vivo — barra slim */}
-      <div className="card py-2.5 px-4 flex items-center overflow-x-auto gap-0 divide-x divide-surface-600">
-        {[
-          { label: 'Ativas',        value: String(comandas.length),                 icon: Users,         color: 'text-brand-400'   },
-          { label: 'Receita hoje',  value: finHoje ? fmt(finHoje.receita) : '—',   icon: DollarSign,    color: 'text-accent-gold'  },
-          { label: 'Em aberto',     value: fmt(totalAberto),                         icon: Clock,         color: 'text-orange-400'   },
-          { label: 'Estoque baixo', value: String(lowStock),                         icon: AlertTriangle, color: lowStock > 0 ? 'text-red-400' : 'text-gray-500' },
-        ].map((m, i) => (
-          <div key={m.label} className={clsx('flex items-center gap-2 shrink-0', i === 0 ? 'pr-4' : 'px-4')}>
-            <m.icon className={clsx('w-3.5 h-3.5 shrink-0', m.color)} />
-            <span className={clsx('text-sm font-bold font-mono', m.color)}>{m.value}</span>
-            <span className="text-xs text-gray-500">{m.label}</span>
-          </div>
-        ))}
+      {/* Métricas ao vivo — grid 2×2 no mobile, barra slim no desktop */}
+      <div className="card py-2.5 px-3 sm:px-4">
+        <div className="grid grid-cols-2 sm:flex sm:items-center sm:divide-x sm:divide-surface-600 gap-3 sm:gap-0">
+          {[
+            { label: 'Ativas',        value: String(comandas.length),                 icon: Users,         color: 'text-brand-400'   },
+            { label: 'Receita hoje',  value: finHoje ? fmt(finHoje.receita) : '—',   icon: DollarSign,    color: 'text-accent-gold'  },
+            { label: 'Em aberto',     value: fmt(totalAberto),                         icon: Clock,         color: 'text-orange-400'   },
+            { label: 'Estoque baixo', value: String(lowStock),                         icon: AlertTriangle, color: lowStock > 0 ? 'text-red-400' : 'text-gray-500' },
+          ].map((m, i) => (
+            <div key={m.label} className={clsx(
+              'flex items-center gap-2',
+              'sm:shrink-0',
+              i === 0 ? 'sm:pr-4' : 'sm:px-4',
+              'bg-surface-800 sm:bg-transparent rounded-lg sm:rounded-none p-2.5 sm:p-0'
+            )}>
+              <m.icon className={clsx('w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0', m.color)} />
+              <div className="min-w-0">
+                <span className={clsx('text-sm font-bold font-mono block', m.color)}>{m.value}</span>
+                <span className="text-xs text-gray-500 block sm:inline sm:ml-1">{m.label}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Tabs + controles — logo após os KPIs, antes de qualquer conteúdo */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex gap-1 bg-surface-800 p-1 rounded-lg">
+      {/* Tabs + controles */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex gap-1 bg-surface-800 p-1 rounded-lg w-full sm:w-auto">
           <button
             onClick={() => setTab('ativas')}
-            className={clsx('px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+            className={clsx('flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all',
               tab === 'ativas' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
           >
-            <Users className="w-4 h-4 inline mr-1.5" />Ativas ({comandas.length})
+            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" /><span>Ativas ({comandas.length})</span>
           </button>
           <button
             onClick={() => setTab('historico')}
-            className={clsx('px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+            className={clsx('flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all',
               tab === 'historico' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
           >
-            <History className="w-4 h-4 inline mr-1.5" />Histórico
+            <History className="w-3.5 h-3.5 sm:w-4 sm:h-4" /><span>Histórico</span>
           </button>
           <button
             onClick={() => setTab('analises')}
-            className={clsx('px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+            className={clsx('flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all',
               tab === 'analises' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
           >
-            <BarChart2 className="w-4 h-4 inline mr-1.5" />Análises
+            <BarChart2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /><span>Análises</span>
           </button>
         </div>
 
@@ -1763,7 +1777,7 @@ export default function DashboardPage() {
         )}
 
         {tab === 'ativas' && (
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               className="input pl-9 text-sm w-full sm:w-56"
@@ -1823,8 +1837,8 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-4">
             {/* Filtros do histórico */}
-            <div className="card py-2.5 px-3 flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-36">
+            <div className="card py-2.5 px-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+              <div className="relative flex-1 min-w-0 sm:min-w-36">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
                 <input
                   className="input pl-8 text-sm py-1.5 w-full"
@@ -1833,13 +1847,13 @@ export default function DashboardPage() {
                   onChange={e => setHistSearch(e.target.value)}
                 />
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                <Clock className="w-3.5 h-3.5 text-gray-500" />
+              <div className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-gray-500 shrink-0" />
                 <input
                   type="time"
                   value={histHoraDe}
                   onChange={e => setHistHoraDe(e.target.value)}
-                  className="input text-sm py-1.5 w-28"
+                  className="input text-sm py-1.5 flex-1 sm:w-28 sm:flex-none"
                   title="Horário de"
                 />
                 <span className="text-xs text-gray-500">até</span>
@@ -1847,16 +1861,16 @@ export default function DashboardPage() {
                   type="time"
                   value={histHoraAte}
                   onChange={e => setHistHoraAte(e.target.value)}
-                  className="input text-sm py-1.5 w-28"
+                  className="input text-sm py-1.5 flex-1 sm:w-28 sm:flex-none"
                   title="Horário até"
                 />
               </div>
               {(histSearch || histHoraDe || histHoraAte) && (
                 <button
                   onClick={() => { setHistSearch(''); setHistHoraDe(''); setHistHoraAte('') }}
-                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors px-2.5 py-1.5 rounded-lg border border-surface-500 hover:border-surface-400 shrink-0"
+                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors px-2.5 py-1.5 rounded-lg border border-surface-500 hover:border-surface-400 w-full sm:w-auto text-center"
                 >
-                  Limpar
+                  Limpar filtros
                 </button>
               )}
             </div>

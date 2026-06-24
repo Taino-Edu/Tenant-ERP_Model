@@ -10,7 +10,7 @@ namespace CardGameStore.Data.Migrations
         {
             migrationBuilder.Sql(@"
                 ALTER TABLE products
-                    ADD COLUMN IF NOT EXISTS show_on_marketplace INTEGER NOT NULL DEFAULT 1;
+                    ADD COLUMN IF NOT EXISTS show_on_marketplace boolean NOT NULL DEFAULT true;
             ");
         }
 
