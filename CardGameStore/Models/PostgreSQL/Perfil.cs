@@ -71,7 +71,7 @@ public static class Permissao
         [Usuarios]    = ["/api/user"],
         [Crediario]   = ["/api/crediarios"],
         [Campeonatos] = ["/api/championship"],
-        [Financeiro]  = ["/api/relatorios/financeiro", "/api/relatorios/pdv"],
+        [Financeiro]  = ["/api/analytics/financeiro", "/api/relatorios/financeiro", "/api/relatorios/pdv"],
         [Relatorios]  = ["/api/relatorios"],
         [Anuncios]    = ["/api/announcements"],
         [Cartas]      = ["/api/tcg"],

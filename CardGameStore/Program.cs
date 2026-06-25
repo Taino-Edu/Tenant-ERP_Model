@@ -149,11 +149,19 @@ builder.Services.AddAuthorization(options =>
 // ---------------------------------------------------------------------------
 builder.Services.AddRateLimiter(options =>
 {
+    // Cloudflare encaminha o IP real do cliente em CF-Connecting-IP.
+    // Usar RemoteIpAddress aqui resultaria no IP do nó Cloudflare, fazendo todos os
+    // usuários compartilharem o mesmo bucket de rate limiting.
+    static string GetClientIp(HttpContext ctx) =>
+        ctx.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
+        ?? ctx.Connection.RemoteIpAddress?.ToString()
+        ?? "unknown";
+
     // Política global — protege TODOS os endpoints sem [EnableRateLimiting] explícito
     // 300 req/min por IP é generoso o suficiente para uso legítimo
-    options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, IPAddress>(
+    options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, string>(
         context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
-            context.Connection.RemoteIpAddress ?? IPAddress.Loopback,
+            GetClientIp(context),
             _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
             {
                 PermitLimit          = 300,

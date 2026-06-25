@@ -12,6 +12,7 @@ using CardGameStore.DTOs;
 using CardGameStore.Models.MongoDB;
 using CardGameStore.Services.Interfaces;
 using MongoDB.Driver;
+using System.Text.RegularExpressions;
 
 namespace CardGameStore.Services.Implementations;
 
@@ -96,7 +97,8 @@ public class TcgService : ITcgService
 
         // Monta filtro flexível
         var filterBuilder = Builders<CardCache>.Filter;
-        var filter = filterBuilder.Regex(c => c.Name, new MongoDB.Bson.BsonRegularExpression(name, "i")); // Case-insensitive
+        // Regex.Escape evita ReDoS e regex injection com input do usuário
+        var filter = filterBuilder.Regex(c => c.Name, new MongoDB.Bson.BsonRegularExpression(Regex.Escape(name), "i"));
 
         if (!string.IsNullOrWhiteSpace(game))
             filter &= filterBuilder.Eq(c => c.Game, game);

@@ -1080,7 +1080,7 @@ export default function VendaAvulsaPage() {
   }, [])
 
   useEffect(() => {
-    vendaAvulsaApi.byDate(todayStr).then(r => setTodayH(r.data)).catch(() => {})
+    vendaAvulsaApi.byDate(todayStr).then(r => setTodayH(r.data)).catch(() => toast.error('Erro ao carregar vendas de hoje'))
   }, [todayStr])
 
   useEffect(() => {
@@ -1093,7 +1093,7 @@ export default function VendaAvulsaPage() {
   }, [tab, histDate])
 
   function refreshToday() {
-    vendaAvulsaApi.byDate(todayStr).then(r => setTodayH(r.data)).catch(() => {})
+    vendaAvulsaApi.byDate(todayStr).then(r => setTodayH(r.data)).catch(() => toast.error('Erro ao atualizar vendas de hoje'))
   }
 
   // ── Analytics ────────────────────────────────────────────────────────────

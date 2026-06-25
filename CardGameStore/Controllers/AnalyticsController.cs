@@ -14,7 +14,7 @@ namespace CardGameStore.Controllers;
 
 [ApiController]
 [Route("api/analytics")]
-[Authorize(Roles = "Admin")]
+[Authorize(Policy = "AdminOnly")]
 public class AnalyticsController : ControllerBase
 {
     // Fuso horário de Brasília — funciona em Linux (IANA) e Windows (ID legado).

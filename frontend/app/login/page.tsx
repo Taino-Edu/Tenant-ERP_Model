@@ -22,8 +22,13 @@ export default function LoginPage() {
       saveAuth(data)
       toast.success(`Bem-vindo, ${data.userName}!`)
       router.push(data.role === 'Customer' ? '/cliente' : '/admin/dashboard')
-    } catch {
-      toast.error('E-mail ou senha inválidos.')
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      if (status === 429) {
+        toast.error('Muitas tentativas. Aguarde 1 minuto e tente novamente.')
+      } else {
+        toast.error('E-mail ou senha inválidos.')
+      }
     } finally {
       setLoading(false)
     }

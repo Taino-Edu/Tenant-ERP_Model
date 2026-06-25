@@ -213,46 +213,55 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow)
                     throw new InvalidOperationException("Os pontos deste cliente estão expirados.");
 
-                if (user.PointsBalance < primaryAmt)
+                // UPDATE atômico: debita pontos somente se o saldo for suficiente (evita race condition)
+                var rows = await _db.Users
+                    .Where(u => u.Id == userId && u.PointsBalance >= primaryAmt)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(u => u.PointsBalance, u => u.PointsBalance - primaryAmt)
+                        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+                if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente. Cliente tem {user.PointsBalance} pts, método principal custa {primaryAmt} pts.");
-
-                user.PointsBalance -= primaryAmt;
-                user.UpdatedAt      = DateTime.UtcNow;
                 _logger.LogInformation(
-                    "Usuário {UserId} usou {Pts} pontos (principal) em venda avulsa. Saldo restante: {Saldo}",
-                    userId, primaryAmt, user.PointsBalance);
+                    "Usuário {UserId} usou {Pts} pontos (principal) em venda avulsa.", userId, primaryAmt);
             }
             else if (pm == PaymentMethod.Cashback)
             {
-                if (user.BalanceInCents < primaryAmt)
+                var rows = await _db.Users
+                    .Where(u => u.Id == userId && u.BalanceInCents >= primaryAmt)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(u => u.BalanceInCents, u => u.BalanceInCents - primaryAmt)
+                        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+                if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo insuficiente. Cliente tem R$ {user.BalanceInCents / 100m:N2}, método principal custa R$ {primaryAmt / 100m:N2}.");
-
-                user.BalanceInCents -= primaryAmt;
-                user.UpdatedAt       = DateTime.UtcNow;
                 _logger.LogInformation(
-                    "Usuário {UserId} usou R$ {Valor:N2} de cashback (principal) em venda avulsa. Saldo restante: R$ {Saldo:N2}",
-                    userId, primaryAmt / 100m, user.BalanceInCents / 100m);
+                    "Usuário {UserId} usou R$ {Valor:N2} de cashback (principal) em venda avulsa.", userId, primaryAmt / 100m);
             }
 
             // Aplica o segundo método de pagamento (Cashback ou Pontos como complemento)
             if (secondPm == PaymentMethod.Cashback)
             {
-                if (user.BalanceInCents < secondAmt)
+                var rows = await _db.Users
+                    .Where(u => u.Id == userId && u.BalanceInCents >= secondAmt)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(u => u.BalanceInCents, u => u.BalanceInCents - secondAmt)
+                        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+                if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo cashback insuficiente para o segundo pagamento. Disponível: R$ {user.BalanceInCents / 100m:N2}.");
-                user.BalanceInCents -= secondAmt;
-                user.UpdatedAt       = DateTime.UtcNow;
                 _logger.LogInformation("Usuário {UserId} usou R$ {Amt:N2} de cashback como segundo pagamento.", userId, secondAmt / 100m);
             }
             else if (secondPm == PaymentMethod.Pontos)
             {
-                if (user.PointsBalance < secondAmt)
+                var rows = await _db.Users
+                    .Where(u => u.Id == userId && u.PointsBalance >= secondAmt)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(u => u.PointsBalance, u => u.PointsBalance - secondAmt)
+                        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+                if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente para o segundo pagamento. Disponível: {user.PointsBalance} pts.");
-                user.PointsBalance -= secondAmt;
-                user.UpdatedAt      = DateTime.UtcNow;
                 _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
             }
 
@@ -262,44 +271,58 @@ public class VendaAvulsaService : IVendaAvulsaService
         {
             // Pagamento normal (Pix / Dinheiro / Cartão) com cliente identificado
             var userId = request.UserId.Value;
-            var user   = await _db.Users.FindAsync(userId)
+            var user   = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId)
                 ?? throw new InvalidOperationException("Cliente não encontrado.");
 
-            // Aplica o segundo método de pagamento se houver
+            // Aplica o segundo método de pagamento se houver (UPDATE atômico)
             if (secondPm == PaymentMethod.Cashback)
             {
-                if (user.BalanceInCents < secondAmt)
+                var rows = await _db.Users
+                    .Where(u => u.Id == userId && u.BalanceInCents >= secondAmt)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(u => u.BalanceInCents, u => u.BalanceInCents - secondAmt)
+                        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+                if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo cashback insuficiente para o segundo pagamento. Disponível: R$ {user.BalanceInCents / 100m:N2}.");
-                user.BalanceInCents -= secondAmt;
-                user.UpdatedAt       = DateTime.UtcNow;
                 _logger.LogInformation("Usuário {UserId} usou R$ {Amt:N2} de cashback como segundo pagamento.", userId, secondAmt / 100m);
             }
             else if (secondPm == PaymentMethod.Pontos)
             {
-                if (user.PointsBalance < secondAmt)
+                var rows = await _db.Users
+                    .Where(u => u.Id == userId && u.PointsBalance >= secondAmt)
+                    .ExecuteUpdateAsync(s => s
+                        .SetProperty(u => u.PointsBalance, u => u.PointsBalance - secondAmt)
+                        .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+                if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente para o segundo pagamento. Disponível: {user.PointsBalance} pts.");
-                user.PointsBalance -= secondAmt;
-                user.UpdatedAt      = DateTime.UtcNow;
                 _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
             }
 
-            // Acumula pontos de fidelidade: 1 ponto por R$1 gasto (baseado no total da compra)
+            // Acumula pontos de fidelidade: 1 ponto por R$1 gasto
             var pontosGanhos = finalTotal / 100;
             if (pontosGanhos > 0)
             {
-                if (user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow)
-                    user.PointsBalance = 0;
-                user.PointsBalance   += pontosGanhos;
-                user.PointsExpiresAt  = DateTime.UtcNow.AddDays(30);
-                user.UpdatedAt        = DateTime.UtcNow;
+                var expirado = user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow;
+                if (expirado)
+                    await _db.Users
+                        .Where(u => u.Id == userId)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(u => u.PointsBalance, pontosGanhos)
+                            .SetProperty(u => u.PointsExpiresAt, DateTime.UtcNow.AddDays(30))
+                            .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+                else
+                    await _db.Users
+                        .Where(u => u.Id == userId)
+                        .ExecuteUpdateAsync(s => s
+                            .SetProperty(u => u.PointsBalance, u => u.PointsBalance + pontosGanhos)
+                            .SetProperty(u => u.PointsExpiresAt, DateTime.UtcNow.AddDays(30))
+                            .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
                 _logger.LogInformation(
                     "Usuário {UserId} ganhou {Pontos} pontos em venda avulsa {VendaId}.",
                     userId, pontosGanhos, venda.Id);
             }
-
-            await _db.SaveChangesAsync();
         }
 
         return MapToDto(venda);
