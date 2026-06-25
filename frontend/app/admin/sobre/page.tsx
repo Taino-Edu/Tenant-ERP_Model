@@ -5,7 +5,7 @@ import {
   Info, Tag, Calendar, CheckCircle, Wrench, Zap,
   BookOpen, ChevronDown, ChevronUp, FileDown,
   LayoutDashboard, ShoppingBag, ShoppingCart, Package,
-  Users, CreditCard, Trophy, BarChart2, Layers, Megaphone, Settings,
+  Users, CreditCard, Trophy, BarChart2, Layers, Megaphone, Settings, Keyboard,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -294,6 +294,22 @@ const MANUAL: ManualSection[] = [
     tips: [
       'Todas as mudanças nas configurações são aplicadas em tempo real — sem precisar recarregar a página.',
       'Use "Resetar layout" nas configurações do Dashboard para reabrir todos os painéis colapsados.',
+    ],
+  },
+  {
+    icon: <Keyboard className="w-4 h-4" />,
+    title: 'Atalhos de Teclado',
+    color: 'text-pink-400',
+    steps: [
+      { title: 'Navegar pelo teclado', desc: 'Pressione uma tecla para ir direto à página (sem clicar no menu): D → Dashboard, P → PDV, E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios, A → Campeonatos. Só funciona quando nenhum campo de texto está focado.' },
+      { title: 'Ver todos os atalhos', desc: 'Pressione ? (Shift + /) em qualquer tela para abrir o painel de ajuda com a lista completa de atalhos. Pressione ? novamente ou Esc para fechar.' },
+      { title: 'Fechar com Esc', desc: 'A tecla Esc fecha modais, painéis flutuantes e o painel de atalhos em qualquer contexto.' },
+      { title: 'Badges no menu lateral', desc: 'No desktop, ao passar o mouse sobre um item do menu, a tecla de atalho correspondente aparece discretamente ao lado do nome.' },
+      { title: 'Não interfere com digitação', desc: 'Os atalhos de navegação ficam desativados enquanto você digita em campos de busca ou formulários. Só a tecla ? continua ativa em qualquer contexto.' },
+    ],
+    tips: [
+      'As teclas são case-insensitive — maiúscula ou minúscula funciona igual.',
+      'Funciona também com teclado físico Bluetooth conectado ao celular.',
     ],
   },
 ]
