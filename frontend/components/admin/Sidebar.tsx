@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
+import { SIDEBAR_SHORTCUT_KEYS } from '@/components/admin/KeyboardShortcutsOverlay'
 
 const sections = [
   {
@@ -74,7 +75,8 @@ function NavItems({ pathname, onClose }: { pathname: string; onClose?: () => voi
               {label}
             </p>
             {visibleItems.map(({ href, label: itemLabel, icon: Icon, badge }: { href: string; label: string; icon: React.ElementType; perm: string | null; badge?: string }) => {
-              const active = pathname.startsWith(href)
+              const active  = pathname.startsWith(href)
+              const shortcut = SIDEBAR_SHORTCUT_KEYS[href]
               return (
                 <Link
                   key={href}
@@ -91,6 +93,11 @@ function NavItems({ pathname, onClose }: { pathname: string; onClose?: () => voi
                     <span className="text-[10px] bg-accent-green/20 text-accent-green border border-accent-green/30 px-1.5 py-0.5 rounded-full font-bold animate-pulse-slow">
                       {badge}
                     </span>
+                  )}
+                  {shortcut && !active && (
+                    <kbd className="hidden md:inline-block text-[9px] text-gray-600 bg-surface-800 border border-surface-600 rounded px-1.5 py-0.5 font-mono font-bold leading-none opacity-0 group-hover:opacity-100 transition-opacity">
+                      {shortcut}
+                    </kbd>
                   )}
                 </Link>
               )

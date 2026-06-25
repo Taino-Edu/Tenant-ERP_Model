@@ -2,8 +2,8 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.7.1'
-const DATA = '22/06/2026'
+const VERSION = 'v1.8.0'
+const DATA = '25/06/2026'
 
 const SECOES = [
   {
@@ -168,6 +168,22 @@ const SECOES = [
   },
   {
     num: '11',
+    titulo: 'Atalhos de Teclado',
+    cor: '#F472B6',
+    itens: [
+      { t: 'Navegar pelo teclado', d: 'Quando nenhum campo de texto está focado, pressione uma tecla para ir direto à página: D → Dashboard, P → PDV (Frente de Caixa), E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios, A → Campeonatos.' },
+      { t: 'Ver todos os atalhos', d: 'Pressione ? (shift + /) em qualquer tela para abrir o painel de atalhos com a lista completa. Pressione ? novamente ou Esc para fechar.' },
+      { t: 'Fechar com Esc', d: 'A tecla Esc fecha modais, painéis flutuantes e o painel de atalhos. Funciona em qualquer contexto.' },
+      { t: 'Badges no menu lateral', d: 'Ao passar o mouse sobre um item do menu no desktop, aparece a tecla de atalho correspondente em destaque ao lado do nome.' },
+      { t: 'Não interfere com digitação', d: 'Os atalhos de navegação ficam desativados enquanto você digita em campos de texto, busca ou formulários — só a tecla ? continua ativa.' },
+    ],
+    dicas: [
+      'Os atalhos de letras são case-insensitive — maiúscula ou minúscula, funciona igual.',
+      'Para navegar com teclado no celular (teclado físico Bluetooth), os atalhos funcionam normalmente.',
+    ],
+  },
+  {
+    num: '12',
     titulo: 'Configurações e Preferências',
     cor: '#94A3B8',
     itens: [

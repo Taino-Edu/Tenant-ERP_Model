@@ -407,6 +407,10 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
     val: maxVal * f,
   }))
 
+  // Quantas labels cabem sem sobreposição (cada label ~28px de largura)
+  const slotPx    = (chartW / dias.length)
+  const labelStep = slotPx < 28 ? Math.ceil(28 / slotPx) : 1
+
   return (
     <div className="card relative">
       <div className="flex items-center justify-between mb-4">
@@ -435,6 +439,7 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
             const custoH  = d.custo > 0 ? Math.min((d.custo / maxVal) * chartH, recH) : 0
             const margemH = recH - custoH
             const hasData = recH > 0
+            const showLabel = i === 0 || i === dias.length - 1 || i % labelStep === 0
             return (
               <g key={d.dia}
                 onMouseEnter={hasData ? e => setTooltip({ x: e.clientX, y: e.clientY, d }) : undefined}
@@ -444,7 +449,7 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
                 {!hasData && <rect x={x + barW * 0.2} y={PAD.top + chartH - 1} width={barW * 0.6} height={1} fill="#32323f" />}
                 {hasData && custoH > 0 && <rect x={x} y={PAD.top + chartH - recH} width={barW} height={custoH} fill="rgba(239,68,68,0.5)" rx="2" />}
                 {hasData && <rect x={x} y={PAD.top + chartH - recH + custoH} width={barW} height={margemH} fill="#42B6EE" rx="2" />}
-                {(hasData || i === 0 || i === dias.length - 1 || i % Math.ceil(dias.length / 8) === 0) && (
+                {showLabel && (
                   <text x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize="8" fill={hasData ? '#9ca3af' : '#4b5563'}>
                     {d.dia.slice(5)}
                   </text>
@@ -463,6 +468,127 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
           <p className="text-brand-400">Margem: {fmt(tooltip.d.receita - tooltip.d.custo)}</p>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Gráfico de pizza para análise de 1 dia ────────────────────────────────────
+const FORMA_CORES: Record<string, string> = {
+  Dinheiro:      '#10b981',
+  Pix:           '#42B6EE',
+  CartaoCredito: '#a855f7',
+  CartaoDebito:  '#3b82f6',
+  Crediario:     '#f59e0b',
+  Pontos:        '#eab308',
+  Cashback:      '#ec4899',
+}
+
+function DayPieChart({ formas, receita, custo, date }: {
+  formas: FormaPagamentoTotalDto[]
+  receita: number
+  custo: number
+  date: string
+}) {
+  const [hovered, setHovered] = useState<string | null>(null)
+  const total = formas.reduce((s, f) => s + f.total, 0)
+  if (total === 0) return null
+
+  const cx = 100, cy = 100, r = 78, innerR = 42
+
+  function polarXY(angleDeg: number, radius: number) {
+    const rad = (angleDeg - 90) * (Math.PI / 180)
+    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) }
+  }
+
+  function arcPath(sa: number, ea: number, outerR: number) {
+    const p1 = polarXY(sa, outerR), p2 = polarXY(ea, outerR)
+    const p3 = polarXY(ea, innerR), p4 = polarXY(sa, innerR)
+    const large = ea - sa > 180 ? 1 : 0
+    return `M ${p1.x} ${p1.y} A ${outerR} ${outerR} 0 ${large} 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${innerR} ${innerR} 0 ${large} 0 ${p4.x} ${p4.y} Z`
+  }
+
+  let angle = 0
+  const slices = formas.filter(f => f.total > 0).map(f => {
+    const pct = f.total / total
+    const sa  = angle, ea = angle + pct * 360
+    angle = ea
+    return { ...f, pct, sa, ea }
+  })
+
+  const hoveredForma = slices.find(s => s.forma === hovered)
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+          <BarChart2 className="w-4 h-4 text-brand-400" /> Receita do dia · {date.slice(5).replace('-', '/')}
+        </h3>
+      </div>
+      <div className="flex flex-col sm:flex-row items-center gap-6">
+        <div className="shrink-0">
+          <svg width="200" height="200" viewBox="0 0 200 200">
+            {slices.map(s => {
+              const isHov  = hovered === s.forma
+              const outerR = isHov ? r + 7 : r
+              const color  = FORMA_CORES[s.forma] ?? '#6b7280'
+              return (
+                <path
+                  key={s.forma}
+                  d={arcPath(s.sa, s.ea, outerR)}
+                  fill={color}
+                  opacity={hovered && !isHov ? 0.4 : 1}
+                  onMouseEnter={() => setHovered(s.forma)}
+                  onMouseLeave={() => setHovered(null)}
+                  className="cursor-pointer transition-all duration-150"
+                  style={{ filter: isHov ? 'brightness(1.15)' : undefined }}
+                />
+              )
+            })}
+            <text x={cx} y={cy - 10} textAnchor="middle" fontSize="9" fill="#9ca3af">
+              {hoveredForma ? (FORMA_LABELS[hoveredForma.forma] ?? hoveredForma.forma) : 'Total'}
+            </text>
+            <text x={cx} y={cy + 6} textAnchor="middle" fontSize="13" fontWeight="bold" fill="white">
+              {hoveredForma ? fmt(hoveredForma.total) : fmt(receita)}
+            </text>
+            {hoveredForma && (
+              <text x={cx} y={cy + 20} textAnchor="middle" fontSize="9" fill="#9ca3af">
+                {(hoveredForma.pct * 100).toFixed(1)}%
+              </text>
+            )}
+          </svg>
+        </div>
+        <div className="flex-1 space-y-1 min-w-0 w-full">
+          {slices.map(s => {
+            const color = FORMA_CORES[s.forma] ?? '#6b7280'
+            return (
+              <div
+                key={s.forma}
+                className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 transition-colors cursor-default ${hovered === s.forma ? 'bg-surface-700' : 'hover:bg-surface-700/50'}`}
+                onMouseEnter={() => setHovered(s.forma)}
+                onMouseLeave={() => setHovered(null)}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+                  <span className="text-xs text-gray-300 truncate">{FORMA_LABELS[s.forma] ?? s.forma}</span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-xs text-gray-500">{s.quantidade}×</span>
+                  <span className="text-xs font-mono font-bold text-white">{fmt(s.total)}</span>
+                  <span className="text-xs text-gray-500 w-10 text-right">{(s.pct * 100).toFixed(1)}%</span>
+                </div>
+              </div>
+            )
+          })}
+          {custo > 0 && (
+            <div className="mt-2 pt-2 border-t border-surface-600 flex items-center justify-between px-3">
+              <span className="text-xs text-gray-500">Margem estimada</span>
+              <span className={`text-xs font-mono font-bold ${receita > custo ? 'text-emerald-400' : 'text-red-400'}`}>
+                {fmt(receita - custo)} · {receita > 0 ? (((receita - custo) / receita) * 100).toFixed(1) : 0}%
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -1047,11 +1173,20 @@ export default function FinanceiroPage() {
             </div>
           )}
 
-          {/* Gráfico + Donut */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            <div className="lg:col-span-3"><BarChart dias={d.diaDia} /></div>
-            <MargemDonut receita={d.receita} custo={d.custo} />
-          </div>
+          {/* Gráfico + Donut — pizza para 1 dia, barras para múltiplos */}
+          {inicio === fim ? (
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-3">
+                <DayPieChart formas={d.pagamentosPorForma} receita={d.receita} custo={d.custo} date={inicio} />
+              </div>
+              <MargemDonut receita={d.receita} custo={d.custo} />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+              <div className="lg:col-span-3"><BarChart dias={d.diaDia} /></div>
+              <MargemDonut receita={d.receita} custo={d.custo} />
+            </div>
+          )}
 
           {/* Formas de pagamento */}
           {d.pagamentosPorForma.length > 0 && (

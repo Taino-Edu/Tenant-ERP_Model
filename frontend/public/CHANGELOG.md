@@ -1,5 +1,25 @@
 # Changelog — Santuário Nerd
 
+## [v1.8.0] — 2026-06-25
+
+### Adicionado
+- **Atalhos de teclado globais**: navegação por tecla única sem precisar clicar no menu — D (Dashboard), P (PDV), E (Estoque), U (Clientes), C (Crediário), F (Financeiro), R (Relatórios), A (Campeonatos); Esc fecha qualquer modal aberto
+- **Painel de ajuda de atalhos**: tecla `?` abre/fecha overlay com todos os atalhos disponíveis e suas descrições
+- **Badges de atalho no Sidebar**: ao passar o mouse sobre itens do menu no desktop, a tecla correspondente aparece discretamente ao lado do nome
+- **Financeiro — gráfico de pizza para 1 dia**: quando o filtro cobre um único dia, o gráfico de barras é substituído automaticamente por um gráfico de pizza por forma de pagamento com hover interativo
+- **Manual atualizado**: nova seção 11 "Atalhos de Teclado" com descrição de todos os atalhos disponíveis
+
+### Corrigido
+- **Financeiro — labels sobrepostas no gráfico de barras**: labels do eixo X eram exibidas em toda barra com receita — em meses completos causava ~25 labels sobrepostas; corrigido para exibir apenas labels espaçadas dinamicamente de acordo com a largura disponível
+- **Login — mensagem de erro para rate limit**: erro 429 (muitas tentativas) mostrava "E-mail ou senha inválidos" — agora exibe "Muitas tentativas. Aguarde 1 minuto e tente novamente."
+- **Rate limiting — IP real com Cloudflare**: o rate limiter usava o IP do nó Cloudflare como chave, fazendo todos os usuários compartilharem o limite de 5 logins/minuto; corrigido para usar o header `CF-Connecting-IP` (IP real do cliente)
+- **Acesso de operadores ao Financeiro**: `AnalyticsController` usava `[Authorize(Roles="Admin")]` bloqueando operadores mesmo com permissão `financeiro`; corrigido para `[Authorize(Policy="AdminOnly")]`; `RotasPrefixo[Financeiro]` também atualizado com `/api/analytics/financeiro`
+- **Race condition em saldo de pontos/cashback**: deduções simultâneas podiam resultar em saldo negativo; substituído por `ExecuteUpdateAsync` com UPDATE atômico no banco
+- **MongoDB — busca TCG com regex de usuário**: input do usuário era passado diretamente a `BsonRegularExpression` permitindo ReDoS; corrigido com `Regex.Escape()`
+- **Venda avulsa — erros silenciosos**: `catch(() => {})` na carga inicial e no refresh de vendas do dia substituído por `toast.error()` com mensagem descritiva
+
+---
+
 ## [v1.7.5] — 2026-06-23
 
 ### Adicionado
