@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import { usePreferences } from '@/hooks/usePreferences'
@@ -1252,13 +1253,14 @@ export default function VendaAvulsaPage() {
   return (
     <div className="p-4 sm:p-6 space-y-5 animate-slide-up">
 
-      {wizardOpen && !loading && (
+      {wizardOpen && !loading && createPortal(
         <VendaWizard
           products={products}
           defaultDiscount={prefs.pdv.defaultDiscount}
           onComplete={r => { setWizard(false); setReceipt(r); refreshToday() }}
           onClose={() => setWizard(false)}
-        />
+        />,
+        document.body
       )}
 
       {/* Header */}
@@ -1539,12 +1541,13 @@ function HistoricoTab({ history, loading, date, onDateChange, onVendaUpdate }: {
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
 
-      {selectedVenda && (
+      {selectedVenda && createPortal(
         <VendaDetailModal
           venda={selectedVenda}
           onClose={() => setSelectedVenda(null)}
           onUpdate={updated => { setSelectedVenda(updated); onVendaUpdate(updated) }}
-        />
+        />,
+        document.body
       )}
 
       <div className="flex items-center gap-3 flex-wrap">
