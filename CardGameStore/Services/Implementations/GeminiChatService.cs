@@ -156,23 +156,61 @@ public class GeminiChatService : IAiChatService
             .Select(c => new { c.User.Name, Valor = c.ValorEmCentavos / 100m, c.DataVencimento })
             .ToListAsync();
 
-        // ── Estoque baixo ─────────────────────────────────────────────────────
+        // ── Estoque ───────────────────────────────────────────────────────────
         var estoqueBaixo = await _db.Products
             .Where(p => p.IsActive && p.StockQuantity <= p.MinimumStock)
             .Select(p => new { p.Name, p.StockQuantity, p.MinimumStock })
             .ToListAsync();
 
+        var totalProdutosAtivos = await _db.Products.CountAsync(p => p.IsActive);
+        var totalPecasEstoque   = await _db.Products.Where(p => p.IsActive).SumAsync(p => (long)p.StockQuantity);
+        var produtosZerados     = await _db.Products.CountAsync(p => p.IsActive && p.StockQuantity == 0);
+
+        // ── Vendas avulsas por categoria (30 dias) ─────────────────────────────
+        var vendasAvulsas30dias = todasVendas
+            .Where(v => v.SoldAt >= ha30Dias)
+            .ToList();
+
+        var totalVendasMes = (vendasHojeComanda / 100m) +
+            vendasAvulsas30dias.Sum(v => v.TotalInCents / 100m);
+
+        var totalVendasAvulsas30 = vendasAvulsas30dias.Sum(v => v.TotalInCents / 100m);
+
+        // ── Formas de pagamento mais usadas (30 dias) ─────────────────────────
+        var pagamentos30dias = vendasAvulsas30dias
+            .GroupBy(v => v.PaymentMethod)
+            .Select(g => new { metodo = g.Key, total = $"R$ {g.Sum(v => v.TotalInCents / 100m):N2}", qtd = g.Count() })
+            .OrderByDescending(g => g.qtd)
+            .Take(5)
+            .ToList();
+
         // ── Monta JSON de contexto (com anonimização LGPD) ────────────────────
         var ctx = new
         {
-            dataHora          = agora.ToString("dd/MM/yyyy HH:mm") + " (UTC)",
-            vendasHoje        = $"R$ {totalHoje:N2}",
+            dataHora               = agora.ToString("dd/MM/yyyy HH:mm") + " (UTC — Brasil = UTC-3)",
+            vendasHoje             = $"R$ {totalHoje:N2}",
+            vendasTotais30dias     = $"R$ {totalVendasMes:N2}",
+            vendasAvulsas30dias    = $"R$ {totalVendasAvulsas30:N2}",
             comandasAbertas,
-            ticketMedio30dias = $"R$ {ticketMedio:N2}",
+            ticketMedio30dias      = $"R$ {ticketMedio:N2}",
             totalClientes,
-            clientesAtivos30dias = clientesAtivos,
+            clientesAtivos30dias   = clientesAtivos,
             clientesInativos30dias = Math.Max(0, totalClientes - clientesAtivos),
-            topProdutos30dias = topProdutos.Select(p => $"{p.Nome} ({p.Qtd} un)"),
+            topProdutos30dias      = topProdutos.Select(p => $"{p.Nome} ({p.Qtd} un)"),
+            pagamentosMaisUsados   = pagamentos30dias,
+            estoque = new
+            {
+                totalProdutosAtivos,
+                totalPecasEmEstoque = totalPecasEstoque,
+                produtosZerados,
+                produtosEstoqueBaixo = estoqueBaixo.Count,
+            },
+            estoqueBaixoDetalhes = estoqueBaixo.Select(p => new
+            {
+                produto = p.Name,
+                estoque = p.StockQuantity,
+                minimo  = p.MinimumStock,
+            }),
             // LGPD: nomes reais substituídos por "Cliente #N" — não enviamos
             // dados pessoais identificáveis à API do Google Gemini.
             crediarios = crediarios.Select((c, index) => new
@@ -182,19 +220,19 @@ public class GeminiChatService : IAiChatService
                 vencimento = c.DataVencimento.ToString("dd/MM/yyyy"),
                 vencido    = c.DataVencimento < agora,
             }),
-            estoqueBaixo = estoqueBaixo.Select(p => new
-            {
-                produto  = p.Name,
-                estoque  = p.StockQuantity,
-                minimo   = p.MinimumStock,
-            }),
         };
 
         return JsonSerializer.Serialize(ctx, new JsonSerializerOptions { WriteIndented = false });
     }
 
     private static string BuildPrompt(string userMessage, string contextJson) => $"""
-        Você é um assistente de gestão da Santuário Nerd, loja especializada em card games (TCG).
+        Você é um assistente de gestão da Santuário Nerd, loja de cultura nerd localizada em José Bonifácio/SP.
+        A loja vende: Card Games (TCG como Pokémon, Magic, One Piece, Dragon Ball), Beyblade, Action Figures,
+        Acessórios para Card Games, Canecas, Garrafas, Presentes, Consumíveis e Refrigerantes.
+        O sistema de fidelidade usa "Pontos Maikon" — a cada R$1 gasto o cliente acumula 1 ponto.
+        O sistema possui: Frente de Caixa (venda avulsa), Comandas (mesas/atendimento), Crediário, Estoque,
+        Financeiro com Curva ABC, Campanhas, Campeonatos e Cardápios.
+
         Responda em português brasileiro, de forma direta e objetiva — máximo 3 parágrafos curtos.
         Use linguagem simples, sem jargões técnicos.
         Não invente dados: use APENAS os dados fornecidos abaixo.
