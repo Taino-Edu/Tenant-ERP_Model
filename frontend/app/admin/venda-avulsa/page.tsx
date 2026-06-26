@@ -540,7 +540,10 @@ function VendaWizard({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md max-h-[92vh] flex flex-col shadow-2xl animate-fade-in">
+      <div className={clsx(
+        "bg-surface-800 border border-surface-500 rounded-2xl w-full flex flex-col shadow-2xl animate-fade-in",
+        step === 2 ? "max-w-2xl max-h-[92vh]" : "max-w-md max-h-[92vh]"
+      )}>
 
         {/* Header + step indicator */}
         <div className="px-5 pt-4 pb-3 border-b border-surface-600 shrink-0">
@@ -580,7 +583,7 @@ function VendaWizard({
         </div>
 
         {/* Conteúdo */}
-        <div className="flex-1 overflow-y-auto p-5 min-h-0">
+        <div className={clsx("flex-1 p-5 min-h-0", step === 2 ? "overflow-hidden flex flex-col" : "overflow-y-auto")}>
 
           {/* ── Etapa 1: Cliente ──────────────────────────────── */}
           {step === 1 && (
@@ -652,112 +655,155 @@ function VendaWizard({
 
           {/* ── Etapa 2: Produtos ──────────────────────────────── */}
           {step === 2 && (
-            <div className="space-y-3">
-              <input
-                ref={searchRef}
-                className="input text-sm"
-                placeholder="Buscar produto, categoria ou código de barras…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && filtered.length === 1) {
-                    addToCart(filtered[0]); setSearch('')
-                  }
-                }}
-              />
+            <div className="flex gap-4 flex-1 min-h-0">
 
-              {categories.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    onClick={() => setCat(null)}
-                    className={clsx('px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
-                      !catFilter
-                        ? 'bg-brand-600/20 border-brand-500/60 text-brand-300'
-                        : 'bg-surface-700 border-surface-500 text-gray-400 hover:border-surface-400'
-                    )}
-                  >Todos</button>
-                  {categories.map(cat => (
+              {/* Coluna esquerda — catálogo */}
+              <div className="flex-1 min-w-0 flex flex-col gap-3">
+                <input
+                  ref={searchRef}
+                  className="input text-sm shrink-0"
+                  placeholder="Buscar produto, categoria ou código de barras…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && filtered.length === 1) {
+                      addToCart(filtered[0]); setSearch('')
+                    }
+                  }}
+                />
+
+                {categories.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 shrink-0">
                     <button
-                      key={cat}
-                      onClick={() => setCat(cat === catFilter ? null : cat)}
+                      onClick={() => setCat(null)}
                       className={clsx('px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
-                        catFilter === cat
+                        !catFilter
                           ? 'bg-brand-600/20 border-brand-500/60 text-brand-300'
                           : 'bg-surface-700 border-surface-500 text-gray-400 hover:border-surface-400'
                       )}
-                    >{cat}</button>
-                  ))}
-                </div>
-              )}
-
-              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-0.5">
-                {filtered.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-500">
-                    <PackageOpen className="w-8 h-8" />
-                    <p className="text-xs">Nenhum produto encontrado</p>
+                    >Todos</button>
+                    {categories.map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setCat(cat === catFilter ? null : cat)}
+                        className={clsx('px-2.5 py-1 rounded-full text-xs font-medium border transition-all',
+                          catFilter === cat
+                            ? 'bg-brand-600/20 border-brand-500/60 text-brand-300'
+                            : 'bg-surface-700 border-surface-500 text-gray-400 hover:border-surface-400'
+                        )}
+                      >{cat}</button>
+                    ))}
                   </div>
-                ) : filtered.map(p => {
-                  const inCart = cart.find(i => i.product.id === p.id)
-                  const price  = p.isOnPromo && p.discountPriceInCents != null ? p.discountPriceInCents : p.priceInCents
-                  return (
-                    <div
-                      key={p.id}
-                      className={clsx(
-                        'flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all',
-                        inCart ? 'border-brand-500/40 bg-brand-600/5' : 'bg-surface-700 border-surface-600 hover:border-surface-500'
-                      )}
-                    >
-                      <div className="flex-1 min-w-0">
-                        {p.isPreVenda && (
-                          <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded mr-1" style={{ backgroundColor: '#7C3AED', color: '#fff' }}>Pré</span>
+                )}
+
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 min-h-0">
+                  {filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-500">
+                      <PackageOpen className="w-8 h-8" />
+                      <p className="text-xs">Nenhum produto encontrado</p>
+                    </div>
+                  ) : filtered.map(p => {
+                    const inCart = cart.find(i => i.product.id === p.id)
+                    const price  = p.isOnPromo && p.discountPriceInCents != null ? p.discountPriceInCents : p.priceInCents
+                    return (
+                      <div
+                        key={p.id}
+                        className={clsx(
+                          'flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all',
+                          inCart ? 'border-brand-500/40 bg-brand-600/5' : 'bg-surface-700 border-surface-600 hover:border-surface-500'
                         )}
-                        {!p.isPreVenda && p.isOnPromo && (
-                          <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded mr-1" style={{ backgroundColor: '#EF4444', color: '#fff' }}>Promo</span>
-                        )}
-                        <span className="text-sm text-white font-medium">{p.name}</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-accent-gold text-xs font-bold">{fmt(price / 100)}</span>
-                          <span className="text-gray-600 text-[10px]">{p.stockQuantity} un.</span>
+                      >
+                        <div className="flex-1 min-w-0">
+                          {p.isPreVenda && (
+                            <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded mr-1" style={{ backgroundColor: '#7C3AED', color: '#fff' }}>Pré</span>
+                          )}
+                          {!p.isPreVenda && p.isOnPromo && (
+                            <span className="text-[9px] font-black uppercase px-1 py-0.5 rounded mr-1" style={{ backgroundColor: '#EF4444', color: '#fff' }}>Promo</span>
+                          )}
+                          <span className="text-sm text-white font-medium">{p.name}</span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-accent-gold text-xs font-bold">{fmt(price / 100)}</span>
+                            <span className="text-gray-600 text-[10px]">{p.stockQuantity} un.</span>
+                          </div>
                         </div>
-                      </div>
-                      {inCart ? (
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => inCart.quantity === 1 ? removeFromCart(p.id) : changeQty(p.id, -1)}
-                            className="w-6 h-6 rounded bg-surface-600 hover:bg-red-600/20 flex items-center justify-center transition-colors"
-                          >
-                            <Minus className="w-3 h-3 text-gray-300" />
-                          </button>
-                          <span className="text-sm font-bold text-white w-4 text-center">{inCart.quantity}</span>
-                          <button
-                            onClick={() => changeQty(p.id, 1)}
-                            disabled={inCart.quantity >= p.stockQuantity}
-                            className="w-6 h-6 rounded bg-surface-600 hover:bg-brand-600/20 flex items-center justify-center transition-colors disabled:opacity-40"
-                          >
-                            <Plus className="w-3 h-3 text-gray-300" />
-                          </button>
-                        </div>
-                      ) : (
                         <button
                           onClick={() => addToCart(p)}
-                          className="shrink-0 w-7 h-7 rounded-lg bg-brand-600/15 hover:bg-brand-600/25 border border-brand-500/30 flex items-center justify-center text-brand-400 transition-all"
+                          disabled={inCart ? inCart.quantity >= p.stockQuantity : false}
+                          className={clsx(
+                            'shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center transition-all',
+                            inCart
+                              ? 'bg-brand-600/25 border-brand-500/50 text-brand-300 hover:bg-brand-600/40'
+                              : 'bg-brand-600/15 border-brand-500/30 text-brand-400 hover:bg-brand-600/25',
+                            inCart && inCart.quantity >= p.stockQuantity ? 'opacity-40 cursor-not-allowed' : ''
+                          )}
                         >
-                          <Plus className="w-3.5 h-3.5" />
+                          <Plus className="w-4 h-4" />
                         </button>
-                      )}
-                    </div>
-                  )
-                })}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
 
-              {cart.length > 0 && (
-                <div className="bg-surface-900 rounded-xl px-3 py-2.5 flex items-center justify-between border border-surface-600">
-                  <span className="text-xs text-gray-400">
-                    {cart.reduce((s, i) => s + i.quantity, 0)} {cart.reduce((s, i) => s + i.quantity, 0) === 1 ? 'item' : 'itens'}
-                  </span>
-                  <span className="text-accent-gold font-bold text-sm">{fmt(subtotal / 100)}</span>
-                </div>
-              )}
+              {/* Divisor */}
+              <div className="w-px bg-surface-600 shrink-0" />
+
+              {/* Coluna direita — carrinho */}
+              <div className="w-52 shrink-0 flex flex-col gap-2 min-h-0">
+                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest shrink-0">
+                  Carrinho {cart.length > 0 && <span className="text-brand-400">({cart.reduce((s, i) => s + i.quantity, 0)})</span>}
+                </p>
+
+                {cart.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-600">
+                    <ShoppingBag className="w-8 h-8 opacity-30" />
+                    <p className="text-[11px] text-center">Nenhum item<br/>adicionado</p>
+                  </div>
+                ) : (
+                  <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
+                    {cart.map(({ product, quantity }) => {
+                      const price = product.isOnPromo && product.discountPriceInCents != null
+                        ? product.discountPriceInCents : product.priceInCents
+                      return (
+                        <div key={product.id} className="bg-surface-700 border border-surface-600 rounded-xl px-2.5 py-2 space-y-1.5">
+                          <p className="text-xs text-white font-medium leading-tight truncate">{product.name}</p>
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] text-accent-gold font-bold font-mono">
+                              {fmt(price * quantity / 100)}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => quantity === 1 ? removeFromCart(product.id) : changeQty(product.id, -1)}
+                                className="w-5 h-5 rounded bg-surface-600 hover:bg-red-600/30 flex items-center justify-center transition-colors"
+                              >
+                                <Minus className="w-2.5 h-2.5 text-gray-300" />
+                              </button>
+                              <span className="text-xs font-bold text-white w-4 text-center">{quantity}</span>
+                              <button
+                                onClick={() => changeQty(product.id, 1)}
+                                disabled={quantity >= product.stockQuantity}
+                                className="w-5 h-5 rounded bg-surface-600 hover:bg-brand-600/30 flex items-center justify-center transition-colors disabled:opacity-40"
+                              >
+                                <Plus className="w-2.5 h-2.5 text-gray-300" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {cart.length > 0 && (
+                  <div className="bg-surface-900 rounded-xl px-3 py-2.5 border border-surface-600 shrink-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-400 uppercase tracking-wider">Total</span>
+                      <span className="text-accent-gold font-black text-base">{fmt(subtotal / 100)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
 
