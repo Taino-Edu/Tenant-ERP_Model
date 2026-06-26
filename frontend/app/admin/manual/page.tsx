@@ -2,8 +2,8 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.8.0'
-const DATA = '25/06/2026'
+const VERSION = 'v1.8.1'
+const DATA = '26/06/2026'
 
 const SECOES = [
   {
@@ -46,9 +46,9 @@ const SECOES = [
     itens: [
       { t: 'Quando usar', d: 'Para vendas rápidas no balcão, sem QR Code. Ideal para clientes que chegam e pagam na hora.' },
       { t: 'Wizard 3 etapas', d: 'O PDV guia você por: 1) selecionar cliente, 2) adicionar produtos, 3) escolher pagamento. Navegue livremente entre etapas sem perder o carrinho.' },
-      { t: 'Adicionar produtos', d: 'Pesquise pelo nome, use código de barras ou a câmera do celular para escanear. Ajuste a quantidade antes de adicionar.' },
-      { t: 'Barra flutuante', d: 'Total e botão de finalizar sempre visíveis no rodapé, em qualquer etapa. Inclui desconto rápido embutido — sem precisar navegar entre abas.' },
-      { t: 'Desconto rápido', d: 'Aplique desconto percentual diretamente na barra flutuante. O desconto padrão é pré-configurável nas Preferências.' },
+      { t: 'Layout 2 colunas no step de produtos', d: 'Ao chegar na etapa de produtos, o modal expande mostrando o catálogo à esquerda e o carrinho à direita. Cada item adicionado aparece imediatamente no painel do carrinho com controles de quantidade — sem precisar avançar de etapa para ver o que foi adicionado.' },
+      { t: 'Adicionar produtos', d: 'Pesquise pelo nome, categoria ou código de barras. Clique em + para adicionar; o produto vai direto para o carrinho ao lado.' },
+      { t: 'Desconto rápido', d: 'Aplique desconto percentual diretamente na etapa de pagamento. O desconto padrão é pré-configurável nas Preferências.' },
       { t: 'Split de pagamento', d: 'Selecione uma segunda forma de pagamento e informe o valor. O saldo restante é calculado automaticamente.' },
       { t: 'Analytics do PDV', d: 'Histórico com gráfico de pico de horário, top produtos vendidos no período e breakdown por forma de pagamento.' },
     ],
@@ -62,11 +62,14 @@ const SECOES = [
     titulo: 'Estoque (Produtos)',
     cor: '#FB923C',
     itens: [
+      { t: 'Cards de resumo', d: 'Topo da tela exibe 4 cards em tempo real: total de peças em estoque, valor total imobilizado em estoque, quantidade de itens com estoque baixo e quantidade de itens zerados.' },
+      { t: 'Filtros por situação', d: 'Use os chips Todos / Normal / Estoque Baixo / Zerado para filtrar a lista. Os filtros Baixo e Zerado reordenam automaticamente do pior para o melhor.' },
+      { t: 'Drawer de detalhe', d: 'Clique em qualquer linha da tabela para abrir o painel lateral com imagem do produto, categoria, código de barras, preço, custo, barra de margem, barra de estoque vs mínimo, valor imobilizado e botões rápidos + / − de ajuste.' },
       { t: 'Cadastrar produto', d: 'Vá em Estoque → Novo Produto. Preencha nome, categoria, preço de custo, preço de venda e estoque inicial.' },
-      { t: 'Estoque mínimo', d: 'Defina um estoque mínimo para receber alertas quando o produto estiver baixo. Aparece em destaque no painel.' },
+      { t: 'Estoque mínimo', d: 'Defina um estoque mínimo para receber alertas quando o produto estiver baixo. Aparece nos cards de resumo e no filtro de situação.' },
       { t: 'Promoção', d: 'Ative o campo "Em Promoção" e informe o preço promocional. O sistema usa o preço com desconto automaticamente nas vendas.' },
       { t: 'Código de barras', d: 'Cadastre o código de barras para agilizar vendas no caixa — basta escanear para adicionar o produto.' },
-      { t: 'Ajuste de estoque', d: 'Para corrigir o estoque (entrada de mercadoria, inventário), use o botão de ajuste manual no produto.' },
+      { t: 'Ajuste de estoque', d: 'Para corrigir o estoque (entrada de mercadoria, inventário), use o botão de ajuste manual no drawer ou no modal de edição.' },
       { t: 'Desativar produto', d: 'Produtos inativos não aparecem nas vendas, mas o histórico é mantido. Use isso em vez de excluir.' },
     ],
     dicas: [
@@ -188,7 +191,7 @@ const SECOES = [
     cor: '#94A3B8',
     itens: [
       { t: 'Preferências por perfil', d: 'Cada usuário tem configurações salvas no servidor. Mudanças refletem em todos os dispositivos e são aplicadas em tempo real, sem recarregar a página.' },
-      { t: 'Assistente IA', d: 'Ative/desative o chat IA. Escolha entre botão arrastável (posição salva entre sessões) ou fixo em um dos 4 cantos da tela.' },
+      { t: 'Assistente IA — botão', d: 'Ative/desative o chat IA. Escolha entre botão arrastável (posição salva entre sessões) ou fixo em um dos 4 cantos da tela.' },
       { t: 'VLibras — Acessibilidade', d: 'Ative/desative o widget de tradução em Libras e defina em qual canto da tela ele aparece.' },
       { t: 'Dashboard — Painéis', d: 'Controle quais painéis aparecem na tab Análises: detalhe financeiro, gráfico 7 dias, previsão do mês, patrimônio, top clientes, LGPD e pré-inscrições.' },
       { t: 'Dashboard — Intervalo e cores', d: 'Configure o intervalo de atualização automática (15s, 30s, 1min ou manual) e o esquema de cores do gráfico (Padrão, Azul, Neon).' },
@@ -197,6 +200,41 @@ const SECOES = [
     dicas: [
       'Todas as mudanças são aplicadas em tempo real — sem precisar recarregar a página.',
       'Use "Resetar layout" nas configurações do Dashboard para reabrir todos os painéis colapsados.',
+    ],
+  },
+  {
+    num: '13',
+    titulo: 'Financeiro & Curva ABC',
+    cor: '#38BDF8',
+    itens: [
+      { t: 'Filtro de período', d: 'Selecione o intervalo de datas no topo ou use o mini filtro abaixo do gráfico para ajustar o período sem precisar rolar a página.' },
+      { t: 'Gráfico de receita por dia', d: 'Barras animadas com entrada suave. Clique em qualquer barra para abrir o detalhe do dia: donut por forma de pagamento, receita, custo e margem.' },
+      { t: 'Gráfico de formas de pagamento', d: 'Pizza interativa mostrando a proporção de cada método. Quando há apenas um método no período, a pizza aparece completa sem erro visual.' },
+      { t: 'Visão Simples', d: 'Tabela de produtos com receita, quantidade, preço médio, custo e margem. Colunas ordenáveis por clique.' },
+      { t: 'Curva ABC', d: 'Classifica automaticamente os produtos pela contribuição na receita: A = top 80% (produtos mais importantes), B = 80–95%, C = restante. Use para decidir o que priorizar no estoque.' },
+      { t: 'Gráfico de Pareto', d: 'Visualização da Curva ABC com barras coloridas por classe e linha de acumulado. Linhas de referência nos 80% e 95% facilitam a leitura.' },
+      { t: 'Filtros na Curva ABC', d: 'Clique em qualquer badge de classe (A, B ou C) ou em uma categoria para filtrar a tabela. Clique novamente para limpar o filtro.' },
+    ],
+    dicas: [
+      'Classe A = poucos produtos que respondem por 80% da receita — são os que nunca podem faltar no estoque.',
+      'O mini filtro de período abaixo do gráfico atualiza os dados sem disparar uma nova requisição separada — usa o mesmo estado do filtro do topo.',
+    ],
+  },
+  {
+    num: '14',
+    titulo: 'Assistente IA — Voz & Navegação',
+    cor: '#A78BFA',
+    itens: [
+      { t: 'Como acessar', d: 'Clique no botão roxo flutuante no canto da tela (arrastável). O widget abre acima do botão.' },
+      { t: 'Perguntas sobre a loja', d: 'Pergunte sobre vendas do dia, estoque baixo, crediários em aberto, top produtos e muito mais. O assistente responde com dados reais em tempo real.' },
+      { t: 'Navegação por comando', d: 'Digite ou fale "abre o estoque", "vai pro financeiro", "abre a frente de caixa" e o assistente navega automaticamente para a página e fecha o widget.' },
+      { t: 'Entrada por voz', d: 'Clique no ícone de microfone no campo de texto. Fale normalmente em português — a transcrição é enviada automaticamente ao assistente. Disponível no Chrome e Edge.' },
+      { t: 'Resposta em voz', d: 'Clique no ícone de alto-falante no cabeçalho do widget para ativar leitura em voz alta das respostas em PT-BR.' },
+      { t: 'Sugestões rápidas', d: 'Quando o chat está vazio, aparecem sugestões de perguntas e comandos para facilitar o uso.' },
+    ],
+    dicas: [
+      'O microfone funciona melhor no Chrome e Edge — Firefox não tem suporte nativo ao reconhecimento de voz.',
+      'Os dados enviados ao assistente são anonimizados (LGPD): nomes de clientes são substituídos por "Cliente #N" antes de ir ao Google Gemini.',
     ],
   },
 ]

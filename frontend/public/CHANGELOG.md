@@ -1,5 +1,31 @@
 # Changelog — Santuário Nerd
 
+## [v1.8.1] — 2026-06-26
+
+### Adicionado
+- **Financeiro — Curva ABC**: classificação automática de produtos em A (80% da receita), B (95%) e C (restante); gráfico de Pareto com barras coloridas por classe, linha de acumulado e linhas de referência 80%/95%; tabela com colunas ordenáveis (Qtd, Preço Médio, Margem, Receita) e filtros por classe e categoria; painel explicativo do conceito ABC integrado
+- **Financeiro — gráfico animado**: entrada suave com animação spring nas barras do gráfico de receita por dia (scaleY + easing cubic-bezier)
+- **Financeiro — mini filtro de período**: contador de dias disponível diretamente abaixo do gráfico, sem precisar subir até o topo da página
+- **Financeiro — pop-up de detalhe do dia**: ao clicar em uma barra do gráfico, abre modal com donut por forma de pagamento, receita, custo e margem daquele dia
+- **Estoque — cards de resumo**: painel com total de peças em estoque, valor imobilizado, contagem de itens com estoque baixo e zerado
+- **Estoque — filtros por situação**: chips Todos / Normal / Estoque Baixo / Zerado com contagens em tempo real; ao selecionar Baixo ou Zerado, lista é reordenada automaticamente do pior para o melhor
+- **Estoque — drawer de detalhe do produto**: painel deslizante ao clicar em qualquer linha — exibe imagem, nome, categoria, código de barras, preço, custo, barra de margem, barra de estoque vs mínimo, valor imobilizado e botões rápidos de ajuste de quantidade
+- **Frente de Caixa — layout 2 colunas no step de produtos**: catálogo de produtos à esquerda + painel de carrinho sempre visível à direita; feedback imediato ao adicionar itens sem precisar avançar para a próxima etapa
+- **Assistente IA — navegação por voz**: comando de texto ou voz redireciona o usuário para qualquer página do sistema ("abre o estoque", "vai pro financeiro", "nova venda")
+- **Assistente IA — entrada por voz**: botão de microfone no widget; fala é transcrita automaticamente e enviada ao Gemini (Chrome/Edge)
+- **Assistente IA — resposta em voz**: toggle de alto-falante no cabeçalho do widget para leitura em voz alta das respostas em PT-BR
+- **Assistente IA — contexto atualizado**: Gemini agora conhece todas as categorias da loja (Beyblade, Action Figures, Canecas, etc.), formas de pagamento dos últimos 30 dias, total de peças e produtos zerados em estoque
+
+### Corrigido
+- **Financeiro — tooltip saindo do viewBox em barras altas**: tooltip ficava cortado pelo viewBox em produtos com alta receita; corrigido com clamping de posição vertical
+- **Financeiro — tooltip do Pareto saindo da área**: mesmo problema no gráfico de Pareto; corrigido com clamping horizontal e vertical
+- **Financeiro — pizza 100% invisível**: quando apenas uma forma de pagamento cobria 100% das vendas, o arco SVG degenerava (ponto de início = fim) e ficava transparente; corrigido renderizando como dois semicírculos de 180°
+- **Frente de Caixa — backdrop não cobrindo a sidebar**: modal com `position: fixed` ficava preso dentro do `<main overflow-auto>`, não cobrindo o menu lateral; corrigido com `createPortal` renderizando no `document.body`
+- **Estoque — drawer sem imagem**: drawer usava apenas o campo `imageUrls` (array), mas a maioria dos produtos salva a imagem em `imageUrl` (string); corrigido com fallback para o campo singular
+- **Sidebar — logo incorreta**: avatar do Maikon substituído pela logo oficial em todas as ocorrências da sidebar (desktop e mobile)
+
+---
+
 ## [v1.8.0] — 2026-06-25
 
 ### Adicionado
