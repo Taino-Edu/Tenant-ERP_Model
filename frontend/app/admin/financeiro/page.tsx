@@ -1146,13 +1146,13 @@ function BarChart({ dias, onDayClick }: {
 
 // ── Gráfico de pizza para análise de 1 dia ────────────────────────────────────
 const FORMA_CORES: Record<string, string> = {
-  Pix:           '#42B6EE',  // brand blue
-  Dinheiro:      '#10b981',  // emerald
-  CartaoCredito: '#818cf8',  // indigo (família do brand)
-  CartaoDebito:  '#38bdf8',  // sky (família do brand)
-  Crediario:     '#f59e0b',  // amber
-  Pontos:        '#84cc16',  // lime
-  Cashback:      '#f43f5e',  // rose
+  Dinheiro:      '#10b981',
+  Pix:           '#42B6EE',
+  CartaoCredito: '#a855f7',
+  CartaoDebito:  '#3b82f6',
+  Crediario:     '#f59e0b',
+  Pontos:        '#eab308',
+  Cashback:      '#ec4899',
 }
 
 function DayPieChart({ formas, receita, custo, date }: {
@@ -1203,7 +1203,23 @@ function DayPieChart({ formas, receita, custo, date }: {
               const isHov  = hovered === s.forma
               const outerR = isHov ? r + 7 : r
               const color  = FORMA_CORES[s.forma] ?? '#6b7280'
-              return (
+              // Quando o slice é 100% o arco SVG degenera (ponto inicial = final).
+              // Nesse caso renderiza dois semicírculos para formar o anel completo.
+              const isFull = s.ea - s.sa >= 359.99
+              return isFull ? (
+                <g key={s.forma}
+                  onMouseEnter={() => setHovered(s.forma)}
+                  onMouseLeave={() => setHovered(null)}
+                  className="cursor-pointer"
+                >
+                  <path d={arcPath(s.sa, s.sa + 179.99, outerR)} fill={color}
+                    opacity={hovered && !isHov ? 0.4 : 1}
+                    style={{ filter: isHov ? 'brightness(1.15)' : undefined }} />
+                  <path d={arcPath(s.sa + 180, s.sa + 359.99, outerR)} fill={color}
+                    opacity={hovered && !isHov ? 0.4 : 1}
+                    style={{ filter: isHov ? 'brightness(1.15)' : undefined }} />
+                </g>
+              ) : (
                 <path
                   key={s.forma}
                   d={arcPath(s.sa, s.ea, outerR)}
