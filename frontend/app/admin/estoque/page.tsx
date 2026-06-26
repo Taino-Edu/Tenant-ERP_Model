@@ -2,10 +2,156 @@
 import { useEffect, useRef, useState } from 'react'
 import { productApi, categoryApi, Product, ProductCategory } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2 } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import CameraScanner from '@/components/CameraScanner'
+
+// ── Drawer de detalhe do produto ─────────────────────────────────────────────
+function ProductDrawer({ product, onClose, onEdit, onStock }: {
+  product: Product
+  onClose: () => void
+  onEdit:  () => void
+  onStock: (id: string, delta: number) => void
+}) {
+  const [imgIdx, setImgIdx] = useState(0)
+  const images   = product.imageUrls ?? []
+  const minStock = product.minimumStock ?? 5
+  const stockPct = minStock > 0 ? Math.min(100, (product.stockQuantity / minStock) * 100) : 100
+  const valorImob = product.stockQuantity * (product.costPriceInCents / 100)
+
+  const status =
+    product.stockQuantity === 0 ? { label: 'Zerado',        cls: 'text-red-400 bg-red-500/15 border-red-500/30'     } :
+    product.isLowStock          ? { label: 'Estoque Baixo', cls: 'text-amber-400 bg-amber-500/15 border-amber-500/30' } :
+                                  { label: 'Normal',        cls: 'text-emerald-400 bg-emerald-500/15 border-emerald-500/30' }
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="fixed right-0 top-0 h-full w-full max-w-sm z-50 bg-surface-800 border-l border-surface-500 shadow-2xl flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600 shrink-0">
+          <span className="text-sm font-semibold text-gray-300">Detalhes do Produto</span>
+          <div className="flex items-center gap-2">
+            <button onClick={onEdit} className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1.5">
+              <Edit2 className="w-3.5 h-3.5" /> Editar
+            </button>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-600 text-gray-400 hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {/* Imagem */}
+          {images.length > 0 ? (
+            <div className="space-y-2">
+              <div className="aspect-square rounded-xl overflow-hidden bg-surface-700 border border-surface-600">
+                <img src={images[imgIdx]} alt={product.name} className="w-full h-full object-contain" />
+              </div>
+              {images.length > 1 && (
+                <div className="flex gap-2 justify-center flex-wrap">
+                  {images.map((url, i) => (
+                    <button key={i} onClick={() => setImgIdx(i)}
+                      className={`w-10 h-10 rounded-lg overflow-hidden border-2 transition-all ${i === imgIdx ? 'border-brand-400' : 'border-surface-600 opacity-40 hover:opacity-70'}`}
+                    >
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="aspect-square rounded-xl bg-surface-700 border border-surface-600 flex items-center justify-center">
+              <Package className="w-16 h-16 text-gray-600" />
+            </div>
+          )}
+
+          {/* Nome + status + categoria */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${status.cls}`}>{status.label}</span>
+              {product.isPreVenda && (
+                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: '#7C3AED' }}>Pré-venda</span>
+              )}
+            </div>
+            <h2 className="text-base font-bold text-white leading-snug">{product.name}</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="badge bg-surface-600 text-gray-300 border-surface-500">{product.category}</span>
+              {product.barcode && (
+                <span className="text-[10px] font-mono text-gray-500 flex items-center gap-1">
+                  <ScanBarcode className="w-3 h-3" />{product.barcode}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Preços */}
+          <div className="bg-surface-700 rounded-xl p-4 space-y-3 border border-surface-600">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Preço de Venda</span>
+              <span className="text-lg font-black font-mono text-accent-gold">
+                R$ {product.priceInReais.toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+            {product.costPriceInCents > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Custo</span>
+                  <span className="text-sm font-mono text-red-400">R$ {product.costPriceInReais.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Margem</span>
+                  <span className={`text-sm font-bold font-mono ${product.marginInReais >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {product.marginPercent.toFixed(1)}% · R$ {product.marginInReais.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-surface-600 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${product.marginInReais >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}
+                    style={{ width: `${Math.min(100, Math.max(0, product.marginPercent))}%` }} />
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Estoque */}
+          <div className="bg-surface-700 rounded-xl p-4 space-y-3 border border-surface-600">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Estoque Atual</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => onStock(product.id, -1)}
+                  className="w-7 h-7 rounded bg-surface-600 hover:bg-red-600/30 text-gray-400 hover:text-red-400 transition-colors flex items-center justify-center text-base">−</button>
+                <span className={`text-2xl font-black font-mono w-10 text-center ${
+                  product.stockQuantity === 0 ? 'text-red-400' : product.isLowStock ? 'text-amber-400' : 'text-white'
+                }`}>{product.stockQuantity}</span>
+                <button onClick={() => onStock(product.id, +1)}
+                  className="w-7 h-7 rounded bg-surface-600 hover:bg-emerald-600/30 text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center text-base">+</button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Mínimo: {minStock} un.</span>
+              <span>{product.stockQuantity > 0 ? `${stockPct.toFixed(0)}% do mínimo` : 'Sem estoque'}</span>
+            </div>
+            <div className="h-2 bg-surface-600 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${
+                product.stockQuantity === 0 ? 'bg-red-500' : product.isLowStock ? 'bg-amber-500' : 'bg-emerald-500'
+              }`} style={{ width: `${Math.min(100, stockPct)}%` }} />
+            </div>
+            {product.costPriceInCents > 0 && (
+              <div className="flex items-center justify-between text-xs pt-1 border-t border-surface-600">
+                <span className="text-gray-500">Valor imobilizado</span>
+                <span className="font-mono font-semibold text-brand-400">
+                  R$ {valorImob.toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
 
 function ProductModal({
   product, categories, onClose, onSave,
@@ -291,12 +437,14 @@ function ProductModal({
 }
 
 export default function EstoquePage() {
-  const [products, setProducts]     = useState<Product[]>([])
-  const [categories, setCategories] = useState<ProductCategory[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [search, setSearch]         = useState('')
-  const [modal, setModal]           = useState<Partial<Product> | null | undefined>(undefined)
-  const [catFilter, setCatFilter]   = useState('')
+  const [products, setProducts]       = useState<Product[]>([])
+  const [categories, setCategories]   = useState<ProductCategory[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [search, setSearch]           = useState('')
+  const [modal, setModal]             = useState<Partial<Product> | null | undefined>(undefined)
+  const [catFilter, setCatFilter]     = useState('')
+  const [stockFilter, setStockFilter] = useState<'todos' | 'normal' | 'baixo' | 'zerado'>('todos')
+  const [drawer, setDrawer]           = useState<Product | null>(null)
 
   const fetch = async () => {
     setLoading(true)
@@ -309,10 +457,26 @@ export default function EstoquePage() {
   }
   useEffect(() => { fetch() }, [])
 
-  const filtered = products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) &&
-    (!catFilter || p.category === catFilter)
-  )
+  const filtered = products
+    .filter(p => {
+      if (!p.name.toLowerCase().includes(search.toLowerCase())) return false
+      if (catFilter && p.category !== catFilter) return false
+      if (stockFilter === 'baixo')   return p.isLowStock && p.stockQuantity > 0
+      if (stockFilter === 'zerado')  return p.stockQuantity === 0
+      if (stockFilter === 'normal')  return !p.isLowStock && p.stockQuantity > 0
+      return true
+    })
+    .sort((a, b) => {
+      if (stockFilter === 'baixo' || stockFilter === 'zerado') return a.stockQuantity - b.stockQuantity
+      return 0
+    })
+
+  // Resumo
+  const totalPecas    = products.reduce((s, p) => s + p.stockQuantity, 0)
+  const valorImob     = products.reduce((s, p) => s + p.stockQuantity * (p.costPriceInCents / 100), 0)
+  const qtdBaixo      = products.filter(p => p.isLowStock && p.stockQuantity > 0).length
+  const qtdZerado     = products.filter(p => p.stockQuantity === 0).length
+  const qtdNormal     = products.filter(p => !p.isLowStock && p.stockQuantity > 0).length
 
   async function handleSave(form: Partial<Product>) {
     try {
@@ -362,6 +526,14 @@ export default function EstoquePage() {
       {modal !== undefined && (
         <ProductModal product={modal} categories={categories} onClose={() => setModal(undefined)} onSave={handleSave} />
       )}
+      {drawer && (
+        <ProductDrawer
+          product={drawer}
+          onClose={() => setDrawer(null)}
+          onEdit={() => { setModal(drawer); setDrawer(null) }}
+          onStock={async (id, delta) => { await handleStock(id, delta); setDrawer(prev => prev ? { ...prev, stockQuantity: prev.stockQuantity + delta } : null) }}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -393,6 +565,59 @@ export default function EstoquePage() {
         </div>
       </div>
 
+      {/* Cards de resumo */}
+      {!loading && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <button onClick={() => setStockFilter('todos')}
+            className={`card flex items-center gap-3 text-left transition-all hover:border-surface-400 ${stockFilter === 'todos' ? 'border-brand-500/50 bg-brand-600/5' : ''}`}>
+            <div className="w-9 h-9 rounded-lg bg-brand-600/15 flex items-center justify-center shrink-0">
+              <Layers className="w-4 h-4 text-brand-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Total de peças</p>
+              <p className="text-xl font-black font-mono text-brand-400">{totalPecas.toLocaleString('pt-BR')}</p>
+            </div>
+          </button>
+
+          <button onClick={() => setStockFilter('todos')}
+            className="card flex items-center gap-3 text-left transition-all hover:border-surface-400">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
+              <DollarSign className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Valor imobilizado</p>
+              <p className="text-sm font-black font-mono text-emerald-400">
+                {valorImob >= 1000
+                  ? `R$ ${(valorImob / 1000).toFixed(1).replace('.', ',')}k`
+                  : `R$ ${valorImob.toFixed(0)}`}
+              </p>
+            </div>
+          </button>
+
+          <button onClick={() => setStockFilter(stockFilter === 'baixo' ? 'todos' : 'baixo')}
+            className={`card flex items-center gap-3 text-left transition-all hover:border-amber-500/40 ${stockFilter === 'baixo' ? 'border-amber-500/50 bg-amber-500/5' : ''}`}>
+            <div className="w-9 h-9 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
+              <TrendingDown className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Estoque baixo</p>
+              <p className="text-xl font-black font-mono text-amber-400">{qtdBaixo}</p>
+            </div>
+          </button>
+
+          <button onClick={() => setStockFilter(stockFilter === 'zerado' ? 'todos' : 'zerado')}
+            className={`card flex items-center gap-3 text-left transition-all hover:border-red-500/40 ${stockFilter === 'zerado' ? 'border-red-500/50 bg-red-500/5' : ''}`}>
+            <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0">
+              <CircleOff className="w-4 h-4 text-red-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Sem estoque</p>
+              <p className="text-xl font-black font-mono text-red-400">{qtdZerado}</p>
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -404,6 +629,28 @@ export default function EstoquePage() {
           {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
       </div>
+
+      {/* Chips de situação */}
+      {!loading && (
+        <div className="flex gap-2 flex-wrap">
+          {([
+            { key: 'todos',  label: 'Todos',          count: products.length, cls: 'border-surface-500 text-gray-300' },
+            { key: 'normal', label: 'Normal',          count: qtdNormal,       cls: 'border-emerald-500/40 text-emerald-300' },
+            { key: 'baixo',  label: 'Estoque baixo',  count: qtdBaixo,        cls: 'border-amber-500/40 text-amber-300' },
+            { key: 'zerado', label: 'Zerado',          count: qtdZerado,       cls: 'border-red-500/40 text-red-300' },
+          ] as const).map(({ key, label, count, cls }) => (
+            <button key={key} onClick={() => setStockFilter(key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                stockFilter === key ? `${cls} bg-surface-700` : 'border-surface-600 text-gray-500 hover:border-surface-500 hover:text-gray-300'
+              }`}>
+              {label}
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                stockFilter === key ? 'bg-surface-600' : 'bg-surface-700'
+              }`}>{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Tabela */}
       {loading ? (
@@ -423,7 +670,7 @@ export default function EstoquePage() {
             </thead>
             <tbody className="divide-y divide-surface-500">
               {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-surface-600/30 transition-colors">
+                <tr key={p.id} className="hover:bg-surface-600/30 transition-colors cursor-pointer" onClick={() => setDrawer(p)}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-white">{p.name}</p>
@@ -455,15 +702,19 @@ export default function EstoquePage() {
                       : <span className="text-gray-400">—</span>
                     }
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button onClick={() => handleStock(p.id, -1)} className="w-6 h-6 rounded bg-surface-600 hover:bg-red-600/30 text-gray-400 hover:text-red-400 transition-colors flex items-center justify-center text-lg leading-none">−</button>
-                      <span className={p.isLowStock ? 'text-red-400 font-bold' : 'text-white'}>{p.stockQuantity}</span>
+                      <span className={`font-bold ${p.stockQuantity === 0 ? 'text-red-400' : p.isLowStock ? 'text-amber-400' : 'text-white'}`}>{p.stockQuantity}</span>
                       <button onClick={() => handleStock(p.id, +1)} className="w-6 h-6 rounded bg-surface-600 hover:bg-emerald-600/30 text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center text-lg leading-none">+</button>
-                      {p.isLowStock && <AlertTriangle className="w-3.5 h-3.5 text-red-400" aria-label="Estoque baixo" />}
+                      {p.stockQuantity === 0
+                        ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/25">Zerado</span>
+                        : p.isLowStock
+                          ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/25 flex items-center gap-0.5"><AlertTriangle className="w-2.5 h-2.5" />Baixo</span>
+                          : null}
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={async () => {
                         try {
@@ -476,7 +727,7 @@ export default function EstoquePage() {
                       className={`text-base transition-opacity ${p.showOnMarketplace ? 'opacity-100' : 'opacity-25'}`}
                     >🛍️</button>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-2">
                       <button onClick={() => setModal(p)} className="p-1.5 rounded hover:bg-brand-600/20 text-gray-500 hover:text-brand-400 transition-colors">
                         <Edit2 className="w-4 h-4" />
