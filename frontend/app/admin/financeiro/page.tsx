@@ -44,6 +44,363 @@ const FORMA_ICONS: Record<string, React.ReactNode> = {
   Cashback:      <Wallet     className="w-4 h-4 text-pink-400"    />,
 }
 
+// ── Curva ABC ─────────────────────────────────────────────────────────────────
+type AbcClass = 'A' | 'B' | 'C'
+
+interface AbcProduto {
+  nome: string; receita: number; qtd: number; custo: number
+  categoria?: string; abcClass: AbcClass; cumPct: number; pct: number
+}
+
+const ABC_COLORS: Record<AbcClass, { bar: string; text: string; bg: string; border: string }> = {
+  A: { bar: '#10b981', text: 'text-emerald-400', bg: 'bg-emerald-500/15', border: 'border-emerald-500/40' },
+  B: { bar: '#f59e0b', text: 'text-yellow-400',  bg: 'bg-yellow-500/15',  border: 'border-yellow-500/40'  },
+  C: { bar: '#ef4444', text: 'text-red-400',     bg: 'bg-red-500/15',     border: 'border-red-500/40'     },
+}
+
+function classifyABC(produtos: { nome: string; receita: number; qtd: number; custo: number; categoria?: string }[]): AbcProduto[] {
+  const sorted = [...produtos].sort((a, b) => b.receita - a.receita)
+  const total  = sorted.reduce((s, p) => s + p.receita, 0)
+  let cum = 0
+  return sorted.map(p => {
+    cum += p.receita
+    const cumPct = total > 0 ? (cum / total) * 100 : 0
+    const pct    = total > 0 ? (p.receita / total) * 100 : 0
+    const abcClass: AbcClass = cumPct <= 80 ? 'A' : cumPct <= 95 ? 'B' : 'C'
+    return { nome: p.nome, receita: p.receita, qtd: p.qtd, custo: p.custo, categoria: p.categoria, abcClass, cumPct, pct }
+  })
+}
+
+type AbcSortCol = 'receita' | 'qtd' | 'margemPct' | 'precoMedio'
+
+function CurvaABCSection({ produtos, targetPct }: {
+  produtos: { nome: string; receita: number; qtd: number; custo: number; categoria?: string }[]
+  targetPct: number
+}) {
+  const [hoveredIdx,  setHoveredIdx]  = useState<number | null>(null)
+  const [sortCol,     setSortCol]     = useState<AbcSortCol>('receita')
+  const [sortDir,     setSortDir]     = useState<'desc' | 'asc'>('desc')
+  const [filterClass, setFilterClass] = useState<AbcClass | null>(null)
+  const [filterCat,   setFilterCat]   = useState<string | null>(null)
+
+  const abcData  = useMemo(() => classifyABC(produtos), [produtos])
+  const grandTotal = useMemo(() => produtos.reduce((s, p) => s + p.receita, 0), [produtos])
+
+  const catWeights = useMemo(() => {
+    const map: Record<string, { receita: number; qtd: number; count: number }> = {}
+    abcData.forEach(p => {
+      const cat = p.categoria || 'Sem categoria'
+      if (!map[cat]) map[cat] = { receita: 0, qtd: 0, count: 0 }
+      map[cat].receita += p.receita
+      map[cat].qtd     += p.qtd
+      map[cat].count   += 1
+    })
+    const cats = Object.entries(map).sort((a, b) => b[1].receita - a[1].receita)
+    let cumCat = 0
+    return cats.map(([cat, v]) => {
+      cumCat += v.receita
+      const cumPct = grandTotal > 0 ? (cumCat / grandTotal) * 100 : 0
+      const pct    = grandTotal > 0 ? (v.receita  / grandTotal) * 100 : 0
+      const cls: AbcClass = cumPct <= 80 ? 'A' : cumPct <= 95 ? 'B' : 'C'
+      return { cat, ...v, pct, cumPct, cls }
+    })
+  }, [abcData, grandTotal])
+
+  const tableData = useMemo(() => {
+    let rows = [...abcData]
+    if (filterClass) rows = rows.filter(p => p.abcClass === filterClass)
+    if (filterCat)   rows = rows.filter(p => (p.categoria || 'Sem categoria') === filterCat)
+    rows.sort((a, b) => {
+      let va: number, vb: number
+      if (sortCol === 'qtd') { va = a.qtd; vb = b.qtd }
+      else if (sortCol === 'precoMedio') {
+        va = a.qtd > 0 ? a.receita / a.qtd : 0
+        vb = b.qtd > 0 ? b.receita / b.qtd : 0
+      } else if (sortCol === 'margemPct') {
+        const pm = (x: AbcProduto) => x.qtd > 0 ? x.receita / x.qtd : 0
+        const cm = (x: AbcProduto) => x.qtd > 0 ? x.custo  / x.qtd : 0
+        va = pm(a) > 0 && cm(a) > 0 ? ((pm(a) - cm(a)) / pm(a)) * 100 : -999
+        vb = pm(b) > 0 && cm(b) > 0 ? ((pm(b) - cm(b)) / pm(b)) * 100 : -999
+      } else { va = a.receita; vb = b.receita }
+      return sortDir === 'desc' ? vb - va : va - vb
+    })
+    return rows
+  }, [abcData, filterClass, filterCat, sortCol, sortDir])
+
+  function toggleSort(col: AbcSortCol) {
+    if (sortCol === col) setSortDir(d => d === 'desc' ? 'asc' : 'desc')
+    else { setSortCol(col); setSortDir('desc') }
+  }
+
+  const chartData  = abcData.slice(0, 30)
+  const maxReceita = chartData[0]?.receita ?? 1
+  const W = 700, H = 200, PAD = { top: 14, right: 46, bottom: 36, left: 54 }
+  const chartW = W - PAD.left - PAD.right
+  const chartH = H - PAD.top  - PAD.bottom
+  const barW   = Math.max(5, chartW / (chartData.length || 1) - 2)
+
+  const linePoints = chartData.map((p, i) => {
+    const slotW = chartW / chartData.length
+    const x = PAD.left + slotW * i + slotW / 2
+    const y = PAD.top  + chartH * (1 - p.cumPct / 100)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+
+  const hasFilters = filterClass !== null || filterCat !== null
+
+  return (
+    <div className="space-y-4">
+      {/* Resumo A/B/C */}
+      <div className="grid grid-cols-3 gap-3">
+        {(['A', 'B', 'C'] as AbcClass[]).map(cls => {
+          const items = abcData.filter(p => p.abcClass === cls)
+          const clsRec = items.reduce((s, p) => s + p.receita, 0)
+          const c = ABC_COLORS[cls]
+          const isActive = filterClass === cls
+          return (
+            <button key={cls} onClick={() => setFilterClass(isActive ? null : cls)}
+              className={`rounded-xl p-4 border text-left transition-all ${isActive ? `${c.bg} ${c.border} border-2` : 'bg-surface-800 border-surface-600 hover:border-surface-400'}`}
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className={`text-2xl font-black ${c.text}`}>{cls}</span>
+                <span className="text-[10px] text-gray-500">{items.length} produto{items.length !== 1 ? 's' : ''}</span>
+              </div>
+              <p className={`text-sm font-bold font-mono ${c.text}`}>{fmt(clsRec)}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {cls === 'A' ? 'Vitais · 80% receita' : cls === 'B' ? 'Importantes · 15%' : 'Periféricos · 5%'}
+              </p>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Pareto Chart */}
+      <div className="bg-surface-800 rounded-xl p-4 border border-surface-600">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+            <BarChart2 className="w-3.5 h-3.5 text-brand-400" /> Curva ABC — Pareto
+            {chartData.length < abcData.length && <span className="text-gray-600 font-normal">(top {chartData.length})</span>}
+          </h4>
+          <div className="flex items-center gap-3 text-[10px] text-gray-500">
+            {(['A','B','C'] as AbcClass[]).map(cls => (
+              <span key={cls} className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: ABC_COLORS[cls].bar }} />
+                {cls}
+              </span>
+            ))}
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-4 h-0.5 bg-brand-400" />% Acum.
+            </span>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: Math.max(300, chartData.length * 20) }}>
+            {[0.25, 0.5, 0.75, 1].map(f => (
+              <g key={f}>
+                <line x1={PAD.left} y1={PAD.top + chartH * (1 - f)} x2={W - PAD.right} y2={PAD.top + chartH * (1 - f)} stroke="#32323f" strokeWidth="1" />
+                <text x={PAD.left - 4} y={PAD.top + chartH * (1 - f) + 4} textAnchor="end" fontSize="8" fill="#6b7280">
+                  {fmtShort(maxReceita * f)}
+                </text>
+              </g>
+            ))}
+            {([80, 95] as const).map(pct => {
+              const y = PAD.top + chartH * (1 - pct / 100)
+              const col = pct === 80 ? '#10b981' : '#f59e0b'
+              return (
+                <g key={pct}>
+                  <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y} stroke={col} strokeWidth="1" strokeDasharray="4,3" opacity="0.7" />
+                  <text x={W - PAD.right + 3} y={y + 3} fontSize="7" fill={col}>{pct}%</text>
+                </g>
+              )
+            })}
+            {[25, 50, 75, 100].map(pct => (
+              <text key={pct} x={W - PAD.right + 3} y={PAD.top + chartH * (1 - pct / 100) + 3} fontSize="7" fill="#4b5563">{pct}%</text>
+            ))}
+            {chartData.map((p, i) => {
+              const slotW = chartW / chartData.length
+              const x = PAD.left + slotW * i + (slotW - barW) / 2
+              const bH = Math.max(2, (p.receita / maxReceita) * chartH)
+              const color = ABC_COLORS[p.abcClass].bar
+              const isHov = hoveredIdx === i
+              return (
+                <g key={p.nome} onMouseEnter={() => setHoveredIdx(i)} onMouseLeave={() => setHoveredIdx(null)} className="cursor-pointer">
+                  <rect x={x} y={PAD.top + chartH - bH} width={barW} height={bH}
+                    fill={color} opacity={hoveredIdx === null || isHov ? 1 : 0.35} rx="2"
+                    style={{ filter: isHov ? 'brightness(1.2)' : undefined }} />
+                  {chartData.length <= 20 && (
+                    <text x={x + barW / 2} y={H - 2} textAnchor="middle" fontSize="5.5" fill={isHov ? '#d1d5db' : '#6b7280'}>
+                      {p.nome.slice(0, 6)}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+            {chartData.length > 1 && (
+              <polyline points={linePoints} fill="none" stroke="#42B6EE" strokeWidth="1.5" strokeLinejoin="round" />
+            )}
+            {hoveredIdx !== null && chartData[hoveredIdx] && (() => {
+              const p = chartData[hoveredIdx]
+              const slotW = chartW / chartData.length
+              const cx2 = PAD.left + slotW * hoveredIdx + slotW / 2
+              const cy2 = PAD.top + chartH * (1 - p.cumPct / 100)
+              const bx = Math.min(cx2 - 65, W - PAD.right - 130)
+              return (
+                <g>
+                  <circle cx={cx2} cy={cy2} r="3.5" fill="#42B6EE" stroke="#1e1e2e" strokeWidth="1" />
+                  <rect x={Math.max(PAD.left, bx)} y={cy2 - 42} width="140" height="36" rx="5" fill="#1e1e2e" stroke="#32323f" strokeWidth="1" />
+                  <text x={Math.max(PAD.left, bx) + 70} y={cy2 - 28} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">
+                    {p.nome.length > 22 ? p.nome.slice(0, 22) + '…' : p.nome}
+                  </text>
+                  <text x={Math.max(PAD.left, bx) + 70} y={cy2 - 16} textAnchor="middle" fontSize="7.5" fill={ABC_COLORS[p.abcClass].bar}>
+                    {fmt(p.receita)} · {p.pct.toFixed(1)}% · Acum: {p.cumPct.toFixed(1)}%
+                  </text>
+                  <text x={Math.max(PAD.left, bx) + 70} y={cy2 - 6} textAnchor="middle" fontSize="7" fill="#9ca3af">
+                    Classe {p.abcClass}
+                  </text>
+                </g>
+              )
+            })()}
+          </svg>
+        </div>
+      </div>
+
+      {/* Peso por categoria */}
+      <div className="bg-surface-800 rounded-xl border border-surface-600 overflow-hidden">
+        <div className="px-4 py-3 border-b border-surface-600">
+          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Peso por Categoria</h4>
+        </div>
+        <div className="divide-y divide-surface-700">
+          {catWeights.map(cw => {
+            const clr = ABC_COLORS[cw.cls]
+            const isFiltered = filterCat === cw.cat
+            return (
+              <button key={cw.cat} onClick={() => setFilterCat(isFiltered ? null : cw.cat)}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-700 ${isFiltered ? 'bg-surface-700' : ''}`}
+              >
+                <span className={`text-xs font-black w-4 ${clr.text}`}>{cw.cls}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-gray-200 truncate">{cw.cat}</span>
+                    <span className={`text-xs font-mono font-bold ml-3 shrink-0 ${clr.text}`}>{cw.pct.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-surface-700 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${cw.pct}%`, background: clr.bar }} />
+                  </div>
+                </div>
+                <div className="text-right shrink-0 ml-2">
+                  <p className="text-xs font-mono text-gray-200">{fmt(cw.receita)}</p>
+                  <p className="text-[10px] text-gray-500">{cw.count} prod.</p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Tabela com headers clicáveis */}
+      <div className="rounded-xl border border-surface-600 overflow-x-auto">
+        {hasFilters && (
+          <div className="px-4 py-2 bg-surface-800 border-b border-surface-600 flex items-center gap-2 text-xs text-gray-400">
+            Filtrando:
+            {filterClass && <span className={`font-bold ${ABC_COLORS[filterClass].text}`}>Classe {filterClass}</span>}
+            {filterCat   && <span className="text-brand-300">{filterCat}</span>}
+            <button onClick={() => { setFilterClass(null); setFilterCat(null) }}
+              className="ml-auto flex items-center gap-1 hover:text-gray-200 transition-colors">
+              <X className="w-3.5 h-3.5" /> Limpar
+            </button>
+          </div>
+        )}
+        <table className="w-full text-sm">
+          <thead className="bg-surface-800">
+            <tr className="text-left">
+              <th className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold">#</th>
+              <th className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold">Produto</th>
+              <th className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold text-center">ABC</th>
+              {([
+                ['qtd',       'Qtd'],
+                ['precoMedio','Preço Médio'],
+                ['margemPct', 'Margem'],
+                ['receita',   'Receita'],
+              ] as [AbcSortCol, string][]).map(([col, label]) => (
+                <th key={col}
+                  className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold whitespace-nowrap cursor-pointer hover:text-gray-300 select-none transition-colors"
+                  onClick={() => toggleSort(col)}
+                >
+                  <span className="flex items-center gap-1">
+                    {label}
+                    {sortCol === col
+                      ? sortDir === 'desc' ? <ChevronDown className="w-3 h-3 text-brand-400" /> : <ChevronUp className="w-3 h-3 text-brand-400" />
+                      : <ChevronDown className="w-3 h-3 opacity-20" />}
+                  </span>
+                </th>
+              ))}
+              <th className="px-4 py-2.5 text-xs text-gray-500 uppercase tracking-wider font-semibold whitespace-nowrap">% Acum.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-surface-600">
+            {tableData.map((p, i) => {
+              const precoMedio = p.qtd > 0 ? p.receita / p.qtd : 0
+              const custoMedio = p.qtd > 0 ? p.custo  / p.qtd : 0
+              const margemPct  = precoMedio > 0 && custoMedio > 0 ? ((precoMedio - custoMedio) / precoMedio) * 100 : null
+              const precoSug   = custoMedio > 0 ? custoMedio / (1 - targetPct / 100) : null
+              const clr = ABC_COLORS[p.abcClass]
+              return (
+                <tr key={p.nome} className="hover:bg-white/5 transition-colors">
+                  <td className="px-4 py-2.5 text-gray-500 text-xs font-mono">{i + 1}</td>
+                  <td className="px-4 py-2.5 font-medium text-white max-w-[180px]">
+                    <p className="truncate">{p.nome}</p>
+                    {p.categoria && <span className="text-[10px] bg-surface-600 text-gray-400 px-1.5 rounded">{p.categoria}</span>}
+                  </td>
+                  <td className="px-4 py-2.5 text-center">
+                    <span className={`text-sm font-black ${clr.text}`}>{p.abcClass}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-300 text-xs font-mono font-semibold">{p.qtd}x</td>
+                  <td className="px-4 py-2.5 font-mono text-gray-200 text-xs">
+                    {precoMedio > 0 ? (
+                      <span>
+                        {fmt(precoMedio)}
+                        {precoSug !== null && Math.abs(precoSug - precoMedio) >= 0.50 && (
+                          <span className={`ml-1 text-[10px] ${precoSug > precoMedio ? 'text-red-400' : 'text-emerald-400'}`}>
+                            ({precoSug > precoMedio ? '↑' : '↓'}{fmt(precoSug)})
+                          </span>
+                        )}
+                      </span>
+                    ) : '—'}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {margemPct !== null ? (
+                      <span className={`text-xs font-mono font-bold ${margemPct >= targetPct ? 'text-emerald-400' : margemPct >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        {margemPct.toFixed(0)}%
+                      </span>
+                    ) : <span className="text-gray-600 text-xs">—</span>}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className={`font-mono font-bold text-xs ${clr.text}`}>{fmt(p.receita)}</span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-14 h-1.5 bg-surface-600 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${p.cumPct}%`, background: clr.bar }} />
+                      </div>
+                      <span className="text-[10px] text-gray-500 font-mono">{p.cumPct.toFixed(0)}%</span>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        <div className="px-4 py-2.5 border-t border-surface-600 flex flex-wrap gap-4 text-[10px] text-gray-500">
+          <span><span className="text-emerald-400 font-bold">A</span> = produtos vitais que formam 80% da receita</span>
+          <span><span className="text-yellow-400 font-bold">B</span> = importantes · 80–95%</span>
+          <span><span className="text-red-400 font-bold">C</span> = periféricos · acima de 95%</span>
+          <span className="ml-auto">Clique no cabeçalho para ordenar · clique nas classes/categorias para filtrar</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Modal com gráfico de evolução ─────────────────────────────────────────────
 interface ChartPoint { label: string; value: number }
 
@@ -392,8 +749,173 @@ function FormasPagamentoSection({ formas }: { formas: FormaPagamentoTotalDto[] }
 }
 
 // ── Gráfico SVG de barras (principal) ─────────────────────────────────────────
-function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; d: FinanceiroDto['diaDia'][0] } | null>(null)
+// ── Modal de detalhe do dia ───────────────────────────────────────────────────
+function DayDetailModal({ day, onClose }: {
+  day: FinanceiroDto['diaDia'][0]
+  onClose: () => void
+}) {
+  const margem    = day.receita - day.custo
+  const margemPct = day.receita > 0 && day.custo > 0 ? (margem / day.receita) * 100 : 0
+  const custoPct  = day.receita > 0 && day.custo > 0 ? (day.custo / day.receita) * 100 : 0
+  const r = 38, circ = 2 * Math.PI * r
+  const dash = (Math.min(100, Math.max(0, custoPct)) / 100) * circ
+
+  const [animated, setAnimated] = useState(false)
+  useEffect(() => { const id = requestAnimationFrame(() => setAnimated(true)); return () => cancelAnimationFrame(id) }, [])
+
+  const dayLabel = (() => {
+    try {
+      return new Date(day.dia + 'T12:00:00').toLocaleDateString('pt-BR', {
+        weekday: 'long', day: '2-digit', month: 'long',
+      })
+    } catch { return day.dia }
+  })()
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-surface-600 bg-gradient-to-r from-brand-600/10 to-transparent flex items-center justify-between">
+          <div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Resumo do dia</p>
+            <h3 className="font-semibold text-white capitalize mt-0.5">{dayLabel}</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors p-1">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Donut + valores */}
+          <div className="flex items-center gap-5">
+            <div className="relative shrink-0">
+              <svg width="96" height="96" viewBox="0 0 96 96">
+                {/* Track */}
+                <circle cx="48" cy="48" r={r} fill="none" stroke="#42B6EE"
+                  strokeWidth="11" opacity="0.9" />
+                {/* Custo overlay */}
+                {day.custo > 0 && (
+                  <circle cx="48" cy="48" r={r} fill="none"
+                    stroke="rgba(239,68,68,0.6)" strokeWidth="11"
+                    strokeDasharray={`${animated ? dash : 0} ${circ}`}
+                    strokeDashoffset={circ / 4} strokeLinecap="round"
+                    style={{ transition: 'stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1)' }}
+                  />
+                )}
+                <text x="48" y="44" textAnchor="middle" fontSize="15" fontWeight="bold" fill="white">
+                  {day.custo > 0 ? `${margemPct.toFixed(0)}%` : '—'}
+                </text>
+                <text x="48" y="58" textAnchor="middle" fontSize="8" fill="#9ca3af">
+                  {day.custo > 0 ? 'margem' : 'sem custo'}
+                </text>
+              </svg>
+            </div>
+
+            <div className="flex-1 space-y-3 min-w-0">
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Receita</p>
+                <p className="text-2xl font-black font-mono text-emerald-400 leading-tight">{fmt(day.receita)}</p>
+              </div>
+              {day.custo > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Custo</p>
+                    <p className="text-sm font-bold font-mono text-red-400">{fmt(day.custo)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Margem</p>
+                    <p className={`text-sm font-bold font-mono ${margem >= 0 ? 'text-brand-400' : 'text-red-400'}`}>
+                      {fmt(margem)}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Barra custo vs margem */}
+          {day.custo > 0 && (
+            <div className="space-y-1.5">
+              <div className="h-2.5 bg-surface-700 rounded-full overflow-hidden flex gap-px">
+                <div
+                  className="h-full bg-brand-500 rounded-l-full"
+                  style={{
+                    width: animated ? `${margemPct}%` : '0%',
+                    transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1) 0.1s',
+                  }}
+                />
+                <div
+                  className="h-full bg-red-500/60 rounded-r-full"
+                  style={{
+                    width: animated ? `${custoPct}%` : '0%',
+                    transition: 'width 0.8s cubic-bezier(0.4,0,0.2,1) 0.15s',
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-[10px]">
+                <span className="text-brand-400 font-semibold">Margem {margemPct.toFixed(1)}%</span>
+                <span className="text-red-400 font-semibold">Custo {custoPct.toFixed(1)}%</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Mini filtro de período (próximo ao gráfico) ────────────────────────────────
+function DateQuickFilter({ preset, onPreset, inicio, fim }: {
+  preset: Preset
+  onPreset: (p: Preset) => void
+  inicio: string
+  fim: string
+}) {
+  const LABELS: Record<Preset, string> = { hoje: 'Hoje', '7d': '7 dias', mes: 'Este mês', custom: 'Personalizado' }
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[10px] text-gray-600 uppercase tracking-wider font-semibold shrink-0">Período:</span>
+      {(['hoje', '7d', 'mes'] as Preset[]).map(p => (
+        <button
+          key={p}
+          onClick={() => onPreset(p)}
+          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+            preset === p
+              ? 'bg-brand-600/25 border-brand-500/60 text-brand-200'
+              : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500 hover:text-gray-200'
+          }`}
+        >
+          {LABELS[p]}
+        </button>
+      ))}
+      {preset === 'custom' && (
+        <span className="text-xs text-gray-500 font-mono bg-surface-700 border border-surface-600 px-2 py-1 rounded-lg">
+          {inicio.slice(5).replace('-', '/')} → {fim.slice(5).replace('-', '/')}
+        </span>
+      )}
+      <span className="text-[10px] text-gray-600 ml-auto hidden sm:inline">
+        ↑ filtro completo no topo
+      </span>
+    </div>
+  )
+}
+
+// ── Gráfico SVG de barras animado ─────────────────────────────────────────────
+function BarChart({ dias, onDayClick }: {
+  dias: FinanceiroDto['diaDia']
+  onDayClick: (d: FinanceiroDto['diaDia'][0]) => void
+}) {
+  const [hovered, setHovered]   = useState<number | null>(null)
+  const [mounted, setMounted]   = useState(false)
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true))
+    return () => cancelAnimationFrame(id)
+  }, [dias])
+
   if (dias.length === 0) return null
 
   const W = 700, H = 180, PAD = { top: 16, right: 8, bottom: 32, left: 56 }
@@ -401,14 +923,7 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
   const chartH = H - PAD.top  - PAD.bottom
   const maxVal = Math.max(...dias.map(d => d.receita), 1)
   const barW   = Math.max(8, (chartW / dias.length) - 4)
-
-  const gridLines = [0.25, 0.5, 0.75, 1].map(f => ({
-    y:   PAD.top + chartH * (1 - f),
-    val: maxVal * f,
-  }))
-
-  // Quantas labels cabem sem sobreposição (cada label ~28px de largura)
-  const slotPx    = (chartW / dias.length)
+  const slotPx = chartW / dias.length
   const labelStep = slotPx < 28 ? Math.ceil(28 / slotPx) : 1
 
   return (
@@ -420,67 +935,137 @@ function BarChart({ dias }: { dias: FinanceiroDto['diaDia'] }) {
         <div className="flex items-center gap-4 text-xs text-gray-500">
           <span><span className="inline-block w-3 h-2 rounded-sm bg-brand-500 mr-1.5 align-middle" />Margem</span>
           <span><span className="inline-block w-3 h-2 rounded-sm bg-red-500/50 mr-1.5 align-middle" />Custo</span>
+          <span className="text-[10px] text-gray-600 hidden sm:inline">clique para detalhar</span>
         </div>
       </div>
       <div className="overflow-x-auto">
         <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: Math.max(400, dias.length * 28) }}>
-          {gridLines.map(g => (
-            <g key={g.val}>
-              <line x1={PAD.left} y1={g.y} x2={W - PAD.right} y2={g.y} stroke="#32323f" strokeWidth="1" />
-              <text x={PAD.left - 6} y={g.y + 4} textAnchor="end" fontSize="9" fill="#6b7280">
-                {fmtShort(g.val)}
-              </text>
-            </g>
-          ))}
+          {/* Grid */}
+          {[0.25, 0.5, 0.75, 1].map(f => {
+            const gy = PAD.top + chartH * (1 - f)
+            return (
+              <g key={f}>
+                <line x1={PAD.left} y1={gy} x2={W - PAD.right} y2={gy} stroke="#32323f" strokeWidth="1" />
+                <text x={PAD.left - 6} y={gy + 4} textAnchor="end" fontSize="9" fill="#6b7280">
+                  {fmtShort(maxVal * f)}
+                </text>
+              </g>
+            )
+          })}
+
+          {/* Barras */}
           {dias.map((d, i) => {
             const slotW   = chartW / dias.length
             const x       = PAD.left + slotW * i + (slotW - barW) / 2
-            const recH    = (d.receita / maxVal) * chartH
-            const custoH  = d.custo > 0 ? Math.min((d.custo / maxVal) * chartH, recH) : 0
+            const recH    = Math.max(2, (d.receita / maxVal) * chartH)
+            const custoH  = d.custo > 0 ? Math.min((d.custo / maxVal) * chartH, recH - 1) : 0
             const margemH = recH - custoH
-            const hasData = recH > 0
+            const hasData = d.receita > 0
+            const isHov   = hovered === i
             const showLabel = i === 0 || i === dias.length - 1 || i % labelStep === 0
+            const delay   = `${i * 0.018}s`
+
             return (
-              <g key={d.dia}
-                onMouseEnter={hasData ? e => setTooltip({ x: e.clientX, y: e.clientY, d }) : undefined}
-                onMouseLeave={hasData ? () => setTooltip(null) : undefined}
+              <g
+                key={d.dia}
+                onClick={hasData ? () => onDayClick(d) : undefined}
+                onMouseEnter={hasData ? () => setHovered(i) : undefined}
+                onMouseLeave={hasData ? () => setHovered(null) : undefined}
                 className={hasData ? 'cursor-pointer' : ''}
               >
-                {!hasData && <rect x={x + barW * 0.2} y={PAD.top + chartH - 1} width={barW * 0.6} height={1} fill="#32323f" />}
-                {hasData && custoH > 0 && <rect x={x} y={PAD.top + chartH - recH} width={barW} height={custoH} fill="rgba(239,68,68,0.5)" rx="2" />}
-                {hasData && <rect x={x} y={PAD.top + chartH - recH + custoH} width={barW} height={margemH} fill="#42B6EE" rx="2" />}
+                {/* Hover highlight */}
+                {isHov && (
+                  <rect
+                    x={x - 4} y={PAD.top} width={barW + 8} height={chartH}
+                    fill="white" opacity="0.04" rx="4"
+                  />
+                )}
+
+                {!hasData && (
+                  <rect x={x + barW * 0.25} y={PAD.top + chartH - 1} width={barW * 0.5} height={1} fill="#32323f" />
+                )}
+
+                {/* Custo (vermelho) */}
+                {hasData && custoH > 0 && (
+                  <rect
+                    x={x} y={PAD.top + chartH - recH}
+                    width={barW} height={custoH}
+                    fill={isHov ? 'rgba(239,68,68,0.75)' : 'rgba(239,68,68,0.5)'}
+                    rx="2"
+                    style={{
+                      transformBox: 'fill-box',
+                      transformOrigin: 'bottom',
+                      transform: mounted ? 'scaleY(1)' : 'scaleY(0)',
+                      transition: `transform 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}`,
+                    }}
+                  />
+                )}
+
+                {/* Margem (brand azul) */}
+                {hasData && (
+                  <rect
+                    x={x} y={PAD.top + chartH - recH + custoH}
+                    width={barW} height={margemH}
+                    fill={isHov ? '#64c8f5' : '#42B6EE'}
+                    rx="2"
+                    style={{
+                      transformBox: 'fill-box',
+                      transformOrigin: 'bottom',
+                      transform: mounted ? 'scaleY(1)' : 'scaleY(0)',
+                      transition: `transform 0.55s cubic-bezier(0.34,1.56,0.64,1) ${delay}`,
+                      filter: isHov ? 'drop-shadow(0 0 4px rgba(66,182,238,0.5))' : undefined,
+                    }}
+                  />
+                )}
+
+                {/* Label de data */}
                 {showLabel && (
-                  <text x={x + barW / 2} y={H - 4} textAnchor="middle" fontSize="8" fill={hasData ? '#9ca3af' : '#4b5563'}>
+                  <text
+                    x={x + barW / 2} y={H - 4}
+                    textAnchor="middle" fontSize="8"
+                    fill={isHov ? '#d1d5db' : hasData ? '#9ca3af' : '#4b5563'}
+                  >
                     {d.dia.slice(5)}
                   </text>
                 )}
+
+                {/* Tooltip inline ao hover */}
+                {isHov && hasData && (() => {
+                  const ty = PAD.top + chartH - recH - 6
+                  const tx = Math.min(Math.max(x + barW / 2, PAD.left + 52), W - PAD.right - 52)
+                  return (
+                    <g>
+                      <rect x={tx - 52} y={ty - 28} width="104" height="26" rx="5"
+                        fill="#1e1e2e" stroke="#3f3f52" strokeWidth="1" />
+                      <text x={tx} y={ty - 17} textAnchor="middle" fontSize="8.5" fill="#10b981" fontWeight="bold">
+                        {fmt(d.receita)}
+                      </text>
+                      {d.custo > 0 && (
+                        <text x={tx} y={ty - 6} textAnchor="middle" fontSize="7.5" fill="#9ca3af">
+                          custo {fmt(d.custo)} · margem {((d.receita - d.custo) / d.receita * 100).toFixed(0)}%
+                        </text>
+                      )}
+                    </g>
+                  )
+                })()}
               </g>
             )
           })}
         </svg>
       </div>
-      {tooltip && (
-        <div className="fixed z-50 bg-surface-700 border border-surface-500 rounded-lg px-3 py-2 text-xs shadow-xl pointer-events-none"
-          style={{ left: tooltip.x + 12, top: tooltip.y - 48 }}>
-          <p className="font-semibold text-white mb-1">{tooltip.d.dia}</p>
-          <p className="text-emerald-400">Receita: {fmt(tooltip.d.receita)}</p>
-          {tooltip.d.custo > 0 && <p className="text-red-400">Custo: {fmt(tooltip.d.custo)}</p>}
-          <p className="text-brand-400">Margem: {fmt(tooltip.d.receita - tooltip.d.custo)}</p>
-        </div>
-      )}
     </div>
   )
 }
 
 // ── Gráfico de pizza para análise de 1 dia ────────────────────────────────────
 const FORMA_CORES: Record<string, string> = {
-  Dinheiro:      '#10b981',
-  Pix:           '#42B6EE',
-  CartaoCredito: '#a855f7',
-  CartaoDebito:  '#3b82f6',
-  Crediario:     '#f59e0b',
-  Pontos:        '#eab308',
-  Cashback:      '#ec4899',
+  Pix:           '#42B6EE',  // brand blue
+  Dinheiro:      '#10b981',  // emerald
+  CartaoCredito: '#818cf8',  // indigo (família do brand)
+  CartaoDebito:  '#38bdf8',  // sky (família do brand)
+  Crediario:     '#f59e0b',  // amber
+  Pontos:        '#84cc16',  // lime
+  Cashback:      '#f43f5e',  // rose
 }
 
 function DayPieChart({ formas, receita, custo, date }: {
@@ -642,17 +1227,19 @@ export default function FinanceiroPage() {
   const [backfilling, setBackfilling] = useState(false)
   const [kpiModal,   setKpiModal]   = useState<string | null>(null)
   const [targetPct,  setTargetPct]  = useState(40)
-  const [tableView,  setTableView]  = useState<'simples' | 'analise'>('analise')
+  const [tableView,  setTableView]  = useState<'simples' | 'analise' | 'abc'>('analise')
   const [prevData,   setPrevData]   = useState<FinanceiroDto | null>(null)
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('')
   const [topOrigemFilter, setTopOrigemFilter] = useState<'Todos' | 'Comanda' | 'PDV'>('Todos')
   const [topCatFilter, setTopCatFilter] = useState<string | null>(null)
   const [metaManualInput, setMetaManualInput] = useState('')
-  const iniRef = useRef(inicio)
-  const fimRef = useRef(fim)
+  const [dayModal,  setDayModal]  = useState<FinanceiroDto['diaDia'][0] | null>(null)
+  const iniRef    = useRef(inicio)
+  const fimRef    = useRef(fim)
+  const loadIdRef = useRef(0)
 
   const loadPrevMonth = useCallback(async (currentIni: string) => {
-    const iniDate = new Date(currentIni + 'T12:00:00')
+    const iniDate     = new Date(currentIni + 'T12:00:00')
     const prevFimDate = new Date(iniDate.getFullYear(), iniDate.getMonth(), 0)
     const prevIniDate = new Date(prevFimDate.getFullYear(), prevFimDate.getMonth(), 1)
     try {
@@ -662,10 +1249,16 @@ export default function FinanceiroPage() {
   }, [])
 
   const load = useCallback(async (ini: string, f: string, pmFilter?: string) => {
+    const id = ++loadIdRef.current
     setLoading(true)
-    try   { const res = await analyticsApi.financeiro(ini, f, pmFilter || undefined); setData(res.data) }
-    catch { toast.error('Erro ao carregar dados financeiros') }
-    finally { setLoading(false) }
+    try {
+      const res = await analyticsApi.financeiro(ini, f, pmFilter || undefined)
+      if (id === loadIdRef.current) setData(res.data)
+    } catch {
+      if (id === loadIdRef.current) toast.error('Erro ao carregar dados financeiros')
+    } finally {
+      if (id === loadIdRef.current) setLoading(false)
+    }
   }, [])
 
   useEffect(() => { load(inicio, fim); loadPrevMonth(inicio) }, []) // eslint-disable-line
@@ -827,6 +1420,9 @@ export default function FinanceiroPage() {
       {kpiModal && kpiModais[kpiModal] && (
         <KpiChartModal {...kpiModais[kpiModal]} onClose={() => setKpiModal(null)} />
       )}
+
+      {/* Modal de detalhe do dia */}
+      {dayModal && <DayDetailModal day={dayModal} onClose={() => setDayModal(null)} />}
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
@@ -1174,19 +1770,33 @@ export default function FinanceiroPage() {
           )}
 
           {/* Gráfico + Donut — pizza para 1 dia, barras para múltiplos */}
-          {inicio === fim ? (
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-              <div className="lg:col-span-3">
-                <DayPieChart formas={d.pagamentosPorForma} receita={d.receita} custo={d.custo} date={inicio} />
+          <div className="space-y-2">
+            {/* Mini filtro de período — comodidade para quem está rolando a página */}
+            <div className="card py-2.5 px-4">
+              <DateQuickFilter
+                preset={preset}
+                onPreset={applyPreset}
+                inicio={inicio}
+                fim={fim}
+              />
+            </div>
+
+            {inicio === fim ? (
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                <div className="lg:col-span-3">
+                  <DayPieChart formas={d.pagamentosPorForma} receita={d.receita} custo={d.custo} date={inicio} />
+                </div>
+                <MargemDonut receita={d.receita} custo={d.custo} />
               </div>
-              <MargemDonut receita={d.receita} custo={d.custo} />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-              <div className="lg:col-span-3"><BarChart dias={d.diaDia} /></div>
-              <MargemDonut receita={d.receita} custo={d.custo} />
-            </div>
-          )}
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                <div className="lg:col-span-3">
+                  <BarChart dias={d.diaDia} onDayClick={setDayModal} />
+                </div>
+                <MargemDonut receita={d.receita} custo={d.custo} />
+              </div>
+            )}
+          </div>
 
           {/* Formas de pagamento */}
           {d.pagamentosPorForma.length > 0 && (
@@ -1202,11 +1812,13 @@ export default function FinanceiroPage() {
                   <div className="flex items-center gap-2">
                     <Lightbulb className="w-4 h-4 text-yellow-400" />
                     <h3 className="text-sm font-semibold text-gray-300">
-                      {tableView === 'analise' ? 'Top Produtos — Rentabilidade & Sugestão de Preço' : 'Top Produtos — Resumo de Vendas'}
+                      {tableView === 'analise' ? 'Top Produtos — Rentabilidade & Sugestão de Preço'
+                        : tableView === 'abc'  ? 'Top Produtos — Curva ABC & Peso por Categoria'
+                        : 'Top Produtos — Resumo de Vendas'}
                     </h3>
                   </div>
                   <div className="flex items-center gap-3 flex-wrap">
-                    {/* Toggle Simples / Análise */}
+                    {/* Toggle Simples / Análise / Curva ABC */}
                     <div className="flex rounded-lg overflow-hidden border border-surface-600 text-xs font-semibold">
                       <button
                         onClick={() => setTableView('simples')}
@@ -1216,6 +1828,13 @@ export default function FinanceiroPage() {
                         onClick={() => setTableView('analise')}
                         className={`px-3 py-1.5 transition-colors border-l border-surface-600 ${tableView === 'analise' ? 'bg-brand-500/20 text-brand-300' : 'text-gray-400 hover:text-gray-200'}`}
                       >Análise</button>
+                      <button
+                        onClick={() => setTableView('abc')}
+                        className={`px-3 py-1.5 transition-colors border-l border-surface-600 flex items-center gap-1 ${tableView === 'abc' ? 'bg-emerald-500/20 text-emerald-300' : 'text-gray-400 hover:text-gray-200'}`}
+                      >
+                        <span className="text-emerald-400 font-black text-[10px]">ABC</span>
+                        Curva
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1270,8 +1889,10 @@ export default function FinanceiroPage() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                {tableView === 'simples' ? (
+              <div className={tableView === 'abc' ? 'p-4' : 'overflow-x-auto'}>
+                {tableView === 'abc' ? (
+                  <CurvaABCSection produtos={topFiltered} targetPct={targetPct} />
+                ) : tableView === 'simples' ? (
                   <table className="w-full text-sm">
                     <thead className="bg-surface-800">
                       <tr className="text-left">
