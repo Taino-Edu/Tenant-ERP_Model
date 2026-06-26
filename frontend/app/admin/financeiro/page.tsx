@@ -73,6 +73,82 @@ function classifyABC(produtos: { nome: string; receita: number; qtd: number; cus
 
 type AbcSortCol = 'receita' | 'qtd' | 'margemPct' | 'precoMedio'
 
+function AbcExplainer() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="rounded-xl border border-surface-600 bg-surface-800 overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-surface-700 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Lightbulb className="w-4 h-4 text-yellow-400 shrink-0" />
+          <span className="text-sm font-semibold text-gray-300">O que é a Curva ABC?</span>
+          <span className="text-[10px] bg-surface-600 text-gray-400 px-2 py-0.5 rounded-full">conceito</span>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-4 border-t border-surface-700">
+          <p className="text-xs text-gray-400 leading-relaxed pt-3">
+            A <strong className="text-white">Curva ABC</strong> (ou <strong className="text-white">Princípio de Pareto</strong>) é uma técnica
+            que classifica seus produtos pelo impacto na receita. A ideia central é: <em className="text-brand-300">poucos produtos geram a maior parte do faturamento</em>.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-emerald-400">A</span>
+                <span className="text-xs font-semibold text-emerald-300">Produtos Vitais</span>
+              </div>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Respondem por <strong className="text-emerald-300">~80% da receita</strong> com poucos itens.
+                São os mais importantes — nunca podem faltar no estoque e merecem atenção especial no preço e na margem.
+              </p>
+              <p className="text-[10px] text-emerald-500 mt-1">→ Monitore de perto, negocie melhor com fornecedor</p>
+            </div>
+
+            <div className="rounded-xl bg-yellow-500/10 border border-yellow-500/25 p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-yellow-400">B</span>
+                <span className="text-xs font-semibold text-yellow-300">Produtos Importantes</span>
+              </div>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Representam <strong className="text-yellow-300">~15% da receita</strong> (acumulado 80–95%).
+                Têm bom potencial — podem virar classe A com ações de marketing ou ajuste de preço.
+              </p>
+              <p className="text-[10px] text-yellow-500 mt-1">→ Avalie promoções ou combos para alavancar</p>
+            </div>
+
+            <div className="rounded-xl bg-red-500/10 border border-red-500/25 p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-red-400">C</span>
+                <span className="text-xs font-semibold text-red-300">Produtos Periféricos</span>
+              </div>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Os últimos <strong className="text-red-300">~5% da receita</strong> com muitos itens.
+                Vale questionar: custam estoque? Têm giro? Talvez seja hora de descontinuar alguns.
+              </p>
+              <p className="text-[10px] text-red-400 mt-1">→ Revise mix, considere descontinuar ou promover</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-brand-500/8 border border-brand-500/20 p-3">
+            <p className="text-xs text-gray-400 leading-relaxed">
+              <strong className="text-brand-300">Como ler o gráfico Pareto:</strong> As barras mostram a receita de cada produto (da maior para a menor).
+              A <span className="text-brand-300 font-semibold">linha azul</span> mostra o percentual <em>acumulado</em> — onde ela cruza
+              a linha <span className="text-emerald-400 font-semibold">verde (80%)</span> termina a classe A,
+              e onde cruza a <span className="text-yellow-400 font-semibold">amarela (95%)</span> termina a classe B.
+              O restante é C.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CurvaABCSection({ produtos, targetPct }: {
   produtos: { nome: string; receita: number; qtd: number; custo: number; categoria?: string }[]
   targetPct: number
@@ -150,6 +226,9 @@ function CurvaABCSection({ produtos, targetPct }: {
 
   return (
     <div className="space-y-4">
+      {/* Painel explicativo — o que é Curva ABC */}
+      <AbcExplainer />
+
       {/* Resumo A/B/C */}
       <div className="grid grid-cols-3 gap-3">
         {(['A', 'B', 'C'] as AbcClass[]).map(cls => {
@@ -239,22 +318,28 @@ function CurvaABCSection({ produtos, targetPct }: {
               <polyline points={linePoints} fill="none" stroke="#42B6EE" strokeWidth="1.5" strokeLinejoin="round" />
             )}
             {hoveredIdx !== null && chartData[hoveredIdx] && (() => {
-              const p = chartData[hoveredIdx]
+              const p     = chartData[hoveredIdx]
               const slotW = chartW / chartData.length
-              const cx2 = PAD.left + slotW * hoveredIdx + slotW / 2
-              const cy2 = PAD.top + chartH * (1 - p.cumPct / 100)
-              const bx = Math.min(cx2 - 65, W - PAD.right - 130)
+              const cx2   = PAD.left + slotW * hoveredIdx + slotW / 2
+              const cy2   = PAD.top + chartH * (1 - p.cumPct / 100)
+              const boxW  = 144, boxH = 40
+              // Horizontal: cabe à direita? senão à esquerda
+              const bxRaw = cx2 - boxW / 2
+              const bx    = Math.max(PAD.left, Math.min(bxRaw, W - PAD.right - boxW))
+              // Vertical: acima da linha cumulativa, mas nunca sair pelo topo
+              const byRaw = cy2 - boxH - 8
+              const by    = Math.max(PAD.top + 2, byRaw)
               return (
-                <g>
+                <g style={{ pointerEvents: 'none' }}>
                   <circle cx={cx2} cy={cy2} r="3.5" fill="#42B6EE" stroke="#1e1e2e" strokeWidth="1" />
-                  <rect x={Math.max(PAD.left, bx)} y={cy2 - 42} width="140" height="36" rx="5" fill="#1e1e2e" stroke="#32323f" strokeWidth="1" />
-                  <text x={Math.max(PAD.left, bx) + 70} y={cy2 - 28} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">
+                  <rect x={bx} y={by} width={boxW} height={boxH} rx="5" fill="#1e1e2e" stroke="#32323f" strokeWidth="1" opacity="0.97" />
+                  <text x={bx + boxW / 2} y={by + 13} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">
                     {p.nome.length > 22 ? p.nome.slice(0, 22) + '…' : p.nome}
                   </text>
-                  <text x={Math.max(PAD.left, bx) + 70} y={cy2 - 16} textAnchor="middle" fontSize="7.5" fill={ABC_COLORS[p.abcClass].bar}>
+                  <text x={bx + boxW / 2} y={by + 25} textAnchor="middle" fontSize="7.5" fill={ABC_COLORS[p.abcClass].bar}>
                     {fmt(p.receita)} · {p.pct.toFixed(1)}% · Acum: {p.cumPct.toFixed(1)}%
                   </text>
-                  <text x={Math.max(PAD.left, bx) + 70} y={cy2 - 6} textAnchor="middle" fontSize="7" fill="#9ca3af">
+                  <text x={bx + boxW / 2} y={by + 36} textAnchor="middle" fontSize="7" fill="#9ca3af">
                     Classe {p.abcClass}
                   </text>
                 </g>
