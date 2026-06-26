@@ -15,7 +15,7 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
   onStock: (id: string, delta: number) => void
 }) {
   const [imgIdx, setImgIdx] = useState(0)
-  const images   = product.imageUrls ?? []
+  const images   = product.imageUrls?.length > 0 ? product.imageUrls : product.imageUrl ? [product.imageUrl] : []
   const minStock = product.minimumStock ?? 5
   const stockPct = minStock > 0 ? Math.min(100, (product.stockQuantity / minStock) * 100) : 100
   const valorImob = product.stockQuantity * (product.costPriceInCents / 100)
