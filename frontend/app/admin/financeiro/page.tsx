@@ -1031,18 +1031,20 @@ function BarChart({ dias, onDayClick }: {
 
                 {/* Tooltip inline ao hover */}
                 {isHov && hasData && (() => {
-                  const ty = PAD.top + chartH - recH - 6
-                  const tx = Math.min(Math.max(x + barW / 2, PAD.left + 52), W - PAD.right - 52)
+                  const boxH = d.custo > 0 ? 30 : 20
+                  const rawTy = PAD.top + chartH - recH - 8
+                  const ty    = Math.max(PAD.top + boxH + 2, rawTy)
+                  const tx    = Math.min(Math.max(x + barW / 2, PAD.left + 54), W - PAD.right - 54)
                   return (
-                    <g>
-                      <rect x={tx - 52} y={ty - 28} width="104" height="26" rx="5"
-                        fill="#1e1e2e" stroke="#3f3f52" strokeWidth="1" />
-                      <text x={tx} y={ty - 17} textAnchor="middle" fontSize="8.5" fill="#10b981" fontWeight="bold">
+                    <g style={{ pointerEvents: 'none' }}>
+                      <rect x={tx - 54} y={ty - boxH} width="108" height={boxH} rx="5"
+                        fill="#1e1e2e" stroke="#3f3f52" strokeWidth="1" opacity="0.97" />
+                      <text x={tx} y={ty - boxH + 12} textAnchor="middle" fontSize="8.5" fill="#10b981" fontWeight="bold">
                         {fmt(d.receita)}
                       </text>
                       {d.custo > 0 && (
-                        <text x={tx} y={ty - 6} textAnchor="middle" fontSize="7.5" fill="#9ca3af">
-                          custo {fmt(d.custo)} · margem {((d.receita - d.custo) / d.receita * 100).toFixed(0)}%
+                        <text x={tx} y={ty - boxH + 24} textAnchor="middle" fontSize="7.5" fill="#9ca3af">
+                          custo {fmt(d.custo)} · {((d.receita - d.custo) / d.receita * 100).toFixed(0)}% margem
                         </text>
                       )}
                     </g>
