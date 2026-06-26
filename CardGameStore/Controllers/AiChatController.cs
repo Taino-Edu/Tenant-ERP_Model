@@ -42,8 +42,7 @@ public class AiChatController : ControllerBase
 
         try
         {
-            var reply = await _ai.ChatAsync(request.Message);
-            return Ok(new AiChatResponse { Reply = reply, Success = true });
+            return Ok(await _ai.ChatAsync(request.Message));
         }
         catch (Exception ex)
         {
@@ -52,7 +51,7 @@ public class AiChatController : ControllerBase
             {
                 Reply   = "Ocorreu um erro ao processar sua pergunta. Tente novamente.",
                 Success = false,
-                Error   = ex.Message
+                Error   = ex.Message,
             });
         }
     }

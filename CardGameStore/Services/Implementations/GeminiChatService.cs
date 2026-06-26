@@ -10,7 +10,9 @@
 
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CardGameStore.Data;
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -42,13 +44,23 @@ public class GeminiChatService : IAiChatService
         _logger = logger;
     }
 
-    public async Task<string> ChatAsync(string userMessage)
+    // Marcador que o Gemini inclui quando quer navegar: [NAV:/admin/rota]
+    private static readonly Regex NavMarker = new(@"\[NAV:(/[^\]]*)\]", RegexOptions.Compiled);
+
+    // Marcador para abrir o wizard de nova venda: [WIZARD]
+    private static readonly Regex WizardMarker = new(@"\[WIZARD\]", RegexOptions.Compiled);
+
+    public async Task<AiChatResponse> ChatAsync(string userMessage)
     {
         var apiKey = _config["GeminiSettings:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             _logger.LogWarning("GeminiChatService: GEMINI_API_KEY não configurado.");
-            return "O assistente IA não está configurado. Peça ao administrador do sistema para adicionar a chave GEMINI_API_KEY.";
+            return new AiChatResponse
+            {
+                Reply   = "O assistente IA não está configurado. Peça ao administrador para adicionar a chave GEMINI_API_KEY.",
+                Success = false,
+            };
         }
 
         try
@@ -56,8 +68,8 @@ public class GeminiChatService : IAiChatService
             var contexto = await BuildContextAsync();
             var prompt   = BuildPrompt(userMessage, contexto);
 
-            var client   = _http.CreateClient("gemini");
-            var url      = $"{GEMINI_URL}?key={apiKey}";
+            var client = _http.CreateClient("gemini");
+            var url    = $"{GEMINI_URL}?key={apiKey}";
 
             var payload = new
             {
@@ -68,7 +80,7 @@ public class GeminiChatService : IAiChatService
                 generationConfig = new
                 {
                     temperature     = 0.3,
-                    maxOutputTokens = 512,
+                    maxOutputTokens = 600,
                 }
             };
 
@@ -78,23 +90,46 @@ public class GeminiChatService : IAiChatService
             {
                 var err = await response.Content.ReadAsStringAsync();
                 _logger.LogError("Gemini API erro {Status}: {Body}", response.StatusCode, err);
-                return "Não consegui obter resposta do assistente agora. Tente novamente em instantes.";
+                return new AiChatResponse
+                {
+                    Reply   = "Não consegui obter resposta do assistente agora. Tente novamente em instantes.",
+                    Success = false,
+                };
             }
 
-            using var doc    = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-            var text = doc.RootElement
+            using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+            var raw = doc.RootElement
                 .GetProperty("candidates")[0]
                 .GetProperty("content")
                 .GetProperty("parts")[0]
                 .GetProperty("text")
                 .GetString() ?? "Sem resposta.";
 
-            return text.Trim();
+            // ── Extrai action e limpa marcadores do texto visível ──────────────
+            AiAction? action = null;
+
+            var navMatch = NavMarker.Match(raw);
+            if (navMatch.Success)
+            {
+                action = new AiAction { Type = "navigate", Route = navMatch.Groups[1].Value };
+                raw    = NavMarker.Replace(raw, "").Trim();
+            }
+            else if (WizardMarker.IsMatch(raw))
+            {
+                action = new AiAction { Type = "openWizard" };
+                raw    = WizardMarker.Replace(raw, "").Trim();
+            }
+
+            return new AiChatResponse { Reply = raw, Success = true, Action = action };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GeminiChatService: erro inesperado ao chamar API.");
-            return "Ocorreu um erro ao processar sua pergunta. Tente novamente.";
+            return new AiChatResponse
+            {
+                Reply   = "Ocorreu um erro ao processar sua pergunta. Tente novamente.",
+                Success = false,
+            };
         }
     }
 
@@ -238,6 +273,21 @@ public class GeminiChatService : IAiChatService
         Não invente dados: use APENAS os dados fornecidos abaixo.
         Se os dados não forem suficientes para responder, diga isso claramente.
         Valores monetários sempre no formato R$ X,XX.
+
+        NAVEGAÇÃO — Se o usuário pedir para ir a uma página ou abrir uma seção, inclua EXATAMENTE um marcador no final da resposta:
+        - Estoque           → [NAV:/admin/estoque]
+        - Financeiro        → [NAV:/admin/financeiro]
+        - Clientes/Usuários → [NAV:/admin/usuarios]
+        - Crediário         → [NAV:/admin/crediario]
+        - Dashboard         → [NAV:/admin/dashboard]
+        - Frente de Caixa   → [NAV:/admin/venda-avulsa]
+        - Nova venda        → [WIZARD]
+        - Categorias        → [NAV:/admin/categorias]
+        - Campeonatos       → [NAV:/admin/campeonatos]
+        - Relatórios        → [NAV:/admin/relatorios]
+        - Configurações     → [NAV:/admin/configuracoes]
+        - Anúncios          → [NAV:/admin/anuncios]
+        Só inclua o marcador se o usuário explicitamente pedir para navegar ou abrir algo. Nunca invente marcadores.
 
         DADOS ATUAIS DA LOJA:
         {contextJson}
