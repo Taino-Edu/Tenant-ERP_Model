@@ -1,12 +1,13 @@
 // =============================================================================
 // TcgController.cs — Busca de Cartas TCG (Cache-First via MongoDB)
-// GET /api/tcg/search?name=pikachu&game=Pokemon  → pesquisa cartas
-// GET /api/tcg/cards/{id}                        → busca por ID
-// GET /api/tcg/sets?game=Pokemon                 → lista sets
-// DELETE /api/tcg/cards/{id}/cache               → invalida cache (Admin)
-// POST /api/tcg/purge-cache                      → purga itens expirados (Admin)
+// GET /api/tcg/search?name=pikachu&game=Pokemon        → pesquisa por nome
+// GET /api/tcg/search?set=SV8PT5&num=1&game=Pokemon    → pesquisa por código
+// GET /api/tcg/cards/{id}                              → busca por ID
+// GET /api/tcg/sets?game=Pokemon                       → lista sets
+// GET /api/tcg/brl-rate                                → cotação USD/BRL atual
 // =============================================================================
 
+using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,35 +19,50 @@ namespace CardGameStore.Controllers;
 [Produces("application/json")]
 public class TcgController : ControllerBase
 {
-    private readonly ITcgService _tcgService;
+    private readonly ITcgService     _tcgService;
+    private readonly CurrencyService _currency;
 
-    public TcgController(ITcgService tcgService)
+    public TcgController(ITcgService tcgService, CurrencyService currency)
     {
         _tcgService = tcgService;
+        _currency   = currency;
     }
 
     /// <summary>
-    /// Pesquisa cartas por nome com estratégia Cache-First.
-    /// Primeiro busca no MongoDB; se não encontrar, consulta a API TCG externa.
+    /// Pesquisa cartas por nome OU por código (set + número).
+    /// Exemplos:
+    ///   ?name=pikachu&amp;game=Pokemon
+    ///   ?set=SV8PT5&amp;num=1&amp;game=Pokemon
+    ///   ?set=PAL&amp;num=058&amp;game=Pokemon
     /// </summary>
     [HttpGet("search")]
     [Authorize]
     [ProducesResponseType(200)]
     public async Task<IActionResult> Search(
-        [FromQuery] string  name,
-        [FromQuery] string? game     = null,
+        [FromQuery] string? name     = null,
+        [FromQuery] string? set      = null,
+        [FromQuery] string? num      = null,
+        [FromQuery] string? game     = "Pokemon",
         [FromQuery] int     page     = 1,
         [FromQuery] int     pageSize = 20)
     {
-        if (string.IsNullOrWhiteSpace(name))
-            return BadRequest(new { Message = "Parâmetro 'name' é obrigatório." });
-
         pageSize = Math.Clamp(pageSize, 1, 100);
+
+        // Busca por código: set + número
+        if (!string.IsNullOrWhiteSpace(set) && !string.IsNullOrWhiteSpace(num))
+        {
+            var byCode = await _tcgService.SearchCardsByNameAsync($"set:{set} number:{num}", game, 1, 1);
+            return Ok(byCode);
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+            return BadRequest(new { Message = "Informe 'name' para busca por nome, ou 'set' + 'num' para busca por código." });
+
         var result = await _tcgService.SearchCardsByNameAsync(name, game, page, pageSize);
         return Ok(result);
     }
 
-    /// <summary>Busca uma carta específica pelo ID da API TCG.</summary>
+    /// <summary>Busca uma carta específica pelo ID (ex: pokemon:sv8pt5-1).</summary>
     [HttpGet("cards/{tcgCardId}")]
     [Authorize]
     [ProducesResponseType(200)]
@@ -55,6 +71,15 @@ public class TcgController : ControllerBase
     {
         var card = await _tcgService.GetCardByIdAsync(tcgCardId);
         return card == null ? NotFound(new { Message = $"Carta '{tcgCardId}' não encontrada." }) : Ok(card);
+    }
+
+    /// <summary>Retorna a cotação USD/BRL atual (cache de 1h).</summary>
+    [HttpGet("brl-rate")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetBrlRate()
+    {
+        var rate = await _currency.GetUsdToBrlAsync();
+        return Ok(new { UsdToBrl = rate, UpdatedAt = DateTime.UtcNow });
     }
 
     /// <summary>Lista os sets disponíveis para um jogo.</summary>

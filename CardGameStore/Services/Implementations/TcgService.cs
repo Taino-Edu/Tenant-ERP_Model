@@ -263,31 +263,54 @@ public class TcgService : ITcgService
     /// </summary>
     private static CardCache MapApiResponseToCache(TcgApiCardResponse response)
     {
+        static CardPrices? ToPrices(TcgCardPricesApi? p) => p == null ? null : new CardPrices
+        {
+            Low = p.Low, Mid = p.Mid, High = p.High, Market = p.Market, DirectLow = p.DirectLow
+        };
+
         return new CardCache
         {
-            TcgCardId      = response.Id,
-            Name           = response.Name,
-            Game           = response.Game,
-            SetName        = response.SetName,
-            SetCode        = response.SetCode,
-            Number         = response.Number,
-            Rarity         = response.Rarity,
-            Type           = response.Type,
-            Subtypes       = response.Subtypes ?? new List<string>(),
-            ImageUrlSmall  = response.Images?.Small,
-            ImageUrlLarge  = response.Images?.Large,
-            MarketPrices   = response.Prices != null ? new CardPrices
+            TcgCardId            = response.Id,
+            Name                 = response.Name,
+            Game                 = response.Game,
+            SetName              = response.SetName,
+            SetCode              = response.SetCode,
+            Number               = response.Number,
+            Rarity               = response.Rarity,
+            Type                 = response.Type,
+            Subtypes             = response.Subtypes ?? new List<string>(),
+            Types                = response.Types    ?? new List<string>(),
+            Hp                   = response.Hp,
+            Artist               = response.Artist,
+            FlavorText           = response.FlavorText,
+            RegulationMark       = response.RegulationMark,
+            Attacks              = response.Attacks?.Select(a => new CardAttackCache
             {
-                Low       = response.Prices.Low,
-                Mid       = response.Prices.Mid,
-                High      = response.Prices.High,
-                Market    = response.Prices.Market,
-                DirectLow = response.Prices.DirectLow
-            } : null,
-            CachedAt       = DateTime.UtcNow,
-            UpdatedAt      = DateTime.UtcNow,
-            ExpiresAt      = DateTime.UtcNow.AddDays(7),
-            SourceApi      = "apitcg.com"
+                Name                = a.Name,
+                Cost                = a.Cost,
+                ConvertedEnergyCost = a.ConvertedEnergyCost,
+                Damage              = a.Damage,
+                Text                = a.Text,
+            }).ToList() ?? new(),
+            Weaknesses           = response.Weaknesses?.Select(w => new CardWeaknessCache { Type = w.Type, Value = w.Value }).ToList() ?? new(),
+            Resistances          = response.Resistances?.Select(r => new CardWeaknessCache { Type = r.Type, Value = r.Value }).ToList() ?? new(),
+            RetreatCost          = response.RetreatCost ?? new(),
+            ConvertedRetreatCost = response.ConvertedRetreatCost,
+            ImageUrlSmall        = response.Images?.Small,
+            ImageUrlLarge        = response.Images?.Large,
+            AllPrices            = response.AllPrices == null ? null : new CardAllPricesCache
+            {
+                Normal               = ToPrices(response.AllPrices.Normal),
+                Holofoil             = ToPrices(response.AllPrices.Holofoil),
+                ReverseHolofoil      = ToPrices(response.AllPrices.ReverseHolofoil),
+                FirstEditionNormal   = ToPrices(response.AllPrices.FirstEditionNormal),
+                FirstEditionHolofoil = ToPrices(response.AllPrices.FirstEditionHolofoil),
+            },
+            MarketPrices         = ToPrices(response.Prices),
+            CachedAt             = DateTime.UtcNow,
+            UpdatedAt            = DateTime.UtcNow,
+            ExpiresAt            = DateTime.UtcNow.AddDays(7),
+            SourceApi            = response.Game == "Pokemon" ? "pokemontcg.io" : "various",
         };
     }
 }

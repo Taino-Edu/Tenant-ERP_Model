@@ -247,6 +247,24 @@ builder.Services.AddHttpClient("YugiohApi", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+// AwesomeAPI — Cotação USD/BRL em tempo real (gratuita, sem autenticação)
+builder.Services.AddHttpClient("AwesomeApi", client =>
+{
+    client.BaseAddress = new Uri("https://economia.awesomeapi.com.br/");
+    client.Timeout     = TimeSpan.FromSeconds(5);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+});
+
+// LoL Riftbound — TCG físico da Riot Games (URL configurável em appsettings via TcgSettings:RiftboundApiUrl)
+var riftboundApiUrl = builder.Configuration["TcgSettings:RiftboundApiUrl"] ?? "https://api.riftbound.gg/";
+builder.Services.AddHttpClient("RiftboundApi", client =>
+{
+    client.BaseAddress = new Uri(riftboundApiUrl);
+    client.Timeout     = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
+});
+
 // Gemini 2.0 Flash — assistente IA conversacional
 builder.Services.AddHttpClient("gemini", client =>
 {
@@ -276,6 +294,8 @@ builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
 builder.Services.AddSingleton<ITcgService,       TcgService>();
+builder.Services.AddSingleton<CurrencyService>();
+builder.Services.AddMemoryCache();
 
 // LGPD — Auditoria e privacidade
 builder.Services.AddHttpContextAccessor();
@@ -378,6 +398,21 @@ using (var scope = app.Services.CreateScope())
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS perfil_id UUID REFERENCES perfis(id) ON DELETE SET NULL;
                 ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_nome VARCHAR(255) NULL;
                 ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_dados BYTEA NULL;
+
+                CREATE TABLE IF NOT EXISTS decks (
+                    id          UUID         NOT NULL DEFAULT gen_random_uuid(),
+                    user_id     UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    name        VARCHAR(100) NOT NULL,
+                    game        VARCHAR(50)  NOT NULL DEFAULT 'Pokemon',
+                    format      VARCHAR(20)  NOT NULL DEFAULT 'Standard',
+                    cards_json  TEXT         NOT NULL DEFAULT '[]',
+                    is_public   BOOLEAN      NOT NULL DEFAULT FALSE,
+                    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    CONSTRAINT pk_decks PRIMARY KEY (id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_decks_user        ON decks (user_id);
+                CREATE INDEX IF NOT EXISTS ix_decks_user_public ON decks (user_id, is_public);
             ");
         }
 

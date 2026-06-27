@@ -24,7 +24,7 @@ public interface IChampionshipService
     Task                            SetPlacementAsync(Guid participantId, int placement);
     Task                            RemoveParticipantAsync(Guid participantId);
 
-    Task<ChampionshipPreInscricao>              AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp);
+    Task<(ChampionshipPreInscricao PreInscricao, int Numero)> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp);
     Task<IEnumerable<ChampionshipPreInscricao>> GetPreInscricoesAsync(Guid championshipId);
     Task                                        DeletePreInscricaoAsync(Guid preInscricaoId);
     Task                                        SetPodioAsync(Guid championshipId, string podioJson);

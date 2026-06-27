@@ -6,9 +6,101 @@ import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
-  Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight, ChevronDown
+  Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight, ChevronDown,
+  Trophy, Swords, Medal, BookOpen,
 } from 'lucide-react'
 import Link from 'next/link'
+
+interface MyParticipation {
+  participationId: string
+  championshipId: string
+  championshipName: string
+  game: string
+  startDate: string
+  status: string
+  entryFeeInReais: number
+  playerNumber: number
+  deckName?: string
+  placement?: number
+  registeredAt: string
+}
+
+const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
+function PlacementBadge({ place }: { place: number }) {
+  if (place === 1) return <span className="text-xl">🥇</span>
+  if (place === 2) return <span className="text-xl">🥈</span>
+  if (place === 3) return <span className="text-xl">🥉</span>
+  return <span className="text-sm font-black" style={{ color: '#4D8FAC' }}>{place}º</span>
+}
+
+function MeusCampeonatos() {
+  const [participations, setParticipations] = useState<MyParticipation[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`${BASE}/api/championship/my-participations`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setParticipations(Array.isArray(data) ? data : []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || participations.length === 0) return null
+
+  const active   = participations.filter(p => p.status === 'Inscricoes' || p.status === 'Planejado' || p.status === 'EmAndamento')
+  const finished = participations.filter(p => p.status === 'Finalizado')
+
+  return (
+    <div className="rounded-2xl overflow-hidden"
+      style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 10px rgba(12,61,90,0.06)' }}>
+      <div className="px-5 py-4 border-b flex items-center gap-2" style={{ borderColor: C.border }}>
+        <Trophy className="w-4 h-4" style={{ color: C.blue }} />
+        <h2 className="font-black text-sm" style={{ color: C.navy }}>Meus Campeonatos</h2>
+      </div>
+
+      <div className="divide-y" style={{ borderColor: C.border }}>
+        {active.map(p => (
+          <div key={p.participationId} className="px-5 py-3 flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm leading-tight truncate" style={{ color: C.navy }}>{p.championshipName}</p>
+              <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: C.muted }}>
+                <Swords className="w-3 h-3 shrink-0" /> {p.game}
+              </p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: C.muted }}>Nº jogador</p>
+              <p className="text-lg font-black leading-tight" style={{ color: C.blue2 }}>#{p.playerNumber}</p>
+            </div>
+          </div>
+        ))}
+
+        {finished.map(p => (
+          <div key={p.participationId} className="px-5 py-3 flex items-center justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm leading-tight truncate" style={{ color: C.navy }}>{p.championshipName}</p>
+              <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: C.muted }}>
+                <Swords className="w-3 h-3 shrink-0" /> {p.game}
+              </p>
+            </div>
+            <div className="text-right shrink-0 flex items-center gap-2">
+              {p.placement ? (
+                <div className="flex flex-col items-center">
+                  <PlacementBadge place={p.placement} />
+                  {p.placement > 3 && (
+                    <p className="text-[10px]" style={{ color: C.muted }}>lugar</p>
+                  )}
+                </div>
+              ) : (
+                <Medal className="w-4 h-4" style={{ color: C.muted }} />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 const C = {
   navy:   '#0C3D5A',
@@ -346,6 +438,24 @@ export default function ClientePage() {
             )}
           </div>
         )}
+
+        {/* Meus Campeonatos */}
+        <MeusCampeonatos />
+
+        {/* Meus Decks */}
+        <Link href="/cliente/decks"
+          className="flex items-center gap-4 px-5 py-4 rounded-2xl transition-all active:scale-[0.98]"
+          style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)' }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: C.bg }}>
+            <BookOpen className="w-5 h-5" style={{ color: C.blue }} />
+          </div>
+          <div className="flex-1">
+            <p className="font-black text-sm" style={{ color: C.navy }}>Meus Decks</p>
+            <p className="text-xs" style={{ color: C.muted }}>Crie e gerencie seus decks de cartas</p>
+          </div>
+          <ChevronRight className="w-4 h-4 shrink-0" style={{ color: C.muted }} />
+        </Link>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">

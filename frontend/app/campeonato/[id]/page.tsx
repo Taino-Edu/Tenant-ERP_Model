@@ -32,6 +32,7 @@ interface PreInscricaoResult {
   id: string
   nome: string
   isListaEspera: boolean
+  numero: number
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -104,8 +105,8 @@ export default function ChampionshipPublicPage() {
           ok: true,
           listaEspera: data.isListaEspera,
           msg: data.isListaEspera
-            ? `${data.nome}, você foi adicionado(a) à lista de espera! Entraremos em contato pelo WhatsApp.`
-            : `${data.nome}, sua pré-inscrição foi confirmada! Entraremos em contato pelo WhatsApp.`,
+            ? `${data.nome}, você está na fila de espera! Você é o número ${data.numero} da lista. Entraremos em contato pelo WhatsApp caso uma vaga abra.`
+            : `${data.nome}, pré-inscrição confirmada! Você é o participante número ${data.numero}. Entraremos em contato pelo WhatsApp.`,
         })
         window.scrollTo({ top: 0, behavior: 'smooth' })
         // Atualiza contagem local

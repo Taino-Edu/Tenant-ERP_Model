@@ -60,11 +60,44 @@ public class CardCache
     [BsonElement("rarity")]
     public string? Rarity { get; set; }
 
+    /// <summary>Supertype: Pokémon, Trainer, Energy…</summary>
     [BsonElement("type")]
-    public string? Type { get; set; } // Criatura, Feitiço, Pokémon de Fogo, etc.
+    public string? Type { get; set; }
 
+    /// <summary>Subtypes: Basic, Stage 1, Item…</summary>
     [BsonElement("subtypes")]
     public List<string> Subtypes { get; set; } = new();
+
+    /// <summary>Tipos de energia: Fire, Water…</summary>
+    [BsonElement("types")]
+    public List<string> Types { get; set; } = new();
+
+    [BsonElement("hp")]
+    public string? Hp { get; set; }
+
+    [BsonElement("artist")]
+    public string? Artist { get; set; }
+
+    [BsonElement("flavorText")]
+    public string? FlavorText { get; set; }
+
+    [BsonElement("regulationMark")]
+    public string? RegulationMark { get; set; }
+
+    [BsonElement("attacks")]
+    public List<CardAttackCache> Attacks { get; set; } = new();
+
+    [BsonElement("weaknesses")]
+    public List<CardWeaknessCache> Weaknesses { get; set; } = new();
+
+    [BsonElement("resistances")]
+    public List<CardWeaknessCache> Resistances { get; set; } = new();
+
+    [BsonElement("retreatCost")]
+    public List<string> RetreatCost { get; set; } = new();
+
+    [BsonElement("convertedRetreatCost")]
+    public int? ConvertedRetreatCost { get; set; }
 
     // -------------------------------------------------------------------------
     // Imagens
@@ -80,10 +113,11 @@ public class CardCache
     // Preços de mercado (snapshot da API)
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    /// Preços do mercado no momento do cache (em USD, conforme retornado pela API).
-    /// Use CardPrices para acessar de forma estruturada.
-    /// </summary>
+    /// <summary>Preços por variação (normal, holofoil, reverseHolofoil…) em USD.</summary>
+    [BsonElement("allPrices")]
+    public CardAllPricesCache? AllPrices { get; set; }
+
+    /// <summary>Market price da variação principal (mantido para compatibilidade).</summary>
     [BsonElement("marketPrices")]
     public CardPrices? MarketPrices { get; set; }
 
@@ -129,10 +163,52 @@ public class CardCache
     public string SourceApi { get; set; } = "apitcg.com";
 }
 
-/// <summary>
-/// Preços de mercado estruturados de uma carta.
-/// Valores em USD (formato da maioria das APIs TCG).
-/// </summary>
+public class CardAllPricesCache
+{
+    [BsonElement("normal")]
+    public CardPrices? Normal { get; set; }
+
+    [BsonElement("holofoil")]
+    public CardPrices? Holofoil { get; set; }
+
+    [BsonElement("reverseHolofoil")]
+    public CardPrices? ReverseHolofoil { get; set; }
+
+    [BsonElement("firstEditionNormal")]
+    public CardPrices? FirstEditionNormal { get; set; }
+
+    [BsonElement("firstEditionHolofoil")]
+    public CardPrices? FirstEditionHolofoil { get; set; }
+}
+
+public class CardAttackCache
+{
+    [BsonElement("name")]
+    public string Name { get; set; } = string.Empty;
+
+    [BsonElement("cost")]
+    public List<string> Cost { get; set; } = new();
+
+    [BsonElement("convertedEnergyCost")]
+    public int ConvertedEnergyCost { get; set; }
+
+    [BsonElement("damage")]
+    public string? Damage { get; set; }
+
+    [BsonElement("text")]
+    public string? Text { get; set; }
+}
+
+public class CardWeaknessCache
+{
+    [BsonElement("type")]
+    public string Type { get; set; } = string.Empty;
+
+    [BsonElement("value")]
+    public string Value { get; set; } = string.Empty;
+}
+
+/// <summary>Preços de mercado em USD.</summary>
 public class CardPrices
 {
     [BsonElement("low")]

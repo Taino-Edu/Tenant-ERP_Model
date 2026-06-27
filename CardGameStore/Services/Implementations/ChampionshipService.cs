@@ -130,14 +130,26 @@ public class ChampionshipService : IChampionshipService
         await _db.SaveChangesAsync();
     }
 
-    public async Task<ChampionshipPreInscricao> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp)
+    public async Task<(ChampionshipPreInscricao PreInscricao, int Numero)> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp)
     {
         bool isListaEspera = false;
+        int  numero        = 1;
+
         var ch = await _db.Championships.Include(c => c.PreInscricoes).FirstOrDefaultAsync(c => c.Id == championshipId);
-        if (ch?.MaxParticipants.HasValue == true)
+        if (ch != null)
         {
-            var confirmedCount = ch.PreInscricoes.Count(p => !p.IsListaEspera);
-            isListaEspera = confirmedCount >= ch.MaxParticipants.Value;
+            var confirmedCount  = ch.PreInscricoes.Count(p => !p.IsListaEspera);
+            var waitingCount    = ch.PreInscricoes.Count(p =>  p.IsListaEspera);
+
+            if (ch.MaxParticipants.HasValue && confirmedCount >= ch.MaxParticipants.Value)
+            {
+                isListaEspera = true;
+                numero        = waitingCount + 1;
+            }
+            else
+            {
+                numero = confirmedCount + 1;
+            }
         }
 
         var pi = new ChampionshipPreInscricao
@@ -149,7 +161,7 @@ public class ChampionshipService : IChampionshipService
         };
         _db.ChampionshipPreInscricoes.Add(pi);
         await _db.SaveChangesAsync();
-        return pi;
+        return (pi, numero);
     }
 
     public async Task<IEnumerable<ChampionshipPreInscricao>> GetPreInscricoesAsync(Guid championshipId) =>

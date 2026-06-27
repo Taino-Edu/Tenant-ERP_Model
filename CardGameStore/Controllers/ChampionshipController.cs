@@ -398,9 +398,9 @@ public class ChampionshipController : ControllerBase
         if (ch.Status != ChampionshipStatus.Inscricoes && ch.Status != ChampionshipStatus.Planejado)
             return BadRequest(new { Message = "Este campeonato não está aceitando inscrições." });
 
-        var pi = await _service.AddPreInscricaoAsync(id, request.Nome, request.WhatsApp);
-        _logger.LogInformation("Pré-inscrição recebida para campeonato {Id}: {Nome}", id, request.Nome);
-        return StatusCode(201, new PreInscricaoDto { Id = pi.Id, Nome = pi.Nome, WhatsApp = pi.WhatsApp, IsListaEspera = pi.IsListaEspera, CreatedAt = pi.CreatedAt });
+        var (pi, numero) = await _service.AddPreInscricaoAsync(id, request.Nome, request.WhatsApp);
+        _logger.LogInformation("Pré-inscrição recebida para campeonato {Id}: {Nome} (nº {Numero})", id, request.Nome, numero);
+        return StatusCode(201, new PreInscricaoDto { Id = pi.Id, Nome = pi.Nome, WhatsApp = pi.WhatsApp, IsListaEspera = pi.IsListaEspera, Numero = numero, CreatedAt = pi.CreatedAt });
     }
 
     /// <summary>Lista pré-inscrições de um campeonato (Admin).</summary>
@@ -410,7 +410,20 @@ public class ChampionshipController : ControllerBase
     public async Task<IActionResult> GetPreInscricoes(Guid id)
     {
         var list = await _service.GetPreInscricoesAsync(id);
-        return Ok(list.Select(p => new PreInscricaoDto { Id = p.Id, Nome = p.Nome, WhatsApp = p.WhatsApp, IsListaEspera = p.IsListaEspera, CreatedAt = p.CreatedAt }));
+        var ordered = list.OrderBy(p => p.CreatedAt).ToList();
+        var confirmedOrdered = ordered.Where(p => !p.IsListaEspera).ToList();
+        var waitingOrdered   = ordered.Where(p =>  p.IsListaEspera).ToList();
+        return Ok(ordered.Select(p => new PreInscricaoDto
+        {
+            Id            = p.Id,
+            Nome          = p.Nome,
+            WhatsApp      = p.WhatsApp,
+            IsListaEspera = p.IsListaEspera,
+            Numero        = p.IsListaEspera
+                ? waitingOrdered.IndexOf(p) + 1
+                : confirmedOrdered.IndexOf(p) + 1,
+            CreatedAt     = p.CreatedAt,
+        }));
     }
 
     /// <summary>Remove uma pré-inscrição (Admin — recusar ou após confirmar manualmente).</summary>
@@ -615,6 +628,8 @@ public class PreInscricaoDto
     public string   Nome          { get; init; } = string.Empty;
     public string   WhatsApp      { get; init; } = string.Empty;
     public bool     IsListaEspera { get; init; }
+    /// <summary>Posição na fila de confirmados ou na lista de espera.</summary>
+    public int      Numero        { get; init; }
     public DateTime CreatedAt     { get; init; }
 }
 

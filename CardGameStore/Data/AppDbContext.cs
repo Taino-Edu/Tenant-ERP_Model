@@ -32,6 +32,7 @@ public class AppDbContext : DbContext
     public DbSet<Crediario>               Crediarios               { get; set; }
     public DbSet<PagamentoCrediario>      PagamentosCrediario      { get; set; }
     public DbSet<Perfil>                  Perfis                   { get; set; }
+    public DbSet<Deck>                    Decks                    { get; set; }
 
     // ── LGPD — Compliance e privacidade ──────────────────────────────────────
     public DbSet<LgpdRequest>   LgpdRequests   { get; set; }
@@ -192,6 +193,23 @@ public class AppDbContext : DbContext
                   .HasForeignKey(u => u.PerfilId)
                   .OnDelete(DeleteBehavior.SetNull)
                   .IsRequired(false);
+        });
+
+        // =====================================================================
+        // DECK
+        // =====================================================================
+        modelBuilder.Entity<Deck>(entity =>
+        {
+            entity.HasIndex(d => d.UserId)
+                  .HasDatabaseName("ix_decks_user");
+
+            entity.HasIndex(d => new { d.UserId, d.IsPublic })
+                  .HasDatabaseName("ix_decks_user_public");
+
+            entity.HasOne(d => d.User)
+                  .WithMany()
+                  .HasForeignKey(d => d.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // =====================================================================

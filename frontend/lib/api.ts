@@ -147,11 +147,48 @@ export interface AnnouncementDto {
 
 export const ANNOUNCEMENT_TYPES = ['Banner', 'Aviso', 'Destaque'] as const
 
+export interface CardAttack {
+  name: string; cost: string[]; convertedEnergyCost: number; damage?: string | null; text?: string | null
+}
+export interface CardWeakness { type: string; value: string }
+export interface CardPriceVariant { low?: number | null; mid?: number | null; high?: number | null; market?: number | null; directLow?: number | null }
+export interface CardAllPrices {
+  normal?: CardPriceVariant | null
+  holofoil?: CardPriceVariant | null
+  reverseHolofoil?: CardPriceVariant | null
+  firstEditionNormal?: CardPriceVariant | null
+  firstEditionHolofoil?: CardPriceVariant | null
+}
+
 export interface CardCache {
-  tcgCardId: string; name: string; game: string; setName: string | null
-  number?: string | null; rarity: string | null; type: string | null; imageUrlSmall: string | null
-  imageUrlLarge: string | null; marketPrices: { market: number | null; mid: number | null } | null
+  tcgCardId: string; name: string; game: string
+  setName: string | null; setCode: string | null; number?: string | null
+  rarity: string | null; type: string | null
+  subtypes: string[]; types: string[]
+  hp: string | null; artist: string | null; flavorText: string | null; regulationMark: string | null
+  attacks: CardAttack[]; weaknesses: CardWeakness[]; resistances: CardWeakness[]
+  retreatCost: string[]; convertedRetreatCost: number | null
+  imageUrlSmall: string | null; imageUrlLarge: string | null
+  allPrices: CardAllPrices | null
+  marketPrices: CardPriceVariant | null
   cachedAt: string
+}
+
+export interface DeckCard {
+  id: string; name: string; quantity: number
+  setCode?: string; setName?: string; number?: string
+  imageSmall?: string; type?: string; hp?: string
+}
+
+export interface DeckDto {
+  id: string; userId: string; name: string; game: string; format: string
+  cardsJson: string; isPublic: boolean; cardCount: number
+  createdAt: string; updatedAt: string
+}
+
+export interface DeckListDto {
+  id: string; name: string; game: string; format: string
+  isPublic: boolean; cardCount: number; updatedAt: string
 }
 
 export interface Championship {
@@ -574,8 +611,23 @@ export const tcgApi = {
   search: (name: string, game?: string, page = 1, pageSize = 20) =>
     api.get<{ items: CardCache[]; totalCount: number; totalPages: number }>('/api/tcg/search',
       { params: { name, game, page, pageSize } }),
-  getCard: (id: string) => api.get<CardCache>(`/api/tcg/cards/${id}`),
-  sets:    (game: string) => api.get('/api/tcg/sets', { params: { game } }),
+  searchByCode: (set: string, num: string, game = 'Pokemon') =>
+    api.get<{ items: CardCache[]; totalCount: number }>('/api/tcg/search',
+      { params: { set, num, game } }),
+  getCard:  (id: string) => api.get<CardCache>(`/api/tcg/cards/${id}`),
+  sets:     (game: string) => api.get('/api/tcg/sets', { params: { game } }),
+  brlRate:  () => api.get<{ usdToBrl: number }>('/api/tcg/brl-rate'),
+}
+
+export const deckApi = {
+  list:   (game?: string) => api.get<DeckListDto[]>('/api/deck', { params: game ? { game } : {} }),
+  get:    (id: string)    => api.get<DeckDto>(`/api/deck/${id}`),
+  create: (deck: { name: string; game: string; format?: string; cardsJson: string; isPublic: boolean }) =>
+    api.post<DeckDto>('/api/deck', deck),
+  update: (id: string, deck: { name: string; game: string; format?: string; cardsJson: string; isPublic: boolean }) =>
+    api.put<DeckDto>(`/api/deck/${id}`, deck),
+  delete: (id: string) => api.delete(`/api/deck/${id}`),
+  getByUser: (userId: string) => api.get<DeckDto[]>(`/api/deck/user/${userId}`),
 }
 
 

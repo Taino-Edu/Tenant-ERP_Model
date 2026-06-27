@@ -168,24 +168,63 @@ public class PagedResult<T>
 }
 
 // -------------------------------------------------------------------------
-// DTOs da API TCG externa (mapeiam a resposta do apitcg.com)
-// Adapte os campos conforme a documentação real da API
+// DTOs da API TCG (pokemontcg.io, Scryfall, YGOProDeck, Riftbound)
 // -------------------------------------------------------------------------
 
-/// <summary>Resposta de uma carta individual da API TCG.</summary>
+/// <summary>Resposta completa de uma carta TCG.</summary>
 public class TcgApiCardResponse
 {
-    public string        Id       { get; set; } = string.Empty;
-    public string        Name     { get; set; } = string.Empty;
-    public string        Game     { get; set; } = string.Empty;
-    public string?       SetName  { get; set; }
-    public string?       SetCode  { get; set; }
-    public string?       Number   { get; set; }
-    public string?       Rarity   { get; set; }
-    public string?       Type     { get; set; }
-    public List<string>? Subtypes { get; set; }
-    public TcgCardImages? Images  { get; set; }
-    public TcgCardPricesApi? Prices { get; set; }
+    public string        Id                   { get; set; } = string.Empty;
+    public string        Name                 { get; set; } = string.Empty;
+    public string        Game                 { get; set; } = string.Empty;
+    public string?       SetName              { get; set; }
+    public string?       SetCode              { get; set; }
+    public string?       Number               { get; set; }
+    public string?       Rarity               { get; set; }
+    /// <summary>Supertype: Pokémon, Trainer, Energy, Creature, Spell…</summary>
+    public string?       Type                 { get; set; }
+    /// <summary>Subtypes: Basic, Stage 1, Item, Supporter, Special…</summary>
+    public List<string>? Subtypes             { get; set; }
+    /// <summary>Tipos de energia/cor: Fire, Water, Psychic…</summary>
+    public List<string>? Types                { get; set; }
+    public string?       Hp                   { get; set; }
+    public string?       Artist               { get; set; }
+    public string?       FlavorText           { get; set; }
+    public string?       RegulationMark       { get; set; }
+    public List<TcgCardAttack>?   Attacks           { get; set; }
+    public List<TcgCardWeakness>? Weaknesses        { get; set; }
+    public List<TcgCardWeakness>? Resistances       { get; set; }
+    public List<string>?          RetreatCost       { get; set; }
+    public int?                   ConvertedRetreatCost { get; set; }
+    public TcgCardImages?         Images            { get; set; }
+    /// <summary>Preços por variação (normal, holofoil, reverseHolofoil…).</summary>
+    public TcgCardAllPrices?      AllPrices         { get; set; }
+    /// <summary>Market price da variação principal (mantido para compatibilidade).</summary>
+    public TcgCardPricesApi?      Prices            { get; set; }
+}
+
+public class TcgCardAttack
+{
+    public string       Name                { get; set; } = string.Empty;
+    public List<string> Cost                { get; set; } = new();
+    public int          ConvertedEnergyCost { get; set; }
+    public string?      Damage              { get; set; }
+    public string?      Text                { get; set; }
+}
+
+public class TcgCardWeakness
+{
+    public string Type  { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+}
+
+public class TcgCardAllPrices
+{
+    public TcgCardPricesApi? Normal              { get; set; }
+    public TcgCardPricesApi? Holofoil            { get; set; }
+    public TcgCardPricesApi? ReverseHolofoil     { get; set; }
+    public TcgCardPricesApi? FirstEditionNormal  { get; set; }
+    public TcgCardPricesApi? FirstEditionHolofoil { get; set; }
 }
 
 public class TcgCardImages
@@ -215,11 +254,11 @@ public class TcgApiSearchResponse
 /// <summary>Set/Expansão de um jogo TCG.</summary>
 public class TcgSetDto
 {
-    public string  Code        { get; set; } = string.Empty;
-    public string  Name        { get; set; } = string.Empty;
-    public string  Game        { get; set; } = string.Empty;
-    public string? Series      { get; set; }
-    public string? LogoUrl     { get; set; }
-    public int     TotalCards  { get; set; }
+    public string    Code        { get; set; } = string.Empty;
+    public string    Name        { get; set; } = string.Empty;
+    public string    Game        { get; set; } = string.Empty;
+    public string?   Series      { get; set; }
+    public string?   LogoUrl     { get; set; }
+    public int       TotalCards  { get; set; }
     public DateTime? ReleaseDate { get; set; }
 }

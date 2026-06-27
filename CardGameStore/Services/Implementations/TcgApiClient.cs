@@ -66,6 +66,9 @@ public class TcgApiClient : ITcgApiClient
         if (normalized.Contains("yu-gi-oh") || normalized.Contains("yugioh") || normalized.Contains("yu gi oh"))
             return await SearchYugiohCardsAsync(name, page, pageSize);
 
+        if (normalized.Contains("riftbound") || normalized.Contains("lol riftbound"))
+            return await SearchRiftboundCardsAsync(name, page, pageSize);
+
         // Para outros jogos (One Piece, Dragon Ball, etc.) retorna vazio sem erro
         _logger.LogDebug("Jogo '{Game}' sem provider configurado — retornando vazio.", game);
         return new TcgApiSearchResponse();
@@ -121,8 +124,11 @@ public class TcgApiClient : ITcgApiClient
     {
         try
         {
-            var q       = Uri.EscapeDataString($"name:*{name}*");
-            var url     = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}";
+            // Busca por código: "set:SV8PT5 number:1" → passa diretamente como query
+            var q = name.StartsWith("set:", StringComparison.OrdinalIgnoreCase)
+                ? Uri.EscapeDataString(name)
+                : Uri.EscapeDataString($"name:*{name}*");
+            var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}";
             var response = await PokemonClient().GetAsync(url);
             response.EnsureSuccessStatusCode();
 
@@ -185,57 +191,117 @@ public class TcgApiClient : ITcgApiClient
     private static TcgApiCardResponse MapPokemonCard(JsonElement c)
     {
         c.TryGetProperty("tcgplayer", out var tcgp);
-        var prices = ExtractPokemonPrices(tcgp);
+        c.TryGetProperty("images",   out var imgs);
+        c.TryGetProperty("set",      out var set);
 
-        c.TryGetProperty("images", out var imgs);
-        c.TryGetProperty("set", out var set);
-        c.TryGetProperty("subtypes", out var subtypesEl);
+        var allPrices = ExtractAllPokemonPrices(tcgp);
+        // market price da variação principal para compatibilidade
+        var mainPrice = allPrices?.Holofoil ?? allPrices?.Normal ?? allPrices?.FirstEditionNormal ?? allPrices?.ReverseHolofoil;
 
         return new TcgApiCardResponse
         {
-            Id       = c.TryGetProperty("id", out var id)         ? $"pokemon:{id.GetString()}" : string.Empty,
-            Name     = c.TryGetProperty("name", out var nm)       ? nm.GetString()!              : string.Empty,
+            Id       = c.TryGetProperty("id", out var id)              ? $"pokemon:{id.GetString()}" : string.Empty,
+            Name     = c.TryGetProperty("name", out var nm)            ? nm.GetString()!              : string.Empty,
             Game     = "Pokemon",
             SetName  = set.ValueKind != JsonValueKind.Undefined &&
-                       set.TryGetProperty("name", out var sn)     ? sn.GetString()               : null,
+                       set.TryGetProperty("name", out var sn)          ? sn.GetString()               : null,
             SetCode  = set.ValueKind != JsonValueKind.Undefined &&
-                       set.TryGetProperty("id", out var sc)       ? sc.GetString()               : null,
-            Number   = c.TryGetProperty("number", out var num)    ? num.GetString()              : null,
-            Rarity   = c.TryGetProperty("rarity", out var rar)    ? rar.GetString()              : null,
-            Type     = c.TryGetProperty("supertype", out var st)  ? st.GetString()               : null,
-            Subtypes = subtypesEl.ValueKind == JsonValueKind.Array
-                       ? subtypesEl.EnumerateArray().Select(s => s.GetString()!).ToList()
-                       : null,
-            Images   = new TcgCardImages
+                       set.TryGetProperty("id", out var sc)            ? sc.GetString()               : null,
+            Number   = c.TryGetProperty("number", out var num)         ? num.GetString()              : null,
+            Rarity   = c.TryGetProperty("rarity", out var rar)         ? rar.GetString()              : null,
+            Type     = c.TryGetProperty("supertype", out var st)       ? st.GetString()               : null,
+            Subtypes = JsonArrayToList(c, "subtypes"),
+            Types    = JsonArrayToList(c, "types"),
+            Hp       = c.TryGetProperty("hp", out var hp)              ? hp.GetString()               : null,
+            Artist   = c.TryGetProperty("artist", out var art)         ? art.GetString()              : null,
+            FlavorText = c.TryGetProperty("flavorText", out var ft)    ? ft.GetString()               : null,
+            RegulationMark = c.TryGetProperty("regulationMark", out var rm) ? rm.GetString()          : null,
+            Attacks    = ExtractPokemonAttacks(c),
+            Weaknesses = ExtractPokemonWeakResist(c, "weaknesses"),
+            Resistances = ExtractPokemonWeakResist(c, "resistances"),
+            RetreatCost = JsonArrayToList(c, "retreatCost"),
+            ConvertedRetreatCost = c.TryGetProperty("convertedRetreatCost", out var crc) &&
+                                   crc.ValueKind == JsonValueKind.Number ? crc.GetInt32() : null,
+            Images = new TcgCardImages
             {
                 Small = imgs.ValueKind != JsonValueKind.Undefined &&
                         imgs.TryGetProperty("small", out var sm) ? sm.GetString() : null,
                 Large = imgs.ValueKind != JsonValueKind.Undefined &&
                         imgs.TryGetProperty("large", out var lg) ? lg.GetString() : null,
             },
-            Prices   = prices,
+            AllPrices = allPrices,
+            Prices    = mainPrice,
         };
     }
 
-    private static TcgCardPricesApi? ExtractPokemonPrices(JsonElement tcgp)
+    private static List<string>? JsonArrayToList(JsonElement el, string prop)
+    {
+        if (!el.TryGetProperty(prop, out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return null;
+        return arr.EnumerateArray().Select(s => s.GetString() ?? "").Where(s => s != "").ToList();
+    }
+
+    private static List<TcgCardAttack>? ExtractPokemonAttacks(JsonElement c)
+    {
+        if (!c.TryGetProperty("attacks", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return null;
+
+        return arr.EnumerateArray().Select(a => new TcgCardAttack
+        {
+            Name                = a.TryGetProperty("name",  out var n) ? n.GetString()! : string.Empty,
+            Cost                = JsonArrayToList(a, "cost") ?? new(),
+            ConvertedEnergyCost = a.TryGetProperty("convertedEnergyCost", out var ec) &&
+                                  ec.ValueKind == JsonValueKind.Number ? ec.GetInt32() : 0,
+            Damage              = a.TryGetProperty("damage", out var d) ? d.GetString() : null,
+            Text                = a.TryGetProperty("text",   out var t) ? t.GetString() : null,
+        }).ToList();
+    }
+
+    private static List<TcgCardWeakness>? ExtractPokemonWeakResist(JsonElement c, string prop)
+    {
+        if (!c.TryGetProperty(prop, out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return null;
+
+        return arr.EnumerateArray().Select(w => new TcgCardWeakness
+        {
+            Type  = w.TryGetProperty("type",  out var t) ? t.GetString()! : string.Empty,
+            Value = w.TryGetProperty("value", out var v) ? v.GetString()! : string.Empty,
+        }).ToList();
+    }
+
+    private static TcgCardAllPrices? ExtractAllPokemonPrices(JsonElement tcgp)
     {
         if (tcgp.ValueKind == JsonValueKind.Undefined) return null;
         if (!tcgp.TryGetProperty("prices", out var pricesEl)) return null;
 
-        // Tenta holofoil → normal → 1stEditionNormal, nessa ordem
-        foreach (var variant in new[] { "holofoil", "normal", "1stEditionNormal", "reverseHolofoil" })
+        static TcgCardPricesApi? ParseVariant(JsonElement prices, string key)
         {
-            if (!pricesEl.TryGetProperty(variant, out var v)) continue;
+            if (!prices.TryGetProperty(key, out var v)) return null;
             return new TcgCardPricesApi
             {
-                Low    = v.TryGetProperty("low",    out var lo) && lo.ValueKind == JsonValueKind.Number ? lo.GetDecimal() : null,
-                Mid    = v.TryGetProperty("mid",    out var mi) && mi.ValueKind == JsonValueKind.Number ? mi.GetDecimal() : null,
-                High   = v.TryGetProperty("high",   out var hi) && hi.ValueKind == JsonValueKind.Number ? hi.GetDecimal() : null,
-                Market = v.TryGetProperty("market", out var mk) && mk.ValueKind == JsonValueKind.Number ? mk.GetDecimal() : null,
+                Low       = GetDecimal(v, "low"),
+                Mid       = GetDecimal(v, "mid"),
+                High      = GetDecimal(v, "high"),
+                Market    = GetDecimal(v, "market"),
+                DirectLow = GetDecimal(v, "directLow"),
             };
         }
-        return null;
+
+        var result = new TcgCardAllPrices
+        {
+            Normal               = ParseVariant(pricesEl, "normal"),
+            Holofoil             = ParseVariant(pricesEl, "holofoil"),
+            ReverseHolofoil      = ParseVariant(pricesEl, "reverseHolofoil"),
+            FirstEditionNormal   = ParseVariant(pricesEl, "1stEditionNormal"),
+            FirstEditionHolofoil = ParseVariant(pricesEl, "1stEditionHolofoil"),
+        };
+
+        return (result.Normal == null && result.Holofoil == null &&
+                result.ReverseHolofoil == null && result.FirstEditionNormal == null) ? null : result;
     }
+
+    private static decimal? GetDecimal(JsonElement el, string prop) =>
+        el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDecimal() : null;
 
     // =========================================================================
     // Scryfall API (MTG) — https://api.scryfall.com/
@@ -461,6 +527,85 @@ public class TcgApiClient : ITcgApiClient
             Subtypes = c.TryGetProperty("race", out var race)  ? new List<string> { race.GetString()! } : null,
             Images  = new TcgCardImages { Small = smallImg, Large = largeImg },
             Prices  = price.HasValue ? new TcgCardPricesApi { Market = price } : null,
+        };
+    }
+
+    // =========================================================================
+    // LoL: Riftbound API — TCG físico da Riot Games
+    // URL base configurável via appsettings: TcgSettings:RiftboundApiUrl
+    // Endpoint esperado (community API): GET /cards?name={name}&page={page}&pageSize={pageSize}
+    // =========================================================================
+
+    private HttpClient RiftboundClient() => _factory.CreateClient("RiftboundApi");
+
+    private async Task<TcgApiSearchResponse> SearchRiftboundCardsAsync(string name, int page, int pageSize)
+    {
+        try
+        {
+            var q        = Uri.EscapeDataString(name);
+            var url      = $"/cards?name={q}&page={page}&pageSize={pageSize}";
+            var response = await RiftboundClient().GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Riftbound API retornou {Status} para '{Name}'", response.StatusCode, name);
+                return new TcgApiSearchResponse();
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var doc  = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var cards = root.TryGetProperty("data", out var dataArr)
+                ? dataArr.EnumerateArray().Select(MapRiftboundCard).ToList()
+                : root.ValueKind == JsonValueKind.Array
+                    ? root.EnumerateArray().Select(MapRiftboundCard).Take(pageSize).ToList()
+                    : new List<TcgApiCardResponse>();
+
+            return new TcgApiSearchResponse
+            {
+                Cards      = cards,
+                TotalCount = root.TryGetProperty("total", out var total) ? total.GetInt32() : cards.Count,
+                Page       = page,
+                PageSize   = pageSize,
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Erro de conexão com Riftbound API para '{Name}'", name);
+            return new TcgApiSearchResponse();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao pesquisar cartas Riftbound '{Name}'", name);
+            return new TcgApiSearchResponse();
+        }
+    }
+
+    private static TcgApiCardResponse MapRiftboundCard(JsonElement c)
+    {
+        return new TcgApiCardResponse
+        {
+            Id       = c.TryGetProperty("id", out var id)       ? $"riftbound:{id.GetString()}" : $"riftbound:{Guid.NewGuid()}",
+            Name     = c.TryGetProperty("name", out var nm)     ? nm.GetString()!                : string.Empty,
+            Game     = "LoL Riftbound",
+            SetName  = c.TryGetProperty("set", out var set)     ? set.GetString()               : null,
+            SetCode  = c.TryGetProperty("setCode", out var sc)  ? sc.GetString()               : null,
+            Number   = c.TryGetProperty("number", out var num)  ? num.GetString()              : null,
+            Rarity   = c.TryGetProperty("rarity", out var rar)  ? rar.GetString()              : null,
+            Type     = c.TryGetProperty("type", out var t)      ? t.GetString()                 : null,
+            Subtypes = c.TryGetProperty("subtypes", out var sub) && sub.ValueKind == JsonValueKind.Array
+                       ? sub.EnumerateArray().Select(s => s.GetString()!).ToList()
+                       : c.TryGetProperty("region", out var reg) && reg.ValueKind == JsonValueKind.String
+                           ? new List<string> { reg.GetString()! }
+                           : null,
+            Images   = new TcgCardImages
+            {
+                Small = c.TryGetProperty("imageSmall", out var sm) ? sm.GetString()
+                      : c.TryGetProperty("image", out var img)     ? img.GetString() : null,
+                Large = c.TryGetProperty("imageLarge", out var lg) ? lg.GetString()
+                      : c.TryGetProperty("image", out var img2)    ? img2.GetString() : null,
+            },
         };
     }
 }
