@@ -213,7 +213,7 @@ public class TcgApiClient : ITcgApiClient
             // Se não houver nenhum filtro, busca a carta com maior nome (fallback)
             var baseQ = parts.Count > 0 ? string.Join(" ", parts) : "*";
             var q   = Uri.EscapeDataString(baseQ);
-            var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}";
+            var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}&orderBy=name";
             var response = await PokemonClient().GetAsync(url);
             response.EnsureSuccessStatusCode();
 
@@ -221,8 +221,12 @@ public class TcgApiClient : ITcgApiClient
             var doc     = JsonDocument.Parse(json);
             var root    = doc.RootElement;
 
+            var seen  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var cards = root.TryGetProperty("data", out var dataArr)
-                ? dataArr.EnumerateArray().Select(MapPokemonCard).ToList()
+                ? dataArr.EnumerateArray()
+                         .Select(MapPokemonCard)
+                         .Where(c => !string.IsNullOrEmpty(c.Id) && seen.Add(c.Id))
+                         .ToList()
                 : new List<TcgApiCardResponse>();
 
             return new TcgApiSearchResponse

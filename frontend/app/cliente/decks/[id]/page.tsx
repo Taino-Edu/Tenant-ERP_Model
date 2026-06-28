@@ -78,8 +78,12 @@ function CardGridItem({ card, qty, maxCopies, onAdd, onPreview }: {
       {/* imagem */}
       <button onClick={() => onPreview(card)} className="w-full aspect-[2.5/3.5] bg-gray-100 overflow-hidden">
         {card.imageUrlSmall
-          ? <img src={card.imageUrlSmall} alt={card.name} className="w-full h-full object-cover" loading="lazy" />
-          : <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 px-1 text-center">{card.name}</div>}
+          ? <img src={card.imageUrlSmall} alt={card.name} className="w-full h-full object-cover" loading="lazy"
+              onError={e => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.removeAttribute('hidden') }}
+            />
+          : null}
+        <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400 px-1 text-center"
+          hidden={!!card.imageUrlSmall}>{card.name}</div>
       </button>
       {/* info */}
       <div className="px-1.5 py-1 flex-1 flex flex-col gap-0.5">
@@ -309,7 +313,7 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
 
   const searchPlaceholder = useMemo(() => {
     switch (game) {
-      case 'Pokemon':       return 'Nome (Pikachu) ou código (PAL 058, SVI 001)'
+      case 'Pokemon':       return 'Nome em inglês (Pikachu) ou código (PAL 058)'
       case 'MTG':           return 'Nome (Lightning Bolt) ou código (MH3 232, THB 001a)'
       case 'Yu-Gi-Oh!':     return 'Nome, código (DUNE-EN001) ou passcode (89631139)'
       case 'LoL Riftbound': return 'Nome (Jinx) ou código (OGN-296)'
@@ -511,6 +515,13 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
                 <SlidersHorizontal className={`w-4 h-4 ${showFilter ? '' : 'text-white'}`} style={showFilter ? { color: C.navy } : {}} />
               </button>
             </div>
+
+            {/* Aviso de idioma — Pokémon */}
+            {isPokemon && (
+              <p className="text-[10px] text-white/40 -mt-1 px-1">
+                A API Pokémon usa nomes em inglês: <em>Rocket&apos;s Transmission</em>, <em>Mewtwo-EX</em>, <em>Dark Blastoise</em>…
+              </p>
+            )}
 
             {/* Filtros — dinâmicos por jogo */}
             {showFilter && (

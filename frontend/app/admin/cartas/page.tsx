@@ -697,7 +697,11 @@ export default function CartasPage() {
       {/* Busca */}
       <div className="card flex flex-col gap-3">
         <p className="text-xs text-amber-400 flex items-center gap-1.5">
-          ⚠️ Busca em <strong>inglês</strong> — use o nome original da carta. Código: <code className="bg-surface-700 px-1 rounded">PAL 058</code> ou <code className="bg-surface-700 px-1 rounded">SVI 189</code>
+          ⚠️ Busca em <strong>inglês</strong> —{' '}
+          {isPokemon
+            ? <>use o nome em inglês: <em>Rocket&apos;s Transmission</em>, <em>Dark Mewtwo</em>, <em>Rocket&apos;s Mewtwo ex</em>. Código: <code className="bg-surface-700 px-1 rounded">PAL 058</code> ou <code className="bg-surface-700 px-1 rounded">ex6 12</code></>
+            : <>use o nome original da carta. Código: <code className="bg-surface-700 px-1 rounded">PAL 058</code> ou <code className="bg-surface-700 px-1 rounded">SVI 189</code></>
+          }
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <select className="input sm:w-44" value={game} onChange={e => setGame(e.target.value)}>
