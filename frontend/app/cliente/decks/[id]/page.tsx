@@ -117,36 +117,98 @@ function CardPreviewModal({ card, onClose, onAdd, qty, maxCopies, brlRate }: {
               : <div className="w-full aspect-[2.5/3.5] rounded-xl bg-gray-100" />}
           </div>
           {/* dados */}
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <p className="font-black text-base leading-tight" style={{ color: C.navy }}>{card.name}</p>
-            {card.hp && <p className="text-sm font-bold" style={{ color: C.blue2 }}>HP {card.hp}</p>}
-            <p className="text-xs" style={{ color: C.muted }}>{card.setName} · {card.setCode} #{card.number}</p>
-            {card.rarity && <p className="text-xs" style={{ color: C.muted }}>{card.rarity}</p>}
-            {card.types?.length > 0 && <p className="text-xs" style={{ color: C.muted }}>Tipo: {card.types.join(', ')}</p>}
-            {card.artist && <p className="text-[10px]" style={{ color: C.muted }}>Ilustração: {card.artist}</p>}
-            {/* ataques */}
+          <div className="flex-1 min-w-0 space-y-2 overflow-y-auto max-h-[60vh] pr-1">
+            <div>
+              <p className="font-black text-base leading-tight" style={{ color: C.navy }}>{card.name}</p>
+              <p className="text-xs mt-0.5" style={{ color: C.muted }}>{card.setName}{card.setCode && ` · ${card.setCode}`}{card.number && ` #${card.number}`}</p>
+            </div>
+
+            {/* Tags */}
+            <div className="flex flex-wrap gap-1">
+              {card.hp && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: '#fee2e2', color: '#b91c1c' }}>{card.game === 'Pokemon' ? `HP ${card.hp}` : card.hp}</span>}
+              {card.rarity && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: C.bg, color: C.muted }}>{card.rarity}</span>}
+              {card.types?.map(t => <span key={t} className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: C.bg, color: C.blue2 }}>{t}</span>)}
+              {card.subtypes?.slice(0,2).map(s => <span key={s} className="text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: C.bg, color: C.muted }}>{s}</span>)}
+            </div>
+
+            {/* Ataques (Pokemon) */}
             {card.attacks?.length > 0 && (
-              <div className="space-y-1 mt-1">
+              <div className="space-y-1">
                 {card.attacks.map((a, i) => (
                   <div key={i} className="rounded-lg p-1.5 text-[10px]" style={{ backgroundColor: C.bg }}>
-                    <span className="font-black" style={{ color: C.navy }}>{a.name}</span>
-                    {a.damage && <span className="ml-1 font-bold" style={{ color: C.blue2 }}>{a.damage}</span>}
-                    {a.cost?.length > 0 && <span className="ml-1" style={{ color: C.muted }}>[{a.cost.join(',')}]</span>}
+                    <div className="flex items-center justify-between">
+                      <span className="font-black" style={{ color: C.navy }}>{a.name}</span>
+                      {a.damage && <span className="font-black" style={{ color: C.blue2 }}>{a.damage}</span>}
+                    </div>
+                    {a.cost?.length > 0 && <p style={{ color: C.muted }}>Custo: {a.cost.join(' ')}</p>}
                     {a.text && <p className="mt-0.5 leading-snug" style={{ color: C.muted }}>{a.text}</p>}
                   </div>
                 ))}
               </div>
             )}
-            {/* preços */}
-            {price && (
-              <div className="rounded-lg p-2 mt-1" style={{ backgroundColor: C.bg }}>
-                <p className="text-[10px] font-black" style={{ color: C.navy }}>Preço mercado</p>
-                <p className="font-black text-sm" style={{ color: C.blue2 }}>${price.toFixed(2)}</p>
-                {brlRate && <p className="text-[10px]" style={{ color: C.muted }}>≈ R$ {(price * brlRate).toFixed(2)}</p>}
-                {card.allPrices?.holofoil?.market   && <p className="text-[10px]" style={{ color: C.muted }}>Holo: ${card.allPrices.holofoil.market.toFixed(2)}</p>}
-                {card.allPrices?.reverseHolofoil?.market && <p className="text-[10px]" style={{ color: C.muted }}>Rev. Holo: ${card.allPrices.reverseHolofoil.market.toFixed(2)}</p>}
+
+            {/* Oracle text / Efeito (MTG / YGO) */}
+            {card.flavorText && (
+              <div className="rounded-lg p-2 text-[10px] leading-relaxed whitespace-pre-wrap" style={{ backgroundColor: C.bg, color: C.muted }}>
+                <p className="font-black mb-0.5" style={{ color: C.navy }}>
+                  {card.game === 'MTG' ? 'Texto de regras' : card.game === 'Yu-Gi-Oh!' ? 'Efeito' : 'Texto'}
+                </p>
+                {card.flavorText}
               </div>
             )}
+
+            {/* Fraquezas / Resistências (Pokemon) */}
+            {(card.weaknesses?.length > 0 || card.resistances?.length > 0) && (
+              <div className="flex gap-4 text-[10px]" style={{ color: C.muted }}>
+                {card.weaknesses?.length > 0 && (
+                  <div>
+                    <p className="font-black mb-0.5">Fraqueza</p>
+                    {card.weaknesses.map(w => <span key={w.type} className="font-bold" style={{ color: '#ef4444' }}>{w.type} {w.value}</span>)}
+                  </div>
+                )}
+                {card.resistances?.length > 0 && (
+                  <div>
+                    <p className="font-black mb-0.5">Resistência</p>
+                    {card.resistances.map(r => <span key={r.type} className="font-bold" style={{ color: C.blue2 }}>{r.type} {r.value}</span>)}
+                  </div>
+                )}
+                {card.retreatCost?.length > 0 && (
+                  <div>
+                    <p className="font-black mb-0.5">Recuo</p>
+                    <span>{card.retreatCost.length}✦</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Preços */}
+            {price && (
+              <div className="rounded-lg p-2" style={{ backgroundColor: C.bg }}>
+                <p className="text-[10px] font-black mb-1" style={{ color: C.navy }}>Preço de mercado</p>
+                <p className="font-black text-sm" style={{ color: C.blue2 }}>${price.toFixed(2)} <span className="text-[10px] font-normal" style={{ color: C.muted }}>USD</span></p>
+                {brlRate && <p className="text-xs font-bold" style={{ color: '#16a34a' }}>R$ {(price * brlRate).toFixed(2)}</p>}
+
+                {/* Variantes */}
+                {card.allPrices && (
+                  <div className="grid grid-cols-2 gap-1 mt-2">
+                    {[
+                      { l: 'Normal',       p: card.allPrices.normal },
+                      { l: 'Holofoil',     p: card.allPrices.holofoil },
+                      { l: 'Reverse Holo', p: card.allPrices.reverseHolofoil },
+                      { l: '1ª Ed.',       p: card.allPrices.firstEditionHolofoil ?? card.allPrices.firstEditionNormal },
+                    ].filter(v => v.p?.market || v.p?.mid).map(v => (
+                      <div key={v.l} className="rounded p-1" style={{ backgroundColor: C.white }}>
+                        <p className="text-[9px]" style={{ color: C.muted }}>{v.l}</p>
+                        <p className="text-[10px] font-bold" style={{ color: C.blue2 }}>${(v.p!.market ?? v.p!.mid)!.toFixed(2)}</p>
+                        {brlRate && <p className="text-[9px]" style={{ color: '#16a34a' }}>R$ {((v.p!.market ?? v.p!.mid)! * brlRate).toFixed(2)}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {card.artist && <p className="text-[10px]" style={{ color: C.muted }}>Ilustração: {card.artist}</p>}
           </div>
         </div>
         <div className="px-4 pb-5 flex gap-2">
@@ -177,6 +239,7 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
   const [page,       setPage]       = useState(1)
   const [loading,    setLoading]    = useState(false)
   const [loadMore,   setLoadMore]   = useState(false)
+  const [noApi,      setNoApi]      = useState(false)
   const [sets,       setSets]       = useState<TcgSet[]>([])
   const [selSet,      setSelSet]      = useState('')
   const [selRarity,   setSelRarity]   = useState('')
@@ -199,23 +262,25 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
   }, [game])
 
   const doSearch = useCallback(async (q: string, pg: number, append = false) => {
-    if (q.trim().length < 2) { if (!append) { setResults([]); setTotal(0) }; return }
+    if (q.trim().length < 2) { if (!append) { setResults([]); setTotal(0); setNoApi(false) }; return }
     append ? setLoadMore(true) : setLoading(true)
+    if (!append) setNoApi(false)
     try {
       const codeMatch = q.trim().match(/^([A-Za-z0-9]+)\s+(\d+)$/)
       let items: CardCache[] = [], tot = 0
+      let errMsg: string | undefined
+
       if (codeMatch) {
         const r = await tcgApi.searchByCode(codeMatch[1], codeMatch[2], game)
         items = r.data.items ?? []; tot = r.data.totalCount ?? items.length
+        errMsg = (r.data as any).errorMessage
       } else {
-        const r = await tcgApi.search(
-          q, game, pg, PAGE_SIZE,
-          selSet || undefined,
-          selRarity || undefined,
-          selCardType || undefined
-        )
+        const r = await tcgApi.search(q, game, pg, PAGE_SIZE, selSet || undefined, selRarity || undefined, selCardType || undefined)
         items = r.data.items ?? []; tot = r.data.totalCount ?? items.length
+        errMsg = (r.data as any).errorMessage
       }
+
+      if (errMsg === 'no_api') { setNoApi(true); setResults([]); setTotal(0); return }
       setResults(prev => append ? [...prev, ...items] : items)
       setTotal(tot)
       setPage(pg)
@@ -451,6 +516,15 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
             {loading ? (
               <div className="flex justify-center py-20">
                 <Loader2 className="w-8 h-8 animate-spin" style={{ color: C.blue }} />
+              </div>
+            ) : noApi ? (
+              <div className="text-center py-16 space-y-2 px-4">
+                <p className="text-3xl">🎮</p>
+                <p className="font-bold text-sm" style={{ color: C.navy }}>API não disponível para {game}</p>
+                <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
+                  A Riot Games ainda não disponibilizou uma API pública para o LoL: Riftbound.
+                  Você pode adicionar cartas manualmente pelo painel admin.
+                </p>
               </div>
             ) : results.length === 0 && query.trim().length >= 2 ? (
               <div className="text-center py-16">
