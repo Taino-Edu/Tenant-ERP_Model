@@ -14,6 +14,7 @@
 
 using CardGameStore.DTOs;
 using CardGameStore.Services.Interfaces;
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -24,6 +25,7 @@ public class TcgApiClient : ITcgApiClient
     private readonly IHttpClientFactory          _factory;
     private readonly IConfiguration              _config;
     private readonly ILogger<TcgApiClient>       _logger;
+    private readonly IMemoryCache                _cache;
 
     private static readonly JsonSerializerOptions _json = new()
     {
@@ -31,8 +33,9 @@ public class TcgApiClient : ITcgApiClient
         DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public TcgApiClient(IHttpClientFactory factory, IConfiguration config, ILogger<TcgApiClient> logger)
+    public TcgApiClient(IHttpClientFactory factory, IConfiguration config, ILogger<TcgApiClient> logger, IMemoryCache cache)
     {
+        _cache = cache;
         _factory = factory;
         _config  = config;
         _logger  = logger;
@@ -94,6 +97,9 @@ public class TcgApiClient : ITcgApiClient
         if (normalized.Contains("riftbound") || normalized.Contains("lol riftbound"))
             return await SearchRiftboundCardsAsync(name, page, pageSize);
 
+        if (normalized.Contains("one piece"))
+            return await SearchOnePieceCardsAsync(name, page, pageSize, setCode, rarity, cardType);
+
         _logger.LogDebug("Jogo '{Game}' sem provider configurado — retornando vazio.", game);
         return new TcgApiSearchResponse { ErrorMessage = "no_api" };
     }
@@ -110,6 +116,9 @@ public class TcgApiClient : ITcgApiClient
 
         if (normalized.Contains("riftbound") || normalized.Contains("lol"))
             return await FetchRiftboundSetsAsync();
+
+        if (normalized.Contains("one piece"))
+            return await FetchOnePieceSetsAsync();
 
         return Enumerable.Empty<TcgSetDto>();
     }
@@ -855,6 +864,189 @@ public class TcgApiClient : ITcgApiClient
             FlavorText = c.TryGetProperty("desc", out var desc)   ? desc.GetString() : null,
             Images     = new TcgCardImages { Small = smallImg, Large = largeImg },
             Prices     = price.HasValue ? new TcgCardPricesApi { Market = price } : null,
+        };
+    }
+
+    // =========================================================================
+    // One Piece TCG — OPTCG API (https://optcgapi.com, gratuita, sem auth)
+    //
+    //   A API não suporta busca por nome direto — retorna todas as cartas de
+    //   um tipo. Estratégia:
+    //     1. Código exato (OP01-001): GET /api/sets/card/{code}/
+    //     2. Nome livre: fan-out parallel por tipo (Character, Event, Stage,
+    //        Leader, DON!!), filtro por nome em memória; cada lista de tipo
+    //        é cacheada por 24h no IMemoryCache.
+    //     3. Paginação manual sobre o resultado filtrado.
+    // =========================================================================
+
+    private static readonly System.Text.RegularExpressions.Regex _opCodeRegex =
+        new(@"^[A-Z]{2,6}\d{2}-\d{3}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private HttpClient OptcgClient() => _factory.CreateClient("OptcgApi");
+
+    private async Task<TcgApiSearchResponse> SearchOnePieceCardsAsync(
+        string name, int page, int pageSize,
+        string? setCode = null, string? rarity = null, string? cardType = null)
+    {
+        try
+        {
+            var trimmed = name.Trim();
+
+            // Busca por código exato (ex: OP01-001)
+            if (_opCodeRegex.IsMatch(trimmed.ToUpper()))
+            {
+                var code = trimmed.ToUpper();
+                var resp = await OptcgClient().GetAsync($"/api/sets/card/{Uri.EscapeDataString(code)}/");
+                if (!resp.IsSuccessStatusCode) return new TcgApiSearchResponse();
+                var arr  = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+                var card = arr.ValueKind == JsonValueKind.Array && arr.GetArrayLength() > 0
+                    ? MapOptcgCard(arr[0])
+                    : arr.ValueKind == JsonValueKind.Object ? MapOptcgCard(arr) : null;
+                if (card == null) return new TcgApiSearchResponse();
+                return new TcgApiSearchResponse { Cards = new List<TcgApiCardResponse> { card }, TotalCount = 1, Page = 1, PageSize = pageSize };
+            }
+
+            // Busca por nome: carrega catálogo completo por tipo (cache 24h)
+            var allCards = await GetOptcgCatalogAsync();
+
+            // Aplica filtros
+            IEnumerable<TcgApiCardResponse> filtered = allCards;
+
+            if (!string.IsNullOrWhiteSpace(trimmed))
+                filtered = filtered.Where(c => c.Name != null &&
+                    c.Name.Contains(trimmed, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(setCode))
+                filtered = filtered.Where(c => c.SetCode != null &&
+                    c.SetCode.Equals(setCode, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(rarity))
+                filtered = filtered.Where(c => c.Rarity != null &&
+                    c.Rarity.Equals(rarity, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrWhiteSpace(cardType))
+                filtered = filtered.Where(c => c.Type != null &&
+                    c.Type.Equals(cardType, StringComparison.OrdinalIgnoreCase));
+
+            var list  = filtered.ToList();
+            var total = list.Count;
+            var items = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+            return new TcgApiSearchResponse { Cards = items, TotalCount = total, Page = page, PageSize = pageSize };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao buscar cartas One Piece '{Name}'", name);
+            return new TcgApiSearchResponse();
+        }
+    }
+
+    // Retorna catálogo completo em cache (24h). Fan-out paralelo por tipo.
+    private async Task<IList<TcgApiCardResponse>> GetOptcgCatalogAsync()
+    {
+        const string key = "optcg:catalog";
+        if (_cache.TryGetValue(key, out IList<TcgApiCardResponse>? cached) && cached != null)
+            return cached;
+
+        _logger.LogInformation("OPTCG: atualizando catálogo completo…");
+
+        var types = new[] { "Character", "Event", "Stage", "Leader" };
+        var tasks = types.Select(t => FetchOptcgByTypeAsync(t)).ToArray();
+        var don   = FetchOptcgDonAsync();
+
+        await Task.WhenAll(tasks.Append(don));
+
+        var all = tasks.SelectMany(t => t.Result)
+                       .Concat(don.Result)
+                       .DistinctBy(c => c.Id)
+                       .ToList();
+
+        _cache.Set(key, (IList<TcgApiCardResponse>)all, TimeSpan.FromHours(24));
+        _logger.LogInformation("OPTCG: catálogo com {N} cartas cacheado.", all.Count);
+        return all;
+    }
+
+    private async Task<IList<TcgApiCardResponse>> FetchOptcgByTypeAsync(string cardType)
+    {
+        const string baseKey = "optcg:type:";
+        var cacheKey = baseKey + cardType;
+        if (_cache.TryGetValue(cacheKey, out IList<TcgApiCardResponse>? cached) && cached != null)
+            return cached;
+
+        try
+        {
+            var resp = await OptcgClient().GetAsync($"/api/sets/filtered/?card_type={Uri.EscapeDataString(cardType)}");
+            if (!resp.IsSuccessStatusCode) return Array.Empty<TcgApiCardResponse>();
+            var root = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+            if (root.ValueKind != JsonValueKind.Array) return Array.Empty<TcgApiCardResponse>();
+            var cards = root.EnumerateArray().Select(MapOptcgCard).Where(c => !string.IsNullOrEmpty(c.Id)).ToList();
+            _cache.Set(cacheKey, (IList<TcgApiCardResponse>)cards, TimeSpan.FromHours(24));
+            return cards;
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "OPTCG FetchByType '{T}' falhou", cardType); return Array.Empty<TcgApiCardResponse>(); }
+    }
+
+    private async Task<IList<TcgApiCardResponse>> FetchOptcgDonAsync()
+    {
+        const string cacheKey = "optcg:don";
+        if (_cache.TryGetValue(cacheKey, out IList<TcgApiCardResponse>? cached) && cached != null)
+            return cached;
+        try
+        {
+            var resp = await OptcgClient().GetAsync("/api/allDonCards/");
+            if (!resp.IsSuccessStatusCode) return Array.Empty<TcgApiCardResponse>();
+            var root = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+            if (root.ValueKind != JsonValueKind.Array) return Array.Empty<TcgApiCardResponse>();
+            var cards = root.EnumerateArray().Select(MapOptcgCard).Where(c => !string.IsNullOrEmpty(c.Id)).ToList();
+            _cache.Set(cacheKey, (IList<TcgApiCardResponse>)cards, TimeSpan.FromHours(24));
+            return cards;
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "OPTCG FetchDon falhou"); return Array.Empty<TcgApiCardResponse>(); }
+    }
+
+    private async Task<IEnumerable<TcgSetDto>> FetchOnePieceSetsAsync()
+    {
+        try
+        {
+            var resp = await OptcgClient().GetAsync("/api/allSets/");
+            if (!resp.IsSuccessStatusCode) return Enumerable.Empty<TcgSetDto>();
+            var root = JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+            if (root.ValueKind != JsonValueKind.Array) return Enumerable.Empty<TcgSetDto>();
+            return root.EnumerateArray().Select(s => new TcgSetDto
+            {
+                Code = s.TryGetProperty("set_id",   out var id)   ? id.GetString()!   : "",
+                Name = s.TryGetProperty("set_name", out var nm)   ? nm.GetString()!   : "",
+                Game = "One Piece TCG",
+            }).Where(s => !string.IsNullOrEmpty(s.Code));
+        }
+        catch (Exception ex) { _logger.LogWarning(ex, "OPTCG FetchSets falhou"); return Enumerable.Empty<TcgSetDto>(); }
+    }
+
+    private static TcgApiCardResponse MapOptcgCard(JsonElement c)
+    {
+        static string? Str(JsonElement el, string prop) =>
+            el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+        var id      = Str(c, "card_set_id") ?? "";
+        var imgBase = Str(c, "card_image");
+
+        return new TcgApiCardResponse
+        {
+            Id       = string.IsNullOrEmpty(id) ? "" : $"op:{id}",
+            Name     = Str(c, "card_name") ?? "",
+            Game     = "One Piece TCG",
+            SetName  = Str(c, "set_name"),
+            SetCode  = Str(c, "set_id"),
+            Number   = id,
+            Rarity   = Str(c, "rarity"),
+            Type     = Str(c, "card_type"),
+            Hp       = Str(c, "card_power"),
+            FlavorText = Str(c, "card_text"),
+            Types    = Str(c, "card_color") is string col ? new List<string> { col } : new(),
+            Subtypes = Str(c, "sub_types")  is string sub ? new List<string> { sub } : new(),
+            Images   = imgBase != null ? new TcgCardImages { Small = imgBase, Large = imgBase } : null,
+            Prices   = c.TryGetProperty("market_price", out var mp) && mp.ValueKind == JsonValueKind.Number
+                ? new TcgCardPricesApi { Market = mp.GetDecimal() } : null,
         };
     }
 

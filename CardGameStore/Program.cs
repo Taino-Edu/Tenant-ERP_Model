@@ -273,6 +273,15 @@ builder.Services.AddHttpClient("ScrydexApi", client =>
     client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
 });
 
+// OPTCG API — One Piece TCG (gratuita, sem auth, cobre OP-01..OP-15 + starter decks)
+builder.Services.AddHttpClient("OptcgApi", client =>
+{
+    client.BaseAddress = new Uri("https://optcgapi.com/");
+    client.Timeout     = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
+});
+
 // TCGdex — fonte multilíngue de cartas Pokémon (suporte a português nativo, gratuita, sem auth)
 builder.Services.AddHttpClient("TcgDexApi", client =>
 {
