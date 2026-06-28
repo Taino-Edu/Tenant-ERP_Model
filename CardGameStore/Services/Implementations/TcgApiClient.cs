@@ -437,34 +437,53 @@ public class TcgApiClient : ITcgApiClient
         c.TryGetProperty("prices", out var prices);
         c.TryGetProperty("keywords", out var keywords);
 
+        // Power/Toughness para criaturas
+        var power     = c.TryGetProperty("power",     out var pw)  ? pw.GetString()  : null;
+        var toughness = c.TryGetProperty("toughness", out var tgh) ? tgh.GetString() : null;
+        var manaCost  = c.TryGetProperty("mana_cost", out var mc)  ? mc.GetString()  : null;
+        var oracleText = c.TryGetProperty("oracle_text", out var ot) ? ot.GetString() : null;
+        // CMC/colors
+        var colors    = c.TryGetProperty("colors", out var clrs) && clrs.ValueKind == JsonValueKind.Array
+                        ? clrs.EnumerateArray().Select(x => x.GetString()!).ToList()
+                        : new List<string>();
+
+        static decimal? ParsePrice(JsonElement prices, string key)
+        {
+            return prices.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String &&
+                   decimal.TryParse(v.GetString(), System.Globalization.NumberStyles.Any,
+                       System.Globalization.CultureInfo.InvariantCulture, out var val)
+                   ? val : null;
+        }
+
         return new TcgApiCardResponse
         {
-            Id      = c.TryGetProperty("id", out var id)            ? $"mtg:{id.GetString()}"  : string.Empty,
-            Name    = c.TryGetProperty("name", out var nm)          ? nm.GetString()!           : string.Empty,
-            Game    = "MTG",
-            SetName = c.TryGetProperty("set_name", out var sn)      ? sn.GetString()            : null,
-            SetCode = c.TryGetProperty("set", out var sc)           ? sc.GetString()            : null,
-            Number  = c.TryGetProperty("collector_number", out var cn) ? cn.GetString()         : null,
-            Rarity  = c.TryGetProperty("rarity", out var rar)       ? rar.GetString()           : null,
-            Type    = c.TryGetProperty("type_line", out var tl)     ? tl.GetString()            : null,
-            Subtypes = keywords.ValueKind == JsonValueKind.Array
-                       ? keywords.EnumerateArray().Select(k => k.GetString()!).ToList()
-                       : null,
-            Images  = new TcgCardImages
+            Id         = c.TryGetProperty("id", out var id)              ? $"mtg:{id.GetString()}"  : string.Empty,
+            Name       = c.TryGetProperty("name", out var nm)            ? nm.GetString()!           : string.Empty,
+            Game       = "MTG",
+            SetName    = c.TryGetProperty("set_name", out var sn)        ? sn.GetString()            : null,
+            SetCode    = c.TryGetProperty("set", out var sc)             ? sc.GetString()            : null,
+            Number     = c.TryGetProperty("collector_number", out var cn) ? cn.GetString()           : null,
+            Rarity     = c.TryGetProperty("rarity", out var rar)         ? rar.GetString()           : null,
+            Type       = c.TryGetProperty("type_line", out var tl)       ? tl.GetString()            : null,
+            Hp         = power != null ? $"{power}/{toughness}" : manaCost,
+            RegulationMark = manaCost,
+            FlavorText = oracleText ?? (c.TryGetProperty("flavor_text", out var ft) ? ft.GetString() : null),
+            Subtypes   = keywords.ValueKind == JsonValueKind.Array
+                         ? keywords.EnumerateArray().Select(k => k.GetString()!).ToList()
+                         : null,
+            Types      = colors,
+            Images     = new TcgCardImages
             {
                 Small = imgs.ValueKind != JsonValueKind.Undefined &&
                         imgs.TryGetProperty("small", out var sm) ? sm.GetString() : null,
                 Large = imgs.ValueKind != JsonValueKind.Undefined &&
                         imgs.TryGetProperty("large", out var lg) ? lg.GetString() : null,
             },
-            Prices  = prices.ValueKind != JsonValueKind.Undefined ? new TcgCardPricesApi
+            Prices     = prices.ValueKind != JsonValueKind.Undefined ? new TcgCardPricesApi
             {
-                Low    = prices.TryGetProperty("usd",      out var usd)  && usd.ValueKind  == JsonValueKind.String &&
-                         decimal.TryParse(usd.GetString(), System.Globalization.NumberStyles.Any,
-                             System.Globalization.CultureInfo.InvariantCulture, out var usdVal) ? usdVal : null,
-                Market = prices.TryGetProperty("usd_foil", out var foil) && foil.ValueKind == JsonValueKind.String &&
-                         decimal.TryParse(foil.GetString(), System.Globalization.NumberStyles.Any,
-                             System.Globalization.CultureInfo.InvariantCulture, out var foilVal) ? foilVal : null,
+                Low    = ParsePrice(prices, "usd"),
+                Market = ParsePrice(prices, "usd_foil"),
+                Mid    = ParsePrice(prices, "eur"),
             } : null,
         };
     }
@@ -547,19 +566,31 @@ public class TcgApiClient : ITcgApiClient
 
         var cardId = c.TryGetProperty("id", out var id) ? id.GetInt64().ToString() : Guid.NewGuid().ToString();
 
+        // ATK/DEF/Level
+        c.TryGetProperty("atk",       out var atk);
+        c.TryGetProperty("def",       out var def);
+        c.TryGetProperty("level",     out var lvl);
+        c.TryGetProperty("attribute", out var attr);
+
+        var atkStr = atk.ValueKind == JsonValueKind.Number ? atk.GetInt32().ToString() : null;
+        var defStr = def.ValueKind == JsonValueKind.Number ? def.GetInt32().ToString() : null;
+        var ptStr  = (atkStr != null || defStr != null) ? $"ATK {atkStr ?? "?"} / DEF {defStr ?? "?"}" : null;
+        var lvlStr = lvl.ValueKind == JsonValueKind.Number ? $"Nível {lvl.GetInt32()}" : null;
+        var attrStr = attr.ValueKind == JsonValueKind.String ? attr.GetString() : null;
+
         return new TcgApiCardResponse
         {
-            Id      = $"ygo:{cardId}",
-            Name    = c.TryGetProperty("name", out var nm)     ? nm.GetString()!  : string.Empty,
-            Game    = "Yu-Gi-Oh!",
-            SetName = null,
-            SetCode = null,
-            Number  = cardId,
-            Rarity  = null,
-            Type    = c.TryGetProperty("type", out var t)      ? t.GetString()    : null,
-            Subtypes = c.TryGetProperty("race", out var race)  ? new List<string> { race.GetString()! } : null,
-            Images  = new TcgCardImages { Small = smallImg, Large = largeImg },
-            Prices  = price.HasValue ? new TcgCardPricesApi { Market = price } : null,
+            Id         = $"ygo:{cardId}",
+            Name       = c.TryGetProperty("name", out var nm)     ? nm.GetString()!  : string.Empty,
+            Game       = "Yu-Gi-Oh!",
+            Number     = cardId,
+            Type       = c.TryGetProperty("type", out var t)      ? t.GetString()    : null,
+            Subtypes   = c.TryGetProperty("race", out var race)   ? new List<string> { race.GetString()! } : null,
+            Types      = attrStr != null ? new List<string> { attrStr } : new(),
+            Hp         = ptStr ?? lvlStr,
+            FlavorText = c.TryGetProperty("desc", out var desc)   ? desc.GetString() : null,
+            Images     = new TcgCardImages { Small = smallImg, Large = largeImg },
+            Prices     = price.HasValue ? new TcgCardPricesApi { Market = price } : null,
         };
     }
 
@@ -582,7 +613,7 @@ public class TcgApiClient : ITcgApiClient
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Riftbound API retornou {Status} para '{Name}'", response.StatusCode, name);
-                return new TcgApiSearchResponse();
+                return new TcgApiSearchResponse { ErrorMessage = "no_api" };
             }
 
             var json = await response.Content.ReadAsStringAsync();
@@ -605,13 +636,13 @@ public class TcgApiClient : ITcgApiClient
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Erro de conexão com Riftbound API para '{Name}'", name);
-            return new TcgApiSearchResponse();
+            _logger.LogError(ex, "Riftbound API indisponível para '{Name}'", name);
+            return new TcgApiSearchResponse { ErrorMessage = "no_api" };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao pesquisar cartas Riftbound '{Name}'", name);
-            return new TcgApiSearchResponse();
+            return new TcgApiSearchResponse { ErrorMessage = "no_api" };
         }
     }
 

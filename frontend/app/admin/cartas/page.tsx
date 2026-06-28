@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { tcgApi, productApi, CardCache, TcgSet } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Search, Loader2, Zap, Star, DollarSign, Database, PackagePlus, X, Check, PlusCircle, SlidersHorizontal } from 'lucide-react'
+import { Search, Loader2, Zap, Star, DollarSign, Database, PackagePlus, X, Check, PlusCircle, SlidersHorizontal, RefreshCw, TrendingUp } from 'lucide-react'
 import Image from 'next/image'
 import clsx from 'clsx'
 
@@ -258,80 +258,226 @@ function AddToStockModal({ card, onClose }: { card: CardCache; onClose: () => vo
   )
 }
 
-// ── Card item ─────────────────────────────────────────────────────────────────
+// ── Modal de detalhes da carta ────────────────────────────────────────────────
 
-function CardItem({ card }: { card: CardCache }) {
-  const [flipped, setFlipped]     = useState(false)
-  const [addModal, setAddModal]   = useState(false)
-  const price = card.marketPrices?.market ?? card.marketPrices?.mid
-  const isFromCache = new Date(card.cachedAt).getTime() < Date.now() - 60000
+function CardDetailModal({ card, brlRate, onClose, onAddStock }: {
+  card: CardCache; brlRate: number | null; onClose: () => void; onAddStock: () => void
+}) {
+  const [refreshing, setRefreshing] = useState(false)
+  const [current, setCurrent] = useState(card)
+
+  async function refreshPrice() {
+    setRefreshing(true)
+    try {
+      const r = await tcgApi.getCard(current.tcgCardId)
+      setCurrent(r.data)
+      toast.success('Preços atualizados!')
+    } catch { toast.error('Erro ao atualizar preços.') }
+    finally { setRefreshing(false) }
+  }
+
+  const usd = current.marketPrices?.market ?? current.marketPrices?.mid ?? current.marketPrices?.low
+  const brl = usd && brlRate ? usd * brlRate : null
+
+  const priceVariants = current.allPrices ? [
+    { label: 'Normal',        p: current.allPrices.normal },
+    { label: 'Holofoil',      p: current.allPrices.holofoil },
+    { label: 'Reverse Holo',  p: current.allPrices.reverseHolofoil },
+    { label: '1ª Ed. Normal', p: current.allPrices.firstEditionNormal },
+    { label: '1ª Ed. Holo',   p: current.allPrices.firstEditionHolofoil },
+  ].filter(v => v.p?.market || v.p?.mid) : []
 
   return (
-    <>
-      {addModal && <AddToStockModal card={card} onClose={() => setAddModal(false)} />}
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-surface-900 border border-surface-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}>
 
-      <div className="card relative group">
-        {/* Botão "Adicionar ao Estoque" — aparece no hover */}
-        <button
-          onClick={e => { e.stopPropagation(); setAddModal(true) }}
-          className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-brand-600 hover:bg-brand-500 text-white rounded-lg px-2 py-1 text-[10px] font-semibold flex items-center gap-1 shadow-lg"
-          title="Adicionar ao estoque de produtos"
-        >
-          <PackagePlus className="w-3 h-3" /> Estoque
-        </button>
-
-        {/* Imagem (clique para virar) */}
-        <div
-          onClick={() => setFlipped(f => !f)}
-          className="relative w-full aspect-[2.5/3.5] rounded-lg overflow-hidden bg-surface-800 mb-3 cursor-pointer hover:scale-[1.02] transition-transform duration-200"
-        >
-          {card.imageUrlSmall ? (
-            <Image
-              src={flipped ? (card.imageUrlLarge ?? card.imageUrlSmall) : card.imageUrlSmall}
-              alt={card.name}
-              fill className="object-contain"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-4xl">🃏</span>
-            </div>
-          )}
-          {isFromCache && (
-            <div className="absolute top-1.5 right-1.5 bg-black/60 rounded-full p-1" title="Dados do cache">
-              <Database className="w-3 h-3 text-brand-400" />
-            </div>
-          )}
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-surface-700">
+          <div>
+            <h2 className="text-lg font-bold text-white">{current.name}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{current.game}{current.setName && ` · ${current.setName}`}{current.number && ` #${current.number}`}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={refreshPrice} disabled={refreshing} title="Atualizar preços da API"
+              className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1.5">
+              <RefreshCw className={clsx('w-3.5 h-3.5', refreshing && 'animate-spin')} />
+              {refreshing ? 'Atualizando...' : 'Refresh preço'}
+            </button>
+            <button onClick={onClose} className="text-gray-500 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
-        {/* Info */}
-        <div className="space-y-1.5">
-          <p className="font-semibold text-white text-sm leading-tight">{card.name}</p>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {card.rarity && (
-              <span className="badge bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px]">
-                <Star className="w-2.5 h-2.5 mr-0.5" />{card.rarity}
-              </span>
-            )}
-            {card.type && (
-              <span className="badge bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]">
-                <Zap className="w-2.5 h-2.5 mr-0.5" />{card.type}
-              </span>
+        <div className="p-5 flex flex-col sm:flex-row gap-6">
+          {/* Imagem */}
+          <div className="shrink-0 mx-auto sm:mx-0">
+            {current.imageUrlLarge || current.imageUrlSmall ? (
+              <div className="relative w-44 aspect-[2.5/3.5] rounded-xl overflow-hidden">
+                <Image src={current.imageUrlLarge ?? current.imageUrlSmall!} alt={current.name} fill className="object-contain" />
+              </div>
+            ) : (
+              <div className="w-44 aspect-[2.5/3.5] rounded-xl bg-surface-800 flex items-center justify-center">
+                <span className="text-5xl">🃏</span>
+              </div>
             )}
           </div>
 
-          {card.setName && <p className="text-xs text-gray-500 truncate">{card.setName} {card.number && `· #${card.number}`}</p>}
-
-          {price && (
-            <div className="flex items-center gap-1 text-accent-gold">
-              <DollarSign className="w-3.5 h-3.5" />
-              <span className="font-bold text-sm">${price.toFixed(2)}</span>
-              <span className="text-xs text-gray-500">USD</span>
+          {/* Detalhes */}
+          <div className="flex-1 space-y-4 min-w-0">
+            {/* Tags */}
+            <div className="flex flex-wrap gap-2">
+              {current.rarity && <span className="badge bg-amber-500/15 text-amber-400 border-amber-500/30">{current.rarity}</span>}
+              {current.type && <span className="badge bg-blue-500/15 text-blue-400 border-blue-500/30">{current.type}</span>}
+              {current.hp && <span className="badge bg-red-500/15 text-red-400 border-red-500/30">{current.hp}</span>}
+              {current.types?.map(t => <span key={t} className="badge bg-purple-500/15 text-purple-400 border-purple-500/30">{t}</span>)}
+              {current.subtypes?.slice(0,3).map(s => <span key={s} className="badge bg-green-500/15 text-green-400 border-green-500/30">{s}</span>)}
             </div>
-          )}
+
+            {/* Preço principal */}
+            <div className="bg-surface-800 rounded-xl p-4 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-gray-400 font-semibold uppercase tracking-wider">
+                <TrendingUp className="w-3.5 h-3.5" /> Preço de mercado
+              </div>
+              {usd ? (
+                <div className="flex items-baseline gap-3 flex-wrap">
+                  <span className="text-2xl font-black text-accent-gold">${usd.toFixed(2)} <span className="text-sm font-normal text-gray-500">USD</span></span>
+                  {brl && <span className="text-lg font-bold text-green-400">R$ {brl.toFixed(2)}</span>}
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm">Preço não disponível</p>
+              )}
+              {brlRate && <p className="text-[10px] text-gray-600">Taxa: 1 USD = R$ {brlRate.toFixed(2)}</p>}
+            </div>
+
+            {/* Variantes de preço (Pokemon) */}
+            {priceVariants.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Variantes</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {priceVariants.map(v => (
+                    <div key={v.label} className="bg-surface-800 rounded-lg p-2.5">
+                      <p className="text-[10px] text-gray-500 mb-1">{v.label}</p>
+                      <p className="text-sm font-bold text-accent-gold">${(v.p!.market ?? v.p!.mid)!.toFixed(2)}</p>
+                      {brlRate && <p className="text-xs text-green-400">R$ {((v.p!.market ?? v.p!.mid)! * brlRate).toFixed(2)}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ataques (Pokemon) */}
+            {current.attacks && current.attacks.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Ataques</p>
+                {current.attacks.map((atk, i) => (
+                  <div key={i} className="bg-surface-800 rounded-lg p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-white">{atk.name}</span>
+                      {atk.damage && <span className="text-sm font-black text-red-400">{atk.damage}</span>}
+                    </div>
+                    {atk.cost?.length > 0 && <p className="text-[10px] text-gray-500">Custo: {atk.cost.join(' ')}</p>}
+                    {atk.text && <p className="text-xs text-gray-400 leading-relaxed">{atk.text}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Oracle text (MTG) / Efeito (YGO) */}
+            {current.flavorText && (
+              <div className="space-y-1">
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+                  {current.game === 'MTG' ? 'Texto de regras' : current.game === 'Yu-Gi-Oh!' ? 'Efeito' : 'Texto'}
+                </p>
+                <p className="text-xs text-gray-300 leading-relaxed bg-surface-800 rounded-lg p-3 whitespace-pre-wrap">{current.flavorText}</p>
+              </div>
+            )}
+
+            {/* Fraquezas / Resistências (Pokemon) */}
+            {(current.weaknesses?.length > 0 || current.resistances?.length > 0) && (
+              <div className="flex gap-4 text-xs">
+                {current.weaknesses?.length > 0 && (
+                  <div>
+                    <p className="text-gray-500 mb-1">Fraqueza</p>
+                    {current.weaknesses.map(w => <span key={w.type} className="text-red-400 font-bold">{w.type} {w.value}</span>)}
+                  </div>
+                )}
+                {current.resistances?.length > 0 && (
+                  <div>
+                    <p className="text-gray-500 mb-1">Resistência</p>
+                    {current.resistances.map(r => <span key={r.type} className="text-blue-400 font-bold">{r.type} {r.value}</span>)}
+                  </div>
+                )}
+                {current.retreatCost?.length > 0 && (
+                  <div>
+                    <p className="text-gray-500 mb-1">Recuo</p>
+                    <span className="text-gray-300">{current.retreatCost.length}✦</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button onClick={onAddStock} className="btn-primary w-full justify-center">
+              <PackagePlus className="w-4 h-4" /> Adicionar ao Estoque
+            </button>
+          </div>
         </div>
       </div>
-    </>
+    </div>
+  )
+}
+
+// ── Card item — click abre modal de detalhes ──────────────────────────────────
+
+function CardItem({ card, brlRate, onDetail }: { card: CardCache; brlRate: number | null; onDetail: (c: CardCache) => void }) {
+  const price = card.marketPrices?.market ?? card.marketPrices?.mid
+  const brl   = price && brlRate ? price * brlRate : null
+  const isFromCache = new Date(card.cachedAt).getTime() < Date.now() - 60000
+
+  return (
+    <div className="card relative group cursor-pointer hover:border-brand-500/50 transition-colors"
+      onClick={() => onDetail(card)}>
+
+      {/* Badge cache */}
+      {isFromCache && (
+        <div className="absolute top-2 right-2 z-10 bg-black/60 rounded-full p-1" title="Cache MongoDB">
+          <Database className="w-3 h-3 text-brand-400" />
+        </div>
+      )}
+
+      {/* Imagem */}
+      <div className="relative w-full aspect-[2.5/3.5] rounded-lg overflow-hidden bg-surface-800 mb-3">
+        {card.imageUrlSmall ? (
+          <Image src={card.imageUrlSmall} alt={card.name} fill className="object-contain group-hover:scale-105 transition-transform duration-200" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-4xl">🃏</span>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="space-y-1.5">
+        <p className="font-semibold text-white text-sm leading-tight line-clamp-2">{card.name}</p>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {card.rarity && <span className="badge bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px]"><Star className="w-2.5 h-2.5 mr-0.5" />{card.rarity}</span>}
+          {card.type && <span className="badge bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px]"><Zap className="w-2.5 h-2.5 mr-0.5" />{card.type.split('—')[0].trim()}</span>}
+        </div>
+        {card.setName && <p className="text-[10px] text-gray-500 truncate">{card.setName}{card.number && ` #${card.number}`}</p>}
+        {price ? (
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1 text-accent-gold">
+              <DollarSign className="w-3 h-3" /><span className="font-bold text-sm">${price.toFixed(2)}</span>
+              <span className="text-[10px] text-gray-500">USD</span>
+            </div>
+            {brl && <p className="text-xs text-green-400 font-semibold">R$ {brl.toFixed(2)}</p>}
+          </div>
+        ) : (
+          <p className="text-[10px] text-gray-600">Sem preço</p>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -351,38 +497,57 @@ export default function CartasPage() {
   const [totalPages, setTotalPages] = useState(0)
   const [page,       setPage]       = useState(1)
   const [ownModal,   setOwnModal]   = useState(false)
+  const [detailCard, setDetailCard] = useState<CardCache | null>(null)
+  const [addStockCard, setAddStockCard] = useState<CardCache | null>(null)
+  const [brlRate,    setBrlRate]    = useState<number | null>(null)
+  const [brlUpdated, setBrlUpdated] = useState<Date | null>(null)
+  const [refreshingBrl, setRefreshingBrl] = useState(false)
+  const [noApi,      setNoApi]      = useState(false)
 
   const gameFilters = GAME_FILTERS[game] ?? GAME_FILTERS['Pokemon']
 
+  const fetchBrl = useCallback(async () => {
+    setRefreshingBrl(true)
+    try {
+      const r = await tcgApi.brlRate()
+      setBrlRate((r.data as any).usdToBrl)
+      setBrlUpdated(new Date())
+    } catch {} finally { setRefreshingBrl(false) }
+  }, [])
+
+  useEffect(() => { fetchBrl() }, [fetchBrl])
+
   // Carrega sets quando muda o jogo
   useEffect(() => {
-    setSelSet(''); setSelRarity(''); setSelType('')
+    setSelSet(''); setSelRarity(''); setSelType(''); setNoApi(false)
     if (game) tcgApi.sets(game).then((r: any) => setSets(r.data ?? [])).catch(() => setSets([]))
   }, [game])
 
   async function handleSearch(p = 1) {
     if (!query.trim()) { toast.error('Digite o nome ou código da carta'); return }
-    setLoading(true)
+    setLoading(true); setNoApi(false)
     try {
       const codeMatch = query.trim().match(/^([A-Za-z][A-Za-z0-9]{1,7})\s+(\d{1,3})$/)
-      let data
+      let items: CardCache[] = [], totalPgs = 0
+      let errorMsg: string | undefined
+
       if (codeMatch) {
         const r = await tcgApi.searchByCode(codeMatch[1], codeMatch[2], game || 'Pokemon')
-        data = { items: r.data.items, totalPages: 1 }
+        items = r.data.items ?? []; totalPgs = 1
+        errorMsg = (r.data as any).errorMessage
       } else {
-        const r = await tcgApi.search(
-          query, game || undefined, p, 30,
-          selSet || undefined,
-          selRarity || undefined,
-          selType || undefined
-        )
-        data = { items: r.data.items, totalPages: r.data.totalPages }
+        const r = await tcgApi.search(query, game || undefined, p, 30, selSet || undefined, selRarity || undefined, selType || undefined)
+        items = r.data.items ?? []; totalPgs = r.data.totalPages ?? 0
+        errorMsg = (r.data as any).errorMessage
       }
-      setCards(data.items ?? [])
-      setTotalPages(data.totalPages ?? 0)
+
+      if (errorMsg === 'no_api') { setNoApi(true); setCards([]); setSearched(true); return }
+
+      setCards(items)
+      setTotalPages(totalPgs)
       setPage(p)
       setSearched(true)
-      if (!data.items?.length) toast('Nenhuma carta encontrada. Verifique o nome em inglês ou o código.', { icon: '🔍' })
+      if (!items.length) toast('Nenhuma carta encontrada. Verifique o nome em inglês ou o código.', { icon: '🔍' })
     } catch { toast.error('Erro ao buscar cartas.') }
     finally { setLoading(false) }
   }
@@ -395,17 +560,31 @@ export default function CartasPage() {
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-white">Busca de Cartas TCG</h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            Cache-First: MongoDB → API externa · Passe o mouse sobre a carta para adicionar ao estoque
-          </p>
+          <p className="text-gray-400 text-sm mt-0.5">Clique na carta para ver detalhes e preços · Hover no card para ver ações</p>
         </div>
-        <button
-          onClick={() => setOwnModal(true)}
-          className="btn-primary text-sm shrink-0"
-        >
-          <PlusCircle className="w-4 h-4" />
-          Adicionar Carta Própria
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* BRL Rate */}
+          <div className="flex items-center gap-2 bg-surface-800 border border-surface-700 rounded-xl px-3 py-2 text-sm">
+            <span className="text-gray-400">USD/BRL</span>
+            {brlRate ? (
+              <span className="font-bold text-green-400">R$ {brlRate.toFixed(2)}</span>
+            ) : (
+              <span className="text-gray-600">–</span>
+            )}
+            <button onClick={fetchBrl} disabled={refreshingBrl} title="Atualizar cotação"
+              className="text-gray-500 hover:text-white transition-colors ml-1">
+              <RefreshCw className={clsx('w-3.5 h-3.5', refreshingBrl && 'animate-spin')} />
+            </button>
+            {brlUpdated && (
+              <span className="text-[10px] text-gray-600">
+                {Math.round((Date.now() - brlUpdated.getTime()) / 60000)}min
+              </span>
+            )}
+          </div>
+          <button onClick={() => setOwnModal(true)} className="btn-primary text-sm shrink-0">
+            <PlusCircle className="w-4 h-4" /> Adicionar Carta Própria
+          </button>
+        </div>
       </div>
 
       {/* Busca */}
@@ -475,34 +654,42 @@ export default function CartasPage() {
         )}
       </div>
 
-      {/* Legenda */}
-      <div className="flex items-center gap-4 text-xs text-gray-500 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <Database className="w-3.5 h-3.5 text-brand-400" />
-          <span>Ícone roxo = dado do cache MongoDB</span>
-        </div>
-        <span>·</span>
-        <span>Clique na imagem para ampliar</span>
-        <span>·</span>
-        <div className="flex items-center gap-1.5">
-          <PackagePlus className="w-3.5 h-3.5 text-brand-400" />
-          <span>Hover na carta → botão &quot;Estoque&quot; para cadastrar</span>
-        </div>
-      </div>
+      {/* Modais */}
+      {detailCard && (
+        <CardDetailModal
+          card={detailCard}
+          brlRate={brlRate}
+          onClose={() => setDetailCard(null)}
+          onAddStock={() => { setAddStockCard(detailCard); setDetailCard(null) }}
+        />
+      )}
+      {addStockCard && <AddToStockModal card={addStockCard} onClose={() => setAddStockCard(null)} />}
 
       {/* Grid de resultados */}
       {loading ? (
         <div className="flex items-center justify-center py-24">
           <div className="flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-400 text-sm">Buscando no cache e na API TCG...</p>
+            <p className="text-gray-400 text-sm">Buscando na API TCG...</p>
           </div>
+        </div>
+      ) : noApi ? (
+        <div className="text-center py-16 space-y-3">
+          <p className="text-4xl">🎮</p>
+          <p className="text-white font-bold">API do {game} não disponível publicamente</p>
+          <p className="text-gray-400 text-sm max-w-md mx-auto">
+            A Riot Games ainda não disponibilizou uma API pública para o LoL: Riftbound.
+            Use <strong className="text-white">"Adicionar Carta Própria"</strong> para cadastrar cartas manualmente.
+          </p>
+          <button onClick={() => setOwnModal(true)} className="btn-primary mt-2">
+            <PlusCircle className="w-4 h-4" /> Adicionar Carta Própria
+          </button>
         </div>
       ) : searched && cards.length > 0 ? (
         <>
           <p className="text-gray-400 text-sm">{cards.length} carta{cards.length !== 1 ? 's' : ''} encontrada{cards.length !== 1 ? 's' : ''}</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {cards.map(c => <CardItem key={c.tcgCardId} card={c} />)}
+            {cards.map(c => <CardItem key={c.tcgCardId} card={c} brlRate={brlRate} onDetail={setDetailCard} />)}
           </div>
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2">

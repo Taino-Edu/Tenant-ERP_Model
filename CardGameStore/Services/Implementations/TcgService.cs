@@ -113,13 +113,15 @@ public class TcgService : ITcgService
 
         var result = new PagedResult<CardCache>
         {
-            Items      = apiResult.Cards.Select(MapApiResponseToCache).ToList(),
-            TotalCount = apiResult.TotalCount,
-            Page       = page,
-            PageSize   = pageSize
+            Items        = apiResult.Cards.Select(MapApiResponseToCache).ToList(),
+            TotalCount   = apiResult.TotalCount,
+            Page         = page,
+            PageSize     = pageSize,
+            ErrorMessage = apiResult.ErrorMessage,
         };
 
-        _queryCache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
+        if (string.IsNullOrEmpty(apiResult.ErrorMessage))
+            _queryCache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
         return result;
     }
 

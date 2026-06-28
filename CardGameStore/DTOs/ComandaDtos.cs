@@ -158,13 +158,14 @@ public class EditarItemRequest
 /// <summary>Wrapper genérico para resultados paginados da API.</summary>
 public class PagedResult<T>
 {
-    public List<T> Items      { get; set; } = new();
-    public int     TotalCount { get; set; }
-    public int     Page       { get; set; }
-    public int     PageSize   { get; set; }
-    public int     TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
-    public bool    HasNext    => Page < TotalPages;
-    public bool    HasPrev    => Page > 1;
+    public List<T> Items        { get; set; } = new();
+    public int     TotalCount   { get; set; }
+    public int     Page         { get; set; }
+    public int     PageSize     { get; set; }
+    public int     TotalPages   => (int)Math.Ceiling((double)TotalCount / PageSize);
+    public bool    HasNext      => Page < TotalPages;
+    public bool    HasPrev      => Page > 1;
+    public string? ErrorMessage { get; set; }
 }
 
 // -------------------------------------------------------------------------
@@ -245,10 +246,11 @@ public class TcgCardPricesApi
 /// <summary>Resposta de busca paginada da API TCG.</summary>
 public class TcgApiSearchResponse
 {
-    public List<TcgApiCardResponse> Cards      { get; set; } = new();
-    public int                      TotalCount { get; set; }
-    public int                      Page       { get; set; }
-    public int                      PageSize   { get; set; }
+    public List<TcgApiCardResponse> Cards        { get; set; } = new();
+    public int                      TotalCount   { get; set; }
+    public int                      Page         { get; set; }
+    public int                      PageSize     { get; set; }
+    public string?                  ErrorMessage { get; set; }
 }
 
 /// <summary>Set/Expansão de um jogo TCG.</summary>
