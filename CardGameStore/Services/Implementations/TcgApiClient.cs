@@ -177,7 +177,19 @@ public class TcgApiClient : ITcgApiClient
             var parts = new List<string>();
 
             if (!string.IsNullOrWhiteSpace(name))
-                parts.Add(isStructured ? name : $"name:*{name}*");
+            {
+                if (isStructured)
+                {
+                    parts.Add(name);
+                }
+                else
+                {
+                    // Lucene (pokemontcg.io) não suporta wildcard com espaços —
+                    // usa só a primeira palavra; TCGdex recebe o nome completo.
+                    var pokeNameToken = name.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+                    parts.Add($"name:*{pokeNameToken}*");
+                }
+            }
 
             if (!isStructured)
             {
@@ -218,23 +230,33 @@ public class TcgApiClient : ITcgApiClient
             var q   = Uri.EscapeDataString(baseQ);
             var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}&orderBy=name";
 
-            // pokemontcg.io é a fonte primária — sempre aguardada completamente
+            // pokemontcg.io é a fonte primária — falha não bloqueia o TCGdex
             var pokeResponse = await PokemonClient().GetAsync(url);
-            pokeResponse.EnsureSuccessStatusCode();
 
-            var json = await pokeResponse.Content.ReadAsStringAsync();
-            var doc  = JsonDocument.Parse(json);
-            var root = doc.RootElement;
+            var seen      = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pokeCards = new List<TcgApiCardResponse>();
+            var totalCount = 0;
 
-            var seen  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var pokeCards = root.TryGetProperty("data", out var dataArr)
-                ? dataArr.EnumerateArray()
-                         .Select(MapPokemonCard)
-                         .Where(c => !string.IsNullOrEmpty(c.Id) && seen.Add(c.Id))
-                         .ToList()
-                : new List<TcgApiCardResponse>();
+            if (pokeResponse.IsSuccessStatusCode)
+            {
+                var json = await pokeResponse.Content.ReadAsStringAsync();
+                var doc  = JsonDocument.Parse(json);
+                var root = doc.RootElement;
 
-            var totalCount = root.TryGetProperty("totalCount", out var tc) ? tc.GetInt32() : pokeCards.Count;
+                pokeCards = root.TryGetProperty("data", out var dataArr)
+                    ? dataArr.EnumerateArray()
+                             .Select(MapPokemonCard)
+                             .Where(c => !string.IsNullOrEmpty(c.Id) && seen.Add(c.Id))
+                             .ToList()
+                    : new List<TcgApiCardResponse>();
+
+                totalCount = root.TryGetProperty("totalCount", out var tc) ? tc.GetInt32() : pokeCards.Count;
+            }
+            else
+            {
+                _logger.LogWarning("pokemontcg.io retornou {Status} para query '{Q}' — prosseguindo com TCGdex.",
+                    (int)pokeResponse.StatusCode, baseQ);
+            }
 
             // TCGdex: complementa com nomes PT — timeout de 3s para não atrasar a busca
             if (page == 1 && !string.IsNullOrWhiteSpace(name) && !isStructured)
@@ -263,6 +285,10 @@ public class TcgApiClient : ITcgApiClient
                     }
                 }
             }
+
+            // Se pokemontcg.io não retornou nada, usa a contagem real do TCGdex
+            if (totalCount == 0 && pokeCards.Count > 0)
+                totalCount = pokeCards.Count;
 
             return new TcgApiSearchResponse
             {
