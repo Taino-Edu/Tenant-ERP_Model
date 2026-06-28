@@ -657,14 +657,20 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
                 <p className="text-3xl">🎮</p>
                 <p className="font-bold text-sm" style={{ color: C.navy }}>API não disponível para {game}</p>
                 <p className="text-xs leading-relaxed" style={{ color: C.muted }}>
-                  A Riot Games ainda não disponibilizou uma API pública para o LoL: Riftbound.
-                  Você pode adicionar cartas manualmente pelo painel admin.
+                  {game === 'One Piece TCG'
+                    ? 'A API One Piece ainda não está integrada. Peça ao admin para adicionar as cartas manualmente.'
+                    : 'A Riot Games ainda não disponibilizou uma API pública para o LoL: Riftbound. Você pode adicionar cartas manualmente pelo painel admin.'}
                 </p>
               </div>
             ) : results.length === 0 && query.trim().length >= 2 ? (
               <div className="text-center py-16">
                 <p className="font-bold text-sm" style={{ color: C.muted }}>Nenhuma carta encontrada.</p>
-                <p className="text-xs mt-1" style={{ color: C.muted }}>Tente um nome diferente ou busque pelo código (ex: PAL 058).</p>
+                <p className="text-xs mt-1" style={{ color: C.muted }}>
+                  {game === 'Pokemon'     ? 'Tente o nome em PT ou EN, ou o código (ex: PAL 058).'
+                  : game === 'MTG'        ? 'Tente o nome em inglês ou o código (ex: MH3 232).'
+                  : game === 'Yu-Gi-Oh!' ? 'Tente o nome em inglês ou o código (ex: DUNE-EN001).'
+                  :                        'Tente um nome diferente ou o código da carta.'}
+                </p>
               </div>
             ) : (
               <>

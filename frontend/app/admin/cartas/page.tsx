@@ -661,7 +661,16 @@ export default function CartasPage() {
       setTotalPages(totalPgs)
       setPage(p)
       setSearched(true)
-      if (!items.length) toast('Nenhuma carta encontrada. Verifique o nome em inglês ou os filtros.', { icon: '🔍' })
+      if (!items.length) toast(
+        isPokemon
+          ? 'Nenhuma carta encontrada. Tente o nome em PT ou EN, ou o código (ex: PAL 058).'
+          : game === 'MTG'
+            ? 'Nenhuma carta encontrada. Tente o nome em inglês ou o código (ex: MH3 232).'
+            : game === 'Yu-Gi-Oh!'
+              ? 'Nenhuma carta encontrada. Tente o nome em inglês ou o código (ex: DUNE-EN001).'
+              : 'Nenhuma carta encontrada. Verifique o nome ou o código.',
+        { icon: '🔍' }
+      )
     } catch { toast.error('Erro ao buscar cartas.') }
     finally { setLoading(false) }
   }
@@ -704,11 +713,17 @@ export default function CartasPage() {
       {/* Busca */}
       <div className="card flex flex-col gap-3">
         <p className="text-xs text-amber-400 flex items-center gap-1.5">
-          ⚠️ Busca em <strong>inglês</strong> —{' '}
-          {isPokemon
-            ? <>use o nome em inglês: <em>Rocket&apos;s Transmission</em>, <em>Dark Mewtwo</em>, <em>Rocket&apos;s Mewtwo ex</em>. Código: <code className="bg-surface-700 px-1 rounded">PAL 058</code> ou <code className="bg-surface-700 px-1 rounded">ex6 12</code></>
-            : <>use o nome original da carta. Código: <code className="bg-surface-700 px-1 rounded">PAL 058</code> ou <code className="bg-surface-700 px-1 rounded">SVI 189</code></>
-          }
+          {isPokemon ? (
+            <>🔍 Busca em <strong>português ou inglês</strong> — ex: <em>Pikachu</em>, <em>Transmissor da Equipe Rocket</em>. Código: <code className="bg-surface-700 px-1 rounded">PAL 058</code> ou <code className="bg-surface-700 px-1 rounded">ex6 12</code></>
+          ) : game === 'MTG' ? (
+            <>⚠️ Busca em <strong>inglês</strong> — ex: <em>Lightning Bolt</em>. Código de set: <code className="bg-surface-700 px-1 rounded">MH3 232</code> ou <code className="bg-surface-700 px-1 rounded">THB 001a</code></>
+          ) : game === 'Yu-Gi-Oh!' ? (
+            <>⚠️ Busca em <strong>inglês</strong> — ex: <em>Dark Magician</em>. Código: <code className="bg-surface-700 px-1 rounded">DUNE-EN001</code> ou passcode: <code className="bg-surface-700 px-1 rounded">89631139</code></>
+          ) : game === 'One Piece TCG' ? (
+            <>⚠️ API One Piece ainda não integrada — adicione cartas manualmente pelo painel abaixo.</>
+          ) : (
+            <>⚠️ Busca em <strong>inglês</strong> — ex: <em>Jinx</em>. Código: <code className="bg-surface-700 px-1 rounded">OGN-296</code></>
+          )}
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <select className="input sm:w-44" value={game} onChange={e => setGame(e.target.value)}>
@@ -855,8 +870,10 @@ export default function CartasPage() {
           <p className="text-4xl">🎮</p>
           <p className="text-white font-bold">API do {game} não disponível publicamente</p>
           <p className="text-gray-400 text-sm max-w-md mx-auto">
-            A Riot Games ainda não disponibilizou uma API pública para o LoL: Riftbound.
-            Use <strong className="text-white">"Adicionar Carta Própria"</strong> para cadastrar cartas manualmente.
+            {game === 'One Piece TCG'
+              ? 'Não há API pública integrada para o One Piece TCG.'
+              : 'A Riot Games ainda não disponibilizou uma API pública para o LoL: Riftbound.'}
+            {' '}Use <strong className="text-white">"Adicionar Carta Própria"</strong> para cadastrar cartas manualmente.
           </p>
           <button onClick={() => setOwnModal(true)} className="btn-primary mt-2">
             <PlusCircle className="w-4 h-4" /> Adicionar Carta Própria

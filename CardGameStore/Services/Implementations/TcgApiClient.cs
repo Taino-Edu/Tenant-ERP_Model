@@ -95,7 +95,7 @@ public class TcgApiClient : ITcgApiClient
             return await SearchRiftboundCardsAsync(name, page, pageSize);
 
         _logger.LogDebug("Jogo '{Game}' sem provider configurado — retornando vazio.", game);
-        return new TcgApiSearchResponse();
+        return new TcgApiSearchResponse { ErrorMessage = "no_api" };
     }
 
     public async Task<IEnumerable<TcgSetDto>> FetchSetsAsync(string game)
