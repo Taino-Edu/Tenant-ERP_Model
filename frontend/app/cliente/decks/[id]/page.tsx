@@ -5,6 +5,7 @@ import { deckApi, tcgApi, CardCache, DeckCard } from '@/lib/api'
 import {
   Search, Plus, Minus, Trash2, Save, Loader2,
   ArrowLeft, Globe, Lock, ChevronDown, ChevronUp, Zap,
+  Upload, X,
 } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 
@@ -103,6 +104,9 @@ export default function DeckBuilderPage() {
   const [saving,      setSaving]      = useState(false)
   const [loading,     setLoading]     = useState(!isNew)
   const [showSearch,  setShowSearch]  = useState(true)
+  const [showImport,  setShowImport]  = useState(false)
+  const [importText,  setImportText]  = useState('')
+  const [importing,   setImporting]   = useState(false)
   const [brlRate,     setBrlRate]     = useState<number | null>(null)
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>()
 
@@ -206,6 +210,62 @@ export default function DeckBuilderPage() {
     } catch {
       toast.error('Erro ao salvar.')
     } finally { setSaving(false) }
+  }
+
+  // ── Importar lista de texto (formato limitlesstcg / PTCG Live) ───────────
+
+  async function importDeckList() {
+    const lines = importText.split('\n').map(l => l.trim()).filter(Boolean)
+    // Linhas que começam com número = carta: "4 Pikachu PAL 058"
+    const cardLines = lines.filter(l => /^\d+\s+/.test(l))
+    if (cardLines.length === 0) { toast.error('Nenhuma carta encontrada no texto.'); return }
+
+    setImporting(true)
+    let added = 0, failed: string[] = []
+
+    // Substitui deck atual ou acumula — aqui vamos SUBSTITUIR
+    const newCards: DeckCard[] = []
+
+    for (const line of cardLines) {
+      // Formato: "4 Nome da Carta SET 123"  (set = letras+números maiúsculos, numero = só dígitos no final)
+      const match = line.match(/^(\d+)\s+(.+?)\s+([A-Z0-9]{2,8})\s+(\d+)\s*$/)
+      if (!match) { failed.push(line); continue }
+      const [, qtyStr, name, setCode, number] = match
+      const qty = Math.min(parseInt(qtyStr), maxCopies)
+
+      try {
+        const res = await tcgApi.searchByCode(setCode, number, game)
+        const card = res.data.items?.[0]
+        if (card) {
+          const existing = newCards.find(c => c.id === cardKey(card))
+          if (existing) { existing.quantity = Math.min(existing.quantity + qty, maxCopies) }
+          else newCards.push({
+            id: cardKey(card), name: card.name, quantity: qty,
+            setCode: card.setCode ?? undefined, setName: card.setName ?? undefined,
+            number: card.number ?? undefined, imageSmall: card.imageUrlSmall ?? undefined,
+            type: card.type ?? undefined, hp: card.hp ?? undefined,
+          })
+          added++
+        } else {
+          // Fallback sem imagem — adiciona só com o nome
+          newCards.push({ id: `manual:${setCode}-${number}`, name, quantity: qty, setCode, number })
+          added++
+        }
+      } catch {
+        failed.push(line)
+      }
+    }
+
+    setCards(newCards)
+    setImporting(false)
+    setShowImport(false)
+    setImportText('')
+
+    if (failed.length > 0) {
+      toast(`${added} cartas importadas. ${failed.length} não encontrada(s).`, { icon: '⚠️', duration: 4000 })
+    } else {
+      toast.success(`${added} cartas importadas!`)
+    }
   }
 
   // ── Exportar lista de texto (formato padrão Pokémon) ──────────────────────
@@ -315,17 +375,26 @@ export default function DeckBuilderPage() {
         {/* Busca de cartas */}
         <div className="rounded-2xl overflow-hidden"
           style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)' }}>
-          <button
-            onClick={() => setShowSearch(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 border-b"
-            style={{ borderColor: C.border }}
-          >
-            <span className="flex items-center gap-2 font-bold text-sm" style={{ color: C.navy }}>
-              <Search className="w-4 h-4" style={{ color: C.blue }} />
-              Buscar cartas
-            </span>
-            {showSearch ? <ChevronUp className="w-4 h-4" style={{ color: C.muted }} /> : <ChevronDown className="w-4 h-4" style={{ color: C.muted }} />}
-          </button>
+          <div className="flex items-center border-b" style={{ borderColor: C.border }}>
+            <button
+              onClick={() => setShowSearch(v => !v)}
+              className="flex-1 flex items-center justify-between px-4 py-3"
+            >
+              <span className="flex items-center gap-2 font-bold text-sm" style={{ color: C.navy }}>
+                <Search className="w-4 h-4" style={{ color: C.blue }} />
+                Buscar cartas
+              </span>
+              {showSearch ? <ChevronUp className="w-4 h-4" style={{ color: C.muted }} /> : <ChevronDown className="w-4 h-4" style={{ color: C.muted }} />}
+            </button>
+            <button
+              onClick={() => { setShowImport(v => !v); setShowSearch(false) }}
+              className="px-3 py-3 text-xs font-bold flex items-center gap-1 border-l"
+              style={{ borderColor: C.border, color: C.blue2 }}
+              title="Importar lista de deck"
+            >
+              <Upload className="w-3.5 h-3.5" /> Importar
+            </button>
+          </div>
 
           {showSearch && (
             <>
@@ -352,6 +421,47 @@ export default function DeckBuilderPage() {
                 ))}
               </div>
             </>
+          )}
+
+          {/* Painel de import */}
+          {showImport && (
+            <div className="px-4 py-4 space-y-3">
+              <p className="text-xs font-bold" style={{ color: C.muted }}>
+                Cole a lista de deck (formato limitlesstcg / PTCG Live):
+              </p>
+              <p className="text-[10px] font-mono rounded-lg px-3 py-2" style={{ backgroundColor: C.bg, color: C.muted }}>
+                {'4 Pikachu PAL 058\n2 Raichu PAR 021\n4 Professor\'s Research SVI 189'}
+              </p>
+              <textarea
+                value={importText}
+                onChange={e => setImportText(e.target.value)}
+                placeholder="Cole o deck list aqui..."
+                rows={8}
+                className="w-full rounded-xl p-3 text-xs font-mono outline-none resize-none"
+                style={{ backgroundColor: C.bg, border: `1px solid ${C.border}`, color: C.navy }}
+              />
+              <p className="text-[10px]" style={{ color: C.muted }}>
+                ⚠️ Isso irá <strong>substituir</strong> as cartas do deck atual.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowImport(false); setImportText('') }}
+                  className="flex-1 py-2 rounded-xl text-sm font-bold"
+                  style={{ backgroundColor: C.bg, color: C.muted }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={importDeckList}
+                  disabled={importing || importText.trim().length === 0}
+                  className="flex-1 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                  style={{ backgroundColor: C.blue, color: '#fff' }}
+                >
+                  {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  {importing ? 'Importando...' : 'Importar deck'}
+                </button>
+              </div>
+            </div>
           )}
         </div>
 

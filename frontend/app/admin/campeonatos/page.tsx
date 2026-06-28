@@ -680,7 +680,7 @@ function ChampionshipCard({
                               <Medal className="w-3.5 h-3.5" />{p.placement}º
                             </span>
                           )}
-                          {(c.status === 'Inscricoes' || c.status === 'EmAndamento') && (
+                          {c.status !== 'Finalizado' && c.status !== 'Cancelado' && (
                             <button
                               onClick={() => handleRemove(p)}
                               className="text-gray-400 hover:text-red-400 transition-colors ml-1 shrink-0"
