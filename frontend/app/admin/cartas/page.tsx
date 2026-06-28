@@ -1,8 +1,8 @@
 'use client'
-import { useState } from 'react'
-import { tcgApi, productApi, CardCache } from '@/lib/api'
+import { useState, useEffect } from 'react'
+import { tcgApi, productApi, CardCache, TcgSet } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Search, Loader2, Zap, Star, DollarSign, Database, PackagePlus, X, Check, PlusCircle } from 'lucide-react'
+import { Search, Loader2, Zap, Star, DollarSign, Database, PackagePlus, X, Check, PlusCircle, SlidersHorizontal } from 'lucide-react'
 import Image from 'next/image'
 import clsx from 'clsx'
 
@@ -66,9 +66,7 @@ function AddOwnCardModal({ onClose }: { onClose: () => void }) {
             <div>
               <label className="label">Jogo</label>
               <select className="input" value={game} onChange={e => setGame(e.target.value)}>
-                {['Pokemon', 'Magic: The Gathering', 'Yu-Gi-Oh!', 'One Piece TCG', 'Dragon Ball Super', 'Outro'].map(g => (
-                  <option key={g}>{g}</option>
-                ))}
+                {[...GAMES, 'Outro'].map(g => <option key={g}>{g}</option>)}
               </select>
             </div>
             <div>
@@ -106,6 +104,31 @@ function AddOwnCardModal({ onClose }: { onClose: () => void }) {
 }
 
 const GAMES = ['Pokemon', 'MTG', 'Yu-Gi-Oh!', 'LoL Riftbound']
+
+const GAME_FILTERS: Record<string, { rarityLabel: string; rarities: string[]; typeLabel?: string; types?: string[] }> = {
+  Pokemon: {
+    rarityLabel: 'Raridade',
+    rarities: ['Common','Uncommon','Rare','Rare Holo','Double Rare','Illustration Rare','Special Illustration Rare','Hyper Rare','ACE SPEC Rare','Rare Ultra','Rare Secret','Promo'],
+    typeLabel: 'Tipo',
+    types: ['Pokémon','Trainer','Energy'],
+  },
+  MTG: {
+    rarityLabel: 'Raridade',
+    rarities: ['Common','Uncommon','Rare','Mythic Rare'],
+    typeLabel: 'Tipo',
+    types: ['Creature','Instant','Sorcery','Enchantment','Artifact','Land','Planeswalker','Battle'],
+  },
+  'Yu-Gi-Oh!': {
+    rarityLabel: 'Tipo de carta',
+    rarities: ['Effect Monster','Normal Monster','Ritual Monster','Fusion Monster','Synchro Monster','Xyz Monster','Link Monster','Pendulum Effect Monster','Spell Card','Trap Card'],
+    typeLabel: 'Atributo',
+    types: ['DARK','LIGHT','FIRE','WATER','EARTH','WIND','DIVINE'],
+  },
+  'LoL Riftbound': {
+    rarityLabel: 'Raridade',
+    rarities: ['Common','Rare','Epic','Legendary'],
+  },
+}
 
 // ── Modal: adicionar carta ao estoque ─────────────────────────────────────────
 
@@ -315,27 +338,44 @@ function CardItem({ card }: { card: CardCache }) {
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function CartasPage() {
-  const [query, setQuery]       = useState('')
-  const [game, setGame]         = useState('Pokemon')
-  const [cards, setCards]       = useState<CardCache[]>([])
-  const [loading, setLoading]   = useState(false)
-  const [searched, setSearched] = useState(false)
+  const [query,      setQuery]      = useState('')
+  const [game,       setGame]       = useState('Pokemon')
+  const [selSet,     setSelSet]     = useState('')
+  const [selRarity,  setSelRarity]  = useState('')
+  const [selType,    setSelType]    = useState('')
+  const [showFilter, setShowFilter] = useState(false)
+  const [sets,       setSets]       = useState<TcgSet[]>([])
+  const [cards,      setCards]      = useState<CardCache[]>([])
+  const [loading,    setLoading]    = useState(false)
+  const [searched,   setSearched]   = useState(false)
   const [totalPages, setTotalPages] = useState(0)
-  const [page, setPage]         = useState(1)
-  const [ownModal, setOwnModal] = useState(false)
+  const [page,       setPage]       = useState(1)
+  const [ownModal,   setOwnModal]   = useState(false)
+
+  const gameFilters = GAME_FILTERS[game] ?? GAME_FILTERS['Pokemon']
+
+  // Carrega sets quando muda o jogo
+  useEffect(() => {
+    setSelSet(''); setSelRarity(''); setSelType('')
+    if (game) tcgApi.sets(game).then((r: any) => setSets(r.data ?? [])).catch(() => setSets([]))
+  }, [game])
 
   async function handleSearch(p = 1) {
     if (!query.trim()) { toast.error('Digite o nome ou código da carta'); return }
     setLoading(true)
     try {
-      // Detecta código: "PAL 058", "SVI 189", "sv8pt5 1", etc.
       const codeMatch = query.trim().match(/^([A-Za-z][A-Za-z0-9]{1,7})\s+(\d{1,3})$/)
       let data
       if (codeMatch) {
         const r = await tcgApi.searchByCode(codeMatch[1], codeMatch[2], game || 'Pokemon')
         data = { items: r.data.items, totalPages: 1 }
       } else {
-        const r = await tcgApi.search(query, game || undefined, p, 30)
+        const r = await tcgApi.search(
+          query, game || undefined, p, 30,
+          selSet || undefined,
+          selRarity || undefined,
+          selType || undefined
+        )
         data = { items: r.data.items, totalPages: r.data.totalPages }
       }
       setCards(data.items ?? [])
@@ -374,8 +414,7 @@ export default function CartasPage() {
           ⚠️ Busca em <strong>inglês</strong> — use o nome original da carta. Código: <code className="bg-surface-700 px-1 rounded">PAL 058</code> ou <code className="bg-surface-700 px-1 rounded">SVI 189</code>
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
-          <select className="input sm:w-48" value={game} onChange={e => setGame(e.target.value)}>
-            <option value="">Todos os jogos</option>
+          <select className="input sm:w-44" value={game} onChange={e => setGame(e.target.value)}>
             {GAMES.map(g => <option key={g}>{g}</option>)}
           </select>
           <div className="relative flex-1">
@@ -388,11 +427,52 @@ export default function CartasPage() {
               onKeyDown={e => e.key === 'Enter' && handleSearch()}
             />
           </div>
+          <button
+            onClick={() => setShowFilter(v => !v)}
+            className={clsx('btn-secondary px-3', showFilter && 'ring-1 ring-brand-500')}
+            title="Filtros avançados"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+          </button>
           <button onClick={() => handleSearch()} disabled={loading} className="btn-primary px-6">
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             Buscar
           </button>
         </div>
+
+        {/* Filtros avançados */}
+        {showFilter && (
+          <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-surface-700">
+            {sets.length > 0 && (
+              <select className="input flex-1" value={selSet} onChange={e => setSelSet(e.target.value)}>
+                <option value="">Todos os sets</option>
+                {sets.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+              </select>
+            )}
+            {gameFilters.rarities.length > 0 && (
+              <select className="input flex-1" value={selRarity} onChange={e => setSelRarity(e.target.value)}>
+                <option value="">
+                  {game === 'Yu-Gi-Oh!' ? 'Todos os tipos de carta' : `Toda ${gameFilters.rarityLabel.toLowerCase()}`}
+                </option>
+                {gameFilters.rarities.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            )}
+            {gameFilters.types && gameFilters.types.length > 0 && (
+              <select className="input flex-1" value={selType} onChange={e => setSelType(e.target.value)}>
+                <option value="">
+                  {game === 'Yu-Gi-Oh!' ? 'Todos os atributos' : `Todo ${gameFilters.typeLabel?.toLowerCase() ?? 'tipo'}`}
+                </option>
+                {gameFilters.types.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+            {(selSet || selRarity || selType) && (
+              <button onClick={() => { setSelSet(''); setSelRarity(''); setSelType('') }}
+                className="text-xs text-gray-400 hover:text-white px-2">
+                Limpar ×
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Legenda */}
