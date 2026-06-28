@@ -21,7 +21,38 @@ const FORMATS: Record<string, string[]> = {
 const MAX_CARDS:  Record<string, number> = { Pokemon: 60, MTG: 60, 'Yu-Gi-Oh!': 60, 'LoL Riftbound': 50 }
 const MAX_COPIES: Record<string, number> = { Pokemon: 4,  MTG: 4,  'Yu-Gi-Oh!': 3,  'LoL Riftbound': 3 }
 
-const POKEMON_RARITIES = ['Common', 'Uncommon', 'Rare', 'Rare Holo', 'Rare Ultra', 'Rare Secret', 'Illustration Rare', 'Special Illustration Rare', 'Hyper Rare', 'Double Rare', 'ACE SPEC Rare', 'Promo']
+// Opções de filtro por jogo — seguindo padrão dos sites oficiais
+const GAME_FILTERS: Record<string, {
+  rarityLabel: string
+  rarities: string[]
+  typeLabel?: string
+  types?: string[]
+}> = {
+  Pokemon: {
+    rarityLabel: 'Raridade',
+    rarities: ['Common','Uncommon','Rare','Rare Holo','Double Rare','Illustration Rare','Special Illustration Rare','Hyper Rare','ACE SPEC Rare','Rare Ultra','Rare Secret','Promo'],
+    typeLabel: 'Tipo',
+    types: ['Pokémon','Trainer','Energy'],
+  },
+  MTG: {
+    rarityLabel: 'Raridade',
+    rarities: ['Common','Uncommon','Rare','Mythic Rare'],
+    typeLabel: 'Tipo',
+    types: ['Creature','Instant','Sorcery','Enchantment','Artifact','Land','Planeswalker','Battle'],
+  },
+  'Yu-Gi-Oh!': {
+    rarityLabel: 'Tipo de carta',
+    rarities: ['Effect Monster','Normal Monster','Ritual Monster','Fusion Monster','Synchro Monster','Xyz Monster','Link Monster','Pendulum Effect Monster','Spell Card','Trap Card'],
+    typeLabel: 'Atributo',
+    types: ['DARK','LIGHT','FIRE','WATER','EARTH','WIND','DIVINE'],
+  },
+  'LoL Riftbound': {
+    rarityLabel: 'Raridade',
+    rarities: ['Common','Rare','Epic','Legendary'],
+    typeLabel: 'Tipo',
+    types: [],
+  },
+}
 
 function cardKey(c: CardCache) { return c.tcgCardId }
 function mainPrice(c: CardCache) {
@@ -147,9 +178,11 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
   const [loading,    setLoading]    = useState(false)
   const [loadMore,   setLoadMore]   = useState(false)
   const [sets,       setSets]       = useState<TcgSet[]>([])
-  const [selSet,     setSelSet]     = useState('')
-  const [selRarity,  setSelRarity]  = useState('')
-  const [showFilter, setShowFilter] = useState(false)
+  const [selSet,      setSelSet]      = useState('')
+  const [selRarity,   setSelRarity]   = useState('')
+  const [selCardType, setSelCardType] = useState('')
+  const [showFilter,  setShowFilter]  = useState(false)
+  const gameFilters = GAME_FILTERS[game] ?? GAME_FILTERS['Pokemon']
   const [preview,    setPreview]    = useState<CardCache | null>(null)
 
   // Camera — usa <input capture> em vez de getUserMedia (funciona em todos os celulares)
@@ -175,7 +208,12 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
         const r = await tcgApi.searchByCode(codeMatch[1], codeMatch[2], game)
         items = r.data.items ?? []; tot = r.data.totalCount ?? items.length
       } else {
-        const r = await tcgApi.search(q, game, pg, PAGE_SIZE, selSet || undefined, selRarity || undefined)
+        const r = await tcgApi.search(
+          q, game, pg, PAGE_SIZE,
+          selSet || undefined,
+          selRarity || undefined,
+          selCardType || undefined
+        )
         items = r.data.items ?? []; tot = r.data.totalCount ?? items.length
       }
       setResults(prev => append ? [...prev, ...items] : items)
@@ -183,7 +221,7 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
       setPage(pg)
     } catch { toast.error('Erro na busca.') }
     finally { append ? setLoadMore(false) : setLoading(false) }
-  }, [game, selSet, selRarity])
+  }, [game, selSet, selRarity, selCardType])
 
   useEffect(() => {
     clearTimeout(timeout.current)
@@ -329,22 +367,47 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
               </button>
             </div>
 
-            {/* Filtros */}
+            {/* Filtros — dinâmicos por jogo */}
             {showFilter && (
-              <div className="flex gap-2 pb-1">
-                <select value={selSet} onChange={e => setSelSet(e.target.value)}
-                  className="flex-1 rounded-xl px-3 py-2 text-xs font-bold border-0 outline-none"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-                  <option value="" style={{ color: C.navy }}>Todos os sets</option>
-                  {sets.map(s => <option key={s.code} value={s.code} style={{ color: C.navy }}>{s.name}</option>)}
-                </select>
-                {game === 'Pokemon' && (
-                  <select value={selRarity} onChange={e => setSelRarity(e.target.value)}
-                    className="flex-1 rounded-xl px-3 py-2 text-xs font-bold border-0 outline-none"
+              <div className="flex flex-col gap-2 pb-1">
+                {/* Set */}
+                {sets.length > 0 && (
+                  <select value={selSet} onChange={e => { setSelSet(e.target.value); setPage(1) }}
+                    className="w-full rounded-xl px-3 py-2 text-xs font-bold border-0 outline-none"
                     style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-                    <option value="" style={{ color: C.navy }}>Todas raridades</option>
-                    {POKEMON_RARITIES.map(r => <option key={r} value={r} style={{ color: C.navy }}>{r}</option>)}
+                    <option value="" style={{ color: C.navy }}>Todos os sets</option>
+                    {sets.map(s => <option key={s.code} value={s.code} style={{ color: C.navy }}>{s.name}</option>)}
                   </select>
+                )}
+                <div className="flex gap-2">
+                  {/* Raridade / Tipo de carta (YGO) */}
+                  {gameFilters.rarities.length > 0 && (
+                    <select value={selRarity} onChange={e => { setSelRarity(e.target.value); setPage(1) }}
+                      className="flex-1 rounded-xl px-3 py-2 text-xs font-bold border-0 outline-none"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}>
+                      <option value="" style={{ color: C.navy }}>
+                        {game === 'Yu-Gi-Oh!' ? 'Todos os tipos' : `Toda ${gameFilters.rarityLabel.toLowerCase()}`}
+                      </option>
+                      {gameFilters.rarities.map(r => <option key={r} value={r} style={{ color: C.navy }}>{r}</option>)}
+                    </select>
+                  )}
+                  {/* Tipo (criatura, feitiço, etc.) */}
+                  {gameFilters.types && gameFilters.types.length > 0 && (
+                    <select value={selCardType} onChange={e => { setSelCardType(e.target.value); setPage(1) }}
+                      className="flex-1 rounded-xl px-3 py-2 text-xs font-bold border-0 outline-none"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}>
+                      <option value="" style={{ color: C.navy }}>
+                        {game === 'Yu-Gi-Oh!' ? 'Todos atributos' : `Todo tipo`}
+                      </option>
+                      {gameFilters.types.map(t => <option key={t} value={t} style={{ color: C.navy }}>{t}</option>)}
+                    </select>
+                  )}
+                </div>
+                {(selSet || selRarity || selCardType) && (
+                  <button onClick={() => { setSelSet(''); setSelRarity(''); setSelCardType('') }}
+                    className="text-xs text-white/50 hover:text-white/80 text-left px-1">
+                    Limpar filtros ×
+                  </button>
                 )}
               </div>
             )}

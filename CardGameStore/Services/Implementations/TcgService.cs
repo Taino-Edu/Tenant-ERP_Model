@@ -90,26 +90,23 @@ public class TcgService : ITcgService
     /// <inheritdoc/>
     public async Task<PagedResult<CardCache>> SearchCardsByNameAsync(
         string name,
-        string? game    = null,
-        int    page     = 1,
-        int    pageSize = 20,
-        string? setId   = null,
-        string? rarity  = null)
+        string? game     = null,
+        int    page      = 1,
+        int    pageSize  = 20,
+        string? setId    = null,
+        string? rarity   = null,
+        string? cardType = null)
     {
         pageSize = Math.Min(pageSize, 250);
 
         // Cache de query em memória (5 min) — evita bater na API para a mesma busca
-        var cacheKey = $"tcg_q:{name}:{game}:{page}:{pageSize}:{setId}:{rarity}".ToLower();
+        var cacheKey = $"tcg_q:{name}:{game}:{page}:{pageSize}:{setId}:{rarity}:{cardType}".ToLower();
         if (_queryCache.TryGetValue(cacheKey, out PagedResult<CardCache>? cached) && cached != null)
             return cached;
 
-        // Monta query para a API (nome livre → name:*...*; estruturado → passa direto)
-        var apiQuery = name;
-        if (!string.IsNullOrWhiteSpace(setId))  apiQuery += $" set.id:{setId}";
-        if (!string.IsNullOrWhiteSpace(rarity)) apiQuery += $" rarity:\"{rarity}\"";
-
-        _logger.LogInformation("TCG search '{Query}' game={Game} page={Page}", apiQuery, game, page);
-        var apiResult = await _apiClient.SearchCardsAsync(apiQuery, game, page, pageSize);
+        _logger.LogInformation("TCG search '{Name}' game={Game} set={Set} rarity={Rarity} type={Type} page={Page}",
+            name, game, setId, rarity, cardType, page);
+        var apiResult = await _apiClient.SearchCardsAsync(name, game, page, pageSize, setId, rarity, cardType);
 
         // Armazena cartas individuais no MongoDB em background
         _ = Task.Run(() => CacheApiSearchResultsAsync(apiResult.Cards));

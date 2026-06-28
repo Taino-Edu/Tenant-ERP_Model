@@ -620,9 +620,9 @@ export const userApi = {
 export interface TcgSet { code: string; name: string; game: string; series?: string; logoUrl?: string; totalCards: number; releaseDate?: string }
 
 export const tcgApi = {
-  search: (name: string, game?: string, page = 1, pageSize = 30, setId?: string, rarity?: string) =>
+  search: (name: string, game?: string, page = 1, pageSize = 30, setId?: string, rarity?: string, cardType?: string) =>
     api.get<{ items: CardCache[]; totalCount: number; totalPages: number }>('/api/tcg/search',
-      { params: { name, game, page, pageSize, ...(setId ? { setId } : {}), ...(rarity ? { rarity } : {}) } }),
+      { params: { name, game, page, pageSize, ...(setId ? { setId } : {}), ...(rarity ? { rarity } : {}), ...(cardType ? { cardType } : {}) } }),
   searchByCode: (set: string, num: string, game = 'Pokemon') =>
     api.get<{ items: CardCache[]; totalCount: number }>('/api/tcg/search',
       { params: { set, num, game } }),

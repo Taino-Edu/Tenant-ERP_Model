@@ -53,23 +53,24 @@ public class TcgApiClient : ITcgApiClient
         return null;
     }
 
-    public async Task<TcgApiSearchResponse> SearchCardsAsync(string name, string? game, int page, int pageSize)
+    public async Task<TcgApiSearchResponse> SearchCardsAsync(
+        string name, string? game, int page, int pageSize,
+        string? setCode = null, string? rarity = null, string? cardType = null)
     {
         var normalized = game?.ToLowerInvariant() ?? string.Empty;
 
         if (normalized.Contains("pokemon") || normalized.Contains("pokémon"))
-            return await SearchPokemonCardsAsync(name, page, pageSize);
+            return await SearchPokemonCardsAsync(name, page, pageSize, setCode, rarity);
 
         if (normalized.Contains("mtg") || normalized.Contains("magic"))
-            return await SearchScryfallCardsAsync(name, page, pageSize);
+            return await SearchScryfallCardsAsync(name, page, pageSize, setCode, rarity, cardType);
 
         if (normalized.Contains("yu-gi-oh") || normalized.Contains("yugioh") || normalized.Contains("yu gi oh"))
-            return await SearchYugiohCardsAsync(name, page, pageSize);
+            return await SearchYugiohCardsAsync(name, page, pageSize, cardType ?? rarity);
 
         if (normalized.Contains("riftbound") || normalized.Contains("lol riftbound"))
             return await SearchRiftboundCardsAsync(name, page, pageSize);
 
-        // Para outros jogos (One Piece, Dragon Ball, etc.) retorna vazio sem erro
         _logger.LogDebug("Jogo '{Game}' sem provider configurado — retornando vazio.", game);
         return new TcgApiSearchResponse();
     }
@@ -120,16 +121,21 @@ public class TcgApiClient : ITcgApiClient
         }
     }
 
-    private async Task<TcgApiSearchResponse> SearchPokemonCardsAsync(string name, int page, int pageSize)
+    private async Task<TcgApiSearchResponse> SearchPokemonCardsAsync(
+        string name, int page, int pageSize, string? setCode = null, string? rarity = null)
     {
         try
         {
             // Busca estruturada (set.ptcgoCode / set.id / name) → passa diretamente
             // Busca simples por nome → wraps com name:*...*
             var isStructured = name.Contains(':');
-            var q = isStructured
-                ? Uri.EscapeDataString(name)
-                : Uri.EscapeDataString($"name:*{name}*");
+            var baseQ = isStructured ? name : $"name:*{name}*";
+            // Adiciona filtros no formato pokemontcg.io
+            if (!string.IsNullOrWhiteSpace(setCode) && !isStructured)
+                baseQ += $" set.id:{setCode}";
+            if (!string.IsNullOrWhiteSpace(rarity) && !isStructured)
+                baseQ += $" rarity:\"{rarity}\"";
+            var q   = Uri.EscapeDataString(baseQ);
             var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}";
             var response = await PokemonClient().GetAsync(url);
             response.EnsureSuccessStatusCode();
@@ -330,14 +336,25 @@ public class TcgApiClient : ITcgApiClient
         }
     }
 
-    private async Task<TcgApiSearchResponse> SearchScryfallCardsAsync(string name, int page, int pageSize)
+    private async Task<TcgApiSearchResponse> SearchScryfallCardsAsync(
+        string name, int page, int pageSize,
+        string? setCode = null, string? rarity = null, string? cardType = null)
     {
         try
         {
-            await Task.Delay(100); // Scryfall pede ≤10 req/s entre chamadas
-            // Scryfall usa paginação por "page" (não offset) com 175 cards/page max
-            var q       = Uri.EscapeDataString(name);
-            var url     = $"/cards/search?q={q}&page={page}&order=name";
+            await Task.Delay(100);
+            // Scryfall usa sintaxe própria: r:rare s:eld t:creature
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(name))
+                parts.Add(name.Contains(':') ? name : $"\"{name}\"");
+            if (!string.IsNullOrWhiteSpace(setCode))
+                parts.Add($"s:{setCode}");
+            if (!string.IsNullOrWhiteSpace(rarity))
+                parts.Add($"r:{MapScryfallRarity(rarity)}");
+            if (!string.IsNullOrWhiteSpace(cardType))
+                parts.Add($"t:{Uri.EscapeDataString(cardType)}");
+            var q   = Uri.EscapeDataString(string.Join(" ", parts));
+            var url = $"/cards/search?q={q}&page={page}&order=name";
             var response = await ScryfallClient().GetAsync(url);
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -403,6 +420,17 @@ public class TcgApiClient : ITcgApiClient
         }
     }
 
+    // Mapeia label amigável → valor que Scryfall aceita no filtro r:
+    private static string MapScryfallRarity(string r) => r.ToLower() switch
+    {
+        "common"       or "comum"   => "common",
+        "uncommon"     or "incomum" => "uncommon",
+        "rare"         or "rara"    => "rare",
+        "mythic rare"  or "mítica"
+            or "mythic"             => "mythic",
+        _                           => r.ToLower(),
+    };
+
     private static TcgApiCardResponse MapScryfallCard(JsonElement c)
     {
         c.TryGetProperty("image_uris", out var imgs);
@@ -447,13 +475,16 @@ public class TcgApiClient : ITcgApiClient
 
     private HttpClient YugiohClient() => _factory.CreateClient("YugiohApi");
 
-    private async Task<TcgApiSearchResponse> SearchYugiohCardsAsync(string name, int page, int pageSize)
+    private async Task<TcgApiSearchResponse> SearchYugiohCardsAsync(
+        string name, int page, int pageSize, string? cardType = null)
     {
         try
         {
-            var q        = Uri.EscapeDataString(name);
             var offset   = (page - 1) * pageSize;
-            var url      = $"/api/v7/cardinfo.php?fname={q}&num={pageSize}&offset={offset}";
+            var url      = $"/api/v7/cardinfo.php?fname={Uri.EscapeDataString(name)}&num={pageSize}&offset={offset}";
+            // YGO filtra por tipo (Monster, Spell Card, Trap Card, Effect Monster…)
+            if (!string.IsNullOrWhiteSpace(cardType))
+                url += $"&type={Uri.EscapeDataString(cardType)}";
             var response = await YugiohClient().GetAsync(url);
 
             if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)

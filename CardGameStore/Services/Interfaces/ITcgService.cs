@@ -45,11 +45,12 @@ public interface ITcgService
     /// <returns>Lista paginada de cartas encontradas.</returns>
     Task<PagedResult<CardCache>> SearchCardsByNameAsync(
         string name,
-        string? game    = null,
-        int    page     = 1,
-        int    pageSize = 20,
-        string? setId   = null,
-        string? rarity  = null
+        string? game     = null,
+        int    page      = 1,
+        int    pageSize  = 20,
+        string? setId    = null,
+        string? rarity   = null,
+        string? cardType = null
     );
 
     /// <summary>
@@ -106,7 +107,9 @@ public interface ITcgApiClient
     Task<TcgApiCardResponse?> FetchCardByIdAsync(string cardId);
 
     /// <summary>Pesquisa cartas por nome na API externa.</summary>
-    Task<TcgApiSearchResponse> SearchCardsAsync(string name, string? game, int page, int pageSize);
+    Task<TcgApiSearchResponse> SearchCardsAsync(
+        string name, string? game, int page, int pageSize,
+        string? setCode = null, string? rarity = null, string? cardType = null);
 
     /// <summary>Busca todos os sets de um jogo na API externa.</summary>
     Task<IEnumerable<TcgSetDto>> FetchSetsAsync(string game);
