@@ -1,5 +1,27 @@
 # Changelog — Santuário Nerd
 
+## [v1.10.0] — 2026-06-28
+
+### Adicionado
+- **Pokémon TCG — chave de API oficial**: integração com pokemontcg.io autenticada, eliminando limite de requisições da versão pública
+- **Busca avançada Pokémon — 14 novos filtros**: além de nome, raridade e set, agora é possível filtrar por Subtipo (Basic/Stage 1/Stage 2/EX/GX/V/VMAX/VSTAR/Supporter/Item/Tool…), Tipo de Energia (Fire/Water/Grass/Lightning/Psychic/Fighting/Darkness/Metal/Dragon/Colorless/Fairy), Regulation Mark (A–H), Legalidade (Standard/Expanded/Unlimited), Série do set (Scarlet & Violet/Sword & Shield/Sun & Moon…), Código PTCGO, Artista, Evolui de, Número do Pokédex, HP mínimo/máximo e intervalo de data de lançamento do set
+- **Busca somente por filtros**: agora é possível pesquisar sem digitar nome — apenas com filtros ativos (ex: "todas as cartas com Regulation Mark G legais em Standard")
+- **Preços CardMarket (EUR) completos**: cada carta Pokémon agora exibe preços CardMarket — Média de venda, Tendência, Mais baixo, Ex+ baixo, Reverse Holo (venda/baixo/tendência) e médias de 1, 7 e 30 dias
+- **Variantes TCGPlayer expandidas**: além de Normal, Holofoil, Reverse e 1ª Edição, agora exibe também Unlimited Normal e Unlimited Holo (relevantes para Base Set e coleções antigas)
+- **Novos campos por carta**: SetSeries (série do set), SetPtcgoCode (código PTCGO), SetReleaseDate (data de lançamento), EvolvesFrom, EvolvesTo, NationalPokedexNumbers, Legalities (mapa de legalidade por formato)
+- **Filtros Pokémon no Deck Builder**: os mesmos filtros avançados (subtipo, energia, reg mark, legalidade, série, PTCGO code, artista, evolui de) estão disponíveis na busca de cartas ao montar um deck
+- **CardMarket no Deck Builder**: a prévia da carta no deck builder também exibe preços CardMarket (EUR: Tendência, Média, Mais baixo, Média 30d)
+
+### Técnico
+- Lucene query builder no backend constrói a query correta para cada filtro selecionado na UI
+- `TcgController`: 14 novos `[FromQuery]` params + validação `hasFilters` (permite busca sem nome)
+- `TcgApiClient`: `SearchPokemonCardsAsync` reescrito com builder completo; `MapPokemonCard` mapeia CardMarket + todos os novos campos; `ExtractAllPokemonPrices` inclui variantes Unlimited
+- `ComandaDtos`: nova classe `CardMarketPricesApi` (13 campos); `TcgCardAllPrices` + `UnlimitedNormal`/`UnlimitedHolofoil`; `TcgApiCardResponse` + 8 novos campos
+- `CardCache` (MongoDB): espelha todos os novos campos; nova classe `CardMarketCache`
+- `lib/api.ts`: tipos `CardMarketPrices`, `TcgSearchParams`; `tcgApi.searchAdvanced(params)`
+
+---
+
 ## [v1.9.0] — 2026-06-27
 
 ### Adicionado

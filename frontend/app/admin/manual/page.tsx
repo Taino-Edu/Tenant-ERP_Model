@@ -2,8 +2,8 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.9.0'
-const DATA = '27/06/2026'
+const VERSION = 'v1.10.0'
+const DATA = '28/06/2026'
 
 const SECOES = [
   {
@@ -227,18 +227,22 @@ const SECOES = [
     itens: [
       { t: 'Jogos suportados', d: 'Pokémon TCG (pokemontcg.io), Magic: The Gathering (Scryfall), Yu-Gi-Oh! (YGOProDeck) e LoL: Riftbound (Riftcodex + Scrydex). As APIs de Scryfall, YGOProDeck e Riftcodex são gratuitas e sem chave. Pokémon e Scrydex têm chaves opcionais configuráveis no backend.' },
       { t: 'Busca por nome', d: 'Digite o nome (ou parte) da carta na barra de busca e selecione o jogo. Os resultados aparecem em grade com imagem, nome e preço em USD e R$.' },
-      { t: 'Busca por código de set', d: 'Para Pokémon, você pode buscar diretamente pelo código do set e número — por exemplo: "PAL 058". O sistema detecta automaticamente e retorna a carta exata.' },
-      { t: 'Filtros por jogo', d: 'Ao selecionar o jogo, filtros específicos aparecem: Pokémon (raridade: Common/Uncommon/Rare/..., tipo: Pokémon/Trainer/Energy, set: Paldea Evolved/...), MTG (raridade: common/uncommon/rare/mythic, tipo: creature/instant/..., set), YGO (tipo de monstro: Effect/Fusion/Synchro/...), LoL Riftbound (raridade, tipo, set).' },
-      { t: 'Detalhe da carta', d: 'Clique em qualquer carta para abrir o painel completo: imagem ampliada, HP/ATK-DEF/Força-Resistência (adaptado ao jogo), set, raridade, tipos, artista, texto de regras ou efeito, fraquezas e resistências (Pokémon), variantes de preço em USD e R$.' },
-      { t: 'Taxa BRL em tempo real', d: 'O widget de cotação no topo da tela mostra USD → R$ atualizado automaticamente. Clique em "Atualizar" para buscar a cotação mais recente. Todos os preços das cartas são exibidos em R$ usando essa taxa.' },
-      { t: 'Adicionar ao estoque', d: 'No detalhe da carta (admin), use o botão "Adicionar ao Estoque" para criar um produto baseado nos dados da carta TCG — já preenche nome, imagem e preço.' },
-      { t: 'Deck Builder', d: 'Acesse em Minha Conta → Meus Decks. Crie um deck para um jogo específico e use a busca integrada para adicionar cartas. Os mesmos filtros e detalhes do admin estão disponíveis.' },
-      { t: 'Busca por câmera', d: 'No Deck Builder, clique no ícone de câmera para fotografar uma carta. O sistema tenta ler o nome/código automaticamente e preenche o campo de busca.' },
+      { t: 'Busca por código de set', d: 'Busca pela combinação set + número retorna a carta exata. Pokémon: "PAL 058" (código PTCGO) ou "sv3pt5 094" (ID do set). MTG: "MH3 232". YGO: "DUNE-EN001" ou passcode (89631139). LoL: "OGN-296".' },
+      { t: 'Busca somente por filtros', d: 'Para Pokémon, é possível buscar sem digitar nome — apenas com filtros. Exemplo: clique em Filtros, selecione "Regulation Mark G" + "Standard" e pressione Buscar para ver todas as cartas legais com aquela marca.' },
+      { t: 'Filtros básicos por jogo', d: 'Pokémon: raridade, supertipo (Pokémon/Trainer/Energy), set. MTG: raridade, tipo de carta, set. Yu-Gi-Oh!: tipo de monstro/magia/armadilha, atributo, set. LoL Riftbound: raridade, tipo, set.' },
+      { t: 'Filtros avançados — Pokémon', d: 'Clique no ícone de filtros para expandir: Subtipo (Basic/Stage 1/Stage 2/EX/GX/V/VMAX/VSTAR/Supporter/Item…), Tipo de Energia (Fire/Water/Grass…), Regulation Mark (A a H), Legalidade (Standard/Expanded/Unlimited), Série do set (Scarlet & Violet/Sword & Shield…), Código PTCGO, Artista, Evolui de, Nº Pokédex, HP mínimo/máximo, Data de lançamento (de/até).' },
+      { t: 'Detalhe da carta', d: 'Clique em qualquer carta para abrir o painel completo: imagem ampliada, HP/ATK-DEF/Força-Resistência (adaptado ao jogo), set, série, raridade, tipos, artista, texto de regras ou efeito, fraquezas e resistências (Pokémon), variantes de preço TCGPlayer (USD) com todas as versões (Normal, Holo, Reverse, 1ª Ed., Unlimited), preços CardMarket (EUR: Tendência, Média, Avg 30d, Reverse Holo) e conversão para R$.' },
+      { t: 'Preços TCGPlayer e CardMarket', d: 'Cada carta Pokémon exibe preços separados por variante: Normal, Holofoil, Reverse Holofoil, 1ª Edição Normal, 1ª Edição Holo, Unlimited Normal, Unlimited Holo — cada uma com low/mid/high/market em USD. O CardMarket exibe em EUR: Média de venda, Tendência, Mais baixo, Reverse Holo Trend, Médias 1d/7d/30d.' },
+      { t: 'Taxa BRL em tempo real', d: 'O widget de cotação no topo da tela mostra USD → R$ atualizado automaticamente. Todos os preços TCGPlayer são convertidos para R$ usando essa taxa.' },
+      { t: 'Adicionar ao estoque', d: 'No detalhe da carta (admin), use o botão "Adicionar ao Estoque" para criar um produto baseado nos dados da carta TCG — já preenche nome, imagem e preço sugerido.' },
+      { t: 'Deck Builder', d: 'Acesse em Minha Conta → Meus Decks. Crie um deck para um jogo específico e use a busca integrada para adicionar cartas. Os mesmos filtros avançados do admin estão disponíveis na busca do deck.' },
+      { t: 'Busca por câmera', d: 'No Deck Builder, clique no ícone de câmera para fotografar uma carta. O sistema recorta a faixa inferior (onde fica o código) e tenta detectar o código automaticamente — se não detectar, você digita manualmente e confirma.' },
       { t: 'Importar lista', d: 'Cole uma lista no formato PTCG Live / Limitlesstcg (ex: "4 Pikachu PAL 058" / "2 Raichu PAR 021") e clique em Importar. O sistema busca cada carta e adiciona ao deck respeitando os limites de cópias.' },
     ],
     dicas: [
       'LoL: Riftbound usa duas APIs em paralelo — Riftcodex (gratuita) e Scrydex (opcional, com preços de mercado). Se a Scrydex não estiver configurada, o Riftcodex funciona sozinho.',
       'O cache de busca tem TTL de 5 minutos — refazer a mesma busca dentro desse período retorna resultado imediato sem chamar a API.',
+      'Para cartas antigas (Base Set, Gym, Neo…), o preço de mercado mais completo é o CardMarket (EUR) — o TCGPlayer tem menos vendedores internacionais nessas coleções.',
     ],
   },
   {
