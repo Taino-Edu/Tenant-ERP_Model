@@ -152,14 +152,14 @@ function CardSearchModal({ game, onAdd, deckCards, onClose, maxCopies, brlRate }
   const [showFilter, setShowFilter] = useState(false)
   const [preview,    setPreview]    = useState<CardCache | null>(null)
 
-  // Camera
-  const [showCam,    setShowCam]    = useState(false)
-  const videoRef   = useRef<HTMLVideoElement>(null)
-  const canvasRef  = useRef<HTMLCanvasElement>(null)
-  const streamRef  = useRef<MediaStream | null>(null)
+  // Camera — usa <input capture> em vez de getUserMedia (funciona em todos os celulares)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const [camCrop,    setCamCrop]    = useState<string | null>(null)
+  const [manualCode, setManualCode] = useState('')
+  const [detecting,  setDetecting]  = useState(false)
 
   const PAGE_SIZE = 30
-  const timeout   = useRef<ReturnType<typeof setTimeout>>()
+  const timeout   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     tcgApi.sets(game).then(r => setSets(r.data ?? [])).catch(() => {})
@@ -191,72 +191,54 @@ function CardSearchModal({ game, onAdd, deckCards, onClose, maxCopies, brlRate }
     return () => clearTimeout(timeout.current)
   }, [query, doSearch])
 
-  // ── Câmera ──────────────────────────────────────────────────────────────────
+  // ── Câmera — <input capture="environment"> funciona em 100% dos celulares ───
 
-  async function openCamera() {
+  function openCamera() { cameraInputRef.current?.click() }
+
+  async function handleCameraFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''   // reset para permitir re-selecionar a mesma foto
+
+    setDetecting(true)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      streamRef.current = stream
-      setShowCam(true)
-      setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream }, 100)
-    } catch {
-      toast.error('Câmera não disponível.')
-    }
+      // Carrega imagem e recorta a faixa inferior (onde fica o código da carta)
+      const dataUrl: string = await new Promise((res, rej) => {
+        const fr = new FileReader()
+        fr.onload = () => res(fr.result as string)
+        fr.onerror = rej
+        fr.readAsDataURL(file)
+      })
+      const img = new Image()
+      img.src = dataUrl
+      await new Promise(r => { img.onload = r })
+
+      const cropH = Math.round(img.height * 0.22)
+      const c = document.createElement('canvas')
+      c.width = img.width; c.height = cropH
+      c.getContext('2d')!.drawImage(img, 0, img.height - cropH, img.width, cropH, 0, 0, img.width, cropH)
+      setCamCrop(c.toDataURL('image/jpeg', 0.92))
+
+      // Tenta TextDetector (Chrome Android — quando disponível)
+      let detected = ''
+      if ('TextDetector' in window) {
+        try {
+          // @ts-ignore
+          const det = new window.TextDetector()
+          const bmp = await createImageBitmap(c)
+          const texts: { rawValue: string }[] = await det.detect(bmp)
+          const raw = texts.map(t => t.rawValue).join(' ')
+          const m = raw.match(/([A-Z][A-Z0-9]{1,7})\s{0,3}(\d{1,3})/i)
+          if (m) detected = `${m[1].toUpperCase()} ${m[2]}`
+        } catch {}
+      }
+      setManualCode(detected)
+    } catch { toast.error('Erro ao processar imagem.') }
+    finally { setDetecting(false) }
   }
 
-  function closeCamera() {
-    streamRef.current?.getTracks().forEach(t => t.stop())
-    streamRef.current = null
-    setShowCam(false)
-  }
-
-  async function captureCard() {
-    const video  = videoRef.current
-    const canvas = canvasRef.current
-    if (!video || !canvas) return
-
-    canvas.width  = video.videoWidth
-    canvas.height = video.videoHeight
-    canvas.getContext('2d')!.drawImage(video, 0, 0)
-
-    // Tenta TextDetector nativo (Chrome/Android)
-    const detected = await tryTextDetector(canvas)
-    if (detected) {
-      closeCamera()
-      setQuery(detected)
-      return
-    }
-
-    // Fallback: pede confirmação manual da imagem
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.8)
-    closeCamera()
-    const code = prompt('Código não detectado automaticamente.\nDigite o código da carta (ex: PAL 058):')
-    if (code?.trim()) setQuery(code.trim())
-  }
-
-  async function tryTextDetector(canvas: HTMLCanvasElement): Promise<string | null> {
-    if (!('TextDetector' in window)) return null
-    try {
-      // @ts-ignore — experimental API
-      const detector = new window.TextDetector()
-      // Recorta apenas a parte inferior da carta (onde fica o código)
-      const cropCanvas = document.createElement('canvas')
-      cropCanvas.width  = canvas.width
-      cropCanvas.height = Math.round(canvas.height * 0.15)
-      cropCanvas.getContext('2d')!.drawImage(
-        canvas, 0, canvas.height - cropCanvas.height,
-        canvas.width, cropCanvas.height,
-        0, 0, canvas.width, cropCanvas.height
-      )
-      const blob: Blob = await new Promise(res => cropCanvas.toBlob(b => res(b!)))
-      const img = await createImageBitmap(blob)
-      const texts: { rawValue: string }[] = await detector.detect(img)
-      const raw = texts.map(t => t.rawValue).join(' ')
-      // Procura padrão: letras+números seguidos de espaço e número (ex: PAL 058)
-      const match = raw.match(/([A-Z][A-Z0-9]{1,7})\s{0,3}(\d{1,3})/i)
-      if (match) return `${match[1].toUpperCase()} ${match[2]}`
-    } catch {}
-    return null
+  function confirmCameraCode() {
+    if (manualCode.trim()) { setQuery(manualCode.trim()); setCamCrop(null); setManualCode('') }
   }
 
   // ── Import de lista ─────────────────────────────────────────────────────────
@@ -442,28 +424,58 @@ function CardSearchModal({ game, onAdd, deckCards, onClose, maxCopies, brlRate }
         </div>
       </div>
 
-      {/* Camera overlay */}
-      {showCam && (
-        <div className="fixed inset-0 z-[80] bg-black flex flex-col items-center justify-center">
-          <canvas ref={canvasRef} className="hidden" />
-          <div className="relative w-full max-w-sm aspect-[3/4] rounded-2xl overflow-hidden">
-            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-            {/* Guia de enquadramento */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-48 h-64 rounded-xl border-2 border-white/60" />
+      {/* Input de câmera oculto */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleCameraFile}
+      />
+
+      {/* Modal de confirmação do código detectado */}
+      {(camCrop || detecting) && (
+        <div className="fixed inset-0 z-[80] bg-black/80 flex flex-col items-center justify-center p-4 gap-4">
+          {detecting ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <p className="text-white/70 text-sm">Analisando imagem...</p>
             </div>
-            <div className="absolute bottom-4 left-0 right-0 text-center">
-              <p className="text-white/80 text-xs mb-3">Enquadre a carta · código no rodapé visível</p>
-              <button onClick={captureCard}
-                className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center"
-                style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                <Camera className="w-7 h-7 text-white" />
-              </button>
-            </div>
-          </div>
-          <button onClick={closeCamera} className="mt-6 text-white/60 text-sm flex items-center gap-2">
-            <X className="w-4 h-4" /> Cancelar
-          </button>
+          ) : (
+            <>
+              <p className="text-white font-bold text-sm">Faixa inferior da carta detectada:</p>
+              {camCrop && (
+                <img src={camCrop} alt="Faixa inferior" className="w-full max-w-xs rounded-xl border border-white/20" />
+              )}
+              <p className="text-white/60 text-xs text-center">
+                {manualCode ? `Código detectado: ${manualCode}` : 'Código não detectado automaticamente — digite abaixo'}
+              </p>
+              <input
+                type="text"
+                value={manualCode}
+                onChange={e => setManualCode(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && confirmCameraCode()}
+                placeholder="Ex: PAL 058 ou SVI 189"
+                className="w-full max-w-xs text-center bg-white/10 border border-white/30 rounded-xl px-4 py-3 text-white placeholder-white/40 text-sm font-mono outline-none focus:border-white/60"
+              />
+              <div className="flex gap-3 w-full max-w-xs">
+                <button
+                  onClick={() => { setCamCrop(null); setManualCode('') }}
+                  className="flex-1 py-3 rounded-xl border border-white/30 text-white/70 text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmCameraCode}
+                  disabled={!manualCode.trim()}
+                  className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-bold text-sm disabled:opacity-40"
+                >
+                  Buscar
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
