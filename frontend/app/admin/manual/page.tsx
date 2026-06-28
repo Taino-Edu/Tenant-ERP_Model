@@ -2,8 +2,8 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.8.1'
-const DATA = '26/06/2026'
+const VERSION = 'v1.9.0'
+const DATA = '27/06/2026'
 
 const SECOES = [
   {
@@ -221,7 +221,28 @@ const SECOES = [
     ],
   },
   {
-    num: '14',
+    num: '15',
+    titulo: 'Cartas TCG & Deck Builder',
+    cor: '#F59E0B',
+    itens: [
+      { t: 'Jogos suportados', d: 'Pokémon TCG (pokemontcg.io), Magic: The Gathering (Scryfall), Yu-Gi-Oh! (YGOProDeck) e LoL: Riftbound (Riftcodex + Scrydex). As APIs de Scryfall, YGOProDeck e Riftcodex são gratuitas e sem chave. Pokémon e Scrydex têm chaves opcionais configuráveis no backend.' },
+      { t: 'Busca por nome', d: 'Digite o nome (ou parte) da carta na barra de busca e selecione o jogo. Os resultados aparecem em grade com imagem, nome e preço em USD e R$.' },
+      { t: 'Busca por código de set', d: 'Para Pokémon, você pode buscar diretamente pelo código do set e número — por exemplo: "PAL 058". O sistema detecta automaticamente e retorna a carta exata.' },
+      { t: 'Filtros por jogo', d: 'Ao selecionar o jogo, filtros específicos aparecem: Pokémon (raridade: Common/Uncommon/Rare/..., tipo: Pokémon/Trainer/Energy, set: Paldea Evolved/...), MTG (raridade: common/uncommon/rare/mythic, tipo: creature/instant/..., set), YGO (tipo de monstro: Effect/Fusion/Synchro/...), LoL Riftbound (raridade, tipo, set).' },
+      { t: 'Detalhe da carta', d: 'Clique em qualquer carta para abrir o painel completo: imagem ampliada, HP/ATK-DEF/Força-Resistência (adaptado ao jogo), set, raridade, tipos, artista, texto de regras ou efeito, fraquezas e resistências (Pokémon), variantes de preço em USD e R$.' },
+      { t: 'Taxa BRL em tempo real', d: 'O widget de cotação no topo da tela mostra USD → R$ atualizado automaticamente. Clique em "Atualizar" para buscar a cotação mais recente. Todos os preços das cartas são exibidos em R$ usando essa taxa.' },
+      { t: 'Adicionar ao estoque', d: 'No detalhe da carta (admin), use o botão "Adicionar ao Estoque" para criar um produto baseado nos dados da carta TCG — já preenche nome, imagem e preço.' },
+      { t: 'Deck Builder', d: 'Acesse em Minha Conta → Meus Decks. Crie um deck para um jogo específico e use a busca integrada para adicionar cartas. Os mesmos filtros e detalhes do admin estão disponíveis.' },
+      { t: 'Busca por câmera', d: 'No Deck Builder, clique no ícone de câmera para fotografar uma carta. O sistema tenta ler o nome/código automaticamente e preenche o campo de busca.' },
+      { t: 'Importar lista', d: 'Cole uma lista no formato PTCG Live / Limitlesstcg (ex: "4 Pikachu PAL 058" / "2 Raichu PAR 021") e clique em Importar. O sistema busca cada carta e adiciona ao deck respeitando os limites de cópias.' },
+    ],
+    dicas: [
+      'LoL: Riftbound usa duas APIs em paralelo — Riftcodex (gratuita) e Scrydex (opcional, com preços de mercado). Se a Scrydex não estiver configurada, o Riftcodex funciona sozinho.',
+      'O cache de busca tem TTL de 5 minutos — refazer a mesma busca dentro desse período retorna resultado imediato sem chamar a API.',
+    ],
+  },
+  {
+    num: '16',
     titulo: 'Assistente IA — Voz & Navegação',
     cor: '#A78BFA',
     itens: [

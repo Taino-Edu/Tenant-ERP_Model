@@ -1,5 +1,33 @@
 # Changelog — Santuário Nerd
 
+## [v1.9.0] — 2026-06-27
+
+### Adicionado
+- **Cartas TCG — filtros por jogo**: filtros dinâmicos de raridade, tipo e set aparecem automaticamente ao selecionar o jogo (Pokémon, MTG, Yu-Gi-Oh!, LoL Riftbound), seguindo os padrões de sites como Limitlesstcg, Scryfall e YGOProDeck
+- **Cartas TCG — modal de detalhe da carta**: ao clicar numa carta, abre painel completo com imagem ampliada, todos os campos (HP, ATK/DEF, custo de mana, tipos, subtypes, artista), texto de regras/oracle/efeito, fraquezas e resistências (Pokémon), variantes de preço (Normal, Holo, Reverse, 1ª Ed.) em USD e R$ convertido
+- **Cartas TCG — taxa BRL em tempo real**: widget no cabeçalho da tela de cartas mostra a cotação USD → R$ atualizada via AwesomeAPI, com indicador "Xmin atrás" e botão de refresh; cotação aplica-se ao preço de todas as cartas
+- **Deck Builder — filtros por jogo**: mesmos filtros do admin (raridade, tipo, set) disponíveis na busca de cartas ao montar um deck
+- **Deck Builder — prévia completa**: ao clicar numa carta, exibe texto de regras (MTG), efeito (YGO) e flavor text; fraquezas, resistências e custo de recuo (Pokémon); grid de variantes de preço (Normal / Holo / Reverse / 1ª Ed.) com USD + R$; HP dinâmico por jogo ("HP 120" para Pokémon, "3/4" para MTG, "ATK 2400 / DEF 2000" para YGO)
+- **Deck Builder — busca por câmera**: botão de câmera abre galeria/câmera do celular (`<input capture="environment">`); imagem é processada e o texto detectado preenche o campo de busca automaticamente; funciona em 100% dos dispositivos iOS e Android
+- **Deck Builder — importar lista**: importa listas no formato PTCG Live / Limitlesstcg (ex: `4 Pikachu PAL 058`); cartas são adicionadas ao deck sem desaparecer; suporte a múltiplas cartas em lote
+- **LoL Riftbound — Riftcodex API**: integração com `api.riftcodex.com` (gratuita, sem autenticação) com 944 cartas; busca por nome, filtro por set; campos: nome, tipo, raridade, set, número, domínio, energy/might/power, texto da carta, imagem, keywords/tags
+- **LoL Riftbound — Scrydex API**: fonte paralela opcional (`api.scrydex.com`) com preços de mercado (TCGPlayer); ativada configurando `TcgSettings:ScrydexApiKey` e `TcgSettings:ScrydexTeamId`; ignorada silenciosamente se não configurada
+- **Multi-source com deduplicação**: busca de LoL Riftbound dispara Riftcodex + Scrydex em paralelo via `Task.WhenAll`; resultados fundidos por chave `nome::setCode::número`; campos faltantes preenchidos da fonte secundária; preços vêm do Scrydex quando disponível
+- **Configuração TcgSettings**: nova seção no `appsettings.json` documentando as APIs de cada jogo com instruções de onde obter cada chave; Scryfall, YGOProDeck e Riftcodex não exigem configuração; Pokémon e Scrydex têm chaves opcionais
+
+### Corrigido
+- **Busca por código de set (PAL 058)**: busca retornava vazio porque o detector de query estruturada verificava `name.StartsWith("set:")` mas a query gerada era `set.ptcgoCode:PAL number:058`; corrigido para `name.Contains(':')`
+- **Cache retornando resultados parciais**: MongoDB cache-aside devolvia apenas cartas já vistas antes; substituído por `IMemoryCache` com TTL de 5 minutos por chave de query — sempre consulta a API e cache o resultado completo
+- **Filtros de jogo incorretos na tela de cartas admin**: lista de jogos usava `Magic: The Gathering` e `One Piece TCG` em vez de `Pokemon`, `MTG`, `Yu-Gi-Oh!`, `LoL Riftbound`
+- **Importação de deck perdendo cartas**: `importDeckList()` chamava `onAdd({ tcgCardId: '__import__' })` que o componente pai ignorava; corrigido com callback `onImport(DeckCard[])` — pai faz merge das cartas importadas com o deck existente
+- **Câmera de busca não funcionando**: `getUserMedia` + `TextDetector` não estão disponíveis na maioria dos navegadores móveis; substituído por `<input type="file" accept="image/*" capture="environment">`
+- **MTG — informações trocadas**: `Hp` agora exibe `power/toughness`, `RegulationMark` recebe `manaCost`, `FlavorText` recebe `oracle_text`, `Types` recebe as cores da carta
+- **YGO — ATK/DEF e efeito não apareciam**: `Hp` mapeado para `ATK xxx / DEF xxx` (ou nível/rank quando monster), `FlavorText` recebe `desc` (efeito da carta)
+- **LoL Riftbound — schema errado no Riftcodex**: mapper usava campos planos (`rarity`, `set_code`, `image_url`) mas o schema real é aninhado (`classification.rarity`, `set.set_id`, `media.image_url`); reescrito completamente
+- **LoL Riftbound — params errados na busca Riftcodex**: query usava `?q=` e `per_page=` em vez dos corretos `?query=` e `size=`
+
+---
+
 ## [v1.8.1] — 2026-06-26
 
 ### Adicionado
