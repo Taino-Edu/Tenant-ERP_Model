@@ -349,7 +349,17 @@ public class TcgApiClient : ITcgApiClient
             // Scryfall usa sintaxe própria: r:rare s:eld t:creature
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(name))
-                parts.Add(name.Contains(':') ? name : $"\"{name}\"");
+            {
+                if (name.Contains(':'))
+                    // Já é query estruturada (ex: s:mh3 cn:232 ou name:/dri/)
+                    parts.Add(name);
+                else if (!name.Contains(' ') && name.Length <= 5)
+                    // Busca curta sem espaço → regex substring (name:/dri/ encontra Drizzle, Drannith...)
+                    parts.Add($"name:/{Uri.EscapeDataString(name)}/");
+                else
+                    // Nome completo ou parcial com espaço → fuzzy match do Scryfall (sem aspas)
+                    parts.Add(name);
+            }
             if (!string.IsNullOrWhiteSpace(setCode))
                 parts.Add($"s:{setCode}");
             if (!string.IsNullOrWhiteSpace(rarity))
@@ -502,11 +512,21 @@ public class TcgApiClient : ITcgApiClient
     {
         try
         {
-            var offset   = (page - 1) * pageSize;
-            var url      = $"/api/v7/cardinfo.php?fname={Uri.EscapeDataString(name)}&num={pageSize}&offset={offset}";
-            // YGO filtra por tipo (Monster, Spell Card, Trap Card, Effect Monster…)
-            if (!string.IsNullOrWhiteSpace(cardType))
-                url += $"&type={Uri.EscapeDataString(cardType)}";
+            var offset = (page - 1) * pageSize;
+            string url;
+
+            // Passcode YGO: 7-8 dígitos → busca exata por ID
+            if (System.Text.RegularExpressions.Regex.IsMatch(name.Trim(), @"^\d{7,8}$"))
+            {
+                url = $"/api/v7/cardinfo.php?id={name.Trim()}";
+            }
+            else
+            {
+                url = $"/api/v7/cardinfo.php?fname={Uri.EscapeDataString(name)}&num={pageSize}&offset={offset}";
+                // YGO filtra por tipo (Monster, Spell Card, Trap Card, Effect Monster…)
+                if (!string.IsNullOrWhiteSpace(cardType))
+                    url += $"&type={Uri.EscapeDataString(cardType)}";
+            }
             var response = await YugiohClient().GetAsync(url);
 
             if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)

@@ -523,16 +523,40 @@ export default function CartasPage() {
     if (game) tcgApi.sets(game).then((r: any) => setSets(r.data ?? [])).catch(() => setSets([]))
   }, [game])
 
+  // Detecta busca por código (set + número) — suporta todos os TCGs
+  // Pokémon: PAL 058 / SV8PT5 001
+  // MTG:     MH3 232 / MH3 232a
+  // LoL:     OGN-296 / OGN 296
+  // YGO:     DUNE-EN001 → vai como nome (fname); passcode 89631139 → backend usa ?id=
+  function detectCodeSearch(q: string): { set: string; num: string } | null {
+    const t = q.trim()
+    const space  = t.match(/^([A-Za-z][A-Za-z0-9]{1,8})\s+(\d{1,4}[a-z]?)$/)
+    if (space)  return { set: space[1],  num: space[2] }
+    const hyphen = t.match(/^([A-Za-z][A-Za-z0-9]{1,8})-(\d{1,4}[a-z]?)$/)
+    if (hyphen) return { set: hyphen[1], num: hyphen[2] }
+    return null
+  }
+
+  function codePlaceholder() {
+    switch (game) {
+      case 'Pokemon':       return 'Nome (Pikachu) ou código (PAL 058, SVI 001)...'
+      case 'MTG':           return 'Nome (Lightning Bolt) ou código (MH3 232, THB 001a)...'
+      case 'Yu-Gi-Oh!':     return 'Nome, código (DUNE-EN001) ou passcode (89631139)...'
+      case 'LoL Riftbound': return 'Nome (Jinx) ou código (OGN-296, OGN 296)...'
+      default:              return 'Nome ou código da carta...'
+    }
+  }
+
   async function handleSearch(p = 1) {
     if (!query.trim()) { toast.error('Digite o nome ou código da carta'); return }
     setLoading(true); setNoApi(false)
     try {
-      const codeMatch = query.trim().match(/^([A-Za-z][A-Za-z0-9]{1,7})\s+(\d{1,3})$/)
+      const codeMatch = detectCodeSearch(query)
       let items: CardCache[] = [], totalPgs = 0
       let errorMsg: string | undefined
 
       if (codeMatch) {
-        const r = await tcgApi.searchByCode(codeMatch[1], codeMatch[2], game || 'Pokemon')
+        const r = await tcgApi.searchByCode(codeMatch.set, codeMatch.num, game || 'Pokemon')
         items = r.data.items ?? []; totalPgs = 1
         errorMsg = (r.data as any).errorMessage
       } else {
@@ -600,7 +624,7 @@ export default function CartasPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               className="input pl-9"
-              placeholder="Nome (Pikachu) ou código (PAL 058, SVI 189)..."
+              placeholder={codePlaceholder()}
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSearch()}

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { deckApi, tcgApi, CardCache, DeckCard, TcgSet } from '@/lib/api'
 import {
@@ -261,17 +261,37 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
     tcgApi.sets(game).then(r => setSets(r.data ?? [])).catch(() => {})
   }, [game])
 
+  // Detecta busca por código (set + número) — cobre todos os TCGs
+  function detectCode(q: string): { set: string; num: string } | null {
+    const t = q.trim()
+    const space  = t.match(/^([A-Za-z][A-Za-z0-9]{1,8})\s+(\d{1,4}[a-z]?)$/)
+    if (space)  return { set: space[1],  num: space[2] }
+    const hyphen = t.match(/^([A-Za-z][A-Za-z0-9]{1,8})-(\d{1,4}[a-z]?)$/)
+    if (hyphen) return { set: hyphen[1], num: hyphen[2] }
+    return null
+  }
+
+  const searchPlaceholder = useMemo(() => {
+    switch (game) {
+      case 'Pokemon':       return 'Nome (Pikachu) ou código (PAL 058, SVI 001)'
+      case 'MTG':           return 'Nome (Lightning Bolt) ou código (MH3 232, THB 001a)'
+      case 'Yu-Gi-Oh!':     return 'Nome, código (DUNE-EN001) ou passcode (89631139)'
+      case 'LoL Riftbound': return 'Nome (Jinx) ou código (OGN-296)'
+      default:              return 'Nome ou código da carta...'
+    }
+  }, [game])
+
   const doSearch = useCallback(async (q: string, pg: number, append = false) => {
     if (q.trim().length < 2) { if (!append) { setResults([]); setTotal(0); setNoApi(false) }; return }
     append ? setLoadMore(true) : setLoading(true)
     if (!append) setNoApi(false)
     try {
-      const codeMatch = q.trim().match(/^([A-Za-z0-9]+)\s+(\d+)$/)
+      const codeMatch = detectCode(q)
       let items: CardCache[] = [], tot = 0
       let errMsg: string | undefined
 
       if (codeMatch) {
-        const r = await tcgApi.searchByCode(codeMatch[1], codeMatch[2], game)
+        const r = await tcgApi.searchByCode(codeMatch.set, codeMatch.num, game)
         items = r.data.items ?? []; tot = r.data.totalCount ?? items.length
         errMsg = (r.data as any).errorMessage
       } else {
@@ -414,7 +434,7 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
                   autoFocus
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder="Nome ou código (PAL 058)..."
+                  placeholder={searchPlaceholder}
                   className="w-full pl-9 pr-3 py-2.5 rounded-xl text-sm outline-none bg-white/10 text-white placeholder-white/40"
                 />
                 {query && <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40"><X className="w-3.5 h-3.5" /></button>}
@@ -592,7 +612,7 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
                 value={manualCode}
                 onChange={e => setManualCode(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && confirmCameraCode()}
-                placeholder="Ex: PAL 058 ou SVI 189"
+                placeholder={searchPlaceholder}
                 className="w-full max-w-xs text-center bg-white/10 border border-white/30 rounded-xl px-4 py-3 text-white placeholder-white/40 text-sm font-mono outline-none focus:border-white/60"
               />
               <div className="flex gap-3 w-full max-w-xs">

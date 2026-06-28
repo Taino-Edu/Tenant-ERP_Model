@@ -53,14 +53,31 @@ public class TcgController : ControllerBase
     {
         pageSize = Math.Clamp(pageSize, 1, 250);
 
-        // Busca por código: "set.ptcgoCode:PAL number:058" (formato pokemontcg.io)
+        // Busca por código (set + número) — sintaxe adaptada por jogo
         if (!string.IsNullOrWhiteSpace(set) && !string.IsNullOrWhiteSpace(num))
         {
-            // Tenta ptcgoCode (3 letras, ex: PAL) e id (ex: sv8pt5) em paralelo
-            var q = set.Length <= 5
-                ? $"set.ptcgoCode:{set.ToUpper()} number:{num}"
-                : $"set.id:{set.ToLower()} number:{num}";
-            var byCode = await _tcgService.SearchCardsByNameAsync(q, game, 1, 5);
+            var gameNorm = game?.ToLowerInvariant() ?? "pokemon";
+            string q;
+
+            if (gameNorm.Contains("mtg") || gameNorm.Contains("magic"))
+                // Scryfall: s:mh3 cn:232  (collector number)
+                q = $"s:{set.ToLower()} cn:{num.ToLower()}";
+
+            else if (gameNorm.Contains("yu-gi-oh") || gameNorm.Contains("yugioh"))
+                // YGOProDeck: DUNE-EN001 como nome (fname faz substring match)
+                q = $"{set.ToUpper()}-{num.PadLeft(3, '0')}";
+
+            else if (gameNorm.Contains("riftbound") || gameNorm.Contains("lol"))
+                // Riftcodex: busca por set_id + collector_number (ex: OGN-296)
+                q = $"{set.ToUpper()}-{num}";
+
+            else
+                // Pokémon: ptcgoCode (≤5 chars, ex: PAL) ou set.id (ex: sv8pt5)
+                q = set.Length <= 5
+                    ? $"set.ptcgoCode:{set.ToUpper()} number:{num}"
+                    : $"set.id:{set.ToLower()} number:{num}";
+
+            var byCode = await _tcgService.SearchCardsByNameAsync(q, game, 1, 10);
             return Ok(byCode);
         }
 
