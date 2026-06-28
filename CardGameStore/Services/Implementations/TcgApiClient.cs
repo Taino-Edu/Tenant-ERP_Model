@@ -218,16 +218,8 @@ public class TcgApiClient : ITcgApiClient
             var q   = Uri.EscapeDataString(baseQ);
             var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}&orderBy=name";
 
-            // Fan-out paralelo: pokemontcg.io (EN + preços) + TCGdex (PT/multilíngue)
-            // TCGdex só é chamado na primeira página para evitar chamadas redundantes
-            var pokeTask   = PokemonClient().GetAsync(url);
-            var tcgdexTask = (page == 1 && !string.IsNullOrWhiteSpace(name) && !isStructured)
-                ? SearchTcgDexAsync(name, pageSize)
-                : Task.FromResult<IList<TcgApiCardResponse>>(Array.Empty<TcgApiCardResponse>());
-
-            await Task.WhenAll(pokeTask, tcgdexTask);
-
-            var pokeResponse = pokeTask.Result;
+            // pokemontcg.io é a fonte primária — sempre aguardada completamente
+            var pokeResponse = await PokemonClient().GetAsync(url);
             pokeResponse.EnsureSuccessStatusCode();
 
             var json = await pokeResponse.Content.ReadAsStringAsync();
@@ -244,25 +236,31 @@ public class TcgApiClient : ITcgApiClient
 
             var totalCount = root.TryGetProperty("totalCount", out var tc) ? tc.GetInt32() : pokeCards.Count;
 
-            // Merge TCGdex: preenche imagem em cartas sem imagem e adiciona cartas exclusivas PT
-            var tcgdexCards = tcgdexTask.Result;
-            var pokeById    = pokeCards.ToDictionary(
-                c => c.Id.Replace("pokemon:", "", StringComparison.OrdinalIgnoreCase),
-                StringComparer.OrdinalIgnoreCase);
-
-            foreach (var tdCard in tcgdexCards)
+            // TCGdex: complementa com nomes PT — timeout de 3s para não atrasar a busca
+            if (page == 1 && !string.IsNullOrWhiteSpace(name) && !isStructured)
             {
-                var baseId = tdCard.Id.Replace("pokemon:", "", StringComparison.OrdinalIgnoreCase);
-                if (pokeById.TryGetValue(baseId, out var existing))
+                using var cts          = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                var tcgdexTask         = SearchTcgDexAsync(name, pageSize, cts.Token);
+                IList<TcgApiCardResponse> tcgdexCards;
+                try   { tcgdexCards = await tcgdexTask; }
+                catch { tcgdexCards = Array.Empty<TcgApiCardResponse>(); }
+
+                var pokeById = pokeCards.ToDictionary(
+                    c => c.Id.Replace("pokemon:", "", StringComparison.OrdinalIgnoreCase),
+                    StringComparer.OrdinalIgnoreCase);
+
+                foreach (var tdCard in tcgdexCards)
                 {
-                    // Preenche imagem se pokemontcg.io não retornou
-                    if (existing.Images?.Small == null && tdCard.Images?.Small != null)
-                        existing.Images = tdCard.Images;
-                }
-                else if (seen.Add(tdCard.Id))
-                {
-                    // Carta exclusiva do TCGdex (ex: edições PT sem correspondente EN na pokemontcg.io)
-                    pokeCards.Add(tdCard);
+                    var baseId = tdCard.Id.Replace("pokemon:", "", StringComparison.OrdinalIgnoreCase);
+                    if (pokeById.TryGetValue(baseId, out var existing))
+                    {
+                        if (existing.Images?.Small == null && tdCard.Images?.Small != null)
+                            existing.Images = tdCard.Images;
+                    }
+                    else if (seen.Add(tdCard.Id))
+                    {
+                        pokeCards.Add(tdCard);
+                    }
                 }
             }
 
@@ -282,12 +280,12 @@ public class TcgApiClient : ITcgApiClient
     }
 
     // ── TCGdex — busca multilíngue PT (https://api.tcgdex.net/v2/pt) ──────────
-    private async Task<IList<TcgApiCardResponse>> SearchTcgDexAsync(string name, int limit)
+    private async Task<IList<TcgApiCardResponse>> SearchTcgDexAsync(string name, int limit, CancellationToken ct = default)
     {
         try
         {
             var q        = Uri.EscapeDataString(name);
-            var response = await TcgDexClient().GetAsync($"/v2/pt/cards?name={q}");
+            var response = await TcgDexClient().GetAsync($"/v2/pt/cards?name={q}", ct);
             if (!response.IsSuccessStatusCode) return Array.Empty<TcgApiCardResponse>();
 
             var json = await response.Content.ReadAsStringAsync();
