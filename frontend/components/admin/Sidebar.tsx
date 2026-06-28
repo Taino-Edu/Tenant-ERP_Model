@@ -8,7 +8,7 @@ import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings,
+  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings, Timer,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -35,6 +35,7 @@ const sections = [
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,   perm: 'anuncios' },
       { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search,      perm: 'cartas' },
       { href: '/admin/campeonatos', label: 'Campeonatos',  icon: Trophy,      perm: 'campeonatos' },
+      { href: '/admin/timer',       label: 'Timers',        icon: Timer,       perm: 'campeonatos' },
     ],
   },
   {

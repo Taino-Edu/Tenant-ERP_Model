@@ -39,6 +39,7 @@ public class AppDbContext : DbContext
     public DbSet<LgpdRequest>   LgpdRequests   { get; set; }
     public DbSet<CookieConsent> CookieConsents { get; set; }
     public DbSet<AuditLog>      AuditLogs      { get; set; }
+    public DbSet<TimerEntity>   Timers         { get; set; }
 
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas

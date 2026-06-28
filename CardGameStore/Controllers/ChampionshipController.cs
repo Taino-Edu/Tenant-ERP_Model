@@ -616,9 +616,11 @@ public record SetImageRequest(string? ImageUrl);
 public class PreInscricaoRequest
 {
     [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(200)]
-    public string Nome     { get; init; } = string.Empty;
+    public string  Nome     { get; init; } = string.Empty;
     [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.MaxLength(30)]
-    public string WhatsApp { get; init; } = string.Empty;
+    public string  WhatsApp { get; init; } = string.Empty;
+    public Guid?   DeckId   { get; init; }
+    public string? DeckName { get; init; }
 }
 
 /// <summary>DTO de pré-inscrição retornado ao frontend.</summary>
@@ -631,6 +633,8 @@ public class PreInscricaoDto
     /// <summary>Posição na fila de confirmados ou na lista de espera.</summary>
     public int      Numero        { get; init; }
     public DateTime CreatedAt     { get; init; }
+    public Guid?    DeckId        { get; init; }
+    public string?  DeckName      { get; init; }
 }
 
 /// <summary>Request para salvar o pódio de um campeonato.</summary>

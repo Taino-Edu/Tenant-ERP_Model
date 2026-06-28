@@ -709,6 +709,9 @@ function ChampionshipCard({
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-white truncate">{pi.nome}</p>
                             <p className="text-xs text-gray-500">{pi.whatsApp}</p>
+                            {pi.deckName && (
+                              <p className="text-xs text-brand-400 truncate" title={`Deck: ${pi.deckName}`}>🃏 {pi.deckName}</p>
+                            )}
                           </div>
                           {pi.isListaEspera && (
                             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 shrink-0">Espera</span>

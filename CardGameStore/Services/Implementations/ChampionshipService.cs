@@ -71,7 +71,7 @@ public class ChampionshipService : IChampionshipService
         return ch;
     }
 
-    public async Task<ChampionshipParticipant> RegisterParticipantAsync(Guid championshipId, Guid userId, string? deckName = null)
+    public async Task<ChampionshipParticipant> RegisterParticipantAsync(Guid championshipId, Guid userId, string? deckName = null, Guid? deckId = null)
     {
         // Verifica se o usuário já está inscrito para evitar duplicata
         var jaInscrito = await _db.ChampionshipParticipants
@@ -90,6 +90,7 @@ public class ChampionshipService : IChampionshipService
             ChampionshipId = championshipId,
             UserId         = userId,
             DeckName       = deckName,
+            DeckId         = deckId,
             PlayerNumber   = (ultimoNumero ?? 0) + 1
         };
         _db.ChampionshipParticipants.Add(participant);
@@ -130,7 +131,7 @@ public class ChampionshipService : IChampionshipService
         await _db.SaveChangesAsync();
     }
 
-    public async Task<(ChampionshipPreInscricao PreInscricao, int Numero)> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp)
+    public async Task<(ChampionshipPreInscricao PreInscricao, int Numero)> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp, Guid? deckId = null, string? deckName = null)
     {
         bool isListaEspera = false;
         int  numero        = 1;
@@ -158,6 +159,8 @@ public class ChampionshipService : IChampionshipService
             Nome           = nome,
             WhatsApp       = whatsApp,
             IsListaEspera  = isListaEspera,
+            DeckId         = deckId,
+            DeckName       = deckName,
         };
         _db.ChampionshipPreInscricoes.Add(pi);
         await _db.SaveChangesAsync();

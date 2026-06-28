@@ -113,6 +113,13 @@ public class ChampionshipPreInscricao
     [Required, MaxLength(30)] [Column("whatsapp")]
     public string WhatsApp { get; set; } = string.Empty;
 
+    [Column("deck_id")]
+    public Guid? DeckId { get; set; }
+
+    [MaxLength(200)]
+    [Column("deck_name")]
+    public string? DeckName { get; set; }
+
     [Column("is_lista_espera")]
     public bool IsListaEspera { get; set; }
 
@@ -153,6 +160,10 @@ public class ChampionshipParticipant
     [MaxLength(200)]
     [Column("deck_name")]
     public string? DeckName { get; set; }
+
+    /// <summary>ID do deck salvo na conta do jogador (nullable).</summary>
+    [Column("deck_id")]
+    public Guid? DeckId { get; set; }
 
     /// <summary>Colocação final (preenchida após o torneio).</summary>
     [Column("placement")]

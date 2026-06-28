@@ -217,7 +217,14 @@ export interface Championship {
 }
 
 export interface ChampionshipPreInscricao {
-  id: string; nome: string; whatsApp: string; isListaEspera?: boolean; createdAt: string
+  id: string; nome: string; whatsApp: string; isListaEspera?: boolean
+  numero?: number; createdAt: string; deckId?: string | null; deckName?: string | null
+}
+
+export interface TimerDto {
+  id: string; name: string; durationSeconds: number; pausedRemaining: number | null
+  state: 'stopped' | 'running' | 'paused' | 'finished'
+  startedAt: string | null; soundPreset: string; warnAtSeconds: number
 }
 
 export interface PodioItem { lugar: number; nome: string }
@@ -701,14 +708,25 @@ export const championshipApi = {
     api.put(`/api/championship/${id}/participants/${participantId}/placement`, { placement }),
   setImage:         (id: string, imageUrl: string | null) =>
     api.put<Championship>(`/api/championship/${id}/image`, { imageUrl }),
-  addPreInscricao:  (id: string, nome: string, whatsApp: string) =>
-    api.post<ChampionshipPreInscricao>(`/api/championship/${id}/preinscricoes`, { nome, whatsApp }),
+  addPreInscricao:  (id: string, nome: string, whatsApp: string, deckId?: string, deckName?: string) =>
+    api.post<ChampionshipPreInscricao>(`/api/championship/${id}/preinscricoes`, { nome, whatsApp, deckId, deckName }),
   getPreInscricoes: (id: string) =>
     api.get<ChampionshipPreInscricao[]>(`/api/championship/${id}/preinscricoes`),
   deletePreInscricao: (championshipId: string, preInscricaoId: string) =>
     api.delete(`/api/championship/${championshipId}/preinscricoes/${preInscricaoId}`),
   setPodio:         (id: string, podioJson: string) =>
     api.patch(`/api/championship/${id}/podio`, { podioJson }),
+}
+
+// ── Timers ────────────────────────────────────────────────────────────────────
+
+export const timerApi = {
+  list:   () => api.get<TimerDto[]>('/api/timers'),
+  create: (t: { name: string; durationSeconds: number; soundPreset: string; warnAtSeconds: number }) =>
+    api.post<TimerDto>('/api/timers', t),
+  update: (id: string, req: { action: string; name?: string; durationSeconds?: number; soundPreset?: string; warnAtSeconds?: number; fromRemaining?: number }) =>
+    api.put<TimerDto>(`/api/timers/${id}`, req),
+  remove: (id: string) => api.delete(`/api/timers/${id}`),
 }
 
 // ── Assistente IA ─────────────────────────────────────────────────────────────

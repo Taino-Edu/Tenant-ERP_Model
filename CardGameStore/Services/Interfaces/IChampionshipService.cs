@@ -17,14 +17,14 @@ public interface IChampionshipService
     Task<Championship>              UpdateStatusAsync(Guid id, ChampionshipStatus newStatus);
     Task                            DeleteAsync(Guid id);
 
-    Task<ChampionshipParticipant>   RegisterParticipantAsync(Guid championshipId, Guid userId, string? deckName = null);
+    Task<ChampionshipParticipant>   RegisterParticipantAsync(Guid championshipId, Guid userId, string? deckName = null, Guid? deckId = null);
     Task                            LinkComandaToParticipantAsync(Guid participantId, Guid comandaId);
     Task<IEnumerable<ChampionshipParticipant>> GetParticipantsAsync(Guid championshipId);
     Task<IEnumerable<ChampionshipParticipant>> GetUserParticipationsAsync(Guid userId);
     Task                            SetPlacementAsync(Guid participantId, int placement);
     Task                            RemoveParticipantAsync(Guid participantId);
 
-    Task<(ChampionshipPreInscricao PreInscricao, int Numero)> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp);
+    Task<(ChampionshipPreInscricao PreInscricao, int Numero)> AddPreInscricaoAsync(Guid championshipId, string nome, string whatsApp, Guid? deckId = null, string? deckName = null);
     Task<IEnumerable<ChampionshipPreInscricao>> GetPreInscricoesAsync(Guid championshipId);
     Task                                        DeletePreInscricaoAsync(Guid preInscricaoId);
     Task                                        SetPodioAsync(Guid championshipId, string podioJson);

@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getRole } from '@/lib/auth'
-import { championshipApi, productApi, announcementApi, Championship, Product, AnnouncementDto } from '@/lib/api'
+import { championshipApi, productApi, announcementApi, deckApi, Championship, Product, AnnouncementDto, DeckListDto } from '@/lib/api'
 import Link from 'next/link'
 import {
   Trophy, ShoppingBag, Star, Calendar, Users,
@@ -1155,22 +1155,33 @@ function ProductModal({ product: p, onClose, C }: { product: Product; onClose: (
 }
 
 function RegisterModal({ championship, onClose, C }: { championship: Championship; onClose: () => void; C: Theme }) {
-  const [name,    setName]    = useState('')
-  const [phone,   setPhone]   = useState('')
-  const [done,    setDone]    = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [name,       setName]       = useState('')
+  const [phone,      setPhone]      = useState('')
+  const [done,       setDone]       = useState(false)
+  const [loading,    setLoading]    = useState(false)
+  const [decks,      setDecks]      = useState<DeckListDto[]>([])
+  const [selectedDeck, setSelectedDeck] = useState<string>('')
+
+  const isLoggedIn = getRole() === 'Customer' || getRole() === 'Admin'
+
+  useEffect(() => {
+    if (!isLoggedIn || !championship.game) return
+    deckApi.list(championship.game).then(r => setDecks(r.data)).catch(() => {})
+  }, [isLoggedIn, championship.game])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim() || !phone.trim()) return
     setLoading(true)
+    const deck = decks.find(d => d.id === selectedDeck)
     try {
-      await championshipApi.addPreInscricao(championship.id, name.trim(), phone.trim())
+      await championshipApi.addPreInscricao(championship.id, name.trim(), phone.trim(), deck?.id, deck?.name)
     } catch { /* silently continue — WhatsApp still opens */ }
     finally { setLoading(false) }
     const msg = encodeURIComponent(
       `Olá! Quero me inscrever no *${championship.name}*.\n` +
       `Nome: ${name.trim()}\nWhatsApp: ${phone.trim()}\n` +
+      (deck ? `Deck: ${deck.name}\n` : '') +
       `Confirmo o pagamento de R$ ${(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')} na chegada.`
     )
     window.open(`https://wa.me/${MAIKON_WHATSAPP}?text=${msg}`, '_blank')
@@ -1235,6 +1246,20 @@ function RegisterModal({ championship, onClose, C }: { championship: Championshi
                 value={phone} onChange={e => setPhone(e.target.value)} required
               />
             </div>
+            {decks.length > 0 && (
+              <div>
+                <label className="block text-xs font-bold mb-1.5" style={{ color: C.navy }}>Deck (opcional)</label>
+                <select
+                  className="w-full rounded-xl px-4 py-3 text-sm outline-none border transition-all"
+                  style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, color: C.navy }}
+                  value={selectedDeck} onChange={e => setSelectedDeck(e.target.value)}>
+                  <option value="">Não informar deck</option>
+                  {decks.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.cardCount} cartas)</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <button type="submit" disabled={loading}
               className="w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-xl transition-all active:scale-95 disabled:opacity-60"
               style={{ backgroundColor: C.blue, color: '#fff' }}>
