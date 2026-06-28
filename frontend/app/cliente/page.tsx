@@ -490,20 +490,6 @@ export default function ClientePage() {
         {/* Meus Campeonatos */}
         <MeusCampeonatos />
 
-        {/* Meus Decks */}
-        <Link href="/cliente/decks"
-          className="flex items-center gap-4 px-5 py-4 rounded-2xl transition-all active:scale-[0.98]"
-          style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)' }}>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-            style={{ backgroundColor: C.bg }}>
-            <BookOpen className="w-5 h-5" style={{ color: C.blue }} />
-          </div>
-          <div className="flex-1">
-            <p className="font-black text-sm" style={{ color: C.navy }}>Meus Decks</p>
-            <p className="text-xs" style={{ color: C.muted }}>Crie e gerencie seus decks de cartas</p>
-          </div>
-          <ChevronRight className="w-4 h-4 shrink-0" style={{ color: C.muted }} />
-        </Link>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">

@@ -124,8 +124,10 @@ public class TcgApiClient : ITcgApiClient
     {
         try
         {
-            // Busca por código: "set:SV8PT5 number:1" → passa diretamente como query
-            var q = name.StartsWith("set:", StringComparison.OrdinalIgnoreCase)
+            // Busca estruturada (set.ptcgoCode / set.id / name) → passa diretamente
+            // Busca simples por nome → wraps com name:*...*
+            var isStructured = name.Contains(':');
+            var q = isStructured
                 ? Uri.EscapeDataString(name)
                 : Uri.EscapeDataString($"name:*{name}*");
             var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}";

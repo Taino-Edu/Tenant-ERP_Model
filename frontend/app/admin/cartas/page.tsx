@@ -105,7 +105,7 @@ function AddOwnCardModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-const GAMES = ['Pokemon', 'Magic: The Gathering', 'Yu-Gi-Oh!', 'One Piece TCG', 'Dragon Ball Super']
+const GAMES = ['Pokemon', 'MTG', 'Yu-Gi-Oh!', 'LoL Riftbound']
 
 // ── Modal: adicionar carta ao estoque ─────────────────────────────────────────
 
@@ -325,16 +325,25 @@ export default function CartasPage() {
   const [ownModal, setOwnModal] = useState(false)
 
   async function handleSearch(p = 1) {
-    if (!query.trim()) { toast.error('Digite o nome da carta'); return }
+    if (!query.trim()) { toast.error('Digite o nome ou código da carta'); return }
     setLoading(true)
     try {
-      const { data } = await tcgApi.search(query, game || undefined, p, 20)
+      // Detecta código: "PAL 058", "SVI 189", "sv8pt5 1", etc.
+      const codeMatch = query.trim().match(/^([A-Za-z][A-Za-z0-9]{1,7})\s+(\d{1,3})$/)
+      let data
+      if (codeMatch) {
+        const r = await tcgApi.searchByCode(codeMatch[1], codeMatch[2], game || 'Pokemon')
+        data = { items: r.data.items, totalPages: 1 }
+      } else {
+        const r = await tcgApi.search(query, game || undefined, p, 30)
+        data = { items: r.data.items, totalPages: r.data.totalPages }
+      }
       setCards(data.items ?? [])
       setTotalPages(data.totalPages ?? 0)
       setPage(p)
       setSearched(true)
-      if (!data.items?.length) toast('Nenhuma carta encontrada. Verifique o nome ou o jogo.', { icon: '🔍' })
-    } catch { toast.error('Erro ao buscar cartas. API TCG indisponível ou cache vazio.') }
+      if (!data.items?.length) toast('Nenhuma carta encontrada. Verifique o nome em inglês ou o código.', { icon: '🔍' })
+    } catch { toast.error('Erro ao buscar cartas.') }
     finally { setLoading(false) }
   }
 
@@ -360,25 +369,30 @@ export default function CartasPage() {
       </div>
 
       {/* Busca */}
-      <div className="card flex flex-col sm:flex-row gap-3">
-        <select className="input sm:w-56" value={game} onChange={e => setGame(e.target.value)}>
-          <option value="">Todos os jogos</option>
-          {GAMES.map(g => <option key={g}>{g}</option>)}
-        </select>
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            className="input pl-9"
-            placeholder="Ex: Pikachu, Black Lotus, Blue-Eyes..."
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-          />
+      <div className="card flex flex-col gap-3">
+        <p className="text-xs text-amber-400 flex items-center gap-1.5">
+          ⚠️ Busca em <strong>inglês</strong> — use o nome original da carta. Código: <code className="bg-surface-700 px-1 rounded">PAL 058</code> ou <code className="bg-surface-700 px-1 rounded">SVI 189</code>
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <select className="input sm:w-48" value={game} onChange={e => setGame(e.target.value)}>
+            <option value="">Todos os jogos</option>
+            {GAMES.map(g => <option key={g}>{g}</option>)}
+          </select>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input
+              className="input pl-9"
+              placeholder="Nome (Pikachu) ou código (PAL 058, SVI 189)..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            />
+          </div>
+          <button onClick={() => handleSearch()} disabled={loading} className="btn-primary px-6">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            Buscar
+          </button>
         </div>
-        <button onClick={() => handleSearch()} disabled={loading} className="btn-primary px-6">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-          Buscar
-        </button>
       </div>
 
       {/* Legenda */}

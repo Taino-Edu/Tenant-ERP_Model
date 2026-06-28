@@ -8,7 +8,7 @@ import { authApi } from '@/lib/api'
 import {
   Star, User, Phone, CreditCard, Clock, AlertCircle, ArrowLeft, LogOut,
   CheckCircle, Wallet, CalendarClock, Receipt, ChevronDown, ChevronUp,
-  ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail, Settings
+  ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail, Settings, BookOpen
 } from 'lucide-react'
 import clsx from 'clsx'
 import toast, { Toaster } from 'react-hot-toast'
@@ -398,10 +398,27 @@ export default function PerfilPage() {
                 )}
               </div>
             )}
+            {/* ── MEUS DECKS ── */}
+            <Link
+              href="/cliente/decks"
+              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mt-4 hover:bg-gray-50 transition-colors active:scale-[0.98]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-purple-50 border border-purple-100 flex items-center justify-center">
+                  <BookOpen className="w-5 h-5 text-purple-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-900">Meus Decks</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Crie e gerencie seus decks</p>
+                </div>
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-300 -rotate-90" />
+            </Link>
+
             {/* ── CONFIGURAÇÕES ── */}
             <Link
               href="/cliente/configuracoes"
-              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mt-4 hover:bg-gray-50 transition-colors active:scale-[0.98]"
+              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mt-2 hover:bg-gray-50 transition-colors active:scale-[0.98]"
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center">

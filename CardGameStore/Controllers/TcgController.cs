@@ -21,11 +21,13 @@ public class TcgController : ControllerBase
 {
     private readonly ITcgService     _tcgService;
     private readonly CurrencyService _currency;
+    private readonly ILogger<TcgController> _logger;
 
-    public TcgController(ITcgService tcgService, CurrencyService currency)
+    public TcgController(ITcgService tcgService, CurrencyService currency, ILogger<TcgController> logger)
     {
         _tcgService = tcgService;
         _currency   = currency;
+        _logger     = logger;
     }
 
     /// <summary>
@@ -50,10 +52,14 @@ public class TcgController : ControllerBase
     {
         pageSize = Math.Clamp(pageSize, 1, 250);
 
-        // Busca por código: set + número
+        // Busca por código: "set.ptcgoCode:PAL number:058" (formato pokemontcg.io)
         if (!string.IsNullOrWhiteSpace(set) && !string.IsNullOrWhiteSpace(num))
         {
-            var byCode = await _tcgService.SearchCardsByNameAsync($"set:{set} number:{num}", game, 1, 1);
+            // Tenta ptcgoCode (3 letras, ex: PAL) e id (ex: sv8pt5) em paralelo
+            var q = set.Length <= 5
+                ? $"set.ptcgoCode:{set.ToUpper()} number:{num}"
+                : $"set.id:{set.ToLower()} number:{num}";
+            var byCode = await _tcgService.SearchCardsByNameAsync(q, game, 1, 5);
             return Ok(byCode);
         }
 
@@ -118,5 +124,39 @@ public class TcgController : ControllerBase
     {
         var count = await _tcgService.PurgeExpiredCacheAsync();
         return Ok(new { RemovedCount = count, Message = $"{count} cartas expiradas removidas do cache." });
+    }
+
+    /// <summary>
+    /// Sincroniza todos os cards de um set específico com a API pokemontcg.io.
+    /// Dispara em background — retorna imediatamente.
+    /// Admin apenas.
+    /// </summary>
+    [HttpPost("sync")]
+    [Authorize(Policy = "AdminOnly")]
+    public IActionResult SyncSet([FromQuery] string setId, [FromQuery] string game = "Pokemon")
+    {
+        if (string.IsNullOrWhiteSpace(setId))
+            return BadRequest(new { Message = "Informe o 'setId' do set (ex: sv8pt5)." });
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                int page = 1; const int batchSize = 250;
+                while (true)
+                {
+                    var result = await _tcgService.SearchCardsByNameAsync($"set.id:{setId}", game, page, batchSize);
+                    if (result.Items.Count == 0) break;
+                    _logger.LogInformation("Sync set {SetId} página {Page}: {Count} cartas", setId, page, result.Items.Count);
+                    if (result.Items.Count < batchSize) break;
+                    page++;
+                    await Task.Delay(500); // Rate limiting suave
+                }
+                _logger.LogInformation("Sync do set {SetId} concluído.", setId);
+            }
+            catch (Exception ex) { _logger.LogError(ex, "Erro no sync do set {SetId}", setId); }
+        });
+
+        return Accepted(new { Message = $"Sync do set '{setId}' disparado em background." });
     }
 }

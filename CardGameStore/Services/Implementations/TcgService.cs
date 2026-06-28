@@ -11,6 +11,7 @@
 using CardGameStore.DTOs;
 using CardGameStore.Models.MongoDB;
 using CardGameStore.Services.Interfaces;
+using Microsoft.Extensions.Caching.Memory;
 using MongoDB.Driver;
 using System.Text.RegularExpressions;
 
@@ -24,20 +25,21 @@ public class TcgService : ITcgService
     private readonly IMongoCollection<CardCache> _cardCollection;
     private readonly ITcgApiClient               _apiClient;
     private readonly ILogger<TcgService>         _logger;
+    private readonly IMemoryCache                _queryCache;
 
-    // Nome da coleção no MongoDB
     private const string CollectionName = "card_cache";
 
     public TcgService(
-        IMongoDatabase    mongoDatabase,
-        ITcgApiClient     apiClient,
-        ILogger<TcgService> logger)
+        IMongoDatabase      mongoDatabase,
+        ITcgApiClient       apiClient,
+        ILogger<TcgService> logger,
+        IMemoryCache        memoryCache)
     {
         _cardCollection = mongoDatabase.GetCollection<CardCache>(CollectionName);
         _apiClient      = apiClient;
         _logger         = logger;
+        _queryCache     = memoryCache;
 
-        // Garante que os índices existam (idempotente — seguro chamar múltiplas vezes)
         EnsureIndexesAsync().GetAwaiter().GetResult();
     }
 
@@ -95,57 +97,33 @@ public class TcgService : ITcgService
         string? rarity  = null)
     {
         pageSize = Math.Min(pageSize, 250);
-        var skip = (page - 1) * pageSize;
 
-        var filterBuilder = Builders<CardCache>.Filter;
-        var filter = filterBuilder.Regex(c => c.Name, new MongoDB.Bson.BsonRegularExpression(Regex.Escape(name), "i"));
+        // Cache de query em memória (5 min) — evita bater na API para a mesma busca
+        var cacheKey = $"tcg_q:{name}:{game}:{page}:{pageSize}:{setId}:{rarity}".ToLower();
+        if (_queryCache.TryGetValue(cacheKey, out PagedResult<CardCache>? cached) && cached != null)
+            return cached;
 
-        if (!string.IsNullOrWhiteSpace(game))
-            filter &= filterBuilder.Eq(c => c.Game, game);
-        if (!string.IsNullOrWhiteSpace(setId))
-            filter &= filterBuilder.Regex(c => c.SetCode, new MongoDB.Bson.BsonRegularExpression($"^{Regex.Escape(setId)}$", "i"));
-        if (!string.IsNullOrWhiteSpace(rarity))
-            filter &= filterBuilder.Regex(c => c.Rarity, new MongoDB.Bson.BsonRegularExpression(Regex.Escape(rarity), "i"));
+        // Monta query para a API (nome livre → name:*...*; estruturado → passa direto)
+        var apiQuery = name;
+        if (!string.IsNullOrWhiteSpace(setId))  apiQuery += $" set.id:{setId}";
+        if (!string.IsNullOrWhiteSpace(rarity)) apiQuery += $" rarity:\"{rarity}\"";
 
-        filter &= filterBuilder.Gt(c => c.ExpiresAt, DateTime.UtcNow);
+        _logger.LogInformation("TCG search '{Query}' game={Game} page={Page}", apiQuery, game, page);
+        var apiResult = await _apiClient.SearchCardsAsync(apiQuery, game, page, pageSize);
 
-        var totalCount = await _cardCollection.CountDocumentsAsync(filter);
+        // Armazena cartas individuais no MongoDB em background
+        _ = Task.Run(() => CacheApiSearchResultsAsync(apiResult.Cards));
 
-        if (totalCount == 0)
+        var result = new PagedResult<CardCache>
         {
-            // Monta query para a API externa incluindo filtros
-            var apiQuery = name;
-            if (!string.IsNullOrWhiteSpace(setId))   apiQuery += $" set.id:{setId}";
-            if (!string.IsNullOrWhiteSpace(rarity))  apiQuery += $" rarity:\"{rarity}\"";
-
-            _logger.LogInformation("Cache miss para '{Query}'. Buscando na API...", apiQuery);
-            var apiResult = await _apiClient.SearchCardsAsync(apiQuery, game, page, pageSize);
-
-            _ = Task.Run(() => CacheApiSearchResultsAsync(apiResult.Cards));
-
-            return new PagedResult<CardCache>
-            {
-                Items      = apiResult.Cards.Select(MapApiResponseToCache).ToList(),
-                TotalCount = apiResult.TotalCount,
-                Page       = page,
-                PageSize   = pageSize
-            };
-        }
-
-        var items = await _cardCollection
-            .Find(filter)
-            .Skip(skip)
-            .Limit(pageSize)
-            .SortByDescending(c => c.CachedAt)
-            .ToListAsync();
-
-        return new PagedResult<CardCache>
-        {
-            Items      = items,
-            TotalCount = (int)totalCount,
+            Items      = apiResult.Cards.Select(MapApiResponseToCache).ToList(),
+            TotalCount = apiResult.TotalCount,
             Page       = page,
             PageSize   = pageSize
         };
+
+        _queryCache.Set(cacheKey, result, TimeSpan.FromMinutes(5));
+        return result;
     }
 
     /// <inheritdoc/>
