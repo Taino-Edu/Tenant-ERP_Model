@@ -54,13 +54,35 @@ public class TcgApiClient : ITcgApiClient
     }
 
     public async Task<TcgApiSearchResponse> SearchCardsAsync(
-        string name, string? game, int page, int pageSize,
-        string? setCode = null, string? rarity = null, string? cardType = null)
+        string  name,
+        string? game           = null,
+        int     page           = 1,
+        int     pageSize       = 20,
+        string? setCode        = null,
+        string? rarity         = null,
+        string? cardType       = null,
+        string? artist         = null,
+        string? supertype      = null,
+        string? subtype        = null,
+        string? energyType     = null,
+        string? regulationMark = null,
+        string? legality       = null,
+        string? evolvesFrom    = null,
+        string? setSeries      = null,
+        string? ptcgoCode      = null,
+        string? releaseDateFrom = null,
+        string? releaseDateTo  = null,
+        int?    pokedexNumber  = null,
+        int?    hpMin          = null,
+        int?    hpMax          = null)
     {
         var normalized = game?.ToLowerInvariant() ?? string.Empty;
 
         if (normalized.Contains("pokemon") || normalized.Contains("pokémon"))
-            return await SearchPokemonCardsAsync(name, page, pageSize, setCode, rarity);
+            return await SearchPokemonCardsAsync(name, page, pageSize,
+                setCode, rarity, artist, supertype, subtype, energyType,
+                regulationMark, legality, evolvesFrom, setSeries, ptcgoCode,
+                releaseDateFrom, releaseDateTo, pokedexNumber, hpMin, hpMax);
 
         if (normalized.Contains("mtg") || normalized.Contains("magic"))
             return await SearchScryfallCardsAsync(name, page, pageSize, setCode, rarity, cardType);
@@ -125,19 +147,71 @@ public class TcgApiClient : ITcgApiClient
     }
 
     private async Task<TcgApiSearchResponse> SearchPokemonCardsAsync(
-        string name, int page, int pageSize, string? setCode = null, string? rarity = null)
+        string  name,
+        int     page,
+        int     pageSize,
+        string? setCode        = null,
+        string? rarity         = null,
+        string? artist         = null,
+        string? supertype      = null,
+        string? subtype        = null,
+        string? energyType     = null,
+        string? regulationMark = null,
+        string? legality       = null,
+        string? evolvesFrom    = null,
+        string? setSeries      = null,
+        string? ptcgoCode      = null,
+        string? releaseDateFrom = null,
+        string? releaseDateTo  = null,
+        int?    pokedexNumber  = null,
+        int?    hpMin          = null,
+        int?    hpMax          = null)
     {
         try
         {
-            // Busca estruturada (set.ptcgoCode / set.id / name) → passa diretamente
-            // Busca simples por nome → wraps com name:*...*
+            // Query estruturada (contém ':') → passa direto para a API
             var isStructured = name.Contains(':');
-            var baseQ = isStructured ? name : $"name:*{name}*";
-            // Adiciona filtros no formato pokemontcg.io
-            if (!string.IsNullOrWhiteSpace(setCode) && !isStructured)
-                baseQ += $" set.id:{setCode}";
-            if (!string.IsNullOrWhiteSpace(rarity) && !isStructured)
-                baseQ += $" rarity:\"{rarity}\"";
+            var parts = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(name))
+                parts.Add(isStructured ? name : $"name:*{name}*");
+
+            if (!isStructured)
+            {
+                if (!string.IsNullOrWhiteSpace(setCode))
+                    parts.Add(setCode.Length <= 6
+                        ? $"set.ptcgoCode:{setCode.ToUpper()}"
+                        : $"set.id:{setCode.ToLower()}");
+                if (!string.IsNullOrWhiteSpace(rarity))
+                    parts.Add($"rarity:\"{rarity}\"");
+                if (!string.IsNullOrWhiteSpace(artist))
+                    parts.Add($"artist:*{artist}*");
+                if (!string.IsNullOrWhiteSpace(supertype))
+                    parts.Add($"supertype:{supertype}");
+                if (!string.IsNullOrWhiteSpace(subtype))
+                    parts.Add($"subtypes:{subtype}");
+                if (!string.IsNullOrWhiteSpace(energyType))
+                    parts.Add($"types:{energyType}");
+                if (!string.IsNullOrWhiteSpace(regulationMark))
+                    parts.Add($"regulationMark:{regulationMark.ToUpper()}");
+                if (!string.IsNullOrWhiteSpace(legality))
+                    parts.Add($"legalities.{legality.ToLower()}:legal");
+                if (!string.IsNullOrWhiteSpace(evolvesFrom))
+                    parts.Add($"evolvesFrom:*{evolvesFrom}*");
+                if (!string.IsNullOrWhiteSpace(setSeries))
+                    parts.Add($"set.series:\"{setSeries}\"");
+                if (!string.IsNullOrWhiteSpace(ptcgoCode))
+                    parts.Add($"set.ptcgoCode:{ptcgoCode.ToUpper()}");
+                if (!string.IsNullOrWhiteSpace(releaseDateFrom) || !string.IsNullOrWhiteSpace(releaseDateTo))
+                    parts.Add($"set.releaseDate:[{releaseDateFrom ?? "*"} TO {releaseDateTo ?? "*"}]");
+                if (pokedexNumber.HasValue)
+                    parts.Add($"nationalPokedexNumbers:{pokedexNumber}");
+                if (hpMin.HasValue || hpMax.HasValue)
+                    parts.Add($"hp:[{hpMin?.ToString() ?? "*"} TO {hpMax?.ToString() ?? "*"}]");
+            }
+
+            // Se não houver nenhum filtro, busca a carta com maior nome (fallback)
+            var baseQ = parts.Count > 0 ? string.Join(" ", parts) : "*";
             var q   = Uri.EscapeDataString(baseQ);
             var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}";
             var response = await PokemonClient().GetAsync(url);
@@ -201,34 +275,85 @@ public class TcgApiClient : ITcgApiClient
 
     private static TcgApiCardResponse MapPokemonCard(JsonElement c)
     {
-        c.TryGetProperty("tcgplayer", out var tcgp);
-        c.TryGetProperty("images",   out var imgs);
-        c.TryGetProperty("set",      out var set);
+        c.TryGetProperty("tcgplayer",  out var tcgp);
+        c.TryGetProperty("cardmarket", out var cm);
+        c.TryGetProperty("images",     out var imgs);
+        c.TryGetProperty("set",        out var set);
+        c.TryGetProperty("legalities", out var legEl);
 
         var allPrices = ExtractAllPokemonPrices(tcgp);
-        // market price da variação principal para compatibilidade
-        var mainPrice = allPrices?.Holofoil ?? allPrices?.Normal ?? allPrices?.FirstEditionNormal ?? allPrices?.ReverseHolofoil;
+        var mainPrice = allPrices?.Holofoil ?? allPrices?.Normal ?? allPrices?.FirstEditionHolofoil
+                     ?? allPrices?.FirstEditionNormal ?? allPrices?.UnlimitedHolofoil
+                     ?? allPrices?.ReverseHolofoil;
+
+        // CardMarket prices
+        CardMarketPricesApi? cardMarket = null;
+        if (cm.ValueKind == JsonValueKind.Object && cm.TryGetProperty("prices", out var cmp))
+        {
+            cardMarket = new CardMarketPricesApi
+            {
+                AverageSellPrice = GetDecimal(cmp, "averageSellPrice"),
+                LowPrice         = GetDecimal(cmp, "lowPrice"),
+                TrendPrice       = GetDecimal(cmp, "trendPrice"),
+                ReverseHoloSell  = GetDecimal(cmp, "reverseHoloSell"),
+                ReverseHoloLow   = GetDecimal(cmp, "reverseHoloLow"),
+                ReverseHoloTrend = GetDecimal(cmp, "reverseHoloTrend"),
+                LowPriceExPlus   = GetDecimal(cmp, "lowPriceExPlus"),
+                Avg1             = GetDecimal(cmp, "avg1"),
+                Avg7             = GetDecimal(cmp, "avg7"),
+                Avg30            = GetDecimal(cmp, "avg30"),
+                ReverseHoloAvg1  = GetDecimal(cmp, "reverseHoloAvg1"),
+                ReverseHoloAvg7  = GetDecimal(cmp, "reverseHoloAvg7"),
+                ReverseHoloAvg30 = GetDecimal(cmp, "reverseHoloAvg30"),
+                Url       = cm.TryGetProperty("url",       out var cu) ? cu.GetString() : null,
+                UpdatedAt = cm.TryGetProperty("updatedAt", out var cua) ? cua.GetString() : null,
+            };
+        }
+
+        // Legalities dict
+        Dictionary<string, string>? legalities = null;
+        if (legEl.ValueKind == JsonValueKind.Object)
+        {
+            legalities = new Dictionary<string, string>();
+            foreach (var prop in legEl.EnumerateObject())
+                legalities[prop.Name] = prop.Value.GetString() ?? "";
+        }
+
+        // Pokédex numbers
+        List<int>? pokedex = null;
+        if (c.TryGetProperty("nationalPokedexNumbers", out var pdx) && pdx.ValueKind == JsonValueKind.Array)
+            pokedex = pdx.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
 
         return new TcgApiCardResponse
         {
-            Id       = c.TryGetProperty("id", out var id)              ? $"pokemon:{id.GetString()}" : string.Empty,
-            Name     = c.TryGetProperty("name", out var nm)            ? nm.GetString()!              : string.Empty,
-            Game     = "Pokemon",
-            SetName  = set.ValueKind != JsonValueKind.Undefined &&
-                       set.TryGetProperty("name", out var sn)          ? sn.GetString()               : null,
-            SetCode  = set.ValueKind != JsonValueKind.Undefined &&
-                       set.TryGetProperty("id", out var sc)            ? sc.GetString()               : null,
-            Number   = c.TryGetProperty("number", out var num)         ? num.GetString()              : null,
-            Rarity   = c.TryGetProperty("rarity", out var rar)         ? rar.GetString()              : null,
-            Type     = c.TryGetProperty("supertype", out var st)       ? st.GetString()               : null,
-            Subtypes = JsonArrayToList(c, "subtypes"),
-            Types    = JsonArrayToList(c, "types"),
-            Hp       = c.TryGetProperty("hp", out var hp)              ? hp.GetString()               : null,
-            Artist   = c.TryGetProperty("artist", out var art)         ? art.GetString()              : null,
-            FlavorText = c.TryGetProperty("flavorText", out var ft)    ? ft.GetString()               : null,
-            RegulationMark = c.TryGetProperty("regulationMark", out var rm) ? rm.GetString()          : null,
-            Attacks    = ExtractPokemonAttacks(c),
-            Weaknesses = ExtractPokemonWeakResist(c, "weaknesses"),
+            Id         = c.TryGetProperty("id", out var id)              ? $"pokemon:{id.GetString()}" : string.Empty,
+            Name       = c.TryGetProperty("name", out var nm)            ? nm.GetString()!              : string.Empty,
+            Game       = "Pokemon",
+            SetName    = set.ValueKind != JsonValueKind.Undefined &&
+                         set.TryGetProperty("name", out var sn)          ? sn.GetString()               : null,
+            SetCode    = set.ValueKind != JsonValueKind.Undefined &&
+                         set.TryGetProperty("id", out var sc)            ? sc.GetString()               : null,
+            SetSeries  = set.ValueKind != JsonValueKind.Undefined &&
+                         set.TryGetProperty("series", out var ss)        ? ss.GetString()               : null,
+            SetPtcgoCode = set.ValueKind != JsonValueKind.Undefined &&
+                           set.TryGetProperty("ptcgoCode", out var pc)   ? pc.GetString()               : null,
+            SetReleaseDate = set.ValueKind != JsonValueKind.Undefined &&
+                             set.TryGetProperty("releaseDate", out var rd) ? rd.GetString()             : null,
+            Number     = c.TryGetProperty("number", out var num)         ? num.GetString()              : null,
+            Rarity     = c.TryGetProperty("rarity", out var rar)         ? rar.GetString()              : null,
+            Type       = c.TryGetProperty("supertype", out var st)       ? st.GetString()               : null,
+            Subtypes   = JsonArrayToList(c, "subtypes"),
+            Types      = JsonArrayToList(c, "types"),
+            Hp         = c.TryGetProperty("hp", out var hp)              ? hp.GetString()               : null,
+            Artist     = c.TryGetProperty("artist", out var art)         ? art.GetString()              : null,
+            FlavorText = c.TryGetProperty("flavorText", out var ft)      ? ft.GetString()               : null,
+            RegulationMark = c.TryGetProperty("regulationMark", out var rm) ? rm.GetString()            : null,
+            EvolvesFrom = c.TryGetProperty("evolvesFrom", out var ef)    ? ef.GetString()               : null,
+            EvolvesTo   = JsonArrayToList(c, "evolvesTo"),
+            NationalPokedexNumbers = pokedex,
+            Legalities  = legalities,
+            Attacks     = ExtractPokemonAttacks(c),
+            Weaknesses  = ExtractPokemonWeakResist(c, "weaknesses"),
             Resistances = ExtractPokemonWeakResist(c, "resistances"),
             RetreatCost = JsonArrayToList(c, "retreatCost"),
             ConvertedRetreatCost = c.TryGetProperty("convertedRetreatCost", out var crc) &&
@@ -240,8 +365,9 @@ public class TcgApiClient : ITcgApiClient
                 Large = imgs.ValueKind != JsonValueKind.Undefined &&
                         imgs.TryGetProperty("large", out var lg) ? lg.GetString() : null,
             },
-            AllPrices = allPrices,
-            Prices    = mainPrice,
+            AllPrices  = allPrices,
+            CardMarket = cardMarket,
+            Prices     = mainPrice,
         };
     }
 
@@ -305,10 +431,12 @@ public class TcgApiClient : ITcgApiClient
             ReverseHolofoil      = ParseVariant(pricesEl, "reverseHolofoil"),
             FirstEditionNormal   = ParseVariant(pricesEl, "1stEditionNormal"),
             FirstEditionHolofoil = ParseVariant(pricesEl, "1stEditionHolofoil"),
+            UnlimitedNormal      = ParseVariant(pricesEl, "unlimitedNormal"),
+            UnlimitedHolofoil    = ParseVariant(pricesEl, "unlimitedHolofoil"),
         };
 
-        return (result.Normal == null && result.Holofoil == null &&
-                result.ReverseHolofoil == null && result.FirstEditionNormal == null) ? null : result;
+        return (result.Normal == null && result.Holofoil == null && result.ReverseHolofoil == null
+             && result.FirstEditionNormal == null && result.UnlimitedHolofoil == null) ? null : result;
     }
 
     private static decimal? GetDecimal(JsonElement el, string prop) =>

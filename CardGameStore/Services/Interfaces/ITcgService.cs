@@ -44,13 +44,28 @@ public interface ITcgService
     /// <param name="pageSize">Itens por página (default: 20, máx: 50).</param>
     /// <returns>Lista paginada de cartas encontradas.</returns>
     Task<PagedResult<CardCache>> SearchCardsByNameAsync(
-        string name,
-        string? game     = null,
-        int    page      = 1,
-        int    pageSize  = 20,
-        string? setId    = null,
-        string? rarity   = null,
-        string? cardType = null
+        string  name,
+        string? game           = null,
+        int     page           = 1,
+        int     pageSize       = 20,
+        string? setId          = null,
+        string? rarity         = null,
+        string? cardType       = null,
+        // Pokémon TCG extended filters
+        string? artist         = null,
+        string? supertype      = null,
+        string? subtype        = null,
+        string? energyType     = null,
+        string? regulationMark = null,
+        string? legality       = null,
+        string? evolvesFrom    = null,
+        string? setSeries      = null,
+        string? ptcgoCode      = null,
+        string? releaseDateFrom = null,
+        string? releaseDateTo  = null,
+        int?    pokedexNumber  = null,
+        int?    hpMin          = null,
+        int?    hpMax          = null
     );
 
     /// <summary>
@@ -108,8 +123,27 @@ public interface ITcgApiClient
 
     /// <summary>Pesquisa cartas por nome na API externa.</summary>
     Task<TcgApiSearchResponse> SearchCardsAsync(
-        string name, string? game, int page, int pageSize,
-        string? setCode = null, string? rarity = null, string? cardType = null);
+        string  name,
+        string? game           = null,
+        int     page           = 1,
+        int     pageSize       = 20,
+        string? setCode        = null,
+        string? rarity         = null,
+        string? cardType       = null,
+        string? artist         = null,
+        string? supertype      = null,
+        string? subtype        = null,
+        string? energyType     = null,
+        string? regulationMark = null,
+        string? legality       = null,
+        string? evolvesFrom    = null,
+        string? setSeries      = null,
+        string? ptcgoCode      = null,
+        string? releaseDateFrom = null,
+        string? releaseDateTo  = null,
+        int?    pokedexNumber  = null,
+        int?    hpMin          = null,
+        int?    hpMax          = null);
 
     /// <summary>Busca todos os sets de um jogo na API externa.</summary>
     Task<IEnumerable<TcgSetDto>> FetchSetsAsync(string game);

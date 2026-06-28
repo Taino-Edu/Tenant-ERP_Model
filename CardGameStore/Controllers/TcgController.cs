@@ -1,10 +1,12 @@
 // =============================================================================
 // TcgController.cs — Busca de Cartas TCG (Cache-First via MongoDB)
-// GET /api/tcg/search?name=pikachu&game=Pokemon        → pesquisa por nome
-// GET /api/tcg/search?set=SV8PT5&num=1&game=Pokemon    → pesquisa por código
-// GET /api/tcg/cards/{id}                              → busca por ID
-// GET /api/tcg/sets?game=Pokemon                       → lista sets
-// GET /api/tcg/brl-rate                                → cotação USD/BRL atual
+// GET /api/tcg/search?name=pikachu&game=Pokemon             → por nome
+// GET /api/tcg/search?set=PAL&num=058&game=Pokemon          → por código
+// GET /api/tcg/search?artist=kenji&game=Pokemon             → por artista
+// GET /api/tcg/search?regulationMark=G&legality=standard    → por mark/legalidade
+// GET /api/tcg/cards/{id}                                   → por ID
+// GET /api/tcg/sets?game=Pokemon                            → lista sets
+// GET /api/tcg/brl-rate                                     → cotação USD/BRL
 // =============================================================================
 
 using CardGameStore.Services.Implementations;
@@ -41,15 +43,30 @@ public class TcgController : ControllerBase
     [Authorize]
     [ProducesResponseType(200)]
     public async Task<IActionResult> Search(
-        [FromQuery] string? name     = null,
-        [FromQuery] string? set      = null,
-        [FromQuery] string? num      = null,
-        [FromQuery] string? setId    = null,
-        [FromQuery] string? rarity   = null,
-        [FromQuery] string? cardType = null,
-        [FromQuery] string? game     = "Pokemon",
-        [FromQuery] int     page     = 1,
-        [FromQuery] int     pageSize = 30)
+        [FromQuery] string? name           = null,
+        [FromQuery] string? set            = null,
+        [FromQuery] string? num            = null,
+        [FromQuery] string? setId          = null,
+        [FromQuery] string? rarity         = null,
+        [FromQuery] string? cardType       = null,
+        [FromQuery] string? game           = "Pokemon",
+        [FromQuery] int     page           = 1,
+        [FromQuery] int     pageSize       = 30,
+        // Pokémon TCG extended filters
+        [FromQuery] string? artist         = null,
+        [FromQuery] string? supertype      = null,
+        [FromQuery] string? subtype        = null,
+        [FromQuery] string? energyType     = null,
+        [FromQuery] string? regulationMark = null,
+        [FromQuery] string? legality       = null,
+        [FromQuery] string? evolvesFrom    = null,
+        [FromQuery] string? setSeries      = null,
+        [FromQuery] string? ptcgoCode      = null,
+        [FromQuery] string? releaseDateFrom = null,
+        [FromQuery] string? releaseDateTo  = null,
+        [FromQuery] int?    pokedexNumber  = null,
+        [FromQuery] int?    hpMin          = null,
+        [FromQuery] int?    hpMax          = null)
     {
         pageSize = Math.Clamp(pageSize, 1, 250);
 
@@ -60,20 +77,14 @@ public class TcgController : ControllerBase
             string q;
 
             if (gameNorm.Contains("mtg") || gameNorm.Contains("magic"))
-                // Scryfall: s:mh3 cn:232  (collector number)
                 q = $"s:{set.ToLower()} cn:{num.ToLower()}";
-
             else if (gameNorm.Contains("yu-gi-oh") || gameNorm.Contains("yugioh"))
-                // YGOProDeck: DUNE-EN001 como nome (fname faz substring match)
                 q = $"{set.ToUpper()}-{num.PadLeft(3, '0')}";
-
             else if (gameNorm.Contains("riftbound") || gameNorm.Contains("lol"))
-                // Riftcodex: busca por set_id + collector_number (ex: OGN-296)
                 q = $"{set.ToUpper()}-{num}";
-
             else
-                // Pokémon: ptcgoCode (≤5 chars, ex: PAL) ou set.id (ex: sv8pt5)
-                q = set.Length <= 5
+                // Pokémon: ptcgoCode (≤6 chars) → set.ptcgoCode; set.id longo → set.id
+                q = set.Length <= 6
                     ? $"set.ptcgoCode:{set.ToUpper()} number:{num}"
                     : $"set.id:{set.ToLower()} number:{num}";
 
@@ -81,10 +92,23 @@ public class TcgController : ControllerBase
             return Ok(byCode);
         }
 
-        if (string.IsNullOrWhiteSpace(name))
-            return BadRequest(new { Message = "Informe 'name' para busca por nome, ou 'set' + 'num' para busca por código." });
+        // Permite busca apenas por filtros sem nome (ex: buscar todas as cartas Rare Holo do Artista X)
+        var hasFilters = !string.IsNullOrWhiteSpace(artist) || !string.IsNullOrWhiteSpace(supertype)
+            || !string.IsNullOrWhiteSpace(subtype) || !string.IsNullOrWhiteSpace(energyType)
+            || !string.IsNullOrWhiteSpace(regulationMark) || !string.IsNullOrWhiteSpace(legality)
+            || !string.IsNullOrWhiteSpace(evolvesFrom) || !string.IsNullOrWhiteSpace(setSeries)
+            || !string.IsNullOrWhiteSpace(ptcgoCode) || !string.IsNullOrWhiteSpace(rarity)
+            || !string.IsNullOrWhiteSpace(setId) || pokedexNumber.HasValue
+            || hpMin.HasValue || hpMax.HasValue;
 
-        var result = await _tcgService.SearchCardsByNameAsync(name, game, page, pageSize, setId, rarity, cardType);
+        if (string.IsNullOrWhiteSpace(name) && !hasFilters)
+            return BadRequest(new { Message = "Informe ao menos 'name' ou um filtro para busca." });
+
+        var result = await _tcgService.SearchCardsByNameAsync(
+            name ?? string.Empty, game, page, pageSize, setId, rarity, cardType,
+            artist, supertype, subtype, energyType, regulationMark, legality,
+            evolvesFrom, setSeries, ptcgoCode, releaseDateFrom, releaseDateTo,
+            pokedexNumber, hpMin, hpMax);
         return Ok(result);
     }
 

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { tcgApi, productApi, CardCache, TcgSet } from '@/lib/api'
+import { tcgApi, productApi, CardCache, TcgSet, TcgSearchParams } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Search, Loader2, Zap, Star, DollarSign, Database, PackagePlus, X, Check, PlusCircle, SlidersHorizontal, RefreshCw, TrendingUp } from 'lucide-react'
 import Image from 'next/image'
@@ -109,7 +109,7 @@ const GAME_FILTERS: Record<string, { rarityLabel: string; rarities: string[]; ty
   Pokemon: {
     rarityLabel: 'Raridade',
     rarities: ['Common','Uncommon','Rare','Rare Holo','Double Rare','Illustration Rare','Special Illustration Rare','Hyper Rare','ACE SPEC Rare','Rare Ultra','Rare Secret','Promo'],
-    typeLabel: 'Tipo',
+    typeLabel: 'Supertipo',
     types: ['Pokémon','Trainer','Energy'],
   },
   MTG: {
@@ -129,6 +129,11 @@ const GAME_FILTERS: Record<string, { rarityLabel: string; rarities: string[]; ty
     rarities: ['Common','Rare','Epic','Legendary'],
   },
 }
+
+const POKEMON_SUBTYPES = ['Basic','Stage 1','Stage 2','EX','GX','V','VMAX','VSTAR','ex','Radiant','Tera','Supporter','Item','Tool','Stadium','Special Energy','Basic Energy']
+const POKEMON_ENERGY_TYPES = ['Fire','Water','Grass','Lightning','Psychic','Fighting','Darkness','Metal','Dragon','Colorless']
+const POKEMON_REGULATION_MARKS = ['A','B','C','D','E','F','G','H']
+const POKEMON_SERIES = ['Scarlet & Violet','Sword & Shield','Sun & Moon','XY','Black & White','HeartGold SoulSilver','Platinum','Diamond & Pearl','EX','Gym','Neo','Base']
 
 // ── Modal: adicionar carta ao estoque ─────────────────────────────────────────
 
@@ -280,11 +285,13 @@ function CardDetailModal({ card, brlRate, onClose, onAddStock }: {
   const brl = usd && brlRate ? usd * brlRate : null
 
   const priceVariants = current.allPrices ? [
-    { label: 'Normal',        p: current.allPrices.normal },
-    { label: 'Holofoil',      p: current.allPrices.holofoil },
-    { label: 'Reverse Holo',  p: current.allPrices.reverseHolofoil },
-    { label: '1ª Ed. Normal', p: current.allPrices.firstEditionNormal },
-    { label: '1ª Ed. Holo',   p: current.allPrices.firstEditionHolofoil },
+    { label: 'Normal',          p: current.allPrices.normal },
+    { label: 'Holofoil',        p: current.allPrices.holofoil },
+    { label: 'Reverse Holo',    p: current.allPrices.reverseHolofoil },
+    { label: '1ª Ed. Normal',   p: current.allPrices.firstEditionNormal },
+    { label: '1ª Ed. Holo',     p: current.allPrices.firstEditionHolofoil },
+    { label: 'Unlimited Normal', p: current.allPrices.unlimitedNormal },
+    { label: 'Unlimited Holo',  p: current.allPrices.unlimitedHolofoil },
   ].filter(v => v.p?.market || v.p?.mid) : []
 
   return (
@@ -391,6 +398,31 @@ function CardDetailModal({ card, brlRate, onClose, onAddStock }: {
                   {current.game === 'MTG' ? 'Texto de regras' : current.game === 'Yu-Gi-Oh!' ? 'Efeito' : 'Texto'}
                 </p>
                 <p className="text-xs text-gray-300 leading-relaxed bg-surface-800 rounded-lg p-3 whitespace-pre-wrap">{current.flavorText}</p>
+              </div>
+            )}
+
+            {/* CardMarket (EUR) */}
+            {current.cardMarket && (current.cardMarket.trendPrice || current.cardMarket.averageSellPrice) && (
+              <div className="space-y-2">
+                <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">CardMarket (EUR)</p>
+                <div className="bg-surface-800 rounded-xl p-3 grid grid-cols-2 gap-2">
+                  {[
+                    { l: 'Média venda',    v: current.cardMarket.averageSellPrice },
+                    { l: 'Tendência',      v: current.cardMarket.trendPrice },
+                    { l: 'Mais baixo',     v: current.cardMarket.lowPrice },
+                    { l: 'Ex+',            v: current.cardMarket.lowPriceExPlus },
+                    { l: 'Reverse trend',  v: current.cardMarket.reverseHoloTrend },
+                    { l: 'Média 30d',      v: current.cardMarket.avg30 },
+                  ].filter(r => r.v && r.v > 0).map(r => (
+                    <div key={r.l}>
+                      <p className="text-[9px] text-gray-500">{r.l}</p>
+                      <p className="text-xs font-bold text-blue-300">€{r.v!.toFixed(2)}</p>
+                    </div>
+                  ))}
+                </div>
+                {current.cardMarket.updatedAt && (
+                  <p className="text-[9px] text-gray-600">Atualizado: {current.cardMarket.updatedAt}</p>
+                )}
               </div>
             )}
 
@@ -503,8 +535,23 @@ export default function CartasPage() {
   const [brlUpdated, setBrlUpdated] = useState<Date | null>(null)
   const [refreshingBrl, setRefreshingBrl] = useState(false)
   const [noApi,      setNoApi]      = useState(false)
+  // Filtros Pokémon avançados
+  const [pkArtist,     setPkArtist]     = useState('')
+  const [pkSubtype,    setPkSubtype]    = useState('')
+  const [pkEnergy,     setPkEnergy]     = useState('')
+  const [pkRegMark,    setPkRegMark]    = useState('')
+  const [pkLegality,   setPkLegality]   = useState('')
+  const [pkEvolvesFrom, setPkEvolvesFrom] = useState('')
+  const [pkSeries,     setPkSeries]     = useState('')
+  const [pkPtcgo,      setPkPtcgo]      = useState('')
+  const [pkDateFrom,   setPkDateFrom]   = useState('')
+  const [pkDateTo,     setPkDateTo]     = useState('')
+  const [pkPokedex,    setPkPokedex]    = useState('')
+  const [pkHpMin,      setPkHpMin]      = useState('')
+  const [pkHpMax,      setPkHpMax]      = useState('')
 
   const gameFilters = GAME_FILTERS[game] ?? GAME_FILTERS['Pokemon']
+  const isPokemon   = game === 'Pokemon'
 
   const fetchBrl = useCallback(async () => {
     setRefreshingBrl(true)
@@ -517,9 +564,12 @@ export default function CartasPage() {
 
   useEffect(() => { fetchBrl() }, [fetchBrl])
 
-  // Carrega sets quando muda o jogo
+  // Carrega sets quando muda o jogo e limpa filtros específicos de jogo
   useEffect(() => {
     setSelSet(''); setSelRarity(''); setSelType(''); setNoApi(false)
+    setPkArtist(''); setPkSubtype(''); setPkEnergy(''); setPkRegMark('')
+    setPkLegality(''); setPkEvolvesFrom(''); setPkSeries(''); setPkPtcgo('')
+    setPkDateFrom(''); setPkDateTo(''); setPkPokedex(''); setPkHpMin(''); setPkHpMax('')
     if (game) tcgApi.sets(game).then((r: any) => setSets(r.data ?? [])).catch(() => setSets([]))
   }, [game])
 
@@ -548,10 +598,19 @@ export default function CartasPage() {
   }
 
   async function handleSearch(p = 1) {
-    if (!query.trim()) { toast.error('Digite o nome ou código da carta'); return }
+    const hasQuery = query.trim().length > 0
+    const hasPkFilter = isPokemon && (pkArtist || pkSubtype || pkEnergy || pkRegMark || pkLegality ||
+      pkEvolvesFrom || pkSeries || pkPtcgo || pkDateFrom || pkDateTo || pkPokedex || pkHpMin || pkHpMax)
+    const hasBasicFilter = selSet || selRarity || selType
+
+    if (!hasQuery && !hasPkFilter && !hasBasicFilter) {
+      toast.error('Digite o nome ou utilize ao menos um filtro para buscar')
+      return
+    }
+
     setLoading(true); setNoApi(false)
     try {
-      const codeMatch = detectCodeSearch(query)
+      const codeMatch = hasQuery ? detectCodeSearch(query) : null
       let items: CardCache[] = [], totalPgs = 0
       let errorMsg: string | undefined
 
@@ -560,7 +619,31 @@ export default function CartasPage() {
         items = r.data.items ?? []; totalPgs = 1
         errorMsg = (r.data as any).errorMessage
       } else {
-        const r = await tcgApi.search(query, game || undefined, p, 30, selSet || undefined, selRarity || undefined, selType || undefined)
+        const params: TcgSearchParams = {
+          name:     query || undefined,
+          game:     game  || undefined,
+          page:     p,
+          pageSize: 30,
+          setId:    selSet    || undefined,
+          rarity:   selRarity || undefined,
+          cardType: selType   || undefined,
+          ...(isPokemon ? {
+            artist:          pkArtist      || undefined,
+            subtype:         pkSubtype     || undefined,
+            energyType:      pkEnergy      || undefined,
+            regulationMark:  pkRegMark     || undefined,
+            legality:        pkLegality    || undefined,
+            evolvesFrom:     pkEvolvesFrom || undefined,
+            setSeries:       pkSeries      || undefined,
+            ptcgoCode:       pkPtcgo       || undefined,
+            releaseDateFrom: pkDateFrom    || undefined,
+            releaseDateTo:   pkDateTo      || undefined,
+            pokedexNumber:   pkPokedex ? parseInt(pkPokedex) : undefined,
+            hpMin:           pkHpMin   ? parseInt(pkHpMin)   : undefined,
+            hpMax:           pkHpMax   ? parseInt(pkHpMax)   : undefined,
+          } : {}),
+        }
+        const r = await tcgApi.searchAdvanced(params)
         items = r.data.items ?? []; totalPgs = r.data.totalPages ?? 0
         errorMsg = (r.data as any).errorMessage
       }
@@ -571,7 +654,7 @@ export default function CartasPage() {
       setTotalPages(totalPgs)
       setPage(p)
       setSearched(true)
-      if (!items.length) toast('Nenhuma carta encontrada. Verifique o nome em inglês ou o código.', { icon: '🔍' })
+      if (!items.length) toast('Nenhuma carta encontrada. Verifique o nome em inglês ou os filtros.', { icon: '🔍' })
     } catch { toast.error('Erro ao buscar cartas.') }
     finally { setLoading(false) }
   }
@@ -645,33 +728,92 @@ export default function CartasPage() {
 
         {/* Filtros avançados */}
         {showFilter && (
-          <div className="flex flex-col sm:flex-row gap-2 pt-1 border-t border-surface-700">
-            {sets.length > 0 && (
-              <select className="input flex-1" value={selSet} onChange={e => setSelSet(e.target.value)}>
-                <option value="">Todos os sets</option>
-                {sets.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
-              </select>
+          <div className="flex flex-col gap-3 pt-2 border-t border-surface-700">
+            {/* Linha 1 — Set + Raridade + Supertipo */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              {sets.length > 0 && (
+                <select className="input flex-1" value={selSet} onChange={e => setSelSet(e.target.value)}>
+                  <option value="">Todos os sets</option>
+                  {sets.map(s => <option key={s.code} value={s.code}>{s.name}</option>)}
+                </select>
+              )}
+              {gameFilters.rarities.length > 0 && (
+                <select className="input flex-1" value={selRarity} onChange={e => setSelRarity(e.target.value)}>
+                  <option value="">{game === 'Yu-Gi-Oh!' ? 'Todos os tipos de carta' : `Toda ${gameFilters.rarityLabel.toLowerCase()}`}</option>
+                  {gameFilters.rarities.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              )}
+              {gameFilters.types && gameFilters.types.length > 0 && (
+                <select className="input flex-1" value={selType} onChange={e => setSelType(e.target.value)}>
+                  <option value="">{game === 'Yu-Gi-Oh!' ? 'Todos atributos' : `Todo ${gameFilters.typeLabel?.toLowerCase() ?? 'tipo'}`}</option>
+                  {gameFilters.types.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
+            </div>
+
+            {/* Filtros exclusivos Pokémon */}
+            {isPokemon && (
+              <div className="border border-surface-600 rounded-xl p-3 space-y-2 bg-surface-800/40">
+                <p className="text-[10px] font-bold text-brand-400 uppercase tracking-widest">Filtros Pokémon</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {/* Subtipo */}
+                  <select className="input text-xs" value={pkSubtype} onChange={e => setPkSubtype(e.target.value)}>
+                    <option value="">Subtipo</option>
+                    {POKEMON_SUBTYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {/* Tipo de energia */}
+                  <select className="input text-xs" value={pkEnergy} onChange={e => setPkEnergy(e.target.value)}>
+                    <option value="">Tipo de energia</option>
+                    {POKEMON_ENERGY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  {/* Regulation Mark */}
+                  <select className="input text-xs" value={pkRegMark} onChange={e => setPkRegMark(e.target.value)}>
+                    <option value="">Regulation Mark</option>
+                    {POKEMON_REGULATION_MARKS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  {/* Legalidade */}
+                  <select className="input text-xs" value={pkLegality} onChange={e => setPkLegality(e.target.value)}>
+                    <option value="">Legalidade</option>
+                    <option value="standard">Standard</option>
+                    <option value="expanded">Expanded</option>
+                    <option value="unlimited">Unlimited</option>
+                  </select>
+                  {/* Série */}
+                  <select className="input text-xs" value={pkSeries} onChange={e => setPkSeries(e.target.value)}>
+                    <option value="">Série</option>
+                    {POKEMON_SERIES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {/* PTCGO Code */}
+                  <input className="input text-xs" placeholder="Código PTCGO (PAL)" value={pkPtcgo} onChange={e => setPkPtcgo(e.target.value)} />
+                  {/* Artista */}
+                  <input className="input text-xs" placeholder="Artista" value={pkArtist} onChange={e => setPkArtist(e.target.value)} />
+                  {/* Evolui de */}
+                  <input className="input text-xs" placeholder="Evolui de" value={pkEvolvesFrom} onChange={e => setPkEvolvesFrom(e.target.value)} />
+                  {/* Pokédex # */}
+                  <input className="input text-xs" placeholder="Nº Pokédex (ex: 25)" type="number" min="1" max="1025" value={pkPokedex} onChange={e => setPkPokedex(e.target.value)} />
+                  {/* HP */}
+                  <div className="flex gap-1 col-span-1">
+                    <input className="input text-xs w-full" placeholder="HP mín" type="number" min="10" value={pkHpMin} onChange={e => setPkHpMin(e.target.value)} />
+                    <input className="input text-xs w-full" placeholder="HP máx" type="number" min="10" value={pkHpMax} onChange={e => setPkHpMax(e.target.value)} />
+                  </div>
+                  {/* Data de lançamento */}
+                  <div className="flex gap-1 col-span-1 sm:col-span-2">
+                    <input className="input text-xs w-full" placeholder="Data de (YYYY/MM/DD)" value={pkDateFrom} onChange={e => setPkDateFrom(e.target.value)} />
+                    <input className="input text-xs w-full" placeholder="Data até" value={pkDateTo} onChange={e => setPkDateTo(e.target.value)} />
+                  </div>
+                </div>
+              </div>
             )}
-            {gameFilters.rarities.length > 0 && (
-              <select className="input flex-1" value={selRarity} onChange={e => setSelRarity(e.target.value)}>
-                <option value="">
-                  {game === 'Yu-Gi-Oh!' ? 'Todos os tipos de carta' : `Toda ${gameFilters.rarityLabel.toLowerCase()}`}
-                </option>
-                {gameFilters.rarities.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            )}
-            {gameFilters.types && gameFilters.types.length > 0 && (
-              <select className="input flex-1" value={selType} onChange={e => setSelType(e.target.value)}>
-                <option value="">
-                  {game === 'Yu-Gi-Oh!' ? 'Todos os atributos' : `Todo ${gameFilters.typeLabel?.toLowerCase() ?? 'tipo'}`}
-                </option>
-                {gameFilters.types.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            )}
-            {(selSet || selRarity || selType) && (
-              <button onClick={() => { setSelSet(''); setSelRarity(''); setSelType('') }}
-                className="text-xs text-gray-400 hover:text-white px-2">
-                Limpar ×
+
+            {/* Limpar tudo */}
+            {(selSet || selRarity || selType || pkArtist || pkSubtype || pkEnergy || pkRegMark || pkLegality || pkEvolvesFrom || pkSeries || pkPtcgo || pkDateFrom || pkDateTo || pkPokedex || pkHpMin || pkHpMax) && (
+              <button onClick={() => {
+                setSelSet(''); setSelRarity(''); setSelType('')
+                setPkArtist(''); setPkSubtype(''); setPkEnergy(''); setPkRegMark('')
+                setPkLegality(''); setPkEvolvesFrom(''); setPkSeries(''); setPkPtcgo('')
+                setPkDateFrom(''); setPkDateTo(''); setPkPokedex(''); setPkHpMin(''); setPkHpMax('')
+              }} className="text-xs text-gray-400 hover:text-white px-2 text-left">
+                Limpar todos os filtros ×
               </button>
             )}
           </div>

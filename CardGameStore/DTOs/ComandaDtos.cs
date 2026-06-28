@@ -180,6 +180,9 @@ public class TcgApiCardResponse
     public string        Game                 { get; set; } = string.Empty;
     public string?       SetName              { get; set; }
     public string?       SetCode              { get; set; }
+    public string?       SetSeries            { get; set; }
+    public string?       SetPtcgoCode         { get; set; }
+    public string?       SetReleaseDate       { get; set; }
     public string?       Number               { get; set; }
     public string?       Rarity               { get; set; }
     /// <summary>Supertype: Pokémon, Trainer, Energy, Creature, Spell…</summary>
@@ -192,14 +195,21 @@ public class TcgApiCardResponse
     public string?       Artist               { get; set; }
     public string?       FlavorText           { get; set; }
     public string?       RegulationMark       { get; set; }
+    public string?       EvolvesFrom          { get; set; }
+    public List<string>? EvolvesTo            { get; set; }
+    public List<int>?    NationalPokedexNumbers { get; set; }
+    /// <summary>Legality por formato: { "standard": "Legal", "expanded": "Legal" }</summary>
+    public Dictionary<string, string>? Legalities { get; set; }
     public List<TcgCardAttack>?   Attacks           { get; set; }
     public List<TcgCardWeakness>? Weaknesses        { get; set; }
     public List<TcgCardWeakness>? Resistances       { get; set; }
     public List<string>?          RetreatCost       { get; set; }
     public int?                   ConvertedRetreatCost { get; set; }
     public TcgCardImages?         Images            { get; set; }
-    /// <summary>Preços por variação (normal, holofoil, reverseHolofoil…).</summary>
+    /// <summary>Preços TCGPlayer por variação (normal, holofoil, reverseHolofoil…).</summary>
     public TcgCardAllPrices?      AllPrices         { get; set; }
+    /// <summary>Preços CardMarket (EUR).</summary>
+    public CardMarketPricesApi?   CardMarket        { get; set; }
     /// <summary>Market price da variação principal (mantido para compatibilidade).</summary>
     public TcgCardPricesApi?      Prices            { get; set; }
 }
@@ -221,11 +231,33 @@ public class TcgCardWeakness
 
 public class TcgCardAllPrices
 {
-    public TcgCardPricesApi? Normal              { get; set; }
-    public TcgCardPricesApi? Holofoil            { get; set; }
-    public TcgCardPricesApi? ReverseHolofoil     { get; set; }
-    public TcgCardPricesApi? FirstEditionNormal  { get; set; }
+    public TcgCardPricesApi? Normal               { get; set; }
+    public TcgCardPricesApi? Holofoil             { get; set; }
+    public TcgCardPricesApi? ReverseHolofoil      { get; set; }
+    public TcgCardPricesApi? FirstEditionNormal   { get; set; }
     public TcgCardPricesApi? FirstEditionHolofoil { get; set; }
+    public TcgCardPricesApi? UnlimitedNormal      { get; set; }
+    public TcgCardPricesApi? UnlimitedHolofoil    { get; set; }
+}
+
+/// <summary>Preços CardMarket (mercado europeu, em EUR).</summary>
+public class CardMarketPricesApi
+{
+    public decimal? AverageSellPrice  { get; set; }
+    public decimal? LowPrice          { get; set; }
+    public decimal? TrendPrice        { get; set; }
+    public decimal? ReverseHoloSell   { get; set; }
+    public decimal? ReverseHoloLow    { get; set; }
+    public decimal? ReverseHoloTrend  { get; set; }
+    public decimal? LowPriceExPlus    { get; set; }
+    public decimal? Avg1              { get; set; }
+    public decimal? Avg7              { get; set; }
+    public decimal? Avg30             { get; set; }
+    public decimal? ReverseHoloAvg1   { get; set; }
+    public decimal? ReverseHoloAvg7   { get; set; }
+    public decimal? ReverseHoloAvg30  { get; set; }
+    public string?  Url               { get; set; }
+    public string?  UpdatedAt         { get; set; }
 }
 
 public class TcgCardImages

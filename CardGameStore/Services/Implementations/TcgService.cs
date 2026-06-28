@@ -89,24 +89,42 @@ public class TcgService : ITcgService
 
     /// <inheritdoc/>
     public async Task<PagedResult<CardCache>> SearchCardsByNameAsync(
-        string name,
-        string? game     = null,
-        int    page      = 1,
-        int    pageSize  = 20,
-        string? setId    = null,
-        string? rarity   = null,
-        string? cardType = null)
+        string  name,
+        string? game           = null,
+        int     page           = 1,
+        int     pageSize       = 20,
+        string? setId          = null,
+        string? rarity         = null,
+        string? cardType       = null,
+        string? artist         = null,
+        string? supertype      = null,
+        string? subtype        = null,
+        string? energyType     = null,
+        string? regulationMark = null,
+        string? legality       = null,
+        string? evolvesFrom    = null,
+        string? setSeries      = null,
+        string? ptcgoCode      = null,
+        string? releaseDateFrom = null,
+        string? releaseDateTo  = null,
+        int?    pokedexNumber  = null,
+        int?    hpMin          = null,
+        int?    hpMax          = null)
     {
         pageSize = Math.Min(pageSize, 250);
 
-        // Cache de query em memória (5 min) — evita bater na API para a mesma busca
-        var cacheKey = $"tcg_q:{name}:{game}:{page}:{pageSize}:{setId}:{rarity}:{cardType}".ToLower();
+        // Cache de query em memória (5 min)
+        var cacheKey = $"tcg_q:{name}:{game}:{page}:{pageSize}:{setId}:{rarity}:{cardType}:{artist}:{supertype}:{subtype}:{energyType}:{regulationMark}:{legality}:{evolvesFrom}:{setSeries}:{ptcgoCode}:{releaseDateFrom}:{releaseDateTo}:{pokedexNumber}:{hpMin}:{hpMax}".ToLower();
         if (_queryCache.TryGetValue(cacheKey, out PagedResult<CardCache>? cached) && cached != null)
             return cached;
 
-        _logger.LogInformation("TCG search '{Name}' game={Game} set={Set} rarity={Rarity} type={Type} page={Page}",
-            name, game, setId, rarity, cardType, page);
-        var apiResult = await _apiClient.SearchCardsAsync(name, game, page, pageSize, setId, rarity, cardType);
+        _logger.LogInformation("TCG search '{Name}' game={Game} set={Set} rarity={Rarity} type={Type} artist={Artist} page={Page}",
+            name, game, setId, rarity, cardType, artist, page);
+        var apiResult = await _apiClient.SearchCardsAsync(
+            name, game, page, pageSize, setId, rarity, cardType,
+            artist, supertype, subtype, energyType, regulationMark, legality,
+            evolvesFrom, setSeries, ptcgoCode, releaseDateFrom, releaseDateTo,
+            pokedexNumber, hpMin, hpMax);
 
         // Armazena cartas individuais no MongoDB em background
         _ = Task.Run(() => CacheApiSearchResultsAsync(apiResult.Cards));
@@ -250,23 +268,47 @@ public class TcgService : ITcgService
             Low = p.Low, Mid = p.Mid, High = p.High, Market = p.Market, DirectLow = p.DirectLow
         };
 
+        static CardMarketCache? ToCm(CardMarketPricesApi? cm) => cm == null ? null : new CardMarketCache
+        {
+            AverageSellPrice = cm.AverageSellPrice,
+            LowPrice         = cm.LowPrice,
+            TrendPrice       = cm.TrendPrice,
+            ReverseHoloSell  = cm.ReverseHoloSell,
+            ReverseHoloLow   = cm.ReverseHoloLow,
+            ReverseHoloTrend = cm.ReverseHoloTrend,
+            LowPriceExPlus   = cm.LowPriceExPlus,
+            Avg1             = cm.Avg1,  Avg7 = cm.Avg7, Avg30 = cm.Avg30,
+            ReverseHoloAvg1  = cm.ReverseHoloAvg1,
+            ReverseHoloAvg7  = cm.ReverseHoloAvg7,
+            ReverseHoloAvg30 = cm.ReverseHoloAvg30,
+            Url              = cm.Url,
+            UpdatedAt        = cm.UpdatedAt,
+        };
+
         return new CardCache
         {
-            TcgCardId            = response.Id,
-            Name                 = response.Name,
-            Game                 = response.Game,
-            SetName              = response.SetName,
-            SetCode              = response.SetCode,
-            Number               = response.Number,
-            Rarity               = response.Rarity,
-            Type                 = response.Type,
-            Subtypes             = response.Subtypes ?? new List<string>(),
-            Types                = response.Types    ?? new List<string>(),
-            Hp                   = response.Hp,
-            Artist               = response.Artist,
-            FlavorText           = response.FlavorText,
-            RegulationMark       = response.RegulationMark,
-            Attacks              = response.Attacks?.Select(a => new CardAttackCache
+            TcgCardId             = response.Id,
+            Name                  = response.Name,
+            Game                  = response.Game,
+            SetName               = response.SetName,
+            SetCode               = response.SetCode,
+            SetSeries             = response.SetSeries,
+            SetPtcgoCode          = response.SetPtcgoCode,
+            SetReleaseDate        = response.SetReleaseDate,
+            Number                = response.Number,
+            Rarity                = response.Rarity,
+            Type                  = response.Type,
+            Subtypes              = response.Subtypes ?? new List<string>(),
+            Types                 = response.Types    ?? new List<string>(),
+            Hp                    = response.Hp,
+            Artist                = response.Artist,
+            FlavorText            = response.FlavorText,
+            RegulationMark        = response.RegulationMark,
+            EvolvesFrom           = response.EvolvesFrom,
+            EvolvesTo             = response.EvolvesTo ?? new(),
+            NationalPokedexNumbers = response.NationalPokedexNumbers ?? new(),
+            Legalities            = response.Legalities ?? new(),
+            Attacks               = response.Attacks?.Select(a => new CardAttackCache
             {
                 Name                = a.Name,
                 Cost                = a.Cost,
@@ -274,25 +316,28 @@ public class TcgService : ITcgService
                 Damage              = a.Damage,
                 Text                = a.Text,
             }).ToList() ?? new(),
-            Weaknesses           = response.Weaknesses?.Select(w => new CardWeaknessCache { Type = w.Type, Value = w.Value }).ToList() ?? new(),
-            Resistances          = response.Resistances?.Select(r => new CardWeaknessCache { Type = r.Type, Value = r.Value }).ToList() ?? new(),
-            RetreatCost          = response.RetreatCost ?? new(),
-            ConvertedRetreatCost = response.ConvertedRetreatCost,
-            ImageUrlSmall        = response.Images?.Small,
-            ImageUrlLarge        = response.Images?.Large,
-            AllPrices            = response.AllPrices == null ? null : new CardAllPricesCache
+            Weaknesses            = response.Weaknesses?.Select(w => new CardWeaknessCache { Type = w.Type, Value = w.Value }).ToList() ?? new(),
+            Resistances           = response.Resistances?.Select(r => new CardWeaknessCache { Type = r.Type, Value = r.Value }).ToList() ?? new(),
+            RetreatCost           = response.RetreatCost ?? new(),
+            ConvertedRetreatCost  = response.ConvertedRetreatCost,
+            ImageUrlSmall         = response.Images?.Small,
+            ImageUrlLarge         = response.Images?.Large,
+            AllPrices             = response.AllPrices == null ? null : new CardAllPricesCache
             {
                 Normal               = ToPrices(response.AllPrices.Normal),
                 Holofoil             = ToPrices(response.AllPrices.Holofoil),
                 ReverseHolofoil      = ToPrices(response.AllPrices.ReverseHolofoil),
                 FirstEditionNormal   = ToPrices(response.AllPrices.FirstEditionNormal),
                 FirstEditionHolofoil = ToPrices(response.AllPrices.FirstEditionHolofoil),
+                UnlimitedNormal      = ToPrices(response.AllPrices.UnlimitedNormal),
+                UnlimitedHolofoil    = ToPrices(response.AllPrices.UnlimitedHolofoil),
             },
-            MarketPrices         = ToPrices(response.Prices),
-            CachedAt             = DateTime.UtcNow,
-            UpdatedAt            = DateTime.UtcNow,
-            ExpiresAt            = DateTime.UtcNow.AddDays(7),
-            SourceApi            = response.Game == "Pokemon" ? "pokemontcg.io" : "various",
+            MarketPrices          = ToPrices(response.Prices),
+            CardMarket            = ToCm(response.CardMarket),
+            CachedAt              = DateTime.UtcNow,
+            UpdatedAt             = DateTime.UtcNow,
+            ExpiresAt             = DateTime.UtcNow.AddDays(7),
+            SourceApi             = response.Game == "Pokemon" ? "pokemontcg.io" : "various",
         };
     }
 }

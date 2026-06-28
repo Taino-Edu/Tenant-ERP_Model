@@ -158,19 +158,34 @@ export interface CardAllPrices {
   reverseHolofoil?: CardPriceVariant | null
   firstEditionNormal?: CardPriceVariant | null
   firstEditionHolofoil?: CardPriceVariant | null
+  unlimitedNormal?: CardPriceVariant | null
+  unlimitedHolofoil?: CardPriceVariant | null
+}
+export interface CardMarketPrices {
+  averageSellPrice?: number | null; lowPrice?: number | null; trendPrice?: number | null
+  reverseHoloSell?: number | null; reverseHoloLow?: number | null; reverseHoloTrend?: number | null
+  lowPriceExPlus?: number | null
+  avg1?: number | null; avg7?: number | null; avg30?: number | null
+  reverseHoloAvg1?: number | null; reverseHoloAvg7?: number | null; reverseHoloAvg30?: number | null
+  url?: string | null; updatedAt?: string | null
 }
 
 export interface CardCache {
   tcgCardId: string; name: string; game: string
   setName: string | null; setCode: string | null; number?: string | null
+  setSeries?: string | null; setPtcgoCode?: string | null; setReleaseDate?: string | null
   rarity: string | null; type: string | null
   subtypes: string[]; types: string[]
   hp: string | null; artist: string | null; flavorText: string | null; regulationMark: string | null
+  evolvesFrom?: string | null; evolvesTo?: string[]
+  nationalPokedexNumbers?: number[]
+  legalities?: Record<string, string>
   attacks: CardAttack[]; weaknesses: CardWeakness[]; resistances: CardWeakness[]
   retreatCost: string[]; convertedRetreatCost: number | null
   imageUrlSmall: string | null; imageUrlLarge: string | null
   allPrices: CardAllPrices | null
   marketPrices: CardPriceVariant | null
+  cardMarket?: CardMarketPrices | null
   cachedAt: string
 }
 
@@ -619,10 +634,24 @@ export const userApi = {
 
 export interface TcgSet { code: string; name: string; game: string; series?: string; logoUrl?: string; totalCards: number; releaseDate?: string }
 
+export interface TcgSearchParams {
+  name?: string; game?: string; page?: number; pageSize?: number
+  setId?: string; rarity?: string; cardType?: string
+  // Pokémon extended
+  artist?: string; supertype?: string; subtype?: string; energyType?: string
+  regulationMark?: string; legality?: string; evolvesFrom?: string
+  setSeries?: string; ptcgoCode?: string
+  releaseDateFrom?: string; releaseDateTo?: string
+  pokedexNumber?: number; hpMin?: number; hpMax?: number
+}
+
 export const tcgApi = {
-  search: (name: string, game?: string, page = 1, pageSize = 30, setId?: string, rarity?: string, cardType?: string) =>
+  search: (name: string, game?: string, page = 1, pageSize = 30, setId?: string, rarity?: string, cardType?: string, extra?: Omit<TcgSearchParams, 'name'|'game'|'page'|'pageSize'|'setId'|'rarity'|'cardType'>) =>
     api.get<{ items: CardCache[]; totalCount: number; totalPages: number }>('/api/tcg/search',
-      { params: { name, game, page, pageSize, ...(setId ? { setId } : {}), ...(rarity ? { rarity } : {}), ...(cardType ? { cardType } : {}) } }),
+      { params: { name, game, page, pageSize, ...(setId ? { setId } : {}), ...(rarity ? { rarity } : {}), ...(cardType ? { cardType } : {}), ...extra } }),
+  searchAdvanced: (params: TcgSearchParams) =>
+    api.get<{ items: CardCache[]; totalCount: number; totalPages: number }>('/api/tcg/search',
+      { params }),
   searchByCode: (set: string, num: string, game = 'Pokemon') =>
     api.get<{ items: CardCache[]; totalCount: number }>('/api/tcg/search',
       { params: { set, num, game } }),

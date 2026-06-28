@@ -54,6 +54,15 @@ public class CardCache
     [BsonElement("setCode")]
     public string? SetCode { get; set; }
 
+    [BsonElement("setSeries")]
+    public string? SetSeries { get; set; }
+
+    [BsonElement("setPtcgoCode")]
+    public string? SetPtcgoCode { get; set; }
+
+    [BsonElement("setReleaseDate")]
+    public string? SetReleaseDate { get; set; }
+
     [BsonElement("number")]
     public string? Number { get; set; }
 
@@ -84,6 +93,18 @@ public class CardCache
     [BsonElement("regulationMark")]
     public string? RegulationMark { get; set; }
 
+    [BsonElement("evolvesFrom")]
+    public string? EvolvesFrom { get; set; }
+
+    [BsonElement("evolvesTo")]
+    public List<string> EvolvesTo { get; set; } = new();
+
+    [BsonElement("nationalPokedexNumbers")]
+    public List<int> NationalPokedexNumbers { get; set; } = new();
+
+    [BsonElement("legalities")]
+    public Dictionary<string, string> Legalities { get; set; } = new();
+
     [BsonElement("attacks")]
     public List<CardAttackCache> Attacks { get; set; } = new();
 
@@ -113,13 +134,17 @@ public class CardCache
     // Preços de mercado (snapshot da API)
     // -------------------------------------------------------------------------
 
-    /// <summary>Preços por variação (normal, holofoil, reverseHolofoil…) em USD.</summary>
+    /// <summary>Preços TCGPlayer por variação (normal, holofoil, reverseHolofoil…) em USD.</summary>
     [BsonElement("allPrices")]
     public CardAllPricesCache? AllPrices { get; set; }
 
     /// <summary>Market price da variação principal (mantido para compatibilidade).</summary>
     [BsonElement("marketPrices")]
     public CardPrices? MarketPrices { get; set; }
+
+    /// <summary>Preços CardMarket (mercado europeu, em EUR).</summary>
+    [BsonElement("cardMarket")]
+    public CardMarketCache? CardMarket { get; set; }
 
     // -------------------------------------------------------------------------
     // Dados brutos da API (flexibilidade para APIs diferentes)
@@ -179,6 +204,31 @@ public class CardAllPricesCache
 
     [BsonElement("firstEditionHolofoil")]
     public CardPrices? FirstEditionHolofoil { get; set; }
+
+    [BsonElement("unlimitedNormal")]
+    public CardPrices? UnlimitedNormal { get; set; }
+
+    [BsonElement("unlimitedHolofoil")]
+    public CardPrices? UnlimitedHolofoil { get; set; }
+}
+
+public class CardMarketCache
+{
+    [BsonElement("averageSellPrice")]   public decimal? AverageSellPrice  { get; set; }
+    [BsonElement("lowPrice")]           public decimal? LowPrice          { get; set; }
+    [BsonElement("trendPrice")]         public decimal? TrendPrice        { get; set; }
+    [BsonElement("reverseHoloSell")]    public decimal? ReverseHoloSell   { get; set; }
+    [BsonElement("reverseHoloLow")]     public decimal? ReverseHoloLow    { get; set; }
+    [BsonElement("reverseHoloTrend")]   public decimal? ReverseHoloTrend  { get; set; }
+    [BsonElement("lowPriceExPlus")]     public decimal? LowPriceExPlus    { get; set; }
+    [BsonElement("avg1")]               public decimal? Avg1              { get; set; }
+    [BsonElement("avg7")]               public decimal? Avg7              { get; set; }
+    [BsonElement("avg30")]              public decimal? Avg30             { get; set; }
+    [BsonElement("reverseHoloAvg1")]    public decimal? ReverseHoloAvg1   { get; set; }
+    [BsonElement("reverseHoloAvg7")]    public decimal? ReverseHoloAvg7   { get; set; }
+    [BsonElement("reverseHoloAvg30")]   public decimal? ReverseHoloAvg30  { get; set; }
+    [BsonElement("url")]                public string?  Url               { get; set; }
+    [BsonElement("updatedAt")]          public string?  UpdatedAt         { get; set; }
 }
 
 public class CardAttackCache

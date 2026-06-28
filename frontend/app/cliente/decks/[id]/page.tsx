@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { deckApi, tcgApi, CardCache, DeckCard, TcgSet } from '@/lib/api'
+import { deckApi, tcgApi, CardCache, DeckCard, TcgSet, TcgSearchParams } from '@/lib/api'
 import {
   Search, Plus, Minus, Trash2, Save, Loader2,
   ArrowLeft, Globe, Lock, Zap, Upload, X, Camera,
@@ -22,6 +22,11 @@ const MAX_CARDS:  Record<string, number> = { Pokemon: 60, MTG: 60, 'Yu-Gi-Oh!': 
 const MAX_COPIES: Record<string, number> = { Pokemon: 4,  MTG: 4,  'Yu-Gi-Oh!': 3,  'LoL Riftbound': 3 }
 
 // Opções de filtro por jogo — seguindo padrão dos sites oficiais
+const POKEMON_SUBTYPES      = ['Basic','Stage 1','Stage 2','EX','GX','V','VMAX','VSTAR','ex','Radiant','Tera','Supporter','Item','Tool','Stadium','Special Energy','Basic Energy']
+const POKEMON_ENERGY_TYPES  = ['Fire','Water','Grass','Lightning','Psychic','Fighting','Darkness','Metal','Dragon','Colorless']
+const POKEMON_REGULATION_MARKS = ['A','B','C','D','E','F','G','H']
+const POKEMON_SERIES        = ['Scarlet & Violet','Sword & Shield','Sun & Moon','XY','Black & White','HeartGold SoulSilver','Platinum','Diamond & Pearl','EX','Gym','Neo','Base']
+
 const GAME_FILTERS: Record<string, {
   rarityLabel: string
   rarities: string[]
@@ -31,7 +36,7 @@ const GAME_FILTERS: Record<string, {
   Pokemon: {
     rarityLabel: 'Raridade',
     rarities: ['Common','Uncommon','Rare','Rare Holo','Double Rare','Illustration Rare','Special Illustration Rare','Hyper Rare','ACE SPEC Rare','Rare Ultra','Rare Secret','Promo'],
-    typeLabel: 'Tipo',
+    typeLabel: 'Supertipo',
     types: ['Pokémon','Trainer','Energy'],
   },
   MTG: {
@@ -192,10 +197,12 @@ function CardPreviewModal({ card, onClose, onAdd, qty, maxCopies, brlRate }: {
                 {card.allPrices && (
                   <div className="grid grid-cols-2 gap-1 mt-2">
                     {[
-                      { l: 'Normal',       p: card.allPrices.normal },
-                      { l: 'Holofoil',     p: card.allPrices.holofoil },
-                      { l: 'Reverse Holo', p: card.allPrices.reverseHolofoil },
-                      { l: '1ª Ed.',       p: card.allPrices.firstEditionHolofoil ?? card.allPrices.firstEditionNormal },
+                      { l: 'Normal',          p: card.allPrices.normal },
+                      { l: 'Holofoil',        p: card.allPrices.holofoil },
+                      { l: 'Reverse Holo',    p: card.allPrices.reverseHolofoil },
+                      { l: '1ª Ed. Holo',     p: card.allPrices.firstEditionHolofoil },
+                      { l: '1ª Ed. Normal',   p: card.allPrices.firstEditionNormal },
+                      { l: 'Unltd. Holo',     p: card.allPrices.unlimitedHolofoil },
                     ].filter(v => v.p?.market || v.p?.mid).map(v => (
                       <div key={v.l} className="rounded p-1" style={{ backgroundColor: C.white }}>
                         <p className="text-[9px]" style={{ color: C.muted }}>{v.l}</p>
@@ -203,6 +210,25 @@ function CardPreviewModal({ card, onClose, onAdd, qty, maxCopies, brlRate }: {
                         {brlRate && <p className="text-[9px]" style={{ color: '#16a34a' }}>R$ {((v.p!.market ?? v.p!.mid)! * brlRate).toFixed(2)}</p>}
                       </div>
                     ))}
+                  </div>
+                )}
+                {/* CardMarket */}
+                {card.cardMarket && (card.cardMarket.trendPrice || card.cardMarket.averageSellPrice) && (
+                  <div className="mt-2">
+                    <p className="text-[9px] font-bold mb-1" style={{ color: C.muted }}>CardMarket (EUR)</p>
+                    <div className="grid grid-cols-2 gap-1">
+                      {[
+                        { l: 'Tendência', v: card.cardMarket.trendPrice },
+                        { l: 'Média',     v: card.cardMarket.averageSellPrice },
+                        { l: 'Mais baixo',v: card.cardMarket.lowPrice },
+                        { l: 'Média 30d', v: card.cardMarket.avg30 },
+                      ].filter(r => r.v && r.v > 0).map(r => (
+                        <div key={r.l} className="rounded p-1" style={{ backgroundColor: C.white }}>
+                          <p className="text-[9px]" style={{ color: C.muted }}>{r.l}</p>
+                          <p className="text-[10px] font-bold" style={{ color: '#1d4ed8' }}>€{r.v!.toFixed(2)}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -245,8 +271,18 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
   const [selRarity,   setSelRarity]   = useState('')
   const [selCardType, setSelCardType] = useState('')
   const [showFilter,  setShowFilter]  = useState(false)
-  const gameFilters = GAME_FILTERS[game] ?? GAME_FILTERS['Pokemon']
+  const gameFilters  = GAME_FILTERS[game] ?? GAME_FILTERS['Pokemon']
+  const isPokemon    = game === 'Pokemon'
   const [preview,    setPreview]    = useState<CardCache | null>(null)
+  // Pokémon advanced filters
+  const [pkArtist,      setPkArtist]      = useState('')
+  const [pkSubtype,     setPkSubtype]     = useState('')
+  const [pkEnergy,      setPkEnergy]      = useState('')
+  const [pkRegMark,     setPkRegMark]     = useState('')
+  const [pkLegality,    setPkLegality]    = useState('')
+  const [pkEvolvesFrom, setPkEvolvesFrom] = useState('')
+  const [pkSeries,      setPkSeries]      = useState('')
+  const [pkPtcgo,       setPkPtcgo]       = useState('')
 
   // Camera — usa <input capture> em vez de getUserMedia (funciona em todos os celulares)
   const cameraInputRef = useRef<HTMLInputElement>(null)
@@ -282,11 +318,16 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
   }, [game])
 
   const doSearch = useCallback(async (q: string, pg: number, append = false) => {
-    if (q.trim().length < 2) { if (!append) { setResults([]); setTotal(0); setNoApi(false) }; return }
+    const hasQuery = q.trim().length >= 2
+    const hasPkFilter = isPokemon && (pkArtist || pkSubtype || pkEnergy || pkRegMark || pkLegality || pkEvolvesFrom || pkSeries || pkPtcgo)
+    if (!hasQuery && !hasPkFilter && !selSet && !selRarity && !selCardType) {
+      if (!append) { setResults([]); setTotal(0); setNoApi(false) }
+      return
+    }
     append ? setLoadMore(true) : setLoading(true)
     if (!append) setNoApi(false)
     try {
-      const codeMatch = detectCode(q)
+      const codeMatch = hasQuery ? detectCode(q) : null
       let items: CardCache[] = [], tot = 0
       let errMsg: string | undefined
 
@@ -295,7 +336,26 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
         items = r.data.items ?? []; tot = r.data.totalCount ?? items.length
         errMsg = (r.data as any).errorMessage
       } else {
-        const r = await tcgApi.search(q, game, pg, PAGE_SIZE, selSet || undefined, selRarity || undefined, selCardType || undefined)
+        const params: TcgSearchParams = {
+          name:     q.trim() || undefined,
+          game,
+          page:     pg,
+          pageSize: PAGE_SIZE,
+          setId:    selSet      || undefined,
+          rarity:   selRarity   || undefined,
+          cardType: selCardType  || undefined,
+          ...(isPokemon ? {
+            artist:         pkArtist      || undefined,
+            subtype:        pkSubtype     || undefined,
+            energyType:     pkEnergy      || undefined,
+            regulationMark: pkRegMark     || undefined,
+            legality:       pkLegality    || undefined,
+            evolvesFrom:    pkEvolvesFrom || undefined,
+            setSeries:      pkSeries      || undefined,
+            ptcgoCode:      pkPtcgo       || undefined,
+          } : {}),
+        }
+        const r = await tcgApi.searchAdvanced(params)
         items = r.data.items ?? []; tot = r.data.totalCount ?? items.length
         errMsg = (r.data as any).errorMessage
       }
@@ -306,7 +366,7 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
       setPage(pg)
     } catch { toast.error('Erro na busca.') }
     finally { append ? setLoadMore(false) : setLoading(false) }
-  }, [game, selSet, selRarity, selCardType])
+  }, [game, isPokemon, selSet, selRarity, selCardType, pkArtist, pkSubtype, pkEnergy, pkRegMark, pkLegality, pkEvolvesFrom, pkSeries, pkPtcgo])
 
   useEffect(() => {
     clearTimeout(timeout.current)
@@ -465,32 +525,68 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
                   </select>
                 )}
                 <div className="flex gap-2">
-                  {/* Raridade / Tipo de carta (YGO) */}
                   {gameFilters.rarities.length > 0 && (
                     <select value={selRarity} onChange={e => { setSelRarity(e.target.value); setPage(1) }}
                       className="flex-1 rounded-xl px-3 py-2 text-xs font-bold border-0 outline-none"
                       style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-                      <option value="" style={{ color: C.navy }}>
-                        {game === 'Yu-Gi-Oh!' ? 'Todos os tipos' : `Toda ${gameFilters.rarityLabel.toLowerCase()}`}
-                      </option>
+                      <option value="" style={{ color: C.navy }}>{game === 'Yu-Gi-Oh!' ? 'Todos os tipos' : `Toda ${gameFilters.rarityLabel.toLowerCase()}`}</option>
                       {gameFilters.rarities.map(r => <option key={r} value={r} style={{ color: C.navy }}>{r}</option>)}
                     </select>
                   )}
-                  {/* Tipo (criatura, feitiço, etc.) */}
                   {gameFilters.types && gameFilters.types.length > 0 && (
                     <select value={selCardType} onChange={e => { setSelCardType(e.target.value); setPage(1) }}
                       className="flex-1 rounded-xl px-3 py-2 text-xs font-bold border-0 outline-none"
                       style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}>
-                      <option value="" style={{ color: C.navy }}>
-                        {game === 'Yu-Gi-Oh!' ? 'Todos atributos' : `Todo tipo`}
-                      </option>
+                      <option value="" style={{ color: C.navy }}>{game === 'Yu-Gi-Oh!' ? 'Todos atributos' : 'Todo tipo'}</option>
                       {gameFilters.types.map(t => <option key={t} value={t} style={{ color: C.navy }}>{t}</option>)}
                     </select>
                   )}
                 </div>
-                {(selSet || selRarity || selCardType) && (
-                  <button onClick={() => { setSelSet(''); setSelRarity(''); setSelCardType('') }}
-                    className="text-xs text-white/50 hover:text-white/80 text-left px-1">
+
+                {/* Filtros exclusivos Pokémon */}
+                {isPokemon && (
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/10">
+                    {[
+                      { label: 'Subtipo',     val: pkSubtype,     set: setPkSubtype,     opts: POKEMON_SUBTYPES },
+                      { label: 'Energia',     val: pkEnergy,      set: setPkEnergy,      opts: POKEMON_ENERGY_TYPES },
+                      { label: 'Reg. Mark',   val: pkRegMark,     set: setPkRegMark,     opts: POKEMON_REGULATION_MARKS },
+                      { label: 'Legalidade',  val: pkLegality,    set: setPkLegality,    opts: ['standard','expanded','unlimited'] },
+                      { label: 'Série',       val: pkSeries,      set: setPkSeries,      opts: POKEMON_SERIES },
+                    ].map(f => (
+                      <select key={f.label} value={f.val} onChange={e => { f.set(e.target.value); setPage(1) }}
+                        className="rounded-xl px-2 py-1.5 text-[11px] font-bold border-0 outline-none"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.12)', color: '#fff' }}>
+                        <option value="" style={{ color: C.navy }}>{f.label}</option>
+                        {f.opts.map(o => <option key={o} value={o} style={{ color: C.navy }}>{o}</option>)}
+                      </select>
+                    ))}
+                    <input
+                      value={pkArtist} onChange={e => { setPkArtist(e.target.value); setPage(1) }}
+                      placeholder="Artista"
+                      className="rounded-xl px-2 py-1.5 text-[11px] border-0 outline-none"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.12)', color: '#fff' }}
+                    />
+                    <input
+                      value={pkEvolvesFrom} onChange={e => { setPkEvolvesFrom(e.target.value); setPage(1) }}
+                      placeholder="Evolui de"
+                      className="rounded-xl px-2 py-1.5 text-[11px] border-0 outline-none"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.12)', color: '#fff' }}
+                    />
+                    <input
+                      value={pkPtcgo} onChange={e => { setPkPtcgo(e.target.value); setPage(1) }}
+                      placeholder="Código PTCGO (PAL)"
+                      className="col-span-2 rounded-xl px-2 py-1.5 text-[11px] border-0 outline-none"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.12)', color: '#fff' }}
+                    />
+                  </div>
+                )}
+
+                {(selSet || selRarity || selCardType || pkArtist || pkSubtype || pkEnergy || pkRegMark || pkLegality || pkEvolvesFrom || pkSeries || pkPtcgo) && (
+                  <button onClick={() => {
+                    setSelSet(''); setSelRarity(''); setSelCardType('')
+                    setPkArtist(''); setPkSubtype(''); setPkEnergy(''); setPkRegMark('')
+                    setPkLegality(''); setPkEvolvesFrom(''); setPkSeries(''); setPkPtcgo('')
+                  }} className="text-xs text-white/50 hover:text-white/80 text-left px-1">
                     Limpar filtros ×
                   </button>
                 )}
