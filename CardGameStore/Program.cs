@@ -273,6 +273,15 @@ builder.Services.AddHttpClient("ScrydexApi", client =>
     client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
 });
 
+// TCGdex — fonte multilíngue de cartas Pokémon (suporte a português nativo, gratuita, sem auth)
+builder.Services.AddHttpClient("TcgDexApi", client =>
+{
+    client.BaseAddress = new Uri("https://api.tcgdex.net/");
+    client.Timeout     = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
+});
+
 // Gemini 2.0 Flash — assistente IA conversacional
 builder.Services.AddHttpClient("gemini", client =>
 {

@@ -2,9 +2,10 @@
 // TcgApiClient.cs — Cliente HTTP multi-provider para APIs TCG públicas
 //
 // Roteamento por jogo:
-//   Pokemon      → https://api.pokemontcg.io/v2/          (gratuita, sem auth obrigatória)
+//   Pokemon      → pokemontcg.io (EN, preços) + TCGdex (PT, fan-out paralelo)
 //   MTG / Magic  → https://api.scryfall.com/               (gratuita, sem auth)
 //   Yu-Gi-Oh!    → https://db.ygoprodeck.com/api/v7/       (gratuita, sem auth)
+//   LoL Riftbound→ Riftcodex (gratuita) + Scrydex (opcional, preços)
 //   Outros       → retorna vazio (graceful degradation)
 //
 // Para aumentar rate limits do Pokemon TCG API, defina:
@@ -126,6 +127,8 @@ public class TcgApiClient : ITcgApiClient
         return client;
     }
 
+    private HttpClient TcgDexClient() => _factory.CreateClient("TcgDexApi");
+
     private async Task<TcgApiCardResponse?> FetchPokemonCardByIdAsync(string id)
     {
         try
@@ -214,25 +217,59 @@ public class TcgApiClient : ITcgApiClient
             var baseQ = parts.Count > 0 ? string.Join(" ", parts) : "*";
             var q   = Uri.EscapeDataString(baseQ);
             var url = $"/v2/cards?q={q}&page={page}&pageSize={pageSize}&orderBy=name";
-            var response = await PokemonClient().GetAsync(url);
-            response.EnsureSuccessStatusCode();
 
-            var json    = await response.Content.ReadAsStringAsync();
-            var doc     = JsonDocument.Parse(json);
-            var root    = doc.RootElement;
+            // Fan-out paralelo: pokemontcg.io (EN + preços) + TCGdex (PT/multilíngue)
+            // TCGdex só é chamado na primeira página para evitar chamadas redundantes
+            var pokeTask   = PokemonClient().GetAsync(url);
+            var tcgdexTask = (page == 1 && !string.IsNullOrWhiteSpace(name) && !isStructured)
+                ? SearchTcgDexAsync(name, pageSize)
+                : Task.FromResult<IList<TcgApiCardResponse>>(Array.Empty<TcgApiCardResponse>());
+
+            await Task.WhenAll(pokeTask, tcgdexTask);
+
+            var pokeResponse = pokeTask.Result;
+            pokeResponse.EnsureSuccessStatusCode();
+
+            var json = await pokeResponse.Content.ReadAsStringAsync();
+            var doc  = JsonDocument.Parse(json);
+            var root = doc.RootElement;
 
             var seen  = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var cards = root.TryGetProperty("data", out var dataArr)
+            var pokeCards = root.TryGetProperty("data", out var dataArr)
                 ? dataArr.EnumerateArray()
                          .Select(MapPokemonCard)
                          .Where(c => !string.IsNullOrEmpty(c.Id) && seen.Add(c.Id))
                          .ToList()
                 : new List<TcgApiCardResponse>();
 
+            var totalCount = root.TryGetProperty("totalCount", out var tc) ? tc.GetInt32() : pokeCards.Count;
+
+            // Merge TCGdex: preenche imagem em cartas sem imagem e adiciona cartas exclusivas PT
+            var tcgdexCards = tcgdexTask.Result;
+            var pokeById    = pokeCards.ToDictionary(
+                c => c.Id.Replace("pokemon:", "", StringComparison.OrdinalIgnoreCase),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var tdCard in tcgdexCards)
+            {
+                var baseId = tdCard.Id.Replace("pokemon:", "", StringComparison.OrdinalIgnoreCase);
+                if (pokeById.TryGetValue(baseId, out var existing))
+                {
+                    // Preenche imagem se pokemontcg.io não retornou
+                    if (existing.Images?.Small == null && tdCard.Images?.Small != null)
+                        existing.Images = tdCard.Images;
+                }
+                else if (seen.Add(tdCard.Id))
+                {
+                    // Carta exclusiva do TCGdex (ex: edições PT sem correspondente EN na pokemontcg.io)
+                    pokeCards.Add(tdCard);
+                }
+            }
+
             return new TcgApiSearchResponse
             {
-                Cards      = cards,
-                TotalCount = root.TryGetProperty("totalCount", out var tc) ? tc.GetInt32() : cards.Count,
+                Cards      = pokeCards,
+                TotalCount = totalCount,
                 Page       = page,
                 PageSize   = pageSize,
             };
@@ -242,6 +279,54 @@ public class TcgApiClient : ITcgApiClient
             _logger.LogError(ex, "Erro ao pesquisar cartas Pokemon '{Name}'", name);
             return new TcgApiSearchResponse();
         }
+    }
+
+    // ── TCGdex — busca multilíngue PT (https://api.tcgdex.net/v2/pt) ──────────
+    private async Task<IList<TcgApiCardResponse>> SearchTcgDexAsync(string name, int limit)
+    {
+        try
+        {
+            var q        = Uri.EscapeDataString(name);
+            var response = await TcgDexClient().GetAsync($"/v2/pt/cards?name={q}");
+            if (!response.IsSuccessStatusCode) return Array.Empty<TcgApiCardResponse>();
+
+            var json = await response.Content.ReadAsStringAsync();
+            var doc  = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                return Array.Empty<TcgApiCardResponse>();
+
+            return doc.RootElement.EnumerateArray()
+                      .Take(limit)
+                      .Select(MapTcgDexCard)
+                      .Where(c => !string.IsNullOrEmpty(c.Id))
+                      .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "TCGdex search falhou para '{Name}'", name);
+            return Array.Empty<TcgApiCardResponse>();
+        }
+    }
+
+    private static TcgApiCardResponse MapTcgDexCard(JsonElement c)
+    {
+        var id      = c.TryGetProperty("id",      out var idEl)  ? idEl.GetString()  ?? "" : "";
+        var name    = c.TryGetProperty("name",    out var nmEl)  ? nmEl.GetString()  ?? "" : "";
+        var imgBase = c.TryGetProperty("image",   out var imgEl) ? imgEl.GetString()      : null;
+        var localId = c.TryGetProperty("localId", out var locEl) ? locEl.GetString()      : null;
+
+        return new TcgApiCardResponse
+        {
+            Id     = $"pokemon:{id}",
+            Name   = name,
+            Game   = "Pokemon",
+            Number = localId,
+            Images = new TcgCardImages
+            {
+                Small = imgBase != null ? $"{imgBase}/low.webp"  : null,
+                Large = imgBase != null ? $"{imgBase}/high.webp" : null,
+            },
+        };
     }
 
     private async Task<IEnumerable<TcgSetDto>> FetchPokemonSetsAsync()
