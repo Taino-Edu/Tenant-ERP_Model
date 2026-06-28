@@ -255,12 +255,11 @@ builder.Services.AddHttpClient("AwesomeApi", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
-// LoL Riftbound — TCG físico da Riot Games (URL configurável em appsettings via TcgSettings:RiftboundApiUrl)
-var riftboundApiUrl = builder.Configuration["TcgSettings:RiftboundApiUrl"] ?? "https://api.riftbound.gg/";
+// LoL Riftbound — Riftcodex API (gratuita, sem auth) https://api.riftcodex.com
 builder.Services.AddHttpClient("RiftboundApi", client =>
 {
-    client.BaseAddress = new Uri(riftboundApiUrl);
-    client.Timeout     = TimeSpan.FromSeconds(10);
+    client.BaseAddress = new Uri("https://api.riftcodex.com/");
+    client.Timeout     = TimeSpan.FromSeconds(15);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
     client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
 });

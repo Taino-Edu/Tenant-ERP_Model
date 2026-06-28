@@ -85,6 +85,9 @@ public class TcgApiClient : ITcgApiClient
         if (normalized.Contains("mtg") || normalized.Contains("magic"))
             return await FetchScryfallSetsAsync();
 
+        if (normalized.Contains("riftbound") || normalized.Contains("lol"))
+            return await FetchRiftboundSetsAsync();
+
         return Enumerable.Empty<TcgSetDto>();
     }
 
@@ -595,9 +598,10 @@ public class TcgApiClient : ITcgApiClient
     }
 
     // =========================================================================
-    // LoL: Riftbound API — TCG físico da Riot Games
-    // URL base configurável via appsettings: TcgSettings:RiftboundApiUrl
-    // Endpoint esperado (community API): GET /cards?name={name}&page={page}&pageSize={pageSize}
+    // LoL: Riftbound — Riftcodex API (gratuita, sem auth)
+    // https://api.riftcodex.com
+    // GET /cards/search?q={name}&page={page}&per_page={pageSize}
+    // GET /sets
     // =========================================================================
 
     private HttpClient RiftboundClient() => _factory.CreateClient("RiftboundApi");
@@ -606,70 +610,107 @@ public class TcgApiClient : ITcgApiClient
     {
         try
         {
-            var q        = Uri.EscapeDataString(name);
-            var url      = $"/cards?name={q}&page={page}&pageSize={pageSize}";
-            var response = await RiftboundClient().GetAsync(url);
+            var q    = Uri.EscapeDataString(name);
+            // Riftcodex: /cards/search?q=Jinx&page=1&per_page=30
+            var url  = $"/cards/search?q={q}&page={page}&per_page={pageSize}";
+            var resp = await RiftboundClient().GetAsync(url);
 
-            if (!response.IsSuccessStatusCode)
+            if (!resp.IsSuccessStatusCode)
             {
-                _logger.LogWarning("Riftbound API retornou {Status} para '{Name}'", response.StatusCode, name);
-                return new TcgApiSearchResponse { ErrorMessage = "no_api" };
+                _logger.LogWarning("Riftcodex retornou {Status} para '{Name}'", resp.StatusCode, name);
+                return new TcgApiSearchResponse();
             }
 
-            var json = await response.Content.ReadAsStringAsync();
+            var json = await resp.Content.ReadAsStringAsync();
             var doc  = JsonDocument.Parse(json);
             var root = doc.RootElement;
 
-            var cards = root.TryGetProperty("data", out var dataArr)
-                ? dataArr.EnumerateArray().Select(MapRiftboundCard).ToList()
-                : root.ValueKind == JsonValueKind.Array
-                    ? root.EnumerateArray().Select(MapRiftboundCard).Take(pageSize).ToList()
-                    : new List<TcgApiCardResponse>();
+            // Riftcodex responde { data: [...], meta: { total, page, per_page } }
+            List<TcgApiCardResponse> cards;
+            if (root.TryGetProperty("data", out var dataArr) && dataArr.ValueKind == JsonValueKind.Array)
+                cards = dataArr.EnumerateArray().Select(MapRiftboundCard).ToList();
+            else if (root.ValueKind == JsonValueKind.Array)
+                cards = root.EnumerateArray().Select(MapRiftboundCard).Take(pageSize).ToList();
+            else
+                cards = new();
 
-            return new TcgApiSearchResponse
-            {
-                Cards      = cards,
-                TotalCount = root.TryGetProperty("total", out var total) ? total.GetInt32() : cards.Count,
-                Page       = page,
-                PageSize   = pageSize,
-            };
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "Riftbound API indisponível para '{Name}'", name);
-            return new TcgApiSearchResponse { ErrorMessage = "no_api" };
+            int total = cards.Count;
+            if (root.TryGetProperty("meta", out var meta) && meta.TryGetProperty("total", out var tot))
+                total = tot.GetInt32();
+            else if (root.TryGetProperty("total_count", out var tc))
+                total = tc.GetInt32();
+
+            return new TcgApiSearchResponse { Cards = cards, TotalCount = total, Page = page, PageSize = pageSize };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro ao pesquisar cartas Riftbound '{Name}'", name);
-            return new TcgApiSearchResponse { ErrorMessage = "no_api" };
+            _logger.LogError(ex, "Erro ao pesquisar cartas LoL Riftbound '{Name}'", name);
+            return new TcgApiSearchResponse();
         }
     }
 
+    private async Task<IEnumerable<TcgSetDto>> FetchRiftboundSetsAsync()
+    {
+        try
+        {
+            var resp = await RiftboundClient().GetAsync("/sets");
+            if (!resp.IsSuccessStatusCode) return Enumerable.Empty<TcgSetDto>();
+
+            var json = await resp.Content.ReadAsStringAsync();
+            var doc  = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var arr = root.ValueKind == JsonValueKind.Array ? root
+                    : root.TryGetProperty("data", out var d) ? d
+                    : default;
+
+            if (arr.ValueKind != JsonValueKind.Array) return Enumerable.Empty<TcgSetDto>();
+
+            return arr.EnumerateArray().Select(s => new TcgSetDto
+            {
+                Code       = s.TryGetProperty("code", out var c)  ? c.GetString()!  : string.Empty,
+                Name       = s.TryGetProperty("name", out var n)  ? n.GetString()!  : string.Empty,
+                Game       = "LoL Riftbound",
+                TotalCards = s.TryGetProperty("total_cards", out var tc) ? tc.GetInt32()
+                           : s.TryGetProperty("card_count",  out var cc) ? cc.GetInt32() : 0,
+                LogoUrl    = s.TryGetProperty("logo_url", out var logo) ? logo.GetString() : null,
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao buscar sets LoL Riftbound");
+            return Enumerable.Empty<TcgSetDto>();
+        }
+    }
+
+    // Riftcodex card schema (campos principais):
+    // id, name, type, rarity, set_code, set_name, collector_number,
+    // description, keywords[], regions[], image_url
     private static TcgApiCardResponse MapRiftboundCard(JsonElement c)
     {
+        var regions  = c.TryGetProperty("regions", out var reg) && reg.ValueKind == JsonValueKind.Array
+                       ? reg.EnumerateArray().Select(r => r.GetString()!).ToList()
+                       : new List<string>();
+        var keywords = c.TryGetProperty("keywords", out var kw) && kw.ValueKind == JsonValueKind.Array
+                       ? kw.EnumerateArray().Select(k => k.GetString()!).ToList()
+                       : new List<string>();
+        var imageUrl = c.TryGetProperty("image_url", out var img) ? img.GetString()
+                     : c.TryGetProperty("image",     out var img2) ? img2.GetString() : null;
+
         return new TcgApiCardResponse
         {
-            Id       = c.TryGetProperty("id", out var id)       ? $"riftbound:{id.GetString()}" : $"riftbound:{Guid.NewGuid()}",
-            Name     = c.TryGetProperty("name", out var nm)     ? nm.GetString()!                : string.Empty,
-            Game     = "LoL Riftbound",
-            SetName  = c.TryGetProperty("set", out var set)     ? set.GetString()               : null,
-            SetCode  = c.TryGetProperty("setCode", out var sc)  ? sc.GetString()               : null,
-            Number   = c.TryGetProperty("number", out var num)  ? num.GetString()              : null,
-            Rarity   = c.TryGetProperty("rarity", out var rar)  ? rar.GetString()              : null,
-            Type     = c.TryGetProperty("type", out var t)      ? t.GetString()                 : null,
-            Subtypes = c.TryGetProperty("subtypes", out var sub) && sub.ValueKind == JsonValueKind.Array
-                       ? sub.EnumerateArray().Select(s => s.GetString()!).ToList()
-                       : c.TryGetProperty("region", out var reg) && reg.ValueKind == JsonValueKind.String
-                           ? new List<string> { reg.GetString()! }
-                           : null,
-            Images   = new TcgCardImages
-            {
-                Small = c.TryGetProperty("imageSmall", out var sm) ? sm.GetString()
-                      : c.TryGetProperty("image", out var img)     ? img.GetString() : null,
-                Large = c.TryGetProperty("imageLarge", out var lg) ? lg.GetString()
-                      : c.TryGetProperty("image", out var img2)    ? img2.GetString() : null,
-            },
+            Id         = c.TryGetProperty("id", out var id)                 ? $"riftbound:{id}"          : $"riftbound:{Guid.NewGuid()}",
+            Name       = c.TryGetProperty("name", out var nm)               ? nm.GetString()!             : string.Empty,
+            Game       = "LoL Riftbound",
+            SetName    = c.TryGetProperty("set_name", out var sn)           ? sn.GetString()              : null,
+            SetCode    = c.TryGetProperty("set_code", out var sc)           ? sc.GetString()              : null,
+            Number     = c.TryGetProperty("collector_number", out var num)  ? num.GetString()             : null,
+            Rarity     = c.TryGetProperty("rarity", out var rar)            ? rar.GetString()             : null,
+            Type       = c.TryGetProperty("type", out var t)                ? t.GetString()               : null,
+            Subtypes   = keywords.Count > 0 ? keywords : null,
+            Types      = regions,
+            FlavorText = c.TryGetProperty("description", out var desc)      ? desc.GetString()            : null,
+            Images     = new TcgCardImages { Small = imageUrl, Large = imageUrl },
         };
     }
 }
