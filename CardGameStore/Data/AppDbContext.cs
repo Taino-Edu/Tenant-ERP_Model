@@ -33,6 +33,7 @@ public class AppDbContext : DbContext
     public DbSet<PagamentoCrediario>      PagamentosCrediario      { get; set; }
     public DbSet<Perfil>                  Perfis                   { get; set; }
     public DbSet<Deck>                    Decks                    { get; set; }
+    public DbSet<ProductWaitList>         ProductWaitLists         { get; set; }
 
     // ── LGPD — Compliance e privacidade ──────────────────────────────────────
     public DbSet<LgpdRequest>   LgpdRequests   { get; set; }

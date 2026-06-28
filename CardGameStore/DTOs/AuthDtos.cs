@@ -19,6 +19,7 @@ public sealed class ValidCpfAttribute : ValidationAttribute
     protected override ValidationResult? IsValid(object? value, ValidationContext ctx)
     {
         var cpf = (value as string)?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(cpf)) return ValidationResult.Success; // campo opcional
         if (cpf.Length != 11 || !cpf.All(char.IsDigit) || cpf.Distinct().Count() == 1)
             return new ValidationResult(ErrorMessage);
 
@@ -48,13 +49,13 @@ public record LoginRequest(
 
 /// <summary>
 /// Login Rápido via QR Code: apenas para Customers da comanda.
-/// Não exige senha — validação por CPF + WhatsApp.
+/// CPF é opcional — quando ausente, identifica pelo WhatsApp.
 /// </summary>
 public record QuickLoginRequest(
-    [Required, MaxLength(150)]  string Name,
-    [Required, ValidCpf]        string Cpf,       // Apenas dígitos, com verificação de dígito
-    [Required, MaxLength(20)]   string WhatsApp,  // Formato: 5511999999999
-    [MaxLength(50)]             string? TableIdentifier = null // Mesa do QR Code
+    [Required, MaxLength(150)]  string  Name,
+    [ValidCpf, MaxLength(11)]   string? Cpf,              // Opcional — apenas dígitos se fornecido
+    [Required, MaxLength(20)]   string  WhatsApp,
+    [MaxLength(50)]             string? TableIdentifier = null
 );
 
 /// <summary>Renovação de token usando o Refresh Token.</summary>

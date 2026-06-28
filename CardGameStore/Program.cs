@@ -413,6 +413,20 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE INDEX IF NOT EXISTS ix_decks_user        ON decks (user_id);
                 CREATE INDEX IF NOT EXISTS ix_decks_user_public ON decks (user_id, is_public);
+
+                CREATE TABLE IF NOT EXISTS product_waitlist (
+                    id          UUID        NOT NULL DEFAULT gen_random_uuid(),
+                    product_id  UUID        NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                    user_id     UUID        REFERENCES users(id) ON DELETE SET NULL,
+                    name        VARCHAR(150) NOT NULL,
+                    whatsapp    VARCHAR(20)  NOT NULL,
+                    position    INT          NOT NULL,
+                    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    notified_at TIMESTAMPTZ,
+                    CONSTRAINT pk_product_waitlist PRIMARY KEY (id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_product_waitlist_product ON product_waitlist (product_id);
+                CREATE INDEX IF NOT EXISTS ix_product_waitlist_user    ON product_waitlist (user_id) WHERE user_id IS NOT NULL;
             ");
         }
 

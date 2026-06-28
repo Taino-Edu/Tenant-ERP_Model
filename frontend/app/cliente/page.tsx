@@ -1,13 +1,13 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { comandaApi, userApi, productApi, categoryApi, ComandaDto, Product, ProductCategory, UserProfile } from '@/lib/api'
+import { comandaApi, userApi, productApi, categoryApi, waitListApi, ComandaDto, Product, ProductCategory, UserProfile } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
 import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
   Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight, ChevronDown,
-  Trophy, Swords, Medal, BookOpen,
+  Trophy, Swords, Medal, BookOpen, Bell,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -118,78 +118,126 @@ function ProductCard({ p, adding, onAdd }: {
   adding: string | null
   onAdd: () => void
 }) {
-  const isAdding     = adding === p.id
-  const unavailable  = p.stockQuantity === 0
+  const isAdding        = adding === p.id
+  const outOfStock      = p.stockQuantity === 0
+  const canWaitList     = outOfStock && p.isPreVenda
+  const unavailable     = outOfStock && !canWaitList
+
+  const [inList,        setInList]    = useState(false)
+  const [waitLoading,   setWaitLoading] = useState(false)
+  const [position,      setPosition]  = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!canWaitList) return
+    waitListApi.myPosition(p.id)
+      .then(r => { setInList(r.data.inList); setPosition(r.data.position ?? null) })
+      .catch(() => {})
+  }, [p.id, canWaitList])
+
+  async function handleWaitList() {
+    setWaitLoading(true)
+    try {
+      if (inList) {
+        await waitListApi.leave(p.id)
+        setInList(false); setPosition(null)
+        toast.success('Saiu da lista de espera.')
+      } else {
+        const r = await waitListApi.join(p.id)
+        setInList(true); setPosition(r.data.position)
+        toast.success(`Você é o #${r.data.position} na lista de espera!`)
+      }
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || 'Erro na lista de espera.')
+    } finally { setWaitLoading(false) }
+  }
+
   return (
-    <button
-      onClick={unavailable ? undefined : onAdd}
-      disabled={isAdding || unavailable}
-      className="text-left rounded-2xl overflow-hidden flex flex-col transition-all duration-150"
-      style={{
-        backgroundColor: C.white,
-        border: `1px solid ${C.border}`,
-        boxShadow: '0 2px 8px rgba(12,61,90,0.06)',
-        opacity: unavailable ? 0.7 : 1,
-        cursor: unavailable ? 'default' : undefined,
-      }}
-    >
-      <div className="relative w-full aspect-square overflow-hidden flex items-center justify-center p-2"
-        style={{ backgroundColor: C.bg }}>
-        {p.imageUrl
-          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
-          : <Package className="w-10 h-10 opacity-20" style={{ color: C.blue2 }} />
-        }
-        {p.isPreVenda && !unavailable && (
-          <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
-            style={{ backgroundColor: '#7C3AED', color: '#fff' }}>
-            Pré-venda
-          </span>
-        )}
-        {!p.isPreVenda && p.isOnPromo && !unavailable && (
-          <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
-            style={{ backgroundColor: '#FF3B3B', color: '#fff' }}>
-            Promoção
-          </span>
-        )}
-        {unavailable && (
-          <div className="absolute inset-0 flex items-center justify-center"
-            style={{ backgroundColor: 'rgba(255,255,255,0.55)' }}>
-            <span className="text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-md text-white"
-              style={{ backgroundColor: '#6B7280' }}>
-              Indisponível
-            </span>
-          </div>
-        )}
-      </div>
-      <div className="p-3 flex flex-col gap-1.5 flex-1">
-        <p className="text-xs font-bold leading-snug line-clamp-2 flex-1" style={{ color: C.navy }}>{p.name}</p>
-        <div className="flex items-center justify-between mt-1 gap-1">
-          {p.isOnPromo && p.discountPriceInReais != null && !unavailable ? (
-            <div className="flex flex-col">
-              <span className="text-[10px] line-through" style={{ color: C.muted }}>
-                R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-              </span>
-              <span className="text-sm font-black" style={{ color: '#FF3B3B' }}>
-                R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}
-              </span>
-            </div>
-          ) : (
-            <span className="text-sm font-black" style={{ color: unavailable ? C.muted : C.blue2 }}>
-              R$ {p.priceInReais.toFixed(2).replace('.', ',')}
-            </span>
+    <div className="rounded-2xl overflow-hidden flex flex-col"
+      style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)', opacity: unavailable ? 0.7 : 1 }}>
+      <button
+        onClick={unavailable || canWaitList ? undefined : onAdd}
+        disabled={isAdding || unavailable}
+        className="text-left w-full"
+        style={{ cursor: unavailable || canWaitList ? 'default' : undefined }}
+      >
+        <div className="relative w-full aspect-square overflow-hidden flex items-center justify-center p-2"
+          style={{ backgroundColor: C.bg }}>
+          {p.imageUrl
+            ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-contain" />
+            : <Package className="w-10 h-10 opacity-20" style={{ color: C.blue2 }} />}
+          {p.isPreVenda && !outOfStock && (
+            <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+              style={{ backgroundColor: '#7C3AED', color: '#fff' }}>Pré-venda</span>
           )}
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors"
-            style={{ backgroundColor: unavailable ? '#E5E7EB' : isAdding ? `${C.blue}25` : C.blue }}>
-            {isAdding
-              ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.blue }} />
-              : unavailable
-                ? <span className="text-[10px] font-bold text-gray-400">—</span>
-                : <Plus className="w-4 h-4 text-white" />
-            }
-          </div>
+          {canWaitList && (
+            <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+              style={{ backgroundColor: '#7C3AED', color: '#fff' }}>Pré-venda</span>
+          )}
+          {!p.isPreVenda && p.isOnPromo && !outOfStock && (
+            <span className="absolute top-1.5 left-1.5 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+              style={{ backgroundColor: '#FF3B3B', color: '#fff' }}>Promoção</span>
+          )}
+          {unavailable && (
+            <div className="absolute inset-0 flex items-center justify-center"
+              style={{ backgroundColor: 'rgba(255,255,255,0.55)' }}>
+              <span className="text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-md text-white"
+                style={{ backgroundColor: '#6B7280' }}>Indisponível</span>
+            </div>
+          )}
         </div>
-      </div>
-    </button>
+        <div className="p-3 flex flex-col gap-1.5 flex-1">
+          <p className="text-xs font-bold leading-snug line-clamp-2 flex-1" style={{ color: C.navy }}>{p.name}</p>
+          {!canWaitList && (
+            <div className="flex items-center justify-between mt-1 gap-1">
+              {p.isOnPromo && p.discountPriceInReais != null && !outOfStock ? (
+                <div className="flex flex-col">
+                  <span className="text-[10px] line-through" style={{ color: C.muted }}>R$ {p.priceInReais.toFixed(2).replace('.', ',')}</span>
+                  <span className="text-sm font-black" style={{ color: '#FF3B3B' }}>R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}</span>
+                </div>
+              ) : (
+                <span className="text-sm font-black" style={{ color: unavailable ? C.muted : C.blue2 }}>
+                  R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                </span>
+              )}
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                style={{ backgroundColor: unavailable ? '#E5E7EB' : isAdding ? `${C.blue}25` : C.blue }}>
+                {isAdding
+                  ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.blue }} />
+                  : unavailable
+                    ? <span className="text-[10px] font-bold text-gray-400">—</span>
+                    : <Plus className="w-4 h-4 text-white" />}
+              </div>
+            </div>
+          )}
+        </div>
+      </button>
+
+      {/* Botão de lista de espera (pré-venda sem estoque) */}
+      {canWaitList && (
+        <div className="px-3 pb-3 space-y-1.5">
+          <span className="text-sm font-black" style={{ color: C.blue2 }}>
+            R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+          </span>
+          <button
+            onClick={handleWaitList}
+            disabled={waitLoading}
+            className="w-full py-2 rounded-xl text-[11px] font-black flex items-center justify-center gap-1.5 transition-all"
+            style={{
+              backgroundColor: inList ? '#F0FDF4' : '#EDE9FE',
+              color:           inList ? '#16A34A' : '#7C3AED',
+              border:          `1px solid ${inList ? '#86EFAC' : '#C4B5FD'}`,
+            }}
+          >
+            {waitLoading
+              ? <Loader2 className="w-3 h-3 animate-spin" />
+              : <Bell className="w-3 h-3" />}
+            {inList
+              ? `Na fila · #${position} — Sair da lista`
+              : 'Entrar na lista de espera'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

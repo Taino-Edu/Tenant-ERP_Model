@@ -13,7 +13,7 @@ const STORAGE_KEY = 'mesa-last-user'
 
 interface SavedUser {
   name: string
-  cpf: string
+  cpf: string | null
   whatsApp: string
   displayCpf: string
 }
@@ -76,7 +76,7 @@ export default function MesaPage() {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) {
         const user: SavedUser = JSON.parse(raw)
-        if (user.name && user.cpf && user.whatsApp) {
+        if (user.name && user.whatsApp) {
           setSavedUser(user)
           setStep('quick')
         }
@@ -106,7 +106,8 @@ export default function MesaPage() {
   }
 
   async function handleLogin(isQuick = false) {
-    const requestCpf      = isQuick ? savedUser!.cpf : cpf.replace(/\D/g, '')
+    const requestCpfRaw   = isQuick ? savedUser!.cpf : cpf.replace(/\D/g, '')
+    const requestCpf      = requestCpfRaw || null  // null quando não informado
     const requestName     = isQuick ? savedUser!.name : name
     const requestWhatsApp = isQuick ? savedUser!.whatsApp : whatsApp
 
@@ -121,7 +122,7 @@ export default function MesaPage() {
       saveAuth(data)
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         name: requestName, cpf: requestCpf, whatsApp: requestWhatsApp,
-        displayCpf: maskCpf(requestCpf)
+        displayCpf: requestCpf ? maskCpf(requestCpf) : ''
       }))
       toast.success('Entrada autorizada! Boas compras.', { icon: '🏰' })
       setTimeout(() => router.push('/cliente'), 800)
@@ -192,7 +193,8 @@ export default function MesaPage() {
               </div>
               <div className="min-w-0">
                 <p className="font-bold text-gray-900 text-sm truncate">{savedUser.name}</p>
-                <p className="text-[11px] text-gray-500 font-mono">{savedUser.displayCpf}</p>
+                {savedUser.displayCpf && <p className="text-[11px] text-gray-500 font-mono">{savedUser.displayCpf}</p>}
+                <p className="text-[11px] text-gray-500">{savedUser.whatsApp}</p>
               </div>
             </div>
 
@@ -237,7 +239,7 @@ export default function MesaPage() {
 
               <div>
                 <label className="block text-[11px] font-black text-[#1A6DB5] uppercase tracking-wider mb-2">
-                  CPF
+                  CPF <span className="font-normal text-gray-400 normal-case">(opcional)</span>
                 </label>
                 <div className="relative">
                   <Hash className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

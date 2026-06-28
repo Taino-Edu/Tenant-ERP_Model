@@ -63,29 +63,33 @@ public class AuthService : IAuthService
     // =========================================================================
     public async Task<AuthResponse> QuickLoginAsync(QuickLoginRequest request)
     {
-        // Busca por CPF primeiro
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Cpf == request.Cpf);
+        var cpf = request.Cpf?.Trim();
+        var hasCpf = !string.IsNullOrEmpty(cpf);
+
+        // Busca por CPF (preferido) ou WhatsApp quando CPF não informado
+        var user = hasCpf
+            ? await _db.Users.FirstOrDefaultAsync(u => u.Cpf == cpf)
+            : await _db.Users.FirstOrDefaultAsync(u => u.WhatsApp == request.WhatsApp && u.IsActive);
 
         if (user == null)
         {
-            // Cria o cliente automaticamente na primeira visita
             user = new User
             {
-                Name      = request.Name,
-                Cpf       = request.Cpf,
-                WhatsApp  = request.WhatsApp,
-                Role      = UserRole.Customer,
-                IsActive  = true
+                Name     = request.Name,
+                Cpf      = hasCpf ? cpf : null,
+                WhatsApp = request.WhatsApp,
+                Role     = UserRole.Customer,
+                IsActive = true
             };
             _db.Users.Add(user);
-            // LGPD: CPF não é logado — dado sensível do titular
             _logger.LogInformation("Novo cliente criado via QR Code: {Name}", request.Name);
         }
         else
         {
-            // Atualiza dados se necessário
-            user.Name     = request.Name;
-            user.WhatsApp = request.WhatsApp;
+            user.Name      = request.Name;
+            user.WhatsApp  = request.WhatsApp;
+            // Preenche CPF caso tenha sido informado agora e estava vazio
+            if (hasCpf && user.Cpf == null) user.Cpf = cpf;
             user.UpdatedAt = DateTime.UtcNow;
         }
 
@@ -95,14 +99,13 @@ public class AuthService : IAuthService
         }
         catch (DbUpdateException)
         {
-            // CPF duplicado por requisição concorrente — descarta a entidade em estado inválido
-            // e busca o usuário já criado pela outra thread.
             _db.ChangeTracker.Clear();
-            user = await _db.Users.FirstOrDefaultAsync(u => u.Cpf == request.Cpf && u.IsActive);
+            user = hasCpf
+                ? await _db.Users.FirstOrDefaultAsync(u => u.Cpf == cpf && u.IsActive)
+                : await _db.Users.FirstOrDefaultAsync(u => u.WhatsApp == request.WhatsApp && u.IsActive);
             if (user == null) throw;
         }
 
-        // Abre (ou reutiliza) a comanda para esta mesa/sessão
         var comanda = await _comandaService.OpenComandaAsync(user.Id, request.TableIdentifier);
         _logger.LogInformation("Comanda {ComandaId} associada ao quick-login de {Name}", comanda.Id, user.Name);
 

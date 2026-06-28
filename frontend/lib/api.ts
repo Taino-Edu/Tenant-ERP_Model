@@ -277,8 +277,8 @@ export const authApi = {
     api.post<CpfLookupResponse>('/api/auth/cpf-lookup', { cpf }),
   setupAccount: (cpf: string, email: string, password: string) =>
     api.post<AuthResponse>('/api/auth/setup-account', { cpf, email, password }),
-  quickLogin: (name: string, cpf: string, whatsApp: string, tableIdentifier?: string) =>
-    api.post<AuthResponse>('/api/auth/quick-login', { name, cpf, whatsApp, tableIdentifier }),
+  quickLogin: (name: string, cpf: string | null, whatsApp: string, tableIdentifier?: string) =>
+    api.post<AuthResponse>('/api/auth/quick-login', { name, cpf: cpf || null, whatsApp, tableIdentifier }),
   logout:         () => api.post('/api/auth/logout'),
   forgotPassword: (email: string) =>
     api.post('/api/auth/forgot-password', { email }),
@@ -506,6 +506,16 @@ export const productApi = {
   deactivate:  (id: string)         => api.delete(`/api/product/${id}`),
   lowStock:    ()                   => api.get<Product[]>('/api/product/low-stock'),
   adjustStock: (id: string, delta: number) => api.patch(`/api/product/${id}/stock`, { delta }),
+}
+
+export interface WaitListEntry { id: string; productId: string; userId?: string; name: string; whatsApp: string; position: number; createdAt: string; notifiedAt?: string }
+
+export const waitListApi = {
+  myPosition: (productId: string)  => api.get<{ inList: boolean; position?: number; entryId?: string }>(`/api/products/${productId}/waitlist/my`),
+  join:       (productId: string)  => api.post<WaitListEntry>(`/api/products/${productId}/waitlist`),
+  leave:      (productId: string)  => api.delete(`/api/products/${productId}/waitlist`),
+  adminList:  (productId: string)  => api.get<{ productId: string; productName: string; total: number; entries: WaitListEntry[] }>(`/api/products/${productId}/waitlist`),
+  adminRemove:(productId: string, entryId: string) => api.delete(`/api/products/${productId}/waitlist/${entryId}`),
 }
 
 export interface UpdateMeRequest {
