@@ -1,5 +1,20 @@
 # Changelog — Santuário Nerd
 
+## [v1.10.1] — 2026-06-28
+
+### Adicionado
+- **TCGdex — busca Pokémon em português**: integração com `api.tcgdex.net` (gratuita, sem autenticação) como fonte paralela à pokemontcg.io; agora é possível buscar pelo nome em português diretamente — "Transmissor da Equipe Rocket", "Mewtwo ex da Equipe Rocket", "Pikachu V" — sem precisar saber o nome em inglês
+- **Fan-out paralelo**: as duas APIs rodam simultaneamente (`Task.WhenAll`); resultados são mesclados — pokemontcg.io fornece preços completos, TCGdex complementa com nomes PT e imagens WebP de alta qualidade
+- **Imagens WebP via TCGdex**: cartas sem imagem no pokemontcg.io recebem automaticamente a imagem do TCGdex (`/low.webp` para thumbnail, `/high.webp` para modal)
+- **Cartas exclusivas PT**: edições brasileiras não indexadas no pokemontcg.io aparecem nos resultados via TCGdex
+
+### Corrigido
+- **Resultados duplicados**: deduplicação por ID antes de retornar ao frontend elimina cartas repetidas
+- **Aviso de idioma na UI**: placeholder e mensagem abaixo da busca indicam que Pokémon aceita nomes em inglês ou português; exemplos práticos (Rocket's Transmission, Dark Mewtwo, Rocket's Mewtwo ex) exibidos no admin
+- **Fallback de imagem no deck builder**: `onError` nas tags `<img>` exibe o nome da carta se a URL falhar ao carregar
+
+---
+
 ## [v1.10.0] — 2026-06-28
 
 ### Adicionado

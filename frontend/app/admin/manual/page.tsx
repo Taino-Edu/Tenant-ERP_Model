@@ -2,7 +2,7 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.10.0'
+const VERSION = 'v1.10.1'
 const DATA = '28/06/2026'
 
 const SECOES = [
@@ -227,6 +227,7 @@ const SECOES = [
     itens: [
       { t: 'Jogos suportados', d: 'Pokémon TCG (pokemontcg.io), Magic: The Gathering (Scryfall), Yu-Gi-Oh! (YGOProDeck) e LoL: Riftbound (Riftcodex + Scrydex). As APIs de Scryfall, YGOProDeck e Riftcodex são gratuitas e sem chave. Pokémon e Scrydex têm chaves opcionais configuráveis no backend.' },
       { t: 'Busca por nome', d: 'Digite o nome (ou parte) da carta na barra de busca e selecione o jogo. Os resultados aparecem em grade com imagem, nome e preço em USD e R$.' },
+      { t: 'Busca em português ou inglês', d: 'A busca Pokémon aceita nomes em português ou inglês — o sistema consulta simultaneamente a pokemontcg.io (inglês, preços) e a TCGdex (português nativo). Exemplos PT: "Transmissor da Equipe Rocket", "Mewtwo ex da Equipe Rocket", "Pikachu V". Exemplos EN: "Rocket\'s Mewtwo ex", "Dark Blastoise".' },
       { t: 'Busca por código de set', d: 'Busca pela combinação set + número retorna a carta exata. Pokémon: "PAL 058" (código PTCGO) ou "sv3pt5 094" (ID do set). MTG: "MH3 232". YGO: "DUNE-EN001" ou passcode (89631139). LoL: "OGN-296".' },
       { t: 'Busca somente por filtros', d: 'Para Pokémon, é possível buscar sem digitar nome — apenas com filtros. Exemplo: clique em Filtros, selecione "Regulation Mark G" + "Standard" e pressione Buscar para ver todas as cartas legais com aquela marca.' },
       { t: 'Filtros básicos por jogo', d: 'Pokémon: raridade, supertipo (Pokémon/Trainer/Energy), set. MTG: raridade, tipo de carta, set. Yu-Gi-Oh!: tipo de monstro/magia/armadilha, atributo, set. LoL Riftbound: raridade, tipo, set.' },
@@ -240,6 +241,7 @@ const SECOES = [
       { t: 'Importar lista', d: 'Cole uma lista no formato PTCG Live / Limitlesstcg (ex: "4 Pikachu PAL 058" / "2 Raichu PAR 021") e clique em Importar. O sistema busca cada carta e adiciona ao deck respeitando os limites de cópias.' },
     ],
     dicas: [
+      'Pokémon usa duas APIs em paralelo: pokemontcg.io (inglês, preços TCGPlayer + CardMarket) e TCGdex (português nativo, imagens WebP). Digitar em PT ou EN dá o mesmo resultado.',
       'LoL: Riftbound usa duas APIs em paralelo — Riftcodex (gratuita) e Scrydex (opcional, com preços de mercado). Se a Scrydex não estiver configurada, o Riftcodex funciona sozinho.',
       'O cache de busca tem TTL de 5 minutos — refazer a mesma busca dentro desse período retorna resultado imediato sem chamar a API.',
       'Para cartas antigas (Base Set, Gym, Neo…), o preço de mercado mais completo é o CardMarket (EUR) — o TCGPlayer tem menos vendedores internacionais nessas coleções.',
