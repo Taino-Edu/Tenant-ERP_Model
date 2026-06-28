@@ -136,8 +136,8 @@ function CardPreviewModal({ card, onClose, onAdd, qty, maxCopies, brlRate }: {
 }
 
 // ── Modal de busca profissional ───────────────────────────────────────────────
-function CardSearchModal({ game, onAdd, deckCards, onClose, maxCopies, brlRate }: {
-  game: string; onAdd: (c: CardCache, qty?: number) => void
+function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies, brlRate }: {
+  game: string; onAdd: (c: CardCache) => void; onImport: (cards: DeckCard[]) => void
   deckCards: DeckCard[]; onClose: () => void; maxCopies: number; brlRate: number | null
 }) {
   const [query,      setQuery]      = useState('')
@@ -273,8 +273,7 @@ function CardSearchModal({ game, onAdd, deckCards, onClose, maxCopies, brlRate }
         }
       } catch { failed.push(line) }
     }
-    onAdd({ tcgCardId: '__import__' } as CardCache) // trigger parent reset
-    // Replace handled externally via onImport
+    onImport(newCards)
     onClose()
     toast(failed.length ? `${added} importadas. ${failed.length} não encontradas.` : `${added} cartas importadas!`,
       { icon: failed.length ? '⚠️' : '✅', duration: 4000 })
@@ -557,7 +556,6 @@ export default function DeckBuilderPage() {
   const totalCards = cards.reduce((s, c) => s + c.quantity, 0)
 
   function addCard(cache: CardCache) {
-    if (cache.tcgCardId === '__import__') return // handled separately
     const existing = cards.find(c => c.id === cardKey(cache))
     if (existing) {
       if (existing.quantity >= maxCopies) { toast(`Máximo de ${maxCopies} cópias!`, { icon: '⚠️' }); return }
@@ -572,6 +570,18 @@ export default function DeckBuilderPage() {
       }])
     }
     toast.success(`${cache.name} adicionado!`, { duration: 1200 })
+  }
+
+  function importCards(imported: DeckCard[]) {
+    setCards(prev => {
+      const merged = [...prev]
+      for (const imp of imported) {
+        const ex = merged.find(c => c.id === imp.id)
+        if (ex) ex.quantity = Math.min(ex.quantity + imp.quantity, maxCopies)
+        else merged.push({ ...imp, quantity: Math.min(imp.quantity, maxCopies) })
+      }
+      return merged
+    })
   }
 
   function incCard(id: string)    { setCards(prev => prev.map(c => c.id === id && c.quantity < maxCopies ? { ...c, quantity: c.quantity + 1 } : c)) }
@@ -732,7 +742,7 @@ export default function DeckBuilderPage() {
       {/* Modal de busca */}
       {showPicker && (
         <CardSearchModal
-          game={game} onAdd={addCard} deckCards={cards}
+          game={game} onAdd={addCard} onImport={importCards} deckCards={cards}
           onClose={() => setShowPicker(false)}
           maxCopies={maxCopies} brlRate={brlRate}
         />
