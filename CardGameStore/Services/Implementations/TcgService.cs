@@ -90,31 +90,37 @@ public class TcgService : ITcgService
         string name,
         string? game    = null,
         int    page     = 1,
-        int    pageSize = 20)
+        int    pageSize = 20,
+        string? setId   = null,
+        string? rarity  = null)
     {
-        pageSize = Math.Min(pageSize, 50); // Limita o tamanho máximo da página
+        pageSize = Math.Min(pageSize, 250);
         var skip = (page - 1) * pageSize;
 
-        // Monta filtro flexível
         var filterBuilder = Builders<CardCache>.Filter;
-        // Regex.Escape evita ReDoS e regex injection com input do usuário
         var filter = filterBuilder.Regex(c => c.Name, new MongoDB.Bson.BsonRegularExpression(Regex.Escape(name), "i"));
 
         if (!string.IsNullOrWhiteSpace(game))
             filter &= filterBuilder.Eq(c => c.Game, game);
+        if (!string.IsNullOrWhiteSpace(setId))
+            filter &= filterBuilder.Regex(c => c.SetCode, new MongoDB.Bson.BsonRegularExpression($"^{Regex.Escape(setId)}$", "i"));
+        if (!string.IsNullOrWhiteSpace(rarity))
+            filter &= filterBuilder.Regex(c => c.Rarity, new MongoDB.Bson.BsonRegularExpression(Regex.Escape(rarity), "i"));
 
-        // Busca no cache que ainda não expirou
         filter &= filterBuilder.Gt(c => c.ExpiresAt, DateTime.UtcNow);
 
         var totalCount = await _cardCollection.CountDocumentsAsync(filter);
 
         if (totalCount == 0)
         {
-            // Cache sem resultados → chama a API
-            _logger.LogInformation("Nenhum resultado em cache para '{Name}'. Buscando na API...", name);
-            var apiResult = await _apiClient.SearchCardsAsync(name, game, page, pageSize);
+            // Monta query para a API externa incluindo filtros
+            var apiQuery = name;
+            if (!string.IsNullOrWhiteSpace(setId))   apiQuery += $" set.id:{setId}";
+            if (!string.IsNullOrWhiteSpace(rarity))  apiQuery += $" rarity:\"{rarity}\"";
 
-            // Salva todos os resultados no cache em background
+            _logger.LogInformation("Cache miss para '{Query}'. Buscando na API...", apiQuery);
+            var apiResult = await _apiClient.SearchCardsAsync(apiQuery, game, page, pageSize);
+
             _ = Task.Run(() => CacheApiSearchResultsAsync(apiResult.Cards));
 
             return new PagedResult<CardCache>
@@ -126,12 +132,11 @@ public class TcgService : ITcgService
             };
         }
 
-        // Retorna do cache
         var items = await _cardCollection
             .Find(filter)
             .Skip(skip)
             .Limit(pageSize)
-            .SortBy(c => c.Name)
+            .SortByDescending(c => c.CachedAt)
             .ToListAsync();
 
         return new PagedResult<CardCache>

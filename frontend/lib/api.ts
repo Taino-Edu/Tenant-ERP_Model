@@ -607,15 +607,17 @@ export const userApi = {
   updatePreferences: (data: UserPreferences)   => api.put<UserPreferences>('/api/user/me/preferences', data),
 }
 
+export interface TcgSet { code: string; name: string; game: string; series?: string; logoUrl?: string; totalCards: number; releaseDate?: string }
+
 export const tcgApi = {
-  search: (name: string, game?: string, page = 1, pageSize = 20) =>
+  search: (name: string, game?: string, page = 1, pageSize = 30, setId?: string, rarity?: string) =>
     api.get<{ items: CardCache[]; totalCount: number; totalPages: number }>('/api/tcg/search',
-      { params: { name, game, page, pageSize } }),
+      { params: { name, game, page, pageSize, ...(setId ? { setId } : {}), ...(rarity ? { rarity } : {}) } }),
   searchByCode: (set: string, num: string, game = 'Pokemon') =>
     api.get<{ items: CardCache[]; totalCount: number }>('/api/tcg/search',
       { params: { set, num, game } }),
   getCard:  (id: string) => api.get<CardCache>(`/api/tcg/cards/${id}`),
-  sets:     (game: string) => api.get('/api/tcg/sets', { params: { game } }),
+  sets:     (game: string) => api.get<TcgSet[]>('/api/tcg/sets', { params: { game } }),
   brlRate:  () => api.get<{ usdToBrl: number }>('/api/tcg/brl-rate'),
 }
 

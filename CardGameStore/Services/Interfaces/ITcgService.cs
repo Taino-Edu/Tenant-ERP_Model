@@ -47,7 +47,9 @@ public interface ITcgService
         string name,
         string? game    = null,
         int    page     = 1,
-        int    pageSize = 20
+        int    pageSize = 20,
+        string? setId   = null,
+        string? rarity  = null
     );
 
     /// <summary>

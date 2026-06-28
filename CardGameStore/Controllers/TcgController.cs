@@ -42,11 +42,13 @@ public class TcgController : ControllerBase
         [FromQuery] string? name     = null,
         [FromQuery] string? set      = null,
         [FromQuery] string? num      = null,
+        [FromQuery] string? setId    = null,
+        [FromQuery] string? rarity   = null,
         [FromQuery] string? game     = "Pokemon",
         [FromQuery] int     page     = 1,
-        [FromQuery] int     pageSize = 20)
+        [FromQuery] int     pageSize = 30)
     {
-        pageSize = Math.Clamp(pageSize, 1, 100);
+        pageSize = Math.Clamp(pageSize, 1, 250);
 
         // Busca por código: set + número
         if (!string.IsNullOrWhiteSpace(set) && !string.IsNullOrWhiteSpace(num))
@@ -58,7 +60,7 @@ public class TcgController : ControllerBase
         if (string.IsNullOrWhiteSpace(name))
             return BadRequest(new { Message = "Informe 'name' para busca por nome, ou 'set' + 'num' para busca por código." });
 
-        var result = await _tcgService.SearchCardsByNameAsync(name, game, page, pageSize);
+        var result = await _tcgService.SearchCardsByNameAsync(name, game, page, pageSize, setId, rarity);
         return Ok(result);
     }
 
