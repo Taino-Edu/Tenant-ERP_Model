@@ -11,15 +11,16 @@ import toast, { Toaster } from 'react-hot-toast'
 
 const C = { navy: '#0C3D5A', blue: '#3EC2F2', blue2: '#1A9DD4', yellow: '#FFE45E', bg: '#EBF7FD', white: '#FFFFFF', muted: '#4D8FAC', border: 'rgba(62,194,242,0.18)' }
 
-const GAMES   = ['Pokemon', 'MTG', 'Yu-Gi-Oh!', 'LoL Riftbound']
+const GAMES   = ['Pokemon', 'MTG', 'Yu-Gi-Oh!', 'One Piece TCG', 'LoL Riftbound']
 const FORMATS: Record<string, string[]> = {
-  Pokemon:        ['Standard', 'Expanded', 'Unlimited', 'Pocket'],
-  MTG:            ['Standard', 'Modern', 'Legacy', 'Commander', 'Draft'],
-  'Yu-Gi-Oh!':   ['Advanced', 'Traditional'],
-  'LoL Riftbound': ['Standard'],
+  Pokemon:          ['Standard', 'Expanded', 'Unlimited', 'Pocket'],
+  MTG:              ['Standard', 'Modern', 'Legacy', 'Commander', 'Draft'],
+  'Yu-Gi-Oh!':     ['Advanced', 'Traditional'],
+  'One Piece TCG':  ['Standard', 'Draft'],
+  'LoL Riftbound':  ['Standard'],
 }
-const MAX_CARDS:  Record<string, number> = { Pokemon: 60, MTG: 60, 'Yu-Gi-Oh!': 60, 'LoL Riftbound': 50 }
-const MAX_COPIES: Record<string, number> = { Pokemon: 4,  MTG: 4,  'Yu-Gi-Oh!': 3,  'LoL Riftbound': 3 }
+const MAX_CARDS:  Record<string, number> = { Pokemon: 60, MTG: 60, 'Yu-Gi-Oh!': 60, 'One Piece TCG': 50, 'LoL Riftbound': 50 }
+const MAX_COPIES: Record<string, number> = { Pokemon: 4,  MTG: 4,  'Yu-Gi-Oh!': 3,  'One Piece TCG': 4,  'LoL Riftbound': 3 }
 
 // Opções de filtro por jogo — seguindo padrão dos sites oficiais
 const POKEMON_SUBTYPES      = ['Basic','Stage 1','Stage 2','EX','GX','V','VMAX','VSTAR','ex','Radiant','Tera','Supporter','Item','Tool','Stadium','Special Energy','Basic Energy']
@@ -50,6 +51,12 @@ const GAME_FILTERS: Record<string, {
     rarities: ['Effect Monster','Normal Monster','Ritual Monster','Fusion Monster','Synchro Monster','Xyz Monster','Link Monster','Pendulum Effect Monster','Spell Card','Trap Card'],
     typeLabel: 'Atributo',
     types: ['DARK','LIGHT','FIRE','WATER','EARTH','WIND','DIVINE'],
+  },
+  'One Piece TCG': {
+    rarityLabel: 'Raridade',
+    rarities: ['Common','Uncommon','Rare','Super Rare','Secret Rare','Leader','Promotional'],
+    typeLabel: 'Tipo',
+    types: ['Character','Event','Stage','Leader','DON!!'],
   },
   'LoL Riftbound': {
     rarityLabel: 'Raridade',
@@ -313,11 +320,12 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
 
   const searchPlaceholder = useMemo(() => {
     switch (game) {
-      case 'Pokemon':       return 'Nome em inglês (Pikachu) ou código (PAL 058)'
-      case 'MTG':           return 'Nome (Lightning Bolt) ou código (MH3 232, THB 001a)'
+      case 'Pokemon':        return 'Nome em PT ou EN (Pikachu, Transmissor da Equipe Rocket) ou código (PAL 058)'
+      case 'MTG':            return 'Nome (Lightning Bolt) ou código (MH3 232, THB 001a)'
       case 'Yu-Gi-Oh!':     return 'Nome, código (DUNE-EN001) ou passcode (89631139)'
-      case 'LoL Riftbound': return 'Nome (Jinx) ou código (OGN-296)'
-      default:              return 'Nome ou código da carta...'
+      case 'One Piece TCG':  return 'Nome (Monkey D. Luffy) ou código (OP01-060)'
+      case 'LoL Riftbound':  return 'Nome (Jinx) ou código (OGN-296)'
+      default:               return 'Nome ou código da carta...'
     }
   }, [game])
 
@@ -516,10 +524,10 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
               </button>
             </div>
 
-            {/* Aviso de idioma — Pokémon */}
+            {/* Aviso de idioma */}
             {isPokemon && (
               <p className="text-[10px] text-white/40 -mt-1 px-1">
-                A API Pokémon usa nomes em inglês: <em>Rocket&apos;s Transmission</em>, <em>Mewtwo-EX</em>, <em>Dark Blastoise</em>…
+                Busca em português ou inglês: <em>Transmissor da Equipe Rocket</em> ou <em>Rocket&apos;s Transmission</em>
               </p>
             )}
 

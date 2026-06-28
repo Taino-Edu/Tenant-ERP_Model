@@ -103,7 +103,7 @@ function AddOwnCardModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-const GAMES = ['Pokemon', 'MTG', 'Yu-Gi-Oh!', 'LoL Riftbound']
+const GAMES = ['Pokemon', 'MTG', 'Yu-Gi-Oh!', 'One Piece TCG', 'LoL Riftbound']
 
 const GAME_FILTERS: Record<string, { rarityLabel: string; rarities: string[]; typeLabel?: string; types?: string[] }> = {
   Pokemon: {
@@ -123,6 +123,12 @@ const GAME_FILTERS: Record<string, { rarityLabel: string; rarities: string[]; ty
     rarities: ['Effect Monster','Normal Monster','Ritual Monster','Fusion Monster','Synchro Monster','Xyz Monster','Link Monster','Pendulum Effect Monster','Spell Card','Trap Card'],
     typeLabel: 'Atributo',
     types: ['DARK','LIGHT','FIRE','WATER','EARTH','WIND','DIVINE'],
+  },
+  'One Piece TCG': {
+    rarityLabel: 'Raridade',
+    rarities: ['Common','Uncommon','Rare','Super Rare','Secret Rare','Leader','Promotional'],
+    typeLabel: 'Tipo',
+    types: ['Character','Event','Stage','Leader','DON!!'],
   },
   'LoL Riftbound': {
     rarityLabel: 'Raridade',
@@ -589,11 +595,12 @@ export default function CartasPage() {
 
   function codePlaceholder() {
     switch (game) {
-      case 'Pokemon':       return 'Nome (Pikachu) ou código (PAL 058, SVI 001)...'
-      case 'MTG':           return 'Nome (Lightning Bolt) ou código (MH3 232, THB 001a)...'
+      case 'Pokemon':        return 'Nome em PT ou EN (Pikachu, Transmissor da Equipe Rocket) ou código (PAL 058)...'
+      case 'MTG':            return 'Nome (Lightning Bolt) ou código (MH3 232, THB 001a)...'
       case 'Yu-Gi-Oh!':     return 'Nome, código (DUNE-EN001) ou passcode (89631139)...'
-      case 'LoL Riftbound': return 'Nome (Jinx) ou código (OGN-296, OGN 296)...'
-      default:              return 'Nome ou código da carta...'
+      case 'One Piece TCG':  return 'Nome (Monkey D. Luffy) ou código (OP01-060)...'
+      case 'LoL Riftbound':  return 'Nome (Jinx) ou código (OGN-296, OGN 296)...'
+      default:               return 'Nome ou código da carta...'
     }
   }
 
