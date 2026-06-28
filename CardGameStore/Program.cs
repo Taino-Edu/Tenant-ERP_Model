@@ -264,6 +264,15 @@ builder.Services.AddHttpClient("RiftboundApi", client =>
     client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
 });
 
+// Scrydex API — fonte paralela com preços de mercado (requer TcgSettings:ScrydexApiKey e ScrydexTeamId)
+builder.Services.AddHttpClient("ScrydexApi", client =>
+{
+    client.BaseAddress = new Uri("https://api.scrydex.com/");
+    client.Timeout     = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
+});
+
 // Gemini 2.0 Flash — assistente IA conversacional
 builder.Services.AddHttpClient("gemini", client =>
 {
