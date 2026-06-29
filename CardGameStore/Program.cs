@@ -453,6 +453,25 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE INDEX IF NOT EXISTS ix_product_waitlist_product ON product_waitlist (product_id);
                 CREATE INDEX IF NOT EXISTS ix_product_waitlist_user    ON product_waitlist (user_id) WHERE user_id IS NOT NULL;
+
+                -- Deck em pré-inscrição e participante de campeonato
+                ALTER TABLE championship_pre_inscricoes ADD COLUMN IF NOT EXISTS deck_id   UUID                 NULL;
+                ALTER TABLE championship_pre_inscricoes ADD COLUMN IF NOT EXISTS deck_name VARCHAR(200)         NULL;
+                ALTER TABLE championship_participants    ADD COLUMN IF NOT EXISTS deck_id   UUID                 NULL;
+
+                -- Timers de torneio
+                CREATE TABLE IF NOT EXISTS timers (
+                    id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                    name             VARCHAR(100) NOT NULL DEFAULT 'Timer',
+                    duration_seconds INTEGER      NOT NULL DEFAULT 1800,
+                    paused_remaining INTEGER      NULL,
+                    state            INTEGER      NOT NULL DEFAULT 0,
+                    started_at       TIMESTAMPTZ  NULL,
+                    sound_preset     VARCHAR(50)  NOT NULL DEFAULT 'bell',
+                    warn_at_seconds  INTEGER      NOT NULL DEFAULT 60,
+                    created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+                );
             ");
         }
 
