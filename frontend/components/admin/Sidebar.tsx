@@ -54,8 +54,6 @@ const sections = [
     label: 'Compliance',
     items: [
       { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield, perm: 'lgpd' },
-      { href: '/admin/manual',    label: 'Manual',           icon: BookOpen, perm: null },
-      { href: '/admin/changelog', label: 'Changelog',        icon: History,  perm: null },
       { href: '/admin/sobre',     label: 'Sobre o Sistema',  icon: Info,     perm: null },
     ],
   },
