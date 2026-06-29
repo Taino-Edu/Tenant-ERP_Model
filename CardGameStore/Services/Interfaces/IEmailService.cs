@@ -27,6 +27,11 @@ public interface IEmailService
     /// <summary>Confirmação de inscrição em campeonato.</summary>
     Task SendCampeonatoInscricaoAsync(string toEmail, string toName, string campeonato, DateTime data, decimal entryFee);
 
+    // ── Pré-venda / Lista de espera ───────────────────────────────────────────
+
+    /// <summary>Avisa o cliente que chegou sua vez na lista de espera.</summary>
+    Task SendWaitListNotifiedAsync(string toEmail, string toName, string productName, string productUrl);
+
     // ── Anúncios (broadcast) ──────────────────────────────────────────────────
 
     /// <summary>Envia anúncio/promoção para uma lista de destinatários.</summary>

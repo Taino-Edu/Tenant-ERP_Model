@@ -145,6 +145,32 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, $"Inscrição confirmada: {campeonato}", body);
     }
 
+    public async Task SendWaitListNotifiedAsync(string toEmail, string toName, string productName, string productUrl)
+    {
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:500px">
+              <h2 style="color:#7C3AED">softNerd — Chegou sua vez! 🎉</h2>
+              <p>Olá, <strong>{toName}</strong>!</p>
+              <p>
+                Boa notícia! Você é o próximo da lista de espera para o produto
+                <strong>{productName}</strong>.
+              </p>
+              <p>
+                <a href="{productUrl}"
+                   style="display:inline-block;background:#7C3AED;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
+                  Ver produto
+                </a>
+              </p>
+              <p style="color:#888;font-size:12px">
+                Se não conseguir finalizar a compra, entre em contato com a loja pelo WhatsApp.
+              </p>
+              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+            </div>
+            """;
+
+        await SendAsync(toEmail, toName, $"Chegou sua vez — {productName}", body);
+    }
+
     public async Task SendAnuncioAsync(IEnumerable<(string email, string name)> destinatarios, string titulo, string corpo)
     {
         var body = $"""

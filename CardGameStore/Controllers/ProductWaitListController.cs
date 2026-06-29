@@ -9,10 +9,10 @@
 
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 
 namespace CardGameStore.Controllers;
@@ -23,10 +23,12 @@ namespace CardGameStore.Controllers;
 public class ProductWaitListController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IEmailService _email;
+    private readonly IConfiguration _config;
     private readonly ILogger<ProductWaitListController> _logger;
 
-    public ProductWaitListController(AppDbContext db, ILogger<ProductWaitListController> logger)
-    { _db = db; _logger = logger; }
+    public ProductWaitListController(AppDbContext db, IEmailService email, IConfiguration config, ILogger<ProductWaitListController> logger)
+    { _db = db; _email = email; _config = config; _logger = logger; }
 
     private Guid? TryGetUserId()
     {
@@ -134,6 +136,35 @@ public class ProductWaitListController : ControllerBase
             Total       = list.Count,
             Entries     = list.Select(e => new WaitListEntryDto(e)),
         });
+    }
+
+    // ── Admin: notificar próximo da fila ──────────────────────────────────────
+
+    [HttpPost("{entryId:guid}/notify")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> NotifyEntry(Guid productId, Guid entryId)
+    {
+        var entry = await _db.ProductWaitLists
+            .Include(w => w.User)
+            .FirstOrDefaultAsync(w => w.Id == entryId && w.ProductId == productId);
+        if (entry == null) return NotFound(new { Message = "Entrada não encontrada." });
+
+        var product = await _db.Products.FindAsync(productId);
+        if (product == null) return NotFound(new { Message = "Produto não encontrado." });
+
+        var appUrl  = _config["EmailSettings:AppUrl"] ?? "https://santuarionerd.tech";
+        var url     = $"{appUrl}/produtos/{productId}";
+        var email   = entry.User?.Email ?? string.Empty;
+        var name    = entry.Name;
+
+        if (!string.IsNullOrWhiteSpace(email))
+            await _email.SendWaitListNotifiedAsync(email, name, product.Name, url);
+
+        entry.NotifiedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Entrada {EntryId} da lista de espera de {ProductId} notificada", entryId, productId);
+        return Ok(new { Message = "Notificação enviada.", NotifiedAt = entry.NotifiedAt });
     }
 
     // ── Admin: remover entrada ─────────────────────────────────────────────────
