@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { marketplaceApi, CardListingDto, CreateListingRequest } from '@/lib/api'
-import { getUserId, getUserName } from '@/lib/auth'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { marketplaceApi, CardListingDto, CreateListingRequest, MarketplaceInterestDto } from '@/lib/api'
+import { getUserId } from '@/lib/auth'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
   Search, Plus, Heart, HeartOff, Package, Loader2,
   ArrowLeft, X, ChevronLeft, ChevronRight, User as UserIcon,
-  Star, ShoppingBag, Pencil, Trash2, Eye, MessageCircle,
+  ShoppingBag, Pencil, Trash2, Eye, ImagePlus, Phone,
 } from 'lucide-react'
 
 const CONDITIONS: { value: string; label: string; color: string }[] = [
@@ -144,18 +144,31 @@ function ListingModal({ initial, onClose, onSave }: {
   onClose: () => void
   onSave: (l: CardListingDto) => void
 }) {
-  const [form, setForm] = useState<CreateListingRequest & { status?: string }>({
+  const [form, setForm] = useState({
     cardName:    initial?.cardName ?? '',
     cardGame:    initial?.cardGame ?? '',
-    cardImageUrl:initial?.cardImageUrl ?? '',
     priceInCents:initial?.priceInCents ?? 0,
     condition:   initial?.condition ?? 'NM',
     description: initial?.description ?? '',
     status:      initial?.status ?? 'Available',
   })
-  const [saving, setSaving] = useState(false)
+  const [imageUrl,    setImageUrl]    = useState<string | null>(initial?.cardImageUrl ?? null)
+  const [uploading,   setUploading]   = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const set = (k: keyof typeof form, v: string | number) => setForm(p => ({ ...p, [k]: v }))
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const url = await marketplaceApi.uploadImage(file)
+      setImageUrl(url)
+    } catch { toast.error('Erro ao enviar imagem') }
+    finally { setUploading(false) }
+  }
 
   async function submit() {
     if (!form.cardName.trim()) { toast.error('Informe o nome da carta'); return }
@@ -165,7 +178,7 @@ function ListingModal({ initial, onClose, onSave }: {
       const req = {
         cardName:     form.cardName.trim(),
         cardGame:     form.cardGame || undefined,
-        cardImageUrl: form.cardImageUrl || undefined,
+        cardImageUrl: imageUrl || undefined,
         priceInCents: form.priceInCents,
         condition:    form.condition,
         description:  form.description || undefined,
@@ -181,11 +194,51 @@ function ListingModal({ initial, onClose, onSave }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 rounded-2xl shadow-2xl w-full max-w-md flex flex-col gap-5 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 overflow-auto">
+      <div className="bg-surface-800 rounded-2xl shadow-2xl w-full max-w-md flex flex-col gap-5 p-6 my-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-white">{initial ? 'Editar anúncio' : 'Anunciar carta'}</h2>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-700 text-gray-400"><X className="w-5 h-5" /></button>
+        </div>
+
+        {/* Upload de imagem */}
+        <div>
+          <label className="label mb-1.5">Foto da carta</label>
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFile} />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className={clsx(
+              'w-full rounded-xl border-2 border-dashed transition-colors flex flex-col items-center justify-center gap-2 overflow-hidden',
+              imageUrl ? 'border-brand-500/40 p-1' : 'border-surface-600 hover:border-brand-500/60 p-6 text-gray-400',
+            )}
+          >
+            {uploading ? (
+              <div className="py-6 flex flex-col items-center gap-2 text-brand-400">
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <span className="text-xs">Enviando...</span>
+              </div>
+            ) : imageUrl ? (
+              <div className="relative w-full">
+                <img src={imageUrl} alt="preview" className="w-full max-h-48 object-contain rounded-lg" />
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setImageUrl(null) }}
+                  className="absolute top-1 right-1 p-1 rounded-full bg-black/60 text-white hover:bg-red-500 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+                <p className="text-xs text-gray-400 text-center py-1">Clique para trocar</p>
+              </div>
+            ) : (
+              <>
+                <ImagePlus className="w-8 h-8" />
+                <span className="text-sm font-medium">Clique para enviar foto</span>
+                <span className="text-xs">JPG, PNG ou WebP • máx. 5 MB</span>
+              </>
+            )}
+          </button>
         </div>
 
         <div className="flex flex-col gap-3">
@@ -196,7 +249,7 @@ function ListingModal({ initial, onClose, onSave }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Jogo</label>
-              <select className="input" value={form.cardGame ?? ''} onChange={e => set('cardGame', e.target.value)}>
+              <select className="input" value={form.cardGame} onChange={e => set('cardGame', e.target.value)}>
                 <option value="">Selecionar...</option>
                 {GAMES.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
@@ -220,12 +273,8 @@ function ListingModal({ initial, onClose, onSave }: {
             />
           </div>
           <div>
-            <label className="label">URL da imagem (opcional)</label>
-            <input className="input" value={form.cardImageUrl ?? ''} onChange={e => set('cardImageUrl', e.target.value)} placeholder="https://..." />
-          </div>
-          <div>
             <label className="label">Descrição (opcional)</label>
-            <textarea className="input h-20 resize-none" value={form.description ?? ''} onChange={e => set('description', e.target.value)} placeholder="Estado detalhado, idioma, etc." />
+            <textarea className="input h-20 resize-none" value={form.description} onChange={e => set('description', e.target.value)} placeholder="Estado detalhado, idioma, edição, etc." />
           </div>
           {initial && (
             <div>
@@ -241,7 +290,7 @@ function ListingModal({ initial, onClose, onSave }: {
 
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="btn-secondary">Cancelar</button>
-          <button onClick={submit} disabled={saving} className="btn-primary flex items-center gap-2">
+          <button onClick={submit} disabled={saving || uploading} className="btn-primary flex items-center gap-2">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             {initial ? 'Salvar' : 'Publicar'}
           </button>
@@ -253,7 +302,7 @@ function ListingModal({ initial, onClose, onSave }: {
 
 // ── Modal de interesses ───────────────────────────────────────────────────────
 function InterestsModal({ listing, onClose }: { listing: CardListingDto; onClose: () => void }) {
-  const [interests, setInterests] = useState<{ userId: string; userName: string; message: string | null; createdAt: string }[]>([])
+  const [interests, setInterests] = useState<MarketplaceInterestDto[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -263,13 +312,18 @@ function InterestsModal({ listing, onClose }: { listing: CardListingDto; onClose
       .finally(() => setLoading(false))
   }, [listing.id])
 
+  function whatsAppLink(phone: string) {
+    return `https://wa.me/55${phone.replace(/\D/g, '')}`
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <div className="bg-surface-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col gap-4 p-6 max-h-[80vh]">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">Interessados — {listing.cardName}</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-700 text-gray-400"><X className="w-5 h-5" /></button>
+          <h2 className="text-base font-bold text-white truncate">Interessados — {listing.cardName}</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-700 text-gray-400 shrink-0 ml-2"><X className="w-5 h-5" /></button>
         </div>
+        <p className="text-xs text-gray-500">Clique no WhatsApp para combinar a venda diretamente.</p>
 
         {loading ? (
           <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
@@ -278,20 +332,36 @@ function InterestsModal({ listing, onClose }: { listing: CardListingDto; onClose
         ) : (
           <div className="flex flex-col gap-2 overflow-auto">
             {interests.map(i => (
-              <Link
-                key={i.userId}
-                href={`/perfil/${i.userId}`}
-                className="flex items-start gap-3 p-3 rounded-xl bg-surface-700 hover:bg-surface-600 transition-colors"
-              >
-                <div className="w-8 h-8 rounded-full bg-surface-500 flex items-center justify-center shrink-0">
-                  <UserIcon className="w-4 h-4 text-gray-400" />
-                </div>
+              <div key={i.userId} className="flex items-start gap-3 p-3 rounded-xl bg-surface-700">
+                <Link href={`/perfil/${i.userId}`} className="shrink-0">
+                  {i.userProfileImage ? (
+                    <img src={i.userProfileImage} alt={i.userName ?? ''} className="w-9 h-9 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-surface-500 flex items-center justify-center">
+                      <UserIcon className="w-4 h-4 text-gray-400" />
+                    </div>
+                  )}
+                </Link>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">{i.userName}</p>
-                  {i.message && <p className="text-xs text-gray-400 mt-0.5">{i.message}</p>}
+                  <Link href={`/perfil/${i.userId}`} className="text-sm font-semibold text-white hover:text-brand-300 transition-colors">
+                    {i.userName ?? 'Usuário'}
+                  </Link>
+                  {i.message && <p className="text-xs text-gray-400 mt-0.5 italic">"{i.message}"</p>}
                   <p className="text-[10px] text-gray-500 mt-1">{new Date(i.createdAt).toLocaleDateString('pt-BR')}</p>
                 </div>
-              </Link>
+                {i.userWhatsApp ? (
+                  <a
+                    href={whatsAppLink(i.userWhatsApp)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors text-xs font-semibold"
+                  >
+                    <Phone className="w-3.5 h-3.5" /> WhatsApp
+                  </a>
+                ) : (
+                  <span className="shrink-0 text-[10px] text-gray-600 italic">sem contato</span>
+                )}
+              </div>
             ))}
           </div>
         )}

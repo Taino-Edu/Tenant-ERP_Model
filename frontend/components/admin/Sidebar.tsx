@@ -34,8 +34,9 @@ const sections = [
       { href: '/admin/categorias',  label: 'Categorias',   icon: Tag,         perm: 'categorias' },
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,   perm: 'anuncios' },
       { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search,      perm: 'cartas' },
-      { href: '/admin/campeonatos', label: 'Campeonatos',  icon: Trophy,      perm: 'campeonatos' },
-      { href: '/admin/timer',       label: 'Timers',        icon: Timer,       perm: 'campeonatos' },
+      { href: '/admin/campeonatos',  label: 'Campeonatos',  icon: Trophy,      perm: 'campeonatos' },
+      { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: 'campeonatos' },
+      { href: '/admin/marketplace',  label: 'Marketplace',  icon: Store,       perm: 'estoque' },
     ],
   },
   {

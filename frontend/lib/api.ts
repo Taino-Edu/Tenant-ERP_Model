@@ -986,8 +986,14 @@ export interface CreateListingRequest {
   priceInCents: number; condition: string; description?: string
 }
 
+export interface MarketplaceInterestDto {
+  id: string; userId: string; userName: string | null
+  userProfileImage: string | null; userWhatsApp: string | null
+  message: string | null; createdAt: string
+}
+
 export const marketplaceApi = {
-  list: (params?: { page?: number; pageSize?: number; game?: string; search?: string }) =>
+  list: (params?: { page?: number; pageSize?: number; game?: string; search?: string; status?: string; sellerId?: string }) =>
     api.get<MarketplacePageDto>('/api/marketplace', { params }),
   mine: () => api.get<CardListingDto[]>('/api/marketplace/mine'),
   create: (req: CreateListingRequest) => api.post<CardListingDto>('/api/marketplace', req),
@@ -997,7 +1003,14 @@ export const marketplaceApi = {
   toggleInterest: (id: string, message?: string) =>
     api.post<{ interested: boolean; interestCount: number }>(`/api/marketplace/${id}/interest`, { message }),
   interests: (id: string) =>
-    api.get<{ userId: string; userName: string; message: string | null; createdAt: string }[]>(`/api/marketplace/${id}/interests`),
+    api.get<MarketplaceInterestDto[]>(`/api/marketplace/${id}/interests`),
+  uploadImage: async (file: File): Promise<string> => {
+    const fd = new FormData(); fd.append('file', file)
+    const res = await api.post<{ url: string }>('/api/upload/marketplace-image', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data.url
+  },
 }
 
 // ── Perfil público ────────────────────────────────────────────────────────────

@@ -257,6 +257,7 @@ public class MarketplaceController : ControllerBase
             i.UserId,
             userName          = i.User?.Name,
             userProfileImage  = i.User?.ProfileImageUrl,
+            userWhatsApp      = i.User?.WhatsApp,
             i.Message,
             i.CreatedAt,
         });

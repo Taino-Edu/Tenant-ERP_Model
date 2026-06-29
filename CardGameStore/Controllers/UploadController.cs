@@ -60,6 +60,17 @@ public class UploadController : ControllerBase
     }
 
     /// <summary>
+    /// Upload de imagem para anúncio no marketplace. Qualquer usuário logado pode usar.
+    /// Salva em /uploads/marketplace/ e retorna a URL pública.
+    /// </summary>
+    [HttpPost("marketplace-image")]
+    [Authorize]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    [ProducesResponseType(typeof(UploadImageResponse), 200)]
+    public Task<IActionResult> UploadMarketplaceImage(IFormFile? file)
+        => ProcessImageUpload(file, Path.Combine("uploads", "marketplace"));
+
+    /// <summary>
     /// Faz upload da foto de perfil do usuário logado.
     /// Salva em /uploads/profiles/ e atualiza o banco de dados.
     /// </summary>
