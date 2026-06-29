@@ -98,6 +98,7 @@ services:
       SmtpSettings__Password: "${SMTP_PASSWORD}"
       SmtpSettings__FromEmail: "${SMTP_FROM_EMAIL:-noreply@santuarionerd.tech}"
       SmtpSettings__FromName: "${SMTP_FROM_NAME:-Santuário Nerd}"
+      SmtpSettings__AppUrl: "${APP_URL:-https://santuarionerd.tech}"
       # Integrações
       GeminiSettings__ApiKey: "${GEMINI_API_KEY}"
       TcgSettings__PokemonApiKey: "${POKEMON_API_KEY:-}"
