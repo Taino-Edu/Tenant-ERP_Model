@@ -198,7 +198,7 @@ export default function ProductPage() {
                 <>
                   {/* Bloco de fila pré-venda */}
                   {!wlAuth ? (
-                    <Link href="/cliente"
+                    <Link href={`/entrar?redirect=/produtos/${id}`}
                       className="flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-base transition-all active:scale-95 shadow-lg"
                       style={{ backgroundColor: '#7C3AED', color: '#fff', boxShadow: '0 8px 24px rgba(124,58,237,0.30)' }}>
                       <LogIn className="w-5 h-5" /> Entre para garantir sua vaga

@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
 import toast, { Toaster } from 'react-hot-toast'
@@ -8,7 +8,9 @@ import { Mail, KeyRound, Loader2, Gamepad2, ArrowLeft, UserPlus } from 'lucide-r
 import Link from 'next/link'
 
 export default function EntrarPage() {
-  const router = useRouter()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const redirect     = searchParams.get('redirect')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
@@ -20,7 +22,7 @@ export default function EntrarPage() {
       const { data } = await authApi.clientLogin(email, password)
       saveAuth(data)
       toast.success(`Bem-vindo, ${data.userName}!`)
-      router.push('/cliente/perfil')
+      router.push(redirect ?? '/cliente/perfil')
     } catch {
       toast.error('E-mail ou senha inválidos.')
     } finally {
