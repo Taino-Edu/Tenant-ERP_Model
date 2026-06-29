@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { productApi, variantApi, categoryApi, Product, ProductCategory, ProductVariant } from '@/lib/api'
+import { productApi, variantApi, categoryApi, waitListApi, Product, ProductCategory, ProductVariant, WaitListEntry } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp, Users, Bell } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import CameraScanner from '@/components/CameraScanner'
@@ -15,10 +15,35 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
   onStock: (id: string, delta: number) => void
 }) {
   const [imgIdx, setImgIdx] = useState(0)
+  const [wlEntries, setWlEntries] = useState<WaitListEntry[]>([])
+  const [wlLoading, setWlLoading] = useState(false)
+  const [wlTotal,   setWlTotal]   = useState(0)
+
   const images   = product.imageUrls?.length > 0 ? product.imageUrls : product.imageUrl ? [product.imageUrl] : []
   const minStock = product.minimumStock ?? 5
   const stockPct = minStock > 0 ? Math.min(100, (product.stockQuantity / minStock) * 100) : 100
   const valorImob = product.stockQuantity * (product.costPriceInCents / 100)
+
+  useEffect(() => {
+    if (!product.isPreVenda) return
+    setWlLoading(true)
+    waitListApi.adminList(product.id)
+      .then(r => { setWlEntries(r.data.entries); setWlTotal(r.data.total) })
+      .catch(() => {})
+      .finally(() => setWlLoading(false))
+  }, [product.id, product.isPreVenda])
+
+  async function removeFromQueue(entryId: string) {
+    try {
+      await waitListApi.adminRemove(product.id, entryId)
+      setWlEntries(prev => {
+        const updated = prev.filter(e => e.id !== entryId)
+        setWlTotal(updated.length)
+        return updated
+      })
+      toast.success('Removido da fila')
+    } catch { toast.error('Erro ao remover') }
+  }
 
   const status =
     product.stockQuantity === 0 ? { label: 'Zerado',        cls: 'text-red-400 bg-red-500/15 border-red-500/30'     } :
@@ -147,6 +172,49 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
               </div>
             )}
           </div>
+
+          {/* ── Fila de espera (pré-venda) ── */}
+          {product.isPreVenda && (
+            <div className="bg-surface-700 rounded-xl border border-purple-500/30 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-surface-600">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-300">Fila de Espera</span>
+                </div>
+                <span className="text-xs font-bold bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
+                  {wlTotal} {wlTotal === 1 ? 'pessoa' : 'pessoas'}
+                </span>
+              </div>
+
+              {wlLoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="w-5 h-5 animate-spin text-purple-400" />
+                </div>
+              ) : wlEntries.length === 0 ? (
+                <p className="text-center text-xs text-gray-500 py-5">Ninguém na fila ainda</p>
+              ) : (
+                <div className="divide-y divide-surface-600 max-h-52 overflow-y-auto">
+                  {wlEntries.map(e => (
+                    <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-black text-purple-300 shrink-0">
+                        {e.position}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-white truncate">{e.name || e.userId}</p>
+                        <p className="text-[10px] text-gray-500">{new Date(e.createdAt).toLocaleDateString('pt-BR')} · {e.whatsApp}</p>
+                      </div>
+                      <button
+                        onClick={() => removeFromQueue(e.id)}
+                        title="Remover da fila"
+                        className="p-1 rounded hover:bg-red-600/20 text-gray-600 hover:text-red-400 transition-colors shrink-0">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>
