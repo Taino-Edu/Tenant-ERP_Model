@@ -2,6 +2,7 @@
 import Sidebar from '@/components/admin/Sidebar'
 import AiChatWidget from '@/components/admin/AiChatWidget'
 import KeyboardShortcutsOverlay from '@/components/admin/KeyboardShortcutsOverlay'
+import TimerAlarmOverlay from '@/components/admin/TimerAlarmOverlay'
 import { Toaster } from 'react-hot-toast'
 import { useEffect } from 'react'
 import { api } from '@/lib/api'
@@ -41,6 +42,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </main>
       <AiChatWidget />
       <KeyboardShortcutsOverlay />
+      <TimerAlarmOverlay />
     </div>
   )
 }
