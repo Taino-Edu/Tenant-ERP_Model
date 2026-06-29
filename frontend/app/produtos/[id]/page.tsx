@@ -62,7 +62,12 @@ export default function ProductPage() {
       setWl(res.data)
       setWlAuth(true)
     } catch (err: any) {
-      if (err?.response?.status === 401) setWlAuth(false)
+      if (err?.response?.status === 401) {
+        setWlAuth(false)
+      } else {
+        const msg = err?.response?.data?.message || err?.response?.data?.Message
+        alert(msg || 'Não foi possível entrar na lista. Tente novamente.')
+      }
     } finally { setWlLoading(false) }
   }
 

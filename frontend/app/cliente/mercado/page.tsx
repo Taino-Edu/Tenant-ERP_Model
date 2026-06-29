@@ -318,48 +318,52 @@ function InterestsModal({ listing, onClose }: { listing: CardListingDto; onClose
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col gap-4 p-6 max-h-[80vh]">
+      <div className="rounded-2xl shadow-2xl w-full max-w-sm flex flex-col gap-4 p-6 max-h-[80vh]"
+        style={{ backgroundColor: '#FFFFFF' }}>
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-white truncate">Interessados — {listing.cardName}</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-700 text-gray-400 shrink-0 ml-2"><X className="w-5 h-5" /></button>
+          <h2 className="text-base font-bold truncate" style={{ color: '#0C3D5A' }}>Interessados — {listing.cardName}</h2>
+          <button onClick={onClose} className="p-1 rounded-lg shrink-0 ml-2" style={{ color: '#4D8FAC' }}><X className="w-5 h-5" /></button>
         </div>
-        <p className="text-xs text-gray-500">Clique no WhatsApp para combinar a venda diretamente.</p>
+        <p className="text-xs" style={{ color: '#9CA3AF' }}>Clique no WhatsApp para combinar a venda diretamente.</p>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
+          <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin" style={{ color: '#3EC2F2' }} /></div>
         ) : interests.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">Nenhum interesse ainda.</p>
+          <p className="text-sm text-center py-6" style={{ color: '#9CA3AF' }}>Nenhum interesse ainda.</p>
         ) : (
           <div className="flex flex-col gap-2 overflow-auto">
             {interests.map(i => (
-              <div key={i.userId} className="flex items-start gap-3 p-3 rounded-xl bg-surface-700">
+              <div key={i.userId} className="flex items-start gap-3 p-3 rounded-xl"
+                style={{ backgroundColor: '#F0F4F8' }}>
                 <Link href={`/perfil/${i.userId}`} className="shrink-0">
                   {i.userProfileImage ? (
                     <img src={i.userProfileImage} alt={i.userName ?? ''} className="w-9 h-9 rounded-full object-cover" />
                   ) : (
-                    <div className="w-9 h-9 rounded-full bg-surface-500 flex items-center justify-center">
-                      <UserIcon className="w-4 h-4 text-gray-400" />
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: '#DDE8F0' }}>
+                      <UserIcon className="w-4 h-4" style={{ color: '#4D8FAC' }} />
                     </div>
                   )}
                 </Link>
                 <div className="flex-1 min-w-0">
-                  <Link href={`/perfil/${i.userId}`} className="text-sm font-semibold text-white hover:text-brand-300 transition-colors">
+                  <Link href={`/perfil/${i.userId}`} className="text-sm font-semibold" style={{ color: '#0C3D5A' }}>
                     {i.userName ?? 'Usuário'}
                   </Link>
-                  {i.message && <p className="text-xs text-gray-400 mt-0.5 italic">"{i.message}"</p>}
-                  <p className="text-[10px] text-gray-500 mt-1">{new Date(i.createdAt).toLocaleDateString('pt-BR')}</p>
+                  {i.message && <p className="text-xs mt-0.5 italic" style={{ color: '#4D8FAC' }}>"{i.message}"</p>}
+                  <p className="text-[10px] mt-1" style={{ color: '#9CA3AF' }}>{new Date(i.createdAt).toLocaleDateString('pt-BR')}</p>
                 </div>
                 {i.userWhatsApp ? (
                   <a
                     href={whatsAppLink(i.userWhatsApp)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors text-xs font-semibold"
+                    className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold"
+                    style={{ backgroundColor: 'rgba(34,197,94,0.15)', color: '#16A34A' }}
                   >
                     <Phone className="w-3.5 h-3.5" /> WhatsApp
                   </a>
                 ) : (
-                  <span className="shrink-0 text-[10px] text-gray-600 italic">sem contato</span>
+                  <span className="shrink-0 text-[10px] italic" style={{ color: '#9CA3AF' }}>sem contato</span>
                 )}
               </div>
             ))}
@@ -390,28 +394,30 @@ function InterestConsentModal({ listing, onClose, onConfirm }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col gap-4 p-6">
+      <div className="rounded-2xl shadow-2xl w-full max-w-sm flex flex-col gap-4 p-6"
+        style={{ backgroundColor: '#FFFFFF' }}>
         <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-white">Marcar interesse</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-700 text-gray-400"><X className="w-4 h-4" /></button>
+          <h2 className="text-base font-bold" style={{ color: '#0C3D5A' }}>Marcar interesse</h2>
+          <button onClick={onClose} className="p-1 rounded-lg transition-colors" style={{ color: '#4D8FAC' }}><X className="w-4 h-4" /></button>
         </div>
 
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-700">
+        <div className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: '#F0F4F8' }}>
           {listing.cardImageUrl ? (
-            <img src={listing.cardImageUrl} alt={listing.cardName} className="w-10 h-10 rounded-lg object-contain bg-surface-600" />
+            <img src={listing.cardImageUrl} alt={listing.cardName} className="w-10 h-10 rounded-lg object-contain" style={{ backgroundColor: '#E8EFF5' }} />
           ) : (
-            <div className="w-10 h-10 rounded-lg bg-surface-600 flex items-center justify-center"><Package className="w-5 h-5 text-gray-500" /></div>
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#E8EFF5' }}><Package className="w-5 h-5" style={{ color: '#4D8FAC' }} /></div>
           )}
           <div>
-            <p className="font-semibold text-white text-sm">{listing.cardName}</p>
-            <p className="text-brand-300 text-sm font-bold">{fmtPrice(listing.priceInCents)}</p>
+            <p className="font-semibold text-sm" style={{ color: '#0C3D5A' }}>{listing.cardName}</p>
+            <p className="text-sm font-bold" style={{ color: '#3EC2F2' }}>{fmtPrice(listing.priceInCents)}</p>
           </div>
         </div>
 
         <div>
-          <label className="label">Mensagem para o vendedor (opcional)</label>
+          <label className="block text-xs font-semibold mb-1" style={{ color: '#4D8FAC' }}>Mensagem para o vendedor (opcional)</label>
           <textarea
-            className="input h-16 resize-none text-sm"
+            className="w-full border rounded-xl px-3 py-2 text-sm resize-none outline-none focus:ring-2"
+            style={{ borderColor: 'rgba(12,61,90,0.15)', color: '#0C3D5A', backgroundColor: '#F8FAFC', height: 64 }}
             value={message}
             onChange={e => setMessage(e.target.value)}
             placeholder="Ex: Tenho interesse, posso buscar na loja!"
@@ -419,36 +425,40 @@ function InterestConsentModal({ listing, onClose, onConfirm }: {
           />
         </div>
 
-        {/* Consentimento LGPD */}
-        <label className="flex items-start gap-3 cursor-pointer group">
+        <label className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
             checked={shareContact}
             onChange={e => setShareContact(e.target.checked)}
-            className="mt-0.5 w-4 h-4 rounded accent-brand-500 shrink-0"
+            className="mt-0.5 w-4 h-4 rounded shrink-0 accent-blue-500"
           />
-          <span className="text-xs text-gray-300 leading-relaxed group-hover:text-white transition-colors">
+          <span className="text-xs leading-relaxed" style={{ color: '#4D8FAC' }}>
             Autorizo que o vendedor veja meu número de WhatsApp para combinarmos a negociação.{' '}
-            <span className="text-gray-500">(Opcional — seu número fica oculto se não marcar)</span>
+            <span style={{ color: '#9CA3AF' }}>(Opcional)</span>
           </span>
         </label>
 
-        {/* Declaração de maioridade (ECA / Código Civil art. 5) */}
-        <label className="flex items-start gap-3 cursor-pointer group">
+        <label className="flex items-start gap-3 cursor-pointer">
           <input
             type="checkbox"
             checked={isAdult}
             onChange={e => setIsAdult(e.target.checked)}
-            className="mt-0.5 w-4 h-4 rounded accent-brand-500 shrink-0"
+            className="mt-0.5 w-4 h-4 rounded shrink-0 accent-blue-500"
           />
-          <span className="text-xs text-gray-300 leading-relaxed group-hover:text-white transition-colors">
+          <span className="text-xs leading-relaxed" style={{ color: '#4D8FAC' }}>
             Declaro que tenho 18 anos ou mais, ou que possuo autorização dos meus pais/responsáveis para negociar. *
           </span>
         </label>
 
         <div className="flex gap-3 justify-end">
-          <button onClick={onClose} className="btn-secondary text-sm">Cancelar</button>
-          <button onClick={submit} disabled={saving || !isAdult} className="btn-primary text-sm flex items-center gap-2">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-xl text-sm font-semibold border transition-colors"
+            style={{ borderColor: 'rgba(12,61,90,0.2)', color: '#4D8FAC' }}>
+            Cancelar
+          </button>
+          <button onClick={submit} disabled={saving || !isAdult}
+            className="px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 transition-all disabled:opacity-40"
+            style={{ backgroundColor: '#3EC2F2', color: '#0C3D5A' }}>
             {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Confirmar interesse
           </button>
