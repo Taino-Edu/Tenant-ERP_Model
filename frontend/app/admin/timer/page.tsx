@@ -5,38 +5,61 @@ import { timerApi, TimerDto } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, Play, Pause, RotateCcw, Volume2, PlayCircle, Settings } from 'lucide-react'
 
-// ── Web Audio beep ────────────────────────────────────────────────────────────
-function playSound(preset: string, type: 'warn' | 'end') {
-  if (preset === 'none') return
+// ── Web Audio ────────────────────────────────────────────────────────────────
+const freqMap: Record<string, Record<string, number>> = {
+  beep:   { warn: 880,  end: 1100 },
+  bell:   { warn: 660,  end: 880  },
+  buzzer: { warn: 220,  end: 180  },
+}
+
+function playOnce(preset: string, type: 'warn' | 'end'): number {
+  // Toca uma vez e retorna a duração em ms
+  if (preset === 'none') return 0
   try {
+    const freq = freqMap[preset]?.[type] ?? 660
+    const dur  = type === 'end' ? 1.2 : 0.4
     const ctx  = new AudioContext()
     const osc  = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.connect(gain); gain.connect(ctx.destination)
-    const freqMap: Record<string, Record<string, number>> = {
-      beep:   { warn: 880,  end: 1100 },
-      bell:   { warn: 660,  end: 880  },
-      buzzer: { warn: 220,  end: 180  },
-    }
-    const dur  = type === 'end' ? 1.5 : 0.5
-    const freq = freqMap[preset]?.[type] ?? 660
     osc.frequency.value = freq
-    gain.gain.setValueAtTime(0.35, ctx.currentTime)
+    gain.gain.setValueAtTime(0.4, ctx.currentTime)
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur)
     osc.start(); osc.stop(ctx.currentTime + dur)
-    if (type === 'end' && preset !== 'beep') {
+    if (type === 'end') {
+      // Nota de resolução 400ms depois
       setTimeout(() => {
         try {
           const c2 = new AudioContext(); const o2 = c2.createOscillator(); const g2 = c2.createGain()
           o2.connect(g2); g2.connect(c2.destination)
           o2.frequency.value = freq * 1.25
-          g2.gain.setValueAtTime(0.35, c2.currentTime)
-          g2.gain.exponentialRampToValueAtTime(0.001, c2.currentTime + 1)
-          o2.start(); o2.stop(c2.currentTime + 1)
+          g2.gain.setValueAtTime(0.4, c2.currentTime)
+          g2.gain.exponentialRampToValueAtTime(0.001, c2.currentTime + 0.8)
+          o2.start(); o2.stop(c2.currentTime + 0.8)
         } catch {}
       }, 400)
+      return 1800 // pausa entre repetições: 1.8s
     }
-  } catch {}
+    return (dur * 1000) + 200
+  } catch { return 0 }
+}
+
+// Toca uma vez (para preview / aviso)
+function playSound(preset: string, type: 'warn' | 'end') {
+  playOnce(preset, type)
+}
+
+// Inicia loop de som — retorna função para parar
+function startAlarm(preset: string): () => void {
+  if (preset === 'none') return () => {}
+  let stopped = false
+  function loop() {
+    if (stopped) return
+    const delay = playOnce(preset, 'end')
+    setTimeout(() => { if (!stopped) loop() }, delay + 300)
+  }
+  loop()
+  return () => { stopped = true }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -69,30 +92,43 @@ function TimerCard({
   const [cfgWarn,   setCfgWarn]     = useState(String(timer.warnAtSeconds))
   const [cfgSound,  setCfgSound]    = useState(timer.soundPreset)
 
-  const warnFiredRef = useRef(false)
-  const endFiredRef  = useRef(false)
-  const timerRef     = useRef(timer)
-  timerRef.current   = timer
+  const warnFiredRef  = useRef(false)
+  const endFiredRef   = useRef(false)
+  const stopAlarmRef  = useRef<(() => void) | null>(null)
+  const timerRef      = useRef(timer)
+  timerRef.current    = timer
 
-  // Recalcula a cada segundo
+  function stopAlarm() {
+    stopAlarmRef.current?.()
+    stopAlarmRef.current = null
+  }
+
+  // Para o alarme quando o estado sai de 'finished'
   useEffect(() => {
     setRemaining(calcRemaining(timer))
-    if (timer.state !== 'running') { warnFiredRef.current = false; endFiredRef.current = false }
+    if (timer.state !== 'running') {
+      warnFiredRef.current = false
+      endFiredRef.current  = false
+    }
+    if (timer.state !== 'finished') stopAlarm()
   }, [timer])
+
+  // Cleanup ao desmontar
+  useEffect(() => () => stopAlarm(), [])
 
   useEffect(() => {
     if (timer.state !== 'running') return
     const id = setInterval(() => {
       const r = calcRemaining(timerRef.current)
       setRemaining(r)
-      // Dispara sons
       if (r <= timerRef.current.warnAtSeconds && r > 0 && !warnFiredRef.current) {
         warnFiredRef.current = true
         playSound(timerRef.current.soundPreset, 'warn')
       }
       if (r <= 0 && !endFiredRef.current) {
         endFiredRef.current = true
-        playSound(timerRef.current.soundPreset, 'end')
+        // Inicia alarme em loop — só para quando usuário pausar/resetar
+        stopAlarmRef.current = startAlarm(timerRef.current.soundPreset)
         timerApi.update(timerRef.current.id, { action: 'finish' })
           .then((res: { data: TimerDto }) => { if (res.data) onUpdate(res.data) })
           .catch(() => {})
@@ -102,6 +138,7 @@ function TimerCard({
   }, [timer.state, timer.id, onUpdate])
 
   async function doAction(action: string, extra?: object) {
+    stopAlarm() // para o alarme em qualquer ação do usuário
     const fromRemaining = action === 'start' ? Math.round(remaining) : undefined
     try {
       const r = await timerApi.update(timer.id, { action, fromRemaining, ...extra })
@@ -156,8 +193,12 @@ function TimerCard({
         <span className="font-mono text-6xl font-bold tabular-nums transition-colors"
           style={{ color }}>{fmt(remaining)}</span>
         <p className="text-xs text-gray-500 mt-1">
-          {timer.state === 'running' ? 'Rodando' : timer.state === 'paused' ? 'Pausado' : timer.state === 'finished' ? 'Finalizado' : 'Parado'}
-          {' · '}{Math.round(timer.durationSeconds / 60)} min total
+          {timer.state === 'finished'
+            ? <span className="text-red-400 font-semibold animate-pulse">🔔 Alarme tocando — clique Resetar para parar</span>
+            : timer.state === 'running' ? 'Rodando'
+            : timer.state === 'paused'  ? 'Pausado'
+            : 'Parado'}
+          {timer.state !== 'finished' && <>{' · '}{Math.round(timer.durationSeconds / 60)} min total</>}
         </p>
       </div>
 
@@ -169,7 +210,12 @@ function TimerCard({
 
       {/* Controles */}
       <div className="flex gap-2 justify-center">
-        {timer.state !== 'running' ? (
+        {timer.state === 'finished' ? (
+          <button onClick={() => doAction('reset')}
+            className="btn-primary flex items-center gap-1.5 px-6 bg-red-600 hover:bg-red-500 animate-pulse">
+            <RotateCcw className="w-4 h-4" /> Parar alarme
+          </button>
+        ) : timer.state !== 'running' ? (
           <button onClick={() => doAction('start')}
             className="btn-primary flex items-center gap-1.5 px-5">
             <Play className="w-4 h-4" /> {timer.state === 'paused' ? 'Retomar' : 'Iniciar'}
@@ -180,10 +226,12 @@ function TimerCard({
             <Pause className="w-4 h-4" /> Pausar
           </button>
         )}
-        <button onClick={() => doAction('reset')}
-          className="btn-secondary flex items-center gap-1.5 px-4">
-          <RotateCcw className="w-4 h-4" /> Resetar
-        </button>
+        {timer.state !== 'finished' && (
+          <button onClick={() => doAction('reset')}
+            className="btn-secondary flex items-center gap-1.5 px-4">
+            <RotateCcw className="w-4 h-4" /> Resetar
+          </button>
+        )}
       </div>
 
       {/* Config */}
