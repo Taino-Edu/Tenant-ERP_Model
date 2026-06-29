@@ -41,6 +41,10 @@ public class AppDbContext : DbContext
     public DbSet<AuditLog>      AuditLogs      { get; set; }
     public DbSet<TimerEntity>   Timers         { get; set; }
 
+    // ── Marketplace ────────────────────────────────────────────────────────────
+    public DbSet<CardListing>     CardListings     { get; set; }
+    public DbSet<ListingInterest> ListingInterests { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------

@@ -962,3 +962,61 @@ export const relatorioApi = {
   crediario: (mes: number, ano: number) =>
     api.get<RelatorioCrediarioDto>('/api/relatorios/crediario', { params: { mes, ano } }),
 }
+
+// ── Marketplace ───────────────────────────────────────────────────────────────
+
+export interface CardListingDto {
+  id: string
+  cardName: string; cardGame: string | null; cardImageUrl: string | null
+  priceInCents: number; priceInReais: string
+  condition: string; description: string | null
+  status: string
+  createdAt: string
+  sellerId: string; sellerName: string; sellerImageUrl: string | null
+  interestCount: number; myInterest: boolean
+  interests?: { userId: string; userName: string; message: string | null; createdAt: string }[]
+}
+
+export interface MarketplacePageDto {
+  items: CardListingDto[]; totalCount: number; totalPages: number
+}
+
+export interface CreateListingRequest {
+  cardName: string; cardGame?: string; cardImageUrl?: string
+  priceInCents: number; condition: string; description?: string
+}
+
+export const marketplaceApi = {
+  list: (params?: { page?: number; pageSize?: number; game?: string; search?: string }) =>
+    api.get<MarketplacePageDto>('/api/marketplace', { params }),
+  mine: () => api.get<CardListingDto[]>('/api/marketplace/mine'),
+  create: (req: CreateListingRequest) => api.post<CardListingDto>('/api/marketplace', req),
+  update: (id: string, req: Partial<CreateListingRequest & { status: string }>) =>
+    api.put<CardListingDto>(`/api/marketplace/${id}`, req),
+  remove: (id: string) => api.delete(`/api/marketplace/${id}`),
+  toggleInterest: (id: string, message?: string) =>
+    api.post<{ interested: boolean; interestCount: number }>(`/api/marketplace/${id}/interest`, { message }),
+  interests: (id: string) =>
+    api.get<{ userId: string; userName: string; message: string | null; createdAt: string }[]>(`/api/marketplace/${id}/interests`),
+}
+
+// ── Perfil público ────────────────────────────────────────────────────────────
+
+export interface PublicDeckDto {
+  id: string; name: string; game: string; format: string | null; cardCount: number; updatedAt: string
+}
+
+export interface PublicChampionshipDto {
+  championshipId: string; championshipName: string; game: string; startDate: string
+  placement: number | null; playerNumber: number | null; deckName: string | null
+}
+
+export interface PublicProfileDto {
+  id: string; name: string; profileImageUrl: string | null; memberSince: string
+  publicDecks: PublicDeckDto[]
+  championships: PublicChampionshipDto[]
+}
+
+export const publicProfileApi = {
+  get: (userId: string) => api.get<PublicProfileDto>(`/api/profile/${userId}`),
+}

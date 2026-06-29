@@ -7,7 +7,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
   Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight, ChevronDown,
-  Trophy, Swords, Medal, BookOpen, Bell,
+  Trophy, Swords, Medal, BookOpen, Bell, ShoppingBag,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -486,6 +486,30 @@ export default function ClientePage() {
             )}
           </div>
         )}
+
+        {/* Atalhos rápidos */}
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/cliente/mercado" className="flex items-center gap-3 rounded-2xl p-4 transition-all active:scale-95"
+            style={{ backgroundColor: C.white, border: `1px solid ${C.border}` }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${C.blue}18` }}>
+              <ShoppingBag className="w-4 h-4" style={{ color: C.blue }} />
+            </div>
+            <div>
+              <p className="text-xs font-black" style={{ color: C.navy }}>Mercado</p>
+              <p className="text-[10px]" style={{ color: C.muted }}>Compre e venda cartas</p>
+            </div>
+          </Link>
+          <Link href="/cliente/decks" className="flex items-center gap-3 rounded-2xl p-4 transition-all active:scale-95"
+            style={{ backgroundColor: C.white, border: `1px solid ${C.border}` }}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${C.blue}18` }}>
+              <BookOpen className="w-4 h-4" style={{ color: C.blue }} />
+            </div>
+            <div>
+              <p className="text-xs font-black" style={{ color: C.navy }}>Meus Decks</p>
+              <p className="text-[10px]" style={{ color: C.muted }}>Gerenciar coleção</p>
+            </div>
+          </Link>
+        </div>
 
         {/* Meus Campeonatos */}
         <MeusCampeonatos />

@@ -472,6 +472,34 @@ using (var scope = app.Services.CreateScope())
                     created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
                     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
                 );
+
+                -- Marketplace de cartas entre usuários
+                CREATE TABLE IF NOT EXISTS card_listings (
+                    id             UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id        UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    card_name      VARCHAR(200)  NOT NULL,
+                    card_game      VARCHAR(100)  NULL,
+                    card_image_url VARCHAR(500)  NULL,
+                    price_in_cents INTEGER       NOT NULL DEFAULT 0,
+                    condition      VARCHAR(50)   NOT NULL DEFAULT 'NM',
+                    description    VARCHAR(1000) NULL,
+                    status         VARCHAR(20)   NOT NULL DEFAULT 'Available',
+                    created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+                    updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_card_listings_user   ON card_listings (user_id);
+                CREATE INDEX IF NOT EXISTS ix_card_listings_status ON card_listings (status);
+
+                CREATE TABLE IF NOT EXISTS listing_interests (
+                    id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                    listing_id UUID         NOT NULL REFERENCES card_listings(id) ON DELETE CASCADE,
+                    user_id    UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    message    VARCHAR(500) NULL,
+                    created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    UNIQUE (listing_id, user_id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_listing_interests_listing ON listing_interests (listing_id);
+                CREATE INDEX IF NOT EXISTS ix_listing_interests_user    ON listing_interests (user_id);
             ");
         }
 
