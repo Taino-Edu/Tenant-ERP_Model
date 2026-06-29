@@ -89,6 +89,13 @@ public class ListingInterest
     [Column("message")]
     public string? Message { get; set; }
 
+    /// <summary>
+    /// O comprador autoriza explicitamente compartilhar seu WhatsApp com o vendedor (LGPD).
+    /// Sem consentimento, o número não é exposto.
+    /// </summary>
+    [Column("share_contact")]
+    public bool ShareContact { get; set; } = false;
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

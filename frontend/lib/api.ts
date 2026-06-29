@@ -1000,8 +1000,11 @@ export const marketplaceApi = {
   update: (id: string, req: Partial<CreateListingRequest & { status: string }>) =>
     api.put<CardListingDto>(`/api/marketplace/${id}`, req),
   remove: (id: string) => api.delete(`/api/marketplace/${id}`),
-  toggleInterest: (id: string, message?: string) =>
-    api.post<{ interested: boolean; interestCount: number }>(`/api/marketplace/${id}/interest`, { message }),
+  toggleInterest: (id: string, opts?: { message?: string; shareContact?: boolean }) =>
+    api.post<{ interested: boolean; interestCount: number }>(`/api/marketplace/${id}/interest`, {
+      message: opts?.message,
+      shareContact: opts?.shareContact ?? false,
+    }),
   interests: (id: string) =>
     api.get<MarketplaceInterestDto[]>(`/api/marketplace/${id}/interests`),
   uploadImage: async (file: File): Promise<string> => {

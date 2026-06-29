@@ -34,7 +34,7 @@ function ListingCard({
 }: {
   listing: CardListingDto
   myId: string | null
-  onInterest: (id: string) => void
+  onInterest: (listing: CardListingDto) => void
   onEdit: (l: CardListingDto) => void
   onDelete: (l: CardListingDto) => void
   onViewInterests: (l: CardListingDto) => void
@@ -119,7 +119,7 @@ function ListingCard({
           </>
         ) : (
           <button
-            onClick={() => onInterest(listing.id)}
+            onClick={() => onInterest(listing)}
             disabled={listing.status === 'Sold'}
             className={clsx(
               'flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-colors',
@@ -370,20 +370,112 @@ function InterestsModal({ listing, onClose }: { listing: CardListingDto; onClose
   )
 }
 
+// ── Modal de consentimento de interesse ──────────────────────────────────────
+function InterestConsentModal({ listing, onClose, onConfirm }: {
+  listing: CardListingDto
+  onClose: () => void
+  onConfirm: (opts: { message?: string; shareContact: boolean }) => Promise<void>
+}) {
+  const [message,      setMessage]      = useState('')
+  const [shareContact, setShareContact] = useState(false)
+  const [isAdult,      setIsAdult]      = useState(false)
+  const [saving,       setSaving]       = useState(false)
+
+  async function submit() {
+    if (!isAdult) { toast.error('Confirme que você tem 18 anos ou mais'); return }
+    setSaving(true)
+    try { await onConfirm({ message: message || undefined, shareContact }) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col gap-4 p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-white">Marcar interesse</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-surface-700 text-gray-400"><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-700">
+          {listing.cardImageUrl ? (
+            <img src={listing.cardImageUrl} alt={listing.cardName} className="w-10 h-10 rounded-lg object-contain bg-surface-600" />
+          ) : (
+            <div className="w-10 h-10 rounded-lg bg-surface-600 flex items-center justify-center"><Package className="w-5 h-5 text-gray-500" /></div>
+          )}
+          <div>
+            <p className="font-semibold text-white text-sm">{listing.cardName}</p>
+            <p className="text-brand-300 text-sm font-bold">{fmtPrice(listing.priceInCents)}</p>
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Mensagem para o vendedor (opcional)</label>
+          <textarea
+            className="input h-16 resize-none text-sm"
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            placeholder="Ex: Tenho interesse, posso buscar na loja!"
+            maxLength={300}
+          />
+        </div>
+
+        {/* Consentimento LGPD */}
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={shareContact}
+            onChange={e => setShareContact(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded accent-brand-500 shrink-0"
+          />
+          <span className="text-xs text-gray-300 leading-relaxed group-hover:text-white transition-colors">
+            Autorizo que o vendedor veja meu número de WhatsApp para combinarmos a negociação.{' '}
+            <span className="text-gray-500">(Opcional — seu número fica oculto se não marcar)</span>
+          </span>
+        </label>
+
+        {/* Declaração de maioridade (ECA / Código Civil art. 5) */}
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={isAdult}
+            onChange={e => setIsAdult(e.target.checked)}
+            className="mt-0.5 w-4 h-4 rounded accent-brand-500 shrink-0"
+          />
+          <span className="text-xs text-gray-300 leading-relaxed group-hover:text-white transition-colors">
+            Declaro que tenho 18 anos ou mais, ou que possuo autorização dos meus pais/responsáveis para negociar. *
+          </span>
+        </label>
+
+        <div className="flex gap-3 justify-end">
+          <button onClick={onClose} className="btn-secondary text-sm">Cancelar</button>
+          <button onClick={submit} disabled={saving || !isAdult} className="btn-primary text-sm flex items-center gap-2">
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            Confirmar interesse
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function MercadoPage() {
   const myId = getUserId() || null
 
-  const [items,        setItems]        = useState<CardListingDto[]>([])
-  const [totalPages,   setTotalPages]   = useState(1)
-  const [page,         setPage]         = useState(1)
-  const [search,       setSearch]       = useState('')
-  const [gameFilter,   setGameFilter]   = useState('')
-  const [loading,      setLoading]      = useState(true)
-  const [tab,          setTab]          = useState<'all' | 'mine'>('all')
-  const [editModal,    setEditModal]    = useState<CardListingDto | null | 'new'>('new' as 'new' | null | CardListingDto)
-  const [interestModal,setInterestModal]= useState<CardListingDto | null>(null)
-  const [showCreate,   setShowCreate]   = useState(false)
+  const [items,          setItems]          = useState<CardListingDto[]>([])
+  const [totalPages,     setTotalPages]     = useState(1)
+  const [page,           setPage]           = useState(1)
+  const [search,         setSearch]         = useState('')
+  const [gameFilter,     setGameFilter]     = useState('')
+  const [loading,        setLoading]        = useState(true)
+  const [tab,            setTab]            = useState<'all' | 'mine'>('all')
+  const [editModal,      setEditModal]      = useState<CardListingDto | null>(null)
+  const [interestModal,  setInterestModal]  = useState<CardListingDto | null>(null)
+  const [showCreate,     setShowCreate]     = useState(false)
+  const [consentListing, setConsentListing] = useState<CardListingDto | null>(null)
+  // Declaração de maioridade para anunciar
+  const [adultConfirmed, setAdultConfirmed] = useState(false)
+  const [showAdultGate,  setShowAdultGate]  = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -401,10 +493,19 @@ export default function MercadoPage() {
 
   useEffect(() => { load() }, [load])
 
-  async function handleInterest(id: string) {
+  function requestInterest(listing: CardListingDto) {
     if (!myId) { toast.error('Faça login para marcar interesse'); return }
+    if (listing.myInterest) {
+      // Desmarca sem consentimento — só remove
+      doToggleInterest(listing.id, {})
+      return
+    }
+    setConsentListing(listing)
+  }
+
+  async function doToggleInterest(id: string, opts: { message?: string; shareContact?: boolean }) {
     try {
-      const { data } = await marketplaceApi.toggleInterest(id)
+      const { data } = await marketplaceApi.toggleInterest(id, opts)
       setItems(prev => prev.map(i => i.id === id
         ? { ...i, myInterest: data.interested, interestCount: data.interestCount }
         : i
@@ -446,7 +547,10 @@ export default function MercadoPage() {
           <p className="text-sm text-gray-400">Compre e venda cartas com outros jogadores</p>
         </div>
         {myId && (
-          <button onClick={() => setShowCreate(true)} className="ml-auto btn-primary flex items-center gap-2">
+          <button
+            onClick={() => { if (!adultConfirmed) { setShowAdultGate(true) } else { setShowCreate(true) } }}
+            className="ml-auto btn-primary flex items-center gap-2"
+          >
             <Plus className="w-4 h-4" /> Anunciar carta
           </button>
         )}
@@ -515,7 +619,7 @@ export default function MercadoPage() {
               key={l.id}
               listing={l}
               myId={myId}
-              onInterest={handleInterest}
+              onInterest={requestInterest}
               onEdit={l2 => setEditModal(l2)}
               onDelete={handleDelete}
               onViewInterests={l2 => setInterestModal(l2)}
@@ -538,14 +642,43 @@ export default function MercadoPage() {
       )}
 
       {/* Modais */}
+      {showAdultGate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-surface-800 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col gap-4 p-6">
+            <h2 className="text-base font-bold text-white">Antes de anunciar</h2>
+            <p className="text-sm text-gray-300 leading-relaxed">
+              O Marketplace é uma funcionalidade de negociação entre usuários. As transações são de responsabilidade das partes envolvidas.
+            </p>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              De acordo com o Código Civil Brasileiro (arts. 3º e 4º) e o ECA, menores de 16 anos não podem celebrar contratos. Menores entre 16 e 18 anos precisam de autorização dos pais ou responsáveis legais.
+            </p>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" id="adult-gate" className="mt-0.5 w-4 h-4 accent-brand-500 shrink-0"
+                onChange={e => { if (e.target.checked) { setAdultConfirmed(true); setShowAdultGate(false); setShowCreate(true) } }} />
+              <span className="text-sm text-white">Declaro que tenho 18 anos ou mais, ou que possuo autorização dos meus responsáveis legais para anunciar e negociar nesta plataforma.</span>
+            </label>
+            <button onClick={() => setShowAdultGate(false)} className="btn-secondary text-sm">Cancelar</button>
+          </div>
+        </div>
+      )}
       {showCreate && (
         <ListingModal onClose={() => setShowCreate(false)} onSave={handleSaved} />
       )}
-      {editModal && editModal !== 'new' && (
+      {editModal && (
         <ListingModal initial={editModal} onClose={() => setEditModal(null)} onSave={handleSaved} />
       )}
       {interestModal && (
         <InterestsModal listing={interestModal} onClose={() => setInterestModal(null)} />
+      )}
+      {consentListing && (
+        <InterestConsentModal
+          listing={consentListing}
+          onClose={() => setConsentListing(null)}
+          onConfirm={async opts => {
+            await doToggleInterest(consentListing.id, opts)
+            setConsentListing(null)
+          }}
+        />
       )}
     </div>
   )

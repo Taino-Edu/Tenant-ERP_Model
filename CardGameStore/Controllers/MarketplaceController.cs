@@ -217,9 +217,10 @@ public class MarketplaceController : ControllerBase
             // Marca interesse
             var interest = new ListingInterest
             {
-                ListingId = id,
-                UserId    = userId,
-                Message   = req?.Message,
+                ListingId     = id,
+                UserId        = userId,
+                Message       = req?.Message,
+                ShareContact  = req?.ShareContact ?? false,
             };
             _db.ListingInterests.Add(interest);
             listing.Interests.Add(interest);
@@ -255,9 +256,11 @@ public class MarketplaceController : ControllerBase
         {
             i.Id,
             i.UserId,
-            userName          = i.User?.Name,
-            userProfileImage  = i.User?.ProfileImageUrl,
-            userWhatsApp      = i.User?.WhatsApp,
+            userName         = i.User?.Name,
+            userProfileImage = i.User?.ProfileImageUrl,
+            // WhatsApp só exposto se o comprador deu consentimento explícito (LGPD art. 7)
+            userWhatsApp     = i.ShareContact ? i.User?.WhatsApp : null,
+            i.ShareContact,
             i.Message,
             i.CreatedAt,
         });
@@ -383,4 +386,10 @@ public class InterestRequest
 {
     [MaxLength(500)]
     public string? Message { get; init; }
+
+    /// <summary>
+    /// Consentimento explícito do comprador para expor o WhatsApp ao vendedor (LGPD art. 7, I).
+    /// Sem este campo como true, o número nunca é retornado na API.
+    /// </summary>
+    public bool ShareContact { get; init; } = false;
 }

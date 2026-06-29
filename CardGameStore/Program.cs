@@ -500,6 +500,9 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE INDEX IF NOT EXISTS ix_listing_interests_listing ON listing_interests (listing_id);
                 CREATE INDEX IF NOT EXISTS ix_listing_interests_user    ON listing_interests (user_id);
+
+                -- Consentimento LGPD: comprador autoriza expor WhatsApp ao vendedor
+                ALTER TABLE listing_interests ADD COLUMN IF NOT EXISTS share_contact BOOLEAN NOT NULL DEFAULT FALSE;
             ");
         }
 
