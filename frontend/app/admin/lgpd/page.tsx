@@ -315,18 +315,19 @@ export default function LgpdAdminPage() {
   }, [tab, loadRequests])
 
   // ── Audit Log ───────────────────────────────────────────────────────────
-  const [auditData,    setAuditData]    = useState<AuditPagedResponse | null>(null)
-  const [auditLoading, setAuditLoading] = useState(false)
-  const [auditError,   setAuditError]   = useState<string | null>(null)
-  const [auditPage,    setAuditPage]    = useState(1)
+  const [auditData,       setAuditData]       = useState<AuditPagedResponse | null>(null)
+  const [auditLoading,    setAuditLoading]    = useState(false)
+  const [auditError,      setAuditError]      = useState<string | null>(null)
+  const [auditPage,       setAuditPage]       = useState(1)
+  const [auditActionFilter, setAuditActionFilter] = useState('')
 
-  const loadAudit = useCallback(async (page = 1) => {
+  const loadAudit = useCallback(async (page = 1, actionFilter = auditActionFilter) => {
     setAuditLoading(true)
     setAuditError(null)
     try {
-      const res = await api.get<AuditPagedResponse>('/api/audit', {
-        params: { page, pageSize: 50 },
-      })
+      const params: Record<string, string | number> = { page, pageSize: 50 }
+      if (actionFilter) params.entityType = actionFilter === 'Auth' ? 'Auth' : actionFilter
+      const res = await api.get<AuditPagedResponse>('/api/audit', { params })
       setAuditData(res.data)
       setAuditPage(page)
     } catch {
@@ -334,7 +335,7 @@ export default function LgpdAdminPage() {
     } finally {
       setAuditLoading(false)
     }
-  }, [])
+  }, [auditActionFilter])
 
   useEffect(() => {
     if (tab === 'audit') loadAudit(1)
@@ -496,13 +497,46 @@ export default function LgpdAdminPage() {
 
       {/* ── Aba: Audit Log ─────────────────────────────────────────────────── */}
       {tab === 'audit' && (
-        <div>
+        <div className="space-y-4">
+          {/* Filtros */}
+          <div className="flex flex-wrap gap-2 items-center">
+            {(['', 'Auth', 'User', 'LgpdRequest'] as const).map(f => (
+              <button key={f}
+                onClick={() => { setAuditActionFilter(f); loadAudit(1, f) }}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  auditActionFilter === f
+                    ? f === 'Auth' ? 'bg-red-500/20 text-red-400 border border-red-500/40'
+                      : 'bg-brand-500/20 text-brand-400 border border-brand-500/40'
+                    : 'bg-surface-700 text-gray-400 hover:text-white border border-surface-600'
+                }`}>
+                {f === '' ? 'Todos' : f === 'Auth' ? '🔐 Segurança' : f === 'User' ? '👤 Usuários' : '📋 LGPD'}
+              </button>
+            ))}
+            <span className="ml-auto text-xs text-gray-500">
+              {auditData ? `${auditData.totalCount} registros` : ''}
+            </span>
+          </div>
+
+          {/* Alerta de segurança: logins falhos */}
+          {auditData && auditData.items.filter(l => l.action === 'LoginFalhou').length > 0 && (
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+              <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-red-400">Tentativas de login malsucedidas detectadas</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {auditData.items.filter(l => l.action === 'LoginFalhou').length} falha(s) nesta página.
+                  {' '}Filtre por "Segurança" para ver o detalhamento. IPs são armazenados como hash (LGPD).
+                </p>
+              </div>
+            </div>
+          )}
+
           {auditLoading && <p className="text-gray-400 text-sm">Carregando...</p>}
           {auditError  && <p className="text-red-400 text-sm">{auditError}</p>}
 
           {!auditLoading && !auditError && auditData && (
             <>
-              <div className="bg-surface-800 rounded-2xl border border-surface-500 overflow-hidden mb-4">
+              <div className="bg-surface-800 rounded-2xl border border-surface-500 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
@@ -515,31 +549,38 @@ export default function LgpdAdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {auditData.items.map(log => (
-                        <tr key={log.id} className="border-b border-surface-500/50 hover:bg-surface-700/50 transition-colors">
-                          <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
-                            {fmtDateTime(log.createdAt)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="text-white text-xs">{log.actorUserName ?? 'Sistema'}</p>
-                            {log.actorUserId && (
-                              <p className="text-gray-500 text-xs font-mono">{log.actorUserId.substring(0, 8)}...</p>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-brand-400 font-medium text-xs">{log.action}</span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="text-gray-300 text-xs">{log.entityType}</p>
-                            {log.entityId && (
-                              <p className="text-gray-500 text-xs font-mono">{log.entityId.substring(0, 12)}...</p>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate" title={log.details ?? ''}>
-                            {log.details ?? '—'}
-                          </td>
-                        </tr>
-                      ))}
+                      {auditData.items.map(log => {
+                        const isFail = log.action === 'LoginFalhou'
+                        return (
+                          <tr key={log.id} className={`border-b border-surface-500/50 hover:bg-surface-700/50 transition-colors ${isFail ? 'bg-red-500/5' : ''}`}>
+                            <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                              {fmtDateTime(log.createdAt)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-white text-xs">{log.actorUserName ?? <span className="text-gray-500 italic">anônimo</span>}</p>
+                              {log.actorUserId && (
+                                <p className="text-gray-500 text-xs font-mono">{log.actorUserId.substring(0, 8)}…</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`font-medium text-xs ${isFail ? 'text-red-400' : log.action === 'LoginSucesso' ? 'text-green-400' : 'text-brand-400'}`}>
+                                {isFail ? '⚠ ' : log.action === 'LoginSucesso' ? '✓ ' : ''}{log.action}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="text-gray-300 text-xs">{log.entityType}</p>
+                              {log.entityId && (
+                                <p className="text-gray-500 text-xs font-mono">{log.entityId.substring(0, 12)}…</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate" title={log.details ?? ''}>
+                              {log.details
+                                ? (() => { try { const d = JSON.parse(log.details); return d.email ?? log.details } catch { return log.details } })()
+                                : '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -547,25 +588,21 @@ export default function LgpdAdminPage() {
 
               {/* Paginação */}
               <div className="flex items-center justify-between text-sm text-gray-400">
-                <p>
-                  {auditData.totalCount} registros — Página {auditData.page} de {auditData.totalPages}
-                </p>
+                <p>Página {auditData.page} de {auditData.totalPages}</p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => loadAudit(auditPage - 1)}
                     disabled={auditPage === 1}
                     className="flex items-center gap-1 px-3 py-1.5 bg-surface-700 rounded-lg hover:bg-surface-600 disabled:opacity-40 transition-colors"
                   >
-                    <ChevronLeft className="w-4 h-4" />
-                    Anterior
+                    <ChevronLeft className="w-4 h-4" /> Anterior
                   </button>
                   <button
                     onClick={() => loadAudit(auditPage + 1)}
                     disabled={auditPage >= auditData.totalPages}
                     className="flex items-center gap-1 px-3 py-1.5 bg-surface-700 rounded-lg hover:bg-surface-600 disabled:opacity-40 transition-colors"
                   >
-                    Próximo
-                    <ChevronRight className="w-4 h-4" />
+                    Próximo <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>

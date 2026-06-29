@@ -38,6 +38,7 @@ public class AuditController : ControllerBase
         [FromQuery] int    page         = 1,
         [FromQuery] int    pageSize     = 50,
         [FromQuery] string? entityType  = null,
+        [FromQuery] string? action      = null,
         [FromQuery] string? actorUserId = null)
     {
         // Limites de segurança
@@ -48,6 +49,9 @@ public class AuditController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(entityType))
             query = query.Where(a => a.EntityType == entityType);
+
+        if (!string.IsNullOrWhiteSpace(action))
+            query = query.Where(a => a.Action == action);
 
         if (!string.IsNullOrWhiteSpace(actorUserId))
             query = query.Where(a => a.ActorUserId == actorUserId);

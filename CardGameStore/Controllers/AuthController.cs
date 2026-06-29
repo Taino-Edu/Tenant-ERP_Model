@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using CardGameStore.Configuration;
+using System.Text.Json;
 
 namespace CardGameStore.Controllers;
 
@@ -27,17 +28,20 @@ public class AuthController : ControllerBase
     private readonly JwtSettings             _jwt;
     private readonly IWebHostEnvironment     _env;
     private readonly IEmailService           _emailService;
+    private readonly IAuditService           _audit;
 
     public AuthController(
         IAuthService        authService,
         ILogger<AuthController> logger,
         IOptions<JwtSettings>   jwt,
         IWebHostEnvironment     env,
-        IEmailService       emailService)
+        IEmailService       emailService,
+        IAuditService       audit)
     {
         _authService  = authService;
         _logger       = logger;
         _jwt          = jwt.Value;
+        _audit        = audit;
         _env          = env;
         _emailService = emailService;
     }
@@ -113,12 +117,18 @@ public class AuthController : ControllerBase
         {
             var response = await _authService.LoginAsync(request);
             _logger.LogInformation("Login bem-sucedido para {Email}", request.Email);
+            await _audit.LogAsync("LoginSucesso", "Auth", response.UserId.ToString(),
+                details: JsonSerializer.Serialize(new { email = request.Email, role = response.Role }),
+                httpContext: HttpContext);
             SetAuthCookies(response.AccessToken, response.RefreshToken);
             return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId, Permissions: response.Permissions));
         }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning("Tentativa de login inválida para {Email}: {Msg}", request.Email, ex.Message);
+            await _audit.LogAsync("LoginFalhou", "Auth", null,
+                details: JsonSerializer.Serialize(new { email = request.Email, motivo = ex.Message }),
+                httpContext: HttpContext);
             return Unauthorized(new { Message = "E-mail ou senha incorretos." });
         }
         catch (Exception ex)

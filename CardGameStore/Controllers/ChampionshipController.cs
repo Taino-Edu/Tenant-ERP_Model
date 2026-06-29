@@ -398,9 +398,9 @@ public class ChampionshipController : ControllerBase
         if (ch.Status != ChampionshipStatus.Inscricoes && ch.Status != ChampionshipStatus.Planejado)
             return BadRequest(new { Message = "Este campeonato não está aceitando inscrições." });
 
-        var (pi, numero) = await _service.AddPreInscricaoAsync(id, request.Nome, request.WhatsApp);
+        var (pi, numero) = await _service.AddPreInscricaoAsync(id, request.Nome, request.WhatsApp, request.DeckId, request.DeckName);
         _logger.LogInformation("Pré-inscrição recebida para campeonato {Id}: {Nome} (nº {Numero})", id, request.Nome, numero);
-        return StatusCode(201, new PreInscricaoDto { Id = pi.Id, Nome = pi.Nome, WhatsApp = pi.WhatsApp, IsListaEspera = pi.IsListaEspera, Numero = numero, CreatedAt = pi.CreatedAt });
+        return StatusCode(201, new PreInscricaoDto { Id = pi.Id, Nome = pi.Nome, WhatsApp = pi.WhatsApp, IsListaEspera = pi.IsListaEspera, Numero = numero, CreatedAt = pi.CreatedAt, DeckId = pi.DeckId, DeckName = pi.DeckName });
     }
 
     /// <summary>Lista pré-inscrições de um campeonato (Admin).</summary>
@@ -423,6 +423,8 @@ public class ChampionshipController : ControllerBase
                 ? waitingOrdered.IndexOf(p) + 1
                 : confirmedOrdered.IndexOf(p) + 1,
             CreatedAt     = p.CreatedAt,
+            DeckId        = p.DeckId,
+            DeckName      = p.DeckName,
         }));
     }
 

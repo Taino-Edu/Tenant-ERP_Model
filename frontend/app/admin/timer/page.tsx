@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { timerApi, TimerDto } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Trash2, Play, Pause, RotateCcw, Volume2, Settings } from 'lucide-react'
+import { Plus, Trash2, Play, Pause, RotateCcw, Volume2, PlayCircle, Settings } from 'lucide-react'
 
 // ── Web Audio beep ────────────────────────────────────────────────────────────
 function playSound(preset: string, type: 'warn' | 'end') {
@@ -191,24 +191,30 @@ function TimerCard({
         <div className="border-t border-surface-600 pt-3 flex flex-col gap-3">
           <div className="flex gap-2 items-center">
             <label className="text-xs text-gray-400 w-24">Duração (min)</label>
-            <input type="number" min={1} max={999} className="input input-sm flex-1"
+            <input type="number" min={1} max={999} className="input text-sm flex-1"
               value={cfgMin} onChange={e => setCfgMin(e.target.value)} />
           </div>
           <div className="flex gap-2 items-center">
             <label className="text-xs text-gray-400 w-24">Aviso (seg)</label>
-            <input type="number" min={0} max={3600} className="input input-sm flex-1"
+            <input type="number" min={0} max={3600} className="input text-sm flex-1"
               value={cfgWarn} onChange={e => setCfgWarn(e.target.value)} />
           </div>
           <div className="flex gap-2 items-center">
             <label className="text-xs text-gray-400 w-24 flex items-center gap-1">
               <Volume2 className="w-3 h-3" /> Som
             </label>
-            <select className="input input-sm flex-1" value={cfgSound} onChange={e => setCfgSound(e.target.value)}>
+            <select className="input text-sm flex-1" value={cfgSound} onChange={e => setCfgSound(e.target.value)}>
               <option value="none">Sem som</option>
               <option value="beep">Beep</option>
               <option value="bell">Sino</option>
               <option value="buzzer">Buzzer</option>
             </select>
+            <button
+              onClick={() => playSound(cfgSound, 'warn')}
+              title="Testar som de aviso"
+              className="p-1.5 rounded text-gray-400 hover:text-brand-400 hover:bg-surface-700 transition-colors shrink-0">
+              <PlayCircle className="w-4 h-4" />
+            </button>
           </div>
           <button onClick={saveConfig} className="btn-primary text-sm">Salvar</button>
         </div>
@@ -310,12 +316,20 @@ export default function TimerPage() {
               <label className="text-xs text-gray-400 flex items-center gap-1">
                 <Volume2 className="w-3 h-3" /> Som
               </label>
-              <select className="input w-full mt-1" value={newSound} onChange={e => setNewSound(e.target.value)}>
-                <option value="none">Sem som</option>
-                <option value="beep">Beep</option>
-                <option value="bell">Sino</option>
-                <option value="buzzer">Buzzer</option>
-              </select>
+              <div className="flex gap-2 mt-1">
+                <select className="input flex-1" value={newSound} onChange={e => setNewSound(e.target.value)}>
+                  <option value="none">Sem som</option>
+                  <option value="beep">Beep</option>
+                  <option value="bell">Sino</option>
+                  <option value="buzzer">Buzzer</option>
+                </select>
+                <button
+                  onClick={() => playSound(newSound, 'warn')}
+                  title="Testar som"
+                  className="btn-secondary flex items-center gap-1 px-3 text-sm">
+                  <PlayCircle className="w-4 h-4" /> Testar
+                </button>
+              </div>
             </div>
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowNew(false)} className="btn-secondary">Cancelar</button>
