@@ -17,11 +17,10 @@ public class ProductService : IProductService
     {
         var list = await _db.Products
             .Where(p => p.IsActive && p.ShowOnMarketplace)
-            .Include(p => p.Variants)
             .OrderBy(p => p.Name)
             .AsNoTracking()
             .ToListAsync();
-        SyncVariantStock(list);
+        await ApplyVariantStockAsync(list);
         return list;
     }
 
@@ -29,11 +28,10 @@ public class ProductService : IProductService
     {
         var list = await _db.Products
             .Where(p => p.IsActive)
-            .Include(p => p.Variants)
             .OrderBy(p => p.Name)
             .AsNoTracking()
             .ToListAsync();
-        SyncVariantStock(list);
+        await ApplyVariantStockAsync(list);
         return list;
     }
 
@@ -41,30 +39,38 @@ public class ProductService : IProductService
     {
         var list = await _db.Products
             .Where(p => p.IsActive && p.ShowOnMarketplace && p.Category == category)
-            .Include(p => p.Variants)
             .AsNoTracking()
             .ToListAsync();
-        SyncVariantStock(list);
+        await ApplyVariantStockAsync(list);
         return list;
     }
 
     public async Task<Product?> GetByIdAsync(Guid id)
     {
-        var p = await _db.Products
-            .Include(p => p.Variants)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.Id == id);
-        if (p?.HasVariants == true && p.Variants.Count > 0)
-            p.StockQuantity = p.Variants.Sum(v => v.StockQuantity);
+        var p = await _db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+        if (p?.HasVariants == true)
+            p.StockQuantity = await _db.Set<ProductVariant>()
+                .Where(v => v.ProductId == id)
+                .SumAsync(v => v.StockQuantity);
         return p;
     }
 
-    // Quando HasVariants=true, StockQuantity do produto pai não é mais atualizado —
-    // calcula na hora a partir das variantes para sempre refletir o real.
-    private static void SyncVariantStock(List<Product> products)
+    // Busca soma de estoque por variante em query agrupada — evita Include que causaria
+    // referência circular ProductVariant→Product→Variants na serialização JSON.
+    private async Task ApplyVariantStockAsync(List<Product> products)
     {
-        foreach (var p in products.Where(p => p.HasVariants && p.Variants.Count > 0))
-            p.StockQuantity = p.Variants.Sum(v => v.StockQuantity);
+        var ids = products.Where(p => p.HasVariants).Select(p => p.Id).ToList();
+        if (ids.Count == 0) return;
+
+        var sums = await _db.Set<ProductVariant>()
+            .Where(v => ids.Contains(v.ProductId))
+            .GroupBy(v => v.ProductId)
+            .Select(g => new { g.Key, Total = g.Sum(v => v.StockQuantity) })
+            .ToDictionaryAsync(x => x.Key, x => x.Total);
+
+        foreach (var p in products.Where(p => p.HasVariants))
+            if (sums.TryGetValue(p.Id, out var sum))
+                p.StockQuantity = sum;
     }
 
     public async Task<Product> CreateAsync(Product product)
