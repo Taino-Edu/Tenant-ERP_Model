@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api } from '@/lib/api'
+import { api, productApi, waitListApi, Product, WaitListEntry } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
   Clock, CheckCircle, XCircle, Package, User as UserIcon,
   ShoppingBag, LayoutList, RefreshCw, Loader2, ChevronLeft, ChevronRight,
-  AlertTriangle, TimerIcon, Plus,
+  AlertTriangle, TimerIcon, Plus, Users, ChevronDown, ChevronUp, X,
 } from 'lucide-react'
 
 const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Débito', 'Crédito', 'Crediario']
@@ -65,6 +65,9 @@ function timeUntil(d: string) {
 }
 
 export default function ReservasPage() {
+  const [tab,         setTab]         = useState<'reservas' | 'waitlist'>('reservas')
+
+  // ── aba Reservas ──
   const [items,       setItems]       = useState<Reservation[]>([])
   const [loading,     setLoading]     = useState(true)
   const [statusFilter,setStatusFilter]= useState('active')
@@ -79,6 +82,49 @@ export default function ReservasPage() {
   const [comandas,    setComandas]    = useState<OpenComanda[]>([])
   const [homComanda,  setHomComanda]  = useState<string>('')
   const [submitting,  setSubmitting]  = useState(false)
+
+  // ── aba Lista de Espera ──
+  const [wlProducts,  setWlProducts]  = useState<Product[]>([])
+  const [wlLoading,   setWlLoading]   = useState(false)
+  const [wlExpanded,  setWlExpanded]  = useState<string | null>(null)
+  const [wlData,      setWlData]      = useState<Record<string, { entries: WaitListEntry[]; total: number }>>({})
+  const [wlFetching,  setWlFetching]  = useState<string | null>(null)
+
+  const loadWaitlistProducts = useCallback(async () => {
+    setWlLoading(true)
+    try {
+      const { data } = await productApi.listAdmin()
+      setWlProducts(data.filter((p: Product) => p.isPreVenda))
+    } catch { toast.error('Erro ao carregar produtos pré-venda') }
+    finally { setWlLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'waitlist') loadWaitlistProducts()
+  }, [tab, loadWaitlistProducts])
+
+  async function toggleProduct(productId: string) {
+    if (wlExpanded === productId) { setWlExpanded(null); return }
+    setWlExpanded(productId)
+    if (wlData[productId]) return
+    setWlFetching(productId)
+    try {
+      const { data } = await waitListApi.adminList(productId)
+      setWlData(prev => ({ ...prev, [productId]: { entries: data.entries, total: data.total } }))
+    } catch { toast.error('Erro ao carregar fila') }
+    finally { setWlFetching(null) }
+  }
+
+  async function removeWlEntry(productId: string, entryId: string) {
+    try {
+      await waitListApi.adminRemove(productId, entryId)
+      setWlData(prev => {
+        const updated = (prev[productId]?.entries ?? []).filter(e => e.id !== entryId)
+        return { ...prev, [productId]: { entries: updated, total: updated.length } }
+      })
+      toast.success('Removido da fila')
+    } catch { toast.error('Erro ao remover') }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -164,19 +210,113 @@ export default function ReservasPage() {
       <Toaster />
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-5">
         <div className="p-2 rounded-xl bg-brand-500/10">
           <LayoutList className="w-5 h-5 text-brand-400" />
         </div>
-        <div>
-          <h1 className="text-xl font-black text-white">Pré-vendas / Reservas</h1>
-          <p className="text-sm text-gray-400">{totalCount} reserva{totalCount !== 1 ? 's' : ''} encontrada{totalCount !== 1 ? 's' : ''}</p>
-        </div>
-        <button onClick={load} className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-600 transition-colors text-gray-400">
+        <h1 className="text-xl font-black text-white">Pré-vendas</h1>
+        <button
+          onClick={() => tab === 'reservas' ? load() : loadWaitlistProducts()}
+          className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-600 transition-colors text-gray-400">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 bg-surface-800 p-1 rounded-xl mb-5 w-fit">
+        <button
+          onClick={() => setTab('reservas')}
+          className={clsx('px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2',
+            tab === 'reservas' ? 'bg-surface-600 text-white' : 'text-gray-400 hover:text-gray-300')}>
+          <ShoppingBag className="w-3.5 h-3.5" /> Reservas
+        </button>
+        <button
+          onClick={() => setTab('waitlist')}
+          className={clsx('px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2',
+            tab === 'waitlist' ? 'bg-purple-500/20 text-purple-300' : 'text-gray-400 hover:text-gray-300')}>
+          <Users className="w-3.5 h-3.5" /> Lista de Espera
+        </button>
+      </div>
+
+      {/* ── Conteúdo: Lista de Espera ── */}
+      {tab === 'waitlist' && (
+        wlLoading ? (
+          <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-purple-400" /></div>
+        ) : wlProducts.length === 0 ? (
+          <div className="text-center py-16 text-gray-500">
+            <Users className="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p>Nenhum produto pré-venda cadastrado</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {wlProducts.map(p => {
+              const isOpen   = wlExpanded === p.id
+              const fetching = wlFetching === p.id
+              const data     = wlData[p.id]
+              return (
+                <div key={p.id} className="card overflow-hidden">
+                  <button
+                    onClick={() => toggleProduct(p.id)}
+                    className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-700/40 transition-colors">
+                    <div className="w-10 h-10 rounded-lg bg-surface-700 shrink-0 flex items-center justify-center overflow-hidden">
+                      {p.imageUrl
+                        ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                        : <Package className="w-5 h-5 text-surface-500" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white truncate">{p.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {data ? `${data.total} na fila` : 'Ver fila'}
+                      </p>
+                    </div>
+                    {data && data.total > 0 && (
+                      <span className="text-xs font-black bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
+                        {data.total}
+                      </span>
+                    )}
+                    {fetching
+                      ? <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
+                      : isOpen
+                        ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+                        : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+                  </button>
+
+                  {isOpen && data && (
+                    <div className="border-t border-surface-700">
+                      {data.entries.length === 0 ? (
+                        <p className="text-center text-xs text-gray-500 py-5">Ninguém na fila ainda</p>
+                      ) : (
+                        <div className="divide-y divide-surface-700">
+                          {data.entries.map(e => (
+                            <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
+                              <div className="w-7 h-7 rounded-full bg-purple-500/20 flex items-center justify-center text-xs font-black text-purple-300 shrink-0">
+                                {e.position}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-white">{e.name}</p>
+                                <p className="text-xs text-gray-500">{e.whatsApp} · {new Date(e.createdAt).toLocaleDateString('pt-BR')}</p>
+                              </div>
+                              <button
+                                onClick={() => removeWlEntry(p.id, e.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-600/20 text-gray-500 hover:text-red-400 transition-colors shrink-0"
+                                title="Remover da fila">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      )}
+
+      {/* ── Conteúdo: Reservas ── */}
+      {tab === 'reservas' && <>
       {/* Filtros */}
       <div className="flex gap-2 flex-wrap mb-5">
         {badges.map(b => (
@@ -287,6 +427,7 @@ export default function ReservasPage() {
           </button>
         </div>
       )}
+      </>}
 
       {/* Modal de Homologação */}
       {homModal && (
