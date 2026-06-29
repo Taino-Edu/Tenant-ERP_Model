@@ -39,6 +39,9 @@
 
     <!-- QR Code generation -->
     <PackageReference Include="QRCoder" Version="1.4.3" />
+
+    <!-- Web Push / VAPID — notificações browser push -->
+    <PackageReference Include="WebPush" Version="1.0.11" />
   </ItemGroup>
 
 </Project>

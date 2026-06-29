@@ -21,10 +21,11 @@ public class MensageriaController : ControllerBase
 {
     private readonly AppDbContext  _db;
     private readonly IEmailService _email;
+    private readonly IPushService  _push;
     private readonly ILogger<MensageriaController> _log;
 
-    public MensageriaController(AppDbContext db, IEmailService email, ILogger<MensageriaController> log)
-    { _db = db; _email = email; _log = log; }
+    public MensageriaController(AppDbContext db, IEmailService email, IPushService push, ILogger<MensageriaController> log)
+    { _db = db; _email = email; _push = push; _log = log; }
 
     // ── Listar clientes disponíveis para alvo ──────────────────────────────────
 
@@ -91,6 +92,11 @@ public class MensageriaController : ControllerBase
             _db.Notifications.AddRange(notifications);
             await _db.SaveChangesAsync();
             inAppSent = notifications.Count;
+
+            // Dispara push browser (silencioso se VAPID não configurado)
+            await _push.SendToManyAsync(
+                notifications.Select(n => n.UserId),
+                req.Title, req.Body, req.Link);
         }
 
         // ── Email ─────────────────────────────────────────────────────────────────

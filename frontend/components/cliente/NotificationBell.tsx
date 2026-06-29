@@ -1,29 +1,43 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { notificationsApi, AppNotification } from '@/lib/api'
+import { notificationsApi, pushApi, AppNotification } from '@/lib/api'
 import { Bell, X, CheckCheck, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
+const NAVY   = '#0C3D5A'
+const BLUE   = '#3EC2F2'
+const MUTED  = '#4D8FAC'
+const BORDER = 'rgba(12,61,90,0.12)'
+
+function urlBase64ToUint8Array(b64: string) {
+  const pad = '='.repeat((4 - b64.length % 4) % 4)
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'))
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+}
+
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
-  const [open, setOpen]     = useState(false)
+  const [open,   setOpen]   = useState(false)
   const [unread, setUnread] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Polling a cada 30s
+  // Polling unread count a cada 30s
   useEffect(() => {
     fetchCount()
     const id = setInterval(fetchCount, 30_000)
     return () => clearInterval(id)
   }, [])
 
-  // Fecha ao clicar fora
+  // Registra Service Worker e subscreve push na primeira vez
+  useEffect(() => { registerPush() }, [])
+
+  // Fecha dropdown ao clicar fora
   useEffect(() => {
-    function onClick(e: MouseEvent) {
+    function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
   }, [])
 
   async function fetchCount() {
@@ -45,13 +59,13 @@ export default function NotificationBell() {
 
   async function markRead(id: string) {
     await notificationsApi.markRead(id)
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true, readAt: new Date().toISOString() } : n))
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n))
     setUnread(u => Math.max(0, u - 1))
   }
 
   async function markAllRead() {
     await notificationsApi.markAllRead()
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true, readAt: new Date().toISOString() })))
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })))
     setUnread(0)
   }
 
@@ -62,23 +76,47 @@ export default function NotificationBell() {
     if (wasUnread) setUnread(u => Math.max(0, u - 1))
   }
 
+  async function registerPush() {
+    if (typeof window === 'undefined') return
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+    try {
+      const reg  = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      const perm = await Notification.requestPermission()
+      if (perm !== 'granted') return
+      const { data } = await pushApi.publicKey()
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(data.publicKey),
+      })
+      const json = sub.toJSON()
+      await pushApi.subscribe({
+        endpoint: sub.endpoint,
+        p256dh:   json.keys?.p256dh   ?? '',
+        auth:     json.keys?.auth     ?? '',
+      })
+    } catch {
+      // Push não disponível ou negado pelo usuário — sem impacto
+    }
+  }
+
   function timeAgo(iso: string) {
     const diff = (Date.now() - new Date(iso).getTime()) / 1000
-    if (diff < 60)   return 'agora'
-    if (diff < 3600) return `${Math.floor(diff / 60)}min`
+    if (diff < 60)    return 'agora'
+    if (diff < 3600)  return `${Math.floor(diff / 60)}min`
     if (diff < 86400) return `${Math.floor(diff / 3600)}h`
     return `${Math.floor(diff / 86400)}d`
   }
 
   return (
     <div className="relative" ref={ref}>
-      {/* Bell button */}
+      {/* Botão do sino */}
       <button
         onClick={openPanel}
-        className="relative p-2 rounded-xl hover:bg-white/10 transition-colors"
+        className="relative p-2 rounded-xl transition-colors"
+        style={{ color: 'rgba(255,255,255,0.75)' }}
         title="Notificações"
       >
-        <Bell className="w-5 h-5 text-gray-400" />
+        <Bell className="w-5 h-5" />
         {unread > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
             {unread > 9 ? '9+' : unread}
@@ -86,67 +124,89 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown — fundo branco sólido, funciona em qualquer contexto */}
       {open && (
-        <div className="absolute right-0 mt-2 w-80 rounded-2xl border shadow-2xl z-50 overflow-hidden"
-          style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
-
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b"
-            style={{ borderColor: 'var(--border)' }}>
-            <span className="font-semibold text-sm text-[var(--text-primary)]">
-              Notificações {unread > 0 && <span className="text-red-400">({unread})</span>}
+        <div
+          className="absolute right-0 mt-2 w-80 rounded-2xl z-50 overflow-hidden"
+          style={{
+            backgroundColor: '#FFFFFF',
+            border: `1px solid ${BORDER}`,
+            boxShadow: '0 20px 60px rgba(12,61,90,0.18)',
+          }}
+        >
+          {/* Cabeçalho */}
+          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: BORDER }}>
+            <span className="font-black text-sm" style={{ color: NAVY }}>
+              Notificações{unread > 0 && <span className="text-red-500 ml-1">({unread})</span>}
             </span>
             {unread > 0 && (
-              <button onClick={markAllRead}
-                className="flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-violet-400 transition-colors">
-                <CheckCheck className="w-3.5 h-3.5" /> Marcar todas como lidas
+              <button
+                onClick={markAllRead}
+                className="flex items-center gap-1 text-xs font-semibold transition-colors"
+                style={{ color: MUTED }}
+              >
+                <CheckCheck className="w-3.5 h-3.5" /> Todas lidas
               </button>
             )}
           </div>
 
           {/* Lista */}
-          <div className="max-h-80 overflow-y-auto divide-y divide-[var(--border)]">
+          <div className="max-h-[360px] overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="py-8 text-center text-sm text-[var(--text-muted)]">
-                Nenhuma notificação
+              <div className="py-10 text-center">
+                <Bell className="w-8 h-8 mx-auto mb-2 opacity-20" style={{ color: NAVY }} />
+                <p className="text-sm font-bold" style={{ color: MUTED }}>Nenhuma notificação</p>
               </div>
             ) : (
               notifications.map(n => (
-                <div key={n.id}
-                  className={`flex gap-3 px-4 py-3 transition-colors ${!n.isRead ? 'bg-violet-500/5' : ''}`}>
-                  {/* Dot de não lida */}
-                  <div className="mt-1.5 flex-shrink-0">
-                    {!n.isRead
-                      ? <div className="w-2 h-2 rounded-full bg-violet-500" />
-                      : <div className="w-2 h-2 rounded-full bg-transparent" />
-                    }
+                <div
+                  key={n.id}
+                  className="flex gap-3 px-4 py-3 border-b transition-colors"
+                  style={{
+                    borderColor: BORDER,
+                    backgroundColor: !n.isRead ? `rgba(62,194,242,0.06)` : 'transparent',
+                  }}
+                >
+                  {/* Indicador não lida */}
+                  <div className="mt-1.5 shrink-0">
+                    <div
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: !n.isRead ? BLUE : 'transparent' }}
+                    />
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--text-primary)] leading-snug">
-                      {n.title}
-                    </p>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5 line-clamp-2">{n.body}</p>
+                    <p className="text-sm font-black leading-snug" style={{ color: NAVY }}>{n.title}</p>
+                    <p className="text-xs mt-0.5 line-clamp-2" style={{ color: MUTED }}>{n.body}</p>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-[10px] text-[var(--text-muted)]">{timeAgo(n.createdAt)}</span>
+                      <span className="text-[10px]" style={{ color: MUTED }}>{timeAgo(n.createdAt)}</span>
                       {n.link && (
-                        <Link href={n.link} onClick={() => { markRead(n.id); setOpen(false) }}
-                          className="text-[10px] text-violet-400 hover:underline flex items-center gap-0.5">
+                        <Link
+                          href={n.link}
+                          onClick={() => { markRead(n.id); setOpen(false) }}
+                          className="text-[10px] font-bold flex items-center gap-0.5"
+                          style={{ color: BLUE }}
+                        >
                           Ver <ExternalLink className="w-2.5 h-2.5" />
                         </Link>
                       )}
                       {!n.isRead && (
-                        <button onClick={() => markRead(n.id)}
-                          className="text-[10px] text-[var(--text-muted)] hover:text-violet-400 transition-colors">
+                        <button
+                          onClick={() => markRead(n.id)}
+                          className="text-[10px] font-semibold"
+                          style={{ color: MUTED }}
+                        >
                           Marcar lida
                         </button>
                       )}
                     </div>
                   </div>
 
-                  <button onClick={() => remove(n.id)}
-                    className="flex-shrink-0 p-1 rounded hover:bg-white/10 text-[var(--text-muted)] hover:text-red-400 transition-colors mt-0.5">
+                  <button
+                    onClick={() => remove(n.id)}
+                    className="shrink-0 p-1 rounded-lg mt-0.5 transition-colors"
+                    style={{ color: MUTED }}
+                  >
                     <X className="w-3 h-3" />
                   </button>
                 </div>

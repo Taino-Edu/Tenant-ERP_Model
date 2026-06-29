@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { comandaApi, userApi, productApi, categoryApi, waitListApi, ComandaDto, Product, ProductCategory, UserProfile } from '@/lib/api'
+import { comandaApi, userApi, productApi, categoryApi, waitListApi, variantApi, ComandaDto, Product, ProductCategory, UserProfile, ProductVariant } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
 import NotificationBell from '@/components/cliente/NotificationBell'
 import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
@@ -255,6 +255,10 @@ export default function ClientePage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [confirmItem,  setConfirmItem]  = useState<Product | null>(null)
   const [showComandaSheet, setShowComandaSheet] = useState(false)
+  const [variantModal,    setVariantModal]    = useState<Product | null>(null)
+  const [variants,        setVariants]        = useState<ProductVariant[]>([])
+  const [loadingVariants, setLoadingVariants] = useState(false)
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
 
   const fetchComanda = useCallback(async () => {
     try {
@@ -299,13 +303,25 @@ export default function ClientePage() {
     return () => { stopHub() }
   }, [fetchComanda])
 
-  async function addProduct(product: Product) {
+  // Carrega variantes quando um produto com grade é selecionado
+  useEffect(() => {
+    if (!variantModal) { setVariants([]); setSelectedVariant(null); return }
+    setLoadingVariants(true)
+    variantApi.list(variantModal.id)
+      .then(r => setVariants(r.data))
+      .catch(() => {})
+      .finally(() => setLoadingVariants(false))
+  }, [variantModal])
+
+  async function addProduct(product: Product, variantId?: string) {
     if (!comanda) return
     setConfirmItem(null)
+    setVariantModal(null)
     setAdding(product.id)
     try {
       const { data } = await comandaApi.addItem(comanda.id, {
         productId: product.id,
+        variantId,
         itemName: product.name,
         unitPriceInCents: product.isOnPromo && product.discountPriceInCents != null
           ? product.discountPriceInCents
@@ -376,6 +392,103 @@ export default function ClientePage() {
       <Toaster position="top-center" toastOptions={{
         style: { background: C.white, color: C.navy, border: `1px solid ${C.border}`, fontWeight: 600 }
       }} />
+
+      {/* ── Modal de grade (tamanho/cor) ─────────────────────────────────── */}
+      {variantModal && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setVariantModal(null)}>
+          <div className="w-full max-w-lg rounded-t-3xl shadow-2xl"
+            style={{ backgroundColor: C.white }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full" style={{ backgroundColor: C.border.replace('0.18', '0.4') }} />
+            </div>
+
+            {/* Cabeçalho */}
+            <div className="px-5 pt-2 pb-4 border-b" style={{ borderColor: C.border }}>
+              <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Selecione o tamanho/cor</p>
+              <p className="font-black text-lg mt-0.5 leading-snug" style={{ color: C.navy }}>{variantModal.name}</p>
+              <p className="text-base font-black mt-1" style={{ color: C.blue2 }}>
+                R$ {(variantModal.isOnPromo && variantModal.discountPriceInReais != null
+                  ? variantModal.discountPriceInReais
+                  : variantModal.priceInReais
+                ).toFixed(2).replace('.', ',')}
+              </p>
+            </div>
+
+            {/* Variantes */}
+            <div className="px-5 py-5">
+              {loadingVariants ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin" style={{ color: C.blue }} />
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {[...variants]
+                    .sort((a, b) => {
+                      const ord = ['PP','P','M','G','GG','XGG','EG','EGG','U','Único']
+                      const ai = ord.indexOf(a.size ?? ''), bi = ord.indexOf(b.size ?? '')
+                      if (ai === -1 && bi === -1) return (a.label ?? '').localeCompare(b.label ?? '')
+                      if (ai === -1) return 1; if (bi === -1) return -1
+                      return ai - bi
+                    })
+                    .map(v => {
+                      const inStock = v.stockQuantity > 0
+                      const label   = v.size || v.color || v.label
+                      const sel     = selectedVariant?.id === v.id
+                      return (
+                        <button key={v.id}
+                          onClick={() => inStock && setSelectedVariant(v)}
+                          disabled={!inStock}
+                          title={inStock ? `${v.stockQuantity} em estoque` : 'Sem estoque'}
+                          className="relative px-4 py-2.5 rounded-xl text-sm font-black border-2 transition-all"
+                          style={{
+                            backgroundColor: sel ? C.navy : 'transparent',
+                            color:           sel ? C.yellow : inStock ? C.navy : C.muted,
+                            borderColor:     sel ? C.navy : inStock ? C.border.replace('0.18','0.5') : C.border,
+                            opacity:         inStock ? 1 : 0.4,
+                          }}>
+                          {label}
+                          {!inStock && (
+                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <span className="w-full h-px rotate-45" style={{ backgroundColor: C.muted }} />
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })
+                  }
+                </div>
+              )}
+              {selectedVariant && (
+                <p className="text-xs font-bold mt-3 text-center" style={{ color: C.blue2 }}>
+                  {selectedVariant.stockQuantity} unidade{selectedVariant.stockQuantity !== 1 ? 's' : ''} em estoque
+                </p>
+              )}
+            </div>
+
+            {/* Ações */}
+            <div className="px-5 pb-8 flex gap-3">
+              <button onClick={() => setVariantModal(null)}
+                className="flex-1 py-3.5 rounded-2xl font-bold text-sm border-2 transition-colors"
+                style={{ borderColor: C.border, color: C.muted }}>
+                Cancelar
+              </button>
+              <button
+                onClick={() => selectedVariant && addProduct(variantModal, selectedVariant.id)}
+                disabled={!selectedVariant || adding === variantModal.id}
+                className="flex-1 py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-40"
+                style={{ backgroundColor: C.yellow, color: C.navy }}>
+                {adding === variantModal.id
+                  ? <Loader2 className="w-5 h-5 animate-spin" />
+                  : <><Plus className="w-5 h-5" /> Adicionar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de confirmação — z-[60] fica acima do bottom sheet (z-50) */}
       {confirmItem && (
@@ -716,7 +829,7 @@ export default function ClientePage() {
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
                       {items.map(p => (
-                        <ProductCard key={p.id} p={p} adding={adding} onAdd={() => setConfirmItem(p)} />
+                        <ProductCard key={p.id} p={p} adding={adding} onAdd={() => p.hasVariants ? setVariantModal(p) : setConfirmItem(p)} />
                       ))}
                     </div>
                   </div>
@@ -725,7 +838,7 @@ export default function ClientePage() {
                 {uncategorized.length > 0 && (
                   <div className="grid grid-cols-2 gap-3">
                     {uncategorized.map(p => (
-                      <ProductCard key={p.id} p={p} adding={adding} onAdd={() => setConfirmItem(p)} />
+                      <ProductCard key={p.id} p={p} adding={adding} onAdd={() => p.hasVariants ? setVariantModal(p) : setConfirmItem(p)} />
                     ))}
                   </div>
                 )}

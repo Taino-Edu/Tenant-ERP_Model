@@ -54,7 +54,10 @@ public class AppDbContext : DbContext
     public DbSet<IntegrationConfig>   IntegrationConfigs   { get; set; }
 
     // ── Mensageria: notificações in-app por usuário ───────────────────────────
-    public DbSet<Notification> Notifications { get; set; }
+    public DbSet<Notification>     Notifications     { get; set; }
+
+    // ── Push: subscrições de browser push (WebPush/VAPID) ────────────────────
+    public DbSet<PushSubscription> PushSubscriptions { get; set; }
 
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas

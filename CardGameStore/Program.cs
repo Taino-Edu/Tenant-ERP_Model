@@ -325,6 +325,7 @@ builder.Services.AddScoped<IUserService,         UserService>();
 builder.Services.AddScoped<IVendaAvulsaService,  VendaAvulsaService>();
 builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
+builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
 builder.Services.AddSingleton<ITcgService,       TcgService>();

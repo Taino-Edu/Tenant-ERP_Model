@@ -377,7 +377,7 @@ export const comandaApi = {
   history:      (data?: string) => api.get<ComandaDto[]>('/api/comanda/history', { params: data ? { data } : undefined }),
   myComanda:    () => api.get<ComandaDto>('/api/comanda/my'),
   myHistory:    () => api.get<ComandaDto[]>('/api/comanda/my-history'),
-  addItem:      (id: string, item: { productId?: string; cardCacheId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
+  addItem:      (id: string, item: { productId?: string; cardCacheId?: string; variantId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
   updateItem:   (id: string, itemId: string, quantity: number) =>
@@ -1121,4 +1121,14 @@ export const mensageriaApi = {
     channel: 'inapp' | 'email' | 'both'
     segment?: string; userIds?: string[]
   }) => api.post<{ message: string; inApp: number; emails: number; total: number }>('/api/admin/mensageria/send', body),
+}
+
+// ── Push notifications (browser) ──────────────────────────────────────────────
+
+export const pushApi = {
+  publicKey:   () => api.get<{ publicKey: string }>('/api/push/vapid-public-key'),
+  subscribe:   (sub: { endpoint: string; p256dh: string; auth: string }) =>
+                 api.post('/api/push/subscribe', sub),
+  unsubscribe: (endpoint: string) =>
+                 api.delete('/api/push/subscribe', { data: { endpoint } }),
 }
