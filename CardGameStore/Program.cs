@@ -29,6 +29,17 @@ if (args.Contains("gen-key"))
     return;
 }
 
+// Comando utilitário: dotnet run -- gen-vapid  →  gera par de chaves VAPID para push browser
+if (args.Contains("gen-vapid"))
+{
+    var keys = WebPush.VapidHelper.GenerateVapidKeys();
+    Console.WriteLine("# Adicione ao .env do VPS:");
+    Console.WriteLine($"VAPID__PublicKey={keys.PublicKey}");
+    Console.WriteLine($"VAPID__PrivateKey={keys.PrivateKey}");
+    Console.WriteLine("VAPID__Subject=mailto:contato@santuarionerd.tech");
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------
