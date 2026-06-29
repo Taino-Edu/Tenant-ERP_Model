@@ -441,6 +441,39 @@ function VendaWizard({
     if (step === 2) setTimeout(() => searchRef.current?.focus(), 80)
   }, [step])
 
+  // Pre-load de item + cliente vindo da Lista de Espera
+  useEffect(() => {
+    const raw = sessionStorage.getItem('wl_pdv_preload')
+    if (!raw) return
+    sessionStorage.removeItem('wl_pdv_preload')
+    try {
+      const { productId, userId, userName } = JSON.parse(raw)
+      // carrega produto
+      productApi.get(productId).then(r => {
+        const p = r.data
+        const cartKey = p.id
+        setCart([{ product: p, quantity: 1, cartKey }])
+      }).catch(() => {})
+      // carrega cliente se tiver userId
+      if (userId) {
+        userApi.getById(userId).then(r => {
+          const u = r.data
+          setSelectedUser(u)
+          setSelectedUserId(u.id)
+          setClientName(u.name)
+          setClientSearch(u.name)
+        }).catch(() => {
+          // fallback: só preenche nome
+          setClientName(userName ?? '')
+          setClientSearch(userName ?? '')
+        })
+      } else if (userName) {
+        setClientName(userName)
+        setClientSearch(userName)
+      }
+    } catch {}
+  }, [])
+
   // Debounce busca de clientes
   useEffect(() => {
     if (clientSearch.trim().length < 2) { setClientResults([]); return }

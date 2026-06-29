@@ -2,9 +2,9 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { clearAuth, getUserName, getRole, hasPermission } from '@/lib/auth'
-import { authApi } from '@/lib/api'
+import { authApi, notificationsApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
@@ -66,7 +66,7 @@ const sections = [
   },
 ]
 
-function NavItems({ pathname, onClose }: { pathname: string; onClose?: () => void }) {
+function NavItems({ pathname, onClose, unreadCount }: { pathname: string; onClose?: () => void; unreadCount: number }) {
   const role = getRole()
   const isAdmin = role === 'Admin'
 
@@ -82,8 +82,9 @@ function NavItems({ pathname, onClose }: { pathname: string; onClose?: () => voi
               {label}
             </p>
             {visibleItems.map(({ href, label: itemLabel, icon: Icon, badge }: { href: string; label: string; icon: React.ElementType; perm: string | null; badge?: string }) => {
-              const active  = pathname.startsWith(href)
+              const active   = pathname.startsWith(href)
               const shortcut = SIDEBAR_SHORTCUT_KEYS[href]
+              const hasDot   = href === '/admin/mensageria' && unreadCount > 0
               return (
                 <Link
                   key={href}
@@ -94,7 +95,12 @@ function NavItems({ pathname, onClose }: { pathname: string; onClose?: () => voi
                     active ? 'nav-item-active' : 'text-gray-500 hover:bg-surface-700 hover:text-white'
                   )}
                 >
-                  <Icon className={clsx('w-5 h-5 shrink-0', active ? 'text-brand-500' : 'text-gray-500 group-hover:text-gray-300')} />
+                  <div className="relative shrink-0">
+                    <Icon className={clsx('w-5 h-5', active ? 'text-brand-500' : 'text-gray-500 group-hover:text-gray-300')} />
+                    {hasDot && (
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    )}
+                  </div>
                   <span className={clsx('flex-1 nav-item-label', active && 'font-semibold')}>{itemLabel}</span>
                   {badge && (
                     <span className="text-[10px] bg-accent-green/20 text-accent-green border border-accent-green/30 px-1.5 py-0.5 rounded-full font-bold animate-pulse-slow">
@@ -119,8 +125,22 @@ function NavItems({ pathname, onClose }: { pathname: string; onClose?: () => voi
 export default function Sidebar() {
   const pathname      = usePathname()
   const router        = useRouter()
-  const [loggingOut, setLoggingOut] = useState(false)
-  const [mobileOpen,  setMobileOpen]  = useState(false)
+  const [loggingOut,   setLoggingOut]   = useState(false)
+  const [mobileOpen,   setMobileOpen]   = useState(false)
+  const [unreadCount,  setUnreadCount]  = useState(0)
+
+  useEffect(() => {
+    let mounted = true
+    const poll = async () => {
+      try {
+        const { data } = await notificationsApi.unreadCount()
+        if (mounted) setUnreadCount(data.count)
+      } catch {}
+    }
+    poll()
+    const id = setInterval(poll, 30_000)
+    return () => { mounted = false; clearInterval(id) }
+  }, [])
 
   async function handleLogout() {
     if (loggingOut) return
@@ -209,7 +229,7 @@ export default function Sidebar() {
             <X className="w-5 h-5" />
           </button>
         </div>
-        <NavItems pathname={pathname} onClose={() => setMobileOpen(false)} />
+        <NavItems pathname={pathname} onClose={() => setMobileOpen(false)} unreadCount={unreadCount} />
         {footer}
       </aside>
 
@@ -222,7 +242,7 @@ export default function Sidebar() {
             <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
           </div>
         </div>
-        <NavItems pathname={pathname} />
+        <NavItems pathname={pathname} unreadCount={unreadCount} />
         {footer}
       </aside>
     </>

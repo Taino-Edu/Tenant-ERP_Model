@@ -90,6 +90,13 @@ export default function ReservasPage() {
   const [wlData,      setWlData]      = useState<Record<string, { entries: WaitListEntry[]; total: number }>>({})
   const [wlFetching,  setWlFetching]  = useState<string | null>(null)
 
+  // Modal homologar entry da fila
+  const [wlModal,     setWlModal]     = useState<{ entry: WaitListEntry; product: Product } | null>(null)
+  const [wlMode,      setWlMode]      = useState<'pdv' | 'comanda'>('pdv')
+  const [wlPayment,   setWlPayment]   = useState('Dinheiro')
+  const [wlComanda,   setWlComanda]   = useState('')
+  const [wlSubmit,    setWlSubmit]    = useState(false)
+
   const loadWaitlistProducts = useCallback(async () => {
     setWlLoading(true)
     try {
@@ -124,6 +131,39 @@ export default function ReservasPage() {
       })
       toast.success('Removido da fila')
     } catch { toast.error('Erro ao remover') }
+  }
+
+  function openWlModal(entry: WaitListEntry, product: Product) {
+    setWlModal({ entry, product })
+    setWlMode('pdv')
+    setWlPayment('Dinheiro')
+    setWlComanda('')
+    loadComandas()
+  }
+
+  async function handleWlHomologar() {
+    if (!wlModal) return
+    const { entry, product } = wlModal
+    if (wlMode === 'comanda') {
+      if (!wlComanda) { toast.error('Selecione uma comanda'); return }
+      setWlSubmit(true)
+      try {
+        await api.post(`/api/comanda/${wlComanda}/items`, { productId: product.id, quantity: 1 })
+        toast.success(`Adicionado à comanda!`)
+        setWlModal(null)
+      } catch (e: any) { toast.error(e?.response?.data?.message ?? 'Erro ao adicionar à comanda') }
+      finally { setWlSubmit(false) }
+    } else {
+      // PDV: passa via sessionStorage e navega
+      sessionStorage.setItem('wl_pdv_preload', JSON.stringify({
+        productId:   product.id,
+        productName: product.name,
+        userId:      entry.userId ?? null,
+        userName:    entry.name,
+      }))
+      setWlModal(null)
+      window.location.href = '/admin/venda-avulsa'
+    }
   }
 
   const load = useCallback(async () => {
@@ -296,12 +336,20 @@ export default function ReservasPage() {
                                 <p className="text-sm font-semibold text-white">{e.name}</p>
                                 <p className="text-xs text-gray-500">{e.whatsApp} · {new Date(e.createdAt).toLocaleDateString('pt-BR')}</p>
                               </div>
-                              <button
-                                onClick={() => removeWlEntry(p.id, e.id)}
-                                className="p-1.5 rounded-lg hover:bg-red-600/20 text-gray-500 hover:text-red-400 transition-colors shrink-0"
-                                title="Remover da fila">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  onClick={() => openWlModal(e, p)}
+                                  title="Homologar — PDV ou Comanda"
+                                  className="px-2 py-1 rounded-lg bg-green-500/15 text-green-400 border border-green-500/25 hover:bg-green-500/25 text-[10px] font-bold transition-colors flex items-center gap-1">
+                                  <CheckCircle className="w-3 h-3" /> Vender
+                                </button>
+                                <button
+                                  onClick={() => removeWlEntry(p.id, e.id)}
+                                  className="p-1.5 rounded-lg hover:bg-red-600/20 text-gray-500 hover:text-red-400 transition-colors"
+                                  title="Remover da fila">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -428,6 +476,81 @@ export default function ReservasPage() {
         </div>
       )}
       </>}
+
+      {/* Modal de Homologação — Lista de Espera */}
+      {wlModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface-800 rounded-2xl w-full max-w-md p-6 flex flex-col gap-5">
+            <div>
+              <h2 className="text-lg font-black text-white">Vender da fila de espera</h2>
+              <p className="text-sm text-gray-400 mt-0.5">
+                {wlModal.product.name} · #{wlModal.entry.position} {wlModal.entry.name}
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              {(['pdv', 'comanda'] as const).map(m => (
+                <button key={m} onClick={() => setWlMode(m)}
+                  className={clsx('flex-1 py-2.5 rounded-xl border text-sm font-semibold transition-colors',
+                    wlMode === m ? 'bg-brand-500/20 text-brand-300 border-brand-500/40' : 'bg-surface-700 text-gray-400 border-surface-600')}>
+                  {m === 'pdv' ? '🧾 Frente de Caixa (PDV)' : '🪑 Adicionar a uma Comanda'}
+                </button>
+              ))}
+            </div>
+
+            {wlMode === 'pdv' && (
+              <div className="bg-surface-700 rounded-xl p-4 text-sm text-gray-300 border border-surface-600">
+                Vai abrir a Frente de Caixa com o produto e o cliente pré-carregados.
+              </div>
+            )}
+
+            {wlMode === 'comanda' && (
+              <div>
+                <label className="text-xs text-gray-400 mb-2 block font-semibold">Selecionar comanda aberta</label>
+                {comandas.length === 0 ? (
+                  <div className="flex items-center gap-2 text-amber-400 text-sm bg-amber-500/10 rounded-xl p-3">
+                    <AlertTriangle className="w-4 h-4 shrink-0" /> Nenhuma comanda aberta
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                    {comandas.map(c => (
+                      <button key={c.id} onClick={() => setWlComanda(c.id)}
+                        className={clsx('flex items-center gap-3 p-3 rounded-xl border text-left transition-colors',
+                          wlComanda === c.id ? 'bg-brand-500/20 border-brand-500/40' : 'bg-surface-700 border-surface-600 hover:border-surface-500')}>
+                        <div className="w-8 h-8 rounded-lg bg-surface-600 flex items-center justify-center text-xs font-bold text-white">
+                          {c.mesaNumero ?? '?'}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-white">Mesa {c.mesaNumero ?? '—'}</p>
+                          {c.userName && <p className="text-xs text-gray-400">{c.userName}</p>}
+                        </div>
+                        {c.totalInReais != null && (
+                          <span className="ml-auto text-sm font-bold text-brand-300">
+                            R$ {c.totalInReais.toFixed(2).replace('.', ',')}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setWlModal(null)} disabled={wlSubmit}
+                className="flex-1 py-3 rounded-xl bg-surface-700 text-gray-300 text-sm font-semibold">
+                Cancelar
+              </button>
+              <button onClick={handleWlHomologar}
+                disabled={wlSubmit || (wlMode === 'comanda' && !wlComanda)}
+                className="flex-1 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 disabled:opacity-40 text-white text-sm font-bold transition-colors flex items-center justify-center gap-2">
+                {wlSubmit ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {wlMode === 'pdv' ? 'Ir para o PDV' : 'Adicionar à Comanda'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Homologação */}
       {homModal && (
