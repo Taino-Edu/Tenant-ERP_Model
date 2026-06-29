@@ -142,7 +142,7 @@ public class ReservationController : ControllerBase
     // PUT /api/reservations/{id}/status — admin atualiza status
     [HttpPut("{id:guid}/status")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateStatusRequest req)
+    public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateReservationStatusRequest req)
     {
         var res = await _db.ProductReservations
             .Include(r => r.Product).ThenInclude(p => p.Variants)
@@ -222,7 +222,7 @@ public class CreateReservationRequest
     public string? Notes   { get; init; }
 }
 
-public class UpdateStatusRequest
+public class UpdateReservationStatusRequest
 {
     public string Status { get; init; } = "";
 }
