@@ -13,17 +13,59 @@ public class ProductService : IProductService
     private readonly AppDbContext _db;
     public ProductService(AppDbContext db) { _db = db; }
 
-    public async Task<IEnumerable<Product>> GetAllActiveAsync() =>
-        await _db.Products.Where(p => p.IsActive && p.ShowOnMarketplace).OrderBy(p => p.Name).ToListAsync();
+    public async Task<IEnumerable<Product>> GetAllActiveAsync()
+    {
+        var list = await _db.Products
+            .Where(p => p.IsActive && p.ShowOnMarketplace)
+            .Include(p => p.Variants)
+            .OrderBy(p => p.Name)
+            .AsNoTracking()
+            .ToListAsync();
+        SyncVariantStock(list);
+        return list;
+    }
 
-    public async Task<IEnumerable<Product>> GetAllForAdminAsync() =>
-        await _db.Products.Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+    public async Task<IEnumerable<Product>> GetAllForAdminAsync()
+    {
+        var list = await _db.Products
+            .Where(p => p.IsActive)
+            .Include(p => p.Variants)
+            .OrderBy(p => p.Name)
+            .AsNoTracking()
+            .ToListAsync();
+        SyncVariantStock(list);
+        return list;
+    }
 
-    public async Task<IEnumerable<Product>> GetByCategoryAsync(string category) =>
-        await _db.Products.Where(p => p.IsActive && p.ShowOnMarketplace && p.Category == category).ToListAsync();
+    public async Task<IEnumerable<Product>> GetByCategoryAsync(string category)
+    {
+        var list = await _db.Products
+            .Where(p => p.IsActive && p.ShowOnMarketplace && p.Category == category)
+            .Include(p => p.Variants)
+            .AsNoTracking()
+            .ToListAsync();
+        SyncVariantStock(list);
+        return list;
+    }
 
-    public async Task<Product?> GetByIdAsync(Guid id) =>
-        await _db.Products.FindAsync(id);
+    public async Task<Product?> GetByIdAsync(Guid id)
+    {
+        var p = await _db.Products
+            .Include(p => p.Variants)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == id);
+        if (p?.HasVariants == true && p.Variants.Count > 0)
+            p.StockQuantity = p.Variants.Sum(v => v.StockQuantity);
+        return p;
+    }
+
+    // Quando HasVariants=true, StockQuantity do produto pai não é mais atualizado —
+    // calcula na hora a partir das variantes para sempre refletir o real.
+    private static void SyncVariantStock(List<Product> products)
+    {
+        foreach (var p in products.Where(p => p.HasVariants && p.Variants.Count > 0))
+            p.StockQuantity = p.Variants.Sum(v => v.StockQuantity);
+    }
 
     public async Task<Product> CreateAsync(Product product)
     {
