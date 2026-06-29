@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { comandaApi, userApi, productApi, categoryApi, waitListApi, ComandaDto, Product, ProductCategory, UserProfile } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
+import NotificationBell from '@/components/cliente/NotificationBell'
 import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
 import {
@@ -444,16 +445,19 @@ export default function ClientePage() {
               )}
             </div>
           </div>
-          <Link href="/cliente/perfil">
-            {profile?.profileImageUrl
-              ? <img src={profile.profileImageUrl} alt={profile.name}
-                  className="w-10 h-10 rounded-full object-cover ring-2 ring-white/40" />
-              : <div className="w-10 h-10 rounded-full flex items-center justify-center font-black text-sm"
-                  style={{ backgroundColor: C.yellow, color: C.navy }}>
-                  {profile?.name?.charAt(0).toUpperCase() ?? <UserIcon className="w-5 h-5" />}
-                </div>
-            }
-          </Link>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <Link href="/cliente/perfil">
+              {profile?.profileImageUrl
+                ? <img src={profile.profileImageUrl} alt={profile.name}
+                    className="w-10 h-10 rounded-full object-cover ring-2 ring-white/40" />
+                : <div className="w-10 h-10 rounded-full flex items-center justify-center font-black text-sm"
+                    style={{ backgroundColor: C.yellow, color: C.navy }}>
+                    {profile?.name?.charAt(0).toUpperCase() ?? <UserIcon className="w-5 h-5" />}
+                  </div>
+              }
+            </Link>
+          </div>
         </div>
       </header>
 

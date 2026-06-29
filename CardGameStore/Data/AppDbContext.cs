@@ -53,6 +53,9 @@ public class AppDbContext : DbContext
     public DbSet<ExternalTransaction> ExternalTransactions { get; set; }
     public DbSet<IntegrationConfig>   IntegrationConfigs   { get; set; }
 
+    // ── Mensageria: notificações in-app por usuário ───────────────────────────
+    public DbSet<Notification> Notifications { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------
