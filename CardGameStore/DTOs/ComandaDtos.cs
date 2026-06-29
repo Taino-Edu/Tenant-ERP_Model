@@ -19,6 +19,9 @@ public class AddItemToComandaRequest
     /// <summary>ID da carta no cache MongoDB (nullable se for produto físico).</summary>
     public string? CardCacheId { get; set; }
 
+    /// <summary>Variante escolhida (tamanho/cor). Obrigatório quando produto tem HasVariants=true.</summary>
+    public Guid? VariantId { get; set; }
+
     /// <summary>Nome do item (preenchido automaticamente pelo serviço).</summary>
     [MaxLength(200)]
     public string ItemName { get; set; } = string.Empty;

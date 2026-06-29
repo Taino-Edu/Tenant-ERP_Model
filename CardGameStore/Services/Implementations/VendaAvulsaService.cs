@@ -49,14 +49,33 @@ public class VendaAvulsaService : IVendaAvulsaService
             .Where(p => productIds.Contains(p.Id) && p.IsActive)
             .ToListAsync();
 
+        // Pré-carrega variantes necessárias
+        var variantIds = request.Items.Where(i => i.VariantId.HasValue).Select(i => i.VariantId!.Value).ToList();
+        var variants   = variantIds.Count > 0
+            ? await _db.ProductVariants.Where(v => variantIds.Contains(v.Id)).ToListAsync()
+            : new List<ProductVariant>();
+
         foreach (var item in request.Items)
         {
             var product = products.FirstOrDefault(p => p.Id == item.ProductId)
                 ?? throw new InvalidOperationException($"Produto '{item.ProductId}' não encontrado ou inativo.");
 
-            if (product.StockQuantity < item.Quantity)
-                throw new InvalidOperationException(
-                    $"Estoque insuficiente para '{product.Name}'. Disponível: {product.StockQuantity}, solicitado: {item.Quantity}.");
+            if (product.HasVariants)
+            {
+                if (!item.VariantId.HasValue)
+                    throw new InvalidOperationException($"Produto '{product.Name}' tem grade — selecione tamanho/cor.");
+                var variant = variants.FirstOrDefault(v => v.Id == item.VariantId && v.ProductId == product.Id)
+                    ?? throw new InvalidOperationException($"Variante inválida para '{product.Name}'.");
+                if (variant.StockQuantity < item.Quantity)
+                    throw new InvalidOperationException(
+                        $"Estoque insuficiente para '{product.Name} — {variant.Label}'. Disponível: {variant.StockQuantity}, solicitado: {item.Quantity}.");
+            }
+            else
+            {
+                if (product.StockQuantity < item.Quantity)
+                    throw new InvalidOperationException(
+                        $"Estoque insuficiente para '{product.Name}'. Disponível: {product.StockQuantity}, solicitado: {item.Quantity}.");
+            }
         }
 
         // ── 2. Decrementar estoque no PostgreSQL (única transação relacional) ────
@@ -66,16 +85,33 @@ public class VendaAvulsaService : IVendaAvulsaService
         foreach (var reqItem in request.Items)
         {
             var product = products.First(p => p.Id == reqItem.ProductId);
-
-            // Decremento atômico via ExecuteUpdateAsync — evita race condition em vendas simultâneas
-            var updated = await _db.Products
-                .Where(p => p.Id == product.Id && p.StockQuantity >= reqItem.Quantity)
-                .ExecuteUpdateAsync(s => s.SetProperty(
-                    p => p.StockQuantity, p => p.StockQuantity - reqItem.Quantity));
-            if (updated == 0)
-                throw new InvalidOperationException($"Estoque insuficiente para '{product.Name}' (venda simultânea detectada).");
-
             var effectivePrice = product.IsOnPromo ? product.DiscountPriceInCents!.Value : product.PriceInCents;
+            string? variantLabel = null;
+
+            if (product.HasVariants && reqItem.VariantId.HasValue)
+            {
+                var variant = variants.First(v => v.Id == reqItem.VariantId);
+                // Preço específico da variante sobrepõe o produto pai
+                if (variant.PriceInCents.HasValue) effectivePrice = variant.PriceInCents.Value;
+                variantLabel = variant.Label;
+
+                var updated = await _db.ProductVariants
+                    .Where(v => v.Id == variant.Id && v.StockQuantity >= reqItem.Quantity)
+                    .ExecuteUpdateAsync(s => s.SetProperty(v => v.StockQuantity, v => v.StockQuantity - reqItem.Quantity));
+                if (updated == 0)
+                    throw new InvalidOperationException($"Estoque insuficiente para '{product.Name} — {variant.Label}' (venda simultânea detectada).");
+            }
+            else
+            {
+                // Decremento atômico via ExecuteUpdateAsync — evita race condition em vendas simultâneas
+                var updated = await _db.Products
+                    .Where(p => p.Id == product.Id && p.StockQuantity >= reqItem.Quantity)
+                    .ExecuteUpdateAsync(s => s.SetProperty(
+                        p => p.StockQuantity, p => p.StockQuantity - reqItem.Quantity));
+                if (updated == 0)
+                    throw new InvalidOperationException($"Estoque insuficiente para '{product.Name}' (venda simultânea detectada).");
+            }
+
             var subtotal = effectivePrice * reqItem.Quantity;
             total += subtotal;
 
@@ -88,6 +124,8 @@ public class VendaAvulsaService : IVendaAvulsaService
                 UnitPriceInCents = effectivePrice,
                 SubtotalInCents  = subtotal,
                 UnitCostInCents  = product.CostPriceInCents,
+                VariantId        = reqItem.VariantId,
+                VariantLabel     = variantLabel,
             });
         }
 

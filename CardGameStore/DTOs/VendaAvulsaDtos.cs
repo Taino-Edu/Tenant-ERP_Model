@@ -35,7 +35,10 @@ public class VendaAvulsaRequest
 public class VendaAvulsaItemRequest
 {
     [Required]
-    public Guid ProductId { get; set; }
+    public Guid  ProductId { get; set; }
+
+    /// <summary>Preenchido quando o produto tem grade (HasVariants=true). Obrigatório nesse caso.</summary>
+    public Guid? VariantId { get; set; }
 
     [Range(1, 999)]
     public int Quantity { get; set; } = 1;

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest } from '@/lib/api'
+import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, ProductVariant, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import { usePreferences } from '@/hooks/usePreferences'
 import toast from 'react-hot-toast'
@@ -12,8 +12,15 @@ import {
   BarChart2, ArrowRight, ChevronLeft, Pencil,
 } from 'lucide-react'
 import clsx from 'clsx'
+import VariantPicker from '@/components/admin/VariantPicker'
 
-interface CartItem { product: Product; quantity: number }
+interface CartItem {
+  product: Product
+  quantity: number
+  variantId?: string
+  variantLabel?: string
+  cartKey: string   // product.id + (variantId || '') — permite mesma peça em tamanhos diferentes
+}
 
 const PAY_COLORS: Record<string, string> = {
   Pix:           '#42B6EE',
@@ -417,6 +424,7 @@ function VendaWizard({
   const [search, setSearch] = useState('')
   const [catFilter, setCat] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null)
 
   // Etapa 3 — pagamento
   const [payment, setPayment] = useState<string>(PAYMENT_METHODS[0].value)
@@ -456,28 +464,36 @@ function VendaWizard({
     setClientName(''); setClientSearch(''); setClientResults([])
   }
 
-  function addToCart(product: Product) {
+  function addToCart(product: Product, variant?: ProductVariant) {
+    if (product.hasVariants && !variant) {
+      setVariantPickerProduct(product)
+      return
+    }
+    const cartKey = product.id + (variant?.id ?? '')
+    const maxStock = variant ? variant.stockQuantity : product.stockQuantity
     setCart(prev => {
-      const ex = prev.find(i => i.product.id === product.id)
+      const ex = prev.find(i => i.cartKey === cartKey)
       if (ex) {
-        if (ex.quantity >= product.stockQuantity) {
-          toast.error(`Estoque máximo: ${product.stockQuantity} un.`, { id: product.id })
+        if (ex.quantity >= maxStock) {
+          toast.error(`Estoque máximo: ${maxStock} un.`, { id: cartKey })
           return prev
         }
-        return prev.map(i => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
+        return prev.map(i => i.cartKey === cartKey ? { ...i, quantity: i.quantity + 1 } : i)
       }
-      return [...prev, { product, quantity: 1 }]
+      return [...prev, { product, quantity: 1, variantId: variant?.id, variantLabel: variant?.label, cartKey }]
     })
   }
-  function changeQty(productId: string, delta: number) {
-    setCart(prev => prev.map(i =>
-      i.product.id === productId
-        ? { ...i, quantity: Math.max(1, Math.min(i.quantity + delta, i.product.stockQuantity)) }
-        : i
-    ))
+  function changeQty(cartKey: string, delta: number) {
+    setCart(prev => prev.map(i => {
+      if (i.cartKey !== cartKey) return i
+      const maxStock = i.variantId
+        ? (i.product.stockQuantity) // aproximação — backend valida
+        : i.product.stockQuantity
+      return { ...i, quantity: Math.max(1, Math.min(i.quantity + delta, maxStock)) }
+    }))
   }
-  function removeFromCart(productId: string) {
-    setCart(prev => prev.filter(i => i.product.id !== productId))
+  function removeFromCart(cartKey: string) {
+    setCart(prev => prev.filter(i => i.cartKey !== cartKey))
   }
 
   const subtotal = cart.reduce((s, i) => {
@@ -514,7 +530,7 @@ function VendaWizard({
       const { data } = await vendaAvulsaApi.register(
         clientName.trim() || null,
         payment,
-        cart.map(i => ({ productId: i.product.id, quantity: i.quantity })),
+        cart.map(i => ({ productId: i.product.id, quantity: i.quantity, variantId: i.variantId })),
         discountPct,
         selectedUserId ?? undefined,
         splitEnabled ? secondPayment : null,
@@ -537,6 +553,7 @@ function VendaWizard({
   ]
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
@@ -729,14 +746,17 @@ function VendaWizard({
                         </div>
                         <button
                           onClick={() => addToCart(p)}
-                          disabled={inCart ? inCart.quantity >= p.stockQuantity : false}
+                          disabled={!p.hasVariants && (inCart ? inCart.quantity >= p.stockQuantity : p.stockQuantity === 0)}
                           className={clsx(
                             'shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center transition-all',
-                            inCart
+                            p.hasVariants
+                              ? 'bg-violet-600/20 border-violet-500/40 text-violet-300 hover:bg-violet-600/35'
+                              : inCart
                               ? 'bg-brand-600/25 border-brand-500/50 text-brand-300 hover:bg-brand-600/40'
                               : 'bg-brand-600/15 border-brand-500/30 text-brand-400 hover:bg-brand-600/25',
-                            inCart && inCart.quantity >= p.stockQuantity ? 'opacity-40 cursor-not-allowed' : ''
+                            !p.hasVariants && inCart && inCart.quantity >= p.stockQuantity ? 'opacity-40 cursor-not-allowed' : ''
                           )}
+                          title={p.hasVariants ? 'Escolher tamanho/cor' : 'Adicionar'}
                         >
                           <Plus className="w-4 h-4" />
                         </button>
@@ -762,27 +782,29 @@ function VendaWizard({
                   </div>
                 ) : (
                   <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
-                    {cart.map(({ product, quantity }) => {
+                    {cart.map(({ product, quantity, variantLabel, cartKey }) => {
                       const price = product.isOnPromo && product.discountPriceInCents != null
                         ? product.discountPriceInCents : product.priceInCents
                       return (
-                        <div key={product.id} className="bg-surface-700 border border-surface-600 rounded-xl px-2.5 py-2 space-y-1.5">
+                        <div key={cartKey} className="bg-surface-700 border border-surface-600 rounded-xl px-2.5 py-2 space-y-1.5">
                           <p className="text-xs text-white font-medium leading-tight truncate">{product.name}</p>
+                          {variantLabel && (
+                            <p className="text-[10px] text-violet-400 font-medium">{variantLabel}</p>
+                          )}
                           <div className="flex items-center justify-between gap-1">
                             <span className="text-[10px] text-accent-gold font-bold font-mono">
                               {fmt(price * quantity / 100)}
                             </span>
                             <div className="flex items-center gap-1">
                               <button
-                                onClick={() => quantity === 1 ? removeFromCart(product.id) : changeQty(product.id, -1)}
+                                onClick={() => quantity === 1 ? removeFromCart(cartKey) : changeQty(cartKey, -1)}
                                 className="w-5 h-5 rounded bg-surface-600 hover:bg-red-600/30 flex items-center justify-center transition-colors"
                               >
                                 <Minus className="w-2.5 h-2.5 text-gray-300" />
                               </button>
                               <span className="text-xs font-bold text-white w-4 text-center">{quantity}</span>
                               <button
-                                onClick={() => changeQty(product.id, 1)}
-                                disabled={quantity >= product.stockQuantity}
+                                onClick={() => changeQty(cartKey, 1)}
                                 className="w-5 h-5 rounded bg-surface-600 hover:bg-brand-600/30 flex items-center justify-center transition-colors disabled:opacity-40"
                               >
                                 <Plus className="w-2.5 h-2.5 text-gray-300" />
@@ -1095,6 +1117,20 @@ function VendaWizard({
         </div>
       </div>
     </div>
+
+    {/* Seletor de variante (tamanho/cor) */}
+    {variantPickerProduct && (
+      <VariantPicker
+        productId={variantPickerProduct.id}
+        productName={variantPickerProduct.name}
+        onConfirm={variant => {
+          addToCart(variantPickerProduct, variant)
+          setVariantPickerProduct(null)
+        }}
+        onClose={() => setVariantPickerProduct(null)}
+      />
+    )}
+    </>
   )
 }
 
@@ -1514,6 +1550,7 @@ export default function VendaAvulsaPage() {
           <Plus className="w-6 h-6 text-white" />
         </button>
       )}
+
     </div>
   )
 }

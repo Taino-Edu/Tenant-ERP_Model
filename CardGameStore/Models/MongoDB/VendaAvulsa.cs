@@ -60,6 +60,11 @@ public class VendaAvulsaItem
     public int     SubtotalInCents  { get; set; }
     public int     UnitCostInCents  { get; set; }
 
+    /// <summary>ID da variante escolhida (tamanho/cor). Null para produtos sem grade.</summary>
+    public Guid?   VariantId    { get; set; }
+    /// <summary>Snapshot do label da variante, ex: "M / Preto".</summary>
+    public string? VariantLabel { get; set; }
+
     [BsonIgnore]
     public decimal SubtotalInReais => SubtotalInCents / 100m;
     [BsonIgnore]

@@ -168,25 +168,21 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync()
             ?? throw new InvalidOperationException("Comanda ativa não encontrada para este usuário.");
 
-        // Agrupa com item existente de mesmo produto (evita linhas duplicadas)
+        // Agrupa com item existente de mesmo produto+variante (variantes diferentes = linhas separadas)
         if (request.ProductId.HasValue)
         {
-            var existing = comanda.Items.FirstOrDefault(i => i.ProductId == request.ProductId.Value);
+            var existing = comanda.Items.FirstOrDefault(i =>
+                i.ProductId == request.ProductId.Value &&
+                i.VariantId == request.VariantId);   // null == null para produtos sem grade
             if (existing != null)
             {
-                var upd = await _db.Products
-                    .Where(p => p.Id == request.ProductId.Value && p.StockQuantity >= request.Quantity)
-                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockQuantity, p => p.StockQuantity - request.Quantity));
-                if (upd == 0)
-                {
-                    var p = await _db.Products.FindAsync(request.ProductId.Value);
-                    throw new InvalidOperationException($"Estoque insuficiente para '{p?.Name ?? "produto"}'.");
-                }
-                var addedSubtotal        = existing.UnitPriceInCents * request.Quantity;
-                existing.Quantity       += request.Quantity;
+                // Desconta estoque via ResolveItemAsync (já trata variantes)
+                var (_, resolvedPrice, _) = await ResolveItemAsync(request);
+                var addedSubtotal         = existing.UnitPriceInCents * request.Quantity;
+                existing.Quantity        += request.Quantity;
                 existing.SubtotalInCents += addedSubtotal;
-                comanda.TotalInCents    += addedSubtotal;
-                comanda.Status           = ComandaStatus.EmAndamento;
+                comanda.TotalInCents     += addedSubtotal;
+                comanda.Status            = ComandaStatus.EmAndamento;
                 await _db.SaveChangesAsync();
                 await _hub.Clients.Group(ComandaHub.AdminGroup)
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
@@ -211,6 +207,7 @@ public class ComandaService : IComandaService
             ComandaId                = comanda.Id,
             ProductId                = request.ProductId,
             CardCacheId              = request.CardCacheId,
+            VariantId                = request.VariantId,
             ItemNameSnapshot         = itemName,
             UnitPriceInCents         = priceInCents,
             CostPriceSnapshotInCents = costInCents,
@@ -259,17 +256,12 @@ public class ComandaService : IComandaService
         // Agrupa com item existente de mesmo produto (evita linhas duplicadas)
         if (request.ProductId.HasValue)
         {
-            var existing = comanda.Items.FirstOrDefault(i => i.ProductId == request.ProductId.Value);
+            var existing = comanda.Items.FirstOrDefault(i =>
+                i.ProductId == request.ProductId.Value &&
+                i.VariantId == request.VariantId);
             if (existing != null)
             {
-                var upd = await _db.Products
-                    .Where(p => p.Id == request.ProductId.Value && p.StockQuantity >= request.Quantity)
-                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockQuantity, p => p.StockQuantity - request.Quantity));
-                if (upd == 0)
-                {
-                    var p = await _db.Products.FindAsync(request.ProductId.Value);
-                    throw new InvalidOperationException($"Estoque insuficiente para '{p?.Name ?? "produto"}'.");
-                }
+                var (_, _, _) = await ResolveItemAsync(request); // desconta estoque
                 var addedSubtotal        = existing.UnitPriceInCents * request.Quantity;
                 existing.Quantity       += request.Quantity;
                 existing.SubtotalInCents += addedSubtotal;
@@ -301,6 +293,7 @@ public class ComandaService : IComandaService
             ComandaId                = comanda.Id,
             ProductId                = request.ProductId,
             CardCacheId              = request.CardCacheId,
+            VariantId                = request.VariantId,
             ItemNameSnapshot         = itemName,
             UnitPriceInCents         = priceInCents,
             CostPriceSnapshotInCents = costInCents,
@@ -910,12 +903,39 @@ public class ComandaService : IComandaService
         if (!product.IsActive)
             throw new InvalidOperationException("Produto inativo e não pode ser adicionado.");
 
+        var effectivePrice = product.IsOnPromo ? product.DiscountPriceInCents!.Value : product.PriceInCents;
+        string itemName    = product.Name;
+
+        // ── Produto com grade de tamanho/cor ──────────────────────────────────
+        if (product.HasVariants)
+        {
+            if (!request.VariantId.HasValue)
+                throw new InvalidOperationException($"Produto '{product.Name}' tem grade — selecione tamanho/cor.");
+
+            var variant = await _db.ProductVariants
+                .FirstOrDefaultAsync(v => v.Id == request.VariantId && v.ProductId == product.Id)
+                ?? throw new InvalidOperationException("Variante inválida.");
+
+            if (variant.StockQuantity < request.Quantity)
+                throw new InvalidOperationException(
+                    $"Estoque insuficiente para '{product.Name} — {variant.Label}'. Disponível: {variant.StockQuantity} un.");
+
+            var updv = await _db.ProductVariants
+                .Where(v => v.Id == variant.Id && v.StockQuantity >= request.Quantity)
+                .ExecuteUpdateAsync(s => s.SetProperty(v => v.StockQuantity, v => v.StockQuantity - request.Quantity));
+            if (updv == 0)
+                throw new InvalidOperationException($"Estoque insuficiente para '{product.Name} — {variant.Label}' (venda simultânea).");
+
+            if (variant.PriceInCents.HasValue) effectivePrice = variant.PriceInCents.Value;
+            itemName = $"{product.Name} — {variant.Label}";
+            return (itemName, effectivePrice, product.CostPriceInCents);
+        }
+
+        // ── Produto simples ───────────────────────────────────────────────────
         if (product.StockQuantity < request.Quantity)
             throw new InvalidOperationException(
                 $"Estoque insuficiente para '{product.Name}'. Disponível: {product.StockQuantity} un.");
 
-        // Decremento atômico: UPDATE ... WHERE stock >= qty
-        // Evita race condition em vendas simultâneas (estoque negativo)
         var updated = await _db.Products
             .Where(p => p.Id == product.Id && p.StockQuantity >= request.Quantity)
             .ExecuteUpdateAsync(s => s.SetProperty(
@@ -925,9 +945,7 @@ public class ComandaService : IComandaService
             throw new InvalidOperationException(
                 $"Estoque insuficiente para '{product.Name}' (atualizado por outra venda simultânea).");
 
-        // Mantém o objeto local sincronizado para o SaveChanges final
         product.StockQuantity -= request.Quantity;
-        var effectivePrice = product.IsOnPromo ? product.DiscountPriceInCents!.Value : product.PriceInCents;
         return (product.Name, effectivePrice, product.CostPriceInCents);
     }
 

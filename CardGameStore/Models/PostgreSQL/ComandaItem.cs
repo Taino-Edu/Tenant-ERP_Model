@@ -53,6 +53,10 @@ public class ComandaItem
     [Column("card_cache_id")]
     public string? CardCacheId { get; set; }
 
+    /// <summary>Variante escolhida (tamanho/cor) quando produto tem grade. Null para produtos simples.</summary>
+    [Column("variant_id")]
+    public Guid? VariantId { get; set; }
+
     // -------------------------------------------------------------------------
     // Snapshot do item no momento da adição
     // -------------------------------------------------------------------------

@@ -131,7 +131,7 @@ export interface ProductVariant {
   id: string; productId: string
   size: string | null; color: string | null
   stockQuantity: number; priceInCents: number | null
-  sku: string | null; createdAt: string
+  sku: string | null; label: string; createdAt: string
 }
 
 export interface ProductCategory {
@@ -504,7 +504,7 @@ export const vendaAvulsaApi = {
   register: (
     clientName: string | null,
     paymentMethod: string,
-    items: { productId: string; quantity: number }[],
+    items: { productId: string; quantity: number; variantId?: string }[],
     discountPercent = 0,
     userId?: string,
     secondPaymentMethod?: string | null,
