@@ -1,9 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { productApi, Product } from '@/lib/api'
+import { productApi, waitListApi, Product } from '@/lib/api'
 import Link from 'next/link'
-import { ChevronLeft, Package, ShoppingBag, MessageCircle, Sun, Moon, ChevronRight, Share2, Tag, CheckCircle } from 'lucide-react'
+import { ChevronLeft, Package, ShoppingBag, MessageCircle, Sun, Moon, ChevronRight, Share2, Tag, CheckCircle, Clock, LogIn, X } from 'lucide-react'
 
 const NAVY = '#0C3D5A'
 const BLUE = '#3EC2F2'
@@ -19,6 +19,9 @@ export default function ProductPage() {
   const [loading, setLoading] = useState(true)
   const [mainImg, setMainImg] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(false)
+  const [wl, setWl] = useState<{ inList: boolean; position?: number; entryId?: string } | null>(null)
+  const [wlAuth, setWlAuth] = useState(true)
+  const [wlLoading, setWlLoading] = useState(false)
 
   const C = isDark ? {
     bg: '#121215', card: '#1A1A1F', border: 'rgba(255,255,255,0.07)',
@@ -41,10 +44,36 @@ export default function ProductPage() {
       .then(r => {
         setProduct(r.data)
         setMainImg(r.data.imageUrl)
+        if (r.data.isPreVenda)
+          waitListApi.myPosition(id)
+            .then((res: { data: { inList: boolean; position?: number; entryId?: string } }) => setWl(res.data))
+            .catch((err: { response?: { status: number } }) => { if (err?.response?.status === 401) setWlAuth(false) })
       })
       .catch(() => router.replace('/produtos'))
       .finally(() => setLoading(false))
   }, [id, router])
+
+  async function joinQueue() {
+    if (!id) return
+    setWlLoading(true)
+    try {
+      await waitListApi.join(id)
+      const res = await waitListApi.myPosition(id)
+      setWl(res.data)
+      setWlAuth(true)
+    } catch (err: any) {
+      if (err?.response?.status === 401) setWlAuth(false)
+    } finally { setWlLoading(false) }
+  }
+
+  async function leaveQueue() {
+    if (!id) return
+    setWlLoading(true)
+    try {
+      await waitListApi.leave(id)
+      setWl({ inList: false })
+    } finally { setWlLoading(false) }
+  }
 
   const allImgs = product
     ? [product.imageUrl, ...(product.imageUrls ?? [])].filter(Boolean) as string[]
@@ -159,18 +188,64 @@ export default function ProductPage() {
             </div>
 
             {/* CTAs */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <a href={`https://wa.me/${WA_NUM}?text=${waMsg}`}
-                target="_blank" rel="noopener noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-base transition-all active:scale-95 shadow-lg"
-                style={{ backgroundColor: '#25D366', color: '#fff', boxShadow: '0 8px 24px rgba(37,211,102,0.30)' }}>
-                <MessageCircle className="w-5 h-5" /> Comprar pelo WhatsApp
-              </a>
-              <Link href="/produtos"
-                className="flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-semibold text-sm border transition-all hover:opacity-80"
-                style={{ borderColor: C.border, color: C.text, backgroundColor: C.card }}>
-                <ShoppingBag className="w-4 h-4" /> Ver mais produtos
-              </Link>
+            <div className="flex flex-col gap-3">
+              {product.isPreVenda ? (
+                <>
+                  {/* Bloco de fila pré-venda */}
+                  {!wlAuth ? (
+                    <Link href="/cliente"
+                      className="flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-base transition-all active:scale-95 shadow-lg"
+                      style={{ backgroundColor: '#7C3AED', color: '#fff', boxShadow: '0 8px 24px rgba(124,58,237,0.30)' }}>
+                      <LogIn className="w-5 h-5" /> Entre para garantir sua vaga
+                    </Link>
+                  ) : wl?.inList ? (
+                    <div className="rounded-2xl border p-4 flex items-center justify-between gap-3"
+                      style={{ backgroundColor: isDark ? '#1a1435' : '#f5f0ff', borderColor: '#7C3AED' }}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-lg"
+                          style={{ backgroundColor: '#7C3AED' }}>
+                          {wl.position}
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm" style={{ color: '#7C3AED' }}>Você está na fila!</p>
+                          <p className="text-xs" style={{ color: C.muted }}>Posição #{wl.position} — avisaremos pelo WhatsApp</p>
+                        </div>
+                      </div>
+                      <button onClick={leaveQueue} disabled={wlLoading}
+                        className="p-2 rounded-xl hover:bg-red-100 transition-colors" title="Sair da fila"
+                        style={{ color: '#EF4444' }}>
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={joinQueue} disabled={wlLoading}
+                      className="flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-base transition-all active:scale-95 shadow-lg disabled:opacity-60"
+                      style={{ backgroundColor: '#7C3AED', color: '#fff', boxShadow: '0 8px 24px rgba(124,58,237,0.30)' }}>
+                      <Clock className="w-5 h-5" />
+                      {wlLoading ? 'Aguarde...' : 'Entrar na lista de espera'}
+                    </button>
+                  )}
+                  <Link href="/produtos"
+                    className="flex items-center justify-center gap-2 px-6 py-3 rounded-2xl font-semibold text-sm border transition-all hover:opacity-80"
+                    style={{ borderColor: C.border, color: C.text, backgroundColor: C.card }}>
+                    <ShoppingBag className="w-4 h-4" /> Ver mais produtos
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <a href={`https://wa.me/${WA_NUM}?text=${waMsg}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-base transition-all active:scale-95 shadow-lg"
+                    style={{ backgroundColor: '#25D366', color: '#fff', boxShadow: '0 8px 24px rgba(37,211,102,0.30)' }}>
+                    <MessageCircle className="w-5 h-5" /> Comprar pelo WhatsApp
+                  </a>
+                  <Link href="/produtos"
+                    className="flex items-center justify-center gap-2 px-6 py-4 rounded-2xl font-semibold text-sm border transition-all hover:opacity-80"
+                    style={{ borderColor: C.border, color: C.text, backgroundColor: C.card }}>
+                    <ShoppingBag className="w-4 h-4" /> Ver mais produtos
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* Descrição curta */}
