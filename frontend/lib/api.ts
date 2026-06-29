@@ -123,7 +123,15 @@ export interface Product {
   imageUrls: string[]; fullDescription: string | null
   isLowStock: boolean; priceInReais: number; costPriceInReais: number
   marginInReais: number; marginPercent: number
+  hasVariants: boolean
   updatedAt: string; createdAt: string
+}
+
+export interface ProductVariant {
+  id: string; productId: string
+  size: string | null; color: string | null
+  stockQuantity: number; priceInCents: number | null
+  sku: string | null; createdAt: string
 }
 
 export interface ProductCategory {
@@ -528,6 +536,15 @@ export const productApi = {
   deactivate:  (id: string)         => api.delete(`/api/product/${id}`),
   lowStock:    ()                   => api.get<Product[]>('/api/product/low-stock'),
   adjustStock: (id: string, delta: number) => api.patch(`/api/product/${id}/stock`, { delta }),
+}
+
+export const variantApi = {
+  list:      (productId: string)                  => api.get<ProductVariant[]>(`/api/product-variants/${productId}`),
+  create:    (v: Partial<ProductVariant>)          => api.post<ProductVariant>('/api/product-variants', v),
+  update:    (id: string, v: Partial<ProductVariant>) => api.put<ProductVariant>(`/api/product-variants/${id}`, v),
+  remove:    (id: string)                          => api.delete(`/api/product-variants/${id}`),
+  bulk:      (productId: string, sizes: string[], colors: string[], stockQty: number) =>
+               api.post<ProductVariant[]>('/api/product-variants/bulk', { productId, sizes, colors, stockQuantity: stockQty }),
 }
 
 export interface WaitListEntry { id: string; productId: string; userId?: string; name: string; whatsApp: string; position: number; createdAt: string; notifiedAt?: string }

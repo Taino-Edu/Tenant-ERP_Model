@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { productApi, categoryApi, Product, ProductCategory } from '@/lib/api'
+import { productApi, variantApi, categoryApi, Product, ProductCategory, ProductVariant } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import CameraScanner from '@/components/CameraScanner'
@@ -150,6 +150,191 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
         </div>
       </div>
     </>
+  )
+}
+
+// ── Painel de grade de variantes ──────────────────────────────────────────────
+const SIZES  = ['PP', 'P', 'M', 'G', 'GG', 'XGG']
+const COLORS_PRESET = ['Preto', 'Branco', 'Cinza', 'Azul', 'Vermelho', 'Verde', 'Amarelo', 'Rosa', 'Roxo', 'Laranja']
+
+function VariantsPanel({ productId }: { productId: string }) {
+  const [variants, setVariants]       = useState<ProductVariant[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [showBulk, setShowBulk]       = useState(false)
+  const [selSizes, setSelSizes]       = useState<string[]>([])
+  const [selColors, setSelColors]     = useState<string[]>([])
+  const [customColor, setCustomColor] = useState('')
+  const [bulkQty, setBulkQty]         = useState(0)
+  const [creating, setCreating]       = useState(false)
+  const [editId, setEditId]           = useState<string | null>(null)
+  const [editQty, setEditQty]         = useState(0)
+
+  const load = async () => {
+    try { const { data } = await variantApi.list(productId); setVariants(data) }
+    catch { toast.error('Erro ao carregar variantes') }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { load() }, [productId])
+
+  const toggleSize  = (s: string) => setSelSizes(p  => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
+  const toggleColor = (c: string) => setSelColors(p => p.includes(c) ? p.filter(x => x !== c) : [...p, c])
+
+  async function addCustomColor() {
+    const c = customColor.trim()
+    if (!c) return
+    if (!selColors.includes(c)) setSelColors(p => [...p, c])
+    setCustomColor('')
+  }
+
+  async function handleBulk() {
+    if (!selSizes.length || !selColors.length) { toast.error('Selecione tamanhos e cores'); return }
+    setCreating(true)
+    try {
+      await variantApi.bulk(productId, selSizes, selColors, bulkQty)
+      toast.success('Grade criada!')
+      setSelSizes([]); setSelColors([]); setShowBulk(false)
+      load()
+    } catch { toast.error('Erro ao criar grade') }
+    finally { setCreating(false) }
+  }
+
+  async function saveEdit(id: string) {
+    try {
+      await variantApi.update(id, { stockQuantity: editQty })
+      toast.success('Estoque atualizado')
+      setEditId(null)
+      load()
+    } catch { toast.error('Erro ao salvar') }
+  }
+
+  async function removeVariant(id: string) {
+    if (!confirm('Remover variante?')) return
+    try { await variantApi.remove(id); toast.success('Removida'); load() }
+    catch { toast.error('Erro ao remover') }
+  }
+
+  if (loading) return <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
+
+  const grouped = variants.reduce<Record<string, ProductVariant[]>>((acc, v) => {
+    const key = v.size ?? '—'
+    if (!acc[key]) acc[key] = []
+    acc[key].push(v)
+    return acc
+  }, {})
+
+  return (
+    <div className="space-y-3">
+      {/* Botão criar grade */}
+      <button
+        type="button"
+        onClick={() => setShowBulk(v => !v)}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-brand-500/10 border border-brand-500/30 text-brand-400 hover:bg-brand-500/20 text-sm font-medium transition-colors"
+      >
+        <span className="flex items-center gap-2"><Grid3X3 className="w-4 h-4" /> Criar grade de tamanhos × cores</span>
+        {showBulk ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+
+      {showBulk && (
+        <div className="rounded-xl border border-surface-500 bg-surface-700/50 p-4 space-y-4">
+          <div>
+            <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">Tamanhos</p>
+            <div className="flex flex-wrap gap-2">
+              {SIZES.map(s => (
+                <button key={s} type="button" onClick={() => toggleSize(s)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
+                    selSizes.includes(s) ? 'bg-brand-500 border-brand-500 text-white' : 'bg-surface-800 border-surface-500 text-gray-400 hover:border-brand-500/40'
+                  }`}>{s}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">Cores</p>
+            <div className="flex flex-wrap gap-2">
+              {COLORS_PRESET.map(c => (
+                <button key={c} type="button" onClick={() => toggleColor(c)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold border transition-colors ${
+                    selColors.includes(c) ? 'bg-purple-500 border-purple-500 text-white' : 'bg-surface-800 border-surface-500 text-gray-400 hover:border-purple-500/40'
+                  }`}>{c}</button>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-2">
+              <input
+                className="input flex-1 text-sm py-1.5"
+                placeholder="Cor personalizada..."
+                value={customColor}
+                onChange={e => setCustomColor(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomColor())}
+              />
+              <button type="button" onClick={addCustomColor} className="btn-secondary px-3 text-xs">Adicionar</button>
+            </div>
+            {selColors.length > 0 && (
+              <p className="text-xs text-purple-400 mt-1">Selecionadas: {selColors.join(', ')}</p>
+            )}
+          </div>
+          <div>
+            <label className="label text-xs">Estoque inicial por variante</label>
+            <input className="input" type="number" min="0" value={bulkQty} onChange={e => setBulkQty(parseInt(e.target.value) || 0)} />
+          </div>
+          {selSizes.length > 0 && selColors.length > 0 && (
+            <p className="text-xs text-gray-400">
+              Serão criadas <span className="text-white font-semibold">{selSizes.length * selColors.length}</span> variantes ({selSizes.join(', ')} × {selColors.join(', ')})
+            </p>
+          )}
+          <button type="button" onClick={handleBulk} disabled={creating} className="btn-primary w-full justify-center text-sm">
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {creating ? 'Criando...' : 'Criar grade'}
+          </button>
+        </div>
+      )}
+
+      {/* Tabela de variantes */}
+      {variants.length > 0 ? (
+        <div className="rounded-xl border border-surface-500 overflow-hidden">
+          {Object.entries(grouped).map(([size, vars]) => (
+            <div key={size}>
+              <div className="px-3 py-1.5 bg-surface-700/80 text-xs font-bold text-gray-400 uppercase tracking-wide border-b border-surface-600">
+                Tamanho {size}
+              </div>
+              {vars.map(v => (
+                <div key={v.id} className="flex items-center gap-2 px-3 py-2 border-b border-surface-700 last:border-0 hover:bg-surface-700/40 group">
+                  <span className="text-sm text-gray-300 flex-1">{v.color ?? '—'}</span>
+                  {editId === v.id ? (
+                    <>
+                      <input
+                        className="input w-20 text-sm py-1 text-center"
+                        type="number" min="0"
+                        value={editQty}
+                        onChange={e => setEditQty(parseInt(e.target.value) || 0)}
+                        autoFocus
+                      />
+                      <button type="button" onClick={() => saveEdit(v.id)} className="p-1 text-emerald-400 hover:text-emerald-300"><Check className="w-4 h-4" /></button>
+                      <button type="button" onClick={() => setEditId(null)} className="p-1 text-gray-500 hover:text-gray-300"><X className="w-4 h-4" /></button>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`text-sm font-semibold tabular-nums ${v.stockQuantity === 0 ? 'text-red-400' : v.stockQuantity < 3 ? 'text-amber-400' : 'text-white'}`}>
+                        {v.stockQuantity} un
+                      </span>
+                      <button type="button" onClick={() => { setEditId(v.id); setEditQty(v.stockQuantity) }}
+                        className="p-1 text-gray-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button type="button" onClick={() => removeVariant(v.id)}
+                        className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500 text-center py-2">Nenhuma variante criada ainda.</p>
+      )}
+    </div>
   )
 }
 
@@ -301,12 +486,44 @@ function ProductModal({
               <p className="text-xs text-amber-400 mt-1">Preço promocional deve ser menor que o preço de venda</p>
             )}
           </div>
+          {/* Grade de tamanhos/cores toggle */}
+          <div className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3">
+            <label className="flex items-center justify-between gap-3 cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-[var(--text-primary)]">👕 Grade de tamanhos/cores</p>
+                <p className="text-xs text-[var(--text-muted)]">Ative para produtos com variantes (camisas, bonés, etc.). O estoque passa a ser gerenciado por variante.</p>
+              </div>
+              <div
+                onClick={() => set('hasVariants', !(form.hasVariants ?? false))}
+                className={[
+                  'relative w-10 h-6 rounded-full transition-colors cursor-pointer shrink-0',
+                  form.hasVariants ? 'bg-emerald-500' : 'bg-surface-600',
+                ].join(' ')}
+              >
+                <span className={[
+                  'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                  form.hasVariants ? 'translate-x-4' : 'translate-x-0',
+                ].join(' ')} />
+              </div>
+            </label>
+            {form.hasVariants && form.id && (
+              <div className="mt-3 pt-3 border-t border-surface-600">
+                <VariantsPanel productId={form.id} />
+              </div>
+            )}
+            {form.hasVariants && !form.id && (
+              <p className="text-xs text-amber-400 mt-2">Salve o produto primeiro para gerenciar a grade de variantes.</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Estoque *</label>
-              <input className="input" type="number" min="0" required
+              <label className="label">Estoque total {form.hasVariants && <span className="text-gray-500 font-normal">(soma das variantes)</span>}</label>
+              <input className="input" type="number" min="0"
                 value={form.stockQuantity ?? 0}
                 onChange={e => set('stockQuantity', parseInt(e.target.value))}
+                disabled={!!form.hasVariants}
+                title={form.hasVariants ? 'Gerenciado pelas variantes' : undefined}
               />
             </div>
             <div>
