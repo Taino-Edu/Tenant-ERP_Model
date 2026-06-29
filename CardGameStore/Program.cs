@@ -455,9 +455,9 @@ using (var scope = app.Services.CreateScope())
                 CREATE INDEX IF NOT EXISTS ix_product_waitlist_user    ON product_waitlist (user_id) WHERE user_id IS NOT NULL;
 
                 -- Deck em pré-inscrição e participante de campeonato
-                ALTER TABLE championship_pre_inscricoes ADD COLUMN IF NOT EXISTS deck_id   UUID                 NULL;
-                ALTER TABLE championship_pre_inscricoes ADD COLUMN IF NOT EXISTS deck_name VARCHAR(200)         NULL;
-                ALTER TABLE championship_participants    ADD COLUMN IF NOT EXISTS deck_id   UUID                 NULL;
+                ALTER TABLE championship_preinscricoes ADD COLUMN IF NOT EXISTS deck_id   UUID         NULL;
+                ALTER TABLE championship_preinscricoes ADD COLUMN IF NOT EXISTS deck_name VARCHAR(200) NULL;
+                ALTER TABLE championship_participants   ADD COLUMN IF NOT EXISTS deck_id   UUID         NULL;
 
                 -- Timers de torneio
                 CREATE TABLE IF NOT EXISTS timers (
