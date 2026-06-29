@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { comandaApi, crediarioApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
+import { comandaApi, crediarioApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, notificationsApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
@@ -1372,6 +1372,7 @@ export default function DashboardPage() {
   const [fin7d, setFin7d]         = useState<FinanceiroDto | null>(null)
   const [finHoje, setFinHoje]     = useState<FinanceiroDto | null>(null)
   const [lowStock, setLowStock]   = useState(0)
+  const [unreadNotif, setUnreadNotif] = useState(0)
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [ranking, setRanking]     = useState<ClienteInsightDto[]>([])
   const [allUsers, setAllUsers]   = useState<UserSummary[]>([])
@@ -1456,6 +1457,7 @@ export default function DashboardPage() {
       setPendingPI(total)
     }).catch(() => {})
     lgpdAdminApi.listRequests('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
+    notificationsApi.unreadCount().then(r => setUnreadNotif(r.data.count)).catch(() => {})
   }, [])
 
   async function fetchProdutos(de: string, ate: string) {
@@ -1783,7 +1785,13 @@ export default function DashboardPage() {
             className={clsx('flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all',
               tab === 'analises' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
           >
-            <BarChart2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /><span>Análises</span>
+            <div className="relative">
+              <BarChart2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              {(unreadNotif > 0 || lowStock > 0) && tab !== 'analises' && (
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              )}
+            </div>
+            <span>Análises</span>
           </button>
         </div>
 
