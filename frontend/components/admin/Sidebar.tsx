@@ -9,6 +9,7 @@ import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
+  Wallet, Plug, ClipboardList,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -29,8 +30,10 @@ const sections = [
       { href: '/admin/usuarios',    label: 'Clientes',     icon: Users,       perm: 'usuarios' },
       { href: '/admin/crediario',   label: 'Crediário',    icon: CreditCard,  perm: 'crediario' },
       { href: '/admin/estoque',     label: 'Estoque',      icon: Package,     perm: 'estoque' },
-      { href: '/admin/financeiro',  label: 'Financeiro',   icon: TrendingUp,  perm: 'financeiro' },
-      { href: '/admin/relatorios',  label: 'Relatórios',   icon: BarChart2,   perm: 'relatorios' },
+      { href: '/admin/financeiro',      label: 'Financeiro',        icon: TrendingUp,    perm: 'financeiro' },
+      { href: '/admin/contas-receber', label: 'Contas a Pagar/Rec', icon: Wallet,        perm: 'financeiro' },
+      { href: '/admin/reservas',        label: 'Pré-vendas',         icon: ClipboardList, perm: 'estoque' },
+      { href: '/admin/relatorios',      label: 'Relatórios',         icon: BarChart2,     perm: 'relatorios' },
       { href: '/admin/categorias',  label: 'Categorias',   icon: Tag,         perm: 'categorias' },
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,   perm: 'anuncios' },
       { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search,      perm: 'cartas' },
@@ -43,7 +46,8 @@ const sections = [
     label: 'Administração',
     adminOnly: true,
     items: [
-      { href: '/admin/perfis', label: 'Perfis de Acesso', icon: UserCog, perm: null },
+      { href: '/admin/perfis',      label: 'Perfis de Acesso', icon: UserCog, perm: null },
+      { href: '/admin/integracoes', label: 'Integrações',      icon: Plug,    perm: null },
     ],
   },
   {

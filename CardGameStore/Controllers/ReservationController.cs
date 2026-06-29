@@ -1,5 +1,7 @@
 using CardGameStore.Data;
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,8 +14,16 @@ namespace CardGameStore.Controllers;
 [Produces("application/json")]
 public class ReservationController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    public ReservationController(AppDbContext db) => _db = db;
+    private readonly AppDbContext        _db;
+    private readonly IVendaAvulsaService _vendaService;
+    private readonly IComandaService     _comandaService;
+
+    public ReservationController(AppDbContext db, IVendaAvulsaService vendaService, IComandaService comandaService)
+    {
+        _db             = db;
+        _vendaService   = vendaService;
+        _comandaService = comandaService;
+    }
 
     private Guid GetUserId()
     {
@@ -193,6 +203,75 @@ public class ReservationController : ControllerBase
         return Ok(new { productId, variantId, reservedQuantity = reserved });
     }
 
+    // POST /api/reservations/{id}/homologar — admin homologa reserva → lança no PDV ou comanda
+    [HttpPost("{id:guid}/homologar")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Homologar(Guid id, [FromBody] HomologarRequest req)
+    {
+        var res = await _db.ProductReservations
+            .Include(r => r.User)
+            .Include(r => r.Product)
+            .Include(r => r.Variant)
+            .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (res is null) return NotFound();
+        if (res.Status != "active") return BadRequest(new { Message = "Reserva não está ativa." });
+
+        var adminId   = GetUserId();
+        var adminName = User.FindFirst(ClaimTypes.Name)?.Value
+                     ?? User.FindFirst("name")?.Value
+                     ?? "Admin";
+
+        if (req.Mode == "pdv")
+        {
+            var vendaReq = new VendaAvulsaRequest
+            {
+                ClientName    = res.User?.Name,
+                UserId        = res.UserId,
+                PaymentMethod = req.PaymentMethod ?? "Dinheiro",
+                Items         = [new VendaAvulsaItemRequest { ProductId = res.ProductId, Quantity = res.Quantity }],
+            };
+            try { await _vendaService.RegisterAsync(vendaReq, adminId, adminName); }
+            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+        else if (req.Mode == "comanda")
+        {
+            if (!req.ComandaId.HasValue)
+                return BadRequest(new { Message = "ComandaId é obrigatório no modo comanda." });
+
+            try
+            {
+                await _comandaService.AdminAddItemAsync(req.ComandaId.Value, adminId,
+                    new AddItemToComandaRequest { ProductId = res.ProductId, Quantity = res.Quantity });
+            }
+            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
+        }
+        else
+        {
+            return BadRequest(new { Message = "Mode inválido. Use 'pdv' ou 'comanda'." });
+        }
+
+        res.Status      = "fulfilled";
+        res.FulfilledAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+
+        return Ok(new { message = "Reserva homologada com sucesso.", reservationId = id, mode = req.Mode });
+    }
+
+    // PUT /api/reservations/{id}/extend — admin estende prazo +48h
+    [HttpPut("{id:guid}/extend")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Extend(Guid id)
+    {
+        var res = await _db.ProductReservations.FindAsync(id);
+        if (res is null) return NotFound();
+        if (res.Status != "active") return BadRequest(new { Message = "Reserva não está ativa." });
+
+        res.ExpiresAt = res.ExpiresAt.AddHours(48);
+        await _db.SaveChangesAsync();
+        return Ok(ToDto(res));
+    }
+
     private static object ToDto(ProductReservation r) => new
     {
         r.Id,
@@ -225,4 +304,16 @@ public class CreateReservationRequest
 public class UpdateReservationStatusRequest
 {
     public string Status { get; init; } = "";
+}
+
+public class HomologarRequest
+{
+    /// <summary>"pdv" | "comanda"</summary>
+    public string Mode { get; init; } = "pdv";
+
+    /// <summary>Forma de pagamento para o modo PDV. Padrão: Dinheiro.</summary>
+    public string? PaymentMethod { get; init; }
+
+    /// <summary>ID da comanda aberta (obrigatório no modo comanda).</summary>
+    public Guid? ComandaId { get; init; }
 }

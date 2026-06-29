@@ -49,6 +49,10 @@ public class AppDbContext : DbContext
     public DbSet<ProductVariant>     ProductVariants     { get; set; }
     public DbSet<ProductReservation> ProductReservations { get; set; }
 
+    // ── Financeiro: transações externas e integrações ─────────────────────────
+    public DbSet<ExternalTransaction> ExternalTransactions { get; set; }
+    public DbSet<IntegrationConfig>   IntegrationConfigs   { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------

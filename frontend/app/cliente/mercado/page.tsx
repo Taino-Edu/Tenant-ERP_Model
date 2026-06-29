@@ -548,8 +548,8 @@ export default function MercadoPage() {
         </div>
         {myId && (
           <button
-            onClick={() => { if (!adultConfirmed) { setShowAdultGate(true) } else { setShowCreate(true) } }}
-            className="ml-auto btn-primary flex items-center gap-2"
+            onClick={() => toast.error('Anúncios de cartas estão temporariamente suspensos. Em breve disponível!', { duration: 4000 })}
+            className="ml-auto btn-primary flex items-center gap-2 opacity-60 cursor-not-allowed"
           >
             <Plus className="w-4 h-4" /> Anunciar carta
           </button>

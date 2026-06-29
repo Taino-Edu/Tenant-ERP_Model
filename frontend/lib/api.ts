@@ -1055,3 +1055,37 @@ export interface PublicProfileDto {
 export const publicProfileApi = {
   get: (userId: string) => api.get<PublicProfileDto>(`/api/profile/${userId}`),
 }
+
+// ── Reservas (pré-venda) ──────────────────────────────────────────────────────
+export const reservationApi = {
+  list:      (params?: { status?: string; page?: number; pageSize?: number }) =>
+               api.get('/api/reservations', { params }),
+  mine:      ()                                    => api.get('/api/reservations/mine'),
+  create:    (body: { productId: string; variantId?: string; quantity?: number; notes?: string }) =>
+               api.post('/api/reservations', body),
+  cancel:    (id: string)                          => api.delete(`/api/reservations/${id}`),
+  extend:    (id: string)                          => api.put(`/api/reservations/${id}/extend`),
+  homologar: (id: string, body: { mode: 'pdv' | 'comanda'; paymentMethod?: string; comandaId?: string }) =>
+               api.post(`/api/reservations/${id}/homologar`, body),
+  updateStatus: (id: string, status: string)       => api.put(`/api/reservations/${id}/status`, { status }),
+}
+
+// ── Contas a Receber / Pagar ──────────────────────────────────────────────────
+export const contasReceberApi = {
+  list:      (params?: { type?: string; status?: string; source?: string; search?: string; page?: number }) =>
+               api.get('/api/contas-receber', { params }),
+  summary:   ()                                    => api.get('/api/contas-receber/summary'),
+  create:    (body: { type: string; amount: number; description: string; dueDate?: string; category?: string; supplier?: string; notes?: string }) =>
+               api.post('/api/contas-receber', body),
+  update:    (id: string, body: Partial<{ description: string; amount: number; dueDate: string; status: string; category: string; supplier: string; notes: string }>) =>
+               api.put(`/api/contas-receber/${id}`, body),
+  remove:    (id: string)                          => api.delete(`/api/contas-receber/${id}`),
+  importOfx: (file: File)                          => {
+               const form = new FormData(); form.append('file', file)
+               return api.post('/api/contas-receber/import-ofx', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+             },
+  integracoes:   ()                                => api.get('/api/contas-receber/integracoes'),
+  saveIntegracao:(source: string, body: { clientId?: string; clientSecret?: string; cnpj?: string; isActive?: boolean }) =>
+                  api.put(`/api/contas-receber/integracoes/${source}`, body),
+  sefazStatus:  ()                                 => api.get('/api/contas-receber/sefaz-status'),
+}

@@ -21,6 +21,14 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MongoDB.Driver;
 
+// Comando utilitário: dotnet run -- gen-key  →  imprime nova chave AES-256 em Base64
+if (args.Contains("gen-key"))
+{
+    Console.WriteLine("Nova chave AES-256 (copie para Encryption:Key no VPS):");
+    Console.WriteLine(EncryptionService.GenerateKey());
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ---------------------------------------------------------------------------
@@ -326,6 +334,9 @@ builder.Services.AddMemoryCache();
 // LGPD — Auditoria e privacidade
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddSingleton<OfxParserService>();
+builder.Services.AddScoped<SefazNfeService>();
+builder.Services.AddSingleton<EncryptionService>();
 
 // ---------------------------------------------------------------------------
 // 12. CORS — origens lidas de config para facilitar deploy sem rebuild
