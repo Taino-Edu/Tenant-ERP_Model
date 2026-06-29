@@ -199,18 +199,18 @@ function VariantsPanel({ productId }: { productId: string }) {
     finally { setCreating(false) }
   }
 
-  async function saveEdit(id: string) {
+  async function saveEdit(variantId: string) {
     try {
-      await variantApi.update(id, { stockQuantity: editQty })
+      await variantApi.update(productId, variantId, { stockQuantity: editQty })
       toast.success('Estoque atualizado')
       setEditId(null)
       load()
     } catch { toast.error('Erro ao salvar') }
   }
 
-  async function removeVariant(id: string) {
+  async function removeVariant(variantId: string) {
     if (!confirm('Remover variante?')) return
-    try { await variantApi.remove(id); toast.success('Removida'); load() }
+    try { await variantApi.remove(productId, variantId); toast.success('Removida'); load() }
     catch { toast.error('Erro ao remover') }
   }
 

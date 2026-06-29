@@ -539,12 +539,14 @@ export const productApi = {
 }
 
 export const variantApi = {
-  list:      (productId: string)                  => api.get<ProductVariant[]>(`/api/product-variants/${productId}`),
-  create:    (v: Partial<ProductVariant>)          => api.post<ProductVariant>('/api/product-variants', v),
-  update:    (id: string, v: Partial<ProductVariant>) => api.put<ProductVariant>(`/api/product-variants/${id}`, v),
-  remove:    (id: string)                          => api.delete(`/api/product-variants/${id}`),
-  bulk:      (productId: string, sizes: string[], colors: string[], stockQty: number) =>
-               api.post<ProductVariant[]>('/api/product-variants/bulk', { productId, sizes, colors, stockQuantity: stockQty }),
+  list:   (productId: string) =>
+            api.get<ProductVariant[]>(`/api/products/${productId}/variants`),
+  update: (productId: string, variantId: string, v: Partial<ProductVariant>) =>
+            api.put<ProductVariant>(`/api/products/${productId}/variants/${variantId}`, v),
+  remove: (productId: string, variantId: string) =>
+            api.delete(`/api/products/${productId}/variants/${variantId}`),
+  bulk:   (productId: string, sizes: string[], colors: string[], stockQty: number) =>
+            api.post<ProductVariant[]>(`/api/products/${productId}/variants/bulk`, { sizes, colors, baseStockQuantity: stockQty }),
 }
 
 export interface WaitListEntry { id: string; productId: string; userId?: string; name: string; whatsApp: string; position: number; createdAt: string; notifiedAt?: string }
