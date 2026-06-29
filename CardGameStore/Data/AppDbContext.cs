@@ -45,6 +45,10 @@ public class AppDbContext : DbContext
     public DbSet<CardListing>     CardListings     { get; set; }
     public DbSet<ListingInterest> ListingInterests { get; set; }
 
+    // ── Estoque: variantes e reservas ─────────────────────────────────────────
+    public DbSet<ProductVariant>     ProductVariants     { get; set; }
+    public DbSet<ProductReservation> ProductReservations { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------

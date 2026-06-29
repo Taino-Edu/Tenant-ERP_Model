@@ -495,7 +495,7 @@ export default function ClientePage() {
               <ShoppingBag className="w-4 h-4" style={{ color: C.blue }} />
             </div>
             <div>
-              <p className="text-xs font-black" style={{ color: C.navy }}>Mercado</p>
+              <p className="text-xs font-black" style={{ color: C.navy }}>Mercado de Cartas</p>
               <p className="text-[10px]" style={{ color: C.muted }}>Compre e venda cartas</p>
             </div>
           </Link>

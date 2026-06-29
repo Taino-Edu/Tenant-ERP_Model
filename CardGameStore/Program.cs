@@ -503,6 +503,40 @@ using (var scope = app.Services.CreateScope())
 
                 -- Consentimento LGPD: comprador autoriza expor WhatsApp ao vendedor
                 ALTER TABLE listing_interests ADD COLUMN IF NOT EXISTS share_contact BOOLEAN NOT NULL DEFAULT FALSE;
+
+                -- Variantes de produto (grade tamanho/cor para roupas e similares)
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS has_variants BOOLEAN NOT NULL DEFAULT FALSE;
+
+                CREATE TABLE IF NOT EXISTS product_variants (
+                    id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                    product_id      UUID         NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                    size            VARCHAR(50)  NULL,
+                    color           VARCHAR(100) NULL,
+                    stock_quantity  INTEGER      NOT NULL DEFAULT 0,
+                    price_in_cents  INTEGER      NULL,
+                    sku             VARCHAR(100) NULL,
+                    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_product_variants_product ON product_variants (product_id);
+
+                -- Reservas de produtos via site (não usadas no PDV)
+                CREATE TABLE IF NOT EXISTS product_reservations (
+                    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id       UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    product_id    UUID         NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                    variant_id    UUID         NULL REFERENCES product_variants(id) ON DELETE SET NULL,
+                    quantity      INTEGER      NOT NULL DEFAULT 1,
+                    status        VARCHAR(20)  NOT NULL DEFAULT 'active',
+                    notes         VARCHAR(500) NULL,
+                    reserved_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    expires_at    TIMESTAMPTZ  NOT NULL,
+                    fulfilled_at  TIMESTAMPTZ  NULL,
+                    cancelled_at  TIMESTAMPTZ  NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_product_reservations_user    ON product_reservations (user_id);
+                CREATE INDEX IF NOT EXISTS ix_product_reservations_product ON product_reservations (product_id);
+                CREATE INDEX IF NOT EXISTS ix_product_reservations_status  ON product_reservations (status);
             ");
         }
 

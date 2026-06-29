@@ -109,6 +109,13 @@ public class Product
     [Column("is_pre_venda")]
     public bool IsPreVenda { get; set; } = false;
 
+    /// <summary>
+    /// Se true, o estoque é gerenciado por variantes (ProductVariant) em vez do campo StockQuantity.
+    /// Use para produtos com grade de tamanho/cor (ex: camisas).
+    /// </summary>
+    [Column("has_variants")]
+    public bool HasVariants { get; set; } = false;
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -153,5 +160,7 @@ public class Product
     // Navegação
     // -------------------------------------------------------------------------
 
-    public ICollection<ComandaItem> ComandaItems { get; set; } = new List<ComandaItem>();
+    public ICollection<ComandaItem>        ComandaItems { get; set; } = new List<ComandaItem>();
+    public ICollection<ProductVariant>     Variants     { get; set; } = new List<ProductVariant>();
+    public ICollection<ProductReservation> Reservations { get; set; } = new List<ProductReservation>();
 }

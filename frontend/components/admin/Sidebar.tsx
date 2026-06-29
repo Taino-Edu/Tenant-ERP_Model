@@ -8,7 +8,7 @@ import { authApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings, Timer,
+  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -36,7 +36,7 @@ const sections = [
       { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search,      perm: 'cartas' },
       { href: '/admin/campeonatos',  label: 'Campeonatos',  icon: Trophy,      perm: 'campeonatos' },
       { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: 'campeonatos' },
-      { href: '/admin/marketplace',  label: 'Marketplace',  icon: Store,       perm: 'estoque' },
+      { href: '/admin/marketplace',  label: 'Mercado de Cartas', icon: Store, perm: 'estoque' },
     ],
   },
   {
@@ -50,7 +50,9 @@ const sections = [
     label: 'Compliance',
     items: [
       { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield, perm: 'lgpd' },
-      { href: '/admin/sobre', label: 'Sobre o Sistema',   icon: Info,   perm: null },
+      { href: '/admin/manual',    label: 'Manual',           icon: BookOpen, perm: null },
+      { href: '/admin/changelog', label: 'Changelog',        icon: History,  perm: null },
+      { href: '/admin/sobre',     label: 'Sobre o Sistema',  icon: Info,     perm: null },
     ],
   },
   {

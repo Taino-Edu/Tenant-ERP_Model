@@ -129,6 +129,57 @@ const SECOES = [
     ],
   },
   {
+    num: '07b',
+    titulo: 'Grade de Produtos (Tamanhos & Cores)',
+    cor: '#34D399',
+    itens: [
+      { t: 'O que é a grade', d: 'Produtos de vestuário (camisas, moletons, bonés) podem ter variantes de tamanho e cor. Cada combinação tem estoque próprio e SKU único.' },
+      { t: 'Ativar variantes', d: 'No cadastro ou edição do produto, marque "Tem variantes". O campo de estoque geral é substituído pela grade.' },
+      { t: 'Criar grade completa', d: 'Clique em "Criar grade". Selecione os tamanhos (PP/P/M/G/GG/XGG) e as cores. O sistema cria automaticamente todas as combinações (ex: 3 tamanhos × 4 cores = 12 variantes).' },
+      { t: 'Estoque por variante', d: 'Cada variante tem seu próprio estoque. O total no produto é a soma de todas as variantes.' },
+      { t: 'Preço por variante', d: 'Se uma variante tiver preço diferente (ex: XGG mais caro), edite a variante e informe o preço. Sem preço = usa o preço do produto pai.' },
+      { t: 'Vender variante', d: 'Na comanda ou PDV, ao adicionar um produto com grade, aparece um seletor de tamanho e cor. O estoque da variante escolhida é descontado.' },
+    ],
+    dicas: [
+      'Produtos sem variantes não são afetados — a grade é opcional e ativada por produto.',
+      'Para criar variantes individualmente (sem grade), use o botão "Adicionar variante" no painel da grade.',
+    ],
+  },
+  {
+    num: '07c',
+    titulo: 'Reservas de Produtos (Site)',
+    cor: '#60A5FA',
+    itens: [
+      { t: 'O que é', d: 'Clientes podem reservar produtos pelo site sem precisar ir à loja. A reserva bloqueia o item por 48 horas.' },
+      { t: 'Como o cliente reserva', d: 'Na loja online (área do cliente → Loja), clique em "Reservar" no produto. Se tiver variantes, escolhe tamanho e cor. A reserva expira em 48h.' },
+      { t: 'Estoque reservado', d: 'A quantidade reservada é subtraída do estoque disponível para novos pedidos — mas não decrementa o estoque físico ainda.' },
+      { t: 'Confirmar entrega (admin)', d: 'Em Estoque → Reservas, veja as reservas ativas. Clique "Entregar" para confirmar que o cliente retirou. O estoque físico é decrementado neste momento.' },
+      { t: 'Cancelar reserva', d: 'Admin ou o próprio cliente podem cancelar. O estoque fica disponível novamente.' },
+      { t: 'Reservas expiradas', d: 'Reservas não confirmadas em 48h expiram automaticamente e liberam o estoque.' },
+    ],
+    dicas: [
+      'A reserva não é uma venda — nenhum pagamento é registrado até o admin confirmar a entrega.',
+      'Use para clientes que querem garantir o produto antes de vir buscar.',
+    ],
+  },
+  {
+    num: '07d',
+    titulo: 'Mercado de Cartas (C2C)',
+    cor: '#F472B6',
+    itens: [
+      { t: 'O que é', d: 'Plataforma interna onde clientes compram e vendem cartas entre si. A loja não intermedeia financeiramente.' },
+      { t: 'Anunciar carta', d: 'Cliente acessa "Mercado de Cartas" no site → "Anunciar carta". Tira foto direto pelo celular, informa condição (NM/LP/MP/HP/DMG), preço e descrição.' },
+      { t: 'Condições de carta', d: 'NM = Near Mint (perfeita) • LP = Light Played (levemente usada) • MP = Moderate Played • HP = Heavy Played • DMG = Damaged (danificada).' },
+      { t: 'Interesse', d: 'Comprador clica "Tenho interesse" e pode deixar uma mensagem. Pode autorizar (ou não) compartilhar o WhatsApp com o vendedor.' },
+      { t: 'Fechar negócio', d: 'O vendedor vê os interessados. Se o comprador autorizou o contato, aparece botão de WhatsApp direto. Eles negociam e combinam presencialmente ou via WhatsApp.' },
+      { t: 'Moderação', d: 'Admin vê todos os anúncios em Gestão → Mercado de Cartas. Pode remover anúncios inapropriados ou alterar status (Disponível / Reservado / Vendido).' },
+    ],
+    dicas: [
+      'LGPD: o WhatsApp do comprador só aparece para o vendedor se o próprio comprador autorizou explicitamente.',
+      'Menores precisam declarar que têm 18 anos ou autorização dos responsáveis para anunciar ou marcar interesse.',
+    ],
+  },
+  {
     num: '08',
     titulo: 'Relatórios',
     cor: '#22D3EE',

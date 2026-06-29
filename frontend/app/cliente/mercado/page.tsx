@@ -543,7 +543,7 @@ export default function MercadoPage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-          <h1 className="text-2xl font-black text-white">Mercado</h1>
+          <h1 className="text-2xl font-black text-white">Mercado de Cartas</h1>
           <p className="text-sm text-gray-400">Compre e venda cartas com outros jogadores</p>
         </div>
         {myId && (
@@ -562,7 +562,7 @@ export default function MercadoPage() {
           onClick={() => { setTab('all'); setPage(1) }}
           className={clsx('px-4 py-2 rounded-xl text-sm font-semibold transition-colors', tab === 'all' ? 'bg-brand-500 text-white' : 'bg-surface-800 text-gray-400 hover:bg-surface-700')}
         >
-          <ShoppingBag className="w-4 h-4 inline mr-1.5" />Mercado
+          <ShoppingBag className="w-4 h-4 inline mr-1.5" />Mercado de Cartas
         </button>
         {myId && (
           <button
