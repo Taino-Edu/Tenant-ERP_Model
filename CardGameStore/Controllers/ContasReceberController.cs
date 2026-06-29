@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace CardGameStore.Controllers;
 
@@ -18,13 +19,15 @@ public class ContasReceberController : ControllerBase
     private readonly OfxParserService   _ofx;
     private readonly SefazNfeService    _sefaz;
     private readonly EncryptionService  _enc;
+    private readonly InterSyncService   _inter;
 
-    public ContasReceberController(AppDbContext db, OfxParserService ofx, SefazNfeService sefaz, EncryptionService enc)
+    public ContasReceberController(AppDbContext db, OfxParserService ofx, SefazNfeService sefaz, EncryptionService enc, InterSyncService inter)
     {
         _db    = db;
         _ofx   = ofx;
         _sefaz = sefaz;
         _enc   = enc;
+        _inter = inter;
     }
 
     // ── GET /api/contas-receber — lista com filtros ────────────────────────────
@@ -276,6 +279,32 @@ public class ContasReceberController : ControllerBase
     [HttpGet("sefaz-status")]
     public IActionResult SefazStatus() =>
         Ok(new { configured = _sefaz.IsConfigured });
+
+    // ── POST /api/contas-receber/integracoes/inter/sync — sincronização manual ─
+    [HttpPost("integracoes/inter/sync")]
+    public async Task<IActionResult> InterSync([FromQuery] int days = 7)
+    {
+        var result = await _inter.SyncAsync(days);
+        if (result.Skipped)
+            return BadRequest(new { Message = result.Reason });
+        if (result.Error is not null)
+            return StatusCode(502, new { Message = result.Error });
+        return Ok(new { result.Imported, result.Duplicates });
+    }
+
+    // ── GET /api/contas-receber/integracoes/inter/status ──────────────────────
+    [HttpGet("integracoes/inter/status")]
+    public async Task<IActionResult> InterStatus()
+    {
+        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+        return Ok(new
+        {
+            configured      = cfg is not null && _inter.IsConfigured(cfg),
+            certificateOk   = _inter.CertificateExists(),
+            hasCredentials  = !string.IsNullOrWhiteSpace(cfg?.ClientId) && !string.IsNullOrWhiteSpace(cfg?.ClientSecret),
+            lastSyncAt      = cfg?.LastSyncAt,
+        });
+    }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     private static object ToDto(ExternalTransaction t) => new

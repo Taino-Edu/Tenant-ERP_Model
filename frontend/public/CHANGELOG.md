@@ -1,5 +1,25 @@
 # Changelog — Santuário Nerd
 
+## [v1.11.0] — 2026-06-29
+
+### Adicionado
+- **Pré-vendas / Reservas** (`/admin/reservas`): clientes reservam produtos pelo app — estoque é bloqueado imediatamente mas a venda só entra no financeiro quando o admin "homologa"; na homologação, admin escolhe registrar como venda avulsa (frente de caixa) ou lançar em comanda aberta; opção de estender prazo +48h
+- **Contas a Pagar / Receber** (`/admin/contas-receber`): módulo financeiro completo com lançamento manual, cards de resumo (a pagar, atrasado, vencendo em 7 dias, a receber, pago no mês) e marcação automática de contas vencidas como "atrasado"
+- **Importação OFX**: upload de extrato bancário `.ofx` (qualquer banco que exporte nesse formato) — transações importadas automaticamente com deduplicação por FITID, já classificadas como pago
+- **Integrações financeiras** (`/admin/integracoes`): painel com 4 fontes de dados — Inter PJ (OAuth2 + mTLS), Mercado Pago, SEFAZ NF-e (extrato de NF-e por CNPJ, requer certificado A1) e OFX manual; cada integração mostra status de conexão, última sincronização e botão de configurar
+- **Criptografia AES-256-GCM**: Client Secrets e tokens OAuth armazenados no banco com criptografia simétrica de 256 bits; chave configurada via variável de ambiente `Encryption__Key` — nunca exposta em respostas de API
+- **Marketplace bloqueado**: botão "Anunciar carta" exibe toast informativo enquanto o módulo de anúncios está em desenvolvimento; navegação, interesse e listagens existentes continuam funcionando normalmente
+
+### Técnico
+- Novas tabelas: `external_transactions` (transações de qualquer fonte) e `integration_configs` (credenciais criptografadas por integração)
+- `EncryptionService`: AES-256-GCM, formato `Base64(nonce[12] + tag[16] + ciphertext)`; modo dev usa chave-zero; prod exige `Encryption__Key` configurado
+- `OfxParserService`: parser regex para SGML/XML OFX; extrai FITID, TRNTYPE, DTPOSTED, TRNAMT, NAME/MEMO
+- `SefazNfeService`: placeholder pronto para receber certificado A1 via `Sefaz:CertificatePath`
+- `ContasReceberController`: CRUD completo + importação OFX + gestão de integrações (salva credenciais criptografadas, nunca as retorna)
+- CNPJ Santuário Nerd `42.989.093/0001-79` pré-configurado para integração SEFAZ
+
+---
+
 ## [v1.10.1] — 2026-06-28
 
 ### Adicionado

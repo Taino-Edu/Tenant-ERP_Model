@@ -337,6 +337,8 @@ builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddSingleton<OfxParserService>();
 builder.Services.AddScoped<SefazNfeService>();
 builder.Services.AddSingleton<EncryptionService>();
+builder.Services.AddScoped<InterSyncService>();
+builder.Services.AddHostedService<InterSyncBackgroundService>();
 
 // ---------------------------------------------------------------------------
 // 12. CORS — origens lidas de config para facilitar deploy sem rebuild
