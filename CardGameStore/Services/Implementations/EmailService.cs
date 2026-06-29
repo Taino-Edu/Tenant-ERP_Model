@@ -32,7 +32,7 @@ public class EmailService : IEmailService
 
     public async Task SendPasswordResetAsync(string toEmail, string toName, string resetToken)
     {
-        var appUrl = _config["EmailSettings:AppUrl"] ?? "http://localhost:3000";
+        var appUrl = _config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://santuarionerd.tech";
         var link   = $"{appUrl}/reset-password?token={Uri.EscapeDataString(resetToken)}";
 
         var body = $"""
@@ -302,18 +302,17 @@ public class EmailService : IEmailService
 
     private async Task SendAsync(string toEmail, string toName, string subject, string htmlBody)
     {
-        var host     = _config["EmailSettings:Host"];
-        var portStr  = _config["EmailSettings:Port"];
-        var user     = _config["EmailSettings:User"];
-        var password = _config["EmailSettings:Password"];
-        var from     = _config["EmailSettings:From"] ?? user;
+        var host     = _config["SmtpSettings:Host"];
+        var portStr  = _config["SmtpSettings:Port"];
+        var user     = _config["SmtpSettings:Username"];
+        var password = _config["SmtpSettings:Password"];
+        var from     = _config["SmtpSettings:FromEmail"] ?? user;
+        var fromName = _config["SmtpSettings:FromName"] ?? "softNerd";
 
-        // Se email não estiver configurado, loga e retorna sem erro —
-        // o sistema funciona sem email em dev/testes.
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(user))
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
         {
             _logger.LogWarning(
-                "EmailService: configuração ausente. Email para {To} ('{Subject}') não foi enviado.",
+                "EmailService: SmtpSettings não configurado. Email para {To} ('{Subject}') não foi enviado.",
                 toEmail, subject);
             return;
         }
@@ -330,7 +329,7 @@ public class EmailService : IEmailService
 
             using var msg = new MailMessage
             {
-                From       = new MailAddress(from!, "softNerd"),
+                From       = new MailAddress(from!, fromName),
                 Subject    = subject,
                 Body       = htmlBody,
                 IsBodyHtml = true,
