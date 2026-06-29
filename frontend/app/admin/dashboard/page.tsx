@@ -822,13 +822,14 @@ function ConfirmModal({
 // ── Card de Comanda ───────────────────────────────────────────────────────────
 
 function ComandaCard({
-  comanda, onClose, onCancel, onUpdate, isNew,
+  comanda, onClose, onCancel, onUpdate, isNew, recentChange,
 }: {
   comanda: ComandaDto
   onClose:  (id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) => void
   onCancel: (id: string) => void
-  onUpdate: (updated: ComandaDto) => void
+  onUpdate: (updated: ComandaDto, changeType?: 'add' | 'remove') => void
   isNew:    boolean
+  recentChange: 'add' | 'remove' | null
 }) {
   const [expanded, setExpanded]   = useState(false)
   const [loading, setLoading]     = useState(false)
@@ -868,7 +869,7 @@ function ComandaCard({
     setRemovingItem(itemId)
     try {
       const { data } = await comandaApi.removeItem(comanda.id, itemId)
-      onUpdate(data)
+      onUpdate(data, 'remove')
       toast.success('Item removido.')
     } catch {
       toast.error('Erro ao remover item.')
@@ -881,7 +882,7 @@ function ComandaCard({
     setRemovingPts(true)
     try {
       const { data } = await comandaApi.removePoints(comanda.id)
-      onUpdate(data)
+      onUpdate(data, 'remove')
       toast.success('Pontos removidos e devolvidos ao cliente!')
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
@@ -910,7 +911,7 @@ function ComandaCard({
         <AddItemModal
           comandaId={comanda.id}
           onClose={() => setAddOpen(false)}
-          onAdded={updated => { onUpdate(updated); setAddOpen(false) }}
+          onAdded={updated => { onUpdate(updated, 'add'); setAddOpen(false) }}
         />
       )}
       {closeOpen && (
@@ -933,7 +934,9 @@ function ComandaCard({
 
       <div className={clsx(
         'card flex flex-col gap-3 transition-all duration-300',
-        isNew && 'flash-new border-brand-500/50'
+        isNew && 'flash-new border-brand-500/50',
+        recentChange === 'add'    && 'ring-2 ring-green-500/60 shadow-[0_0_12px_rgba(34,197,94,0.25)]',
+        recentChange === 'remove' && 'ring-2 ring-amber-400/60 shadow-[0_0_12px_rgba(251,191,36,0.25)]',
       )}>
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -953,8 +956,14 @@ function ComandaCard({
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className={statusMap[comanda.status] ?? 'badge'}>{statusLabel[comanda.status]}</span>
+                {recentChange === 'add' && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-500/20 text-green-400 border border-green-500/30">+ adicionado</span>
+                )}
+                {recentChange === 'remove' && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">− removido</span>
+                )}
               </div>
               <p className="font-semibold text-white truncate">{comanda.userName}</p>
               {comanda.tableIdentifier && (
@@ -1358,6 +1367,7 @@ export default function DashboardPage() {
   const [histLoading, setHistLoad]= useState(false)
   const [connected, setConnected] = useState(false)
   const [newIds, setNewIds]       = useState<Set<string>>(new Set())
+  const [recentChanges, setRecentChanges] = useState<Map<string, { type: 'add' | 'remove'; at: number }>>(new Map())
   const [search, setSearch]       = useState('')
   const [fin7d, setFin7d]         = useState<FinanceiroDto | null>(null)
   const [finHoje, setFinHoje]     = useState<FinanceiroDto | null>(null)
@@ -1529,8 +1539,19 @@ export default function DashboardPage() {
     prevCountRef.current = comandas.length
   }, [comandas.length])
 
-  function handleUpdate(updated: ComandaDto) {
+  function markChange(id: string, type: 'add' | 'remove') {
+    const now = Date.now()
+    setRecentChanges(prev => new Map(prev).set(id, { type, at: now }))
+    setTimeout(() => setRecentChanges(prev => {
+      const next = new Map(prev)
+      if (next.get(id)?.at === now) next.delete(id)
+      return next
+    }), 5 * 60 * 1000) // 5 minutos
+  }
+
+  function handleUpdate(updated: ComandaDto, changeType?: 'add' | 'remove') {
     setComandas(prev => prev.map(c => c.id === updated.id ? updated : c))
+    if (changeType) markChange(updated.id, changeType)
   }
 
   async function handleClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) {
@@ -1815,6 +1836,7 @@ export default function DashboardPage() {
                 onCancel={handleCancel}
                 onUpdate={handleUpdate}
                 isNew={newIds.has(c.id)}
+                recentChange={recentChanges.get(c.id)?.type ?? null}
               />
             ))}
           </div>

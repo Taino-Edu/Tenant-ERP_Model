@@ -301,17 +301,18 @@ function EditChampionshipModal({ championship, onClose, onSave }: {
 }
 
 // ── Modal: Adicionar Participante ─────────────────────────────────────────────
-function AddParticipantModal({ championshipId, onClose, onAdded, initialName, onConfirmedPreInscricao }: {
+function AddParticipantModal({ championshipId, onClose, onAdded, initialName, initialDeckName, onConfirmedPreInscricao }: {
   championshipId: string
   onClose: () => void
   onAdded: () => void
   initialName?: string
+  initialDeckName?: string | null
   onConfirmedPreInscricao?: () => Promise<void>
 }) {
   const [search, setSearch]     = useState(initialName ?? '')
   const [results, setResults]   = useState<{ id: string; name: string; cpf?: string }[]>([])
   const [selected, setSelected] = useState<{ id: string; name: string } | null>(null)
-  const [deckName, setDeckName] = useState('')
+  const [deckName, setDeckName] = useState(initialDeckName ?? '')
   const [saving, setSaving]     = useState(false)
   const [searching, setSearching] = useState(false)
 
@@ -547,6 +548,7 @@ function ChampionshipCard({
         <AddParticipantModal
           championshipId={c.id}
           initialName={confirmingPI.nome}
+          initialDeckName={confirmingPI.deckName}
           onClose={() => setConfirmingPI(null)}
           onAdded={() => { loadAll(); onParticipantChange() }}
           onConfirmedPreInscricao={() => handleDeletePreInscricao(confirmingPI)}
