@@ -1,13 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { productApi, waitListApi, Product } from '@/lib/api'
+import { productApi, waitListApi, authApi, userApi, Product, UserProfile } from '@/lib/api'
+import { saveAuth, isLoggedIn, getUserName } from '@/lib/auth'
 import Link from 'next/link'
-import { ChevronLeft, Package, ShoppingBag, MessageCircle, Sun, Moon, ChevronRight, Share2, Tag, CheckCircle, Clock, LogIn, X } from 'lucide-react'
+import { ChevronLeft, Package, ShoppingBag, MessageCircle, Sun, Moon, Share2, Tag, CheckCircle, Clock, LogIn, X, Loader2, Mail, KeyRound, User as UserIcon } from 'lucide-react'
 
 const NAVY = '#0C3D5A'
 const BLUE = '#3EC2F2'
-const YELLOW = '#FFE45E'
 const WA_NUM = '5517997633103'
 
 function fmt(v: number) { return `R$ ${v.toFixed(2).replace('.', ',')}` }
@@ -15,13 +15,23 @@ function fmt(v: number) { return `R$ ${v.toFixed(2).replace('.', ',')}` }
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
-  const [product, setProduct] = useState<Product | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [mainImg, setMainImg] = useState<string | null>(null)
-  const [isDark, setIsDark] = useState(false)
-  const [wl, setWl] = useState<{ inList: boolean; position?: number; entryId?: string } | null>(null)
-  const [wlAuth, setWlAuth] = useState(true)
+  const [product,  setProduct]  = useState<Product | null>(null)
+  const [loading,  setLoading]  = useState(true)
+  const [mainImg,  setMainImg]  = useState<string | null>(null)
+  const [isDark,   setIsDark]   = useState(false)
+  const [wl,       setWl]       = useState<{ inList: boolean; position?: number; entryId?: string } | null>(null)
+  const [wlAuth,   setWlAuth]   = useState(false)
   const [wlLoading, setWlLoading] = useState(false)
+
+  // login modal
+  const [showLogin,    setShowLogin]    = useState(false)
+  const [loginEmail,   setLoginEmail]   = useState('')
+  const [loginPass,    setLoginPass]    = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [loginError,   setLoginError]   = useState('')
+
+  // usuário logado
+  const [profile, setProfile] = useState<UserProfile | null>(null)
 
   const C = isDark ? {
     bg: '#121215', card: '#1A1A1F', border: 'rgba(255,255,255,0.07)',
@@ -38,20 +48,53 @@ export default function ProductPage() {
     if (saved === 'dark') setIsDark(true)
   }, [])
 
+  // Verifica autenticação e carrega produto
   useEffect(() => {
     if (!id) return
+
+    if (isLoggedIn()) {
+      setWlAuth(true)
+      userApi.me().then(r => setProfile(r.data)).catch(() => {})
+    }
+
     productApi.get(id)
       .then(r => {
         setProduct(r.data)
         setMainImg(r.data.imageUrl)
-        if (r.data.isPreVenda)
+        if (r.data.isPreVenda && isLoggedIn()) {
           waitListApi.myPosition(id)
             .then((res: { data: { inList: boolean; position?: number; entryId?: string } }) => setWl(res.data))
-            .catch((err: { response?: { status: number } }) => { if (err?.response?.status === 401) setWlAuth(false) })
+            .catch(() => {})
+        }
       })
       .catch(() => router.replace('/produtos'))
       .finally(() => setLoading(false))
   }, [id, router])
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoginLoading(true)
+    setLoginError('')
+    try {
+      const { data } = await authApi.clientLogin(loginEmail, loginPass)
+      saveAuth(data)
+      setWlAuth(true)
+      setShowLogin(false)
+      setLoginEmail('')
+      setLoginPass('')
+      // carrega perfil e posição na fila
+      userApi.me().then(r => setProfile(r.data)).catch(() => {})
+      if (id) {
+        waitListApi.myPosition(id)
+          .then((res: { data: { inList: boolean; position?: number; entryId?: string } }) => setWl(res.data))
+          .catch(() => {})
+      }
+    } catch {
+      setLoginError('E-mail ou senha inválidos.')
+    } finally {
+      setLoginLoading(false)
+    }
+  }
 
   async function joinQueue() {
     if (!id) return
@@ -60,7 +103,6 @@ export default function ProductPage() {
       await waitListApi.join(id)
       const res = await waitListApi.myPosition(id)
       setWl(res.data)
-      setWlAuth(true)
     } catch (err: any) {
       if (err?.response?.status === 401) {
         setWlAuth(false)
@@ -87,6 +129,8 @@ export default function ProductPage() {
   const waMsg = encodeURIComponent(
     `Olá! Tenho interesse no produto: ${product?.name ?? ''}\n${typeof window !== 'undefined' ? window.location.href : ''}`
   )
+
+  const userName = profile?.name || getUserName()
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F8FA' }}>
@@ -117,6 +161,21 @@ export default function ProductPage() {
           className="p-2 rounded-lg hover:bg-white/10 transition-colors" style={{ color: '#fff' }}>
           <Share2 className="w-4 h-4" />
         </button>
+
+        {/* Avatar do usuário logado */}
+        {wlAuth && (
+          <Link href="/cliente" title="Minha conta">
+            {profile?.profileImageUrl ? (
+              <img src={profile.profileImageUrl} alt={userName}
+                className="w-8 h-8 rounded-full object-cover border-2 border-white/30 hover:border-white/70 transition-all" />
+            ) : (
+              <div className="w-8 h-8 rounded-full flex items-center justify-center border-2 border-white/30 hover:border-white/70 transition-all text-xs font-black"
+                style={{ backgroundColor: '#3EC2F2', color: '#0C3D5A' }}>
+                {userName.charAt(0).toUpperCase() || <UserIcon className="w-4 h-4" />}
+              </div>
+            )}
+          </Link>
+        )}
       </nav>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
@@ -124,7 +183,6 @@ export default function ProductPage() {
 
           {/* ── Galeria ── */}
           <div className="lg:w-[420px] shrink-0 space-y-3">
-            {/* Imagem principal */}
             <div className="rounded-2xl overflow-hidden border flex items-center justify-center"
               style={{ backgroundColor: C.card, borderColor: C.border, aspectRatio: '1' }}>
               {mainImg
@@ -132,16 +190,12 @@ export default function ProductPage() {
                 : <Package className="w-20 h-20 opacity-10" style={{ color: C.navy }} />
               }
             </div>
-            {/* Thumbnails */}
             {allImgs.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                 {allImgs.map((url, i) => (
                   <button key={i} onClick={() => setMainImg(url)}
                     className="shrink-0 w-16 h-16 rounded-xl border-2 overflow-hidden transition-all"
-                    style={{
-                      borderColor: mainImg === url ? BLUE : C.border,
-                      backgroundColor: C.card,
-                    }}>
+                    style={{ borderColor: mainImg === url ? BLUE : C.border, backgroundColor: C.card }}>
                     <img src={url} alt="" className="w-full h-full object-contain p-1" />
                   </button>
                 ))}
@@ -152,7 +206,6 @@ export default function ProductPage() {
           {/* ── Info do produto ── */}
           <div className="flex-1 space-y-5">
 
-            {/* Badges */}
             <div className="flex flex-wrap gap-2">
               {product.isPreVenda && (
                 <span className="text-xs font-black uppercase tracking-wide px-3 py-1 rounded-full text-white"
@@ -168,12 +221,10 @@ export default function ProductPage() {
               </span>
             </div>
 
-            {/* Nome */}
             <h1 className="text-2xl md:text-3xl font-black leading-tight" style={{ color: C.navy }}>
               {product.name}
             </h1>
 
-            {/* Preço */}
             <div className="rounded-2xl p-5 border" style={{ backgroundColor: C.card, borderColor: C.border }}>
               {product.isOnPromo && product.discountPriceInReais != null ? (
                 <div>
@@ -196,13 +247,13 @@ export default function ProductPage() {
             <div className="flex flex-col gap-3">
               {product.isPreVenda ? (
                 <>
-                  {/* Bloco de fila pré-venda */}
                   {!wlAuth ? (
-                    <Link href={`/entrar?redirect=/produtos/${id}`}
+                    <button
+                      onClick={() => setShowLogin(true)}
                       className="flex items-center justify-center gap-2 py-4 rounded-2xl font-black text-base transition-all active:scale-95 shadow-lg"
                       style={{ backgroundColor: '#7C3AED', color: '#fff', boxShadow: '0 8px 24px rgba(124,58,237,0.30)' }}>
                       <LogIn className="w-5 h-5" /> Entre para garantir sua vaga
-                    </Link>
+                    </button>
                   ) : wl?.inList ? (
                     <div className="rounded-2xl border p-4 flex items-center justify-between gap-3"
                       style={{ backgroundColor: isDark ? '#1a1435' : '#f5f0ff', borderColor: '#7C3AED' }}>
@@ -217,7 +268,7 @@ export default function ProductPage() {
                         </div>
                       </div>
                       <button onClick={leaveQueue} disabled={wlLoading}
-                        className="p-2 rounded-xl hover:bg-red-100 transition-colors" title="Sair da fila"
+                        className="p-2 rounded-xl transition-colors" title="Sair da fila"
                         style={{ color: '#EF4444' }}>
                         <X className="w-4 h-4" />
                       </button>
@@ -253,12 +304,10 @@ export default function ProductPage() {
               )}
             </div>
 
-            {/* Descrição curta */}
             {product.description && (
               <p className="text-base leading-relaxed" style={{ color: C.text }}>{product.description}</p>
             )}
 
-            {/* Descrição completa */}
             {product.fullDescription && (
               <div className="rounded-2xl border p-5 space-y-2" style={{ backgroundColor: C.card, borderColor: C.border }}>
                 <h2 className="text-sm font-black uppercase tracking-wide" style={{ color: C.navy }}>Descrição do produto</h2>
@@ -266,7 +315,6 @@ export default function ProductPage() {
               </div>
             )}
 
-            {/* Detalhes técnicos */}
             <div className="rounded-2xl border divide-y text-sm" style={{ backgroundColor: C.card, borderColor: C.border }}>
               {([
                 ['Categoria', product.category],
@@ -282,6 +330,81 @@ export default function ProductPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Modal de login inline ── */}
+      {showLogin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowLogin(false)}>
+          <div className="w-full max-w-sm rounded-3xl shadow-2xl p-6 flex flex-col gap-5"
+            style={{ backgroundColor: '#FFFFFF' }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#3EC2F2' }}>Santuário Nerd</p>
+                <h2 className="text-xl font-black mt-0.5" style={{ color: '#0C3D5A' }}>Entre na sua conta</h2>
+              </div>
+              <button onClick={() => setShowLogin(false)}
+                className="p-2 rounded-xl transition-colors"
+                style={{ color: '#4D8FAC' }}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-sm" style={{ color: '#4D8FAC' }}>
+              Faça login para entrar na lista de espera de <strong style={{ color: '#0C3D5A' }}>{product.name}</strong>.
+            </p>
+
+            <form onSubmit={handleLogin} className="flex flex-col gap-3">
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#4D8FAC' }} />
+                <input
+                  type="email"
+                  placeholder="Seu e-mail"
+                  value={loginEmail}
+                  onChange={e => setLoginEmail(e.target.value)}
+                  required
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border text-sm outline-none transition-all"
+                  style={{ borderColor: 'rgba(12,61,90,0.2)', color: '#0C3D5A', backgroundColor: '#F8FAFC' }}
+                />
+              </div>
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#4D8FAC' }} />
+                <input
+                  type="password"
+                  placeholder="Senha"
+                  value={loginPass}
+                  onChange={e => setLoginPass(e.target.value)}
+                  required
+                  className="w-full pl-10 pr-4 py-3 rounded-xl border text-sm outline-none transition-all"
+                  style={{ borderColor: 'rgba(12,61,90,0.2)', color: '#0C3D5A', backgroundColor: '#F8FAFC' }}
+                />
+              </div>
+
+              {loginError && (
+                <p className="text-xs font-semibold text-center" style={{ color: '#EF4444' }}>{loginError}</p>
+              )}
+
+              <button type="submit" disabled={loginLoading}
+                className="w-full py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-60"
+                style={{ backgroundColor: '#0C3D5A', color: '#FFE45E' }}>
+                {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                {loginLoading ? 'Entrando...' : 'Entrar'}
+              </button>
+            </form>
+
+            <div className="flex items-center justify-between text-xs" style={{ color: '#9CA3AF' }}>
+              <Link href="/primeiro-acesso" className="hover:underline" style={{ color: '#3EC2F2' }}>
+                Criar conta grátis
+              </Link>
+              <Link href="/reset-password" className="hover:underline">
+                Esqueci a senha
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
