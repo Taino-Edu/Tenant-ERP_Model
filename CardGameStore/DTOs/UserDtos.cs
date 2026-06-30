@@ -37,6 +37,25 @@ public class PdvPrefs
     public int DefaultDiscount { get; set; } = 0; // 0, 5, 10, 15, 20
 }
 
+public class DashboardPanelsPrefs
+{
+    [JsonPropertyName("finHoje")]       public bool FinHoje       { get; set; } = true;
+    [JsonPropertyName("grafico")]       public bool Grafico       { get; set; } = true;
+    [JsonPropertyName("previsao")]      public bool Previsao      { get; set; } = true;
+    [JsonPropertyName("patrimonio")]    public bool Patrimonio    { get; set; } = true;
+    [JsonPropertyName("clientes")]      public bool Clientes      { get; set; } = true;
+    [JsonPropertyName("produtos")]      public bool Produtos      { get; set; } = true;
+    [JsonPropertyName("lgpd")]          public bool Lgpd          { get; set; } = true;
+    [JsonPropertyName("preInscricoes")] public bool PreInscricoes { get; set; } = true;
+}
+
+public class DashboardPrefs
+{
+    [JsonPropertyName("refreshInterval")] public int                   RefreshInterval { get; set; } = 30;
+    [JsonPropertyName("chartScheme")]     public string                ChartScheme     { get; set; } = "default";
+    [JsonPropertyName("panels")]          public DashboardPanelsPrefs  Panels          { get; set; } = new();
+}
+
 /// <summary>Preferências completas do usuário.</summary>
 public class UserPreferencesDto
 {
@@ -44,6 +63,7 @@ public class UserPreferencesDto
     [JsonPropertyName("vlibras")]       public VLibrasPrefs      Vlibras       { get; set; } = new();
     [JsonPropertyName("notifications")] public NotificationPrefs Notifications { get; set; } = new();
     [JsonPropertyName("pdv")]           public PdvPrefs          Pdv           { get; set; } = new();
+    [JsonPropertyName("dashboard")]     public DashboardPrefs    Dashboard     { get; set; } = new();
 }
 
 /// <summary>Request para atualizar preferências (corpo idêntico ao DTO).</summary>
