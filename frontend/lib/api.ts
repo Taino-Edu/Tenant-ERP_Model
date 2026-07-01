@@ -124,6 +124,10 @@ export interface Product {
   isLowStock: boolean; priceInReais: number; costPriceInReais: number
   marginInReais: number; marginPercent: number
   hasVariants: boolean
+  /** NCM (Nomenclatura Comum do Mercosul) — obrigatório para emitir NFC-e deste produto. */
+  ncm: string | null
+  /** Natureza de operação (CFOP/CSOSN) usada na emissão fiscal. Null = usa a marcada como padrão. */
+  naturezaOperacaoId: string | null
   updatedAt: string; createdAt: string
 }
 
@@ -1105,6 +1109,87 @@ export const contasReceberApi = {
   saveIntegracao:(source: string, body: { clientId?: string; clientSecret?: string; cnpj?: string; isActive?: boolean }) =>
                   api.put(`/api/contas-receber/integracoes/${source}`, body),
   sefazStatus:  ()                                 => api.get('/api/contas-receber/sefaz-status'),
+}
+
+// ── Fiscal (NFC-e, certificado A1, naturezas de operação) ─────────────────────
+
+export interface FiscalConfigDto {
+  cnpj?: string; razaoSocial?: string; inscricaoEstadual?: string
+  logradouro?: string; numero?: string; complemento?: string; bairro?: string
+  codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
+  cscId?: string; cscConfigurado: boolean
+  regimeTributario: string; ambiente: string
+  serieNfce: number; proximoNumeroNfce: number
+  emailContador?: string
+  certificadoConfigurado: boolean
+  certificadoValidade?: string
+  diasParaVencer?: number
+}
+
+export interface NaturezaOperacaoDto {
+  id: string; descricao: string; cfop: string; csosn?: string
+  isPadrao: boolean; isActive: boolean
+}
+
+export interface NotaFiscalDto {
+  id: string; origem: string
+  comandaId?: string; vendaAvulsaId?: string
+  status: string
+  valorTotalEmCentavos: number
+  serie?: number; numero?: number
+  chaveAcesso?: string; protocolo?: string; motivoRejeicao?: string
+  emitidoEm?: string; canceladoEm?: string; inutilizadoEm?: string
+  tentativasReprocessamento: number
+  createdAt: string
+}
+
+export interface CupomItemDto {
+  nome: string; quantidade: number; precoUnitarioCentavos: number; subtotalCentavos: number
+}
+
+export interface CupomDto {
+  razaoSocial: string; cnpj: string; endereco: string
+  chaveAcesso?: string; protocolo?: string; emitidoEm?: string
+  serie: number; numero: number; status: string
+  itens: CupomItemDto[]; valorTotalCentavos: number; formaPagamento: string
+  qrCodeUrl?: string
+}
+
+export const fiscalApi = {
+  getConfig:  ()                                    => api.get<FiscalConfigDto>('/api/fiscal/config'),
+  saveConfig: (body: Partial<{
+    cnpj: string; razaoSocial: string; inscricaoEstadual: string
+    logradouro: string; numero: string; complemento: string; bairro: string
+    codigoMunicipioIbge: string; municipio: string; uf: string; cep: string
+    cscId: string; cscToken: string
+    regimeTributario: string; ambiente: string; serieNfce: number; emailContador: string
+  }>) => api.put<FiscalConfigDto>('/api/fiscal/config', body),
+
+  uploadCertificado: (file: File, senha: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('senha', senha)
+    return api.post<{ message: string; validade: string; diasRestantes: number }>(
+      '/api/fiscal/certificado', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+
+  listNaturezas:  ()                                => api.get<NaturezaOperacaoDto[]>('/api/fiscal/naturezas-operacao'),
+  createNatureza: (body: { descricao: string; cfop: string; csosn?: string; isPadrao: boolean }) =>
+                   api.post<NaturezaOperacaoDto>('/api/fiscal/naturezas-operacao', body),
+  updateNatureza: (id: string, body: { descricao: string; cfop: string; csosn?: string; isPadrao: boolean }) =>
+                   api.put<NaturezaOperacaoDto>(`/api/fiscal/naturezas-operacao/${id}`, body),
+  removeNatureza: (id: string)                      => api.delete(`/api/fiscal/naturezas-operacao/${id}`),
+
+  exportarXmls: (inicio: string, fim: string) =>
+    api.get('/api/fiscal/exportar-xmls', { params: { inicio, fim }, responseType: 'blob' }),
+
+  listNotas: (params?: { status?: string; page?: number; pageSize?: number }) =>
+    api.get<{ items: NotaFiscalDto[]; total: number; totalPages: number }>('/api/fiscal/notas', { params }),
+  reprocessarNota: (id: string) =>
+    api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/notas/${id}/reprocessar`),
+  cancelarNota: (id: string, justificativa: string) =>
+    api.post<{ id: string; status: string }>(`/api/fiscal/notas/${id}/cancelar`, { justificativa }),
+  obterCupom: (id: string) => api.get<CupomDto>(`/api/fiscal/notas/${id}/cupom`),
 }
 
 // ── Notificações in-app ───────────────────────────────────────────────────────

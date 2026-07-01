@@ -677,6 +677,16 @@ public class ComandaService : IComandaService
 
         await _db.SaveChangesAsync();
 
+        // Emite a NFC-e referente a esta comanda de forma assíncrona — falha na emissão
+        // fiscal nunca deve bloquear o fechamento da venda (NfceEmissionService trata isso).
+        var comandaIdParaEmissao = comandaId;
+        _ = Task.Run(async () =>
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+            await emissao.EmitirParaComandaAsync(comandaIdParaEmissao);
+        });
+
         var dto = MapToDto(comanda);
         // Notifica o cliente que a comanda foi fechada
         await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))

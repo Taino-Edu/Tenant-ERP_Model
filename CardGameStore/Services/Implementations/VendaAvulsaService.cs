@@ -31,14 +31,17 @@ public class VendaAvulsaService : IVendaAvulsaService
     private readonly AppDbContext                    _db;
     private readonly IMongoCollection<VendaAvulsa>  _collection;
     private readonly ILogger<VendaAvulsaService>    _logger;
+    private readonly IServiceScopeFactory           _scopeFactory;
 
     private const string CollectionName = "vendas_avulsas";
 
-    public VendaAvulsaService(AppDbContext db, IMongoDatabase mongo, ILogger<VendaAvulsaService> logger)
+    public VendaAvulsaService(
+        AppDbContext db, IMongoDatabase mongo, ILogger<VendaAvulsaService> logger, IServiceScopeFactory scopeFactory)
     {
-        _db         = db;
-        _collection = mongo.GetCollection<VendaAvulsa>(CollectionName);
-        _logger     = logger;
+        _db           = db;
+        _collection   = mongo.GetCollection<VendaAvulsa>(CollectionName);
+        _logger       = logger;
+        _scopeFactory = scopeFactory;
     }
 
     public async Task<VendaAvulsaDto> RegisterAsync(VendaAvulsaRequest request, Guid adminId, string adminName)
@@ -176,6 +179,16 @@ public class VendaAvulsaService : IVendaAvulsaService
         };
 
         await _collection.InsertOneAsync(venda);
+
+        // Emite a NFC-e referente a esta venda avulsa de forma assíncrona — falha na emissão
+        // fiscal nunca deve bloquear o registro da venda (NfceEmissionService trata isso).
+        var vendaIdParaEmissao = venda.Id;
+        _ = Task.Run(async () =>
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+            await emissao.EmitirParaVendaAvulsaAsync(vendaIdParaEmissao);
+        });
 
         var paymentSummary = secondPm != null
             ? $"{request.PaymentMethod} + {secondPm} (R$ {secondAmt / 100m:N2})"

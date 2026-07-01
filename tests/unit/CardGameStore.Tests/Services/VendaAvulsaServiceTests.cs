@@ -11,6 +11,7 @@ using CardGameStore.Services.Implementations;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using MongoDB.Driver;
@@ -91,7 +92,7 @@ public class VendaAvulsaServiceTests
     }
 
     private static VendaAvulsaService CreateService(AppDbContext db, IMongoDatabase mongo) =>
-        new(db, mongo, NullLogger<VendaAvulsaService>.Instance);
+        new(db, mongo, NullLogger<VendaAvulsaService>.Instance, new Mock<IServiceScopeFactory>().Object);
 
     private static async Task<Product> SeedProductAsync(AppDbContext db,
         string name = "Booster Pack", int priceInCents = 1500, int stock = 10, bool isActive = true)

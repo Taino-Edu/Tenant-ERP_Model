@@ -70,6 +70,19 @@ public class Product
     public int MinimumStock { get; set; } = 5;
 
     // -------------------------------------------------------------------------
+    // Fiscal (NFC-e)
+    // -------------------------------------------------------------------------
+
+    /// <summary>NCM (Nomenclatura Comum do Mercosul) — obrigatório na NFC-e.</summary>
+    [MaxLength(8)]
+    [Column("ncm")]
+    public string? Ncm { get; set; }
+
+    /// <summary>Natureza de operação (CFOP/CSOSN) aplicada na emissão da NFC-e deste produto.</summary>
+    [Column("natureza_operacao_id")]
+    public Guid? NaturezaOperacaoId { get; set; }
+
+    // -------------------------------------------------------------------------
     // Metadados
     // -------------------------------------------------------------------------
 
@@ -163,4 +176,5 @@ public class Product
     public ICollection<ComandaItem>        ComandaItems { get; set; } = new List<ComandaItem>();
     public ICollection<ProductVariant>     Variants     { get; set; } = new List<ProductVariant>();
     public ICollection<ProductReservation> Reservations { get; set; } = new List<ProductReservation>();
+    public NaturezaOperacao?               NaturezaOperacao { get; set; }
 }

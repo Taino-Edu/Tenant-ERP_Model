@@ -4,12 +4,12 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { clearAuth, getUserName, getRole, hasPermission } from '@/lib/auth'
-import { authApi, notificationsApi } from '@/lib/api'
+import { authApi, notificationsApi, fiscalApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, Trophy, Search, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
-  Wallet, Plug, ClipboardList, MessageSquare,
+  Wallet, Plug, ClipboardList, MessageSquare, Receipt,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -49,6 +49,7 @@ const sections = [
     items: [
       { href: '/admin/perfis',      label: 'Perfis de Acesso', icon: UserCog, perm: null },
       { href: '/admin/integracoes', label: 'Integrações',      icon: Plug,    perm: null },
+      { href: '/admin/fiscal',      label: 'Fiscal',           icon: Receipt, perm: null },
     ],
   },
   {
@@ -66,7 +67,7 @@ const sections = [
   },
 ]
 
-function NavItems({ pathname, onClose, unreadCount }: { pathname: string; onClose?: () => void; unreadCount: number }) {
+function NavItems({ pathname, onClose, unreadCount, fiscalAlerta }: { pathname: string; onClose?: () => void; unreadCount: number; fiscalAlerta: boolean }) {
   const role = getRole()
   const isAdmin = role === 'Admin'
 
@@ -84,7 +85,8 @@ function NavItems({ pathname, onClose, unreadCount }: { pathname: string; onClos
             {visibleItems.map(({ href, label: itemLabel, icon: Icon, badge }: { href: string; label: string; icon: React.ElementType; perm: string | null; badge?: string }) => {
               const active   = pathname.startsWith(href)
               const shortcut = SIDEBAR_SHORTCUT_KEYS[href]
-              const hasDot   = href === '/admin/mensageria' && unreadCount > 0
+              const hasDot   = (href === '/admin/mensageria' && unreadCount > 0)
+                             || (href === '/admin/fiscal' && fiscalAlerta)
               return (
                 <Link
                   key={href}
@@ -128,6 +130,7 @@ export default function Sidebar() {
   const [loggingOut,   setLoggingOut]   = useState(false)
   const [mobileOpen,   setMobileOpen]   = useState(false)
   const [unreadCount,  setUnreadCount]  = useState(0)
+  const [fiscalAlerta, setFiscalAlerta] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -139,6 +142,23 @@ export default function Sidebar() {
     }
     poll()
     const id = setInterval(poll, 30_000)
+    return () => { mounted = false; clearInterval(id) }
+  }, [])
+
+  // Dot do Fiscal usa um sinal próprio (validade do certificado), não o unreadCount
+  // genérico de notificações — evita acender junto com o dot de Mensageria.
+  useEffect(() => {
+    if (getRole() !== 'Admin') return
+    let mounted = true
+    const poll = async () => {
+      try {
+        const { data } = await fiscalApi.getConfig()
+        const dias = data.diasParaVencer
+        if (mounted) setFiscalAlerta(data.certificadoConfigurado && dias !== undefined && dias !== null && dias <= 30)
+      } catch {}
+    }
+    poll()
+    const id = setInterval(poll, 5 * 60_000)
     return () => { mounted = false; clearInterval(id) }
   }, [])
 
@@ -229,7 +249,7 @@ export default function Sidebar() {
             <X className="w-5 h-5" />
           </button>
         </div>
-        <NavItems pathname={pathname} onClose={() => setMobileOpen(false)} unreadCount={unreadCount} />
+        <NavItems pathname={pathname} onClose={() => setMobileOpen(false)} unreadCount={unreadCount} fiscalAlerta={fiscalAlerta} />
         {footer}
       </aside>
 
@@ -242,7 +262,7 @@ export default function Sidebar() {
             <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
           </div>
         </div>
-        <NavItems pathname={pathname} unreadCount={unreadCount} />
+        <NavItems pathname={pathname} unreadCount={unreadCount} fiscalAlerta={fiscalAlerta} />
         {footer}
       </aside>
     </>

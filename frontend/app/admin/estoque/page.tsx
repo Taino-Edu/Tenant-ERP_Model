@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { productApi, variantApi, categoryApi, waitListApi, Product, ProductCategory, ProductVariant, WaitListEntry } from '@/lib/api'
+import { productApi, variantApi, categoryApi, waitListApi, fiscalApi, Product, ProductCategory, ProductVariant, WaitListEntry, NaturezaOperacaoDto } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp, Users, Bell } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
@@ -407,10 +407,11 @@ function VariantsPanel({ productId }: { productId: string }) {
 }
 
 function ProductModal({
-  product, categories, onClose, onSave,
+  product, categories, naturezas, onClose, onSave,
 }: {
   product:    Partial<Product> | null
   categories: ProductCategory[]
+  naturezas:  NaturezaOperacaoDto[]
   onClose:    () => void
   onSave:     (p: Partial<Product>) => Promise<void>
 }) {
@@ -507,6 +508,25 @@ function ProductModal({
                 <option key={c.id} value={c.name}>{c.emoji ? `${c.emoji} ` : ''}{c.name}</option>
               ))}
             </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">NCM</label>
+              <input className="input" value={form.ncm ?? ''} onChange={e => set('ncm', e.target.value || null)}
+                     placeholder="0000.00.00" maxLength={8} />
+              <p className="text-xs text-gray-400 mt-1">Obrigatório pra emitir NFC-e deste produto.</p>
+            </div>
+            <div>
+              <label className="label">Natureza de Operação</label>
+              <select className="input" value={form.naturezaOperacaoId ?? ''}
+                      onChange={e => set('naturezaOperacaoId', e.target.value || null)}>
+                <option value="">Usar a padrão</option>
+                {naturezas.map(n => (
+                  <option key={n.id} value={n.id}>{n.descricao} (CFOP {n.cfop})</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -724,6 +744,7 @@ function ProductModal({
 export default function EstoquePage() {
   const [products, setProducts]       = useState<Product[]>([])
   const [categories, setCategories]   = useState<ProductCategory[]>([])
+  const [naturezas, setNaturezas]     = useState<NaturezaOperacaoDto[]>([])
   const [loading, setLoading]         = useState(true)
   const [search, setSearch]           = useState('')
   const [modal, setModal]             = useState<Partial<Product> | null | undefined>(undefined)
@@ -734,9 +755,10 @@ export default function EstoquePage() {
   const fetch = async () => {
     setLoading(true)
     try {
-      const [prodRes, catRes] = await Promise.all([productApi.listAdmin(), categoryApi.list()])
+      const [prodRes, catRes, natRes] = await Promise.all([productApi.listAdmin(), categoryApi.list(), fiscalApi.listNaturezas()])
       setProducts(prodRes.data)
       setCategories(catRes.data)
+      setNaturezas(natRes.data)
     } catch { toast.error('Erro ao carregar produtos') }
     finally { setLoading(false) }
   }
@@ -809,7 +831,7 @@ export default function EstoquePage() {
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {modal !== undefined && (
-        <ProductModal product={modal} categories={categories} onClose={() => setModal(undefined)} onSave={handleSave} />
+        <ProductModal product={modal} categories={categories} naturezas={naturezas} onClose={() => setModal(undefined)} onSave={handleSave} />
       )}
       {drawer && (
         <ProductDrawer

@@ -352,6 +352,14 @@ builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddScoped<InterSyncService>();
 builder.Services.AddHostedService<InterSyncBackgroundService>();
 
+// Fiscal — emissão de NFC-e, certificado A1, exportação de XMLs
+builder.Services.AddScoped<FiscalCertificadoService>();
+builder.Services.AddScoped<FiscalXmlExportService>();
+builder.Services.AddScoped<INfceEmissionService, NfceEmissionService>();
+builder.Services.AddHostedService<FiscalAlertBackgroundService>();
+builder.Services.AddHostedService<FiscalXmlExportBackgroundService>();
+builder.Services.AddHostedService<FiscalRetryBackgroundService>();
+
 // ---------------------------------------------------------------------------
 // 12. CORS — origens lidas de config para facilitar deploy sem rebuild
 // ---------------------------------------------------------------------------
@@ -562,6 +570,96 @@ using (var scope = app.Services.CreateScope())
                 CREATE INDEX IF NOT EXISTS ix_product_reservations_user    ON product_reservations (user_id);
                 CREATE INDEX IF NOT EXISTS ix_product_reservations_product ON product_reservations (product_id);
                 CREATE INDEX IF NOT EXISTS ix_product_reservations_status  ON product_reservations (status);
+
+                -- Fiscal: emissão de NFC-e (certificado A1, config da empresa emitente)
+                CREATE TABLE IF NOT EXISTS fiscal_config (
+                    id                                UUID         NOT NULL DEFAULT gen_random_uuid(),
+                    cnpj                              VARCHAR(18)  NOT NULL,
+                    inscricao_estadual                VARCHAR(20)  NULL,
+                    regime_tributario                 VARCHAR(30)  NOT NULL DEFAULT 'SimplesNacional',
+                    ambiente                          VARCHAR(20)  NOT NULL DEFAULT 'Homologacao',
+                    serie_nfce                        INTEGER      NOT NULL DEFAULT 1,
+                    proximo_numero_nfce               INTEGER      NOT NULL DEFAULT 1,
+                    email_contador                    VARCHAR(200) NULL,
+                    certificado_pfx_encrypted         TEXT         NULL,
+                    certificado_senha_encrypted       TEXT         NULL,
+                    certificado_validade              TIMESTAMPTZ  NULL,
+                    certificado_uploaded_at           TIMESTAMPTZ  NULL,
+                    certificado_ultimo_alerta_limiar  INTEGER      NULL,
+                    created_at                        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    updated_at                         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    CONSTRAINT pk_fiscal_config PRIMARY KEY (id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_fiscal_config_cnpj ON fiscal_config (cnpj);
+
+                -- Fiscal: endereço do estabelecimento (obrigatório no XML da NFC-e)
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS razao_social         VARCHAR(150) NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS logradouro           VARCHAR(150) NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS numero               VARCHAR(20)  NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS complemento          VARCHAR(100) NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS bairro               VARCHAR(100) NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS codigo_municipio_ibge VARCHAR(7)  NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS municipio            VARCHAR(100) NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS uf                   VARCHAR(2)  NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS cep                  VARCHAR(9)  NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS csc_id               VARCHAR(10) NULL;
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS csc_token            VARCHAR(100) NULL;
+
+                -- Fiscal: natureza de operação reutilizável (CFOP/CSOSN, estilo Bling)
+                CREATE TABLE IF NOT EXISTS naturezas_operacao (
+                    id          UUID         NOT NULL DEFAULT gen_random_uuid(),
+                    descricao   VARCHAR(150) NOT NULL,
+                    cfop        VARCHAR(4)   NOT NULL,
+                    csosn       VARCHAR(3)   NULL,
+                    is_padrao   BOOLEAN      NOT NULL DEFAULT FALSE,
+                    is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
+                    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    CONSTRAINT pk_naturezas_operacao PRIMARY KEY (id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_naturezas_operacao_descricao ON naturezas_operacao (descricao);
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_naturezas_operacao_unica_padrao
+                    ON naturezas_operacao (is_padrao) WHERE is_padrao = true;
+
+                -- Fiscal: NCM e natureza de operação por produto
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS ncm VARCHAR(8) NULL;
+                ALTER TABLE products ADD COLUMN IF NOT EXISTS natureza_operacao_id UUID NULL REFERENCES naturezas_operacao(id) ON DELETE SET NULL;
+                CREATE INDEX IF NOT EXISTS ix_products_natureza_operacao ON products (natureza_operacao_id);
+
+                -- Fiscal: controle do envio mensal automático do ZIP de XMLs pro contador
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS ultimo_envio_mensal_xmls TIMESTAMPTZ NULL;
+
+                -- Fiscal: notas fiscais emitidas (NFC-e por Comanda/Venda Avulsa)
+                CREATE TABLE IF NOT EXISTS notas_fiscais_emitidas (
+                    id                       UUID         NOT NULL DEFAULT gen_random_uuid(),
+                    origem                   VARCHAR(20)  NOT NULL,
+                    comanda_id               UUID         NULL,
+                    venda_avulsa_id          VARCHAR(50)  NULL,
+                    status                   VARCHAR(20)  NOT NULL DEFAULT 'PendenteEmissao',
+                    valor_total_em_centavos  INTEGER      NOT NULL DEFAULT 0,
+                    serie                    INTEGER      NULL,
+                    numero                   INTEGER      NULL,
+                    chave_acesso             VARCHAR(44)  NULL,
+                    protocolo                VARCHAR(30)  NULL,
+                    motivo_rejeicao          TEXT         NULL,
+                    xml_autorizado           TEXT         NULL,
+                    emitido_em               TIMESTAMPTZ  NULL,
+                    cancelado_em             TIMESTAMPTZ  NULL,
+                    created_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    CONSTRAINT pk_notas_fiscais_emitidas PRIMARY KEY (id)
+                );
+                CREATE INDEX IF NOT EXISTS ix_notas_fiscais_status      ON notas_fiscais_emitidas (status);
+                CREATE INDEX IF NOT EXISTS ix_notas_fiscais_comanda     ON notas_fiscais_emitidas (comanda_id);
+                CREATE INDEX IF NOT EXISTS ix_notas_fiscais_emitido_em  ON notas_fiscais_emitidas (emitido_em);
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_notas_fiscais_chave_acesso
+                    ON notas_fiscais_emitidas (chave_acesso) WHERE chave_acesso IS NOT NULL;
+
+                -- Fiscal: cancelamento, inutilização e controle de reprocessamento
+                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS justificativa_cancelamento TEXT        NULL;
+                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS inutilizado_em             TIMESTAMPTZ NULL;
+                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS protocolo_inutilizacao      VARCHAR(30) NULL;
+                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS tentativas_reprocessamento  INTEGER     NOT NULL DEFAULT 0;
 
                 -- Financeiro: chave Pix cadastrada no Inter (para emitir cobrança via API)
                 ALTER TABLE integration_configs ADD COLUMN IF NOT EXISTS pix_key VARCHAR(100) NULL;
