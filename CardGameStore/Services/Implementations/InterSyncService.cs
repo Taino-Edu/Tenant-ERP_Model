@@ -60,7 +60,7 @@ public class InterSyncService
         try
         {
             var clientSecret = _enc.Decrypt(cfg.ClientSecret!);
-            var token        = await GetTokenAsync(cfg.ClientId!, clientSecret);
+            var token        = await GetTokenAsync(cfg.ClientId!, clientSecret, "extrato.read");
 
             var fim    = DateOnly.FromDateTime(DateTime.Now);
             var inicio = fim.AddDays(-days);
@@ -107,7 +107,7 @@ public class InterSyncService
     }
 
     // ── OAuth2 Client Credentials com mTLS ───────────────────────────────────
-    private async Task<string> GetTokenAsync(string clientId, string clientSecret)
+    private async Task<string> GetTokenAsync(string clientId, string clientSecret, string scope)
     {
         using var http = BuildMtlsClient();
 
@@ -116,7 +116,7 @@ public class InterSyncService
             ["client_id"]     = clientId,
             ["client_secret"] = clientSecret,
             ["grant_type"]    = "client_credentials",
-            ["scope"]         = "extrato.read",
+            ["scope"]         = scope,
         });
 
         var resp = await http.PostAsync("https://cdpj.partners.bancointer.com.br/oauth/v2/token", body);
@@ -126,6 +126,115 @@ public class InterSyncService
             ?? throw new InvalidOperationException("Resposta de token inválida.");
 
         return json.AccessToken;
+    }
+
+    // ── Pix Cobrança Imediata — gera cobrança pra qualquer origem (Crediário,
+    // Comanda ou Venda Avulsa). Segue a API Pix padrão do Banco Central (mesmos
+    // endpoints /pix/v2/cob e /pix/v2/cob/{txid} usados por todos os PSPs),
+    // hospedada pelo Inter em cdpj.partners.bancointer.com.br.
+    public async Task<PixCobrancaResult> CriarCobrancaAsync(
+        IntegrationConfig cfg, int valorEmCentavos, string? nomeDevedor, string? cpfDevedor,
+        string descricao = "Cobrança Santuário Nerd")
+    {
+        if (!IsConfigured(cfg))
+            return new PixCobrancaResult { Error = "Inter não configurado (Client ID, Client Secret ou certificado ausente)." };
+
+        if (string.IsNullOrWhiteSpace(cfg.PixKey))
+            return new PixCobrancaResult { Error = "Chave Pix não configurada em Integrações → Inter." };
+
+        try
+        {
+            var clientSecret = _enc.Decrypt(cfg.ClientSecret!);
+            var token        = await GetTokenAsync(cfg.ClientId!, clientSecret, "cob.write cob.read");
+
+            var txid = Guid.NewGuid().ToString("N"); // 32 chars alfanuméricos — dentro do range 26-35 exigido
+
+            object? devedor = null;
+            if (!string.IsNullOrWhiteSpace(cpfDevedor) && cpfDevedor.Length == 11 && !string.IsNullOrWhiteSpace(nomeDevedor))
+                devedor = new { cpf = cpfDevedor, nome = nomeDevedor };
+
+            var payload = new
+            {
+                calendario = new { expiracao = 3600 },
+                devedor,
+                valor = new { original = (valorEmCentavos / 100m).ToString("F2", System.Globalization.CultureInfo.InvariantCulture) },
+                chave = cfg.PixKey,
+                solicitacaoPagador = descricao,
+            };
+
+            using var http = BuildMtlsClient();
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await http.PutAsJsonAsync(
+                $"https://cdpj.partners.bancointer.com.br/pix/v2/cob/{txid}", payload, _json);
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                _logger.LogError("Erro ao criar cobrança Pix Inter: {Status} {Body}", resp.StatusCode, body);
+                return new PixCobrancaResult { Error = $"Inter recusou a cobrança ({(int)resp.StatusCode})." };
+            }
+
+            var cob = await resp.Content.ReadFromJsonAsync<InterCobResponse>(_json)
+                ?? throw new InvalidOperationException("Resposta de cobrança inválida.");
+
+            string? pixCopiaCola = null, imagemQrCode = null;
+            if (cob.Loc?.Id is not null)
+                (pixCopiaCola, imagemQrCode) = await FetchQrCodeAsync(http, cob.Loc.Id.Value);
+
+            return new PixCobrancaResult
+            {
+                TxId         = txid,
+                Status       = cob.Status ?? "ATIVA",
+                PixCopiaCola = pixCopiaCola,
+                ImagemQrCode = imagemQrCode,
+                ExpiraEm     = DateTime.UtcNow.AddSeconds(cob.Calendario?.Expiracao ?? 3600),
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao criar cobrança Pix via Inter");
+            return new PixCobrancaResult { Error = ex.Message };
+        }
+    }
+
+    // ── Consulta status de uma cobrança existente ──────────────────────────────
+    public async Task<PixCobrancaResult> ConsultarCobrancaAsync(IntegrationConfig cfg, string txid)
+    {
+        if (!IsConfigured(cfg))
+            return new PixCobrancaResult { Error = "Inter não configurado." };
+
+        try
+        {
+            var clientSecret = _enc.Decrypt(cfg.ClientSecret!);
+            var token        = await GetTokenAsync(cfg.ClientId!, clientSecret, "cob.read");
+
+            using var http = BuildMtlsClient();
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var resp = await http.GetAsync($"https://cdpj.partners.bancointer.com.br/pix/v2/cob/{txid}");
+            if (!resp.IsSuccessStatusCode)
+                return new PixCobrancaResult { Error = $"Erro ao consultar cobrança ({(int)resp.StatusCode})." };
+
+            var cob = await resp.Content.ReadFromJsonAsync<InterCobResponse>(_json)
+                ?? throw new InvalidOperationException("Resposta de cobrança inválida.");
+
+            return new PixCobrancaResult { TxId = txid, Status = cob.Status ?? "ATIVA" };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao consultar cobrança Pix via Inter (txid={TxId})", txid);
+            return new PixCobrancaResult { Error = ex.Message };
+        }
+    }
+
+    private async Task<(string? copiaCola, string? imagem)> FetchQrCodeAsync(HttpClient http, int locId)
+    {
+        var resp = await http.GetAsync($"https://cdpj.partners.bancointer.com.br/pix/v2/loc/{locId}/qrcode");
+        if (!resp.IsSuccessStatusCode) return (null, null);
+
+        var body = await resp.Content.ReadFromJsonAsync<InterLocQrCodeResponse>(_json);
+        return (body?.QrCode, body?.ImagemQrcode);
     }
 
     // ── Extrato ───────────────────────────────────────────────────────────────
@@ -221,4 +330,31 @@ public record InterSyncResult
     public int     Imported   { get; init; }
     public int     Duplicates { get; init; }
     public string? Error      { get; init; }
+}
+
+// ── DTOs da API Pix (padrão Banco Central, usado pelo Inter) ──────────────────
+internal record InterCobResponse(
+    [property: JsonPropertyName("txid")]       string?              TxId,
+    [property: JsonPropertyName("status")]     string?              Status,
+    [property: JsonPropertyName("calendario")] InterCobCalendario?  Calendario,
+    [property: JsonPropertyName("loc")]        InterCobLoc?         Loc);
+
+internal record InterCobCalendario(
+    [property: JsonPropertyName("expiracao")] int Expiracao);
+
+internal record InterCobLoc(
+    [property: JsonPropertyName("id")] int? Id);
+
+internal record InterLocQrCodeResponse(
+    [property: JsonPropertyName("qrcode")]       string? QrCode,
+    [property: JsonPropertyName("imagemQrcode")] string? ImagemQrcode);
+
+public record PixCobrancaResult
+{
+    public string?   TxId         { get; init; }
+    public string?   Status       { get; init; }
+    public string?   PixCopiaCola { get; init; }
+    public string?   ImagemQrCode { get; init; }
+    public DateTime? ExpiraEm     { get; init; }
+    public string?   Error        { get; init; }
 }

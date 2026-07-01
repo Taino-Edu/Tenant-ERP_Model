@@ -222,6 +222,7 @@ public class ContasReceberController : ControllerBase
                 isActive    = cfg?.IsActive ?? false,
                 isConnected = cfg is not null && cfg.IsActive,
                 cnpj        = cfg?.Cnpj,
+                pixKey      = cfg?.PixKey,
                 lastSyncAt  = cfg?.LastSyncAt,
                 expiresAt   = cfg?.ExpiresAt,
                 // Nunca expõe tokens
@@ -250,6 +251,7 @@ public class ContasReceberController : ControllerBase
         if (req.ClientSecret is not null) cfg.ClientSecret = _enc.Encrypt(req.ClientSecret);
 
         if (req.Cnpj      is not null) cfg.Cnpj     = req.Cnpj.Replace(".", "").Replace("/", "").Replace("-", "");
+        if (req.PixKey    is not null) cfg.PixKey   = req.PixKey.Trim();
         if (req.IsActive.HasValue)     cfg.IsActive  = req.IsActive.Value;
 
         cfg.UpdatedAt = DateTime.UtcNow;
@@ -362,6 +364,7 @@ public class SaveIntegracaoRequest
     public string? ClientId     { get; init; }
     public string? ClientSecret { get; init; }
     public string? Cnpj         { get; init; }
+    public string? PixKey       { get; init; }
     public bool?   IsActive     { get; init; }
 }
 

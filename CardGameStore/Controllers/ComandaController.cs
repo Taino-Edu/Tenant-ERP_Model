@@ -12,10 +12,14 @@
 // Venda avulsa de balcão → POST /api/venda-avulsa  (VendaAvulsaController)
 // =============================================================================
 
+using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Controllers;
 
@@ -25,11 +29,15 @@ namespace CardGameStore.Controllers;
 [Produces("application/json")]
 public class ComandaController : ControllerBase
 {
-    private readonly IComandaService _service;
+    private readonly IComandaService  _service;
+    private readonly AppDbContext     _db;
+    private readonly InterSyncService _inter;
 
-    public ComandaController(IComandaService service)
+    public ComandaController(IComandaService service, AppDbContext db, InterSyncService inter)
     {
         _service = service;
+        _db      = db;
+        _inter   = inter;
     }
 
     /// <summary>Admin abre uma comanda para um cliente (sem precisar que ele escaneie o QR).</summary>
@@ -245,6 +253,101 @@ public class ComandaController : ControllerBase
         {
             return BadRequest(new { Message = ex.Message });
         }
+    }
+
+    /// <summary>Gera cobrança Pix pro total em aberto da comanda. Apenas Admin.</summary>
+    [HttpPost("{id:guid}/pix")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> GerarCobrancaPix(Guid id)
+    {
+        var comanda = await _db.Comandas
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (comanda == null)
+            return NotFound(new { Message = "Comanda não encontrada." });
+
+        if (comanda.Status is ComandaStatus.Fechada or ComandaStatus.Cancelada)
+            return BadRequest(new { Message = "Comanda já está fechada ou cancelada." });
+
+        var valorEmCentavos = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+        if (valorEmCentavos <= 0)
+            return BadRequest(new { Message = "Comanda não tem valor restante para cobrar." });
+
+        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+        if (cfg == null)
+            return BadRequest(new { Message = "Integração com o Inter não configurada em /admin/integracoes." });
+
+        var cpf    = comanda.User.Cpf?.Length == 11 ? comanda.User.Cpf : null;
+        var result = await _inter.CriarCobrancaAsync(
+            cfg, valorEmCentavos, comanda.User.Name, cpf, "Santuário Nerd — Comanda");
+
+        if (result.Error is not null)
+            return StatusCode(502, new { Message = result.Error });
+
+        var pix = new PixCobranca
+        {
+            Origem           = PixCobrancaOrigem.Comanda,
+            ComandaId        = comanda.Id,
+            TxId             = result.TxId!,
+            ValorEmCentavos  = valorEmCentavos,
+            Status           = result.Status ?? "ATIVA",
+            PixCopiaCola     = result.PixCopiaCola,
+            ImagemQrCode     = result.ImagemQrCode,
+            NomeDevedor      = comanda.User.Name,
+            CriadoPorAdminId = GetUserId(),
+            ExpiraEm         = result.ExpiraEm,
+        };
+        _db.PixCobrancas.Add(pix);
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            pix.TxId,
+            pix.Status,
+            pix.PixCopiaCola,
+            pix.ImagemQrCode,
+            pix.ExpiraEm,
+            ValorEmReais = pix.ValorEmReais,
+        });
+    }
+
+    /// <summary>Consulta status da cobrança Pix da comanda; se paga, fecha a comanda automaticamente. Apenas Admin.</summary>
+    [HttpGet("{id:guid}/pix/{txid}/status")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> ConsultarCobrancaPix(Guid id, string txid)
+    {
+        var pix = await _db.PixCobrancas.FirstOrDefaultAsync(p => p.ComandaId == id && p.TxId == txid);
+        if (pix == null)
+            return NotFound(new { Message = "Cobrança não encontrada." });
+
+        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+        if (cfg == null)
+            return BadRequest(new { Message = "Integração com o Inter não configurada." });
+
+        var result = await _inter.ConsultarCobrancaAsync(cfg, txid);
+        if (result.Error is not null)
+            return StatusCode(502, new { Message = result.Error });
+
+        pix.Status = result.Status ?? pix.Status;
+
+        ComandaDto? comandaFechada = null;
+        if (pix.Status == "CONCLUIDA" && pix.PagoEm is null)
+        {
+            pix.PagoEm = DateTime.UtcNow;
+
+            try
+            {
+                comandaFechada = await _service.CloseComandaAsync(pix.ComandaId!.Value, GetUserId(), "Pix");
+            }
+            catch (InvalidOperationException)
+            {
+                // Comanda já foi fechada por outro caminho enquanto a cobrança estava ativa — ignora.
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { pix.TxId, pix.Status, PagoEm = pix.PagoEm, Comanda = comandaFechada });
     }
 
     private Guid GetUserId()

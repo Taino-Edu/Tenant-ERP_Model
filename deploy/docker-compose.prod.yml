@@ -102,12 +102,16 @@ services:
       # Integrações
       GeminiSettings__ApiKey: "${GEMINI_API_KEY}"
       TcgSettings__PokemonApiKey: "${POKEMON_API_KEY:-}"
+      # Inter PJ — certificado mTLS (Client ID/Secret são salvos via /admin/integracoes)
+      Inter__CertificatePath: "/app/certs/inter/inter.crt"
+      Inter__KeyPath: "/app/certs/inter/inter.key"
       # Segurança — HTTPS via Cloudflare, cookies Secure=true
       COOKIE_SECURE: "true"
       CorsSettings__AllowedOrigins: "https://santuarionerd.tech,https://www.santuarionerd.tech"
       Security__IpHashSalt: "${IP_HASH_SALT}"
     volumes:
       - api_uploads:/app/wwwroot/uploads
+      - ./certs/inter:/app/certs/inter:ro
     depends_on:
       postgres:
         condition: service_healthy

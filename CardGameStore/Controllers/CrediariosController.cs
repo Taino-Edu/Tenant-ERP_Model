@@ -13,6 +13,7 @@ using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -27,12 +28,14 @@ public class CrediariosController : ControllerBase
 {
     private readonly AppDbContext    _db;
     private readonly IEmailService   _email;
+    private readonly InterSyncService _inter;
     private readonly ILogger<CrediariosController> _logger;
 
-    public CrediariosController(AppDbContext db, IEmailService email, ILogger<CrediariosController> logger)
+    public CrediariosController(AppDbContext db, IEmailService email, InterSyncService inter, ILogger<CrediariosController> logger)
     {
         _db     = db;
         _email  = email;
+        _inter  = inter;
         _logger = logger;
     }
 
@@ -428,6 +431,133 @@ public class CrediariosController : ControllerBase
 
         await _db.SaveChangesAsync();
         return Ok(MapToDto(crediario));
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/crediarios/{id}/pix — gera cobrança Pix pro saldo restante
+    // -------------------------------------------------------------------------
+    [HttpPost("{id:guid}/pix")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> GerarCobrancaPix(Guid id)
+    {
+        var crediario = await _db.Crediarios
+            .Include(c => c.User)
+            .FirstOrDefaultAsync(c => c.Id == id);
+
+        if (crediario == null)
+            return NotFound(new { Message = "Crediário não encontrado." });
+
+        if (crediario.Status == CrediariosStatus.Pago)
+            return BadRequest(new { Message = "Crediário já está quitado." });
+
+        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+        if (cfg == null)
+            return BadRequest(new { Message = "Integração com o Inter não configurada em /admin/integracoes." });
+
+        var cpf = crediario.User.Cpf?.Length == 11 ? crediario.User.Cpf : null;
+
+        var result = await _inter.CriarCobrancaAsync(
+            cfg, crediario.SaldoRestanteEmCentavos, crediario.User.Name, cpf,
+            "Santuário Nerd — Crediário");
+
+        if (result.Error is not null)
+            return StatusCode(502, new { Message = result.Error });
+
+        var pix = new PixCobranca
+        {
+            Origem           = PixCobrancaOrigem.Crediario,
+            CrediarioId      = crediario.Id,
+            TxId             = result.TxId!,
+            ValorEmCentavos  = crediario.SaldoRestanteEmCentavos,
+            Status           = result.Status ?? "ATIVA",
+            PixCopiaCola     = result.PixCopiaCola,
+            ImagemQrCode     = result.ImagemQrCode,
+            NomeDevedor      = crediario.User.Name,
+            CriadoPorAdminId = GetUserId(),
+            ExpiraEm         = result.ExpiraEm,
+        };
+        _db.PixCobrancas.Add(pix);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Cobrança Pix {TxId} gerada pelo admin {AdminId} para crediário {CrediarioId} — R$ {Valor:N2}",
+            pix.TxId, GetUserId(), crediario.Id, pix.ValorEmReais);
+
+        return Ok(new
+        {
+            pix.TxId,
+            pix.Status,
+            pix.PixCopiaCola,
+            pix.ImagemQrCode,
+            pix.ExpiraEm,
+            ValorEmReais = pix.ValorEmReais,
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // GET /api/crediarios/{id}/pix/{txid}/status — consulta e reconcilia pagamento
+    // -------------------------------------------------------------------------
+    [HttpGet("{id:guid}/pix/{txid}/status")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> ConsultarCobrancaPix(Guid id, string txid)
+    {
+        var pix = await _db.PixCobrancas.FirstOrDefaultAsync(p => p.CrediarioId == id && p.TxId == txid);
+        if (pix == null)
+            return NotFound(new { Message = "Cobrança não encontrada." });
+
+        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+        if (cfg == null)
+            return BadRequest(new { Message = "Integração com o Inter não configurada." });
+
+        var result = await _inter.ConsultarCobrancaAsync(cfg, txid);
+        if (result.Error is not null)
+            return StatusCode(502, new { Message = result.Error });
+
+        pix.Status = result.Status ?? pix.Status;
+
+        // Reconcilia automaticamente: cobrança paga → registra pagamento no crediário
+        if (pix.Status == "CONCLUIDA" && pix.PagoEm is null)
+        {
+            pix.PagoEm = DateTime.UtcNow;
+
+            var crediario = await _db.Crediarios
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == pix.CrediarioId);
+
+            if (crediario is not null && crediario.Status != CrediariosStatus.Pago)
+            {
+                var adminId    = GetUserId();
+                var valorPagar = Math.Min(pix.ValorEmCentavos, crediario.SaldoRestanteEmCentavos);
+
+                _db.PagamentosCrediario.Add(new PagamentoCrediario
+                {
+                    CrediarioId     = crediario.Id,
+                    ValorEmCentavos = valorPagar,
+                    FormaPagamento  = "Pix",
+                    Observacao      = $"Cobrança Pix automática (txid {txid})",
+                    AdminId         = adminId,
+                });
+                crediario.ValorPagoEmCentavos += valorPagar;
+
+                if (crediario.SaldoRestanteEmCentavos <= 1)
+                {
+                    crediario.Status         = CrediariosStatus.Pago;
+                    crediario.DataPagamento  = DateTime.UtcNow;
+                    crediario.PagoPorAdminId = adminId;
+
+                    if (!string.IsNullOrWhiteSpace(crediario.User?.Email))
+                        _ = _email.SendCrediarioPagoAsync(
+                            crediario.User.Email, crediario.User.Name, crediario.ValorEmReais);
+                }
+
+                _logger.LogInformation(
+                    "Cobrança Pix {TxId} confirmada — pagamento de R$ {Valor:N2} registrado no crediário {CrediarioId}",
+                    txid, valorPagar / 100m, crediario.Id);
+            }
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { pix.TxId, pix.Status, PagoEm = pix.PagoEm });
     }
 
     // -------------------------------------------------------------------------

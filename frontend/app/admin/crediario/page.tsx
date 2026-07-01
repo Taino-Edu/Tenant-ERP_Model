@@ -9,9 +9,10 @@ import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
   Plus, History, DollarSign, X, Search, Pencil, Printer, Package, Trash2,
-  MessageCircle, RefreshCw,
+  MessageCircle, RefreshCw, QrCode,
 } from 'lucide-react'
 import { ItemCrediarioDto } from '@/lib/api'
+import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
 import clsx from 'clsx'
 
 const fmt     = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
@@ -767,12 +768,14 @@ function CrediarioCard({
   onPagamento,
   onEditar,
   onDeletar,
+  onCobrancaPix,
 }: {
   c: CrediariosDto
   compact?: boolean
   onPagamento: (c: CrediariosDto) => void
   onEditar: (c: CrediariosDto) => void
   onDeletar: (c: CrediariosDto) => void
+  onCobrancaPix: (c: CrediariosDto) => void
 }) {
   const [expandido,   setExpandido]   = useState(false)
   const [expandItens, setExpandItens] = useState(compact) // auto-expande itens dentro do card de pessoa
@@ -856,6 +859,12 @@ function CrediarioCard({
                 className="btn-success text-sm py-1.5 px-4 whitespace-nowrap"
               >
                 <Plus className="w-4 h-4" /> Registrar Pagamento
+              </button>
+              <button
+                onClick={() => onCobrancaPix(c)}
+                className="btn-secondary text-sm py-1.5 px-4 whitespace-nowrap"
+              >
+                <QrCode className="w-4 h-4" /> Cobrar via Pix
               </button>
               <button
                 onClick={() => onEditar(c)}
@@ -967,11 +976,13 @@ function ClienteCrediarioCard({
   onPagamento,
   onEditar,
   onDeletar,
+  onCobrancaPix,
 }: {
   grupo: CrediariosClienteDto
   onPagamento: (c: CrediariosDto) => void
   onEditar: (c: CrediariosDto) => void
   onDeletar: (c: CrediariosDto) => void
+  onCobrancaPix: (c: CrediariosDto) => void
 }) {
   const [aberto, setAberto] = useState(grupo.temVencido)
 
@@ -1048,6 +1059,7 @@ function ClienteCrediarioCard({
               onPagamento={onPagamento}
               onEditar={onEditar}
               onDeletar={onDeletar}
+              onCobrancaPix={onCobrancaPix}
             />
           ))}
         </div>
@@ -1066,6 +1078,7 @@ export default function CrediarioPage() {
   const [loading, setLoading]         = useState(true)
   const [modalCrediario, setModalCrediario]   = useState<CrediariosDto | null>(null)
   const [editarCrediario, setEditarCrediario] = useState<CrediariosDto | null>(null)
+  const [pixCrediario, setPixCrediario]       = useState<CrediariosDto | null>(null)
   const [showNovaDivida, setShowNovaDivida] = useState(false)
 
   async function handleDeletar(crediario: CrediariosDto) {
@@ -1151,6 +1164,15 @@ export default function CrediarioPage() {
         <EditarCrediarioModal
           crediario={editarCrediario}
           onClose={() => setEditarCrediario(null)}
+          onSuccess={fetchCrediarios}
+        />
+      )}
+      {pixCrediario && (
+        <CobrancaPixModal
+          clienteNome={pixCrediario.userName}
+          gerar={() => crediarioApi.gerarPix(pixCrediario.id)}
+          verificar={txid => crediarioApi.statusPix(pixCrediario.id, txid)}
+          onClose={() => setPixCrediario(null)}
           onSuccess={fetchCrediarios}
         />
       )}
@@ -1249,6 +1271,7 @@ export default function CrediarioPage() {
                 onPagamento={setModalCrediario}
                 onEditar={setEditarCrediario}
                 onDeletar={handleDeletar}
+                onCobrancaPix={setPixCrediario}
               />
             ))}
           </div>
@@ -1271,6 +1294,7 @@ export default function CrediarioPage() {
               onPagamento={setModalCrediario}
               onEditar={setEditarCrediario}
               onDeletar={handleDeletar}
+              onCobrancaPix={setPixCrediario}
             />
           ))}
         </div>

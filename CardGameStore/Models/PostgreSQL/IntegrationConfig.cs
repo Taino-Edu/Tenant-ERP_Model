@@ -45,6 +45,11 @@ public class IntegrationConfig
     [Column("cnpj")]
     public string? Cnpj { get; set; }
 
+    /// <summary>Chave Pix cadastrada na conta (usada para emitir cobrança via API do Inter).</summary>
+    [MaxLength(100)]
+    [Column("pix_key")]
+    public string? PixKey { get; set; }
+
     [Column("last_sync_at")]
     public DateTime? LastSyncAt { get; set; }
 

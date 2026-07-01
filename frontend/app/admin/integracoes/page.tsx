@@ -14,6 +14,7 @@ type IntegracaoStatus = {
   isActive:    boolean
   isConnected: boolean
   cnpj?:       string
+  pixKey?:     string
   lastSyncAt?: string
   expiresAt?:  string
 }
@@ -23,6 +24,7 @@ type ConfigModal = {
   clientId: string
   clientSecret: string
   cnpj: string
+  pixKey: string
 }
 
 const INTEGRACAO_INFO: Record<string, {
@@ -31,8 +33,8 @@ const INTEGRACAO_INFO: Record<string, {
   inter: {
     label: 'Banco Inter PJ',
     icon:  '🏦',
-    desc:  'Puxa extrato, Pix recebidos e boletos automaticamente via API gratuita do Inter para conta PJ.',
-    fields: ['clientId', 'clientSecret'],
+    desc:  'Puxa extrato, Pix recebidos e boletos automaticamente via API gratuita do Inter para conta PJ. A chave Pix é usada para gerar cobranças no Crediário.',
+    fields: ['clientId', 'clientSecret', 'pixKey'],
     docs: 'https://developers.bancointer.com.br',
   },
   mercadopago: {
@@ -79,7 +81,10 @@ export default function IntegracoesPage() {
   useEffect(() => { load() }, [])
 
   function openConfig(src: string, current?: IntegracaoStatus) {
-    setConfigModal({ source: src, clientId: '', clientSecret: '', cnpj: current?.cnpj ?? '' })
+    setConfigModal({
+      source: src, clientId: '', clientSecret: '',
+      cnpj: current?.cnpj ?? '', pixKey: current?.pixKey ?? '',
+    })
   }
 
   async function saveConfig() {
@@ -90,6 +95,7 @@ export default function IntegracoesPage() {
       if (configModal.clientId)     payload.clientId     = configModal.clientId
       if (configModal.clientSecret) payload.clientSecret = configModal.clientSecret
       if (configModal.cnpj)         payload.cnpj         = configModal.cnpj
+      if (configModal.pixKey)       payload.pixKey       = configModal.pixKey
       payload.isActive = true
 
       await api.put(`/api/contas-receber/integracoes/${configModal.source}`, payload)
@@ -176,6 +182,9 @@ export default function IntegracoesPage() {
                   )}
                   {int.cnpj && (
                     <p className="text-xs text-gray-500 mt-0.5">CNPJ: {int.cnpj}</p>
+                  )}
+                  {int.pixKey && (
+                    <p className="text-xs text-gray-500 mt-0.5">Chave Pix: {int.pixKey}</p>
                   )}
 
                   {int.source === 'sefaz' && !sefazOk && int.cnpj && (
@@ -282,6 +291,16 @@ export default function IntegracoesPage() {
                     value={configModal.clientSecret}
                     onChange={e => setConfigModal(m => m ? { ...m, clientSecret: e.target.value } : m)}
                     type="password" placeholder="Client Secret da API" className="input w-full" />
+                </div>
+              )}
+              {cfgInfo.fields.includes('pixKey') && (
+                <div>
+                  <label className="text-xs text-gray-400 font-semibold mb-1 block">Chave Pix cadastrada</label>
+                  <input
+                    value={configModal.pixKey}
+                    onChange={e => setConfigModal(m => m ? { ...m, pixKey: e.target.value } : m)}
+                    placeholder="CNPJ, e-mail, telefone ou chave aleatória" className="input w-full" />
+                  <p className="text-xs text-gray-500 mt-1">Usada para gerar cobranças Pix no Crediário.</p>
                 </div>
               )}
             </div>

@@ -120,3 +120,6 @@ CONTEXTO-SESSAO.md
 
 # package-lock na raiz (o real fica em frontend/)
 /package-lock.json
+
+# Certificados/chaves de integrações (Inter, SEFAZ, etc.) — nunca versionar
+deploy/certs/

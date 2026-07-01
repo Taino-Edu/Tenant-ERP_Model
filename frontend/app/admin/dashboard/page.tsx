@@ -6,13 +6,14 @@ import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
 import { tocarSom, notificarBrowser, pedirPermissaoNotificacao, incrementBadge, clearBadge } from '@/lib/notificacoes'
 import CameraScanner from '@/components/CameraScanner'
+import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
 import toast from 'react-hot-toast'
 import {
   Wifi, WifiOff, RefreshCw, Users, TrendingUp,
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
   History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode, Camera,
   AlertTriangle, DollarSign, BarChart2, Trophy, Medal, Star, FolderOpen, Package, Shield, MessageCircle,
-  Pencil, X, UserSearch,
+  Pencil, X, UserSearch, QrCode,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -561,11 +562,12 @@ function EscolherContaCrediarioModal({
 // ── Modal: selecionar pagamento ao fechar comanda ────────────────────────────
 
 function CloseComandaModal({
-  comanda, onConfirm, onCancel,
+  comanda, onConfirm, onCancel, onGerarPix,
 }: {
   comanda:   ComandaDto
   onConfirm: (paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) => void
   onCancel:  () => void
+  onGerarPix: () => void
 }) {
   const [method,        setMethod]        = useState('Dinheiro')
   const [splitEnabled,  setSplitEnabled]  = useState(false)
@@ -780,13 +782,22 @@ function CloseComandaModal({
 
         <div className="flex gap-3 pt-1">
           <button onClick={onCancel} className="btn-secondary flex-1 justify-center">Voltar</button>
-          <button
-            onClick={handleConfirm}
-            disabled={bloqueado}
-            className="btn-success flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <CheckCircle className="w-4 h-4" /> Confirmar
-          </button>
+          {method === 'Pix' && !splitEnabled ? (
+            <button
+              onClick={onGerarPix}
+              className="btn-success flex-1 justify-center"
+            >
+              <QrCode className="w-4 h-4" /> Gerar QR Pix
+            </button>
+          ) : (
+            <button
+              onClick={handleConfirm}
+              disabled={bloqueado}
+              className="btn-success flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCircle className="w-4 h-4" /> Confirmar
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -822,12 +833,13 @@ function ConfirmModal({
 // ── Card de Comanda ───────────────────────────────────────────────────────────
 
 function ComandaCard({
-  comanda, onClose, onCancel, onUpdate, isNew, recentChange,
+  comanda, onClose, onCancel, onUpdate, onClosedExternally, isNew, recentChange,
 }: {
   comanda: ComandaDto
   onClose:  (id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) => void
   onCancel: (id: string) => void
   onUpdate: (updated: ComandaDto, changeType?: 'add' | 'remove') => void
+  onClosedExternally: () => void
   isNew:    boolean
   recentChange: 'add' | 'remove' | null
 }) {
@@ -835,6 +847,7 @@ function ComandaCard({
   const [loading, setLoading]     = useState(false)
   const [addOpen, setAddOpen]     = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
+  const [pixOpen, setPixOpen]     = useState(false)
   const [confirm, setConfirm]     = useState<'cancel' | null>(null)
   const [removingItem, setRemovingItem]   = useState<string | null>(null)
   const [updatingItem, setUpdatingItem]   = useState<string | null>(null)
@@ -919,6 +932,16 @@ function ComandaCard({
           comanda={comanda}
           onConfirm={handleClose}
           onCancel={() => setCloseOpen(false)}
+          onGerarPix={() => { setCloseOpen(false); setPixOpen(true) }}
+        />
+      )}
+      {pixOpen && (
+        <CobrancaPixModal
+          clienteNome={comanda.userName}
+          gerar={() => comandaApi.gerarPix(comanda.id)}
+          verificar={txid => comandaApi.statusPix(comanda.id, txid)}
+          onClose={() => setPixOpen(false)}
+          onSuccess={onClosedExternally}
         />
       )}
       {confirm === 'cancel' && (
@@ -1843,6 +1866,7 @@ export default function DashboardPage() {
                 onClose={handleClose}
                 onCancel={handleCancel}
                 onUpdate={handleUpdate}
+                onClosedExternally={() => { fetchComandas(); fetchHistory(histData) }}
                 isNew={newIds.has(c.id)}
                 recentChange={recentChanges.get(c.id)?.type ?? null}
               />

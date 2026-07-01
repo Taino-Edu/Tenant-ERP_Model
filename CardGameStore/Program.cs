@@ -562,6 +562,32 @@ using (var scope = app.Services.CreateScope())
                 CREATE INDEX IF NOT EXISTS ix_product_reservations_user    ON product_reservations (user_id);
                 CREATE INDEX IF NOT EXISTS ix_product_reservations_product ON product_reservations (product_id);
                 CREATE INDEX IF NOT EXISTS ix_product_reservations_status  ON product_reservations (status);
+
+                -- Financeiro: chave Pix cadastrada no Inter (para emitir cobrança via API)
+                ALTER TABLE integration_configs ADD COLUMN IF NOT EXISTS pix_key VARCHAR(100) NULL;
+
+                -- Financeiro: cobranças Pix imediatas (Crediário, Comanda ou Venda Avulsa)
+                CREATE TABLE IF NOT EXISTS pix_cobrancas (
+                    id                   UUID         NOT NULL DEFAULT gen_random_uuid(),
+                    origem               VARCHAR(20)  NOT NULL DEFAULT 'Crediario',
+                    crediario_id         UUID         NULL REFERENCES crediarios(id) ON DELETE CASCADE,
+                    comanda_id           UUID         NULL REFERENCES comandas(id) ON DELETE CASCADE,
+                    venda_avulsa_id      VARCHAR(50)  NULL,
+                    tx_id                VARCHAR(35)  NOT NULL,
+                    valor_em_centavos    INTEGER      NOT NULL DEFAULT 0,
+                    status               VARCHAR(40)  NOT NULL DEFAULT 'ATIVA',
+                    pix_copia_cola       TEXT         NULL,
+                    imagem_qrcode        TEXT         NULL,
+                    nome_devedor         VARCHAR(200) NULL,
+                    criado_por_admin_id  UUID         NOT NULL,
+                    criado_em            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    expira_em            TIMESTAMPTZ  NULL,
+                    pago_em              TIMESTAMPTZ  NULL,
+                    CONSTRAINT pk_pix_cobrancas PRIMARY KEY (id)
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_pix_cobrancas_tx_id    ON pix_cobrancas (tx_id);
+                CREATE INDEX IF NOT EXISTS ix_pix_cobrancas_crediario      ON pix_cobrancas (crediario_id);
+                CREATE INDEX IF NOT EXISTS ix_pix_cobrancas_comanda        ON pix_cobrancas (comanda_id);
             ");
         }
 

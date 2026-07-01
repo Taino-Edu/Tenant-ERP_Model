@@ -392,6 +392,10 @@ export const comandaApi = {
     api.post<ComandaDto>(`/api/comanda/${id}/apply-points`, { points }),
   removePoints: (id: string) =>
     api.delete<ComandaDto>(`/api/comanda/${id}/apply-points`),
+  gerarPix: (id: string) =>
+    api.post<PixCobrancaDto>(`/api/comanda/${id}/pix`),
+  statusPix: (id: string, txid: string) =>
+    api.get<{ txId: string; status: string; pagoEm: string | null; comanda: ComandaDto | null }>(`/api/comanda/${id}/pix/${txid}/status`),
 }
 
 // ── Crediário ─────────────────────────────────────────────────────────────────
@@ -459,6 +463,15 @@ export interface CrediariosClienteDto {
   dividas: CrediariosDto[]
 }
 
+export interface PixCobrancaDto {
+  txId: string
+  status: string // 'ATIVA' | 'CONCLUIDA' | 'REMOVIDA_PELO_USUARIO_RECEBEDOR' | 'REMOVIDA_PELO_PSP'
+  pixCopiaCola: string | null
+  imagemQrCode: string | null // data URI base64, pronta pra <img src=...>
+  expiraEm: string | null
+  valorEmReais: number
+}
+
 export const crediarioApi = {
   list:        (status?: string) =>
     api.get<CrediariosDto[]>('/api/crediarios', { params: { status } }),
@@ -479,6 +492,10 @@ export const crediarioApi = {
     api.get<CrediariosDto[]>('/api/crediarios/historico'),
   porCliente: () =>
     api.get<CrediariosClienteDto[]>('/api/crediarios/por-cliente'),
+  gerarPix: (id: string) =>
+    api.post<PixCobrancaDto>(`/api/crediarios/${id}/pix`),
+  statusPix: (id: string, txid: string) =>
+    api.get<{ txId: string; status: string; pagoEm: string | null }>(`/api/crediarios/${id}/pix/${txid}/status`),
 }
 
 export const COMANDA_PAYMENT_METHODS = [

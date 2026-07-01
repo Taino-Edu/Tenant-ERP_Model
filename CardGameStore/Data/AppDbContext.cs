@@ -31,6 +31,7 @@ public class AppDbContext : DbContext
     public DbSet<Announcement>            Announcements            { get; set; }
     public DbSet<Crediario>               Crediarios               { get; set; }
     public DbSet<PagamentoCrediario>      PagamentosCrediario      { get; set; }
+    public DbSet<PixCobranca>             PixCobrancas             { get; set; }
     public DbSet<Perfil>                  Perfis                   { get; set; }
     public DbSet<Deck>                    Decks                    { get; set; }
     public DbSet<ProductWaitList>         ProductWaitLists         { get; set; }
@@ -272,6 +273,36 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(p => p.CreatedAt)
                   .HasDatabaseName("ix_pagamentos_crediario_created_at");
+        });
+
+        // =====================================================================
+        // PIX COBRANCA
+        // =====================================================================
+        modelBuilder.Entity<PixCobranca>(entity =>
+        {
+            entity.Property(p => p.Origem).HasConversion<string>();
+
+            entity.HasIndex(p => p.TxId)
+                  .IsUnique()
+                  .HasDatabaseName("ix_pix_cobrancas_tx_id");
+
+            entity.HasIndex(p => p.CrediarioId)
+                  .HasDatabaseName("ix_pix_cobrancas_crediario");
+
+            entity.HasIndex(p => p.ComandaId)
+                  .HasDatabaseName("ix_pix_cobrancas_comanda");
+
+            entity.HasOne(p => p.Crediario)
+                  .WithMany()
+                  .HasForeignKey(p => p.CrediarioId)
+                  .OnDelete(DeleteBehavior.Cascade)
+                  .IsRequired(false);
+
+            entity.HasOne(p => p.Comanda)
+                  .WithMany()
+                  .HasForeignKey(p => p.ComandaId)
+                  .OnDelete(DeleteBehavior.Cascade)
+                  .IsRequired(false);
         });
 
         // =====================================================================
