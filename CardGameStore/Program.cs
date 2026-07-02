@@ -454,7 +454,11 @@ using (var scope = app.Services.CreateScope())
                     CONSTRAINT pk_perfis PRIMARY KEY (id)
                 );
                 CREATE INDEX IF NOT EXISTS ix_perfis_nome ON perfis (nome);
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS perfil_id UUID REFERENCES perfis(id) ON DELETE SET NULL;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS perfil_id                    UUID         REFERENCES perfis(id) ON DELETE SET NULL;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token        VARCHAR(200) NULL;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expiry TIMESTAMPTZ  NULL;
+
+                ALTER TABLE comanda_items ADD COLUMN IF NOT EXISTS variant_id UUID NULL REFERENCES product_variants(id) ON DELETE SET NULL;
                 ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_nome VARCHAR(255) NULL;
                 ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_dados BYTEA NULL;
 
@@ -686,6 +690,64 @@ using (var scope = app.Services.CreateScope())
                 CREATE UNIQUE INDEX IF NOT EXISTS ix_pix_cobrancas_tx_id    ON pix_cobrancas (tx_id);
                 CREATE INDEX IF NOT EXISTS ix_pix_cobrancas_crediario      ON pix_cobrancas (crediario_id);
                 CREATE INDEX IF NOT EXISTS ix_pix_cobrancas_comanda        ON pix_cobrancas (comanda_id);
+
+                -- Financeiro: tabelas que dependiam só do EnsureCreated (no-op em banco já existente)
+                CREATE TABLE IF NOT EXISTS external_transactions (
+                    id          UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+                    source      VARCHAR(30)     NOT NULL DEFAULT 'manual',
+                    external_id VARCHAR(200)    NULL,
+                    type        VARCHAR(10)     NOT NULL DEFAULT 'expense',
+                    amount      NUMERIC(10,2)   NOT NULL DEFAULT 0,
+                    description VARCHAR(500)    NOT NULL DEFAULT '',
+                    due_date    TIMESTAMPTZ     NULL,
+                    paid_at     TIMESTAMPTZ     NULL,
+                    status      VARCHAR(20)     NOT NULL DEFAULT 'pending',
+                    category    VARCHAR(100)    NULL,
+                    supplier    VARCHAR(200)    NULL,
+                    nfe_key     VARCHAR(44)     NULL,
+                    notes       VARCHAR(2000)   NULL,
+                    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+                    updated_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_ext_tx_source_external_id
+                    ON external_transactions (source, external_id)
+                    WHERE external_id IS NOT NULL;
+
+                CREATE TABLE IF NOT EXISTS integration_configs (
+                    id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+                    source        VARCHAR(30)   NOT NULL UNIQUE,
+                    access_token  VARCHAR(2000) NULL,
+                    refresh_token VARCHAR(2000) NULL,
+                    client_id     VARCHAR(200)  NULL,
+                    client_secret VARCHAR(200)  NULL,
+                    expires_at    TIMESTAMPTZ   NULL,
+                    is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
+                    cnpj          VARCHAR(18)   NULL,
+                    last_sync_at  TIMESTAMPTZ   NULL,
+                    created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+                    updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+                );
+
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    title      VARCHAR(120) NOT NULL,
+                    body       VARCHAR(500) NOT NULL,
+                    link       VARCHAR(300) NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    read_at    TIMESTAMPTZ NULL
+                );
+                CREATE INDEX IF NOT EXISTS ix_notifications_user ON notifications (user_id);
+
+                CREATE TABLE IF NOT EXISTS push_subscriptions (
+                    id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id    UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    endpoint   VARCHAR(600) NOT NULL,
+                    p256dh     VARCHAR(300) NOT NULL,
+                    auth       VARCHAR(150) NOT NULL,
+                    created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_push_subscriptions_endpoint ON push_subscriptions (endpoint);
             ");
         }
 
