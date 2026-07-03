@@ -430,7 +430,7 @@ function CurvaABCSection({ produtos, targetPct }: {
               const precoSug   = custoMedio > 0 ? custoMedio / (1 - targetPct / 100) : null
               const clr = ABC_COLORS[p.abcClass]
               return (
-                <tr key={p.nome} className="hover:bg-white/5 transition-colors">
+                <tr key={p.nome} className="hover:bg-white/10 transition-colors">
                   <td className="px-4 py-2.5 text-gray-500 text-xs font-mono">{i + 1}</td>
                   <td className="px-4 py-2.5 font-medium text-white max-w-[180px]">
                     <p className="truncate">{p.nome}</p>
@@ -2058,7 +2058,7 @@ export default function FinanceiroPage() {
                         const precoSugerido = custoMedio > 0 ? custoMedio / (1 - targetPct / 100) : null
                         const diff = precoSugerido !== null ? precoSugerido - precoMedio : null
                         return (
-                          <tr key={p.nome} className="hover:bg-white/5 transition-colors">
+                          <tr key={p.nome} className="hover:bg-white/10 transition-colors">
                             <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
                             <td className="px-4 py-2.5 font-medium text-white max-w-[180px]">
                               <p className="truncate">{p.nome}</p>

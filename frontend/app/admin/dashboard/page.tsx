@@ -291,8 +291,8 @@ function AddItemModal({
                   <button
                     key={p.id}
                     onClick={() => handleAdd(p)}
-                    disabled={!!adding}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-surface-600 transition-colors text-left disabled:opacity-50"
+                    disabled={adding === p.id}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-surface-500 transition-colors text-left disabled:opacity-50"
                   >
                     <div>
                       <p className="text-sm text-white font-medium">{p.name}</p>
@@ -387,7 +387,7 @@ function AdminOpenModal({
                   'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors text-white',
                   selected?.id === u.id
                     ? 'bg-brand-500/25 border-l-2 border-brand-400'
-                    : 'hover:bg-white/5'
+                    : 'hover:bg-white/10'
                 )}
               >
                 <div className="w-8 h-8 rounded-full bg-brand-600/20 flex items-center justify-center text-brand-400 font-bold text-sm shrink-0">
@@ -780,15 +780,29 @@ function CloseComandaModal({
           </div>
         )}
 
+        {method === 'Pix' && !splitEnabled && (
+          <p className="text-xs text-gray-500 -mt-1">
+            Cliente já pagou por fora? Use "Confirmar" direto. Pra gerar um QR Code de cobrança, use "Gerar QR Pix".
+          </p>
+        )}
         <div className="flex gap-3 pt-1">
           <button onClick={onCancel} className="btn-secondary flex-1 justify-center">Voltar</button>
           {method === 'Pix' && !splitEnabled ? (
-            <button
-              onClick={onGerarPix}
-              className="btn-success flex-1 justify-center"
-            >
-              <QrCode className="w-4 h-4" /> Gerar QR Pix
-            </button>
+            <>
+              <button
+                onClick={handleConfirm}
+                disabled={bloqueado}
+                className="btn-secondary flex-1 justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CheckCircle className="w-4 h-4" /> Confirmar
+              </button>
+              <button
+                onClick={onGerarPix}
+                className="btn-success flex-1 justify-center"
+              >
+                <QrCode className="w-4 h-4" /> Gerar QR Pix
+              </button>
+            </>
           ) : (
             <button
               onClick={handleConfirm}

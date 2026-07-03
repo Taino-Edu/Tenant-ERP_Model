@@ -688,7 +688,7 @@ function VendaWizard({
                     <button
                       key={u.id}
                       onClick={() => selectClient(u)}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/5 transition-colors text-left border-b border-surface-600 last:border-0 text-white"
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-white/10 transition-colors text-left border-b border-surface-600 last:border-0 text-white"
                     >
                       <div className="w-7 h-7 rounded-full bg-brand-600/20 flex items-center justify-center shrink-0">
                         <User className="w-3.5 h-3.5 text-brand-400" />
