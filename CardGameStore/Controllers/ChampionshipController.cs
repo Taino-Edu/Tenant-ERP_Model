@@ -230,7 +230,7 @@ public class ChampionshipController : ControllerBase
         ChampionshipParticipant participant;
         try
         {
-            participant = await _service.RegisterParticipantAsync(id, userId, request?.DeckName);
+            participant = await _service.RegisterParticipantAsync(id, userId, request?.DeckName, request?.DeckId);
         }
         catch (InvalidOperationException ex)
         {
@@ -606,7 +606,8 @@ public class AdminRegisterRequest
 
 /// <summary>Request para inscrição em campeonato (deck é opcional).</summary>
 public record RegisterChampionshipRequest(
-    [property: System.ComponentModel.DataAnnotations.MaxLength(200)] string? DeckName);
+    [System.ComponentModel.DataAnnotations.MaxLength(200)] string? DeckName,
+    Guid? DeckId = null);
 
 /// <summary>Request para definir colocação de participante.</summary>
 public record SetPlacementRequest(int Placement);

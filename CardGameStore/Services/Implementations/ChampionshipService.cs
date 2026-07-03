@@ -79,6 +79,16 @@ public class ChampionshipService : IChampionshipService
         if (jaInscrito)
             throw new InvalidOperationException("Usuário já está inscrito neste campeonato.");
 
+        // Se veio DeckId, confirma que o deck é do próprio usuário (nunca confia em ID vindo do
+        // cliente sem checar dono) e usa o nome real do deck em vez do que foi digitado.
+        if (deckId.HasValue)
+        {
+            var deck = await _db.Decks.FirstOrDefaultAsync(d => d.Id == deckId.Value && d.UserId == userId);
+            if (deck is null)
+                throw new InvalidOperationException("Deck não encontrado ou não pertence a este usuário.");
+            deckName = deck.Name;
+        }
+
         // Gera número sequencial de jogador (último + 1)
         var ultimoNumero = await _db.ChampionshipParticipants
             .Where(p => p.ChampionshipId == championshipId)

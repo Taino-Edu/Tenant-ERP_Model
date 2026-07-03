@@ -75,6 +75,16 @@ public record SetupAccountRequest(
     [Required, MinLength(8)]    string Password
 );
 
+/// <summary>Cria uma conta nova de cliente pelo site — não depende de CPF pré-cadastrado
+/// (diferente de SetupAccountRequest, que só ativa contas já existentes vinda de compra em loja).</summary>
+public record RegisterRequest(
+    [Required, MaxLength(150)]  string  Name,
+    [Required, EmailAddress]    string  Email,
+    [Required, MinLength(8)]    string  Password,
+    [MaxLength(20)]             string? WhatsApp = null,
+    [ValidCpf, MaxLength(11)]   string? Cpf      = null
+);
+
 /// <summary>Login de cliente pelo site (email + senha).</summary>
 public record ClientLoginRequest(
     [Required, EmailAddress]    string Email,

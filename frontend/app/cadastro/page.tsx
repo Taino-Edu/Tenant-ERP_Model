@@ -4,27 +4,34 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
 import toast, { Toaster } from 'react-hot-toast'
-import { Mail, KeyRound, Loader2, Gamepad2, ArrowLeft, UserPlus } from 'lucide-react'
+import { Mail, KeyRound, Loader2, Gamepad2, ArrowLeft, User, Phone } from 'lucide-react'
 import Link from 'next/link'
 
-export default function EntrarPage() {
-  const router = useRouter()
+export default function CadastroPage() {
+  const router      = useRouter()
   const searchParams = useSearchParams()
-  const returnTo = searchParams.get('returnTo') || '/cliente/perfil'
+  const returnTo     = searchParams.get('returnTo') || '/cliente/perfil'
+
+  const [name, setName]         = useState('')
   const [email, setEmail]       = useState('')
+  const [whatsApp, setWhatsApp] = useState('')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm]   = useState('')
   const [loading, setLoading]   = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (password !== confirm) { toast.error('As senhas não coincidem.'); return }
+    if (password.length < 8) { toast.error('A senha precisa ter pelo menos 8 caracteres.'); return }
     setLoading(true)
     try {
-      const { data } = await authApi.clientLogin(email, password)
+      const { data } = await authApi.register(name.trim(), email.trim(), password, whatsApp.trim() || undefined)
       saveAuth(data)
-      toast.success(`Bem-vindo, ${data.userName}!`)
+      toast.success('Conta criada! Bem-vindo, ' + data.userName)
       router.push(returnTo)
-    } catch {
-      toast.error('E-mail ou senha inválidos.')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Erro ao criar conta.')
     } finally {
       setLoading(false)
     }
@@ -48,11 +55,23 @@ export default function EntrarPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-600/20 border border-brand-500/30 rounded-2xl mb-4">
             <Gamepad2 className="w-8 h-8 text-brand-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Minha Conta</h1>
-          <p className="text-gray-400 mt-1 text-sm">Entre para ver seus pontos e histórico</p>
+          <h1 className="text-2xl font-bold text-white">Criar Conta</h1>
+          <p className="text-gray-400 mt-1 text-sm">Cadastre-se pra se inscrever em campeonatos e acompanhar seus pontos</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-5">
+          <div>
+            <label className="label">Nome</label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text" required value={name}
+                onChange={e => setName(e.target.value)}
+                className="input pl-9"
+                placeholder="Seu nome completo"
+              />
+            </div>
+          </div>
           <div>
             <label className="label">E-mail</label>
             <div className="relative">
@@ -66,6 +85,18 @@ export default function EntrarPage() {
             </div>
           </div>
           <div>
+            <label className="label">WhatsApp <span className="text-gray-500 font-normal">(opcional)</span></label>
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="tel" value={whatsApp}
+                onChange={e => setWhatsApp(e.target.value)}
+                className="input pl-9"
+                placeholder="11999999999"
+              />
+            </div>
+          </div>
+          <div>
             <label className="label">Senha</label>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -73,20 +104,32 @@ export default function EntrarPage() {
                 type="password" required value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="input pl-9"
+                placeholder="Mínimo 8 caracteres"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="label">Confirmar senha</label>
+            <div className="relative">
+              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="password" required value={confirm}
+                onChange={e => setConfirm(e.target.value)}
+                className="input pl-9"
                 placeholder="••••••••"
               />
             </div>
           </div>
 
           <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-2.5">
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <KeyRound className="w-5 h-5" />}
-            {loading ? 'Entrando...' : 'Entrar'}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <User className="w-5 h-5" />}
+            {loading ? 'Criando...' : 'Criar conta'}
           </button>
 
           <div className="text-center text-sm text-gray-500">
-            Ainda não é cliente?{' '}
-            <Link href={`/cadastro?returnTo=${encodeURIComponent(returnTo)}`} className="text-brand-400 hover:text-brand-300 font-medium transition">
-              Criar conta
+            Já tem conta?{' '}
+            <Link href="/entrar" className="text-brand-400 hover:text-brand-300 font-medium transition">
+              Entrar
             </Link>
           </div>
           <div className="text-center text-xs text-gray-600">
@@ -96,12 +139,6 @@ export default function EntrarPage() {
             </Link>
           </div>
         </form>
-
-        <div className="mt-4 text-center">
-          <Link href="/reset-password" className="text-xs text-gray-400 hover:text-gray-400 transition">
-            Esqueci minha senha
-          </Link>
-        </div>
       </div>
     </div>
   )

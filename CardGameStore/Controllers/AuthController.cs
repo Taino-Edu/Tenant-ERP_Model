@@ -282,6 +282,21 @@ public class AuthController : ControllerBase
         catch (UnauthorizedAccessException) { return Unauthorized(new { Message = "E-mail ou senha inválidos." }); }
     }
 
+    [HttpPost("register")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            var response = await _authService.RegisterAsync(request);
+            SetAuthCookies(response.AccessToken, response.RefreshToken);
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
+        }
+        catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
+    }
+
     // =========================================================================
     // FORGOT PASSWORD — Solicitar reset por email
     // =========================================================================

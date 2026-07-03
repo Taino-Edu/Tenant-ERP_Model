@@ -253,6 +253,38 @@ public class AuthService : IAuthService
         return await GenerateAuthResponseAsync(user);
     }
 
+    public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+
+        var emailInUse = await _db.Users.AnyAsync(u => u.Email == email);
+        if (emailInUse)
+            throw new InvalidOperationException("Este e-mail já está em uso. Tente fazer login.");
+
+        var cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf;
+        if (cpf is not null)
+        {
+            var cpfInUse = await _db.Users.AnyAsync(u => u.Cpf == cpf);
+            if (cpfInUse)
+                throw new InvalidOperationException("Este CPF já está cadastrado. Tente fazer login ou use \"Esqueci minha senha\".");
+        }
+
+        var user = new User
+        {
+            Name         = request.Name.Trim(),
+            Email        = email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            WhatsApp     = string.IsNullOrWhiteSpace(request.WhatsApp) ? null : request.WhatsApp,
+            Cpf          = cpf,
+            Role         = UserRole.Customer,
+        };
+        _db.Users.Add(user);
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Nova conta criada via cadastro público: {Name} ({Email})", user.Name, user.Email);
+        return await GenerateAuthResponseAsync(user);
+    }
+
     public async Task<AuthResponse> ClientLoginAsync(ClientLoginRequest request)
     {
         var user = await _db.Users.FirstOrDefaultAsync(

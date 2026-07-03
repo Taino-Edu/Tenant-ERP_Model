@@ -41,4 +41,7 @@ public interface IAuthService
 
     /// <summary>Login de cliente pelo site (email + senha).</summary>
     Task<AuthResponse> ClientLoginAsync(ClientLoginRequest request);
+
+    /// <summary>Cria uma conta nova de cliente pelo site, sem depender de CPF pré-cadastrado.</summary>
+    Task<AuthResponse> RegisterAsync(RegisterRequest request);
 }

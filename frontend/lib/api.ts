@@ -308,6 +308,8 @@ export const authApi = {
     api.post<AuthResponse>('/api/auth/login', { email, password }),
   clientLogin: (email: string, password: string) =>
     api.post<AuthResponse>('/api/auth/client-login', { email, password }),
+  register: (name: string, email: string, password: string, whatsApp?: string, cpf?: string) =>
+    api.post<AuthResponse>('/api/auth/register', { name, email, password, whatsApp, cpf }),
   cpfLookup: (cpf: string) =>
     api.post<CpfLookupResponse>('/api/auth/cpf-lookup', { cpf }),
   setupAccount: (cpf: string, email: string, password: string) =>
