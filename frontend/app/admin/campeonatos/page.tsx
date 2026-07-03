@@ -57,7 +57,11 @@ function NewChampionshipModal({ onClose, onSave }: {
   }
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true)
+    e.preventDefault()
+    if (!form.name?.trim())  { toast.error('Preencha o nome do campeonato'); return }
+    if (!form.game?.trim())  { toast.error('Preencha o jogo do campeonato'); return }
+    if (!form.startDate)     { toast.error('Preencha a data/hora do campeonato'); return }
+    setSaving(true)
     try { await onSave(form) } finally { setSaving(false) }
   }
 
@@ -108,14 +112,14 @@ function NewChampionshipModal({ onClose, onSave }: {
 
           <div>
             <label className="label">Nome do Campeonato *</label>
-            <input className="input" required value={form.name ?? ''}
+            <input className="input" value={form.name ?? ''}
               onChange={e => set('name', e.target.value)}
               placeholder="Ex: Torneio Pokémon — Junho 2025" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Jogo *</label>
-              <input className="input" required list="games-list"
+              <input className="input" list="games-list"
                 placeholder="Ex: Pokemon, Magic, Yu-Gi-Oh!..."
                 value={form.game ?? ''}
                 onChange={e => set('game', e.target.value)} />
@@ -133,8 +137,8 @@ function NewChampionshipModal({ onClose, onSave }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Data / Hora *</label>
-              <input className="input" type="datetime-local" required
-                onChange={e => set('startDate', new Date(e.target.value).toISOString())} />
+              <input className="input" type="datetime-local"
+                onChange={e => set('startDate', e.target.value ? new Date(e.target.value).toISOString() : undefined)} />
             </div>
             <div>
               <label className="label">Máx. participantes</label>
@@ -884,8 +888,11 @@ export default function CampeonatosPage() {
       toast.success('Campeonato criado!')
       setShowModal(false)
       load(search || undefined)
-    } catch {
-      toast.error('Erro ao criar campeonato')
+    } catch (err: any) {
+      const data = err?.response?.data
+      const msg  = data?.message
+        ?? (data?.errors ? Object.values(data.errors).flat().join(' ') : null)
+      toast.error(msg || 'Erro ao criar campeonato')
     }
   }
 
