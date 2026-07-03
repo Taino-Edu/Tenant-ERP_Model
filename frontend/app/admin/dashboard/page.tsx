@@ -387,7 +387,7 @@ function AdminOpenModal({
                   'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors text-white',
                   selected?.id === u.id
                     ? 'bg-brand-500/25 border-l-2 border-brand-400'
-                    : 'hover:bg-white/10'
+                    : 'hover:bg-surface-700'
                 )}
               >
                 <div className="w-8 h-8 rounded-full bg-brand-600/20 flex items-center justify-center text-brand-400 font-bold text-sm shrink-0">
