@@ -247,6 +247,7 @@ export default function ConfiguracoesPage() {
               { key: 'produtos',      label: 'Top Produtos (7 dias)' },
               { key: 'lgpd',          label: 'LGPD' },
               { key: 'preInscricoes', label: 'Pré-inscrições campeonatos' },
+              { key: 'preVenda',      label: 'Lista de espera pré-venda' },
             ] as { key: keyof DashboardPanels; label: string }[]).map(({ key, label }) => (
               <Row key={key} label={label}>
                 <Toggle

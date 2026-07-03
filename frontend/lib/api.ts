@@ -275,6 +275,7 @@ export interface DashboardPanels {
   produtos:      boolean
   lgpd:          boolean
   preInscricoes: boolean
+  preVenda:      boolean
 }
 
 export interface UserPreferences {
@@ -287,7 +288,7 @@ export interface UserPreferences {
 
 export const DEFAULT_DASHBOARD_PANELS: DashboardPanels = {
   finHoje: true, grafico: true, previsao: true, patrimonio: true,
-  clientes: true, produtos: true, lgpd: true, preInscricoes: true,
+  clientes: true, produtos: true, lgpd: true, preInscricoes: true, preVenda: true,
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
@@ -578,6 +579,7 @@ export const waitListApi = {
   leave:      (productId: string)  => api.delete(`/api/products/${productId}/waitlist`),
   adminList:  (productId: string)  => api.get<{ productId: string; productName: string; total: number; entries: WaitListEntry[] }>(`/api/products/${productId}/waitlist`),
   adminRemove:(productId: string, entryId: string) => api.delete(`/api/products/${productId}/waitlist/${entryId}`),
+  preVendaPendentesCount: () => api.get<{ count: number }>('/api/products/waitlist/pre-venda/pendentes'),
 }
 
 export interface UpdateMeRequest {

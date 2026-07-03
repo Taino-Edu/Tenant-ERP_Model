@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { comandaApi, crediarioApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, notificationsApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
+import { comandaApi, crediarioApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, notificationsApi, waitListApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
@@ -1419,7 +1419,9 @@ export default function DashboardPage() {
   const [panelProdutos,     togglePanelProdutos]     = usePersistentPanel('produtos')
   const [panelLgpd,         togglePanelLgpd]         = usePersistentPanel('lgpd')
   const [panelPreInscricoes,togglePanelPreInscricoes]= usePersistentPanel('preinscricoes')
+  const [panelPreVenda,     togglePanelPreVenda]     = usePersistentPanel('prevenda')
   const [pendingPI, setPendingPI]       = useState(0)
+  const [pendingPreVenda, setPendingPreVenda] = useState(0)
   const [pendingLgpd, setPendingLgpd]   = useState<LgpdRequestDto[]>([])
   const [finProdutos, setFinProdutos]   = useState<FinanceiroDto | null>(null)
   const [prodDe,  setProdDe]  = useState(() => {
@@ -1481,6 +1483,7 @@ export default function DashboardPage() {
     }).catch(() => {})
     lgpdAdminApi.listRequests('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
     notificationsApi.unreadCount().then(r => setUnreadNotif(r.data.count)).catch(() => {})
+    waitListApi.preVendaPendentesCount().then(r => setPendingPreVenda(r.data.count)).catch(() => {})
   }, [])
 
   async function fetchProdutos(de: string, ate: string) {
@@ -2318,7 +2321,7 @@ export default function DashboardPage() {
           </div>
 
           {/* ── Produtos & Eventos ── */}
-          {(dp.panels.produtos || dp.panels.preInscricoes) && (
+          {(dp.panels.produtos || dp.panels.preInscricoes || dp.panels.preVenda) && (
             <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest -mb-3">Produtos & eventos</p>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -2409,6 +2412,32 @@ export default function DashboardPage() {
                     </div>
                     <span className={clsx('text-sm font-bold tabular-nums', pendingPI > 0 ? 'text-amber-400' : 'text-gray-600')}>
                       {pendingPI}
+                    </span>
+                  </a>
+                )}
+              </div>
+            )}
+
+            {dp.panels.preVenda && (
+              <div className="card">
+                <button onClick={togglePanelPreVenda} className="w-full flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-amber-400" /> Pré-venda
+                  </h3>
+                  {panelPreVenda ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                </button>
+                {panelPreVenda && (
+                  <a href="/admin/estoque" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
+                    <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                      pendingPreVenda > 0 ? 'bg-amber-500/15' : 'bg-surface-600')}>
+                      <Package className={clsx('w-4 h-4', pendingPreVenda > 0 ? 'text-amber-400' : 'text-gray-500')} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white">Lista de espera</p>
+                      <p className="text-xs text-gray-500">Aguardando notificação</p>
+                    </div>
+                    <span className={clsx('text-sm font-bold tabular-nums', pendingPreVenda > 0 ? 'text-amber-400' : 'text-gray-600')}>
+                      {pendingPreVenda}
                     </span>
                   </a>
                 )}

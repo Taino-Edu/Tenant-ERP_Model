@@ -115,6 +115,19 @@ public class ProductWaitListController : ControllerBase
         return NoContent();
     }
 
+    // ── Admin: contagem agregada de pendentes em pré-venda (dashboard) ─────────
+
+    [HttpGet("/api/products/waitlist/pre-venda/pendentes")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> CountPreVendaPendentes()
+    {
+        var count = await _db.ProductWaitLists
+            .Where(w => w.NotifiedAt == null && w.Product!.IsPreVenda)
+            .CountAsync();
+
+        return Ok(new { Count = count });
+    }
+
     // ── Admin: ver lista completa ──────────────────────────────────────────────
 
     [HttpGet]
