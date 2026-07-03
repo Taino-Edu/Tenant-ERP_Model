@@ -903,7 +903,7 @@ function ProductCard({ product: p, onClick, C }: { product: Product; onClick: ()
           ? <img src={p.imageUrl} alt={p.name}
               className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 p-2" />
           : <div className="w-full h-full flex items-center justify-center">
-              <Package className="w-10 h-10 opacity-20 text-white" />
+              <Package className="w-10 h-10 opacity-20" style={{ color: C.navy }} />
             </div>
         }
         {p.isPreVenda && (
@@ -975,7 +975,7 @@ function AnnouncementModal({ ann, onClose, C }: { ann: AnnouncementDto; onClose:
           <img src={ann.imageUrl} alt={ann.title} className="w-full max-h-64 object-cover" />
         )}
         <div className="p-6 pb-8 sm:pb-6">
-          <h3 className="text-xl font-black text-white leading-snug">{ann.title}</h3>
+          <h3 className="text-xl font-black leading-snug" style={{ color: C.navy }}>{ann.title}</h3>
           {ann.body && (
             <p className="text-sm mt-3 leading-relaxed whitespace-pre-wrap" style={{ color: C.text }}>{ann.body}</p>
           )}
