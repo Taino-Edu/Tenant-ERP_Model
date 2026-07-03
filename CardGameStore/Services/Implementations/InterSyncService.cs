@@ -230,11 +230,20 @@ public class InterSyncService
 
     private async Task<(string? copiaCola, string? imagem)> FetchQrCodeAsync(HttpClient http, int locId)
     {
-        var resp = await http.GetAsync($"https://cdpj.partners.bancointer.com.br/pix/v2/loc/{locId}/qrcode");
-        if (!resp.IsSuccessStatusCode) return (null, null);
+        // Falha ao buscar QR Code nunca deve abortar a cobrança — o Pix Copia e Cola já basta para o cliente pagar.
+        try
+        {
+            var resp = await http.GetAsync($"https://cdpj.partners.bancointer.com.br/pix/v2/loc/{locId}/qrcode");
+            if (!resp.IsSuccessStatusCode) return (null, null);
 
-        var body = await resp.Content.ReadFromJsonAsync<InterLocQrCodeResponse>(_json);
-        return (body?.QrCode, body?.ImagemQrcode);
+            var body = await resp.Content.ReadFromJsonAsync<InterLocQrCodeResponse>(_json);
+            return (body?.QrCode, body?.ImagemQrcode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao buscar QR Code Pix (loc {LocId}) — cobrança continua válida, sem imagem.", locId);
+            return (null, null);
+        }
     }
 
     // ── Extrato ───────────────────────────────────────────────────────────────

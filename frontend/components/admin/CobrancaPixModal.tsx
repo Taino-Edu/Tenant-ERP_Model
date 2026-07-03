@@ -95,10 +95,15 @@ export function CobrancaPixModal({ clienteNome, gerar, verificar, onClose, onSuc
                 <p className="text-2xl font-bold text-accent-gold">{fmt(pix.valorEmReais)}</p>
               </div>
 
-              {pix.imagemQrCode && (
+              {pix.imagemQrCode ? (
                 <div className="flex justify-center bg-white rounded-xl p-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={pix.imagemQrCode} alt="QR Code Pix" className="w-48 h-48" />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-2 py-3 text-sm text-gray-400 bg-surface-700 rounded-xl border border-surface-500/50">
+                  <QrCode className="w-4 h-4 shrink-0" />
+                  <span>QR Code indisponível — use o Pix Copia e Cola abaixo</span>
                 </div>
               )}
 
@@ -120,7 +125,9 @@ export function CobrancaPixModal({ clienteNome, gerar, verificar, onClose, onSuc
               </div>
 
               <p className="text-xs text-gray-500 text-center">
-                Peça pro cliente escanear o QR Code ou colar o código no app do banco dele.
+                {pix.imagemQrCode
+                  ? 'Peça pro cliente escanear o QR Code ou colar o código no app do banco dele.'
+                  : 'Peça pro cliente colar o código Pix no app do banco dele.'}
               </p>
             </>
           ) : null}
