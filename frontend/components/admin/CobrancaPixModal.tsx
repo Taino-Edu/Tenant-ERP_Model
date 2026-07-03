@@ -30,11 +30,13 @@ export function CobrancaPixModal({ clienteNome, gerar, verificar, onClose, onSuc
       } catch (err: unknown) {
         const e = err as { response?: { status?: number; data?: unknown }; message?: string }
         const d = e?.response?.data
-        const msg =
-          (typeof d === 'object' && d !== null && 'message' in d ? (d as Record<string, string>).message : null) ||
-          (typeof d === 'string' ? d : null) ||
-          (e?.message) ||
-          'Erro ao gerar cobrança Pix'
+        const fromObj = typeof d === 'object' && d !== null
+          ? ((d as Record<string, unknown>).message as string | undefined) ||
+            ((d as Record<string, unknown>).Message as string | undefined) ||
+            ((d as Record<string, unknown>).title  as string | undefined) ||
+            null
+          : null
+        const msg = fromObj || (typeof d === 'string' && d ? d : null) || e?.message || 'Erro ao gerar cobrança Pix'
         setErro(e?.response?.status ? `[${e.response.status}] ${msg}` : msg)
       } finally {
         setGerando(false)

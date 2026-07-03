@@ -286,7 +286,7 @@ public class ComandaController : ControllerBase
                 cfg, valorEmCentavos, nomeDevedor, cpf, "Santuário Nerd — Comanda");
 
             if (result.Error is not null)
-                return StatusCode(502, new { Message = result.Error });
+                return StatusCode(422, new { message = result.Error });
 
             var pix = new PixCobranca
             {
@@ -335,7 +335,7 @@ public class ComandaController : ControllerBase
 
         var result = await _inter.ConsultarCobrancaAsync(cfg, txid);
         if (result.Error is not null)
-            return StatusCode(502, new { Message = result.Error });
+            return StatusCode(422, new { message = result.Error });
 
         pix.Status = result.Status ?? pix.Status;
 
