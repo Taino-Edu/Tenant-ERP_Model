@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
@@ -8,6 +8,14 @@ import { Mail, KeyRound, Loader2, Gamepad2, ArrowLeft, User, Phone } from 'lucid
 import Link from 'next/link'
 
 export default function CadastroPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-surface-900" />}>
+      <CadastroForm />
+    </Suspense>
+  )
+}
+
+function CadastroForm() {
   const router      = useRouter()
   const searchParams = useSearchParams()
   const returnTo     = searchParams.get('returnTo') || '/cliente/perfil'
