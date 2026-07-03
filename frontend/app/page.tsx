@@ -245,8 +245,9 @@ export default function LandingPage() {
                 <img src={banner.imageUrl!} alt="" className="w-full h-full object-cover" />
               </div>
             ))}
-            {/* Overlay escuro para garantir legibilidade do texto sobre qualquer imagem */}
-            <div className="absolute inset-0 bg-black/55" />
+            {/* Overlay escuro — mais forte à esquerda (onde fica o texto do site) e mais
+                fraco à direita, pra não apagar o texto que já vem desenhado na imagem do banner */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/55 via-black/25 to-black/10" />
           </>
         ) : (
           <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #0D1B2A 0%, #112B45 100%)' }} />
