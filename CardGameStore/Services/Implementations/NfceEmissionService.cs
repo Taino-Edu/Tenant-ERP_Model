@@ -49,10 +49,6 @@ namespace CardGameStore.Services.Implementations;
 
 public class NfceEmissionService : INfceEmissionService
 {
-    // NCM genérico ("cartas para jogar") usado quando o item não tem Product vinculado
-    // (ex: carta TCG avulsa do cache Mongo, sem cadastro fiscal próprio).
-    private const string NcmFallbackCartas = "95044000";
-
     // Janela legal pra cancelar uma NFC-e após autorizada (padrão nacional: 30 minutos).
     private static readonly TimeSpan JanelaCancelamento = TimeSpan.FromMinutes(30);
 
@@ -274,9 +270,19 @@ public class NfceEmissionService : INfceEmissionService
 
         var padrao = await _db.NaturezasOperacao.FirstOrDefaultAsync(n => n.IsPadrao);
 
+        var semNcm = comanda.Items
+            .Where(item => string.IsNullOrWhiteSpace(item.Product?.Ncm))
+            .Select(item => item.ItemNameSnapshot)
+            .Distinct()
+            .ToList();
+        if (semNcm.Count > 0)
+            throw new FiscalNaoConfiguradoException(
+                $"Produto(s) sem NCM cadastrado (Admin > Estoque): {string.Join(", ", semNcm)}. " +
+                "O NCM deve vir da nota fiscal de compra do produto — não é inventado pelo sistema.");
+
         var itens = comanda.Items.Select(item => new ItemFiscal(
             Nome:                 item.ItemNameSnapshot,
-            Ncm:                  item.Product?.Ncm ?? NcmFallbackCartas,
+            Ncm:                  item.Product!.Ncm!,
             Cfop:                 item.Product?.NaturezaOperacao?.Cfop ?? padrao?.Cfop ?? "5102",
             Csosn:                item.Product?.NaturezaOperacao?.Csosn ?? padrao?.Csosn ?? "102",
             Quantidade:           item.Quantity,
@@ -301,12 +307,22 @@ public class NfceEmissionService : INfceEmissionService
 
         var padrao = await _db.NaturezasOperacao.FirstOrDefaultAsync(n => n.IsPadrao);
 
+        var semNcm = venda.Items
+            .Where(item => { products.TryGetValue(item.ProductId, out var p); return string.IsNullOrWhiteSpace(p?.Ncm); })
+            .Select(item => item.ProductName)
+            .Distinct()
+            .ToList();
+        if (semNcm.Count > 0)
+            throw new FiscalNaoConfiguradoException(
+                $"Produto(s) sem NCM cadastrado (Admin > Estoque): {string.Join(", ", semNcm)}. " +
+                "O NCM deve vir da nota fiscal de compra do produto — não é inventado pelo sistema.");
+
         var itens = venda.Items.Select(item =>
         {
             products.TryGetValue(item.ProductId, out var product);
             return new ItemFiscal(
                 Nome:                 item.ProductName,
-                Ncm:                  product?.Ncm ?? NcmFallbackCartas,
+                Ncm:                  product!.Ncm!,
                 Cfop:                 product?.NaturezaOperacao?.Cfop ?? padrao?.Cfop ?? "5102",
                 Csosn:                product?.NaturezaOperacao?.Csosn ?? padrao?.Csosn ?? "102",
                 Quantidade:           item.Quantity,
