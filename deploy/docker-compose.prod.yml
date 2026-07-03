@@ -112,7 +112,7 @@ services:
       Encryption__Key: "${ENCRYPTION_KEY}"
     volumes:
       - api_uploads:/app/wwwroot/uploads
-      - ./certs/inter:/app/certs/inter:ro
+      - ./certs/inter:/app/certs/inter
     depends_on:
       postgres:
         condition: service_healthy

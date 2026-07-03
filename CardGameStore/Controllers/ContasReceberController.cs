@@ -20,14 +20,16 @@ public class ContasReceberController : ControllerBase
     private readonly SefazNfeService    _sefaz;
     private readonly EncryptionService  _enc;
     private readonly InterSyncService   _inter;
+    private readonly IConfiguration     _config;
 
-    public ContasReceberController(AppDbContext db, OfxParserService ofx, SefazNfeService sefaz, EncryptionService enc, InterSyncService inter)
+    public ContasReceberController(AppDbContext db, OfxParserService ofx, SefazNfeService sefaz, EncryptionService enc, InterSyncService inter, IConfiguration config)
     {
-        _db    = db;
-        _ofx   = ofx;
-        _sefaz = sefaz;
-        _enc   = enc;
-        _inter = inter;
+        _db     = db;
+        _ofx    = ofx;
+        _sefaz  = sefaz;
+        _enc    = enc;
+        _inter  = inter;
+        _config = config;
     }
 
     // ── GET /api/contas-receber — lista com filtros ────────────────────────────
@@ -290,7 +292,7 @@ public class ContasReceberController : ControllerBase
         if (result.Skipped)
             return BadRequest(new { Message = result.Reason });
         if (result.Error is not null)
-            return StatusCode(502, new { Message = result.Error });
+            return StatusCode(422, new { message = result.Error });
         return Ok(new { result.Imported, result.Duplicates });
     }
 
@@ -306,6 +308,32 @@ public class ContasReceberController : ControllerBase
             hasCredentials  = !string.IsNullOrWhiteSpace(cfg?.ClientId) && !string.IsNullOrWhiteSpace(cfg?.ClientSecret),
             lastSyncAt      = cfg?.LastSyncAt,
         });
+    }
+
+    // ── POST /api/contas-receber/integracoes/inter/certificado — upload mTLS ────
+    [HttpPost("integracoes/inter/certificado")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadCertificado(IFormFile crt, IFormFile key)
+    {
+        const long maxBytes = 64 * 1024; // 64 KB
+        if (crt.Length > maxBytes || key.Length > maxBytes)
+            return BadRequest(new { message = "Arquivo muito grande (máx 64 KB)." });
+
+        var certPath = _config["Inter:CertificatePath"]
+            ?? throw new InvalidOperationException("Inter:CertificatePath não configurado.");
+        var keyPath  = _config["Inter:KeyPath"]
+            ?? throw new InvalidOperationException("Inter:KeyPath não configurado.");
+
+        Directory.CreateDirectory(Path.GetDirectoryName(certPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(keyPath)!);
+
+        await using (var fs = System.IO.File.Create(certPath))
+            await crt.CopyToAsync(fs);
+
+        await using (var fs = System.IO.File.Create(keyPath))
+            await key.CopyToAsync(fs);
+
+        return Ok(new { message = "Certificado instalado com sucesso.", certificateOk = true });
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

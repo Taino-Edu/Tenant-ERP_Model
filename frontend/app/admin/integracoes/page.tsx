@@ -25,6 +25,8 @@ type ConfigModal = {
   clientSecret: string
   cnpj: string
   pixKey: string
+  certOk?: boolean
+  certUploading?: boolean
 }
 
 const INTEGRACAO_INFO: Record<string, {
@@ -80,11 +82,36 @@ export default function IntegracoesPage() {
 
   useEffect(() => { load() }, [])
 
-  function openConfig(src: string, current?: IntegracaoStatus) {
+  async function openConfig(src: string, current?: IntegracaoStatus) {
+    let certOk = false
+    if (src === 'inter') {
+      try {
+        const { data } = await api.get('/api/contas-receber/integracoes/inter/status')
+        certOk = !!data.certificateOk
+      } catch { /* ignora */ }
+    }
     setConfigModal({
       source: src, clientId: '', clientSecret: '',
       cnpj: current?.cnpj ?? '', pixKey: current?.pixKey ?? '',
+      certOk,
     })
+  }
+
+  async function uploadCertificado(crt: File, key: File) {
+    setConfigModal(m => m ? { ...m, certUploading: true } : m)
+    try {
+      const form = new FormData()
+      form.append('crt', crt)
+      form.append('key', key)
+      await api.post('/api/contas-receber/integracoes/inter/certificado', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      toast.success('Certificado instalado!')
+      setConfigModal(m => m ? { ...m, certOk: true, certUploading: false } : m)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao instalar certificado')
+      setConfigModal(m => m ? { ...m, certUploading: false } : m)
+    }
   }
 
   async function saveConfig() {
@@ -300,7 +327,49 @@ export default function IntegracoesPage() {
                     value={configModal.pixKey}
                     onChange={e => setConfigModal(m => m ? { ...m, pixKey: e.target.value } : m)}
                     placeholder="CNPJ, e-mail, telefone ou chave aleatória" className="input w-full" />
-                  <p className="text-xs text-gray-500 mt-1">Usada para gerar cobranças Pix no Crediário.</p>
+                  <p className="text-xs text-gray-500 mt-1">Usada para gerar cobranças Pix no Crediário e Comandas.</p>
+                </div>
+              )}
+
+              {configModal.source === 'inter' && (
+                <div className="border border-surface-600 rounded-xl p-3 flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-gray-400 font-semibold flex-1">
+                      Certificado mTLS (.crt + .key)
+                    </label>
+                    {configModal.certOk
+                      ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30">✓ Instalado</span>
+                      : <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">Ausente</span>
+                    }
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Baixe o par de arquivos no portal Inter Developer ({'"'}Meus Certificados{'"'}) e faça upload dos dois juntos.
+                  </p>
+                  <label className={clsx(
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-colors text-sm font-semibold w-fit',
+                    configModal.certUploading
+                      ? 'opacity-60 pointer-events-none bg-surface-700 text-gray-400'
+                      : 'bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 text-brand-300',
+                  )}>
+                    {configModal.certUploading
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Instalando…</>
+                      : <><Upload className="w-3.5 h-3.5" /> Selecionar .crt e .key</>
+                    }
+                    <input
+                      type="file"
+                      accept=".crt,.key,.pem"
+                      multiple
+                      className="hidden"
+                      onChange={e => {
+                        const files = Array.from(e.target.files ?? [])
+                        const crt = files.find(f => f.name.endsWith('.crt') || f.name.endsWith('.pem'))
+                        const key = files.find(f => f.name.endsWith('.key'))
+                        if (!crt || !key) { toast.error('Selecione um arquivo .crt e um .key juntos'); return }
+                        uploadCertificado(crt, key)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
                 </div>
               )}
             </div>
