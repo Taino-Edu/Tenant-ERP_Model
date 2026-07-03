@@ -105,7 +105,7 @@ function ListingCard({
           <>
             <button
               onClick={() => onViewInterests(listing)}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-xs text-gray-300 transition-colors"
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 text-xs text-gray-300 transition-colors"
             >
               <Eye className="w-3.5 h-3.5" />
               {listing.interestCount > 0 ? `${listing.interestCount} interesse${listing.interestCount > 1 ? 's' : ''}` : 'Ver interesses'}

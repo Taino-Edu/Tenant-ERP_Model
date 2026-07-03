@@ -1312,7 +1312,7 @@ function EditarComandaModal({
               <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-surface-700 border border-surface-600 rounded-xl shadow-xl overflow-hidden">
                 {filteredClientes.map(u => (
                   <button key={u.id} onMouseDown={() => { setClienteId(u.id); setShowClienteList(false) }}
-                    className="w-full flex items-center gap-2 px-4 py-2 hover:bg-surface-600 transition-colors text-left">
+                    className="w-full flex items-center gap-2 px-4 py-2 hover:bg-surface-500 transition-colors text-left">
                     <span className="text-sm text-white truncate">{u.name}</span>
                     {u.cpf && <span className="text-xs text-gray-500 shrink-0 font-mono">{u.cpf}</span>}
                   </button>
@@ -1361,7 +1361,7 @@ function EditarComandaModal({
                     <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-surface-700 border border-surface-600 rounded-xl shadow-xl overflow-hidden">
                       {filteredProds.map(p => (
                         <button key={p.id} onMouseDown={() => addProductItem(p)}
-                          className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-surface-600 transition-colors text-left">
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-surface-500 transition-colors text-left">
                           <span className="text-xs text-white truncate">{p.name}</span>
                           <span className="text-xs text-gray-400 shrink-0">{fmt(p.priceInReais)}</span>
                         </button>
@@ -2441,7 +2441,7 @@ export default function DashboardPage() {
                   {panelPreVenda ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
                 </button>
                 {panelPreVenda && (
-                  <a href="/admin/estoque" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
+                  <a href="/admin/reservas" className="mt-3 flex items-center gap-3 p-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 transition-colors">
                     <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
                       pendingPreVenda > 0 ? 'bg-amber-500/15' : 'bg-surface-600')}>
                       <Package className={clsx('w-4 h-4', pendingPreVenda > 0 ? 'text-amber-400' : 'text-gray-500')} />

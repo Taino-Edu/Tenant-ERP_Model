@@ -1583,7 +1583,7 @@ export default function FinanceiroPage() {
             {(['hoje', '7d', 'mes', 'custom'] as Preset[]).map(p => (
               <button key={p} onClick={() => applyPreset(p)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                  preset === p ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20' : 'bg-surface-700 text-gray-400 hover:text-white hover:bg-surface-600'
+                  preset === p ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20' : 'bg-surface-700 text-gray-400 hover:text-white hover:bg-surface-500'
                 }`}
               >
                 {{ hoje: 'Hoje', '7d': '7 dias', mes: 'Este mês', custom: 'Personalizado' }[p]}
@@ -2009,7 +2009,7 @@ export default function FinanceiroPage() {
                         const qtdShow     = topOrigemFilter === 'Comanda' ? p.qtdComandas : topOrigemFilter === 'PDV' ? p.qtdAvulsa : p.qtd
                         const receitaShow = topOrigemFilter === 'Comanda' ? p.receitaComandas : topOrigemFilter === 'PDV' ? p.receitaAvulsa : p.receita
                         return (
-                          <tr key={p.nome} className="hover:bg-surface-600/20 transition-colors">
+                          <tr key={p.nome} className="hover:bg-surface-500/20 transition-colors">
                             <td className="px-4 py-2.5 text-gray-400 text-xs font-mono">{i + 1}</td>
                             <td className="px-4 py-2.5 font-medium text-white max-w-[200px]">
                               <p className="truncate">{p.nome}</p>

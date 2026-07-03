@@ -593,14 +593,14 @@ export default function LgpdAdminPage() {
                   <button
                     onClick={() => loadAudit(auditPage - 1)}
                     disabled={auditPage === 1}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-surface-700 rounded-lg hover:bg-surface-600 disabled:opacity-40 transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-surface-700 rounded-lg hover:bg-surface-500 disabled:opacity-40 transition-colors"
                   >
                     <ChevronLeft className="w-4 h-4" /> Anterior
                   </button>
                   <button
                     onClick={() => loadAudit(auditPage + 1)}
                     disabled={auditPage >= auditData.totalPages}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-surface-700 rounded-lg hover:bg-surface-600 disabled:opacity-40 transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-surface-700 rounded-lg hover:bg-surface-500 disabled:opacity-40 transition-colors"
                   >
                     Próximo <ChevronRight className="w-4 h-4" />
                   </button>

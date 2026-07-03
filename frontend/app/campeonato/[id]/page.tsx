@@ -422,7 +422,7 @@ export default function ChampionshipPublicPage() {
               <div className="flex gap-3 justify-center pt-1">
                 <Link
                   href={`/entrar?returnTo=/campeonato/${id}`}
-                  className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-surface-700 text-white hover:bg-surface-600 transition-colors"
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-surface-700 text-white hover:bg-surface-500 transition-colors"
                 >
                   Entrar
                 </Link>

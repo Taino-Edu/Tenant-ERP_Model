@@ -62,7 +62,7 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
             <button onClick={onEdit} className="btn-primary py-1.5 px-3 text-xs flex items-center gap-1.5">
               <Edit2 className="w-3.5 h-3.5" /> Editar
             </button>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-600 text-gray-400 hover:text-white transition-colors">
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-500 text-gray-400 hover:text-white transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -467,7 +467,7 @@ function ProductModal({
       <div className="w-full max-w-md bg-surface-800 border border-surface-600 rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-600 shrink-0">
           <h2 className="text-lg font-bold text-white">{form.id ? 'Editar Produto' : 'Novo Produto'}</h2>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-600 text-gray-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-500 text-gray-400 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
         </div>
         <div className="overflow-y-auto flex-1 px-6 py-4">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -977,7 +977,7 @@ export default function EstoquePage() {
             </thead>
             <tbody className="divide-y divide-surface-500">
               {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-surface-600/30 transition-colors cursor-pointer" onClick={() => setDrawer(p)}>
+                <tr key={p.id} className="hover:bg-surface-500/30 transition-colors cursor-pointer" onClick={() => setDrawer(p)}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-white">{p.name}</p>

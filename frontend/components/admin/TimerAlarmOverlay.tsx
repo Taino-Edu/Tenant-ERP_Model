@@ -160,7 +160,7 @@ export default function TimerAlarmOverlay() {
               </button>
               <button
                 onClick={() => handleDismiss(t.id)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-gray-300 text-xs font-semibold transition-colors"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 text-gray-300 text-xs font-semibold transition-colors"
               >
                 <X className="w-3 h-3" /> Dispensar
               </button>

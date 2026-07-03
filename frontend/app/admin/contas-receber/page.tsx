@@ -288,7 +288,7 @@ export default function ContasReceberPage() {
         <div className="ml-auto flex items-center gap-2 flex-wrap">
           {/* Upload OFX */}
           <label className={clsx(
-            'flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-700 hover:bg-surface-600',
+            'flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-700 hover:bg-surface-500',
             'border border-surface-600 text-sm text-gray-300 cursor-pointer transition-colors',
             ofxLoading && 'opacity-60 pointer-events-none')}>
             {ofxLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}

@@ -312,7 +312,7 @@ export default function FiscalPage() {
         )}
 
         <div className="flex flex-col sm:flex-row gap-3">
-          <label className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-surface-700 border border-surface-600 text-sm text-gray-300 cursor-pointer hover:bg-surface-600">
+          <label className="flex-1 flex items-center gap-2 px-3 py-2.5 rounded-xl bg-surface-700 border border-surface-600 text-sm text-gray-300 cursor-pointer hover:bg-surface-500">
             <Upload className="w-4 h-4 shrink-0" />
             <span className="truncate">{certFile ? certFile.name : 'Selecionar arquivo .pfx'}</span>
             <input type="file" accept=".pfx,.p12" className="hidden"
@@ -505,7 +505,7 @@ export default function FiscalPage() {
           <h3 className="font-bold text-white flex items-center gap-2">
             <ScrollText className="w-4 h-4 text-brand-400" /> Notas Emitidas
           </h3>
-          <button onClick={loadNotas} className="p-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-gray-400">
+          <button onClick={loadNotas} className="p-2 rounded-lg bg-surface-700 hover:bg-surface-500 text-gray-400">
             <RefreshCw className={clsx('w-4 h-4', notasLoading && 'animate-spin')} />
           </button>
         </div>
@@ -539,13 +539,13 @@ export default function FiscalPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {n.chaveAcesso && (
                       <Link href={`/admin/fiscal/cupom/${n.id}`} target="_blank"
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 border border-surface-600 text-sm text-gray-300">
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 border border-surface-600 text-sm text-gray-300">
                         <Printer className="w-3.5 h-3.5" /> Cupom
                       </Link>
                     )}
                     {(n.status === 'PendenteEmissao' || n.status === 'Rejeitada') && (
                       <button onClick={() => reprocessarNota(n.id)} disabled={reprocessingId === n.id}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 border border-surface-600 text-sm text-gray-300">
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 border border-surface-600 text-sm text-gray-300">
                         {reprocessingId === n.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                         Reprocessar
                       </button>

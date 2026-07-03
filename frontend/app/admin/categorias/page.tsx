@@ -193,7 +193,7 @@ export default function CategoriasPage() {
             </thead>
             <tbody className="divide-y divide-surface-500">
               {categories.map(c => (
-                <tr key={c.id} className="hover:bg-surface-600/30 transition-colors">
+                <tr key={c.id} className="hover:bg-surface-500/30 transition-colors">
                   <td className="px-3 py-3 text-gray-500">
                     <GripVertical className="w-4 h-4" />
                   </td>

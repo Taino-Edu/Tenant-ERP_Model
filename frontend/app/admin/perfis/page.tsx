@@ -151,7 +151,7 @@ function PerfilCard({
           </div>
         </div>
         <div className="flex gap-1 shrink-0">
-          <button onClick={onEdit} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-surface-600 transition-colors">
+          <button onClick={onEdit} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-surface-500 transition-colors">
             <Edit2 className="w-4 h-4" />
           </button>
           {confirmDelete ? (
@@ -159,7 +159,7 @@ function PerfilCard({
               <button onClick={onDelete} className="p-1.5 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors">
                 <Check className="w-4 h-4" />
               </button>
-              <button onClick={() => setConfirmDelete(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-surface-600 transition-colors">
+              <button onClick={() => setConfirmDelete(false)} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-surface-500 transition-colors">
                 <X className="w-4 h-4" />
               </button>
             </div>

@@ -167,7 +167,7 @@ export default function IntegracoesPage() {
           <h1 className="text-xl font-black text-white">Integrações Financeiras</h1>
           <p className="text-sm text-gray-400">Conecte fontes de dados — todas gratuitas</p>
         </div>
-        <button onClick={load} className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-600 text-gray-400">
+        <button onClick={load} className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-500 text-gray-400">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
@@ -224,7 +224,7 @@ export default function IntegracoesPage() {
                   <div className="flex items-center gap-2 mt-3">
                     <button
                       onClick={() => openConfig(int.source, int)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500
                                  border border-surface-600 text-sm text-gray-300 transition-colors">
                       <Settings className="w-3.5 h-3.5" />
                       {isReady ? 'Reconfigurar' : 'Configurar'}

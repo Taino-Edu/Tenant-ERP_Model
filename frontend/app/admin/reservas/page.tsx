@@ -257,7 +257,7 @@ export default function ReservasPage() {
         <h1 className="text-xl font-black text-white">Pré-vendas</h1>
         <button
           onClick={() => tab === 'reservas' ? load() : loadWaitlistProducts()}
-          className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-600 transition-colors text-gray-400">
+          className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-500 transition-colors text-gray-400">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
