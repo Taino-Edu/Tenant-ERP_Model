@@ -260,56 +260,64 @@ public class ComandaController : ControllerBase
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GerarCobrancaPix(Guid id)
     {
-        var comanda = await _db.Comandas
-            .Include(c => c.User)
-            .FirstOrDefaultAsync(c => c.Id == id);
-
-        if (comanda == null)
-            return NotFound(new { Message = "Comanda não encontrada." });
-
-        if (comanda.Status is ComandaStatus.Fechada or ComandaStatus.Cancelada)
-            return BadRequest(new { Message = "Comanda já está fechada ou cancelada." });
-
-        var valorEmCentavos = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
-        if (valorEmCentavos <= 0)
-            return BadRequest(new { Message = "Comanda não tem valor restante para cobrar." });
-
-        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
-        if (cfg == null)
-            return BadRequest(new { Message = "Integração com o Inter não configurada em /admin/integracoes." });
-
-        var cpf    = comanda.User.Cpf?.Length == 11 ? comanda.User.Cpf : null;
-        var result = await _inter.CriarCobrancaAsync(
-            cfg, valorEmCentavos, comanda.User.Name, cpf, "Santuário Nerd — Comanda");
-
-        if (result.Error is not null)
-            return StatusCode(502, new { Message = result.Error });
-
-        var pix = new PixCobranca
+        try
         {
-            Origem           = PixCobrancaOrigem.Comanda,
-            ComandaId        = comanda.Id,
-            TxId             = result.TxId!,
-            ValorEmCentavos  = valorEmCentavos,
-            Status           = result.Status ?? "ATIVA",
-            PixCopiaCola     = result.PixCopiaCola,
-            ImagemQrCode     = result.ImagemQrCode,
-            NomeDevedor      = comanda.User.Name,
-            CriadoPorAdminId = GetUserId(),
-            ExpiraEm         = result.ExpiraEm,
-        };
-        _db.PixCobrancas.Add(pix);
-        await _db.SaveChangesAsync();
+            var comanda = await _db.Comandas
+                .Include(c => c.User)
+                .FirstOrDefaultAsync(c => c.Id == id);
 
-        return Ok(new
+            if (comanda == null)
+                return NotFound(new { Message = "Comanda não encontrada." });
+
+            if (comanda.Status is ComandaStatus.Fechada or ComandaStatus.Cancelada)
+                return BadRequest(new { Message = "Comanda já está fechada ou cancelada." });
+
+            var valorEmCentavos = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+            if (valorEmCentavos <= 0)
+                return BadRequest(new { Message = "Comanda não tem valor restante para cobrar." });
+
+            var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+            if (cfg == null)
+                return BadRequest(new { Message = "Integração com o Inter não configurada em /admin/integracoes." });
+
+            var nomeDevedor = comanda.User?.Name;
+            var cpf         = comanda.User?.Cpf?.Length == 11 ? comanda.User.Cpf : null;
+            var result = await _inter.CriarCobrancaAsync(
+                cfg, valorEmCentavos, nomeDevedor, cpf, "Santuário Nerd — Comanda");
+
+            if (result.Error is not null)
+                return StatusCode(502, new { Message = result.Error });
+
+            var pix = new PixCobranca
+            {
+                Origem           = PixCobrancaOrigem.Comanda,
+                ComandaId        = comanda.Id,
+                TxId             = result.TxId!,
+                ValorEmCentavos  = valorEmCentavos,
+                Status           = result.Status ?? "ATIVA",
+                PixCopiaCola     = result.PixCopiaCola,
+                ImagemQrCode     = result.ImagemQrCode,
+                NomeDevedor      = nomeDevedor,
+                CriadoPorAdminId = GetUserId(),
+                ExpiraEm         = result.ExpiraEm,
+            };
+            _db.PixCobrancas.Add(pix);
+            await _db.SaveChangesAsync();
+
+            return Ok(new
+            {
+                pix.TxId,
+                pix.Status,
+                pix.PixCopiaCola,
+                pix.ImagemQrCode,
+                pix.ExpiraEm,
+                ValorEmReais = pix.ValorEmReais,
+            });
+        }
+        catch (Exception ex)
         {
-            pix.TxId,
-            pix.Status,
-            pix.PixCopiaCola,
-            pix.ImagemQrCode,
-            pix.ExpiraEm,
-            ValorEmReais = pix.ValorEmReais,
-        });
+            return StatusCode(500, new { Message = $"Erro interno ao gerar cobrança Pix: {ex.Message}" });
+        }
     }
 
     /// <summary>Consulta status da cobrança Pix da comanda; se paga, fecha a comanda automaticamente. Apenas Admin.</summary>
