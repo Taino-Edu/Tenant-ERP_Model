@@ -96,6 +96,7 @@ if [ ! -f "$APP_DIR/.env" ]; then
     POSTGRES_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
     IP_SALT=$(openssl rand -hex 32)
+    ENCRYPTION_KEY=$(openssl rand -base64 32)
 
     cat > "$APP_DIR/.env" <<EOF
 # Gerado por setup.sh em $(date)
@@ -125,6 +126,11 @@ POKEMON_API_KEY=
 
 # --- Segurança ---
 IP_HASH_SALT=${IP_SALT}
+
+# --- Criptografia (senha de certificado, client secrets, tokens OAuth) ---
+# NUNCA troque depois do primeiro deploy — dados já criptografados com a chave
+# antiga viram ilegíveis pra sempre. Faça backup deste valor.
+ENCRYPTION_KEY=${ENCRYPTION_KEY}
 EOF
     ok ".env criado com senhas geradas automaticamente"
     warn "Edite o .env antes de continuar:"
