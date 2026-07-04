@@ -287,6 +287,38 @@ public class ComandaServiceTests
         estoqueAtual.Should().Be(10); // 10 - 5 + 5 = 10 restaurado
     }
 
+    [Fact]
+    public async Task CancelComanda_DeveRecusarQuandoComandaJaEstaFechada()
+    {
+        var db      = CreateDb(nameof(CancelComanda_DeveRecusarQuandoComandaJaEstaFechada));
+        var service = CreateService(db);
+        var (_, _, comanda) = await SeedAsync(db);
+
+        comanda.Status = ComandaStatus.Fechada;
+        await db.SaveChangesAsync();
+
+        var adminId = Guid.NewGuid();
+        var act = async () => await service.CancelComandaAsync(comanda.Id, adminId);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task CancelComanda_DeveRecusarQuandoComandaJaEstaCancelada()
+    {
+        var db      = CreateDb(nameof(CancelComanda_DeveRecusarQuandoComandaJaEstaCancelada));
+        var service = CreateService(db);
+        var (_, _, comanda) = await SeedAsync(db);
+
+        comanda.Status = ComandaStatus.Cancelada;
+        await db.SaveChangesAsync();
+
+        var adminId = Guid.NewGuid();
+        var act = async () => await service.CancelComandaAsync(comanda.Id, adminId);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
     // ── Aplicar pontos ────────────────────────────────────────────────────────
 
     [Fact]

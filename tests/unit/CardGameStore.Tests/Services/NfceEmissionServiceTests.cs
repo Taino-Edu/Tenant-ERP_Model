@@ -198,4 +198,45 @@ public class NfceEmissionServiceTests
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*janela legal*");
     }
+
+    [Fact]
+    public async Task EmitirParaComandaAsync_ComandaCancelada_AnulaNotaSemTentarTransmitir()
+    {
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        comanda.Status = ComandaStatus.Cancelada;
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var nota = await service.EmitirParaComandaAsync(comanda.Id);
+
+        nota.Status.Should().Be(NotaFiscalStatus.Cancelada);
+        nota.CanceladoEm.Should().NotBeNull();
+        nota.ChaveAcesso.Should().BeNull(); // nunca chegou a ser transmitida à SEFAZ
+    }
+
+    [Fact]
+    public async Task ReprocessarAsync_ComandaFoiCanceladaAposFicarPendente_AnulaNotaEmVezDeEmitir()
+    {
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+
+        var nota = new NotaFiscalEmitida
+        {
+            Origem    = NotaFiscalOrigem.Comanda,
+            ComandaId = comanda.Id,
+            Status    = NotaFiscalStatus.PendenteEmissao,
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        // Comanda é cancelada enquanto a nota ainda está pendente (ex: retry automático não rodou ainda)
+        comanda.Status = ComandaStatus.Cancelada;
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var resultado = await service.ReprocessarAsync(nota.Id);
+
+        resultado.Status.Should().Be(NotaFiscalStatus.Cancelada);
+    }
 }

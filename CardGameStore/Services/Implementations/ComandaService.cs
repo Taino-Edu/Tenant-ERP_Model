@@ -713,6 +713,11 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
+        if (comanda.Status == ComandaStatus.Fechada || comanda.Status == ComandaStatus.Cancelada)
+            throw new InvalidOperationException(
+                "Esta comanda já foi fechada (cobrada) ou cancelada — cancelamento sem cobrança só se aplica a comandas ainda abertas. " +
+                "Para estornar uma venda já fechada, use o cancelamento da nota fiscal (Admin > Fiscal).");
+
         foreach (var item in comanda.Items.Where(i => i.ProductId.HasValue))
         {
             await _db.Products

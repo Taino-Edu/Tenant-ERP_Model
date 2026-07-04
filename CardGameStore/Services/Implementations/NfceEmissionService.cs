@@ -238,6 +238,19 @@ public class NfceEmissionService : INfceEmissionService
         {
             await acao();
         }
+        catch (ComandaCanceladaException)
+        {
+            // Comanda foi cancelada antes da nota ser transmitida à SEFAZ — nunca chegou a
+            // existir de verdade, então não há evento de cancelamento a fazer, só anular
+            // localmente para o retry automático parar de tentar emitir esta nota.
+            nota.Status                   = NotaFiscalStatus.Cancelada;
+            nota.CanceladoEm              = DateTime.UtcNow;
+            nota.JustificativaCancelamento = "Comanda cancelada antes da emissão fiscal — nota anulada automaticamente (nunca transmitida à SEFAZ).";
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "NFC-e {NotaId} anulada automaticamente — comanda de origem foi cancelada antes da transmissão.", nota.Id);
+        }
         catch (FiscalNaoConfiguradoException ex)
         {
             // Estado esperado enquanto o admin não termina de configurar — não é uma falha real.
@@ -267,6 +280,9 @@ public class NfceEmissionService : INfceEmissionService
             .Include(c => c.User)
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada para emissão fiscal.");
+
+        if (comanda.Status == ComandaStatus.Cancelada)
+            throw new ComandaCanceladaException(comandaId);
 
         var padrao = await _db.NaturezasOperacao.FirstOrDefaultAsync(n => n.IsPadrao);
 
@@ -599,4 +615,13 @@ public class NfceEmissionService : INfceEmissionService
 public class FiscalNaoConfiguradoException : Exception
 {
     public FiscalNaoConfiguradoException(string message) : base(message) { }
+}
+
+/// <summary>Sinaliza que a comanda de origem foi cancelada antes da NFC-e ser
+/// transmitida à SEFAZ — a nota deve ser anulada localmente, nunca emitida.</summary>
+public class ComandaCanceladaException : Exception
+{
+    public Guid ComandaId { get; }
+    public ComandaCanceladaException(Guid comandaId)
+        : base($"Comanda {comandaId} foi cancelada — emissão fiscal abortada.") => ComandaId = comandaId;
 }
