@@ -15,6 +15,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Driver;
+using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual;
+using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual.Tipos;
 
 namespace CardGameStore.Tests.Services;
 
@@ -238,5 +240,103 @@ public class NfceEmissionServiceTests
         var resultado = await service.ReprocessarAsync(nota.Id);
 
         resultado.Status.Should().Be(NotaFiscalStatus.Cancelada);
+    }
+
+    // ── Mapeamento de CSOSN (MontarIcmsSimplesNacional) ───────────────────────
+
+    private static NfceEmissionService.ItemFiscal Item(string? csosn, decimal? percentualCredito = null) =>
+        new(Nome: "Item Teste", Ncm: "95044000", Cfop: "5102", Csosn: csosn,
+            PercentualCreditoSn: percentualCredito, Quantidade: 1, PrecoUnitarioCentavos: 1000, SubtotalCentavos: 1000);
+
+    [Theory]
+    [InlineData("102", Csosnicms.Csosn102)]
+    [InlineData(null,  Csosnicms.Csosn102)]
+    [InlineData("",    Csosnicms.Csosn102)]
+    [InlineData("103", Csosnicms.Csosn103)]
+    [InlineData("300", Csosnicms.Csosn300)]
+    [InlineData("400", Csosnicms.Csosn400)]
+    public void MontarIcmsSimplesNacional_CodigosSemCredito_UsamClasseICMSSN102(string? csosn, Csosnicms esperado)
+    {
+        var icms = NfceEmissionService.MontarIcmsSimplesNacional(Item(csosn));
+
+        icms.Should().BeOfType<ICMSSN102>();
+        ((ICMSSN102)icms).CSOSN.Should().Be(esperado);
+    }
+
+    [Fact]
+    public void MontarIcmsSimplesNacional_Csosn101_CalculaCreditoCorretamente()
+    {
+        var icms = NfceEmissionService.MontarIcmsSimplesNacional(Item("101", percentualCredito: 2.5m));
+
+        var sn101 = icms.Should().BeOfType<ICMSSN101>().Subject;
+        sn101.CSOSN.Should().Be(Csosnicms.Csosn101);
+        sn101.pCredSN.Should().Be(2.5m);
+        sn101.vCredICMSSN.Should().Be(0.25m); // R$10,00 (1000 centavos) * 2,5% = R$0,25
+    }
+
+    [Fact]
+    public void MontarIcmsSimplesNacional_Csosn500_UsaClasseICMSSN500()
+    {
+        var icms = NfceEmissionService.MontarIcmsSimplesNacional(Item("500"));
+
+        icms.Should().BeOfType<ICMSSN500>().Which.CSOSN.Should().Be(Csosnicms.Csosn500);
+    }
+
+    [Fact]
+    public void MontarIcmsSimplesNacional_Csosn900_UsaClasseICMSSN900()
+    {
+        var icms = NfceEmissionService.MontarIcmsSimplesNacional(Item("900"));
+
+        icms.Should().BeOfType<ICMSSN900>().Which.CSOSN.Should().Be(Csosnicms.Csosn900);
+    }
+
+    [Theory]
+    [InlineData("201")]
+    [InlineData("202")]
+    [InlineData("203")]
+    public void MontarIcmsSimplesNacional_CsosnComIcmsSt_LancaFiscalNaoConfigurado(string csosn)
+    {
+        var act = () => NfceEmissionService.MontarIcmsSimplesNacional(Item(csosn));
+
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*ICMS-ST*");
+    }
+
+    [Fact]
+    public void MontarIcmsSimplesNacional_CsosnDesconhecido_LancaFiscalNaoConfigurado()
+    {
+        var act = () => NfceEmissionService.MontarIcmsSimplesNacional(Item("999"));
+
+        act.Should().Throw<FiscalNaoConfiguradoException>();
+    }
+
+    // ── Detecção de falha de conectividade (contingência) ─────────────────────
+
+    [Theory]
+    [InlineData(typeof(System.Net.Http.HttpRequestException))]
+    [InlineData(typeof(System.Net.WebException))]
+    [InlineData(typeof(System.Net.Sockets.SocketException))]
+    [InlineData(typeof(TimeoutException))]
+    [InlineData(typeof(TaskCanceledException))]
+    public void EhFalhaDeConectividade_TiposDeRede_RetornaTrue(Type tipoExcecao)
+    {
+        var ex = (Exception)Activator.CreateInstance(tipoExcecao)!;
+
+        NfceEmissionService.EhFalhaDeConectividade(ex).Should().BeTrue();
+    }
+
+    [Fact]
+    public void EhFalhaDeConectividade_ExcecaoEmbrulhadaEmInnerException_RetornaTrue()
+    {
+        var ex = new InvalidOperationException("erro genérico da lib", new System.Net.Http.HttpRequestException("timeout"));
+
+        NfceEmissionService.EhFalhaDeConectividade(ex).Should().BeTrue();
+    }
+
+    [Fact]
+    public void EhFalhaDeConectividade_ExcecaoDeNegocio_RetornaFalse()
+    {
+        var ex = new InvalidOperationException("CNPJ inválido");
+
+        NfceEmissionService.EhFalhaDeConectividade(ex).Should().BeFalse();
     }
 }

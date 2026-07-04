@@ -625,6 +625,9 @@ using (var scope = app.Services.CreateScope())
                 CREATE UNIQUE INDEX IF NOT EXISTS ix_naturezas_operacao_unica_padrao
                     ON naturezas_operacao (is_padrao) WHERE is_padrao = true;
 
+                -- Fiscal: % de crédito de ICMS (pCredSN), usado só quando CSOSN = 101
+                ALTER TABLE naturezas_operacao ADD COLUMN IF NOT EXISTS percentual_credito_sn NUMERIC(5,2) NULL;
+
                 -- Fiscal: NCM e natureza de operação por produto
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS ncm VARCHAR(8) NULL;
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS natureza_operacao_id UUID NULL REFERENCES naturezas_operacao(id) ON DELETE SET NULL;
@@ -664,6 +667,15 @@ using (var scope = app.Services.CreateScope())
                 ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS inutilizado_em             TIMESTAMPTZ NULL;
                 ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS protocolo_inutilizacao      VARCHAR(30) NULL;
                 ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS tentativas_reprocessamento  INTEGER     NOT NULL DEFAULT 0;
+
+                -- Fiscal: URL do QR Code calculada pela lib no momento da autorização (evita recalcular)
+                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS url_qrcode TEXT NULL;
+
+                -- Fiscal: contingência offline (tpEmis=9) — status novo é mais longo que 20 chars
+                ALTER TABLE notas_fiscais_emitidas ALTER COLUMN status TYPE VARCHAR(30);
+                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS cnf_contingencia            INTEGER     NULL;
+                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS dh_contingencia             TIMESTAMPTZ NULL;
+                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS justificativa_contingencia  TEXT        NULL;
 
                 -- Financeiro: chave Pix cadastrada no Inter (para emitir cobrança via API)
                 ALTER TABLE integration_configs ADD COLUMN IF NOT EXISTS pix_key VARCHAR(100) NULL;

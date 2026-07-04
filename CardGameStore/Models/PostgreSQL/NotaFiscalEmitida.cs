@@ -19,7 +19,12 @@ public enum NotaFiscalStatus
     PendenteEmissao,
     Autorizada,
     Rejeitada,
-    Cancelada
+    Cancelada,
+
+    /// <summary>Emitida em contingência offline (tpEmis=9) porque a SEFAZ estava
+    /// inalcançável — já vale pro cliente (cupom liberado), mas ainda precisa ser
+    /// retransmitida à SEFAZ (o retry automático faz isso) pra virar Autorizada de fato.</summary>
+    AutorizadaContingencia,
 }
 
 /// <summary>
@@ -75,6 +80,12 @@ public class NotaFiscalEmitida
     [Column("xml_autorizado")]
     public string? XmlAutorizado { get; set; }
 
+    /// <summary>URL do QR Code (com hash do CSC), calculada pela lib fiscal no momento da
+    /// autorização e persistida aqui — evita recalcular (e evita fórmula desatualizada) toda
+    /// vez que o cupom é exibido.</summary>
+    [Column("url_qrcode")]
+    public string? UrlQrCode { get; set; }
+
     [Column("emitido_em")]
     public DateTime? EmitidoEm { get; set; }
 
@@ -96,6 +107,24 @@ public class NotaFiscalEmitida
     /// <summary>Quantas vezes o reprocessamento (manual ou automático) já foi tentado — limita retries.</summary>
     [Column("tentativas_reprocessamento")]
     public int TentativasReprocessamento { get; set; } = 0;
+
+    // ── Contingência offline (tpEmis=9) ────────────────────────────────────────
+    // Persistidos na primeira tentativa em contingência pra reconstruir a MESMA chave
+    // de acesso (já mostrada ao cliente no cupom) quando a retransmissão acontecer depois
+    // — cNf/dhCont/tpEmis entram na fórmula da chave, então não podem mudar entre tentativas.
+
+    /// <summary>Código numérico aleatório (cNf) usado no cálculo da chave — fixado na
+    /// primeira tentativa em contingência pra a retransmissão gerar a chave idêntica.</summary>
+    [Column("cnf_contingencia")]
+    public int? CnfContingencia { get; set; }
+
+    /// <summary>Momento (UTC) em que a contingência foi acionada — vira dhCont no XML.</summary>
+    [Column("dh_contingencia")]
+    public DateTime? DhContingencia { get; set; }
+
+    /// <summary>Justificativa (xJust) da entrada em contingência, exigida pela SEFAZ.</summary>
+    [Column("justificativa_contingencia")]
+    public string? JustificativaContingencia { get; set; }
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -138,17 +138,37 @@ public class FiscalController : ControllerBase
         return Ok(naturezas);
     }
 
+    /// <summary>CSOSN que o motor de emissão sabe montar sozinho — ver
+    /// NfceEmissionService.MontarIcmsSimplesNacional. 201/202/203 exigem ICMS-ST como
+    /// substituto (MVA, base reduzida) que ninguém aqui calcula, por isso ficam de fora.</summary>
+    private static readonly string[] CsosnSuportados = { "101", "102", "103", "300", "400", "500", "900" };
+
+    private BadRequestObjectResult? ValidarCsosn(string? csosn)
+    {
+        if (string.IsNullOrWhiteSpace(csosn)) return null;
+        if (!CsosnSuportados.Contains(csosn))
+            return BadRequest(new
+            {
+                Message = csosn is "201" or "202" or "203"
+                    ? $"CSOSN {csosn} exige ICMS-ST como substituto tributário (MVA, base reduzida) — este sistema não calcula isso sozinho. Consulte o contador ou use um CSOSN sem ICMS-ST."
+                    : $"CSOSN \"{csosn}\" não é suportado. Use um destes: {string.Join(", ", CsosnSuportados)}."
+            });
+        return null;
+    }
+
     // ── POST /api/fiscal/naturezas-operacao ───────────────────────────────────
     [HttpPost("naturezas-operacao")]
     public async Task<IActionResult> CreateNatureza([FromBody] SaveNaturezaRequest req)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        if (ValidarCsosn(req.Csosn) is BadRequestObjectResult erro) return erro;
 
         var natureza = new NaturezaOperacao
         {
             Descricao = req.Descricao,
             Cfop      = req.Cfop,
             Csosn     = req.Csosn,
+            PercentualCreditoIcmsSn = req.Csosn == "101" ? req.PercentualCreditoSn : null,
             IsPadrao  = req.IsPadrao,
         };
 
@@ -179,12 +199,15 @@ public class FiscalController : ControllerBase
     [HttpPut("naturezas-operacao/{id:guid}")]
     public async Task<IActionResult> UpdateNatureza(Guid id, [FromBody] SaveNaturezaRequest req)
     {
+        if (ValidarCsosn(req.Csosn) is BadRequestObjectResult erro) return erro;
+
         var natureza = await _db.NaturezasOperacao.FindAsync(id);
         if (natureza is null) return NotFound();
 
         natureza.Descricao = req.Descricao;
         natureza.Cfop      = req.Cfop;
         natureza.Csosn     = req.Csosn;
+        natureza.PercentualCreditoIcmsSn = req.Csosn == "101" ? req.PercentualCreditoSn : null;
         natureza.UpdatedAt = DateTime.UtcNow;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
@@ -253,7 +276,21 @@ public class FiscalController : ControllerBase
             })
             .ToListAsync();
 
-        return Ok(new { items = itens, total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+        // Visibilidade pro admin: quantas notas estão paradas esperando o retry automático
+        // (pendentes de verdade + em contingência aguardando retransmissão) e há quanto
+        // tempo a mais antiga está parada — sinal de que algo precisa de atenção.
+        var pendentesQuery = _db.NotasFiscaisEmitidas.Where(n =>
+            n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia);
+        var pendentesCount = await pendentesQuery.CountAsync();
+        var pendenteMaisAntiga = pendentesCount > 0
+            ? await pendentesQuery.OrderBy(n => n.CreatedAt).Select(n => n.CreatedAt).FirstAsync()
+            : (DateTime?)null;
+
+        return Ok(new
+        {
+            items = itens, total, totalPages = (int)Math.Ceiling(total / (double)pageSize),
+            pendentesCount, pendenteMaisAntiga,
+        });
     }
 
     // ── POST /api/fiscal/notas/{id}/reprocessar ───────────────────────────────
@@ -403,6 +440,10 @@ public class SaveNaturezaRequest
 
     [MaxLength(3)]
     public string? Csosn { get; init; }
+
+    /// <summary>% de crédito de ICMS (pCredSN) — só considerado quando Csosn = "101".</summary>
+    [Range(0, 100)]
+    public decimal? PercentualCreditoSn { get; init; }
 
     public bool IsPadrao { get; init; }
 }

@@ -47,7 +47,7 @@ public class FiscalRetryBackgroundService : BackgroundService
         var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
 
         var pendentesIds = await db.NotasFiscaisEmitidas
-            .Where(n => n.Status == NotaFiscalStatus.PendenteEmissao)
+            .Where(n => n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia)
             .OrderBy(n => n.CreatedAt)
             .Take(50) // não tenta reprocessar milhares de uma vez
             .Select(n => n.Id)

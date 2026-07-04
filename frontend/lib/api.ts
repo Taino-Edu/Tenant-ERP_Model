@@ -1132,6 +1132,7 @@ export interface FiscalConfigDto {
 
 export interface NaturezaOperacaoDto {
   id: string; descricao: string; cfop: string; csosn?: string
+  percentualCreditoIcmsSn?: number
   isPadrao: boolean; isActive: boolean
 }
 
@@ -1178,9 +1179,9 @@ export const fiscalApi = {
   },
 
   listNaturezas:  ()                                => api.get<NaturezaOperacaoDto[]>('/api/fiscal/naturezas-operacao'),
-  createNatureza: (body: { descricao: string; cfop: string; csosn?: string; isPadrao: boolean }) =>
+  createNatureza: (body: { descricao: string; cfop: string; csosn?: string; percentualCreditoSn?: number; isPadrao: boolean }) =>
                    api.post<NaturezaOperacaoDto>('/api/fiscal/naturezas-operacao', body),
-  updateNatureza: (id: string, body: { descricao: string; cfop: string; csosn?: string; isPadrao: boolean }) =>
+  updateNatureza: (id: string, body: { descricao: string; cfop: string; csosn?: string; percentualCreditoSn?: number; isPadrao: boolean }) =>
                    api.put<NaturezaOperacaoDto>(`/api/fiscal/naturezas-operacao/${id}`, body),
   removeNatureza: (id: string)                      => api.delete(`/api/fiscal/naturezas-operacao/${id}`),
 
@@ -1188,7 +1189,7 @@ export const fiscalApi = {
     api.get('/api/fiscal/exportar-xmls', { params: { inicio, fim }, responseType: 'blob' }),
 
   listNotas: (params?: { status?: string; page?: number; pageSize?: number }) =>
-    api.get<{ items: NotaFiscalDto[]; total: number; totalPages: number }>('/api/fiscal/notas', { params }),
+    api.get<{ items: NotaFiscalDto[]; total: number; totalPages: number; pendentesCount: number; pendenteMaisAntiga?: string }>('/api/fiscal/notas', { params }),
   reprocessarNota: (id: string) =>
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/notas/${id}/reprocessar`),
   cancelarNota: (id: string, justificativa: string) =>

@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CardGameStore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Entity Framework Core -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.10">

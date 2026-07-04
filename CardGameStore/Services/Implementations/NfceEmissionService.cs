@@ -4,15 +4,35 @@
 // Monta o objeto NFe (ide/emit/dest/det/total/pag), assina com o certificado
 // A1 do FiscalConfig e transmite à SEFAZ via NFe.Servicos.ServicosNFe.
 //
-// Simplificações conhecidas (documentadas para revisão futura com o contador):
-//  - Pagamento dividido (segundo método) não é discriminado — usa só o principal.
+// Decisões já verificadas contra documentação oficial / prática de mercado:
+//  - PIS/COFINS sempre CST 99 ("Outras Operações") com alíquota zero: confirmado
+//    como o padrão de fato usado por optantes do Simples Nacional (o DAS já
+//    unifica essas contribuições — não há CST federal específico exigido pela
+//    Receita pra esse regime na NFC-e).
+//  - CSOSN: suporta 101, 102, 103, 300, 400, 500, 900 (os únicos que fazem
+//    sentido pra um lojista que NÃO é substituto tributário). 201/202/203
+//    (ICMS-ST como substituto) são bloqueados de propósito — exigem MVA/base
+//    reduzida que ninguém aqui calcula sozinho; ver MontarIcmsSimplesNacional.
+//  - dhEmi usa nota.CreatedAt (momento real da venda/fechamento da comanda),
+//    não o momento da transmissão — importante pro caso comum de retry
+//    automático rodar minutos/horas depois da venda de verdade.
+//  - Todos os timestamps enviados à SEFAZ usam o fuso America/Sao_Paulo
+//    explicitamente (ParaBrasil/AgoraBrasil), independente do fuso do
+//    servidor onde a API está hospedada.
+//  - Numeração da NFC-e é reservada com UPDATE...RETURNING atômico no
+//    Postgres — não há race condition entre dois fechamentos simultâneos.
+//  - QR Code é gerado pela própria lib (Zeus.Net.NFe.NFCe / ExtinfNFeSupl),
+//    que já sabe a URL certa por estado — não reinventamos hash/URL na mão.
+//
+// Simplificações conhecidas ainda pendentes (documentadas para revisão futura
+// com o contador):
 //  - Itens sem Product vinculado (cartas TCG avulsas) usam NCM/CFOP/CSOSN de
 //    fallback (NCM 9504.40.00 "cartas para jogar" + a Natureza de Operação
 //    marcada como padrão).
-//  - CSOSN só tem tratamento explícito para 102 e 500 — qualquer outro código
-//    cadastrado numa Natureza de Operação cai no 102 (mais comum/neutro).
-//  - PIS/COFINS sempre "Outras Operações" (CST 99) com alíquota zero — padrão
-//    comum para Simples Nacional, mas não confirmado com o contador ainda.
+//  - Não há modo de contingência formal da SEFAZ (offline/EPEC/SVC) — se a
+//    SEFAZ estiver fora do ar, a nota só fica PendenteEmissao aguardando o
+//    retry automático. Pra um volume pequeno de vendas isso tende a resolver
+//    sozinho em minutos, mas não é o mecanismo oficial previsto em lei.
 //  - Cancelamento e inutilização assumem que "sem exceção + cStat esperado" é
 //    sucesso — não foi possível testar contra a SEFAZ real neste ambiente.
 // =============================================================================
@@ -26,6 +46,7 @@ using DFe.Classes.Flags;
 using DFe.Utils;
 using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
+using NFe.Classes;
 using NFe.Classes.Informacoes;
 using NFe.Classes.Informacoes.Destinatario;
 using NFe.Classes.Informacoes.Detalhe;
@@ -41,7 +62,9 @@ using NFe.Classes.Informacoes.Pagamento;
 using NFe.Classes.Informacoes.Total;
 using NFe.Classes.Servicos.Tipos;
 using NFe.Servicos;
+using NFe.Servicos.Retorno;
 using NFe.Utils;
+using NFe.Utils.InformacoesSuplementares;
 using NFe.Utils.NFe;
 using NfeDocumento = NFe.Classes.NFe;
 
@@ -54,6 +77,30 @@ public class NfceEmissionService : INfceEmissionService
 
     // Trava contra loop de reprocessamento em nota permanentemente quebrada.
     private const int MaxTentativasReprocessamento = 10;
+
+    // Todo horário enviado à SEFAZ usa esse fuso explicitamente — nunca o fuso
+    // do servidor (containers em nuvem tipicamente rodam em UTC por padrão).
+    private static readonly TimeZoneInfo FusoBrasil = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+
+    private static DateTimeOffset AgoraBrasil() =>
+        TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, FusoBrasil);
+
+    private static DateTimeOffset ParaBrasil(DateTime momentoUtc) =>
+        TimeZoneInfo.ConvertTime(new DateTimeOffset(DateTime.SpecifyKind(momentoUtc, DateTimeKind.Utc)), FusoBrasil);
+
+    /// <summary>
+    /// Distingue "SEFAZ inalcançável" (entra em contingência) de uma rejeição de negócio de
+    /// verdade (SEFAZ respondeu, só não autorizou). Só os tipos de exceção claramente ligados
+    /// a rede/timeout contam — qualquer outra coisa inesperada cai no catch genérico de fora
+    /// (vira PendenteEmissao) em vez de declarar contingência por um motivo que pode ser bug.
+    /// </summary>
+    internal static bool EhFalhaDeConectividade(Exception ex) =>
+        ex is System.Net.Http.HttpRequestException
+           or System.Net.WebException
+           or System.Net.Sockets.SocketException
+           or TimeoutException
+           or TaskCanceledException
+        || (ex.InnerException is not null && EhFalhaDeConectividade(ex.InnerException));
 
     private readonly AppDbContext                _db;
     private readonly IMongoDatabase              _mongo;
@@ -79,7 +126,7 @@ public class NfceEmissionService : INfceEmissionService
         var nota = await _db.NotasFiscaisEmitidas.FindAsync(notaId)
             ?? throw new InvalidOperationException($"Nota {notaId} não encontrada.");
 
-        if (nota.Status is not (NotaFiscalStatus.PendenteEmissao or NotaFiscalStatus.Rejeitada))
+        if (nota.Status is not (NotaFiscalStatus.PendenteEmissao or NotaFiscalStatus.Rejeitada or NotaFiscalStatus.AutorizadaContingencia))
             return nota; // Autorizada/Cancelada não têm o que reprocessar — devolve como está.
 
         if (nota.TentativasReprocessamento >= MaxTentativasReprocessamento)
@@ -121,14 +168,14 @@ public class NfceEmissionService : INfceEmissionService
             throw new InvalidOperationException(
                 $"Fora da janela legal de cancelamento ({JanelaCancelamento.TotalMinutes:0} minutos após a autorização).");
 
-        var (cfg, cfgServico, certificado, _, _) = await AbrirConfiguracaoSefazAsync();
+        var (cfg, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
 
         using var servico = new ServicosNFe(cfgServico, certificado);
         var retorno = servico.RecepcaoEventoCancelamento(
             idlote: 1, sequenciaEvento: 1,
             protocoloAutorizacao: nota.Protocolo!, chaveNFe: nota.ChaveAcesso!,
-            justificativa: justificativa.Trim(), cpfcnpj: cfg.Cnpj, dhEvento: DateTimeOffset.Now);
+            justificativa: justificativa.Trim(), cpfcnpj: cfg.Cnpj, dhEvento: AgoraBrasil());
 
         var infEvento = retorno.Retorno?.retEvento?.FirstOrDefault()?.infEvento;
         if (infEvento is null || infEvento.cStat is not (135 or 136))
@@ -158,10 +205,6 @@ public class NfceEmissionService : INfceEmissionService
         var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
         var endereco = cfg is null ? "" : $"{cfg.Logradouro}, {cfg.Numero} - {cfg.Bairro} - {cfg.Municipio}/{cfg.Uf}";
 
-        string? qrCodeUrl = null;
-        if (nota.ChaveAcesso is not null && cfg is not null)
-            qrCodeUrl = MontarUrlQrCode(cfg, nota.ChaveAcesso);
-
         return new CupomDto(
             RazaoSocial: cfg?.RazaoSocial ?? "",
             Cnpj:        cfg?.Cnpj ?? "",
@@ -175,30 +218,7 @@ public class NfceEmissionService : INfceEmissionService
             Itens:       dados.Itens.Select(i => new CupomItemDto(i.Nome, i.Quantidade, i.PrecoUnitarioCentavos, i.SubtotalCentavos)).ToList(),
             ValorTotalCentavos: nota.ValorTotalEmCentavos,
             FormaPagamento: dados.FormaPagamento,
-            QrCodeUrl:   qrCodeUrl);
-    }
-
-    /// <summary>
-    /// Monta a URL do QR Code da NFC-e conforme o layout nacional (chave|versão|ambiente|idCSC|hash).
-    /// Sem o CSC cadastrado (obtido na SEFAZ via emissor), retorna só um link de consulta manual,
-    /// sem o hash de segurança — o cupom ainda funciona, mas o QR não é o oficial completo.
-    /// Só cobre o portal de SP; outros estados usam URLs de consulta próprias.
-    /// </summary>
-    private static string MontarUrlQrCode(FiscalConfig cfg, string chave)
-    {
-        var baseUrl = cfg.Ambiente == AmbienteFiscal.Producao
-            ? "https://www.qrcode.fazenda.sp.gov.br/qrcode"
-            : "https://www.homologacao.qrcode.fazenda.sp.gov.br/qrcode";
-
-        var tpAmb = cfg.Ambiente == AmbienteFiscal.Producao ? "1" : "2";
-
-        if (string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscToken))
-            return $"{baseUrl}?chNFe={chave}&nVersao=100&tpAmb={tpAmb}";
-
-        var payload = $"{chave}|2|{tpAmb}|{cfg.CscId}";
-        var hash = Convert.ToHexString(
-            System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(payload + cfg.CscToken)));
-        return $"{baseUrl}?p={payload}|{hash}";
+            QrCodeUrl:   nota.UrlQrCode);
     }
 
     // ── Orquestração ──────────────────────────────────────────────────────────
@@ -270,8 +290,13 @@ public class NfceEmissionService : INfceEmissionService
 
     // ── Carregamento dos dados de origem ──────────────────────────────────────
 
-    private record ItemFiscal(string Nome, string Ncm, string Cfop, string? Csosn, int Quantidade, int PrecoUnitarioCentavos, int SubtotalCentavos);
-    private record DadosEmissao(List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf);
+    internal record ItemFiscal(
+        string Nome, string Ncm, string Cfop, string? Csosn, decimal? PercentualCreditoSn,
+        int Quantidade, int PrecoUnitarioCentavos, int SubtotalCentavos);
+
+    private record DadosEmissao(
+        List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
+        string? SegundaFormaPagamento, int SegundoValorCentavos);
 
     private async Task<DadosEmissao> CarregarDadosComandaAsync(Guid comandaId)
     {
@@ -301,12 +326,15 @@ public class NfceEmissionService : INfceEmissionService
             Ncm:                  item.Product!.Ncm!,
             Cfop:                 item.Product?.NaturezaOperacao?.Cfop ?? padrao?.Cfop ?? "5102",
             Csosn:                item.Product?.NaturezaOperacao?.Csosn ?? padrao?.Csosn ?? "102",
+            PercentualCreditoSn:  item.Product?.NaturezaOperacao?.PercentualCreditoIcmsSn ?? padrao?.PercentualCreditoIcmsSn,
             Quantidade:           item.Quantity,
             PrecoUnitarioCentavos: item.UnitPriceInCents,
             SubtotalCentavos:     item.SubtotalInCents
         )).ToList();
 
-        return new DadosEmissao(itens, comanda.PaymentMethod ?? "Dinheiro", comanda.User?.Cpf);
+        return new DadosEmissao(
+            itens, comanda.PaymentMethod ?? "Dinheiro", comanda.User?.Cpf,
+            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents);
     }
 
     private async Task<DadosEmissao> CarregarDadosVendaAvulsaAsync(string vendaAvulsaId)
@@ -341,6 +369,7 @@ public class NfceEmissionService : INfceEmissionService
                 Ncm:                  product!.Ncm!,
                 Cfop:                 product?.NaturezaOperacao?.Cfop ?? padrao?.Cfop ?? "5102",
                 Csosn:                product?.NaturezaOperacao?.Csosn ?? padrao?.Csosn ?? "102",
+                PercentualCreditoSn:  product?.NaturezaOperacao?.PercentualCreditoIcmsSn ?? padrao?.PercentualCreditoIcmsSn,
                 Quantidade:           item.Quantity,
                 PrecoUnitarioCentavos: item.UnitPriceInCents,
                 SubtotalCentavos:     item.SubtotalInCents
@@ -351,7 +380,9 @@ public class NfceEmissionService : INfceEmissionService
         if (venda.UserId.HasValue)
             cpf = (await _db.Users.FindAsync(venda.UserId.Value))?.Cpf;
 
-        return new DadosEmissao(itens, venda.PaymentMethod, cpf);
+        return new DadosEmissao(
+            itens, venda.PaymentMethod, cpf,
+            venda.SecondPaymentMethod, venda.SecondPaymentAmountInCents);
     }
 
     // ── Montagem, assinatura e transmissão ─────────────────────────────────────
@@ -360,7 +391,8 @@ public class NfceEmissionService : INfceEmissionService
     /// Carrega o certificado (descriptografado) e monta a config de conexão com a SEFAZ,
     /// reaproveitada por emissão, cancelamento e inutilização.
     /// </summary>
-    private async Task<(FiscalConfig cfg, ConfiguracaoServico cfgServico, X509Certificate2 certificado, Estado estado, TipoAmbiente ambiente)>
+    private async Task<(FiscalConfig cfg, ConfiguracaoServico cfgServico, X509Certificate2 certificado,
+        ConfiguracaoCertificado cfgCertificado, Estado estado, TipoAmbiente ambiente)>
         AbrirConfiguracaoSefazAsync()
     {
         var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
@@ -374,6 +406,7 @@ public class NfceEmissionService : INfceEmissionService
         var pfxBytes    = Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted!));
         var senha       = _enc.Decrypt(cfg.CertificadoSenhaEncrypted!);
         var certificado = new X509Certificate2(pfxBytes, senha, X509KeyStorageFlags.Exportable);
+        var cfgCertificado = new ConfiguracaoCertificado { ArrayBytesArquivo = pfxBytes, Senha = senha };
 
         var estado   = Enum.Parse<Estado>(cfg.Uf);
         var ambiente = cfg.Ambiente == AmbienteFiscal.Producao ? TipoAmbiente.Producao : TipoAmbiente.Homologacao;
@@ -389,18 +422,54 @@ public class NfceEmissionService : INfceEmissionService
             ValidarSchemas  = false,
         };
 
-        return (cfg, cfgServico, certificado, estado, ambiente);
+        return (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente);
+    }
+
+    /// <summary>
+    /// Reserva atomicamente o próximo número de NFC-e via UPDATE...RETURNING no Postgres —
+    /// evita que dois fechamentos de comanda simultâneos peguem o mesmo número (a leitura +
+    /// incremento em memória do EF não é segura contra concorrência entre requisições).
+    /// </summary>
+    private async Task<int> ReservarProximoNumeroNfceAsync(Guid fiscalConfigId)
+    {
+        var conn = _db.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+            await conn.OpenAsync();
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE fiscal_config SET proximo_numero_nfce = proximo_numero_nfce + 1, updated_at = now() " +
+            "WHERE id = @id RETURNING proximo_numero_nfce - 1";
+        var param = cmd.CreateParameter();
+        param.ParameterName = "id";
+        param.Value = fiscalConfigId;
+        cmd.Parameters.Add(param);
+
+        var resultado = await cmd.ExecuteScalarAsync()
+            ?? throw new InvalidOperationException("Não foi possível reservar o número da NFC-e — FiscalConfig não encontrado.");
+        return Convert.ToInt32(resultado);
     }
 
     private async Task TransmitirAsync(NotaFiscalEmitida nota, DadosEmissao dados)
     {
-        var (cfg, cfgServico, certificado, estado, ambiente) = await AbrirConfiguracaoSefazAsync();
+        var (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
 
-        var numero = cfg.ProximoNumeroNfce;
-        var dhEmi  = DateTimeOffset.Now;
-        var cNf    = Random.Shared.Next(10_000_000, 99_999_999);
-        var chave  = ChaveFiscal.ObterChave(estado, dhEmi, cfg.Cnpj, ModeloDocumento.NFCe, cfg.SerieNfce, numero, (int)TipoEmissao.teNormal, cNf);
+        // Monta os itens (e valida CSOSN) ANTES de reservar o número — uma Natureza de
+        // Operação mal configurada não pode queimar um número de NFC-e sem transmitir nada.
+        var detItens = dados.Itens.Select((item, idx) => MontarItem(item, idx + 1)).ToList();
+
+        // Se esta nota já entrou em contingência offline numa tentativa anterior, a
+        // retransmissão precisa reconstruir a MESMA chave de acesso (já mostrada ao
+        // cliente no cupom) — número, cNf e tpEmis não podem mudar entre tentativas.
+        var jaEmContingencia = nota.CnfContingencia.HasValue;
+        var numero = jaEmContingencia ? nota.Numero!.Value : await ReservarProximoNumeroNfceAsync(cfg.Id);
+        // dhEmi é o momento REAL da venda (quando a nota foi criada como PendenteEmissao),
+        // não o momento desta transmissão — que pode ser minutos/horas depois num retry.
+        var dhEmi  = ParaBrasil(nota.CreatedAt);
+        var cNf    = jaEmContingencia ? nota.CnfContingencia!.Value : Random.Shared.Next(10_000_000, 99_999_999);
+        var tpEmis = jaEmContingencia ? TipoEmissao.teOffLine : TipoEmissao.teNormal;
+        var chave  = ChaveFiscal.ObterChave(estado, dhEmi, cfg.Cnpj, ModeloDocumento.NFCe, cfg.SerieNfce, numero, (int)tpEmis, cNf);
 
         var municipioIbge = long.Parse(cfg.CodigoMunicipioIbge!);
         var valorTotal     = dados.Itens.Sum(i => i.SubtotalCentavos) / 100m;
@@ -423,7 +492,7 @@ public class NfceEmissionService : INfceEmissionService
                     idDest  = DestinoOperacao.doInterna,
                     cMunFG  = municipioIbge,
                     tpImp   = TipoImpressao.tiNFCe,
-                    tpEmis  = TipoEmissao.teNormal,
+                    tpEmis  = tpEmis,
                     cDV     = chave.DigitoVerificador,
                     tpAmb   = ambiente,
                     finNFe  = FinalidadeNFe.fnNormal,
@@ -454,7 +523,7 @@ public class NfceEmissionService : INfceEmissionService
                 {
                     CPF = dados.ClienteCpf,
                 },
-                det = dados.Itens.Select((item, idx) => MontarItem(item, idx + 1)).ToList(),
+                det = detItens,
                 total = new total
                 {
                     ICMSTot = new ICMSTot
@@ -466,31 +535,71 @@ public class NfceEmissionService : INfceEmissionService
                         vNF      = valorTotal,
                     },
                 },
-                pag = new List<pag>
-                {
-                    new pag
-                    {
-                        detPag = new List<detPag>
-                        {
-                            new detPag { tPag = MapFormaPagamento(dados.FormaPagamento), vPag = valorTotal },
-                        },
-                    },
-                },
+                pag = new List<pag> { new pag { detPag = MontarDetPag(dados, valorTotal) } },
             },
         };
 
+        // dhCont/xJust só existem (e são exigidos) em contingência offline (tpEmis=9) — a
+        // lib só serializa esses campos quando fazem sentido pro tpEmis atual.
+        if (jaEmContingencia)
+        {
+            nfe.infNFe.ide.dhCont = ParaBrasil(nota.DhContingencia!.Value);
+            nfe.infNFe.ide.xJust  = nota.JustificativaContingencia;
+        }
+
         nfe.Assina(cfgServico, certificado);
 
+        // QR Code: usa a própria lib (sabe a URL certa de cada estado e o hash do CSC) em vez
+        // de reimplementar isso na mão — evita erro de domínio/fórmula por estado.
+        nfe.infNFeSupl = new infNFeSupl();
+        var qrCodeUrl = string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscToken)
+            ? null
+            : ExtinfNFeSupl.ObterUrlQrCode(nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao2, cfg.CscId, cfg.CscToken, cfgCertificado);
+        if (qrCodeUrl is not null)
+            nfe.infNFeSupl.qrCode = qrCodeUrl;
+
         using var servico = new ServicosNFe(cfgServico, certificado);
-        var retorno = servico.NFeAutorizacao(1, IndicadorSincronizacao.Sincrono, new List<NfeDocumento> { nfe }, false);
+        RetornoNFeAutorizacao retorno;
+        try
+        {
+            retorno = servico.NFeAutorizacao(1, IndicadorSincronizacao.Sincrono, new List<NfeDocumento> { nfe }, false);
+        }
+        catch (Exception ex) when (EhFalhaDeConectividade(ex))
+        {
+            if (!jaEmContingencia)
+            {
+                // 1ª vez inalcançável nesta nota: entra em contingência offline agora — o
+                // cliente já sai com o cupom (chave/QR válidos), a retransmissão de verdade
+                // acontece sozinha no próximo ciclo do FiscalRetryBackgroundService.
+                nota.Serie                     = cfg.SerieNfce;
+                nota.Numero                    = numero;
+                nota.CnfContingencia           = cNf;
+                nota.DhContingencia            = DateTime.UtcNow;
+                nota.JustificativaContingencia = "Sem comunicação com o webservice da SEFAZ no momento da venda.";
+                nota.Status                    = NotaFiscalStatus.AutorizadaContingencia;
+                nota.ChaveAcesso                = chave.Chave;
+                nota.EmitidoEm                  = DateTime.UtcNow;
+                nota.UrlQrCode                  = qrCodeUrl;
+                await _db.SaveChangesAsync();
+
+                _logger.LogWarning(ex,
+                    "NFC-e {NotaId} emitida em CONTINGÊNCIA offline — SEFAZ inalcançável no momento da venda. " +
+                    "Retransmissão automática tentará no próximo ciclo.", nota.Id);
+            }
+            else
+            {
+                // Já estava em contingência e a SEFAZ continua inalcançável — tenta de novo depois.
+                _logger.LogWarning(ex,
+                    "NFC-e {NotaId} (em contingência desde {DhContingencia}) ainda não conseguiu retransmitir — " +
+                    "SEFAZ continua inalcançável.", nota.Id, nota.DhContingencia);
+            }
+            return;
+        }
 
         var protInfo = retorno.Retorno?.protNFe?.infProt;
 
-        // Número consumido nesta tentativa, autorizada ou não — a numeração da NFC-e
-        // não pode ser reaproveitada sem um evento formal de inutilização.
-        cfg.ProximoNumeroNfce = numero + 1;
-        cfg.UpdatedAt         = DateTime.UtcNow;
-
+        // Número já foi consumido e persistido atomicamente em ReservarProximoNumeroNfceAsync,
+        // autorizada ou não — a numeração da NFC-e não pode ser reaproveitada sem inutilização.
         nota.Serie  = cfg.SerieNfce;
         nota.Numero = numero;
 
@@ -499,8 +608,11 @@ public class NfceEmissionService : INfceEmissionService
             nota.Status         = NotaFiscalStatus.Autorizada;
             nota.ChaveAcesso    = protInfo.chNFe ?? chave.Chave;
             nota.Protocolo      = protInfo.nProt;
-            nota.EmitidoEm      = DateTime.UtcNow;
+            // Se veio de contingência, EmitidoEm já é o momento real da venda — não pisa nele
+            // com o momento da confirmação tardia da SEFAZ.
+            nota.EmitidoEm    ??= DateTime.UtcNow;
             nota.XmlAutorizado  = retorno.EnvioStr;
+            nota.UrlQrCode      = qrCodeUrl;
         }
         else
         {
@@ -532,7 +644,7 @@ public class NfceEmissionService : INfceEmissionService
     {
         using var servico = new ServicosNFe(cfgServico, certificado);
         var justificativa = $"Numero da NFCe {nota.Id} rejeitado pela SEFAZ, inutilizado automaticamente.";
-        var retorno = servico.NfeInutilizacao(cfg.Cnpj, DateTime.Now.Year, ModeloDocumento.NFCe, cfg.SerieNfce, numero, numero, justificativa);
+        var retorno = servico.NfeInutilizacao(cfg.Cnpj, AgoraBrasil().Year, ModeloDocumento.NFCe, cfg.SerieNfce, numero, numero, justificativa);
 
         var infInut = retorno.Retorno?.infInut;
         if (infInut is not null && infInut.cStat == 102)
@@ -547,6 +659,25 @@ public class NfceEmissionService : INfceEmissionService
             _logger.LogWarning("SEFAZ não confirmou a inutilização do número {Numero} (nota {NotaId}): {Motivo}",
                 numero, nota.Id, infInut?.xMotivo ?? retorno.RetornoStr ?? "motivo desconhecido");
         }
+    }
+
+    /// <summary>
+    /// Monta um ou dois detPag conforme haja segundo método de pagamento (split).
+    /// O valor do primeiro método é o total menos o que foi pago no segundo, pra bater
+    /// exatamente com vNF — evita a diferença de centavos ser "engolida" num só método.
+    /// </summary>
+    private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal)
+    {
+        if (string.IsNullOrWhiteSpace(dados.SegundaFormaPagamento) || dados.SegundoValorCentavos <= 0)
+            return new List<detPag> { new detPag { tPag = MapFormaPagamento(dados.FormaPagamento), vPag = valorTotal } };
+
+        var valorSegundo  = dados.SegundoValorCentavos / 100m;
+        var valorPrimeiro = valorTotal - valorSegundo;
+        return new List<detPag>
+        {
+            new detPag { tPag = MapFormaPagamento(dados.FormaPagamento), vPag = valorPrimeiro },
+            new detPag { tPag = MapFormaPagamento(dados.SegundaFormaPagamento), vPag = valorSegundo },
+        };
     }
 
     private static det MontarItem(ItemFiscal item, int numero) => new()
@@ -571,21 +702,45 @@ public class NfceEmissionService : INfceEmissionService
         },
         imposto = new imposto
         {
-            ICMS   = new ICMS   { TipoICMS   = MontarIcmsSimplesNacional(item.Csosn) },
+            ICMS   = new ICMS   { TipoICMS   = MontarIcmsSimplesNacional(item) },
+            // CST 99 "Outras Operações" é o padrão de fato usado por optantes do Simples
+            // Nacional (o DAS já unifica PIS/COFINS — não há CST federal específico pra
+            // esse regime na NFC-e). Confirmado contra prática de mercado, não é chute.
             PIS    = new PIS    { TipoPIS    = new PISOutr    { CST = CSTPIS.pis99,    vBC = 0, pPIS    = 0, vPIS    = 0 } },
             COFINS = new COFINS { TipoCOFINS = new COFINSOutr { CST = CSTCOFINS.cofins99, vBC = 0, pCOFINS = 0, vCOFINS = 0 } },
         },
     };
 
     /// <summary>
-    /// CSOSN 500 (cobrança por substituição/antecipação, sem crédito) tem campos próprios;
-    /// qualquer outro código cai no 102 ("sem permissão de crédito") — o mais comum e
-    /// mais neutro pro Simples Nacional. Ajustar aqui se o contador indicar outro CSOSN.
+    /// Mapeia o CSOSN da Natureza de Operação pra classe ICMS correta do Simples Nacional.
+    /// Cobre os 7 códigos que fazem sentido pra um lojista que NÃO é substituto tributário:
+    /// 101 (com crédito), 102/103/300/400 (sem crédito — mesma estrutura de campos, só muda
+    /// o código), 500 (ICMS-ST já retido antes) e 900 (outros). 201/202/203 são bloqueados de
+    /// propósito: exigem MVA/base de cálculo de ICMS-ST que este sistema não calcula sozinho —
+    /// inventar esses valores seria pior do que não emitir. Ajustar aqui só com o contador.
     /// </summary>
-    private static ICMSBasico MontarIcmsSimplesNacional(string? csosn) => csosn switch
+    internal static ICMSBasico MontarIcmsSimplesNacional(ItemFiscal item) => item.Csosn switch
     {
-        "500" => new ICMSSN500 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn500 },
-        _      => new ICMSSN102 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn102 },
+        "101" => new ICMSSN101
+        {
+            orig        = OrigemMercadoria.OmNacional,
+            CSOSN       = Csosnicms.Csosn101,
+            pCredSN     = item.PercentualCreditoSn ?? 0,
+            vCredICMSSN = Math.Round(item.SubtotalCentavos / 100m * (item.PercentualCreditoSn ?? 0) / 100m, 2),
+        },
+        "102" or null or "" => new ICMSSN102 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn102 },
+        "103"  => new ICMSSN102 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn103 },
+        "300"  => new ICMSSN102 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn300 },
+        "400"  => new ICMSSN102 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn400 },
+        "500"  => new ICMSSN500 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn500 },
+        "900"  => new ICMSSN900 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn900 },
+        "201" or "202" or "203" => throw new FiscalNaoConfiguradoException(
+            $"CSOSN {item.Csosn} exige cálculo de ICMS-ST (substituição tributária) como substituto — " +
+            "MVA, base reduzida etc. Este sistema não inventa esses valores. Consulte o contador antes " +
+            "de usar essa Natureza de Operação, ou troque para um CSOSN sem ICMS-ST (102, por exemplo)."),
+        _ => throw new FiscalNaoConfiguradoException(
+            $"CSOSN \"{item.Csosn}\" não é um código suportado do Simples Nacional. " +
+            "Use 101, 102, 103, 300, 400, 500 ou 900 em Admin > Fiscal > Naturezas de Operação."),
     };
 
     private static CRT MapCrt(RegimeTributario regime) => regime switch

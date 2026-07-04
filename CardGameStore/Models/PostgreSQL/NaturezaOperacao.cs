@@ -28,10 +28,17 @@ public class NaturezaOperacao
     [Column("cfop")]
     public string Cfop { get; set; } = string.Empty;
 
-    /// <summary>Código de Situação da Operação no Simples Nacional (ex: "102", "500").</summary>
+    /// <summary>Código de Situação da Operação no Simples Nacional. Suportados: 101, 102,
+    /// 103, 300, 400, 500, 900 (ver NfceEmissionService.MontarIcmsSimplesNacional — 201/202/203
+    /// são bloqueados de propósito por exigirem cálculo de ICMS-ST como substituto).</summary>
     [MaxLength(3)]
     [Column("csosn")]
     public string? Csosn { get; set; }
+
+    /// <summary>% de crédito de ICMS (pCredSN) — só usado quando Csosn = "101". Nos demais
+    /// códigos este campo é ignorado.</summary>
+    [Column("percentual_credito_sn")]
+    public decimal? PercentualCreditoIcmsSn { get; set; }
 
     /// <summary>Se true, é sugerida como padrão ao cadastrar um novo produto.</summary>
     [Column("is_padrao")]

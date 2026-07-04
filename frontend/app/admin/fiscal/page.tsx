@@ -11,10 +11,11 @@ import {
 } from 'lucide-react'
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
-  PendenteEmissao: { label: 'Pendente',   color: 'bg-gray-500/15 text-gray-400 border-gray-500/30' },
-  Autorizada:      { label: 'Autorizada', color: 'bg-green-500/15 text-green-400 border-green-500/30' },
-  Rejeitada:       { label: 'Rejeitada',  color: 'bg-red-500/15 text-red-400 border-red-500/30' },
-  Cancelada:       { label: 'Cancelada',  color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  PendenteEmissao:         { label: 'Pendente',              color: 'bg-gray-500/15 text-gray-400 border-gray-500/30' },
+  Autorizada:              { label: 'Autorizada',            color: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  Rejeitada:               { label: 'Rejeitada',             color: 'bg-red-500/15 text-red-400 border-red-500/30' },
+  Cancelada:               { label: 'Cancelada',             color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  AutorizadaContingencia:  { label: 'Contingência',          color: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
 }
 
 const REGIMES = [
@@ -26,6 +27,20 @@ const REGIMES = [
 const AMBIENTES = [
   { value: 'Homologacao', label: 'Homologação (testes)' },
   { value: 'Producao',    label: 'Produção' },
+]
+
+// Só os CSOSN que o motor de emissão sabe montar sozinho (ver NfceEmissionService).
+// 201/202/203 (ICMS-ST como substituto) ficam de fora de propósito — exigem MVA/base
+// reduzida que ninguém aqui calcula; usar um desses exigiria ajuste com o contador antes.
+const CSOSN_OPCOES = [
+  { value: '',    label: '— Nenhum —' },
+  { value: '102', label: '102 — Tributada sem permissão de crédito (mais comum)' },
+  { value: '101', label: '101 — Tributada com permissão de crédito' },
+  { value: '103', label: '103 — Isenção por faixa de receita bruta' },
+  { value: '300', label: '300 — Imune' },
+  { value: '400', label: '400 — Não tributada' },
+  { value: '500', label: '500 — ICMS já retido antes (substituição tributária)' },
+  { value: '900', label: '900 — Outros' },
 ]
 
 function fmtDate(d?: string) {
@@ -71,6 +86,7 @@ export default function FiscalPage() {
   const [novaDescricao, setNovaDescricao] = useState('')
   const [novoCfop, setNovoCfop]           = useState('')
   const [novoCsosn, setNovoCsosn]         = useState('')
+  const [novoPercentualCredito, setNovoPercentualCredito] = useState('')
   const [novoPadrao, setNovoPadrao]       = useState(false)
   const [savingNatureza, setSavingNatureza] = useState(false)
 
@@ -82,6 +98,8 @@ export default function FiscalPage() {
   // Histórico de notas
   const [notas, setNotas]               = useState<NotaFiscalDto[]>([])
   const [notasLoading, setNotasLoading] = useState(true)
+  const [pendentesCount, setPendentesCount] = useState(0)
+  const [pendenteMaisAntiga, setPendenteMaisAntiga] = useState<string | undefined>()
   const [reprocessingId, setReprocessingId] = useState<string | null>(null)
   const [cancelModalId, setCancelModalId]   = useState<string | null>(null)
   const [cancelJustificativa, setCancelJustificativa] = useState('')
@@ -92,6 +110,8 @@ export default function FiscalPage() {
     try {
       const { data } = await fiscalApi.listNotas({ pageSize: 30 })
       setNotas(data.items)
+      setPendentesCount(data.pendentesCount)
+      setPendenteMaisAntiga(data.pendenteMaisAntiga)
     } catch {
       toast.error('Erro ao carregar notas emitidas')
     } finally {
@@ -216,13 +236,15 @@ export default function FiscalPage() {
     try {
       await fiscalApi.createNatureza({
         descricao: novaDescricao, cfop: novoCfop,
-        csosn: novoCsosn || undefined, isPadrao: novoPadrao,
+        csosn: novoCsosn || undefined,
+        percentualCreditoSn: novoCsosn === '101' && novoPercentualCredito ? Number(novoPercentualCredito) : undefined,
+        isPadrao: novoPadrao,
       })
-      setNovaDescricao(''); setNovoCfop(''); setNovoCsosn(''); setNovoPadrao(false)
+      setNovaDescricao(''); setNovoCfop(''); setNovoCsosn(''); setNovoPercentualCredito(''); setNovoPadrao(false)
       toast.success('Natureza de operação criada!')
       load()
-    } catch {
-      toast.error('Erro ao criar natureza de operação')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao criar natureza de operação')
     } finally {
       setSavingNatureza(false)
     }
@@ -440,7 +462,10 @@ export default function FiscalPage() {
               {n.isPadrao && <Star className="w-3.5 h-3.5 text-accent-gold shrink-0" fill="currentColor" />}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{n.descricao}</p>
-                <p className="text-xs text-gray-500">CFOP {n.cfop}{n.csosn ? ` · CSOSN ${n.csosn}` : ''}</p>
+                <p className="text-xs text-gray-500">
+                  CFOP {n.cfop}{n.csosn ? ` · CSOSN ${n.csosn}` : ''}
+                  {n.csosn === '101' && n.percentualCreditoIcmsSn != null && ` (${n.percentualCreditoIcmsSn}% crédito)`}
+                </p>
               </div>
               <button onClick={() => removeNatureza(n.id)} className="text-gray-500 hover:text-red-400 p-1">
                 <Trash2 className="w-4 h-4" />
@@ -452,7 +477,7 @@ export default function FiscalPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_100px_auto] gap-2 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_1fr_auto] gap-2 items-end">
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Descrição</label>
             <input value={novaDescricao} onChange={e => setNovaDescricao(e.target.value)}
@@ -464,12 +489,21 @@ export default function FiscalPage() {
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">CSOSN</label>
-            <input value={novoCsosn} onChange={e => setNovoCsosn(e.target.value)} placeholder="102" className="input w-full" />
+            <select value={novoCsosn} onChange={e => setNovoCsosn(e.target.value)} className="input w-full">
+              {CSOSN_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </div>
           <button onClick={addNatureza} disabled={savingNatureza} className="btn-primary justify-center">
             {savingNatureza ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           </button>
         </div>
+        {novoCsosn === '101' && (
+          <div className="mt-2 max-w-[200px]">
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">% de crédito de ICMS</label>
+            <input type="number" min={0} max={100} step={0.01} value={novoPercentualCredito}
+                   onChange={e => setNovoPercentualCredito(e.target.value)} placeholder="Ex: 2.5" className="input w-full" />
+          </div>
+        )}
         <label className="flex items-center gap-2 mt-2 text-xs text-gray-400 cursor-pointer">
           <input type="checkbox" checked={novoPadrao} onChange={e => setNovoPadrao(e.target.checked)} />
           Definir como padrão
@@ -510,6 +544,15 @@ export default function FiscalPage() {
           </button>
         </div>
 
+        {pendentesCount > 0 && (
+          <div className="flex items-center gap-2 text-sm bg-amber-500/10 text-amber-400 rounded-lg p-3 mb-3">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            {pendentesCount} nota(s) pendente(s) ou em contingência aguardando emissão/retransmissão
+            {pendenteMaisAntiga && ` — a mais antiga é de ${fmtDate(pendenteMaisAntiga)}`}.
+            {' '}O retry automático tenta a cada 15 min; use &quot;Reprocessar&quot; pra forçar agora.
+          </div>
+        )}
+
         {notasLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
         ) : notas.length === 0 ? (
@@ -543,7 +586,7 @@ export default function FiscalPage() {
                         <Printer className="w-3.5 h-3.5" /> Cupom
                       </Link>
                     )}
-                    {(n.status === 'PendenteEmissao' || n.status === 'Rejeitada') && (
+                    {(n.status === 'PendenteEmissao' || n.status === 'Rejeitada' || n.status === 'AutorizadaContingencia') && (
                       <button onClick={() => reprocessarNota(n.id)} disabled={reprocessingId === n.id}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 border border-surface-600 text-sm text-gray-300">
                         {reprocessingId === n.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
