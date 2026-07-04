@@ -243,7 +243,7 @@ export interface PodioItem { lugar: number; nome: string }
 
 export interface ChampionshipParticipant {
   id: string; userId: string; userName: string; playerNumber: number
-  deckName?: string | null; placement?: number | null; registeredAt: string
+  deckName?: string | null; deckId?: string | null; placement?: number | null; registeredAt: string
 }
 
 export interface UserSummary {
@@ -740,8 +740,8 @@ export const championshipApi = {
   delete:           (id: string) => api.delete(`/api/championship/${id}`),
   register:         (id: string, userId: string, deckName?: string) =>
     api.post(`/api/championship/${id}/register`, { userId, deckName }),
-  adminRegister:    (id: string, userId: string, deckName?: string) =>
-    api.post<ChampionshipParticipant>(`/api/championship/${id}/admin-register`, { userId, deckName }),
+  adminRegister:    (id: string, userId: string, deckName?: string, deckId?: string) =>
+    api.post<ChampionshipParticipant>(`/api/championship/${id}/admin-register`, { userId, deckName, deckId }),
   participants:     (id: string) =>
     api.get<ChampionshipParticipant[]>(`/api/championship/${id}/participants`),
   removeParticipant:(id: string, participantId: string) =>

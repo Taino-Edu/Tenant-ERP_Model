@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { championshipApi, userApi, uploadApi, Championship, ChampionshipParticipant, ChampionshipPreInscricao, PodioItem } from '@/lib/api'
+import { championshipApi, userApi, deckApi, Championship, ChampionshipParticipant, ChampionshipPreInscricao, DeckListDto, uploadApi, PodioItem } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   Trophy, Plus, Users, Swords, X, Check, Loader2,
@@ -305,8 +305,9 @@ function EditChampionshipModal({ championship, onClose, onSave }: {
 }
 
 // ── Modal: Adicionar Participante ─────────────────────────────────────────────
-function AddParticipantModal({ championshipId, onClose, onAdded, initialName, initialDeckName, onConfirmedPreInscricao }: {
+function AddParticipantModal({ championshipId, game, onClose, onAdded, initialName, initialDeckName, onConfirmedPreInscricao }: {
   championshipId: string
+  game: string
   onClose: () => void
   onAdded: () => void
   initialName?: string
@@ -316,6 +317,9 @@ function AddParticipantModal({ championshipId, onClose, onAdded, initialName, in
   const [search, setSearch]     = useState(initialName ?? '')
   const [results, setResults]   = useState<{ id: string; name: string; cpf?: string }[]>([])
   const [selected, setSelected] = useState<{ id: string; name: string } | null>(null)
+  const [decks, setDecks]       = useState<DeckListDto[]>([])
+  const [loadingDecks, setLoadingDecks] = useState(false)
+  const [selectedDeckId, setSelectedDeckId] = useState('')
   const [deckName, setDeckName] = useState(initialDeckName ?? '')
   const [saving, setSaving]     = useState(false)
   const [searching, setSearching] = useState(false)
@@ -324,6 +328,18 @@ function AddParticipantModal({ championshipId, onClose, onAdded, initialName, in
     if (initialName && initialName.length >= 2) handleSearch(initialName)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Ao selecionar o cliente, busca os decks reais dele (do jogo do campeonato) pra
+  // vincular o deck de verdade em vez de só o nome digitado.
+  useEffect(() => {
+    setSelectedDeckId('')
+    if (!selected) { setDecks([]); return }
+    setLoadingDecks(true)
+    deckApi.getByUser(selected.id)
+      .then(({ data }) => setDecks(data.filter(d => d.game.toLowerCase() === game.toLowerCase())))
+      .catch(() => setDecks([]))
+      .finally(() => setLoadingDecks(false))
+  }, [selected, game])
 
   async function handleSearch(q: string) {
     setSearch(q)
@@ -348,7 +364,7 @@ function AddParticipantModal({ championshipId, onClose, onAdded, initialName, in
     if (!selected) return
     setSaving(true)
     try {
-      await championshipApi.adminRegister(championshipId, selected.id, deckName || undefined)
+      await championshipApi.adminRegister(championshipId, selected.id, deckName || undefined, selectedDeckId || undefined)
       if (onConfirmedPreInscricao) await onConfirmedPreInscricao()
       toast.success(`${selected.name} inscrito com sucesso!`)
       onAdded()
@@ -423,12 +439,32 @@ function AddParticipantModal({ championshipId, onClose, onAdded, initialName, in
             </div>
           )}
 
-          {/* Nome do deck (opcional) */}
-          <div>
-            <label className="label">Nome do Deck <span className="text-gray-400">(opcional)</span></label>
-            <input className="input" placeholder="Ex: Charizard ex, Mewtwo..."
-              value={deckName} onChange={e => setDeckName(e.target.value)} />
-          </div>
+          {/* Deck do cliente: escolhe entre os decks salvos dele, ou digita o nome na mão */}
+          {selected && (
+            <div>
+              <label className="label">Deck</label>
+              {loadingDecks ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Carregando decks do cliente...
+                </div>
+              ) : decks.length > 0 ? (
+                <select className="input" value={selectedDeckId} onChange={e => setSelectedDeckId(e.target.value)}>
+                  <option value="">Digitar nome manualmente</option>
+                  {decks.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.cardCount} cartas)</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-gray-500 mb-2">
+                  Nenhum deck salvo pra {game}. Pode digitar o nome manualmente ou o cliente cadastra depois em Meus Decks.
+                </p>
+              )}
+              {!selectedDeckId && (
+                <input className="input mt-2" placeholder="Ex: Charizard ex, Mewtwo..."
+                  value={deckName} onChange={e => setDeckName(e.target.value)} />
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3 pt-1">
             <button onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
@@ -544,6 +580,7 @@ function ChampionshipCard({
       {showAdd && (
         <AddParticipantModal
           championshipId={c.id}
+          game={c.game}
           onClose={() => setShowAdd(false)}
           onAdded={() => { loadAll(); onParticipantChange() }}
         />
@@ -551,6 +588,7 @@ function ChampionshipCard({
       {confirmingPI && (
         <AddParticipantModal
           championshipId={c.id}
+          game={c.game}
           initialName={confirmingPI.nome}
           initialDeckName={confirmingPI.deckName}
           onClose={() => setConfirmingPI(null)}

@@ -124,6 +124,7 @@ public class ChampionshipController : ControllerBase
             UserName       = p.User?.Name ?? string.Empty,
             PlayerNumber   = p.PlayerNumber,
             DeckName       = p.DeckName,
+            DeckId         = p.DeckId,
             Placement      = p.Placement,
             RegisteredAt   = p.RegisteredAt
         }));
@@ -245,6 +246,7 @@ public class ChampionshipController : ControllerBase
             UserName     = string.Empty,   // sem eager load aqui
             PlayerNumber = participant.PlayerNumber,
             DeckName     = participant.DeckName,
+            DeckId       = participant.DeckId,
             RegisteredAt = participant.RegisteredAt
         });
     }
@@ -271,7 +273,7 @@ public class ChampionshipController : ControllerBase
         ChampionshipParticipant participant;
         try
         {
-            participant = await _service.RegisterParticipantAsync(id, request.UserId, request.DeckName);
+            participant = await _service.RegisterParticipantAsync(id, request.UserId, request.DeckName, request.DeckId);
         }
         catch (InvalidOperationException ex)
         {
@@ -291,6 +293,7 @@ public class ChampionshipController : ControllerBase
             UserName     = registered?.User?.Name ?? string.Empty,
             PlayerNumber = participant.PlayerNumber,
             DeckName     = participant.DeckName,
+            DeckId       = participant.DeckId,
             RegisteredAt = participant.RegisteredAt
         });
     }
@@ -567,6 +570,7 @@ public class ParticipantDto
     public string    UserName     { get; init; } = string.Empty;
     public int       PlayerNumber { get; init; }
     public string?   DeckName     { get; init; }
+    public Guid?     DeckId       { get; init; }
     public int?      Placement    { get; init; }
     public DateTime  RegisteredAt { get; init; }
 }
@@ -602,6 +606,7 @@ public class AdminRegisterRequest
     [System.ComponentModel.DataAnnotations.Required]
     public Guid UserId { get; init; }
     public string? DeckName { get; init; }
+    public Guid?   DeckId   { get; init; }
 }
 
 /// <summary>Request para inscrição em campeonato (deck é opcional).</summary>

@@ -67,6 +67,8 @@ const GAME_FILTERS: Record<string, {
 }
 
 function cardKey(c: CardCache) { return c.tcgCardId }
+// Energia (Pokémon) não tem limite de cópias por regra oficial — o resto do jogo segue MAX_COPIES normal.
+function copyLimit(card: { type?: string | null }, base: number) { return card.type === 'Energy' ? Infinity : base }
 function mainPrice(c: CardCache) {
   const p = c.allPrices?.holofoil ?? c.allPrices?.normal ?? c.allPrices?.reverseHolofoil ?? c.marketPrices
   return p?.market ?? p?.mid ?? null
@@ -78,7 +80,8 @@ function CardGridItem({ card, qty, maxCopies, onAdd, onPreview }: {
   onAdd: (c: CardCache) => void; onPreview: (c: CardCache) => void
 }) {
   const price = mainPrice(card)
-  const full  = qty >= maxCopies
+  const limit = copyLimit(card, maxCopies)
+  const full  = qty >= limit
   return (
     <div className="relative rounded-xl overflow-hidden flex flex-col"
       style={{ backgroundColor: C.white, border: `1px solid ${full ? C.blue2 : C.border}` }}>
@@ -116,7 +119,8 @@ function CardPreviewModal({ card, onClose, onAdd, qty, maxCopies, brlRate }: {
   card: CardCache; onClose: () => void; onAdd: (c: CardCache) => void; qty: number; maxCopies: number; brlRate: number | null
 }) {
   const price  = mainPrice(card)
-  const full   = qty >= maxCopies
+  const limit  = copyLimit(card, maxCopies)
+  const full   = qty >= limit
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
@@ -453,17 +457,19 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
       const match = line.match(/^(\d+)\s+(.+?)\s+([A-Z0-9]{2,8})\s+(\d+)\s*$/)
       if (!match) { failed.push(line); continue }
       const [, qtyStr, name, setCode, number] = match
-      const qty = Math.min(parseInt(qtyStr), maxCopies)
+      const qtyRequested = parseInt(qtyStr)
       try {
         const r = await tcgApi.searchByCode(setCode, number, game)
         const card = r.data.items?.[0]
         if (card) {
+          const limit = copyLimit(card, maxCopies)
+          const qty   = Math.min(qtyRequested, limit)
           const ex = newCards.find(c => c.id === cardKey(card))
-          if (ex) ex.quantity = Math.min(ex.quantity + qty, maxCopies)
+          if (ex) ex.quantity = Math.min(ex.quantity + qty, limit)
           else newCards.push({ id: cardKey(card), name: card.name, quantity: qty, setCode: card.setCode ?? undefined, setName: card.setName ?? undefined, number: card.number ?? undefined, imageSmall: card.imageUrlSmall ?? undefined, type: card.type ?? undefined, hp: card.hp ?? undefined })
           added++
         } else {
-          newCards.push({ id: `manual:${setCode}-${number}`, name, quantity: qty, setCode, number })
+          newCards.push({ id: `manual:${setCode}-${number}`, name, quantity: Math.min(qtyRequested, maxCopies), setCode, number })
           added++
         }
       } catch { failed.push(line) }
@@ -773,6 +779,7 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
 function DeckCardRow({ card, qty, onInc, onDec, onRemove, maxCopies }: {
   card: DeckCard; qty: number; onInc: () => void; onDec: () => void; onRemove: () => void; maxCopies: number
 }) {
+  const limit = copyLimit(card, maxCopies)
   return (
     <div className="flex items-center gap-2 px-4 py-2">
       {card.imageSmall
@@ -787,9 +794,9 @@ function DeckCardRow({ card, qty, onInc, onDec, onRemove, maxCopies }: {
           <Minus className="w-3 h-3" />
         </button>
         <span className="w-6 text-center font-black text-sm" style={{ color: C.navy }}>{qty}</span>
-        <button onClick={onInc} disabled={qty >= maxCopies}
+        <button onClick={onInc} disabled={qty >= limit}
           className="w-6 h-6 rounded-lg flex items-center justify-center disabled:opacity-40"
-          style={{ backgroundColor: qty >= maxCopies ? '#e5e7eb' : `${C.blue}20`, color: C.blue2 }}>
+          style={{ backgroundColor: qty >= limit ? '#e5e7eb' : `${C.blue}20`, color: C.blue2 }}>
           <Plus className="w-3 h-3" />
         </button>
         <button onClick={onRemove} className="w-6 h-6 rounded-lg flex items-center justify-center ml-1" style={{ color: '#9CA3AF' }}>
@@ -836,7 +843,8 @@ export default function DeckBuilderPage() {
   function addCard(cache: CardCache) {
     const existing = cards.find(c => c.id === cardKey(cache))
     if (existing) {
-      if (existing.quantity >= maxCopies) { toast(`Máximo de ${maxCopies} cópias!`, { icon: '⚠️' }); return }
+      const limit = copyLimit(cache, maxCopies)
+      if (existing.quantity >= limit) { toast(`Máximo de ${limit} cópias!`, { icon: '⚠️' }); return }
       setCards(prev => prev.map(c => c.id === cardKey(cache) ? { ...c, quantity: c.quantity + 1 } : c))
     } else {
       if (totalCards >= maxCards) { toast(`Deck cheio! (${maxCards} cartas)`, { icon: '⚠️' }); return }
@@ -855,14 +863,15 @@ export default function DeckBuilderPage() {
       const merged = [...prev]
       for (const imp of imported) {
         const ex = merged.find(c => c.id === imp.id)
-        if (ex) ex.quantity = Math.min(ex.quantity + imp.quantity, maxCopies)
-        else merged.push({ ...imp, quantity: Math.min(imp.quantity, maxCopies) })
+        const limit = copyLimit(imp, maxCopies)
+        if (ex) ex.quantity = Math.min(ex.quantity + imp.quantity, limit)
+        else merged.push({ ...imp, quantity: Math.min(imp.quantity, limit) })
       }
       return merged
     })
   }
 
-  function incCard(id: string)    { setCards(prev => prev.map(c => c.id === id && c.quantity < maxCopies ? { ...c, quantity: c.quantity + 1 } : c)) }
+  function incCard(id: string)    { setCards(prev => prev.map(c => c.id === id && c.quantity < copyLimit(c, maxCopies) ? { ...c, quantity: c.quantity + 1 } : c)) }
   function decCard(id: string)    { setCards(prev => prev.map(c => c.id === id ? { ...c, quantity: Math.max(1, c.quantity - 1) } : c)) }
   function removeCard(id: string) { setCards(prev => prev.filter(c => c.id !== id)) }
 
