@@ -458,6 +458,19 @@ using (var scope = app.Services.CreateScope())
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token        VARCHAR(200) NULL;
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expiry TIMESTAMPTZ  NULL;
 
+                CREATE TABLE IF NOT EXISTS product_variants (
+                    id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
+                    product_id      UUID         NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+                    size            VARCHAR(50)  NULL,
+                    color           VARCHAR(100) NULL,
+                    stock_quantity  INTEGER      NOT NULL DEFAULT 0,
+                    price_in_cents  INTEGER      NULL,
+                    sku             VARCHAR(100) NULL,
+                    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+                    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+                );
+                CREATE INDEX IF NOT EXISTS ix_product_variants_product ON product_variants (product_id);
+
                 ALTER TABLE comanda_items ADD COLUMN IF NOT EXISTS variant_id UUID NULL REFERENCES product_variants(id) ON DELETE SET NULL;
                 ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_nome VARCHAR(255) NULL;
                 ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_dados BYTEA NULL;
@@ -543,19 +556,6 @@ using (var scope = app.Services.CreateScope())
 
                 -- Variantes de produto (grade tamanho/cor para roupas e similares)
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS has_variants BOOLEAN NOT NULL DEFAULT FALSE;
-
-                CREATE TABLE IF NOT EXISTS product_variants (
-                    id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                    product_id      UUID         NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                    size            VARCHAR(50)  NULL,
-                    color           VARCHAR(100) NULL,
-                    stock_quantity  INTEGER      NOT NULL DEFAULT 0,
-                    price_in_cents  INTEGER      NULL,
-                    sku             VARCHAR(100) NULL,
-                    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-                );
-                CREATE INDEX IF NOT EXISTS ix_product_variants_product ON product_variants (product_id);
 
                 -- Reservas de produtos via site (não usadas no PDV)
                 CREATE TABLE IF NOT EXISTS product_reservations (
