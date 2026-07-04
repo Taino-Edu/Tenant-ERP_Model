@@ -252,7 +252,7 @@ public class InterSyncService
         using var http = BuildMtlsClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var url = $"https://cdpj.partners.bancointer.com.br/banking/v3/extrato?dataInicio={inicio:yyyy-MM-dd}&dataFim={fim:yyyy-MM-dd}";
+        var url = $"https://cdpj.partners.bancointer.com.br/banking/v2/extrato?dataInicio={inicio:yyyy-MM-dd}&dataFim={fim:yyyy-MM-dd}";
         var resp = await http.GetAsync(url);
         resp.EnsureSuccessStatusCode();
 

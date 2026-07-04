@@ -66,6 +66,7 @@ export default function IntegracoesPage() {
   const [configModal, setConfigModal] = useState<ConfigModal | null>(null)
   const [saving,      setSaving]      = useState(false)
   const [ofxLoading,  setOfxLoading]  = useState(false)
+  const [syncingInter, setSyncingInter] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -131,6 +132,19 @@ export default function IntegracoesPage() {
       load()
     } catch { toast.error('Erro ao salvar') }
     finally { setSaving(false) }
+  }
+
+  async function syncInterAgora() {
+    setSyncingInter(true)
+    try {
+      const { data } = await api.post('/api/contas-receber/integracoes/inter/sync')
+      toast.success(`${data.imported} transação(ões) importada(s)${data.duplicates ? `, ${data.duplicates} já existiam` : ''}.`)
+      load()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao sincronizar — confira Client ID/Secret e certificado.')
+    } finally {
+      setSyncingInter(false)
+    }
   }
 
   async function handleOfxUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -229,6 +243,16 @@ export default function IntegracoesPage() {
                       <Settings className="w-3.5 h-3.5" />
                       {isReady ? 'Reconfigurar' : 'Configurar'}
                     </button>
+                    {int.source === 'inter' && isReady && (
+                      <button
+                        onClick={syncInterAgora}
+                        disabled={syncingInter}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30
+                                   border border-brand-500/30 text-sm text-brand-300 transition-colors disabled:opacity-50">
+                        {syncingInter ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        {syncingInter ? 'Sincronizando…' : 'Sincronizar agora'}
+                      </button>
+                    )}
                     {info.docs && (
                       <a href={info.docs} target="_blank" rel="noopener noreferrer"
                         className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300">
