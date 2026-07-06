@@ -8,7 +8,7 @@ import {
   Wallet, Plus, Upload, RefreshCw, Loader2,
   ChevronLeft, ChevronRight, CheckCircle, Clock,
   AlertTriangle, TrendingDown, TrendingUp, DollarSign,
-  X, Pencil, Trash2, FileText,
+  X, Pencil, Trash2, FileText, Inbox,
 } from 'lucide-react'
 
 type Transaction = {
@@ -30,6 +30,29 @@ type Summary = {
   aPagar:   { total: number; atrasado: number; vence7d: number; qtd: number }
   aReceber: { total: number; qtd: number }
   pagoMes:  number
+}
+
+type NotaDestinada = {
+  id: string
+  chaveAcesso: string
+  emitenteCnpj?: string
+  emitenteNome?: string
+  valor: number
+  dataEmissao?: string
+  status: string
+  contasGeradas: number
+  cienciaEm?: string
+  erro?: string
+  createdAt: string
+}
+
+type SefazStatus = {
+  configured: boolean
+  ativa: boolean
+  ambiente?: string
+  ultimoNsu: number
+  lastSyncAt?: string
+  notas: { resumo: number; ciencia: number; xmlBaixado: number; contasGeradas: number; canceladas: number }
 }
 
 const STATUS_OPTS = [
@@ -194,8 +217,148 @@ function TransactionModal({ initial, onClose, onSaved }: {
   )
 }
 
+// ── Aba: Notas Recebidas (NF-e de fornecedores via Manifestação do Destinatário)
+const notaStatusInfo: Record<string, { label: string; cls: string }> = {
+  resumo:         { label: 'Aguardando ciência', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+  ciencia:        { label: 'Aguardando XML',     cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  xml_baixado:    { label: 'Processando',        cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+  contas_geradas: { label: 'Contas geradas',     cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+  cancelada:      { label: 'Cancelada',          cls: 'bg-gray-500/15 text-gray-400 border-gray-500/30' },
+}
+
+function NotasRecebidasTab() {
+  const [notas,   setNotas]   = useState<NotaDestinada[]>([])
+  const [status,  setStatus]  = useState<SefazStatus | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [{ data: st }, { data: ns }] = await Promise.all([
+        api.get('/api/contas-receber/sefaz-status'),
+        api.get('/api/contas-receber/notas-destinadas'),
+      ])
+      setStatus(st)
+      setNotas(ns)
+    } catch { toast.error('Erro ao carregar notas recebidas') }
+    finally  { setLoading(false) }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function syncAgora() {
+    setSyncing(true)
+    try {
+      const { data } = await api.post('/api/contas-receber/sefaz/sync')
+      toast.success(
+        `${data.novasNotas} nota(s) nova(s), ${data.manifestadas} ciência(s), ${data.contasCriadas} conta(s) a pagar.`,
+        { duration: 6000 },
+      )
+      if (data.mensagem) toast(data.mensagem, { duration: 8000 })
+      load()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao sincronizar com a SEFAZ.')
+    } finally { setSyncing(false) }
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-brand-400" /></div>
+  }
+
+  return (
+    <div>
+      {/* Status da integração */}
+      {status && !status.configured ? (
+        <div className="card p-4 mb-4 flex items-start gap-3 border-amber-500/30 bg-amber-500/5">
+          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-bold text-amber-400">Integração SEFAZ não configurada</p>
+            <p className="text-gray-400 mt-0.5">
+              Configure o certificado A1 e os dados da empresa em <span className="text-gray-300">Admin → Fiscal</span>,
+              depois ative a integração em <span className="text-gray-300">Admin → Integrações</span>.
+            </p>
+          </div>
+        </div>
+      ) : status && (
+        <div className="card p-4 mb-4 flex items-center gap-4 flex-wrap">
+          <div className="text-sm">
+            <p className="text-xs text-gray-500 font-semibold">Consulta automática</p>
+            <p className={clsx('font-bold', status.ativa ? 'text-green-400' : 'text-amber-400')}>
+              {status.ativa ? 'Ativa (a cada 2h)' : 'Desativada'}
+            </p>
+          </div>
+          <div className="text-sm">
+            <p className="text-xs text-gray-500 font-semibold">Última sincronização</p>
+            <p className="text-gray-300">{status.lastSyncAt ? fmtDate(status.lastSyncAt) : 'nunca'}</p>
+          </div>
+          <div className="text-sm">
+            <p className="text-xs text-gray-500 font-semibold">Último NSU</p>
+            <p className="text-gray-300 font-mono">{status.ultimoNsu}</p>
+          </div>
+          {status.ambiente === 'Homologacao' && (
+            <span className="text-xs text-amber-400 bg-amber-500/10 rounded-lg px-2 py-1">
+              Ambiente de homologação — a SEFAZ não devolve notas reais
+            </span>
+          )}
+          <button onClick={syncAgora} disabled={syncing}
+            className="ml-auto flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-500 hover:bg-brand-400
+                       text-white text-sm font-semibold transition-colors disabled:opacity-50">
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            {syncing ? 'Consultando SEFAZ…' : 'Sincronizar agora'}
+          </button>
+        </div>
+      )}
+
+      {/* Lista de notas */}
+      {notas.length === 0 ? (
+        <div className="text-center py-16 text-gray-500">
+          <Inbox className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p>Nenhuma NF-e recebida ainda</p>
+          <p className="text-xs mt-1">Notas emitidas por fornecedores contra o CNPJ da loja aparecem aqui automaticamente</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {notas.map(n => {
+            const st = notaStatusInfo[n.status] ?? { label: n.status, cls: 'bg-gray-500/15 text-gray-400 border-gray-500/30' }
+            return (
+              <div key={n.id} className="card flex items-center gap-3 p-3">
+                <div className="w-9 h-9 rounded-xl bg-brand-500/10 flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 text-brand-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-white text-sm truncate">
+                    {n.emitenteNome ?? 'Fornecedor não identificado'}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-xs text-gray-500 font-mono truncate" title={n.chaveAcesso}>
+                      {n.chaveAcesso.slice(0, 6)}…{n.chaveAcesso.slice(-8)}
+                    </span>
+                    {n.dataEmissao && <span className="text-xs text-gray-500">· Emitida {fmtDate(n.dataEmissao)}</span>}
+                    {n.contasGeradas > 0 && (
+                      <span className="text-xs text-green-400">· {n.contasGeradas} conta{n.contasGeradas !== 1 ? 's' : ''} a pagar</span>
+                    )}
+                  </div>
+                  {n.erro && <p className="text-xs text-red-400 mt-0.5 truncate" title={n.erro}>{n.erro}</p>}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="font-black text-base text-white">{fmtMoney(n.valor)}</p>
+                  <span className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded-full border', st.cls)}>
+                    {st.label}
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function ContasReceberPage() {
+  const [tab,         setTab]         = useState<'lancamentos' | 'notas'>('lancamentos')
   const [items,       setItems]       = useState<Transaction[]>([])
   const [summary,     setSummary]     = useState<Summary | null>(null)
   const [loading,     setLoading]     = useState(true)
@@ -297,26 +460,46 @@ export default function ContasReceberPage() {
           <h1 className="text-xl font-black text-white">Contas a Receber / Pagar</h1>
           <p className="text-sm text-gray-400">{totalCount} lançamentos</p>
         </div>
-        <div className="ml-auto flex items-center gap-2 flex-wrap">
-          {/* Upload OFX */}
-          <label className={clsx(
-            'flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-700 hover:bg-surface-500',
-            'border border-surface-600 text-sm text-gray-300 cursor-pointer transition-colors',
-            ofxLoading && 'opacity-60 pointer-events-none')}>
-            {ofxLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            {ofxLoading ? 'Importando…' : 'Importar OFX'}
-            <input type="file" accept=".ofx,.OFX" className="hidden" onChange={handleOfxUpload} />
-          </label>
-          <button onClick={() => setCreateModal(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-500 hover:bg-brand-400
-                       text-white text-sm font-semibold transition-colors">
-            <Plus className="w-4 h-4" /> Novo lançamento
-          </button>
-        </div>
+        {tab === 'lancamentos' && (
+          <div className="ml-auto flex items-center gap-2 flex-wrap">
+            {/* Upload OFX */}
+            <label className={clsx(
+              'flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-700 hover:bg-surface-500',
+              'border border-surface-600 text-sm text-gray-300 cursor-pointer transition-colors',
+              ofxLoading && 'opacity-60 pointer-events-none')}>
+              {ofxLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {ofxLoading ? 'Importando…' : 'Importar OFX'}
+              <input type="file" accept=".ofx,.OFX" className="hidden" onChange={handleOfxUpload} />
+            </label>
+            <button onClick={() => setCreateModal(true)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-brand-500 hover:bg-brand-400
+                         text-white text-sm font-semibold transition-colors">
+              <Plus className="w-4 h-4" /> Novo lançamento
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Abas */}
+      <div className="flex gap-2 mb-6">
+        {([
+          { id: 'lancamentos', label: 'Lançamentos',     icon: <Wallet className="w-4 h-4" /> },
+          { id: 'notas',       label: 'Notas Recebidas', icon: <Inbox  className="w-4 h-4" /> },
+        ] as const).map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={clsx('flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-colors',
+              tab === t.id
+                ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
+                : 'bg-surface-700 text-gray-400 border-surface-600 hover:text-gray-300')}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'notas' && <NotasRecebidasTab />}
+
       {/* Cards resumo */}
-      {summary && (
+      {tab === 'lancamentos' && summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           <div className="card p-4 flex flex-col gap-1">
             <div className="flex items-center gap-2 text-xs text-gray-400 font-semibold">
@@ -352,6 +535,7 @@ export default function ContasReceberPage() {
       )}
 
       {/* Filtros */}
+      {tab === 'lancamentos' && (
       <div className="flex gap-2 flex-wrap mb-4">
         {TYPE_OPTS.map(o => (
           <button key={o.value} onClick={() => { setTypeFilter(o.value); setPage(1) }}
@@ -376,9 +560,10 @@ export default function ContasReceberPage() {
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
+      )}
 
       {/* Lista */}
-      {loading ? (
+      {tab === 'lancamentos' && (loading ? (
         <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-brand-400" /></div>
       ) : items.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
@@ -451,10 +636,10 @@ export default function ContasReceberPage() {
             )
           })}
         </div>
-      )}
+      ))}
 
       {/* Paginação */}
-      {totalPages > 1 && (
+      {tab === 'lancamentos' && totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 mt-6">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
             className="p-2 rounded-lg bg-surface-700 disabled:opacity-40">

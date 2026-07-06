@@ -359,6 +359,7 @@ builder.Services.AddScoped<INfceEmissionService, NfceEmissionService>();
 builder.Services.AddHostedService<FiscalAlertBackgroundService>();
 builder.Services.AddHostedService<FiscalXmlExportBackgroundService>();
 builder.Services.AddHostedService<FiscalRetryBackgroundService>();
+builder.Services.AddHostedService<SefazDistBackgroundService>();
 
 // ---------------------------------------------------------------------------
 // 12. CORS — origens lidas de config para facilitar deploy sem rebuild
@@ -763,6 +764,30 @@ using (var scope = app.Services.CreateScope())
                     created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS ix_push_subscriptions_endpoint ON push_subscriptions (endpoint);
+
+                -- Fiscal: Manifestação do Destinatário (DDA) — NF-e destinadas ao CNPJ da loja
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS dist_ultimo_nsu BIGINT NOT NULL DEFAULT 0;
+
+                CREATE TABLE IF NOT EXISTS notas_destinadas (
+                    id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+                    chave_acesso      VARCHAR(44)   NOT NULL,
+                    nsu               BIGINT        NOT NULL DEFAULT 0,
+                    emitente_cnpj     VARCHAR(14)   NULL,
+                    emitente_nome     VARCHAR(150)  NULL,
+                    valor             NUMERIC(12,2) NOT NULL DEFAULT 0,
+                    data_emissao      TIMESTAMPTZ   NULL,
+                    situacao          INTEGER       NOT NULL DEFAULT 1,
+                    status            VARCHAR(30)   NOT NULL DEFAULT 'resumo',
+                    ciencia_protocolo VARCHAR(30)   NULL,
+                    ciencia_em        TIMESTAMPTZ   NULL,
+                    xml_proc          TEXT          NULL,
+                    contas_geradas    INTEGER       NOT NULL DEFAULT 0,
+                    erro              VARCHAR(500)  NULL,
+                    created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+                    updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_notas_destinadas_chave  ON notas_destinadas (chave_acesso);
+                CREATE INDEX IF NOT EXISTS ix_notas_destinadas_status        ON notas_destinadas (status);
             ");
         }
 

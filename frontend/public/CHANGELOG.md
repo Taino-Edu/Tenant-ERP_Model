@@ -1,5 +1,23 @@
 # Changelog — Santuário Nerd
 
+## [v1.13.0] — 2026-07-06
+
+### Adicionado
+- **Manifestação do Destinatário ("DDA" fiscal)**: o sistema agora descobre automaticamente as NF-e que fornecedores emitem contra o CNPJ da loja, direto na SEFAZ (DFe Distribuição) — sem digitar nada
+- **Contas a pagar automáticas**: as duplicatas (`<dup>`) do XML da NF-e viram lançamentos "a pagar" no financeiro, com vencimento, valor, parcela e fornecedor preenchidos; compras à vista geram lançamento único pelo total da nota
+- **Aba "Notas Recebidas"** em `/admin/contas-receber`: lista as NF-e destinadas com status do pipeline (aguardando ciência → aguardando XML → contas geradas), botão "Sincronizar agora" e status da consulta automática
+- **Ciência da Operação automática**: evento oficial 210210 registrado em lote na SEFAZ para liberar o download do XML completo
+- **Cancelamento propagado**: se o fornecedor cancelar a NF-e, as contas a pagar pendentes dela são canceladas automaticamente
+- Card SEFAZ em `/admin/integracoes` com botão de sincronização manual e orientação de configuração
+
+### Técnico
+- Job em background a cada 2h (`SefazDistBackgroundService`), com tratamento de consumo indevido (cStat 656) e NSU incremental persistido por lote
+- Novas: tabela `notas_destinadas` e coluna `dist_ultimo_nsu` em `fiscal_config` (criadas no startup)
+- Reuso do certificado A1 criptografado e do `Zeus.Net.NFe.NFCe` já existentes — nenhuma dependência nova
+- Deduplicação de contas por chave de acesso + número da duplicata (índice único existente em `external_transactions`)
+
+---
+
 ## [v1.12.0] — 2026-07-06
 
 ### Adicionado

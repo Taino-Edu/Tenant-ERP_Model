@@ -67,6 +67,7 @@ export default function IntegracoesPage() {
   const [saving,      setSaving]      = useState(false)
   const [ofxLoading,  setOfxLoading]  = useState(false)
   const [syncingInter, setSyncingInter] = useState(false)
+  const [syncingSefaz, setSyncingSefaz] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -144,6 +145,23 @@ export default function IntegracoesPage() {
       toast.error(err?.response?.data?.message ?? 'Erro ao sincronizar — confira Client ID/Secret e certificado.')
     } finally {
       setSyncingInter(false)
+    }
+  }
+
+  async function syncSefazAgora() {
+    setSyncingSefaz(true)
+    try {
+      const { data } = await api.post('/api/contas-receber/sefaz/sync')
+      toast.success(
+        `${data.novasNotas} nota(s) nova(s), ${data.manifestadas} ciência(s), ${data.contasCriadas} conta(s) a pagar.`,
+        { duration: 6000 },
+      )
+      if (data.mensagem) toast(data.mensagem, { duration: 8000 })
+      load()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao sincronizar com a SEFAZ.')
+    } finally {
+      setSyncingSefaz(false)
     }
   }
 
@@ -228,10 +246,16 @@ export default function IntegracoesPage() {
                     <p className="text-xs text-gray-500 mt-0.5">Chave Pix: {int.pixKey}</p>
                   )}
 
-                  {int.source === 'sefaz' && !sefazOk && int.cnpj && (
+                  {int.source === 'sefaz' && !sefazOk && (
                     <div className="flex items-center gap-2 mt-2 text-amber-400 text-xs bg-amber-500/10 rounded-lg p-2">
                       <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                      CNPJ configurado. Aguardando certificado digital A1 para ativar consulta automática.
+                      Requer certificado A1 e CNPJ/UF configurados em Admin → Fiscal.
+                    </div>
+                  )}
+                  {int.source === 'sefaz' && sefazOk && !int.isActive && (
+                    <div className="flex items-center gap-2 mt-2 text-amber-400 text-xs bg-amber-500/10 rounded-lg p-2">
+                      <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                      Certificado ok. Clique em Configurar e salve para ativar a consulta automática (a cada 2h).
                     </div>
                   )}
 
@@ -251,6 +275,16 @@ export default function IntegracoesPage() {
                                    border border-brand-500/30 text-sm text-brand-300 transition-colors disabled:opacity-50">
                         {syncingInter ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                         {syncingInter ? 'Sincronizando…' : 'Sincronizar agora'}
+                      </button>
+                    )}
+                    {int.source === 'sefaz' && sefazOk && (
+                      <button
+                        onClick={syncSefazAgora}
+                        disabled={syncingSefaz}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30
+                                   border border-brand-500/30 text-sm text-brand-300 transition-colors disabled:opacity-50">
+                        {syncingSefaz ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        {syncingSefaz ? 'Consultando SEFAZ…' : 'Sincronizar agora'}
                       </button>
                     )}
                     {info.docs && (

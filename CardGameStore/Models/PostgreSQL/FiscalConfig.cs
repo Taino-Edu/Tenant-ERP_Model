@@ -143,6 +143,14 @@ public class FiscalConfig
     [Column("ultimo_envio_mensal_xmls")]
     public DateTime? UltimoEnvioMensalXmls { get; set; }
 
+    /// <summary>
+    /// Último NSU consumido do DFe Distribuição (notas destinadas ao CNPJ da loja).
+    /// A próxima consulta continua deste ponto — nunca zerar em produção, senão a SEFAZ
+    /// reenvia todo o histórico e pode bloquear por consumo indevido (cStat 656).
+    /// </summary>
+    [Column("dist_ultimo_nsu")]
+    public long DistUltimoNsu { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

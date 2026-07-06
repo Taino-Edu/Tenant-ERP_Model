@@ -65,6 +65,9 @@ public class AppDbContext : DbContext
     public DbSet<NaturezaOperacao>   NaturezasOperacao    { get; set; }
     public DbSet<NotaFiscalEmitida>  NotasFiscaisEmitidas { get; set; }
 
+    // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
+    public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------

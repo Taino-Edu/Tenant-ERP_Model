@@ -281,8 +281,71 @@ public class ContasReceberController : ControllerBase
 
     // ── GET /api/contas-receber/sefaz-status ──────────────────────────────────
     [HttpGet("sefaz-status")]
-    public IActionResult SefazStatus() =>
-        Ok(new { configured = _sefaz.IsConfigured });
+    public async Task<IActionResult> SefazStatus()
+    {
+        var fiscal     = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
+        var integracao = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "sefaz");
+
+        var porStatus = await _db.NotasDestinadas
+            .GroupBy(n => n.Status)
+            .Select(g => new { Status = g.Key, Qtd = g.Count() })
+            .ToDictionaryAsync(x => x.Status, x => x.Qtd);
+
+        return Ok(new
+        {
+            configured  = await _sefaz.IsConfiguredAsync(),
+            ativa       = integracao?.IsActive ?? false,
+            ambiente    = fiscal?.Ambiente.ToString(),
+            ultimoNsu   = fiscal?.DistUltimoNsu ?? 0,
+            lastSyncAt  = integracao?.LastSyncAt,
+            notas = new
+            {
+                resumo        = porStatus.GetValueOrDefault(NotaDestinadaStatus.Resumo),
+                ciencia       = porStatus.GetValueOrDefault(NotaDestinadaStatus.Ciencia),
+                xmlBaixado    = porStatus.GetValueOrDefault(NotaDestinadaStatus.XmlBaixado),
+                contasGeradas = porStatus.GetValueOrDefault(NotaDestinadaStatus.ContasGeradas),
+                canceladas    = porStatus.GetValueOrDefault(NotaDestinadaStatus.Cancelada),
+            },
+        });
+    }
+
+    // ── POST /api/contas-receber/sefaz/sync — sincronização manual ────────────
+    [HttpPost("sefaz/sync")]
+    public async Task<IActionResult> SefazSync(CancellationToken ct)
+    {
+        var result = await _sefaz.SincronizarAsync(ct);
+        if (!result.Executado)
+            return BadRequest(new { message = result.Mensagem });
+        return Ok(new
+        {
+            novasNotas    = result.NovasNotas,
+            manifestadas  = result.Manifestadas,
+            xmlsBaixados  = result.XmlsBaixados,
+            contasCriadas = result.ContasCriadas,
+            mensagem      = result.Mensagem,
+        });
+    }
+
+    // ── GET /api/contas-receber/notas-destinadas — NF-e recebidas ─────────────
+    [HttpGet("notas-destinadas")]
+    public async Task<IActionResult> NotasDestinadas([FromQuery] string? status = null)
+    {
+        var q = _db.NotasDestinadas.AsQueryable();
+        if (!string.IsNullOrWhiteSpace(status)) q = q.Where(n => n.Status == status);
+
+        var notas = await q
+            .OrderByDescending(n => n.DataEmissao ?? n.CreatedAt)
+            .Take(200)
+            .Select(n => new
+            {
+                n.Id, n.ChaveAcesso, n.EmitenteCnpj, n.EmitenteNome,
+                n.Valor, n.DataEmissao, n.Status, n.ContasGeradas,
+                n.CienciaEm, n.Erro, n.CreatedAt,
+            })
+            .ToListAsync();
+
+        return Ok(notas);
+    }
 
     // ── POST /api/contas-receber/integracoes/inter/sync — sincronização manual ─
     [HttpPost("integracoes/inter/sync")]
