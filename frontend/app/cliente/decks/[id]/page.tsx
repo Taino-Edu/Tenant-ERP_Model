@@ -1,11 +1,11 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { deckApi, tcgApi, CardCache, DeckCard, TcgSet, TcgSearchParams } from '@/lib/api'
+import { deckApi, tcgApi, userApi, CardCache, DeckCard, TcgSet, TcgSearchParams } from '@/lib/api'
 import {
   Search, Plus, Minus, Trash2, Save, Loader2,
   ArrowLeft, Globe, Lock, Zap, Upload, X, Camera,
-  ChevronDown, SlidersHorizontal, RefreshCw,
+  ChevronDown, SlidersHorizontal, RefreshCw, Eye,
 } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 
@@ -776,8 +776,9 @@ function CardSearchModal({ game, onAdd, onImport, deckCards, onClose, maxCopies,
 }
 
 // ── Linha de carta no deck ────────────────────────────────────────────────────
-function DeckCardRow({ card, qty, onInc, onDec, onRemove, maxCopies }: {
+function DeckCardRow({ card, qty, onInc, onDec, onRemove, maxCopies, readOnly }: {
   card: DeckCard; qty: number; onInc: () => void; onDec: () => void; onRemove: () => void; maxCopies: number
+  readOnly?: boolean
 }) {
   const limit = copyLimit(card, maxCopies)
   return (
@@ -789,20 +790,24 @@ function DeckCardRow({ card, qty, onInc, onDec, onRemove, maxCopies }: {
         <p className="text-xs font-bold truncate" style={{ color: C.navy }}>{card.name}</p>
         <p className="text-[10px]" style={{ color: C.muted }}>{card.setCode} {card.number}</p>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <button onClick={onDec} className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>
-          <Minus className="w-3 h-3" />
-        </button>
-        <span className="w-6 text-center font-black text-sm" style={{ color: C.navy }}>{qty}</span>
-        <button onClick={onInc} disabled={qty >= limit}
-          className="w-6 h-6 rounded-lg flex items-center justify-center disabled:opacity-40"
-          style={{ backgroundColor: qty >= limit ? '#e5e7eb' : `${C.blue}20`, color: C.blue2 }}>
-          <Plus className="w-3 h-3" />
-        </button>
-        <button onClick={onRemove} className="w-6 h-6 rounded-lg flex items-center justify-center ml-1" style={{ color: '#9CA3AF' }}>
-          <Trash2 className="w-3 h-3" />
-        </button>
-      </div>
+      {readOnly ? (
+        <span className="w-6 text-center font-black text-sm shrink-0" style={{ color: C.navy }}>{qty}</span>
+      ) : (
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={onDec} className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#FEE2E2', color: '#DC2626' }}>
+            <Minus className="w-3 h-3" />
+          </button>
+          <span className="w-6 text-center font-black text-sm" style={{ color: C.navy }}>{qty}</span>
+          <button onClick={onInc} disabled={qty >= limit}
+            className="w-6 h-6 rounded-lg flex items-center justify-center disabled:opacity-40"
+            style={{ backgroundColor: qty >= limit ? '#e5e7eb' : `${C.blue}20`, color: C.blue2 }}>
+            <Plus className="w-3 h-3" />
+          </button>
+          <button onClick={onRemove} className="w-6 h-6 rounded-lg flex items-center justify-center ml-1" style={{ color: '#9CA3AF' }}>
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -822,14 +827,22 @@ export default function DeckBuilderPage() {
   const [loading,  setLoading]  = useState(!isNew)
   const [brlRate,  setBrlRate]  = useState<number | null>(null)
   const [showPicker, setShowPicker] = useState(false)
+  const [ownerId,     setOwnerId]     = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  // Somente leitura quando quem está vendo não é o dono do deck (ex: admin conferindo
+  // o deck de um participante de campeonato) — o backend já bloqueia salvar nesse caso,
+  // isso só evita mostrar controles de edição que nunca vão funcionar.
+  const readOnly = !isNew && !!ownerId && !!currentUserId && ownerId !== currentUserId
 
   useEffect(() => {
     if (isNew) return
     deckApi.get(id).then(r => {
       setDeckName(r.data.name); setGame(r.data.game); setFormat(r.data.format)
-      setIsPublic(r.data.isPublic)
+      setIsPublic(r.data.isPublic); setOwnerId(r.data.userId)
       try { setCards(JSON.parse(r.data.cardsJson)) } catch { setCards([]) }
     }).catch(() => toast.error('Deck não encontrado.')).finally(() => setLoading(false))
+    userApi.me().then(r => setCurrentUserId(r.data.id)).catch(() => {})
   }, [id, isNew])
 
   useEffect(() => {
@@ -926,24 +939,32 @@ export default function DeckBuilderPage() {
             <button onClick={() => router.push('/cliente/decks')} className="text-white/60 hover:text-white">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <input value={deckName} onChange={e => setDeckName(e.target.value)}
+            <input value={deckName} onChange={e => setDeckName(e.target.value)} disabled={readOnly}
               placeholder="Nome do deck..." maxLength={100}
-              className="flex-1 bg-transparent text-white font-black text-lg placeholder-white/40 outline-none" />
-            <button onClick={() => setIsPublic(v => !v)}
-              className="p-2 rounded-lg" title={isPublic ? 'Público' : 'Privado'}
-              style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: isPublic ? C.yellow : 'rgba(255,255,255,0.5)' }}>
-              {isPublic ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-            </button>
+              className="flex-1 bg-transparent text-white font-black text-lg placeholder-white/40 outline-none disabled:opacity-80" />
+            {!readOnly && (
+              <button onClick={() => setIsPublic(v => !v)}
+                className="p-2 rounded-lg" title={isPublic ? 'Público' : 'Privado'}
+                style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: isPublic ? C.yellow : 'rgba(255,255,255,0.5)' }}>
+                {isPublic ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              </button>
+            )}
           </div>
+          {readOnly && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+              <Eye className="w-3.5 h-3.5 text-white/70 shrink-0" />
+              <span className="text-xs text-white/70 font-semibold">Somente leitura — você não é o dono deste deck.</span>
+            </div>
+          )}
           <div className="flex gap-2 overflow-x-auto pb-1">
-            <select value={game}
+            <select value={game} disabled={readOnly}
               onChange={e => { setGame(e.target.value); setFormat(FORMATS[e.target.value]?.[0] ?? 'Standard') }}
-              className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border-0 outline-none"
+              className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border-0 outline-none disabled:opacity-70"
               style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}>
               {GAMES.map(g => <option key={g} value={g} style={{ color: C.navy }}>{g}</option>)}
             </select>
-            <select value={format} onChange={e => setFormat(e.target.value)}
-              className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border-0 outline-none"
+            <select value={format} disabled={readOnly} onChange={e => setFormat(e.target.value)}
+              className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold border-0 outline-none disabled:opacity-70"
               style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}>
               {(FORMATS[game] ?? ['Standard']).map(f => <option key={f} value={f} style={{ color: C.navy }}>{f}</option>)}
             </select>
@@ -959,13 +980,15 @@ export default function DeckBuilderPage() {
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-3 pb-32">
         {/* Botão abre picker */}
-        <button onClick={() => setShowPicker(true)}
-          className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-[0.98]"
-          style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)' }}>
-          <Search className="w-5 h-5 shrink-0" style={{ color: C.blue }} />
-          <span className="flex-1 text-left text-sm" style={{ color: C.muted }}>Buscar cartas para adicionar...</span>
-          <Plus className="w-5 h-5 shrink-0" style={{ color: C.blue }} />
-        </button>
+        {!readOnly && (
+          <button onClick={() => setShowPicker(true)}
+            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all active:scale-[0.98]"
+            style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 8px rgba(12,61,90,0.06)' }}>
+            <Search className="w-5 h-5 shrink-0" style={{ color: C.blue }} />
+            <span className="flex-1 text-left text-sm" style={{ color: C.muted }}>Buscar cartas para adicionar...</span>
+            <Plus className="w-5 h-5 shrink-0" style={{ color: C.blue }} />
+          </button>
+        )}
 
         {/* Lista do deck */}
         {cards.length === 0 ? (
@@ -992,7 +1015,7 @@ export default function DeckBuilderPage() {
                   {group.items.map(c => (
                     <DeckCardRow key={c.id} card={c} qty={c.quantity}
                       onInc={() => incCard(c.id)} onDec={() => decCard(c.id)}
-                      onRemove={() => removeCard(c.id)} maxCopies={maxCopies} />
+                      onRemove={() => removeCard(c.id)} maxCopies={maxCopies} readOnly={readOnly} />
                   ))}
                 </div>
               </div>
@@ -1015,12 +1038,19 @@ export default function DeckBuilderPage() {
                   </p>
                 )}
               </div>
-              <button onClick={save} disabled={saving}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm active:scale-95 disabled:opacity-60"
-                style={{ backgroundColor: C.yellow, color: C.navy }}>
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {isNew ? 'Criar deck' : 'Salvar'}
-              </button>
+              {readOnly ? (
+                <span className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-xs"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}>
+                  <Eye className="w-4 h-4" /> Somente leitura
+                </span>
+              ) : (
+                <button onClick={save} disabled={saving}
+                  className="flex items-center gap-2 px-6 py-3 rounded-xl font-black text-sm active:scale-95 disabled:opacity-60"
+                  style={{ backgroundColor: C.yellow, color: C.navy }}>
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {isNew ? 'Criar deck' : 'Salvar'}
+                </button>
+              )}
             </div>
           </div>
         </div>
