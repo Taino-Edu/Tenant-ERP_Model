@@ -16,10 +16,10 @@ public class PushService : IPushService
     public PushService(AppDbContext db, IConfiguration config, ILogger<PushService> logger)
     { _db = db; _config = config; _logger = logger; }
 
-    public Task SendAsync(Guid userId, string title, string body, string? link = null)
-        => SendToManyAsync([userId], title, body, link);
+    public Task SendAsync(Guid userId, string title, string body, string? link = null, string? imageUrl = null)
+        => SendToManyAsync([userId], title, body, link, imageUrl);
 
-    public async Task SendToManyAsync(IEnumerable<Guid> userIds, string title, string body, string? link = null)
+    public async Task SendToManyAsync(IEnumerable<Guid> userIds, string title, string body, string? link = null, string? imageUrl = null)
     {
         var publicKey  = _config["Vapid:PublicKey"];
         var privateKey = _config["Vapid:PrivateKey"];
@@ -37,7 +37,7 @@ public class PushService : IPushService
 
         var client   = new WebPushClient();
         var vapid    = new VapidDetails(subject, publicKey, privateKey);
-        var payload  = JsonSerializer.Serialize(new { title, body, link });
+        var payload  = JsonSerializer.Serialize(new { title, body, link, image = imageUrl });
         var toRemove = new List<Models.PostgreSQL.PushSubscription>();
 
         foreach (var s in subs)

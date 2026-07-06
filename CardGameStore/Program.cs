@@ -751,6 +751,9 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE INDEX IF NOT EXISTS ix_notifications_user ON notifications (user_id);
 
+                -- Mensageria: imagem opcional na notificação (banner de campanha)
+                ALTER TABLE notifications ADD COLUMN IF NOT EXISTS image_url VARCHAR(500) NULL;
+
                 CREATE TABLE IF NOT EXISTS push_subscriptions (
                     id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
                     user_id    UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,

@@ -1200,7 +1200,7 @@ export const fiscalApi = {
 // ── Notificações in-app ───────────────────────────────────────────────────────
 
 export interface AppNotification {
-  id: string; title: string; body: string; link?: string
+  id: string; title: string; body: string; link?: string; imageUrl?: string
   createdAt: string; readAt?: string; isRead: boolean
 }
 
@@ -1224,7 +1224,7 @@ export const mensageriaApi = {
   clients:  () => api.get<MensageriaClient[]>('/api/admin/mensageria/clients'),
   segments: () => api.get<MensageriaSegment[]>('/api/admin/mensageria/segments'),
   send:     (body: {
-    title: string; body: string; link?: string
+    title: string; body: string; link?: string; imageUrl?: string
     channel: 'inapp' | 'email' | 'both'
     segment?: string; userIds?: string[]
   }) => api.post<{ message: string; inApp: number; emails: number; total: number }>('/api/admin/mensageria/send', body),

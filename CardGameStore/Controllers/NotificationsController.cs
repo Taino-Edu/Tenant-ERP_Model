@@ -44,7 +44,7 @@ public class NotificationsController : ControllerBase
             .ThenByDescending(n => n.CreatedAt)
             .Take(50)
             .Select(n => new {
-                n.Id, n.Title, n.Body, n.Link,
+                n.Id, n.Title, n.Body, n.Link, n.ImageUrl,
                 n.CreatedAt, n.ReadAt, n.IsRead
             })
             .ToListAsync();

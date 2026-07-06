@@ -171,14 +171,41 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, $"Chegou sua vez — {productName}", body);
     }
 
-    public async Task SendAnuncioAsync(IEnumerable<(string email, string name)> destinatarios, string titulo, string corpo)
+    public async Task<int> SendAnuncioAsync(IEnumerable<(string email, string name)> destinatarios, string titulo, string corpo,
+                                            string? imageUrl = null, string? link = null)
     {
+        var appUrl = (_config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://santuarionerd.tech").TrimEnd('/');
+
+        // Conteúdo vem de campos de texto livre do admin: escapa HTML e preserva quebras de linha.
+        var tituloHtml = WebUtility.HtmlEncode(titulo);
+        var corpoHtml  = WebUtility.HtmlEncode(corpo).Replace("\n", "<br/>");
+
+        string AbsoluteUrl(string url) =>
+            url.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? url : $"{appUrl}{(url.StartsWith('/') ? "" : "/")}{url}";
+
+        var imagemHtml = string.IsNullOrWhiteSpace(imageUrl) ? "" : $"""
+              <img src="{AbsoluteUrl(imageUrl)}" alt=""
+                   style="width:100%;max-width:520px;border-radius:12px;display:block;margin:0 0 16px 0"/>
+            """;
+
+        var botaoHtml = string.IsNullOrWhiteSpace(link) ? "" : $"""
+              <p style="margin:20px 0">
+                <a href="{AbsoluteUrl(link)}"
+                   style="display:inline-block;background:#7839F3;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:bold">
+                  Ver no site
+                </a>
+              </p>
+            """;
+
         var body = $"""
-            <div style="font-family:sans-serif;max-width:500px">
-              <h2 style="color:#7839F3">softNerd — {titulo}</h2>
-              <div style="margin:16px 0;color:#333">
-                {corpo}
+            <div style="font-family:sans-serif;max-width:520px">
+              {imagemHtml}
+              <h2 style="color:#7839F3;margin-top:0">{tituloHtml}</h2>
+              <div style="margin:16px 0;color:#333;line-height:1.6">
+                {corpoHtml}
               </div>
+              {botaoHtml}
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
               <p style="color:#888;font-size:12px">
                 Você recebe este email por ser cliente softNerd.<br/>
                 Dúvidas? Fale com o Maikon no balcão.
@@ -186,8 +213,53 @@ public class EmailService : IEmailService
             </div>
             """;
 
+        var host     = _config["SmtpSettings:Host"];
+        var portStr  = _config["SmtpSettings:Port"];
+        var user     = _config["SmtpSettings:Username"];
+        var password = _config["SmtpSettings:Password"];
+        var from     = _config["SmtpSettings:FromEmail"] ?? user;
+        var fromName = _config["SmtpSettings:FromName"] ?? "softNerd";
+
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
+        {
+            _logger.LogWarning("EmailService: SmtpSettings não configurado. Anúncio '{Titulo}' não foi enviado.", titulo);
+            return 0;
+        }
+
+        var port = int.TryParse(portStr, out var p) ? p : 587;
+        using var client = new SmtpClient(host, port)
+        {
+            Credentials    = new NetworkCredential(user, password),
+            EnableSsl      = true,
+            DeliveryMethod = SmtpDeliveryMethod.Network,
+        };
+
+        // Reutiliza a mesma conexão SMTP para o lote inteiro — falha em um
+        // destinatário não interrompe os demais.
+        var enviados = 0;
         foreach (var (email, name) in destinatarios)
-            await SendAsync(email, name, $"softNerd — {titulo}", body);
+        {
+            try
+            {
+                using var msg = new MailMessage
+                {
+                    From       = new MailAddress(from!, fromName),
+                    Subject    = $"softNerd — {titulo}",
+                    Body       = body,
+                    IsBodyHtml = true,
+                };
+                msg.To.Add(new MailAddress(email, name));
+                await client.SendMailAsync(msg);
+                enviados++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Falha ao enviar anúncio '{Titulo}' para {To}", titulo, email);
+            }
+        }
+
+        _logger.LogInformation("Anúncio '{Titulo}': {Ok} de {Total} e-mails enviados.", titulo, enviados, destinatarios.Count());
+        return enviados;
     }
 
     // ── LGPD ──────────────────────────────────────────────────────────────────

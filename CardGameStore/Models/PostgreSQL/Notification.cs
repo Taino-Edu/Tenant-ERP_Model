@@ -28,6 +28,10 @@ public class Notification
     [Column("link")]
     public string? Link { get; set; }
 
+    [MaxLength(500)]
+    [Column("image_url")]
+    public string? ImageUrl { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

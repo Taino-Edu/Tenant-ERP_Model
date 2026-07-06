@@ -86,6 +86,7 @@ public class MensageriaController : ControllerBase
                 Title     = req.Title,
                 Body      = req.Body,
                 Link      = req.Link,
+                ImageUrl  = req.ImageUrl,
                 CreatedAt = DateTime.UtcNow,
             }).ToList();
 
@@ -96,18 +97,19 @@ public class MensageriaController : ControllerBase
             // Dispara push browser (silencioso se VAPID não configurado)
             await _push.SendToManyAsync(
                 notifications.Select(n => n.UserId),
-                req.Title, req.Body, req.Link);
+                req.Title, req.Body, req.Link, req.ImageUrl);
         }
 
         // ── Email ─────────────────────────────────────────────────────────────────
         if (req.Channel is "email" or "both")
         {
             var withEmail = users.Where(u => !string.IsNullOrWhiteSpace(u.Email)).ToList();
-            await _email.SendAnuncioAsync(
+            emailSent = await _email.SendAnuncioAsync(
                 withEmail.Select(u => (u.Email!, u.Name)),
                 req.Title,
-                req.Body);
-            emailSent = withEmail.Count;
+                req.Body,
+                req.ImageUrl,
+                req.Link);
         }
 
         _log.LogInformation(
@@ -168,6 +170,8 @@ public class MensageriaRequest
     public string       Title    { get; set; } = string.Empty;
     public string       Body     { get; set; } = string.Empty;
     public string?      Link     { get; set; }
+    /// <summary>URL da imagem/banner exibida na notificação, push e e-mail.</summary>
+    public string?      ImageUrl { get; set; }
     /// <summary>"inapp" | "email" | "both"</summary>
     public string       Channel  { get; set; } = "inapp";
     /// <summary>Se preenchido, sobrepõe Segment.</summary>

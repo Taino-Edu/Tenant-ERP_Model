@@ -34,8 +34,12 @@ public interface IEmailService
 
     // ── Anúncios (broadcast) ──────────────────────────────────────────────────
 
-    /// <summary>Envia anúncio/promoção para uma lista de destinatários.</summary>
-    Task SendAnuncioAsync(IEnumerable<(string email, string name)> destinatarios, string titulo, string corpo);
+    /// <summary>
+    /// Envia anúncio/promoção para uma lista de destinatários.
+    /// Imagem e link são opcionais; retorna a quantidade de e-mails enviados com sucesso.
+    /// </summary>
+    Task<int> SendAnuncioAsync(IEnumerable<(string email, string name)> destinatarios, string titulo, string corpo,
+                               string? imageUrl = null, string? link = null);
 
     // ── LGPD ──────────────────────────────────────────────────────────────────
 

@@ -15,6 +15,7 @@ export default function MensageriaPage() {
   const [title,      setTitle]      = useState('')
   const [body,       setBody]       = useState('')
   const [link,       setLink]       = useState('')
+  const [imageUrl,   setImageUrl]   = useState('')
   const [channel,    setChannel]    = useState<Channel>('inapp')
   const [targetMode, setTargetMode] = useState<TargetMode>('segment')
   const [segment,    setSegment]    = useState('all')
@@ -48,12 +49,12 @@ export default function MensageriaPage() {
     setLoading(true); setResult(null)
     try {
       const r = await mensageriaApi.send({
-        title, body, link: link || undefined, channel,
+        title, body, link: link || undefined, imageUrl: imageUrl || undefined, channel,
         segment: targetMode === 'segment' ? segment : undefined,
         userIds: targetMode === 'specific' ? [...selected] : undefined,
       })
       setResult(r.data)
-      setTitle(''); setBody(''); setLink(''); setSelected(new Set())
+      setTitle(''); setBody(''); setLink(''); setImageUrl(''); setSelected(new Set())
       toast.success('Mensagem enviada!')
     } catch { toast.error('Erro ao enviar mensagem.') }
     finally  { setLoading(false) }
@@ -109,6 +110,19 @@ export default function MensageriaPage() {
             <label className="label">Link (opcional) — botão "Ver" na notificação</label>
             <input className="input" placeholder="/produtos ou https://..."
               value={link} onChange={e => setLink(e.target.value)} />
+          </div>
+
+          <div>
+            <label className="label">Imagem (opcional) — banner exibido na notificação e no e-mail</label>
+            <input className="input" placeholder="https://... ou /uploads/banner.png"
+              value={imageUrl} onChange={e => setImageUrl(e.target.value)} maxLength={500} />
+            {imageUrl.trim() && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imageUrl} alt="Pré-visualização do banner"
+                className="mt-2 rounded-xl max-h-40 w-auto border border-surface-500"
+                onError={e => { e.currentTarget.style.display = 'none' }}
+                onLoad={e => { e.currentTarget.style.display = '' }} />
+            )}
           </div>
         </div>
 

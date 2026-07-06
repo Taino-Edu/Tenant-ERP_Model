@@ -1,5 +1,32 @@
 # Changelog — Santuário Nerd
 
+## [v1.12.0] — 2026-07-06
+
+### Adicionado
+- **Mensageria** (`/admin/mensageria`): envio de notificações in-app, push no navegador e e-mail para clientes — por segmento (todos, com e-mail, crediário aberto, lista de espera, top 20 pontos) ou seleção manual
+- **Imagem na notificação**: campo opcional de banner na mensageria — a imagem aparece na notificação in-app (sino), no push do navegador e no corpo do e-mail, com pré-visualização no painel antes do envio
+- **Push no navegador**: notificações web push via VAPID — cliente recebe aviso mesmo com o site fechado; comando `gen-vapid` para gerar chaves no VPS
+- **NFC-e** (`/admin/fiscal`): módulo completo de emissão de cupom fiscal eletrônico via DFe.NET, com certificado A1 e Natureza de Operação configuráveis
+- **Pix Inter**: cobrança Pix com QR Code para Crediário e Comanda via API do Banco Inter (OAuth2 + mTLS, upload de certificado pelo painel de integrações)
+- **Grade de variantes**: produtos com tamanho/cor funcionais no PDV e na comanda; estoque total reflete a soma das variantes
+- **Fila de espera de pré-venda**: cliente entra na fila pela página pública do produto; admin vê a fila no drawer do produto, na aba Lista de Espera e em card no painel Análises, com botão "Vender"
+- **Campeonatos — cadastro público**: criação de conta direto na inscrição do campeonato + vínculo de deck
+- **Reset de senha funcional**: fluxo em duas fases em `/reset-password`
+
+### Corrigido
+- E-mail de anúncio agora escapa HTML do conteúdo e reaproveita a conexão SMTP no lote — falha em um destinatário não interrompe os demais; contador de enviados reflete apenas sucessos
+- Hover quase invisível no tema claro em todo o site; banner promocional apagado pelo overlay escuro; título do modal de aviso ilegível no tema claro
+- NCM genérico "inventado" removido do fiscal — nunca emite com valor chutado
+- Referência circular ProductVariant→Product que sumia com todos os produtos do estoque
+- Build de produção quebrado por `useSearchParams` sem Suspense
+
+### Técnico
+- Coluna `image_url` na tabela `notifications` (criada automaticamente no startup)
+- `SendAnuncioAsync` retorna a contagem de e-mails enviados com sucesso; aceita imagem e link opcionais (botão "Ver no site")
+- Service worker (`sw.js`) exibe o campo `image` do payload push
+
+---
+
 ## [v1.11.0] — 2026-06-29
 
 ### Adicionado

@@ -3,6 +3,7 @@ self.addEventListener('push', event => {
   event.waitUntil(
     self.registration.showNotification(data.title ?? 'Santuário Nerd', {
       body:  data.body  ?? '',
+      image: data.image ?? undefined,
       icon:  '/logo-maikon.png',
       badge: '/logo-maikon.png',
       tag:   'santuario-nerd-notif',

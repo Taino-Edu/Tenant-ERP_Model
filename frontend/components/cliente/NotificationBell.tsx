@@ -178,6 +178,12 @@ export default function NotificationBell() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-black leading-snug" style={{ color: NAVY }}>{n.title}</p>
                     <p className="text-xs mt-0.5 line-clamp-2" style={{ color: MUTED }}>{n.body}</p>
+                    {n.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={n.imageUrl} alt=""
+                        className="mt-2 rounded-lg w-full max-h-32 object-cover"
+                        onError={e => { e.currentTarget.style.display = 'none' }} />
+                    )}
                     <div className="flex items-center gap-2 mt-1.5">
                       <span className="text-[10px]" style={{ color: MUTED }}>{timeAgo(n.createdAt)}</span>
                       {n.link && (
