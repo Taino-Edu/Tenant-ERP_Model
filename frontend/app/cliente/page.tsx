@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { comandaApi, userApi, productApi, categoryApi, waitListApi, variantApi, ComandaDto, Product, ProductCategory, UserProfile, ProductVariant } from '@/lib/api'
+import { comandaApi, userApi, productApi, categoryApi, waitListApi, variantApi, ComandaDto, Product, ProductCategory, UserProfile, ProductVariant, PixCobrancaDto } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
 import NotificationBell from '@/components/cliente/NotificationBell'
 import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
@@ -9,6 +9,7 @@ import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
   Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight, ChevronDown,
   Trophy, Swords, Medal, BookOpen, Bell, ShoppingBag,
+  QrCode, Copy, Share2,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -242,6 +243,80 @@ function ProductCard({ p, adding, onAdd }: {
   )
 }
 
+// ── Card de pagamento Pix na comanda do cliente ───────────────────────────────
+// Aparece quando o admin gera uma cobrança: QR Code, copia-e-cola e botão que
+// abre a lista de apps do celular (share sheet) com o código pronto pra colar.
+function PixPagamentoCard({ pix }: { pix: PixCobrancaDto }) {
+  const [copiado, setCopiado] = useState(false)
+
+  async function copiar() {
+    if (!pix.pixCopiaCola) return
+    try {
+      await navigator.clipboard.writeText(pix.pixCopiaCola)
+      setCopiado(true)
+      toast.success('Código Pix copiado!')
+      setTimeout(() => setCopiado(false), 3000)
+    } catch {
+      toast.error('Não consegui copiar — selecione o código manualmente.')
+    }
+  }
+
+  async function pagarNoBanco() {
+    if (!pix.pixCopiaCola) return
+    // Copia antes de compartilhar: mesmo que o app do banco não leia o texto
+    // compartilhado, o cliente já tem o código no clipboard pra colar.
+    try { await navigator.clipboard.writeText(pix.pixCopiaCola) } catch { /* segue */ }
+
+    if (navigator.share) {
+      try {
+        await navigator.share({ text: pix.pixCopiaCola })
+      } catch { /* usuário fechou o share sheet — sem erro */ }
+    } else {
+      toast.success('Código copiado! Abra o app do seu banco e cole na área Pix.', { duration: 6000 })
+    }
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden"
+      style={{ backgroundColor: C.white, border: '2px solid #22c55e', boxShadow: '0 4px 20px rgba(34,197,94,0.25)' }}>
+      <div className="px-5 py-3 flex items-center gap-2" style={{ backgroundColor: '#F0FDF4' }}>
+        <QrCode className="w-4 h-4" style={{ color: '#16a34a' }} />
+        <h2 className="font-black text-sm flex-1" style={{ color: '#15803d' }}>Pagamento Pix</h2>
+        <span className="text-lg font-black" style={{ color: '#15803d' }}>
+          R$ {pix.valorEmReais.toFixed(2).replace('.', ',')}
+        </span>
+      </div>
+
+      <div className="px-5 py-4 space-y-3">
+        {pix.imagemQrCode && (
+          <div className="flex justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pix.imagemQrCode} alt="QR Code Pix" className="w-44 h-44 rounded-xl"
+              style={{ border: `1px solid ${C.border}` }} />
+          </div>
+        )}
+
+        <button onClick={pagarNoBanco}
+          className="w-full py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition-all active:scale-95 text-white"
+          style={{ backgroundColor: '#16a34a' }}>
+          <Share2 className="w-4 h-4" /> Pagar no app do banco
+        </button>
+
+        <button onClick={copiar}
+          className="w-full py-3 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 border transition-all active:scale-95"
+          style={{ borderColor: C.border, color: C.blue2 }}>
+          <Copy className="w-3.5 h-3.5" />
+          {copiado ? 'Copiado!' : 'Copiar código Pix (copia e cola)'}
+        </button>
+
+        <p className="text-[11px] text-center font-medium" style={{ color: C.muted }}>
+          Assim que o pagamento cair, sua comanda fecha sozinha. ✨
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export default function ClientePage() {
   const [comanda,      setComanda]      = useState<ComandaDto | null>(null)
   const [products,     setProducts]     = useState<Product[]>([])
@@ -259,6 +334,7 @@ export default function ClientePage() {
   const [variants,        setVariants]        = useState<ProductVariant[]>([])
   const [loadingVariants, setLoadingVariants] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
+  const [pix,             setPix]             = useState<PixCobrancaDto | null>(null)
 
   const fetchComanda = useCallback(async () => {
     try {
@@ -272,8 +348,35 @@ export default function ClientePage() {
     }
   }, [])
 
+  const fetchPix = useCallback(async () => {
+    try {
+      const { data } = await comandaApi.meuPix()
+      setPix(data)
+    } catch {
+      setPix(null) // 404 = nenhuma cobrança ativa
+    }
+  }, [])
+
+  // Enquanto há cobrança ativa, verifica no Inter a cada 6s — quando o
+  // pagamento cai, o backend fecha a comanda e o ComandaClosed chega via SignalR.
+  useEffect(() => {
+    if (!pix || pix.status !== 'ATIVA') return
+    const id = setInterval(async () => {
+      try {
+        const { data } = await comandaApi.verificarMeuPix()
+        if (data.status === 'CONCLUIDA') {
+          setPix(null)
+          toast.success('Pagamento confirmado! 🎉', { duration: 6000 })
+          fetchComanda()
+        }
+      } catch { /* rede/Inter fora — tenta de novo no próximo tick */ }
+    }, 6000)
+    return () => clearInterval(id)
+  }, [pix, fetchComanda])
+
   useEffect(() => {
     fetchComanda()
+    fetchPix()
     productApi.listStore().then(r => setProducts(r.data)).catch(() => {})
     categoryApi.list().then(r => setCategories(r.data)).catch(() => {})
     userApi.me().then(r => setProfile(r.data)).catch(() => {})
@@ -286,22 +389,28 @@ export default function ClientePage() {
       })
       hub.on('ComandaClosed', () => {
         toast.success('Comanda fechada! Obrigado pela visita.', { duration: 6000 })
+        setPix(null)
         fetchComanda()
       })
       hub.on('ComandaCancelled', () => {
         toast.error('Sua comanda foi cancelada.', { duration: 6000 })
+        setPix(null)
         fetchComanda()
       })
       hub.on('ItemAddedByAdmin', (data: { itemName: string }) => {
         toast(`+${data.itemName} adicionado pelo atendente`, { icon: '🛒' })
         fetchComanda()
       })
+      hub.on('PixCobrancaCriada', (data: PixCobrancaDto) => {
+        setPix(data)
+        toast('Cobrança Pix recebida — pague direto pelo app do seu banco!', { icon: '💸', duration: 8000 })
+      })
       hub.on('ComandaUpdated', () => fetchComanda())
-      hub.onreconnected(() => fetchComanda())
+      hub.onreconnected(() => { fetchComanda(); fetchPix() })
     }).catch(() => {})
 
     return () => { stopHub() }
-  }, [fetchComanda])
+  }, [fetchComanda, fetchPix])
 
   // Carrega variantes quando um produto com grade é selecionado
   useEffect(() => {
@@ -650,6 +759,11 @@ export default function ClientePage() {
           </div>
         ) : (
           <>
+            {/* ── PAGAMENTO PIX (quando o admin gera a cobrança) ────── */}
+            {pix && pix.status === 'ATIVA' && pix.pixCopiaCola && (
+              <PixPagamentoCard pix={pix} />
+            )}
+
             {/* ── COMANDA ───────────────────────────────────────────── */}
             <div className="rounded-2xl overflow-hidden"
               style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 10px rgba(12,61,90,0.06)' }}>

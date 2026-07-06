@@ -14,11 +14,13 @@
 
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Controllers;
@@ -32,12 +34,20 @@ public class ComandaController : ControllerBase
     private readonly IComandaService  _service;
     private readonly AppDbContext     _db;
     private readonly InterSyncService _inter;
+    private readonly IHubContext<ComandaHub> _hub;
+    private readonly IPushService     _push;
+    private readonly ILogger<ComandaController> _logger;
 
-    public ComandaController(IComandaService service, AppDbContext db, InterSyncService inter)
+    public ComandaController(
+        IComandaService service, AppDbContext db, InterSyncService inter,
+        IHubContext<ComandaHub> hub, IPushService push, ILogger<ComandaController> logger)
     {
         _service = service;
         _db      = db;
         _inter   = inter;
+        _hub     = hub;
+        _push    = push;
+        _logger  = logger;
     }
 
     /// <summary>Admin abre uma comanda para um cliente (sem precisar que ele escaneie o QR).</summary>
@@ -304,15 +314,25 @@ public class ComandaController : ControllerBase
             _db.PixCobrancas.Add(pix);
             await _db.SaveChangesAsync();
 
-            return Ok(new
+            // Avisa o cliente na hora: card de pagamento na comanda (SignalR) e push
+            // no navegador se o site estiver fechado. Falha aqui nunca desfaz a cobrança.
+            try
             {
-                pix.TxId,
-                pix.Status,
-                pix.PixCopiaCola,
-                pix.ImagemQrCode,
-                pix.ExpiraEm,
-                ValorEmReais = pix.ValorEmReais,
-            });
+                await _hub.Clients.Group(ComandaHub.GetComandaGroup(comanda.Id))
+                    .SendAsync("PixCobrancaCriada", PixDto(pix));
+
+                await _push.SendAsync(
+                    comanda.UserId,
+                    $"Cobrança Pix — R$ {pix.ValorEmReais:N2}".Replace('.', ','),
+                    "Sua comanda está pronta pra pagar. Toque para abrir o Pix.",
+                    "/cliente");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Cobrança Pix {TxId} criada, mas falhou ao notificar o cliente.", pix.TxId);
+            }
+
+            return Ok(PixDto(pix));
         }
         catch (Exception ex)
         {
@@ -329,11 +349,43 @@ public class ComandaController : ControllerBase
         if (pix == null)
             return NotFound(new { Message = "Cobrança não encontrada." });
 
+        return await VerificarPagamentoPixAsync(pix, fechadoPor: GetUserId());
+    }
+
+    /// <summary>Cobrança Pix ativa da comanda do cliente autenticado — pro card "Pagar" na tela dele.</summary>
+    [HttpGet("my/pix")]
+    public async Task<IActionResult> GetMinhaCobrancaPix()
+    {
+        var pix = await BuscarCobrancaAtivaDoUsuarioAsync();
+        return pix == null
+            ? NotFound(new { Message = "Nenhuma cobrança Pix ativa." })
+            : Ok(PixDto(pix));
+    }
+
+    /// <summary>
+    /// Cliente verifica se o pagamento da própria cobrança caiu (polling da tela do cliente).
+    /// A confirmação vem do Inter — se paga, fecha a comanda como o admin faria.
+    /// </summary>
+    [HttpPost("my/pix/verificar")]
+    public async Task<IActionResult> VerificarMinhaCobrancaPix()
+    {
+        var pix = await BuscarCobrancaAtivaDoUsuarioAsync(incluirRecemPagas: true);
+        if (pix == null)
+            return NotFound(new { Message = "Nenhuma cobrança Pix ativa." });
+
+        // Quem "fecha" é o admin que gerou a cobrança — o cliente só dispara a checagem;
+        // a prova do pagamento é a consulta autenticada na API do Inter.
+        return await VerificarPagamentoPixAsync(pix, fechadoPor: pix.CriadoPorAdminId);
+    }
+
+    /// <summary>Consulta o Inter e, se a cobrança estiver paga, marca e fecha a comanda. Compartilhado entre admin e cliente.</summary>
+    private async Task<IActionResult> VerificarPagamentoPixAsync(PixCobranca pix, Guid fechadoPor)
+    {
         var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
         if (cfg == null)
             return BadRequest(new { Message = "Integração com o Inter não configurada." });
 
-        var result = await _inter.ConsultarCobrancaAsync(cfg, txid);
+        var result = await _inter.ConsultarCobrancaAsync(cfg, pix.TxId);
         if (result.Error is not null)
             return StatusCode(422, new { message = result.Error });
 
@@ -346,7 +398,7 @@ public class ComandaController : ControllerBase
 
             try
             {
-                comandaFechada = await _service.CloseComandaAsync(pix.ComandaId!.Value, GetUserId(), "Pix");
+                comandaFechada = await _service.CloseComandaAsync(pix.ComandaId!.Value, fechadoPor, "Pix");
             }
             catch (InvalidOperationException)
             {
@@ -357,6 +409,37 @@ public class ComandaController : ControllerBase
         await _db.SaveChangesAsync();
         return Ok(new { pix.TxId, pix.Status, PagoEm = pix.PagoEm, Comanda = comandaFechada });
     }
+
+    /// <summary>Última cobrança Pix não expirada da comanda ativa do usuário logado.</summary>
+    private async Task<PixCobranca?> BuscarCobrancaAtivaDoUsuarioAsync(bool incluirRecemPagas = false)
+    {
+        var userId  = GetUserId();
+        var agora   = DateTime.UtcNow;
+
+        var comandaId = await _db.Comandas
+            .Where(c => c.UserId == userId &&
+                        c.Status != ComandaStatus.Fechada && c.Status != ComandaStatus.Cancelada)
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync();
+        if (comandaId == null) return null;
+
+        var q = _db.PixCobrancas.Where(p => p.ComandaId == comandaId);
+        q = incluirRecemPagas
+            ? q.Where(p => p.Status == "ATIVA" || p.Status == "CONCLUIDA")
+            : q.Where(p => p.Status == "ATIVA" && (p.ExpiraEm == null || p.ExpiraEm > agora));
+
+        return await q.OrderByDescending(p => p.CriadoEm).FirstOrDefaultAsync();
+    }
+
+    private static object PixDto(PixCobranca pix) => new
+    {
+        pix.TxId,
+        pix.Status,
+        pix.PixCopiaCola,
+        pix.ImagemQrCode,
+        pix.ExpiraEm,
+        pix.ValorEmReais,
+    };
 
     private Guid GetUserId()
     {

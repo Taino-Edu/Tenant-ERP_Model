@@ -403,6 +403,11 @@ export const comandaApi = {
     api.post<PixCobrancaDto>(`/api/comanda/${id}/pix`),
   statusPix: (id: string, txid: string) =>
     api.get<{ txId: string; status: string; pagoEm: string | null; comanda: ComandaDto | null }>(`/api/comanda/${id}/pix/${txid}/status`),
+  // Lado do cliente: cobrança ativa da própria comanda + verificação de pagamento
+  meuPix: () =>
+    api.get<PixCobrancaDto>('/api/comanda/my/pix'),
+  verificarMeuPix: () =>
+    api.post<{ txId: string; status: string; pagoEm: string | null; comanda: ComandaDto | null }>('/api/comanda/my/pix/verificar'),
 }
 
 // ── Crediário ─────────────────────────────────────────────────────────────────

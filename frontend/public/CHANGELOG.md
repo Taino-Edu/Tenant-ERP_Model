@@ -1,5 +1,15 @@
 # Changelog — Santuário Nerd
 
+## [v1.14.0] — 2026-07-07
+
+### Adicionado
+- **Pix na comanda do cliente**: quando o admin gera a cobrança, ela aparece **na hora** na tela do cliente (tempo real via SignalR) — QR Code, código copia-e-cola e botão **"Pagar no app do banco"** que abre a lista de apps do celular com o código já copiado; quem estiver com o site fechado recebe push no navegador
+- **Confirmação automática do pagamento**: a tela do cliente verifica no Inter a cada 6 segundos — quando o Pix cai, a comanda fecha sozinha e os dois lados são avisados; o modal do admin também verifica sozinho a cada 5 segundos (sem precisar clicar em "Verificar pagamento")
+- Se o cliente recarregar a página, a cobrança ativa reaparece (novo endpoint `GET /api/comanda/my/pix`)
+
+### Corrigido
+- "Verificar pagamento" mostrava erro genérico — agora exibe a mensagem real retornada pelo Inter quando a consulta falha
+
 ## [v1.13.1] — 2026-07-07
 
 ### Corrigido

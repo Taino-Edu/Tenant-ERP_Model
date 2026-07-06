@@ -51,24 +51,36 @@ export function CobrancaPixModal({ clienteNome, gerar, verificar, onClose, onSuc
     toast.success('Código copiado!')
   }
 
-  async function verificarPagamento() {
+  async function verificarPagamento(silencioso = false) {
     if (!pix) return
-    setVerificando(true)
+    if (!silencioso) setVerificando(true)
     try {
       const { data } = await verificar(pix.txId)
       if (data.status === 'CONCLUIDA') {
         toast.success('Pagamento confirmado!')
         onSuccess()
         onClose()
-      } else {
+      } else if (!silencioso) {
         toast('Ainda não identificamos o pagamento.', { icon: '⏳' })
       }
-    } catch {
-      toast.error('Erro ao verificar pagamento')
+    } catch (err: unknown) {
+      if (!silencioso) {
+        const e = err as { response?: { data?: { message?: string; Message?: string } } }
+        toast.error(e?.response?.data?.message ?? e?.response?.data?.Message ?? 'Erro ao verificar pagamento')
+      }
     } finally {
-      setVerificando(false)
+      if (!silencioso) setVerificando(false)
     }
   }
+
+  // Verificação automática enquanto o modal está aberto — o admin não precisa
+  // ficar clicando: quando o Pix cai, confirma e fecha sozinho.
+  useEffect(() => {
+    if (!pix) return
+    const id = setInterval(() => verificarPagamento(true), 5000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pix])
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -134,8 +146,9 @@ export function CobrancaPixModal({ clienteNome, gerar, verificar, onClose, onSuc
 
               <p className="text-xs text-gray-500 text-center">
                 {pix.imagemQrCode
-                  ? 'Peça pro cliente escanear o QR Code ou colar o código no app do banco dele.'
-                  : 'Peça pro cliente colar o código Pix no app do banco dele.'}
+                  ? 'O cliente pode escanear o QR Code, colar o código no app do banco — ou pagar direto pela comanda no celular dele.'
+                  : 'O cliente pode colar o código no app do banco — ou pagar direto pela comanda no celular dele.'}
+                {' '}A confirmação é automática enquanto esta janela estiver aberta.
               </p>
             </>
           ) : null}
@@ -147,7 +160,7 @@ export function CobrancaPixModal({ clienteNome, gerar, verificar, onClose, onSuc
           </button>
           <button
             type="button"
-            onClick={verificarPagamento}
+            onClick={() => verificarPagamento()}
             disabled={!pix || verificando}
             className="btn-success flex-1 justify-center"
           >
