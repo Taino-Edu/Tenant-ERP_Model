@@ -72,8 +72,20 @@ function fmtDate(d?: string) {
   return new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+// Vencimento é uma data pura (sem hora significativa, sempre salva como meia-noite UTC) —
+// nunca reinterpretar pelo fuso do navegador, senão qualquer fuso atrás de UTC (incluindo
+// o Brasil) mostra um dia a menos do que o que está salvo.
+function fmtDataPura(d?: string) {
+  if (!d) return '—'
+  const [ano, mes, dia] = d.slice(0, 10).split('-')
+  return `${dia}/${mes}/${ano}`
+}
+
 function isOverdue(t: Transaction) {
-  return t.status === 'overdue' || (t.status === 'pending' && t.dueDate && new Date(t.dueDate) < new Date())
+  if (t.status === 'overdue') return true
+  if (t.status !== 'pending' || !t.dueDate) return false
+  const hojeUtc = new Date().toISOString().slice(0, 10)
+  return t.dueDate.slice(0, 10) < hojeUtc
 }
 
 // ── Modal de criação/edição ───────────────────────────────────────────────────
@@ -401,7 +413,7 @@ export default function ContasReceberPage() {
                     {t.supplier && <span className="text-xs text-gray-400">{t.supplier}</span>}
                     {t.category && <span className="text-xs text-gray-500">· {t.category}</span>}
                     <span className="text-xs text-gray-500">
-                      {t.dueDate ? `Vence ${fmtDate(t.dueDate)}` : `Criado ${fmtDate(t.createdAt)}`}
+                      {t.dueDate ? `Vence ${fmtDataPura(t.dueDate)}` : `Criado ${fmtDate(t.createdAt)}`}
                     </span>
                   </div>
                 </div>
