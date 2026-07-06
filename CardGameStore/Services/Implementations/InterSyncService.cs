@@ -65,26 +65,35 @@ public class InterSyncService
             var fim    = DateOnly.FromDateTime(DateTime.Now);
             var inicio = fim.AddDays(-days);
 
-            var transactions = await FetchExtratoAsync(token, inicio, fim);
+            var transactions = await FetchExtratoCompletoAsync(token, inicio, fim);
 
             int imported = 0, skipped = 0;
             foreach (var t in transactions)
             {
+                // Sem idTransacao não há como deduplicar com segurança — pula em vez de
+                // importar algo que voltaria duplicado a cada sync.
+                if (string.IsNullOrWhiteSpace(t.IdTransacao)) { skipped++; continue; }
+
                 var exists = await db.ExternalTransactions
-                    .AnyAsync(x => x.Source == "inter" && x.ExternalId == t.CodigoTransacao);
+                    .AnyAsync(x => x.Source == "inter" && x.ExternalId == t.IdTransacao);
 
                 if (exists) { skipped++; continue; }
 
-                var isIncome = t.Tipo == "C"; // C = Crédito, D = Débito
+                var isIncome = t.TipoOperacao == "C"; // C = Crédito, D = Débito
+                var data     = ParseData(t.DataEntrada) ?? ParseData(t.DataTransacao) ?? DateTime.UtcNow;
+                var titulo   = string.IsNullOrWhiteSpace(t.Titulo) ? null : t.Titulo.Trim();
+                var detalhe  = string.IsNullOrWhiteSpace(t.Descricao) ? null : t.Descricao.Trim();
+
                 db.ExternalTransactions.Add(new ExternalTransaction
                 {
                     Source      = "inter",
-                    ExternalId  = t.CodigoTransacao,
+                    ExternalId  = t.IdTransacao,
                     Type        = isIncome ? "income" : "expense",
                     Amount      = Math.Abs(t.Valor),
-                    Description = t.Descricao ?? t.TipoTransacao ?? "Transação Inter",
-                    DueDate     = t.DataTransacao.ToDateTime(TimeOnly.MinValue),
-                    PaidAt      = t.DataTransacao.ToDateTime(TimeOnly.MinValue),
+                    Description = titulo is not null && detalhe is not null ? $"{titulo} — {detalhe}"
+                                  : titulo ?? detalhe ?? t.TipoTransacao ?? "Transação Inter",
+                    DueDate     = data,
+                    PaidAt      = data, // extrato = transação já executada
                     Status      = "paid",
                     Category    = t.TipoTransacao,
                 });
@@ -284,18 +293,37 @@ public class InterSyncService
     }
 
     // ── Extrato ───────────────────────────────────────────────────────────────
-    private async Task<List<InterLancamento>> FetchExtratoAsync(string token, DateOnly inicio, DateOnly fim)
+    // Usa o /extrato/completo (não o /extrato simples) porque só ele devolve o
+    // idTransacao — sem ele não há deduplicação confiável entre syncs. É paginado.
+    private async Task<List<InterLancamento>> FetchExtratoCompletoAsync(string token, DateOnly inicio, DateOnly fim)
     {
         using var http = BuildMtlsClient();
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var url = $"https://cdpj.partners.bancointer.com.br/banking/v2/extrato?dataInicio={inicio:yyyy-MM-dd}&dataFim={fim:yyyy-MM-dd}";
-        var resp = await http.GetAsync(url);
-        resp.EnsureSuccessStatusCode();
+        var todas = new List<InterLancamento>();
+        for (var pagina = 0; pagina < 30; pagina++) // guarda: 30 páginas ≈ 1.500+ transações em 7 dias
+        {
+            var url = $"https://cdpj.partners.bancointer.com.br/banking/v2/extrato/completo" +
+                      $"?dataInicio={inicio:yyyy-MM-dd}&dataFim={fim:yyyy-MM-dd}&pagina={pagina}";
+            var resp = await http.GetAsync(url);
+            resp.EnsureSuccessStatusCode();
 
-        var body = await resp.Content.ReadFromJsonAsync<InterExtratoResponse>(_json);
-        return body?.Transacoes ?? [];
+            var body = await resp.Content.ReadFromJsonAsync<InterExtratoResponse>(_json);
+            if (body?.Transacoes is { Count: > 0 })
+                todas.AddRange(body.Transacoes);
+
+            if (body is null || body.UltimaPagina || body.Transacoes is null or { Count: 0 })
+                break;
+        }
+        return todas;
     }
+
+    /// <summary>Datas do extrato vêm como "yyyy-MM-dd" — armazenadas como meia-noite UTC (data pura).</summary>
+    private static DateTime? ParseData(string? s) =>
+        DateTime.TryParse(s, System.Globalization.CultureInfo.InvariantCulture,
+                          System.Globalization.DateTimeStyles.None, out var d)
+            ? DateTime.SpecifyKind(d.Date, DateTimeKind.Utc)
+            : null;
 
     // ── HttpClient com certificado mTLS do Inter ──────────────────────────────
     private HttpClient BuildMtlsClient()
@@ -359,15 +387,21 @@ internal record InterTokenResponse(
     [property: JsonPropertyName("expires_in")]   int    ExpiresIn);
 
 internal record InterExtratoResponse(
-    [property: JsonPropertyName("transacoes")] List<InterLancamento>? Transacoes);
+    [property: JsonPropertyName("transacoes")]   List<InterLancamento>? Transacoes,
+    [property: JsonPropertyName("ultimaPagina")] bool                   UltimaPagina);
 
+// Campos conforme o schema real do GET /banking/v2/extrato/completo:
+// idTransacao (único, só no /completo), dataEntrada, tipoOperacao ("C"|"D"),
+// tipoTransacao (PIX, PAGAMENTO...), titulo, descricao, valor (string).
 internal record InterLancamento(
-    [property: JsonPropertyName("codigoTransacao")] string?  CodigoTransacao,
-    [property: JsonPropertyName("dataTransacao")]   DateOnly DataTransacao,
-    [property: JsonPropertyName("tipo")]            string?  Tipo,
-    [property: JsonPropertyName("tipoTransacao")]   string?  TipoTransacao,
-    [property: JsonPropertyName("descricao")]       string?  Descricao,
-    [property: JsonPropertyName("valor")]           decimal  Valor);
+    [property: JsonPropertyName("idTransacao")]   string?  IdTransacao,
+    [property: JsonPropertyName("dataEntrada")]   string?  DataEntrada,
+    [property: JsonPropertyName("dataTransacao")] string?  DataTransacao,
+    [property: JsonPropertyName("tipoOperacao")]  string?  TipoOperacao,
+    [property: JsonPropertyName("tipoTransacao")] string?  TipoTransacao,
+    [property: JsonPropertyName("titulo")]        string?  Titulo,
+    [property: JsonPropertyName("descricao")]     string?  Descricao,
+    [property: JsonPropertyName("valor")]         decimal  Valor);
 
 public record InterSyncResult
 {

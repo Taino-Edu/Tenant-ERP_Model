@@ -788,6 +788,11 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE UNIQUE INDEX IF NOT EXISTS ix_notas_destinadas_chave  ON notas_destinadas (chave_acesso);
                 CREATE INDEX IF NOT EXISTS ix_notas_destinadas_status        ON notas_destinadas (status);
+
+                -- Financeiro: remove lançamentos do Inter importados pelo sync antigo, que lia
+                -- campos errados da API (tudo virava despesa e sem external_id não há dedup).
+                -- O próximo sync (janela de 7 dias) reimporta corretamente com idTransacao.
+                DELETE FROM external_transactions WHERE source = 'inter' AND external_id IS NULL;
             ");
         }
 
