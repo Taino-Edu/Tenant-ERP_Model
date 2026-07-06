@@ -19,7 +19,7 @@ public class FiscalCertificadoService
     {
         try
         {
-            using var cert = new X509Certificate2(pfxBytes, senha, X509KeyStorageFlags.Exportable);
+            using var cert = Pkcs12Loader.Abrir(pfxBytes, senha);
 
             if (!cert.HasPrivateKey)
                 throw new CertificadoInvalidoException("O certificado não possui chave privada — verifique se é um .pfx/.p12 válido.");
@@ -28,8 +28,6 @@ public class FiscalCertificadoService
         }
         catch (CryptographicException ex)
         {
-            // Inclui o detalhe técnico: distingue senha errada de algoritmo legado
-            // não suportado pelo OpenSSL (comum em .pfx ICP-Brasil rodando em Linux).
             throw new CertificadoInvalidoException(
                 $"Senha incorreta ou arquivo de certificado inválido. Detalhe técnico: {ex.Message}", ex);
         }

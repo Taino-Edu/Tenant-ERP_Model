@@ -1,5 +1,11 @@
 # Changelog — Santuário Nerd
 
+## [v1.13.1] — 2026-07-07
+
+### Corrigido
+- **Upload do certificado A1 rejeitado em produção ("senha incorreta")**: certificados ICP-Brasil mais antigos usam criptografia legada (RC2/3DES) que o OpenSSL do Linux desativa por padrão desde a versão 3 — e o .NET não confiava de forma consistente na configuração de ambiente pra reativar isso. A leitura do `.pfx` agora usa BouncyCastle (biblioteca própria, sem depender do OpenSSL do sistema) sempre que o carregamento nativo falhar — mesmo caminho usado no upload, na emissão de NFC-e e na Manifestação do Destinatário
+- Testado com um certificado sintético gerado com o mesmo algoritmo legado antes de ir pra produção, incluindo assinatura digital real (o mesmo passo que a emissão de NFC-e faz) e rejeição correta de senha errada
+
 ## [v1.13.0] — 2026-07-06
 
 ### Adicionado
