@@ -29,18 +29,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl openssl &&
 # costumam ser empacotados com PBE antigo (RC2/3DES), que o OpenSSL 3 desativa
 # por padrão. Sem isso, abrir o .pfx falha como se a senha estivesse errada.
 #
-# Em vez de editar o openssl.cnf do sistema (cujo layout varia entre imagens
-# base), escrevemos um config próprio que inclui o do sistema e liga o provider
-# legacy por cima, apontado via OPENSSL_CONF. O `openssl list` no fim é uma
-# verificação real: falha o build se o legacy não carregar.
-# Só adicionamos o delta (provider legacy + reativação do default, que fica
-# obrigatória ao ligar qualquer provider). As chaves `default`/`provider_sect`
-# já vêm do sistema via .include — não redeclaramos, pra não colidir com o
-# config_diagnostics do Debian.
+# Config autocontido (sem .include do arquivo do sistema — evitava risco de
+# seção duplicada e escondia o erro real atrás do pipe). Testado manualmente
+# contra esta mesma imagem base em 07/07/2026: providers default+legacy
+# carregam e ficam "active". `tee` garante que, se algo mudar e voltar a
+# falhar, o erro real do OpenSSL aparece no log do build em vez de sumir
+# atrás do grep.
 RUN printf '%s\n' \
-      '.include /etc/ssl/openssl.cnf' \
+      'openssl_conf = openssl_init' \
+      '' \
+      '[openssl_init]' \
+      'providers = provider_sect' \
       '' \
       '[provider_sect]' \
+      'default = default_sect' \
       'legacy = legacy_sect' \
       '' \
       '[default_sect]' \
@@ -48,10 +50,11 @@ RUN printf '%s\n' \
       '' \
       '[legacy_sect]' \
       'activate = 1' \
-      > /etc/ssl/openssl-legacy.cnf && \
-    OPENSSL_CONF=/etc/ssl/openssl-legacy.cnf openssl list -providers | grep -q legacy
+      > /etc/ssl/openssl-legacy.cnf
 
 ENV OPENSSL_CONF=/etc/ssl/openssl-legacy.cnf
+
+RUN openssl list -providers | tee /dev/stderr | grep -q legacy
 
 COPY --from=build /app/publish .
 
