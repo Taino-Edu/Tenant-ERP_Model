@@ -4,7 +4,7 @@ import { championshipApi, userApi, deckApi, Championship, ChampionshipParticipan
 import toast from 'react-hot-toast'
 import {
   Trophy, Plus, Users, Swords, X, Check, Loader2,
-  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus, Edit2, MessageCircle, Award, Link2,
+  ChevronDown, ChevronUp, UserPlus, Trash2, Medal, Search, ImagePlus, Edit2, MessageCircle, Award, Link2, Eye,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -719,6 +719,16 @@ function ChampionshipCard({
                             <p className="text-sm font-medium text-white truncate">{p.userName}</p>
                             {p.deckName && <p className="text-xs text-gray-500 truncate">{p.deckName}</p>}
                           </div>
+                          {p.deckId && (
+                            <a
+                              href={`/cliente/decks/${p.deckId}`}
+                              target="_blank" rel="noreferrer"
+                              className="text-gray-400 hover:text-brand-400 transition-colors shrink-0"
+                              title="Ver deck completo"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </a>
+                          )}
                           {p.placement && (
                             <span className="text-xs font-bold text-accent-gold flex items-center gap-1">
                               <Medal className="w-3.5 h-3.5" />{p.placement}º
@@ -757,6 +767,16 @@ function ChampionshipCard({
                               <p className="text-xs text-brand-400 truncate" title={`Deck: ${pi.deckName}`}>🃏 {pi.deckName}</p>
                             )}
                           </div>
+                          {pi.deckId && (
+                            <a
+                              href={`/cliente/decks/${pi.deckId}`}
+                              target="_blank" rel="noreferrer"
+                              className="text-gray-400 hover:text-brand-400 transition-colors shrink-0"
+                              title="Ver deck completo"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </a>
+                          )}
                           {pi.isListaEspera && (
                             <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 shrink-0">Espera</span>
                           )}
