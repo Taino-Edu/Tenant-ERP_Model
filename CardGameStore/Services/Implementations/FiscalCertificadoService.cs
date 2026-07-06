@@ -28,7 +28,10 @@ public class FiscalCertificadoService
         }
         catch (CryptographicException ex)
         {
-            throw new CertificadoInvalidoException("Senha incorreta ou arquivo de certificado inválido.", ex);
+            // Inclui o detalhe técnico: distingue senha errada de algoritmo legado
+            // não suportado pelo OpenSSL (comum em .pfx ICP-Brasil rodando em Linux).
+            throw new CertificadoInvalidoException(
+                $"Senha incorreta ou arquivo de certificado inválido. Detalhe técnico: {ex.Message}", ex);
         }
     }
 }

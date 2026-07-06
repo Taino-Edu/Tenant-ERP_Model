@@ -10,6 +10,10 @@
 - **Cancelamento propagado**: se o fornecedor cancelar a NF-e, as contas a pagar pendentes dela são canceladas automaticamente
 - Card SEFAZ em `/admin/integracoes` com botão de sincronização manual e orientação de configuração
 
+### Corrigido
+- **Pix sem QR Code e sem copia-e-cola**: o copia-e-cola agora é lido direto da resposta de criação da cobrança (`pixCopiaECola`), e o QR Code é gerado localmente (QRCoder) a partir dele — o modal nunca mais abre vazio quando o endpoint de QR do Inter falha
+- **Upload do certificado A1 falhando no servidor**: habilitado o provider legacy do OpenSSL 3 no container — certificados ICP-Brasil empacotados com algoritmos antigos (RC2/3DES) eram rejeitados como "senha incorreta" no Linux; o erro do upload agora também mostra o detalhe técnico real
+
 ### Técnico
 - Job em background a cada 2h (`SefazDistBackgroundService`), com tratamento de consumo indevido (cStat 656) e NSU incremental persistido por lote
 - Novas: tabela `notas_destinadas` e coluna `dist_ultimo_nsu` em `fiscal_config` (criadas no startup)

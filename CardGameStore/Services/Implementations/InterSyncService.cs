@@ -175,12 +175,21 @@ public class InterSyncService
                 return new PixCobrancaResult { Error = $"Inter recusou a cobrança ({(int)resp.StatusCode})." };
             }
 
-            var cob = await resp.Content.ReadFromJsonAsync<InterCobResponse>(_json)
+            var rawBody = await resp.Content.ReadAsStringAsync();
+            var cob     = JsonSerializer.Deserialize<InterCobResponse>(rawBody, _json)
                 ?? throw new InvalidOperationException("Resposta de cobrança inválida.");
 
-            string? pixCopiaCola = null, imagemQrCode = null;
-            if (cob.Loc?.Id is not null)
+            // O copia-e-cola já vem na resposta da criação (campo pixCopiaECola);
+            // o endpoint /loc/{id}/qrcode é só fallback pra respostas antigas sem ele.
+            var pixCopiaCola = cob.PixCopiaECola;
+            string? imagemQrCode = null;
+            if (string.IsNullOrWhiteSpace(pixCopiaCola) && cob.Loc?.Id is not null)
                 (pixCopiaCola, imagemQrCode) = await FetchQrCodeAsync(http, cob.Loc.Id.Value);
+
+            if (string.IsNullOrWhiteSpace(pixCopiaCola))
+                _logger.LogWarning("Cobrança Pix {TxId} criada mas sem pixCopiaECola. Resposta do Inter: {Body}", txid, rawBody);
+
+            imagemQrCode = NormalizarOuGerarQrCode(imagemQrCode, pixCopiaCola);
 
             return new PixCobrancaResult
             {
@@ -225,6 +234,34 @@ public class InterSyncService
         {
             _logger.LogError(ex, "Erro ao consultar cobrança Pix via Inter (txid={TxId})", txid);
             return new PixCobrancaResult { Error = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// Garante uma imagem de QR Code em formato data URI (o &lt;img&gt; do frontend espera isso).
+    /// Se o Inter não mandou imagem, gera localmente a partir do copia-e-cola — o QR do Pix
+    /// é só o próprio BR Code em texto, qualquer gerador produz um QR válido.
+    /// </summary>
+    private string? NormalizarOuGerarQrCode(string? imagemDoInter, string? pixCopiaCola)
+    {
+        if (!string.IsNullOrWhiteSpace(imagemDoInter))
+            return imagemDoInter.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                ? imagemDoInter
+                : $"data:image/png;base64,{imagemDoInter}";
+
+        if (string.IsNullOrWhiteSpace(pixCopiaCola)) return null;
+
+        try
+        {
+            using var generator = new QRCoder.QRCodeGenerator();
+            using var data      = generator.CreateQrCode(pixCopiaCola, QRCoder.QRCodeGenerator.ECCLevel.M);
+            var png = new QRCoder.PngByteQRCode(data).GetGraphic(10);
+            return $"data:image/png;base64,{Convert.ToBase64String(png)}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao gerar QR Code local — cobrança segue só com copia-e-cola.");
+            return null;
         }
     }
 
@@ -343,10 +380,11 @@ public record InterSyncResult
 
 // ── DTOs da API Pix (padrão Banco Central, usado pelo Inter) ──────────────────
 internal record InterCobResponse(
-    [property: JsonPropertyName("txid")]       string?              TxId,
-    [property: JsonPropertyName("status")]     string?              Status,
-    [property: JsonPropertyName("calendario")] InterCobCalendario?  Calendario,
-    [property: JsonPropertyName("loc")]        InterCobLoc?         Loc);
+    [property: JsonPropertyName("txid")]          string?              TxId,
+    [property: JsonPropertyName("status")]        string?              Status,
+    [property: JsonPropertyName("calendario")]    InterCobCalendario?  Calendario,
+    [property: JsonPropertyName("loc")]           InterCobLoc?         Loc,
+    [property: JsonPropertyName("pixCopiaECola")] string?              PixCopiaECola);
 
 internal record InterCobCalendario(
     [property: JsonPropertyName("expiracao")] int Expiracao);

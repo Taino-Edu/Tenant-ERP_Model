@@ -24,6 +24,13 @@ WORKDIR /app
 # curl é necessário para o healthcheck do docker-compose
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 
+# Habilita o provider "legacy" do OpenSSL 3 — certificados A1 ICP-Brasil (.pfx)
+# costumam ser empacotados com PBE antigo (RC2/3DES), que o OpenSSL 3 desativa
+# por padrão. Sem isso, abrir o .pfx falha como se a senha estivesse errada.
+RUN sed -i 's/^default = default_sect$/default = default_sect\nlegacy = legacy_sect/' /etc/ssl/openssl.cnf && \
+    printf '\n[legacy_sect]\nactivate = 1\n' >> /etc/ssl/openssl.cnf && \
+    grep -q '^legacy = legacy_sect$' /etc/ssl/openssl.cnf
+
 COPY --from=build /app/publish .
 
 EXPOSE 5000
