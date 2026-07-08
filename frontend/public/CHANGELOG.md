@@ -1,5 +1,11 @@
 # Changelog — Santuário Nerd
 
+## [v1.16.1] — 2026-07-08
+
+### Corrigido
+- **Preço promocional não aparecia pro admin ao adicionar item numa comanda**: o valor cobrado já saía certo (o backend nunca confiou no preço vindo do frontend), mas a lista de produtos mostrava o preço cheio — agora mostra o preço promocional com o de tabela riscado, igual já acontecia no PDV
+- Mesmo ajuste no seletor de produto ao editar uma comanda já fechada
+
 ## [v1.16.0] — 2026-07-08
 
 ### Adicionado

@@ -146,10 +146,12 @@ function AddItemModal({
   async function handleAdd(product: Product) {
     setAdding(product.id)
     try {
+      const effectivePrice = product.isOnPromo && product.discountPriceInCents != null
+        ? product.discountPriceInCents : product.priceInCents
       const { data } = await comandaApi.addItem(comandaId, {
         productId:        product.id,
         itemName:         product.name,
-        unitPriceInCents: product.priceInCents,
+        unitPriceInCents: effectivePrice,
         quantity:         1,
       })
       onAdded(data)
@@ -287,26 +289,43 @@ function AddItemModal({
               ) : filtered.length === 0 ? (
                 <p className="text-center text-gray-500 text-sm py-8">Nenhum produto encontrado</p>
               ) : (
-                filtered.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => handleAdd(p)}
-                    disabled={adding === p.id}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-surface-500 transition-colors text-left disabled:opacity-50"
-                  >
-                    <div>
-                      <p className="text-sm text-white font-medium">{p.name}</p>
-                      <p className="text-xs text-gray-500">{p.category} · {p.stockQuantity} un.</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-3">
-                      <span className="text-accent-gold text-sm font-bold">{fmt(p.priceInReais)}</span>
-                      {adding === p.id
-                        ? <Loader2 className="w-4 h-4 animate-spin text-brand-400" />
-                        : <Plus className="w-4 h-4 text-brand-400" />
-                      }
-                    </div>
-                  </button>
-                ))
+                filtered.map(p => {
+                  const onPromo = p.isOnPromo && p.discountPriceInReais != null
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => handleAdd(p)}
+                      disabled={adding === p.id}
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-surface-500 transition-colors text-left disabled:opacity-50"
+                    >
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm text-white font-medium">{p.name}</p>
+                          {onPromo && (
+                            <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-red-500/20 text-red-400">
+                              Promoção
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500">{p.category} · {p.stockQuantity} un.</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-3">
+                        {onPromo ? (
+                          <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-gray-500 line-through">{fmt(p.priceInReais)}</span>
+                            <span className="text-red-400 text-sm font-bold">{fmt(p.discountPriceInReais!)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-accent-gold text-sm font-bold">{fmt(p.priceInReais)}</span>
+                        )}
+                        {adding === p.id
+                          ? <Loader2 className="w-4 h-4 animate-spin text-brand-400" />
+                          : <Plus className="w-4 h-4 text-brand-400" />
+                        }
+                      </div>
+                    </button>
+                  )
+                })
               )}
             </div>
           </>
@@ -1227,9 +1246,11 @@ function EditarComandaModal({
     setItems(prev => [...prev, { itemName: '', unitPriceInCents: 0, quantity: 1, remover: false }])
   }
   function addProductItem(p: Product) {
+    const effectivePrice = p.isOnPromo && p.discountPriceInCents != null
+      ? p.discountPriceInCents : p.priceInCents
     setItems(prev => [...prev, {
       productId: p.id, itemName: p.name,
-      unitPriceInCents: p.priceInCents, quantity: 1, remover: false,
+      unitPriceInCents: effectivePrice, quantity: 1, remover: false,
     }])
     setProdSearch(''); setShowProdList(false)
   }
@@ -1382,13 +1403,25 @@ function EditarComandaModal({
                     className="w-full pl-8 pr-3 py-2 bg-surface-700 border border-surface-600 rounded-xl text-xs text-white placeholder-gray-500 outline-none" />
                   {showProdList && filteredProds.length > 0 && (
                     <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-surface-700 border border-surface-600 rounded-xl shadow-xl overflow-hidden">
-                      {filteredProds.map(p => (
-                        <button key={p.id} onMouseDown={() => addProductItem(p)}
-                          className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-surface-500 transition-colors text-left">
-                          <span className="text-xs text-white truncate">{p.name}</span>
-                          <span className="text-xs text-gray-400 shrink-0">{fmt(p.priceInReais)}</span>
-                        </button>
-                      ))}
+                      {filteredProds.map(p => {
+                        const onPromo = p.isOnPromo && p.discountPriceInReais != null
+                        return (
+                          <button key={p.id} onMouseDown={() => addProductItem(p)}
+                            className="w-full flex items-center justify-between gap-2 px-3 py-2 hover:bg-surface-500 transition-colors text-left">
+                            <span className="text-xs text-white truncate">
+                              {p.name}{onPromo && <span className="text-red-400 ml-1">· promo</span>}
+                            </span>
+                            {onPromo ? (
+                              <span className="text-xs shrink-0">
+                                <span className="text-gray-500 line-through mr-1">{fmt(p.priceInReais)}</span>
+                                <span className="text-red-400 font-semibold">{fmt(p.discountPriceInReais!)}</span>
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400 shrink-0">{fmt(p.priceInReais)}</span>
+                            )}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </div>
