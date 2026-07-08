@@ -837,9 +837,13 @@ using (var scope = app.Services.CreateScope())
                     color_primary           VARCHAR(9)   NOT NULL DEFAULT '#3EC2F2',
                     color_accent            VARCHAR(9)   NOT NULL DEFAULT '#FFE45E',
                     color_navy              VARCHAR(9)   NOT NULL DEFAULT '#0C3D5A',
+                    color_background        VARCHAR(9)   NOT NULL DEFAULT '#EBF7FD',
+                    color_card              VARCHAR(9)   NOT NULL DEFAULT '#FFFFFF',
                     updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
                 );
                 ALTER TABLE site_config ADD COLUMN IF NOT EXISTS contact_person_name VARCHAR(60) NOT NULL DEFAULT 'Maikon';
+                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS color_background VARCHAR(9) NOT NULL DEFAULT '#EBF7FD';
+                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS color_card VARCHAR(9) NOT NULL DEFAULT '#FFFFFF';
             ");
         }
 

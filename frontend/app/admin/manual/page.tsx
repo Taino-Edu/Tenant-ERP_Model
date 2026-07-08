@@ -2,7 +2,7 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.20.0'
+const VERSION = 'v1.20.1'
 const DATA = '08/07/2026'
 
 const SECOES = [
@@ -385,14 +385,16 @@ const SECOES = [
       { t: 'Onde fica', d: 'Admin → Personalizar Site (seção Administração no menu). Formulário simples — preenche e clica em Salvar, sem precisar mexer em código.' },
       { t: 'Identidade', d: 'Nome do site (aparece na navbar, título principal e rodapé), frase de apresentação abaixo do título, endereço/cidade e nome de quem atende (usado em textos como "Falar com [nome]").' },
       { t: 'Contato', d: 'Número de WhatsApp (com DDI, ex: 5517999999999) e e-mail de contato — usados no botão flutuante, rodapé e nos links de "falar no WhatsApp" da landing page.' },
-      { t: 'Cores', d: 'Cor primária (azul), cor de destaque (amarelo) e cor da navbar — escolha pelo seletor de cor ou digite o código hexadecimal.' },
+      { t: 'Cores', d: 'Cor primária (azul), cor de destaque (amarelo), cor da navbar, fundo da página e fundo dos cards — escolha pelo seletor de cor ou digite o código hexadecimal. Fundo e cards só valem no modo claro; o modo escuro mantém a paleta própria dele.' },
       { t: 'Textos da navbar', d: 'Nomes dos links (Torneios, Produtos, Mercado de Cartas, Pontos) e dos botões "Ver Eventos" / "Ver Torneios" / "Ver Produtos".' },
       { t: 'Textos das seções', d: 'Etiqueta e título de cada seção da landing page (Torneios, Produtos, Pontos) e o parágrafo do programa de fidelidade.' },
-      { t: 'Ver o resultado', d: 'Clique em "Ver site" no topo da página pra abrir a landing em outra aba e conferir as mudanças.' },
+      { t: 'Preview ao vivo', d: 'Uma miniatura da navbar, hero e um card de exemplo aparece ao lado do formulário, atualizando em tempo real conforme você digita ou muda uma cor — sem precisar salvar pra ver o resultado.' },
+      { t: 'Ver o resultado', d: 'Clique em "Ver site" no topo da página pra abrir a landing de verdade em outra aba e conferir as mudanças já salvas.' },
     ],
     dicas: [
       'Enquanto nada é preenchido, o site continua exatamente como está hoje — todo campo já vem com o valor atual como padrão.',
       'Esse painel é a base pro sistema virar white-label no futuro — quanto mais aqui, menos precisa mexer em código depois.',
+      'O menu lateral do admin (Painel Geral, Estoque, etc.) ainda não é personalizável por aqui — só a página pública.',
     ],
   },
 ]

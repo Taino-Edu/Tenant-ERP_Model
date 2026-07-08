@@ -29,6 +29,8 @@ const DEFAULTS: SiteConfigDto = {
   colorPrimary: '#3EC2F2',
   colorAccent: '#FFE45E',
   colorNavy: '#0C3D5A',
+  colorBackground: '#EBF7FD',
+  colorCard: '#FFFFFF',
 }
 
 function Field({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
@@ -58,6 +60,77 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
           placeholder="#000000"
           className="input w-full font-mono text-sm"
         />
+      </div>
+    </div>
+  )
+}
+
+/** Mistura duas cores hex — mesmo helper usado na landing pra derivar o fundo de imagem dentro do card. */
+function mixHex(a: string, b: string, ratio: number): string {
+  const parse = (h: string) => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(h.trim())
+    if (!m) return null
+    const n = parseInt(m[1], 16)
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+  }
+  const pa = parse(a), pb = parse(b)
+  if (!pa || !pb) return a
+  const mix = pa.map((c, i) => Math.round(c * (1 - ratio) + pb[i] * ratio))
+  return '#' + mix.map(c => c.toString(16).padStart(2, '0')).join('')
+}
+
+/** Preview ao vivo — miniatura da navbar + hero + card da landing page, refletindo o
+ * formulário em tempo real, antes de salvar. */
+function LivePreview({ cfg }: { cfg: SiteConfigDto }) {
+  const [firstWord, ...rest] = cfg.siteName.split(' ')
+  const restWord = rest.join(' ')
+  const cardAlt = mixHex(cfg.colorCard, cfg.colorPrimary, 0.08)
+
+  return (
+    <div className="lg:sticky lg:top-4 rounded-2xl overflow-hidden border border-surface-600 shadow-xl">
+      <div className="px-3 py-2 bg-surface-800 border-b border-surface-600 flex items-center gap-1.5">
+        <span className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-amber-400/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/70" />
+        <span className="ml-2 text-[10px] text-gray-500 font-medium">Preview</span>
+      </div>
+
+      {/* Navbar */}
+      <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: cfg.colorNavy }}>
+        <span className="font-black text-sm text-white">{cfg.siteName || 'Nome do site'}</span>
+        <span className="text-[10px] font-black px-2.5 py-1 rounded-lg" style={{ backgroundColor: cfg.colorAccent, color: cfg.colorNavy }}>
+          {cfg.ctaVerEventosLabel || 'Ver Eventos'}
+        </span>
+      </div>
+
+      {/* Hero */}
+      <div className="p-4" style={{ backgroundColor: cfg.colorBackground }}>
+        <p className="text-base font-black leading-tight mb-1.5">
+          <span style={{ color: cfg.colorAccent }}>{firstWord || 'Nome'}</span>
+          {restWord && <span style={{ color: cfg.colorPrimary }}> {restWord}</span>}
+        </p>
+        <p className="text-[10px] leading-snug mb-3" style={{ color: '#4D8FAC' }}>
+          {cfg.heroSubtitle || 'Frase de apresentação...'}
+        </p>
+        <div className="flex gap-1.5 mb-3">
+          <span className="text-[10px] font-black px-2 py-1 rounded-lg" style={{ backgroundColor: cfg.colorAccent, color: cfg.colorNavy }}>
+            {cfg.ctaVerTorneiosLabel || 'Ver Torneios'}
+          </span>
+          <span className="text-[10px] font-semibold px-2 py-1 rounded-lg border" style={{ borderColor: cfg.colorPrimary, color: cfg.colorPrimary }}>
+            {cfg.ctaVerProdutosLabel || 'Ver Produtos'}
+          </span>
+        </div>
+
+        {/* Card de exemplo */}
+        <div className="rounded-xl overflow-hidden border" style={{ backgroundColor: cfg.colorCard, borderColor: 'rgba(12,61,90,0.10)' }}>
+          <div className="h-14" style={{ backgroundColor: cardAlt }} />
+          <div className="p-2.5">
+            <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: cfg.colorPrimary }}>
+              {cfg.produtosEyebrow || 'Vitrine'}
+            </p>
+            <p className="text-xs font-black" style={{ color: cfg.colorNavy }}>{cfg.produtosTitle || 'Em Destaque'}</p>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -101,10 +174,10 @@ export default function SiteConfigPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-3xl">
+    <div className="p-4 sm:p-6 max-w-6xl">
       <Toaster position="top-center" />
 
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Palette className="w-6 h-6 text-brand-400" /> Personalizar Site
@@ -116,6 +189,9 @@ export default function SiteConfigPage() {
           Ver site <ExternalLink className="w-3.5 h-3.5" />
         </a>
       </div>
+
+      <div className="lg:grid lg:grid-cols-[1fr_320px] gap-6 items-start">
+      <div className="space-y-6">
 
       {/* Identidade */}
       <div className="card p-5 space-y-3">
@@ -155,7 +231,10 @@ export default function SiteConfigPage() {
           <ColorField label="Cor primária (azul)" value={cfg.colorPrimary} onChange={v => set('colorPrimary', v)} />
           <ColorField label="Cor de destaque (amarelo)" value={cfg.colorAccent} onChange={v => set('colorAccent', v)} />
           <ColorField label="Cor da navbar" value={cfg.colorNavy} onChange={v => set('colorNavy', v)} />
+          <ColorField label="Fundo da página" value={cfg.colorBackground} onChange={v => set('colorBackground', v)} />
+          <ColorField label="Fundo dos cards" value={cfg.colorCard} onChange={v => set('colorCard', v)} />
         </div>
+        <p className="text-[11px] text-gray-500">Fundo e cards só valem no modo claro — o modo escuro mantém a paleta própria dele.</p>
       </div>
 
       {/* Textos da navbar */}
@@ -220,6 +299,13 @@ export default function SiteConfigPage() {
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         Salvar
       </button>
+
+      </div>
+
+      <div className="mt-6 lg:mt-0">
+        <LivePreview cfg={cfg} />
+      </div>
+      </div>
     </div>
   )
 }

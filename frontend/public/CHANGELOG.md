@@ -1,5 +1,10 @@
 # Changelog — Santuário Nerd
 
+## [v1.20.1] — 2026-07-08
+
+### Adicionado
+- **Personalizar Site** ganhou mais 2 cores (fundo da página e fundo dos cards, modo claro) e um **preview ao vivo** — o formulário mostra uma miniatura da navbar/hero/card atualizando em tempo real conforme você digita ou muda uma cor, antes de salvar
+
 ## [v1.20.0] — 2026-07-08
 
 ### Adicionado

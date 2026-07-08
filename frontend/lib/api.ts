@@ -1254,6 +1254,8 @@ export interface SiteConfigDto {
   colorPrimary: string
   colorAccent: string
   colorNavy: string
+  colorBackground: string
+  colorCard: string
 }
 
 export const siteConfigApi = {

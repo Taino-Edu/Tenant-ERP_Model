@@ -37,6 +37,23 @@ const DEFAULT_SITE: SiteConfigDto = {
   colorPrimary: '#3EC2F2',
   colorAccent: '#FFE45E',
   colorNavy: '#0C3D5A',
+  colorBackground: '#EBF7FD',
+  colorCard: '#FFFFFF',
+}
+
+/** Mistura duas cores hex — usado pra derivar o "cardAlt" (fundo de imagem dentro de card)
+ * a partir da cor de card + um toque da cor primária, sem precisar de um campo próprio. */
+function mixHex(a: string, b: string, ratio: number): string {
+  const parse = (h: string) => {
+    const m = /^#?([0-9a-f]{6})$/i.exec(h.trim())
+    if (!m) return null
+    const n = parseInt(m[1], 16)
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
+  }
+  const pa = parse(a), pb = parse(b)
+  if (!pa || !pb) return a
+  const mix = pa.map((c, i) => Math.round(c * (1 - ratio) + pb[i] * ratio))
+  return '#' + mix.map(c => c.toString(16).padStart(2, '0')).join('')
 }
 
 /** Formata "5517999998888" como "(17) 99999-8888" — se não bater o formato esperado, devolve como veio. */
@@ -88,7 +105,7 @@ export default function LandingPage() {
     yellow: site.colorAccent, text: 'rgba(255,255,255,0.60)',
     navy: '#FFFFFF',
   } : {
-    bg: '#EBF7FD', card: '#FFFFFF', cardAlt: '#F0F9FF',
+    bg: site.colorBackground, card: site.colorCard, cardAlt: mixHex(site.colorCard, site.colorPrimary, 0.06),
     border: 'rgba(12,61,90,0.10)', blue: site.colorPrimary,
     yellow: site.colorAccent, text: '#4D8FAC',
     navy: '#0C3D5A',

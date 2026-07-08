@@ -121,6 +121,17 @@ public class SiteConfig
     [Column("color_navy")]
     public string ColorNavy { get; set; } = "#0C3D5A";
 
+    /// <summary>Fundo da landing page — só afeta o tema claro (o tema escuro mantém a paleta
+    /// própria dele, é uma escolha de tema, não de marca).</summary>
+    [MaxLength(9)]
+    [Column("color_background")]
+    public string ColorBackground { get; set; } = "#EBF7FD";
+
+    /// <summary>Fundo dos cards/caixas (produto, torneio, etc.) na landing page — só tema claro.</summary>
+    [MaxLength(9)]
+    [Column("color_card")]
+    public string ColorCard { get; set; } = "#FFFFFF";
+
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
