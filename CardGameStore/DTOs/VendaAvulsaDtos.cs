@@ -19,6 +19,10 @@ public class VendaAvulsaRequest
     [Range(0, 100)]
     public int DiscountPercent { get; set; } = 0;
 
+    /// <summary>Se preenchido, sobrepõe DiscountPercent — desconto direto em centavos.</summary>
+    [Range(0, int.MaxValue)]
+    public int? DiscountInCents { get; set; }
+
     [Required, MinLength(1)]
     public List<VendaAvulsaItemRequest> Items { get; set; } = new();
 

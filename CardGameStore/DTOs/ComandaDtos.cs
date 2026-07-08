@@ -47,6 +47,7 @@ public class ComandaDto
     public string            Status          { get; set; } = string.Empty;
     public decimal           TotalInReais    { get; set; }
     public int               PointsApplied   { get; set; }
+    public int               DiscountInCents { get; set; }
     public DateTime          OpenedAt                    { get; set; }
     public DateTime?         ClosedAt                    { get; set; }
     public string?           PaymentMethod               { get; set; }
@@ -110,6 +111,10 @@ public class CloseComandaRequest
     /// ou se deve criar uma nova conta (null = nova conta com prazo próprio de 30 dias).
     /// </summary>
     public Guid? CrediarioExistenteId { get; set; }
+
+    /// <summary>Desconto administrativo em centavos aplicado no fechamento (opcional).</summary>
+    [Range(0, int.MaxValue)]
+    public int DiscountInCents { get; set; } = 0;
 }
 
 public class ComandaItemDto

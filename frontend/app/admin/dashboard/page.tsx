@@ -565,7 +565,7 @@ function CloseComandaModal({
   comanda, onConfirm, onCancel, onGerarPix,
 }: {
   comanda:   ComandaDto
-  onConfirm: (paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) => void
+  onConfirm: (paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number) => void
   onCancel:  () => void
   onGerarPix: () => void
 }) {
@@ -573,8 +573,14 @@ function CloseComandaModal({
   const [splitEnabled,  setSplitEnabled]  = useState(false)
   const [secondMethod,  setSecondMethod]  = useState('Cashback')
   const [secondAmtStr,  setSecondAmtStr]  = useState('')
+  const [descontoStr,   setDescontoStr]   = useState('')
 
-  const totalRestante  = comanda.totalInReais - comanda.pointsApplied / 100
+  const totalAntesDesconto = comanda.totalInReais - comanda.pointsApplied / 100
+  const descontoCents  = Math.min(
+    Math.round(parseFloat(descontoStr.replace(',', '.') || '0') * 100),
+    Math.round(totalAntesDesconto * 100),
+  )
+  const totalRestante  = totalAntesDesconto - descontoCents / 100
   const saldoCashback  = comanda.userBalanceInCents / 100
   const saldoPontos    = comanda.userPointsBalance
 
@@ -592,9 +598,9 @@ function CloseComandaModal({
 
   function handleConfirm() {
     if (splitEnabled && secondAmtCents > 0)
-      onConfirm(method, secondMethod, secondAmtCents)
+      onConfirm(method, secondMethod, secondAmtCents, descontoCents)
     else
-      onConfirm(method)
+      onConfirm(method, undefined, undefined, descontoCents)
   }
 
   return (
@@ -618,6 +624,23 @@ function CloseComandaModal({
                 </span>
               )}
             </div>
+          )}
+        </div>
+
+        <div>
+          <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Desconto (R$)</p>
+          <input
+            type="text"
+            inputMode="decimal"
+            placeholder="0,00"
+            value={descontoStr}
+            onChange={e => setDescontoStr(e.target.value)}
+            className="input text-sm w-full font-mono"
+          />
+          {descontoCents > 0 && (
+            <p className="text-xs text-accent-green mt-1">
+              Total após desconto: R$ {totalRestante.toFixed(2).replace('.', ',')}
+            </p>
           )}
         </div>
 
@@ -850,7 +873,7 @@ function ComandaCard({
   comanda, onClose, onCancel, onUpdate, onClosedExternally, isNew, recentChange,
 }: {
   comanda: ComandaDto
-  onClose:  (id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) => void
+  onClose:  (id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number) => void
   onCancel: (id: string) => void
   onUpdate: (updated: ComandaDto, changeType?: 'add' | 'remove') => void
   onClosedExternally: () => void
@@ -881,10 +904,10 @@ function ComandaCard({
     Aberta: '● Aberta', EmAndamento: '● Em Andamento',
   }
 
-  async function handleClose(paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) {
+  async function handleClose(paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number) {
     setCloseOpen(false)
     setLoading(true)
-    try { await onClose(comanda.id, paymentMethod, secondMethod, secondAmountInCents) } finally { setLoading(false) }
+    try { await onClose(comanda.id, paymentMethod, secondMethod, secondAmountInCents, discountInCents) } finally { setLoading(false) }
   }
   async function handleCancel() {
     setConfirm(null)
@@ -1170,7 +1193,7 @@ function EditarComandaModal({
   const [pm,       setPm]       = useState(comanda.paymentMethod ?? 'Dinheiro')
   const [pm2,      setPm2]      = useState(comanda.secondPaymentMethod ?? '')
   const [pm2val,   setPm2val]   = useState(String(comanda.secondPaymentAmountInCents / 100))
-  const [desconto, setDesconto] = useState(String(comanda.pointsApplied / 100))
+  const [desconto, setDesconto] = useState(String(comanda.discountInCents / 100))
   const [clienteId, setClienteId] = useState(comanda.userId)
   const [clienteSearch, setClienteSearch] = useState('')
   const [showClienteList, setShowClienteList] = useState(false)
@@ -1419,7 +1442,7 @@ export default function DashboardPage() {
   const [editComanda, setEditComanda]   = useState<ComandaDto | null>(null)
   // Crediário — escolha de conta ao fechar comanda
   const [pendingClose, setPendingClose] = useState<{
-    id: string; pm: string; pm2?: string; amt2?: number
+    id: string; pm: string; pm2?: string; amt2?: number; discount?: number
     userId: string; userName: string; valorPrincipal: number
   } | null>(null)
   const [contasAbertas, setContasAbertas] = useState<CrediariosDto[]>([])
@@ -1596,7 +1619,7 @@ export default function DashboardPage() {
     if (changeType) markChange(updated.id, changeType)
   }
 
-  async function handleClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number) {
+  async function handleClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number) {
     if (paymentMethod === 'Crediario') {
       // Descobre o cliente da comanda
       const comanda = comandas.find(c => c.id === id)
@@ -1605,22 +1628,22 @@ export default function DashboardPage() {
           const { data } = await crediarioApi.byUser(comanda.userId)
           const abertas = data.filter(c => c.status === 'Aberto')
           if (abertas.length > 0) {
-            // Calcula valor principal (total - segundo pagamento)
+            // Calcula valor principal (total - desconto - segundo pagamento)
             const totalCents = comanda.items.reduce((s, i) => s + i.unitPriceInCents * i.quantity, 0)
-            const valorPrincipal = totalCents - (secondAmountInCents ?? 0)
-            setPendingClose({ id, pm: paymentMethod, pm2: secondMethod, amt2: secondAmountInCents, userId: comanda.userId, userName: comanda.userName, valorPrincipal })
+            const valorPrincipal = totalCents - (discountInCents ?? 0) - (secondAmountInCents ?? 0)
+            setPendingClose({ id, pm: paymentMethod, pm2: secondMethod, amt2: secondAmountInCents, discount: discountInCents, userId: comanda.userId, userName: comanda.userName, valorPrincipal })
             setContasAbertas(abertas)
             return
           }
         } catch { /* se falhar na busca, fecha normalmente */ }
       }
     }
-    await executarClose(id, paymentMethod, secondMethod, secondAmountInCents)
+    await executarClose(id, paymentMethod, secondMethod, secondAmountInCents, undefined, discountInCents)
   }
 
-  async function executarClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, crediarioExistenteId?: string) {
+  async function executarClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, crediarioExistenteId?: string, discountInCents?: number) {
     try {
-      await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId)
+      await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId, discountInCents)
       const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
       toast.success(label)
       fetchComandas()
@@ -1727,10 +1750,10 @@ export default function DashboardPage() {
   ].map(pm => ({
     ...pm,
     // Para split payment, calcula o valor real de cada método:
-    // primaryAmt = (total - pontos descontados) - valor do segundo método
+    // primaryAmt = total (já líquido de pontos/desconto no fechamento) - valor do segundo método
     // secondAmt  = secondPaymentAmountInCents / 100
     total: fechadas.reduce((sum, c) => {
-      const net        = c.totalInReais - c.pointsApplied / 100
+      const net        = c.totalInReais // totalInReais já sai líquido de pontos/desconto do CloseComandaAsync
       const hasSecond  = !!c.secondPaymentMethod && c.secondPaymentAmountInCents > 0
       const secondAmt  = c.secondPaymentAmountInCents / 100
       const primaryAmt = hasSecond ? net - secondAmt : net
@@ -2051,7 +2074,7 @@ export default function DashboardPage() {
                           </button>
                         )}
                         {c.status === 'Fechada' && c.paymentMethod && (() => {
-                          const net        = c.totalInReais - c.pointsApplied / 100
+                          const net        = c.totalInReais // já líquido de pontos/desconto (CloseComandaAsync)
                           const hasSecond  = !!c.secondPaymentMethod && c.secondPaymentAmountInCents > 0
                           const secondAmt  = c.secondPaymentAmountInCents / 100
                           const primaryAmt = hasSecond ? net - secondAmt : net
@@ -2060,8 +2083,14 @@ export default function DashboardPage() {
                             <div className="space-y-0.5 pt-1">
                               {c.pointsApplied > 0 && (
                                 <div className="flex justify-between text-xs text-gray-500">
-                                  <span>Desconto pontos</span>
+                                  <span>Pontos aplicados</span>
                                   <span className="text-amber-400">− {fmt(c.pointsApplied / 100)}</span>
+                                </div>
+                              )}
+                              {c.discountInCents > 0 && (
+                                <div className="flex justify-between text-xs text-gray-500">
+                                  <span>Desconto</span>
+                                  <span className="text-accent-green">− {fmt(c.discountInCents / 100)}</span>
                                 </div>
                               )}
                               <div className="flex justify-between text-xs text-gray-500">
@@ -2480,11 +2509,11 @@ export default function DashboardPage() {
           valorNovo={pendingClose.valorPrincipal}
           onEscolher={async (credId) => {
             setPendingClose(null)
-            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, credId)
+            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, credId, pendingClose.discount)
           }}
           onNova={async () => {
             setPendingClose(null)
-            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2)
+            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, undefined, pendingClose.discount)
           }}
           onCancel={() => setPendingClose(null)}
         />

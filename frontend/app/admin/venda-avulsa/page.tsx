@@ -428,7 +428,9 @@ function VendaWizard({
 
   // Etapa 3 — pagamento
   const [payment, setPayment] = useState<string>(PAYMENT_METHODS[0].value)
+  const [discountMode, setDiscountMode] = useState<'percent' | 'cents'>('percent')
   const [discountPct, setDiscountPct] = useState(defaultDiscount)
+  const [discountValueStr, setDiscountValueStr] = useState('')
   const [received, setReceived] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -534,7 +536,9 @@ function VendaWizard({
       ? i.product.discountPriceInCents : i.product.priceInCents
     return s + price * i.quantity
   }, 0)
-  const discountCents     = Math.round(subtotal * discountPct / 100)
+  const discountCents     = discountMode === 'cents'
+    ? Math.min(Math.round(parseFloat(discountValueStr.replace(',', '.') || '0') * 100), subtotal)
+    : Math.round(subtotal * discountPct / 100)
   const total             = subtotal - discountCents
   const receivedCents     = Math.round(parseFloat(received.replace(',', '.') || '0') * 100)
   const troco             = receivedCents - total
@@ -564,10 +568,11 @@ function VendaWizard({
         clientName.trim() || null,
         payment,
         cart.map(i => ({ productId: i.product.id, quantity: i.quantity, variantId: i.variantId })),
-        discountPct,
+        discountMode === 'percent' ? discountPct : 0,
         selectedUserId ?? undefined,
         splitEnabled ? secondPayment : null,
         splitEnabled ? secondAmountCents : 0,
+        discountMode === 'cents' ? discountCents : undefined,
       )
       onComplete(data)
       toast.success('Venda registrada!')
@@ -575,7 +580,7 @@ function VendaWizard({
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao registrar venda.')
     } finally { setSubmitting(false) }
-  }, [cart, clientName, payment, discountPct, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid])
+  }, [cart, clientName, payment, discountMode, discountPct, discountCents, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid])
 
   const handleSubmit = useThrottle(submitRaw, 2000)
 
@@ -882,35 +887,65 @@ function VendaWizard({
 
               {/* Desconto */}
               <div>
-                <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
-                  <Tag className="w-3.5 h-3.5" /> Desconto
-                </p>
-                <div className="flex gap-1.5">
-                  {[0, 5, 10, 15, 20].map(d => (
-                    <button
-                      key={d}
-                      onClick={() => setDiscountPct(d)}
-                      className={clsx(
-                        'flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all',
-                        discountPct === d
-                          ? 'bg-accent-green/20 border-accent-green/50 text-accent-green'
-                          : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
-                      )}
-                    >{d === 0 ? '—' : `${d}%`}</button>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5" /> Desconto
+                  </p>
+                  <div className="flex gap-1 bg-surface-900 rounded-lg p-0.5">
+                    {(['percent', 'cents'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setDiscountMode(mode)}
+                        className={clsx(
+                          'px-2.5 py-1 rounded-md text-[11px] font-bold transition-all',
+                          discountMode === mode
+                            ? 'bg-accent-green/20 text-accent-green'
+                            : 'text-gray-500 hover:text-gray-300'
+                        )}
+                      >{mode === 'percent' ? '%' : 'R$'}</button>
+                    ))}
+                  </div>
                 </div>
+
+                {discountMode === 'percent' ? (
+                  <div className="flex gap-1.5">
+                    {[0, 5, 10, 15, 20].map(d => (
+                      <button
+                        key={d}
+                        onClick={() => setDiscountPct(d)}
+                        className={clsx(
+                          'flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all',
+                          discountPct === d
+                            ? 'bg-accent-green/20 border-accent-green/50 text-accent-green'
+                            : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                        )}
+                      >{d === 0 ? '—' : `${d}%`}</button>
+                    ))}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={discountValueStr}
+                    onChange={e => setDiscountValueStr(e.target.value)}
+                    className="input text-sm w-full font-mono"
+                  />
+                )}
               </div>
 
               {/* Total */}
               <div className="bg-surface-900 rounded-xl px-4 py-3 space-y-1.5">
-                {discountPct > 0 && (
+                {discountCents > 0 && (
                   <>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Subtotal</span>
                       <span className="text-gray-400 font-mono">{fmt(subtotal / 100)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-accent-green">Desconto {discountPct}%</span>
+                      <span className="text-accent-green">
+                        Desconto{discountMode === 'percent' ? ` ${discountPct}%` : ''}
+                      </span>
                       <span className="text-accent-green font-mono">−{fmt(discountCents / 100)}</span>
                     </div>
                     <div className="h-px bg-surface-600" />

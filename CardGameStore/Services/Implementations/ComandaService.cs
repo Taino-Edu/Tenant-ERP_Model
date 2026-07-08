@@ -460,7 +460,7 @@ public class ComandaService : IComandaService
         return dto;
     }
 
-    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null)
+    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0)
     {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -468,8 +468,14 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
-        // Total líquido: desconta pontos que o cliente já pré-pagou via ApplyPoints.
-        var netTotal = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied);
+        if (discountInCents > 0 && discountInCents > comanda.TotalInCents - comanda.PointsApplied)
+            throw new InvalidOperationException(
+                $"O desconto (R$ {discountInCents / 100m:N2}) não pode ser maior que o total da comanda (R$ {(comanda.TotalInCents - comanda.PointsApplied) / 100m:N2}).");
+
+        // Total líquido: desconta pontos que o cliente já pré-pagou via ApplyPoints e o
+        // desconto administrativo dado pelo Admin no fechamento.
+        var netTotal = Math.Max(0, comanda.TotalInCents - comanda.PointsApplied - discountInCents);
+        comanda.DiscountInCents = discountInCents;
 
         // ── Split payment: valida e processa segundo método ───────────────────
         var hasSecond = secondPaymentAmountInCents > 0 && !string.IsNullOrEmpty(secondPaymentMethod);
@@ -989,9 +995,9 @@ public class ComandaService : IComandaService
         if (request.SecondPaymentAmountInCents.HasValue)
             comanda.SecondPaymentAmountInCents = request.SecondPaymentAmountInCents.Value;
 
-        // 2. Desconto
+        // 2. Desconto — campo próprio, separado de PointsApplied (pontos de fidelidade reais)
         if (request.DescontoEmCentavos.HasValue)
-            comanda.PointsApplied = Math.Max(0, request.DescontoEmCentavos.Value);
+            comanda.DiscountInCents = Math.Max(0, request.DescontoEmCentavos.Value);
 
         // 3. Observações
         if (request.Notes != null)
@@ -1092,7 +1098,7 @@ public class ComandaService : IComandaService
         var totalItens = await _db.ComandaItems
             .Where(i => i.ComandaId == comandaId)
             .SumAsync(i => i.SubtotalInCents);
-        comanda.TotalInCents = Math.Max(0, totalItens - comanda.PointsApplied);
+        comanda.TotalInCents = Math.Max(0, totalItens - comanda.PointsApplied - comanda.DiscountInCents);
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Comanda {Id} editada pelo admin {AdminId}.", comandaId, adminId);
@@ -1116,6 +1122,7 @@ public class ComandaService : IComandaService
         Status                     = comanda.Status.ToString(),
         TotalInReais               = comanda.TotalInReais,
         PointsApplied              = comanda.PointsApplied,
+        DiscountInCents            = comanda.DiscountInCents,
         OpenedAt                   = comanda.OpenedAt,
         ClosedAt                   = comanda.ClosedAt,
         PaymentMethod              = comanda.PaymentMethod,

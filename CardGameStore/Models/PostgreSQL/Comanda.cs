@@ -98,6 +98,10 @@ public class Comanda
     [Column("points_applied")]
     public int PointsApplied { get; set; } = 0;
 
+    /// <summary>Desconto administrativo em centavos (loja), separado dos pontos de fidelidade.</summary>
+    [Column("discount_in_cents")]
+    public int DiscountInCents { get; set; } = 0;
+
     /// <summary>Observações do Admin (ex: "cliente solicitou desconto").</summary>
     [MaxLength(500)]
     [Column("notes")]

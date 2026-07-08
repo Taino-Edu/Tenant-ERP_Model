@@ -386,7 +386,9 @@ public class AnalyticsController : ControllerBase
         var transacoesComanda = comandasPeriodo
             .SelectMany(c =>
             {
-                var net        = c.TotalInCents - c.PointsApplied;
+                // TotalInCents já sai líquido de PointsApplied/DiscountInCents no fechamento
+                // (ComandaService.CloseComandaAsync) — não subtrair de novo aqui.
+                var net        = c.TotalInCents;
                 var hasSecond  = !string.IsNullOrEmpty(c.SecondPaymentMethod) && c.SecondPaymentAmountInCents > 0;
                 var secondAmt  = hasSecond ? c.SecondPaymentAmountInCents : 0;
                 var primaryAmt = Math.Max(0, net - secondAmt);

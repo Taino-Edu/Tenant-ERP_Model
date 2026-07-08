@@ -1,5 +1,14 @@
 # Changelog — Santuário Nerd
 
+## [v1.16.0] — 2026-07-08
+
+### Adicionado
+- **Desconto em R$ (valor fixo)** no PDV e na Comanda, além do percentual já existente — igual ao Bling: toggle % ↔ R$ na venda avulsa (Etapa 3), e campo livre de desconto em R$ ao fechar qualquer comanda
+- Comanda ganhou campo próprio de desconto administrativo, separado dos pontos de fidelidade do cliente — antes só dava pra dar desconto editando o histórico depois de fechada; agora dá direto no fechamento
+
+### Corrigido
+- **Relatório "Formas de Pagamento" (Financeiro e Histórico) subestimava a receita** de qualquer comanda em que o cliente usou pontos de fidelidade — o valor já vinha líquido de pontos ao fechar a comanda, mas o relatório descontava os pontos de novo por cima
+
 ## [v1.15.0] — 2026-07-07
 
 ### Adicionado

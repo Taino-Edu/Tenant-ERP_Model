@@ -794,6 +794,9 @@ using (var scope = app.Services.CreateScope())
                 -- O próximo sync (janela de 7 dias) reimporta corretamente com idTransacao.
                 DELETE FROM external_transactions WHERE source = 'inter' AND external_id IS NULL;
 
+                -- Comanda: desconto administrativo em R$, separado dos pontos de fidelidade
+                ALTER TABLE comandas ADD COLUMN IF NOT EXISTS discount_in_cents INTEGER NOT NULL DEFAULT 0;
+
                 -- Fila de espera: controle de quem já foi avisado do reestoque
                 ALTER TABLE product_waitlist ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ NULL;
 

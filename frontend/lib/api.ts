@@ -77,7 +77,7 @@ export interface AuthResponse {
 export interface ComandaDto {
   id: string; userName: string; userId: string
   tableIdentifier: string | null; status: string
-  totalInReais: number; pointsApplied: number
+  totalInReais: number; pointsApplied: number; discountInCents: number
   openedAt: string; closedAt?: string
   paymentMethod: string | null
   secondPaymentMethod: string | null
@@ -390,8 +390,8 @@ export const comandaApi = {
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
   updateItem:   (id: string, itemId: string, quantity: number) =>
     api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
-  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string) =>
-    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId }),
+  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0) =>
+    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId, discountInCents }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
   editar:       (id: string, request: EditarComandaRequest) => api.put<ComandaDto>(`/api/comanda/${id}/editar`, request),
   adminOpen:    (userId: string, tableIdentifier?: string) =>
@@ -539,9 +539,10 @@ export const vendaAvulsaApi = {
     userId?: string,
     secondPaymentMethod?: string | null,
     secondPaymentAmountInCents = 0,
+    discountInCents?: number,
   ) =>
     api.post<VendaAvulsaDto>('/api/venda-avulsa', {
-      clientName, paymentMethod, items, discountPercent, userId,
+      clientName, paymentMethod, items, discountPercent, discountInCents, userId,
       secondPaymentMethod: secondPaymentMethod || null,
       secondPaymentAmountInCents,
     }),

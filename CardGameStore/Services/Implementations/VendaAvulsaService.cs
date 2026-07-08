@@ -132,7 +132,11 @@ public class VendaAvulsaService : IVendaAvulsaService
             });
         }
 
-        var discountInCents = (int)Math.Round(total * request.DiscountPercent / 100.0);
+        // Desconto em R$ sobrepõe percentual quando informado — mesmo padrão do EditarPagamentoAsync.
+        var discountInCents = request.DiscountInCents.HasValue
+            ? Math.Min(request.DiscountInCents.Value, total)
+            : (int)Math.Round(total * request.DiscountPercent / 100.0);
+        var discountPercentStored = request.DiscountInCents.HasValue ? 0 : request.DiscountPercent;
         var finalTotal = total - discountInCents;
 
         // ── Validação do segundo método de pagamento ──────────────────────────
@@ -165,7 +169,7 @@ public class VendaAvulsaService : IVendaAvulsaService
         {
             Items                      = vendaItems,
             TotalInCents               = finalTotal,
-            DiscountPercent            = request.DiscountPercent,
+            DiscountPercent            = discountPercentStored,
             DiscountInCents            = discountInCents,
             PaymentMethod              = request.PaymentMethod,
             SecondPaymentMethod        = secondPm,
@@ -194,8 +198,8 @@ public class VendaAvulsaService : IVendaAvulsaService
             ? $"{request.PaymentMethod} + {secondPm} (R$ {secondAmt / 100m:N2})"
             : request.PaymentMethod;
         _logger.LogInformation(
-            "Venda avulsa {Id} registrada por {Admin}: {Count} item(ns), R$ {Total:F2} (desconto {Disc}%), {Payment}",
-            venda.Id, adminName, vendaItems.Count, finalTotal / 100m, request.DiscountPercent, paymentSummary);
+            "Venda avulsa {Id} registrada por {Admin}: {Count} item(ns), R$ {Total:F2} (desconto R$ {Desc:F2}), {Payment}",
+            venda.Id, adminName, vendaItems.Count, finalTotal / 100m, discountInCents / 100m, paymentSummary);
 
         // ── Pós-venda: operações que dependem de cliente cadastrado ──────────────
         var pm = request.PaymentMethod;
