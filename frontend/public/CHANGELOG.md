@@ -1,5 +1,16 @@
 # Changelog — Santuário Nerd
 
+## [v1.15.0] — 2026-07-07
+
+### Adicionado
+- **Pix na inscrição de campeonato**: pagamento da taxa é opcional (a vaga já vale na hora da inscrição) — o jogador vê um botão "Pagar inscrição via Pix" em Meus Campeonatos, com QR Code/copia-e-cola e confirmação automática; o Maikon acompanha quem pagou (Pix ou balcão) direto na lista de participantes, com botão para marcar pagamento manual de quem pagar no balcão
+- **Aviso automático da fila de espera**: quando o estoque de um produto em pré-venda sai de zero, todo mundo na fila recebe notificação in-app + push + e-mail na hora, uma única vez por pessoa
+- **Botão "Avisar fila"** em Admin → Pré-vendas → Lista de Espera: leva direto pra Mensageria com os clientes daquela fila já selecionados e o título/imagem do produto preenchidos
+- **Minhas Filas** no perfil do cliente: nova aba mostra posição em cada lista de espera e reservas ativas com prazo de expiração, com botão pra sair/cancelar — sem precisar caçar o produto de novo
+
+### Corrigido
+- Extrato do Inter importava toda transação como despesa (inclusive Pix recebido) e pulava a maioria por falta de identificador único — a integração usava nomes de campo que não existem na API real do banco. Corrigido usando o schema real e o endpoint `/extrato/completo`, que traz o identificador necessário para não duplicar/perder lançamentos
+
 ## [v1.14.0] — 2026-07-07
 
 ### Adicionado

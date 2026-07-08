@@ -2,13 +2,17 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto, championshipApi, MyParticipation } from '@/lib/api'
+import {
+  userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto, championshipApi, MyParticipation,
+  waitListApi, MyWaitListEntry, reservationApi, MyReservation,
+} from '@/lib/api'
 import { getUserName, clearAuth } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   Star, User, Phone, CreditCard, Clock, AlertCircle, ArrowLeft, LogOut,
   CheckCircle, Wallet, CalendarClock, Receipt, ChevronDown, ChevronUp,
-  ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail, Settings, BookOpen
+  ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail, Settings, BookOpen,
+  Bell, Package, X, Hourglass,
 } from 'lucide-react'
 import clsx from 'clsx'
 import toast, { Toaster } from 'react-hot-toast'
@@ -19,9 +23,11 @@ export default function PerfilPage() {
   const [crediarios,     setCrediarios]     = useState<CrediariosDto[]>([])
   const [history,        setHistory]        = useState<ComandaDto[]>([])
   const [participations, setParticipations] = useState<MyParticipation[]>([])
+  const [waitlist,       setWaitlist]       = useState<MyWaitListEntry[]>([])
+  const [reservations,   setReservations]   = useState<MyReservation[]>([])
   const [loading,        setLoading]        = useState(true)
   const [expanded,       setExpanded]       = useState<string | null>(null)
-  const [tab,            setTab]            = useState<'pontos' | 'historico' | 'torneios' | 'crediario'>('pontos')
+  const [tab,            setTab]            = useState<'pontos' | 'historico' | 'torneios' | 'crediario' | 'filas'>('pontos')
   const [isUploading,    setIsUploading]    = useState(false)
 
   useEffect(() => {
@@ -30,8 +36,35 @@ export default function PerfilPage() {
       crediarioApi.meuHistorico().then(r => setCrediarios(r.data)).catch(() => {}),
       comandaApi.myHistory().then(r => setHistory(r.data)).catch(() => {}),
       championshipApi.myParticipations().then(r => setParticipations(r.data)).catch(() => {}),
+      waitListApi.mine().then(r => setWaitlist(r.data)).catch(() => {}),
+      reservationApi.mine().then(r => setReservations(r.data.filter((res: MyReservation) => res.status === 'active'))).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
+
+  async function handleLeaveWaitlist(entry: MyWaitListEntry) {
+    try {
+      await waitListApi.leave(entry.productId)
+      setWaitlist(prev => prev.filter(e => e.id !== entry.id))
+      toast.success('Você saiu da lista de espera.')
+    } catch { toast.error('Erro ao sair da fila.') }
+  }
+
+  async function handleCancelReservation(res: MyReservation) {
+    if (!confirm('Cancelar esta reserva?')) return
+    try {
+      await reservationApi.cancel(res.id)
+      setReservations(prev => prev.filter(r => r.id !== res.id))
+      toast.success('Reserva cancelada.')
+    } catch { toast.error('Erro ao cancelar reserva.') }
+  }
+
+  function reservaTempoRestante(expiresAt: string) {
+    const diff = new Date(expiresAt).getTime() - Date.now()
+    if (diff <= 0) return 'expirando…'
+    const h = Math.floor(diff / 3_600_000)
+    const m = Math.floor((diff % 3_600_000) / 60_000)
+    return h > 0 ? `${h}h ${m}min restantes` : `${m}min restantes`
+  }
 
   const crediario = crediarios.find(c => c.status === 'Aberto' || c.status === 'Vencido') ?? null
 
@@ -80,6 +113,7 @@ export default function PerfilPage() {
     { id: 'pontos',    icon: Star,    label: 'Pontos'   },
     { id: 'historico', icon: Receipt, label: 'Histórico' },
     { id: 'torneios',  icon: Trophy,  label: 'Torneios' },
+    { id: 'filas',     icon: Bell,    label: 'Filas', badge: waitlist.length + reservations.length },
     { id: 'crediario', icon: Wallet,  label: 'Dívida'   },
   ] as const
 
@@ -214,13 +248,18 @@ export default function PerfilPage() {
                   key={t.id}
                   onClick={() => setTab(t.id)}
                   className={clsx(
-                    'flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all',
+                    'relative flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all',
                     tab === t.id
                       ? 'text-white shadow-md'
                       : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
                   )}
                   style={tab === t.id ? { background: 'linear-gradient(135deg, #29B5E8, #1A6DB5)' } : {}}
                 >
+                  {'badge' in t && t.badge > 0 && (
+                    <span className="absolute top-1 right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center">
+                      {t.badge}
+                    </span>
+                  )}
                   <t.icon className={clsx('w-4 h-4 mb-1', tab === t.id ? 'text-white' : 'text-gray-400')} />
                   <span className="text-[10px] font-black uppercase tracking-tight">{t.label}</span>
                 </button>
@@ -355,6 +394,77 @@ export default function PerfilPage() {
                       </div>
                     </div>
                   ))
+                )}
+              </div>
+            )}
+
+            {/* ── TAB: FILAS (lista de espera + reservas) ── */}
+            {tab === 'filas' && (
+              <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {waitlist.length === 0 && reservations.length === 0 ? (
+                  <div className="bg-white border border-gray-100 rounded-2xl py-14 text-center shadow-sm">
+                    <Bell className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                    <p className="text-sm text-gray-400 italic">Você não está em nenhuma fila nem tem reservas ativas.</p>
+                  </div>
+                ) : (
+                  <>
+                    {reservations.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Reservas ativas</p>
+                        {reservations.map(r => (
+                          <div key={r.id} className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0 overflow-hidden">
+                              {r.productImageUrl
+                                ? <img src={r.productImageUrl} alt={r.productName} className="w-full h-full object-cover" />
+                                : <Package className="w-5 h-5 text-amber-400" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-gray-900 truncate">{r.productName}</p>
+                              {r.variantLabel && <p className="text-[11px] text-gray-400">{r.variantLabel}</p>}
+                              <p className="text-[11px] text-amber-500 font-bold flex items-center gap-1 mt-0.5">
+                                <Hourglass className="w-3 h-3" /> {reservaTempoRestante(r.expiresAt)}
+                              </p>
+                            </div>
+                            <button onClick={() => handleCancelReservation(r)}
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                              title="Cancelar reserva">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {waitlist.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-1">Listas de espera</p>
+                        {waitlist.map(w => (
+                          <div key={w.id} className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0 overflow-hidden">
+                              {w.productImageUrl
+                                ? <img src={w.productImageUrl} alt={w.productName} className="w-full h-full object-cover" />
+                                : <Package className="w-5 h-5 text-purple-400" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-gray-900 truncate">{w.productName}</p>
+                              {w.notifiedAt ? (
+                                <p className="text-[11px] text-emerald-500 font-black uppercase tracking-wide mt-0.5">
+                                  Chegou! Disponível para compra
+                                </p>
+                              ) : (
+                                <p className="text-[11px] text-purple-500 font-bold mt-0.5">#{w.position} na fila</p>
+                              )}
+                            </div>
+                            <button onClick={() => handleLeaveWaitlist(w)}
+                              className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                              title="Sair da fila">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}

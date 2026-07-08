@@ -172,6 +172,15 @@ public class ChampionshipParticipant
     [Column("registered_at")]
     public DateTime RegisteredAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Quando a taxa de inscrição foi paga — null = pendente (pagamento não bloqueia a vaga).</summary>
+    [Column("entry_fee_paid_at")]
+    public DateTime? EntryFeePaidAt { get; set; }
+
+    /// <summary>"Pix" (confirmado pelo Inter) ou "Balcao" (marcado manualmente pelo admin).</summary>
+    [MaxLength(20)]
+    [Column("entry_fee_payment_method")]
+    public string? EntryFeePaymentMethod { get; set; }
+
     /// <summary>Comanda do jogador durante o campeonato (para lanche, acessórios, etc.).</summary>
     [Column("comanda_id")]
     public Guid? ComandaId { get; set; }

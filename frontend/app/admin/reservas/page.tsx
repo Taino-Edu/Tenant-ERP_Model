@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { api, productApi, waitListApi, Product, WaitListEntry } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
   Clock, CheckCircle, XCircle, Package, User as UserIcon,
   ShoppingBag, LayoutList, RefreshCw, Loader2, ChevronLeft, ChevronRight,
-  AlertTriangle, TimerIcon, Plus, Users, ChevronDown, ChevronUp, X,
+  AlertTriangle, TimerIcon, Plus, Users, ChevronDown, ChevronUp, X, Megaphone,
 } from 'lucide-react'
 
 const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Débito', 'Crédito', 'Crediario']
@@ -65,6 +66,7 @@ function timeUntil(d: string) {
 }
 
 export default function ReservasPage() {
+  const router = useRouter()
   const [tab,         setTab]         = useState<'reservas' | 'waitlist'>('reservas')
 
   // ── aba Reservas ──
@@ -120,6 +122,30 @@ export default function ReservasPage() {
       setWlData(prev => ({ ...prev, [productId]: { entries: data.entries, total: data.total } }))
     } catch { toast.error('Erro ao carregar fila') }
     finally { setWlFetching(null) }
+  }
+
+  async function avisarFila(p: Product) {
+    let data = wlData[p.id]
+    if (!data) {
+      setWlFetching(p.id)
+      try {
+        const r = await waitListApi.adminList(p.id)
+        data = { entries: r.data.entries, total: r.data.total }
+        setWlData(prev => ({ ...prev, [p.id]: data! }))
+      } catch { toast.error('Erro ao carregar fila'); return }
+      finally { setWlFetching(null) }
+    }
+
+    const uids = [...new Set(data.entries.map(e => e.userId).filter((id): id is string => !!id))]
+    if (uids.length === 0) { toast.error('Ninguém com conta cadastrada nesta fila ainda.'); return }
+
+    const qs = new URLSearchParams({
+      uids:        uids.join(','),
+      productId:   p.id,
+      productName: p.name,
+      ...(p.imageUrl ? { imageUrl: p.imageUrl } : {}),
+    })
+    router.push(`/admin/mensageria?${qs.toString()}`)
   }
 
   async function removeWlEntry(productId: string, entryId: string) {
@@ -295,31 +321,40 @@ export default function ReservasPage() {
               const data     = wlData[p.id]
               return (
                 <div key={p.id} className="card overflow-hidden">
-                  <button
-                    onClick={() => toggleProduct(p.id)}
-                    className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-700/40 transition-colors">
-                    <div className="w-10 h-10 rounded-lg bg-surface-700 shrink-0 flex items-center justify-center overflow-hidden">
-                      {p.imageUrl
-                        ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                        : <Package className="w-5 h-5 text-surface-500" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-white truncate">{p.name}</p>
-                      <p className="text-xs text-gray-400">
-                        {data ? `${data.total} na fila` : 'Ver fila'}
-                      </p>
-                    </div>
-                    {data && data.total > 0 && (
-                      <span className="text-xs font-black bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
-                        {data.total}
-                      </span>
-                    )}
-                    {fetching
-                      ? <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
-                      : isOpen
-                        ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
-                        : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
-                  </button>
+                  <div className="w-full flex items-center gap-3 p-3">
+                    <button
+                      onClick={() => toggleProduct(p.id)}
+                      className="flex-1 min-w-0 flex items-center gap-3 text-left hover:opacity-80 transition-opacity">
+                      <div className="w-10 h-10 rounded-lg bg-surface-700 shrink-0 flex items-center justify-center overflow-hidden">
+                        {p.imageUrl
+                          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                          : <Package className="w-5 h-5 text-surface-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-white truncate">{p.name}</p>
+                        <p className="text-xs text-gray-400">
+                          {data ? `${data.total} na fila` : 'Ver fila'}
+                        </p>
+                      </div>
+                      {data && data.total > 0 && (
+                        <span className="text-xs font-black bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
+                          {data.total}
+                        </span>
+                      )}
+                      {fetching
+                        ? <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
+                        : isOpen
+                          ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+                          : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+                    </button>
+                    <button
+                      onClick={() => avisarFila(p)}
+                      title="Avisar toda a fila pela Mensageria"
+                      className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-500/15 text-brand-300
+                                 border border-brand-500/25 hover:bg-brand-500/25 text-[11px] font-bold transition-colors">
+                      <Megaphone className="w-3.5 h-3.5" /> Avisar fila
+                    </button>
+                  </div>
 
                   {isOpen && data && (
                     <div className="border-t border-surface-700">

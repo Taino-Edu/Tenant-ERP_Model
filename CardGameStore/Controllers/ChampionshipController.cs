@@ -10,10 +10,13 @@
 // PUT  /api/championship/{id}/participants/{pid}/placement → define colocação (Admin)
 // =============================================================================
 
+using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Controllers;
 
@@ -23,11 +26,17 @@ namespace CardGameStore.Controllers;
 public class ChampionshipController : ControllerBase
 {
     private readonly IChampionshipService _service;
+    private readonly AppDbContext         _db;
+    private readonly InterSyncService     _inter;
     private readonly ILogger<ChampionshipController> _logger;
 
-    public ChampionshipController(IChampionshipService service, ILogger<ChampionshipController> logger)
+    public ChampionshipController(
+        IChampionshipService service, AppDbContext db, InterSyncService inter,
+        ILogger<ChampionshipController> logger)
     {
         _service = service;
+        _db      = db;
+        _inter   = inter;
         _logger  = logger;
     }
 
@@ -107,6 +116,8 @@ public class ChampionshipController : ControllerBase
             DeckName         = p.DeckName,
             Placement        = p.Placement,
             RegisteredAt     = p.RegisteredAt,
+            EntryFeePaidAt        = p.EntryFeePaidAt,
+            EntryFeePaymentMethod = p.EntryFeePaymentMethod,
         }));
     }
 
@@ -126,7 +137,9 @@ public class ChampionshipController : ControllerBase
             DeckName       = p.DeckName,
             DeckId         = p.DeckId,
             Placement      = p.Placement,
-            RegisteredAt   = p.RegisteredAt
+            RegisteredAt   = p.RegisteredAt,
+            EntryFeePaidAt        = p.EntryFeePaidAt,
+            EntryFeePaymentMethod = p.EntryFeePaymentMethod,
         }));
     }
 
@@ -249,6 +262,132 @@ public class ChampionshipController : ControllerBase
             DeckId       = participant.DeckId,
             RegisteredAt = participant.RegisteredAt
         });
+    }
+
+    // -------------------------------------------------------------------------
+    // PAGAMENTO DA INSCRIÇÃO — Pix (cliente) ou balcão (admin marca manual)
+    // -------------------------------------------------------------------------
+
+    /// <summary>Gera cobrança Pix da taxa de inscrição do próprio usuário. Pagamento é opcional — a vaga já vale.</summary>
+    [HttpPost("{id:guid}/my-inscription/pix")]
+    [Authorize]
+    public async Task<IActionResult> GerarPixInscricao(Guid id)
+    {
+        var userId = GetUserId();
+
+        var participant = await _db.ChampionshipParticipants
+            .Include(p => p.Championship)
+            .Include(p => p.User)
+            .FirstOrDefaultAsync(p => p.ChampionshipId == id && p.UserId == userId);
+        if (participant is null)
+            return NotFound(new { Message = "Você não está inscrito neste campeonato." });
+
+        if (participant.EntryFeePaidAt is not null)
+            return BadRequest(new { Message = "A inscrição já está paga." });
+
+        var valorEmCentavos = participant.Championship.EntryFeeInCents;
+        if (valorEmCentavos <= 0)
+            return BadRequest(new { Message = "Este campeonato não tem taxa de inscrição." });
+
+        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+        if (cfg is null)
+            return BadRequest(new { Message = "Pagamento Pix indisponível no momento — pague no balcão." });
+
+        var cpf    = participant.User?.Cpf?.Length == 11 ? participant.User.Cpf : null;
+        var result = await _inter.CriarCobrancaAsync(
+            cfg, valorEmCentavos, participant.User?.Name, cpf,
+            $"Inscrição — {participant.Championship.Name}");
+
+        if (result.Error is not null)
+            return StatusCode(422, new { message = result.Error });
+
+        var pix = new PixCobranca
+        {
+            Origem                    = PixCobrancaOrigem.Campeonato,
+            ChampionshipParticipantId = participant.Id,
+            TxId                      = result.TxId!,
+            ValorEmCentavos           = valorEmCentavos,
+            Status                    = result.Status ?? "ATIVA",
+            PixCopiaCola              = result.PixCopiaCola,
+            ImagemQrCode              = result.ImagemQrCode,
+            NomeDevedor               = participant.User?.Name,
+            CriadoPorAdminId          = userId, // gerada pelo próprio jogador
+            ExpiraEm                  = result.ExpiraEm,
+        };
+        _db.PixCobrancas.Add(pix);
+        await _db.SaveChangesAsync();
+
+        return Ok(new { pix.TxId, pix.Status, pix.PixCopiaCola, pix.ImagemQrCode, pix.ExpiraEm, pix.ValorEmReais });
+    }
+
+    /// <summary>Verifica no Inter se a taxa de inscrição caiu; se sim, marca a inscrição como paga (Pix).</summary>
+    [HttpPost("{id:guid}/my-inscription/pix/verificar")]
+    [Authorize]
+    public async Task<IActionResult> VerificarPixInscricao(Guid id)
+    {
+        var userId = GetUserId();
+
+        var participant = await _db.ChampionshipParticipants
+            .FirstOrDefaultAsync(p => p.ChampionshipId == id && p.UserId == userId);
+        if (participant is null)
+            return NotFound(new { Message = "Você não está inscrito neste campeonato." });
+
+        if (participant.EntryFeePaidAt is not null)
+            return Ok(new { status = "CONCLUIDA", pagoEm = participant.EntryFeePaidAt });
+
+        var pix = await _db.PixCobrancas
+            .Where(p => p.ChampionshipParticipantId == participant.Id && p.Status == "ATIVA")
+            .OrderByDescending(p => p.CriadoEm)
+            .FirstOrDefaultAsync();
+        if (pix is null)
+            return NotFound(new { Message = "Nenhuma cobrança Pix ativa para esta inscrição." });
+
+        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+        if (cfg is null)
+            return BadRequest(new { Message = "Integração com o Inter não configurada." });
+
+        var result = await _inter.ConsultarCobrancaAsync(cfg, pix.TxId);
+        if (result.Error is not null)
+            return StatusCode(422, new { message = result.Error });
+
+        pix.Status = result.Status ?? pix.Status;
+        if (pix.Status == "CONCLUIDA" && pix.PagoEm is null)
+        {
+            pix.PagoEm = DateTime.UtcNow;
+            participant.EntryFeePaidAt        = DateTime.UtcNow;
+            participant.EntryFeePaymentMethod = "Pix";
+            _logger.LogInformation("Inscrição {ParticipantId} paga via Pix (tx {TxId}).", participant.Id, pix.TxId);
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { status = pix.Status, pagoEm = pix.PagoEm });
+    }
+
+    /// <summary>Admin marca/desmarca a taxa de inscrição como paga no balcão.</summary>
+    [HttpPut("participants/{participantId:guid}/pagamento")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> MarcarPagamentoInscricao(Guid participantId, [FromBody] MarcarPagamentoRequest req)
+    {
+        var participant = await _db.ChampionshipParticipants.FindAsync(participantId);
+        if (participant is null)
+            return NotFound(new { Message = "Participante não encontrado." });
+
+        if (req.Pago)
+        {
+            participant.EntryFeePaidAt        = DateTime.UtcNow;
+            participant.EntryFeePaymentMethod = "Balcao";
+        }
+        else
+        {
+            // Pagamento via Pix confirmado pelo banco não pode ser desfeito manualmente
+            if (participant.EntryFeePaymentMethod == "Pix")
+                return BadRequest(new { Message = "Pagamento confirmado via Pix não pode ser desmarcado." });
+            participant.EntryFeePaidAt        = null;
+            participant.EntryFeePaymentMethod = null;
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { participant.Id, participant.EntryFeePaidAt, participant.EntryFeePaymentMethod });
     }
 
     // -------------------------------------------------------------------------
@@ -560,6 +699,8 @@ public class MyParticipationDto
     public string?   DeckName         { get; init; }
     public int?      Placement        { get; init; }
     public DateTime  RegisteredAt     { get; init; }
+    public DateTime? EntryFeePaidAt        { get; init; }
+    public string?   EntryFeePaymentMethod { get; init; }
 }
 
 /// <summary>DTO de participante em um campeonato.</summary>
@@ -573,6 +714,14 @@ public class ParticipantDto
     public Guid?     DeckId       { get; init; }
     public int?      Placement    { get; init; }
     public DateTime  RegisteredAt { get; init; }
+    public DateTime? EntryFeePaidAt        { get; init; }
+    public string?   EntryFeePaymentMethod { get; init; }
+}
+
+/// <summary>Request do admin para marcar/desmarcar pagamento da inscrição no balcão.</summary>
+public class MarcarPagamentoRequest
+{
+    public bool Pago { get; init; }
 }
 
 /// <summary>Request para criar campeonato.</summary>

@@ -10,8 +10,13 @@ namespace CardGameStore.Services.Implementations;
 
 public class ProductService : IProductService
 {
-    private readonly AppDbContext _db;
-    public ProductService(AppDbContext db) { _db = db; }
+    private readonly AppDbContext  _db;
+    private readonly IPushService  _push;
+    private readonly IEmailService _email;
+    private readonly ILogger<ProductService> _logger;
+
+    public ProductService(AppDbContext db, IPushService push, IEmailService email, ILogger<ProductService> logger)
+    { _db = db; _push = push; _email = email; _logger = logger; }
 
     public async Task<IEnumerable<Product>> GetAllActiveAsync()
     {
@@ -85,6 +90,8 @@ public class ProductService : IProductService
         var existing = await _db.Products.FindAsync(updated.Id)
             ?? throw new KeyNotFoundException($"Produto {updated.Id} não encontrado.");
 
+        var estoqueAntes = existing.StockQuantity;
+
         // Atualização campo a campo — evita sobrescrever com null/0 campos não enviados pelo frontend.
         existing.Name                 = updated.Name;
         existing.Description          = updated.Description;
@@ -106,7 +113,62 @@ public class ProductService : IProductService
         existing.UpdatedAt            = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        // Reestoque (0 → positivo): avisa quem está na fila de espera. Nunca
+        // derruba o update do produto — notificação é melhor-esforço.
+        if (estoqueAntes <= 0 && existing.StockQuantity > 0)
+        {
+            try { await NotificarFilaDeEsperaAsync(existing); }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Falha ao notificar fila de espera do produto {ProductId}", existing.Id);
+            }
+        }
+
         return existing;
+    }
+
+    /// <summary>
+    /// Notifica todos da fila que ainda não foram avisados (in-app + push + email)
+    /// e marca NotifiedAt — quem entrar na fila depois é avisado no próximo reestoque.
+    /// </summary>
+    private async Task NotificarFilaDeEsperaAsync(Product p)
+    {
+        var fila = await _db.ProductWaitLists
+            .Include(w => w.User)
+            .Where(w => w.ProductId == p.Id && w.NotifiedAt == null)
+            .OrderBy(w => w.Position)
+            .ToListAsync();
+        if (fila.Count == 0) return;
+
+        var titulo = "Chegou! 🎉";
+        var corpo  = $"{p.Name} está disponível — você estava na fila de espera. Garanta o seu!";
+        var link   = $"/produtos/{p.Id}";
+
+        foreach (var w in fila)
+        {
+            if (w.UserId is Guid uid)
+                _db.Notifications.Add(new Notification
+                {
+                    UserId = uid, Title = titulo, Body = corpo, Link = link, ImageUrl = p.ImageUrl,
+                });
+            w.NotifiedAt = DateTime.UtcNow;
+        }
+        await _db.SaveChangesAsync();
+
+        var userIds = fila.Where(w => w.UserId != null).Select(w => w.UserId!.Value).Distinct().ToList();
+        if (userIds.Count > 0)
+            await _push.SendToManyAsync(userIds, titulo, corpo, link, p.ImageUrl);
+
+        var comEmail = fila
+            .Where(w => !string.IsNullOrWhiteSpace(w.User?.Email))
+            .Select(w => (w.User!.Email!, w.User.Name))
+            .Distinct()
+            .ToList();
+        if (comEmail.Count > 0)
+            await _email.SendAnuncioAsync(comEmail, $"Chegou: {p.Name}", corpo, p.ImageUrl, link);
+
+        _logger.LogInformation("Fila de espera de {Produto}: {Qtd} pessoa(s) avisada(s) do reestoque.", p.Name, fila.Count);
     }
 
     public async Task DeactivateAsync(Guid id)

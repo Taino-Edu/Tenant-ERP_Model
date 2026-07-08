@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { comandaApi, userApi, productApi, categoryApi, waitListApi, variantApi, ComandaDto, Product, ProductCategory, UserProfile, ProductVariant, PixCobrancaDto } from '@/lib/api'
+import { api, comandaApi, userApi, productApi, categoryApi, waitListApi, variantApi, ComandaDto, Product, ProductCategory, UserProfile, ProductVariant, PixCobrancaDto } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
 import NotificationBell from '@/components/cliente/NotificationBell'
 import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
@@ -25,6 +25,8 @@ interface MyParticipation {
   deckName?: string
   placement?: number
   registeredAt: string
+  entryFeePaidAt?: string | null
+  entryFeePaymentMethod?: string | null
 }
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
@@ -39,14 +41,44 @@ function PlacementBadge({ place }: { place: number }) {
 function MeusCampeonatos() {
   const [participations, setParticipations] = useState<MyParticipation[]>([])
   const [loading, setLoading] = useState(true)
+  const [pixInscricao, setPixInscricao] = useState<{ championshipId: string; pix: PixCobrancaDto } | null>(null)
+  const [gerandoPix, setGerandoPix] = useState<string | null>(null)
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch(`${BASE}/api/championship/my-participations`, { credentials: 'include' })
       .then(r => r.ok ? r.json() : [])
       .then(data => setParticipations(Array.isArray(data) ? data : []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function pagarInscricao(championshipId: string) {
+    setGerandoPix(championshipId)
+    try {
+      const { data } = await api.post<PixCobrancaDto>(`/api/championship/${championshipId}/my-inscription/pix`)
+      setPixInscricao({ championshipId, pix: data })
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Não foi possível gerar o Pix agora.')
+    } finally { setGerandoPix(null) }
+  }
+
+  // Polling: enquanto o Pix da inscrição está aberto, verifica a cada 6s
+  useEffect(() => {
+    if (!pixInscricao) return
+    const id = setInterval(async () => {
+      try {
+        const { data } = await api.post(`/api/championship/${pixInscricao.championshipId}/my-inscription/pix/verificar`)
+        if (data.status === 'CONCLUIDA') {
+          setPixInscricao(null)
+          toast.success('Inscrição paga! 🎉', { duration: 6000 })
+          load()
+        }
+      } catch { /* tenta no próximo tick */ }
+    }, 6000)
+    return () => clearInterval(id)
+  }, [pixInscricao, load])
 
   if (loading || participations.length === 0) return null
 
@@ -63,17 +95,47 @@ function MeusCampeonatos() {
 
       <div className="divide-y" style={{ borderColor: C.border }}>
         {active.map(p => (
-          <div key={p.participationId} className="px-5 py-3 flex items-center justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-sm leading-tight truncate" style={{ color: C.navy }}>{p.championshipName}</p>
-              <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: C.muted }}>
-                <Swords className="w-3 h-3 shrink-0" /> {p.game}
-              </p>
+          <div key={p.participationId} className="px-5 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm leading-tight truncate" style={{ color: C.navy }}>{p.championshipName}</p>
+                <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: C.muted }}>
+                  <Swords className="w-3 h-3 shrink-0" /> {p.game}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: C.muted }}>Nº jogador</p>
+                <p className="text-lg font-black leading-tight" style={{ color: C.blue2 }}>#{p.playerNumber}</p>
+              </div>
             </div>
-            <div className="text-right shrink-0">
-              <p className="text-[10px] font-black uppercase tracking-wider" style={{ color: C.muted }}>Nº jogador</p>
-              <p className="text-lg font-black leading-tight" style={{ color: C.blue2 }}>#{p.playerNumber}</p>
-            </div>
+
+            {/* Taxa de inscrição: paga (chip) ou botão de Pix */}
+            {p.entryFeeInReais > 0 && (
+              p.entryFeePaidAt ? (
+                <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-black px-2 py-1 rounded-full"
+                  style={{ backgroundColor: '#F0FDF4', color: '#16A34A' }}>
+                  ✓ Inscrição paga {p.entryFeePaymentMethod === 'Pix' ? 'via Pix' : 'no balcão'}
+                </span>
+              ) : pixInscricao?.championshipId === p.championshipId ? (
+                <div className="mt-3 space-y-2">
+                  <PixPagamentoCard pix={pixInscricao.pix} />
+                  <button onClick={() => setPixInscricao(null)}
+                    className="w-full text-center text-xs font-bold py-1" style={{ color: C.muted }}>
+                    Fechar — pago depois
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => pagarInscricao(p.championshipId)}
+                  disabled={gerandoPix === p.championshipId}
+                  className="mt-2 w-full py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                  style={{ backgroundColor: '#F0FDF4', color: '#16A34A', border: '1px solid #86EFAC' }}>
+                  {gerandoPix === p.championshipId
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <QrCode className="w-3.5 h-3.5" />}
+                  Pagar inscrição via Pix — R$ {p.entryFeeInReais.toFixed(2).replace('.', ',')}
+                </button>
+              )
+            )}
           </div>
         ))}
 

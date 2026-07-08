@@ -793,6 +793,15 @@ using (var scope = app.Services.CreateScope())
                 -- campos errados da API (tudo virava despesa e sem external_id não há dedup).
                 -- O próximo sync (janela de 7 dias) reimporta corretamente com idTransacao.
                 DELETE FROM external_transactions WHERE source = 'inter' AND external_id IS NULL;
+
+                -- Fila de espera: controle de quem já foi avisado do reestoque
+                ALTER TABLE product_waitlist ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ NULL;
+
+                -- Campeonatos: pagamento opcional da taxa de inscrição (Pix ou balcão)
+                ALTER TABLE championship_participants ADD COLUMN IF NOT EXISTS entry_fee_paid_at        TIMESTAMPTZ NULL;
+                ALTER TABLE championship_participants ADD COLUMN IF NOT EXISTS entry_fee_payment_method VARCHAR(20) NULL;
+                ALTER TABLE pix_cobrancas ADD COLUMN IF NOT EXISTS championship_participant_id UUID NULL
+                    REFERENCES championship_participants(id) ON DELETE CASCADE;
             ");
         }
 

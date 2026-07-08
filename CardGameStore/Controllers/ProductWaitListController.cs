@@ -115,6 +115,33 @@ public class ProductWaitListController : ControllerBase
         return NoContent();
     }
 
+    // ── Cliente: todas as filas de espera em que estou (perfil) ────────────────
+
+    [HttpGet("/api/products/waitlist/mine")]
+    [Authorize]
+    public async Task<IActionResult> GetMine()
+    {
+        var userId = TryGetUserId();
+        if (userId == null) return Unauthorized();
+
+        var entries = await _db.ProductWaitLists
+            .Include(w => w.Product)
+            .Where(w => w.UserId == userId)
+            .OrderByDescending(w => w.CreatedAt)
+            .ToListAsync();
+
+        return Ok(entries.Select(e => new
+        {
+            e.Id,
+            e.ProductId,
+            ProductName     = e.Product?.Name ?? "Produto removido",
+            ProductImageUrl = e.Product?.ImageUrl,
+            e.Position,
+            e.CreatedAt,
+            e.NotifiedAt,
+        }));
+    }
+
     // ── Admin: contagem agregada de pendentes em pré-venda (dashboard) ─────────
 
     [HttpGet("/api/products/waitlist/pre-venda/pendentes")]

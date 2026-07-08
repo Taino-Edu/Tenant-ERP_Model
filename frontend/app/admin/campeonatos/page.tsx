@@ -553,6 +553,18 @@ function ChampionshipCard({
     }
   }
 
+  async function handleTogglePagamento(p: ChampionshipParticipant, pago: boolean) {
+    try {
+      await championshipApi.marcarPagamento(p.id, pago)
+      setParticipants(prev => prev.map(x => x.id === p.id
+        ? { ...x, entryFeePaidAt: pago ? new Date().toISOString() : null, entryFeePaymentMethod: pago ? 'Balcao' : null }
+        : x))
+      toast.success(pago ? `Inscrição de ${p.userName} marcada como paga (balcão).` : 'Pagamento desmarcado.')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao atualizar pagamento')
+    }
+  }
+
   async function handleSavePodio() {
     setSavingPodio(true)
     try {
@@ -728,6 +740,29 @@ function ChampionshipCard({
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </a>
+                          )}
+                          {/* Pagamento da inscrição (só quando o campeonato tem taxa) */}
+                          {(c.entryFeeInCents ?? 0) > 0 && (
+                            p.entryFeePaidAt ? (
+                              <button
+                                onClick={() => p.entryFeePaymentMethod !== 'Pix' && handleTogglePagamento(p, false)}
+                                className={clsx('text-[10px] font-bold px-1.5 py-0.5 rounded-full border shrink-0',
+                                  'bg-green-500/15 text-green-400 border-green-500/30',
+                                  p.entryFeePaymentMethod !== 'Pix' && 'hover:bg-green-500/25')}
+                                title={p.entryFeePaymentMethod === 'Pix'
+                                  ? 'Pago via Pix (confirmado pelo banco)'
+                                  : 'Pago no balcão — clique para desmarcar'}>
+                                ✓ {p.entryFeePaymentMethod === 'Pix' ? 'Pix' : 'Balcão'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleTogglePagamento(p, true)}
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border shrink-0
+                                           bg-amber-500/15 text-amber-400 border-amber-500/30 hover:bg-amber-500/25"
+                                title="Inscrição não paga — clique para marcar como paga no balcão">
+                                Pendente
+                              </button>
+                            )
                           )}
                           {p.placement && (
                             <span className="text-xs font-bold text-accent-gold flex items-center gap-1">

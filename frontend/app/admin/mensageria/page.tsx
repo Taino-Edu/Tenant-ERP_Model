@@ -1,10 +1,11 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { mensageriaApi, MensageriaClient, MensageriaSegment } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   Send, Users, User, Mail, Bell, BellRing,
-  Search, X, CheckCircle, ChevronDown, ChevronUp,
+  Search, X, CheckCircle, ChevronDown, ChevronUp, ListFilter,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -12,6 +13,15 @@ type Channel    = 'inapp' | 'email' | 'both'
 type TargetMode = 'segment' | 'specific'
 
 export default function MensageriaPage() {
+  return (
+    <Suspense fallback={null}>
+      <MensageriaForm />
+    </Suspense>
+  )
+}
+
+function MensageriaForm() {
+  const params = useSearchParams()
   const [title,      setTitle]      = useState('')
   const [body,       setBody]       = useState('')
   const [link,       setLink]       = useState('')
@@ -26,10 +36,29 @@ export default function MensageriaPage() {
   const [loading,    setLoading]    = useState(false)
   const [result,     setResult]     = useState<{ inApp: number; emails: number; total: number } | null>(null)
   const [showPicker, setShowPicker] = useState(false)
+  const [fromWaitlistProduct, setFromWaitlistProduct] = useState<string | null>(null)
 
   useEffect(() => {
     mensageriaApi.segments().then(r => setSegments(r.data)).catch(() => {})
     mensageriaApi.clients().then(r => setClients(r.data)).catch(() => {})
+  }, [])
+
+  // Chegando do botão "Avisar fila" (Admin > Pré-vendas > Lista de Espera):
+  // pré-seleciona os clientes daquela fila e sugere título/imagem/link do produto.
+  useEffect(() => {
+    const uids        = params.get('uids')
+    const productName = params.get('productName')
+    const productId    = params.get('productId')
+    const imgParam     = params.get('imageUrl')
+    if (!uids) return
+
+    setTargetMode('specific')
+    setSelected(new Set(uids.split(',').filter(Boolean)))
+    setShowPicker(true)
+    if (productName) { setTitle(`Chegou: ${productName}`); setFromWaitlistProduct(productName) }
+    if (productId)    setLink(`/produtos/${productId}`)
+    if (imgParam)      setImageUrl(imgParam)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const filtered = clients.filter(c =>
@@ -72,6 +101,16 @@ export default function MensageriaPage() {
         <h1 className="text-2xl font-bold text-white">Mensageria</h1>
         <p className="text-sm text-gray-400 mt-1">Envie notificações in-app e/ou e-mail para clientes.</p>
       </div>
+
+      {fromWaitlistProduct && (
+        <div className="card flex items-center gap-3 border-brand-500/30 bg-brand-500/10">
+          <ListFilter className="w-5 h-5 text-brand-400 flex-shrink-0" />
+          <p className="text-sm text-gray-300">
+            Destinatários pré-selecionados da <strong className="text-brand-300">fila de espera de {fromWaitlistProduct}</strong>.
+            Revise a mensagem e envie quando quiser.
+          </p>
+        </div>
+      )}
 
       {/* Resultado */}
       {result && (

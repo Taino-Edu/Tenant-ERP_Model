@@ -244,6 +244,7 @@ export interface PodioItem { lugar: number; nome: string }
 export interface ChampionshipParticipant {
   id: string; userId: string; userName: string; playerNumber: number
   deckName?: string | null; deckId?: string | null; placement?: number | null; registeredAt: string
+  entryFeePaidAt?: string | null; entryFeePaymentMethod?: string | null
 }
 
 export interface UserSummary {
@@ -587,6 +588,19 @@ export const waitListApi = {
   adminList:  (productId: string)  => api.get<{ productId: string; productName: string; total: number; entries: WaitListEntry[] }>(`/api/products/${productId}/waitlist`),
   adminRemove:(productId: string, entryId: string) => api.delete(`/api/products/${productId}/waitlist/${entryId}`),
   preVendaPendentesCount: () => api.get<{ count: number }>('/api/products/waitlist/pre-venda/pendentes'),
+  mine: () => api.get<MyWaitListEntry[]>('/api/products/waitlist/mine'),
+}
+
+export interface MyWaitListEntry {
+  id: string; productId: string; productName: string; productImageUrl?: string
+  position: number; createdAt: string; notifiedAt?: string | null
+}
+
+export interface MyReservation {
+  id: string; productId: string; productName?: string; productImageUrl?: string
+  variantId?: string; variantLabel?: string; quantity: number; status: string
+  notes?: string; reservedAt: string; expiresAt: string
+  fulfilledAt?: string; cancelledAt?: string; isExpired: boolean
 }
 
 export interface UpdateMeRequest {
@@ -755,6 +769,8 @@ export const championshipApi = {
     api.put(`/api/championship/${id}/status`, { status }),
   setPlacement:     (id: string, participantId: string, placement: number) =>
     api.put(`/api/championship/${id}/participants/${participantId}/placement`, { placement }),
+  marcarPagamento:  (participantId: string, pago: boolean) =>
+    api.put(`/api/championship/participants/${participantId}/pagamento`, { pago }),
   setImage:         (id: string, imageUrl: string | null) =>
     api.put<Championship>(`/api/championship/${id}/image`, { imageUrl }),
   addPreInscricao:  (id: string, nome: string, whatsApp: string, deckId?: string, deckName?: string) =>
@@ -1090,7 +1106,7 @@ export const publicProfileApi = {
 export const reservationApi = {
   list:      (params?: { status?: string; page?: number; pageSize?: number }) =>
                api.get('/api/reservations', { params }),
-  mine:      ()                                    => api.get('/api/reservations/mine'),
+  mine:      ()                                    => api.get<MyReservation[]>('/api/reservations/mine'),
   create:    (body: { productId: string; variantId?: string; quantity?: number; notes?: string }) =>
                api.post('/api/reservations', body),
   cancel:    (id: string)                          => api.delete(`/api/reservations/${id}`),
