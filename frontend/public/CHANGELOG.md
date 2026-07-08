@@ -1,5 +1,11 @@
 # Changelog — Santuário Nerd
 
+## [v1.17.0] — 2026-07-08
+
+### Melhorado
+- **Mensageria redesenhada**: passos numerados (Mensagem → Canal → Destinatários), preview ao vivo mostrando exatamente como a notificação vai aparecer pro cliente conforme você digita, e resumo do envio (canal, destinatários, se está pronto pra mandar) sempre visível ao lado
+- **Pré-vendas redesenhada**: faixa com Aguardando/Em fila/Pré-vendas no topo, abas com contador de badge, lista de espera virou grade de cards de produto (com contagem já carregada, sem precisar abrir um por um), e reservas ganharam barra de progresso visual até o vencimento das 48h (fica vermelha quando está acabando o prazo)
+
 ## [v1.16.1] — 2026-07-08
 
 ### Corrigido

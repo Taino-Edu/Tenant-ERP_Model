@@ -9,6 +9,7 @@ import {
   Clock, CheckCircle, XCircle, Package, User as UserIcon,
   ShoppingBag, LayoutList, RefreshCw, Loader2, ChevronLeft, ChevronRight,
   AlertTriangle, TimerIcon, Plus, Users, ChevronDown, ChevronUp, X, Megaphone,
+  Hourglass, Sparkles,
 } from 'lucide-react'
 
 const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Débito', 'Crédito', 'Crediario']
@@ -65,6 +66,30 @@ function timeUntil(d: string) {
   return h > 0 ? `${h}h ${m}m` : `${m}min`
 }
 
+/** 0–100: quanto da janela de 48h já passou desde a reserva. */
+function progressPct(reservedAt: string, expiresAt: string) {
+  const total = new Date(expiresAt).getTime() - new Date(reservedAt).getTime()
+  const elapsed = Date.now() - new Date(reservedAt).getTime()
+  if (total <= 0) return 100
+  return Math.min(100, Math.max(0, (elapsed / total) * 100))
+}
+
+function StatCard({ icon, label, value, tint }: {
+  icon: React.ReactNode; label: string; value: number | string; tint: string
+}) {
+  return (
+    <div className="card flex items-center gap-3 py-3.5">
+      <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', tint)}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xl font-black text-white leading-tight">{value}</p>
+        <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wide truncate">{label}</p>
+      </div>
+    </div>
+  )
+}
+
 export default function ReservasPage() {
   const router = useRouter()
   const [tab,         setTab]         = useState<'reservas' | 'waitlist'>('reservas')
@@ -76,6 +101,7 @@ export default function ReservasPage() {
   const [page,        setPage]        = useState(1)
   const [totalPages,  setTotalPages]  = useState(1)
   const [totalCount,  setTotalCount]  = useState(0)
+  const [activeCount, setActiveCount] = useState(0) // "aguardando" — independente do filtro atual
 
   // Modal de homologação
   const [homModal,    setHomModal]    = useState<Reservation | null>(null)
@@ -90,7 +116,6 @@ export default function ReservasPage() {
   const [wlLoading,   setWlLoading]   = useState(false)
   const [wlExpanded,  setWlExpanded]  = useState<string | null>(null)
   const [wlData,      setWlData]      = useState<Record<string, { entries: WaitListEntry[]; total: number }>>({})
-  const [wlFetching,  setWlFetching]  = useState<string | null>(null)
 
   // Modal homologar entry da fila
   const [wlModal,     setWlModal]     = useState<{ entry: WaitListEntry; product: Product } | null>(null)
@@ -99,44 +124,37 @@ export default function ReservasPage() {
   const [wlComanda,   setWlComanda]   = useState('')
   const [wlSubmit,    setWlSubmit]    = useState(false)
 
+  // Carrega produtos em pré-venda + contagem da fila de cada um em paralelo,
+  // pra alimentar a faixa de stats e os cards sem precisar expandir um por um.
   const loadWaitlistProducts = useCallback(async () => {
     setWlLoading(true)
     try {
       const { data } = await productApi.listAdmin()
-      setWlProducts(data.filter((p: Product) => p.isPreVenda))
+      const preVenda = data.filter((p: Product) => p.isPreVenda)
+      setWlProducts(preVenda)
+
+      const results = await Promise.all(preVenda.map(p =>
+        waitListApi.adminList(p.id).then(r => ({ id: p.id, entries: r.data.entries, total: r.data.total }))
+          .catch(() => ({ id: p.id, entries: [] as WaitListEntry[], total: 0 }))
+      ))
+      setWlData(prev => {
+        const next = { ...prev }
+        for (const r of results) next[r.id] = { entries: r.entries, total: r.total }
+        return next
+      })
     } catch { toast.error('Erro ao carregar produtos pré-venda') }
     finally { setWlLoading(false) }
   }, [])
 
-  useEffect(() => {
-    if (tab === 'waitlist') loadWaitlistProducts()
-  }, [tab, loadWaitlistProducts])
+  useEffect(() => { loadWaitlistProducts() }, [loadWaitlistProducts])
 
   async function toggleProduct(productId: string) {
-    if (wlExpanded === productId) { setWlExpanded(null); return }
-    setWlExpanded(productId)
-    if (wlData[productId]) return
-    setWlFetching(productId)
-    try {
-      const { data } = await waitListApi.adminList(productId)
-      setWlData(prev => ({ ...prev, [productId]: { entries: data.entries, total: data.total } }))
-    } catch { toast.error('Erro ao carregar fila') }
-    finally { setWlFetching(null) }
+    setWlExpanded(prev => prev === productId ? null : productId)
   }
 
   async function avisarFila(p: Product) {
-    let data = wlData[p.id]
-    if (!data) {
-      setWlFetching(p.id)
-      try {
-        const r = await waitListApi.adminList(p.id)
-        data = { entries: r.data.entries, total: r.data.total }
-        setWlData(prev => ({ ...prev, [p.id]: data! }))
-      } catch { toast.error('Erro ao carregar fila'); return }
-      finally { setWlFetching(null) }
-    }
-
-    const uids = [...new Set(data.entries.map(e => e.userId).filter((id): id is string => !!id))]
+    const data = wlData[p.id]
+    const uids = [...new Set((data?.entries ?? []).map(e => e.userId).filter((id): id is string => !!id))]
     if (uids.length === 0) { toast.error('Ninguém com conta cadastrada nesta fila ainda.'); return }
 
     const qs = new URLSearchParams({
@@ -195,12 +213,14 @@ export default function ReservasPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const { data } = await api.get('/api/reservations', {
-        params: { status: statusFilter || undefined, page, pageSize: 20 },
-      })
+      const [{ data }, { data: activeData }] = await Promise.all([
+        api.get('/api/reservations', { params: { status: statusFilter || undefined, page, pageSize: 20 } }),
+        api.get('/api/reservations', { params: { status: 'active', page: 1, pageSize: 1 } }),
+      ])
       setItems(data.items)
       setTotalPages(data.totalPages)
       setTotalCount(data.total)
+      setActiveCount(activeData.total)
     } catch { toast.error('Erro ao carregar reservas') }
     finally  { setLoading(false) }
   }, [statusFilter, page])
@@ -264,12 +284,19 @@ export default function ReservasPage() {
     } catch { toast.error('Erro ao estender') }
   }
 
+  function refreshAll() {
+    load()
+    loadWaitlistProducts()
+  }
+
   const badges = [
     { value: 'active',    label: 'Aguardando' },
     { value: 'fulfilled', label: 'Homologadas' },
     { value: 'cancelled', label: 'Canceladas' },
     { value: '',          label: 'Todas' },
   ]
+
+  const totalNaFila = Object.values(wlData).reduce((s, d) => s + d.total, 0)
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
@@ -280,12 +307,25 @@ export default function ReservasPage() {
         <div className="p-2 rounded-xl bg-brand-500/10">
           <LayoutList className="w-5 h-5 text-brand-400" />
         </div>
-        <h1 className="text-xl font-black text-white">Pré-vendas</h1>
+        <div>
+          <h1 className="text-xl font-black text-white">Pré-vendas</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Reservas antecipadas e fila de espera de produtos</p>
+        </div>
         <button
-          onClick={() => tab === 'reservas' ? load() : loadWaitlistProducts()}
+          onClick={refreshAll}
           className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-500 transition-colors text-gray-400">
           <RefreshCw className="w-4 h-4" />
         </button>
+      </div>
+
+      {/* Faixa de stats */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <StatCard icon={<Hourglass className="w-4.5 h-4.5 text-blue-400" />} tint="bg-blue-500/10"
+          label="Aguardando" value={activeCount} />
+        <StatCard icon={<Users className="w-4.5 h-4.5 text-purple-400" />} tint="bg-purple-500/10"
+          label="Em fila" value={wlLoading ? '…' : totalNaFila} />
+        <StatCard icon={<Sparkles className="w-4.5 h-4.5 text-amber-400" />} tint="bg-amber-500/10"
+          label="Pré-vendas" value={wlLoading ? '…' : wlProducts.length} />
       </div>
 
       {/* Tabs */}
@@ -295,12 +335,18 @@ export default function ReservasPage() {
           className={clsx('px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2',
             tab === 'reservas' ? 'bg-surface-600 text-white' : 'text-gray-400 hover:text-gray-300')}>
           <ShoppingBag className="w-3.5 h-3.5" /> Reservas
+          {activeCount > 0 && (
+            <span className="text-[10px] font-black bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded-full">{activeCount}</span>
+          )}
         </button>
         <button
           onClick={() => setTab('waitlist')}
           className={clsx('px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2',
             tab === 'waitlist' ? 'bg-purple-500/20 text-purple-300' : 'text-gray-400 hover:text-gray-300')}>
           <Users className="w-3.5 h-3.5" /> Lista de Espera
+          {totalNaFila > 0 && (
+            <span className="text-[10px] font-black bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded-full">{totalNaFila}</span>
+          )}
         </button>
       </div>
 
@@ -314,49 +360,53 @@ export default function ReservasPage() {
             <p>Nenhum produto pré-venda cadastrado</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {wlProducts.map(p => {
-              const isOpen   = wlExpanded === p.id
-              const fetching = wlFetching === p.id
-              const data     = wlData[p.id]
+              const isOpen = wlExpanded === p.id
+              const data   = wlData[p.id] ?? { entries: [], total: 0 }
               return (
-                <div key={p.id} className="card overflow-hidden">
-                  <div className="w-full flex items-center gap-3 p-3">
-                    <button
-                      onClick={() => toggleProduct(p.id)}
-                      className="flex-1 min-w-0 flex items-center gap-3 text-left hover:opacity-80 transition-opacity">
-                      <div className="w-10 h-10 rounded-lg bg-surface-700 shrink-0 flex items-center justify-center overflow-hidden">
-                        {p.imageUrl
-                          ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                          : <Package className="w-5 h-5 text-surface-500" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-white truncate">{p.name}</p>
-                        <p className="text-xs text-gray-400">
-                          {data ? `${data.total} na fila` : 'Ver fila'}
-                        </p>
-                      </div>
-                      {data && data.total > 0 && (
-                        <span className="text-xs font-black bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
-                          {data.total}
+                <div key={p.id}
+                  className={clsx('card overflow-hidden p-0 transition-colors',
+                    isOpen && 'ring-1 ring-purple-500/40')}>
+                  <div className="flex items-center gap-3 p-3">
+                    <div className="w-12 h-12 rounded-xl bg-surface-700 shrink-0 flex items-center justify-center overflow-hidden">
+                      {p.imageUrl
+                        ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                        : <Package className="w-5 h-5 text-surface-500" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white truncate">{p.name}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className={clsx('text-xs font-black',
+                          data.total > 0 ? 'text-purple-300' : 'text-gray-500')}>
+                          {data.total} na fila
                         </span>
-                      )}
-                      {fetching
-                        ? <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
-                        : isOpen
-                          ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
-                          : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
-                    </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 px-3 pb-3">
                     <button
                       onClick={() => avisarFila(p)}
+                      disabled={data.total === 0}
                       title="Avisar toda a fila pela Mensageria"
-                      className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-500/15 text-brand-300
-                                 border border-brand-500/25 hover:bg-brand-500/25 text-[11px] font-bold transition-colors">
+                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-brand-500/15 text-brand-300
+                                 border border-brand-500/25 hover:bg-brand-500/25 disabled:opacity-40 disabled:cursor-not-allowed
+                                 text-xs font-bold transition-colors">
                       <Megaphone className="w-3.5 h-3.5" /> Avisar fila
+                    </button>
+                    <button
+                      onClick={() => toggleProduct(p.id)}
+                      disabled={data.total === 0}
+                      className="shrink-0 flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-700
+                                 border border-surface-600 hover:border-purple-500/40 disabled:opacity-40 disabled:cursor-not-allowed
+                                 text-xs font-semibold text-gray-300 transition-colors">
+                      Ver
+                      {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </button>
                   </div>
 
-                  {isOpen && data && (
+                  {isOpen && (
                     <div className="border-t border-surface-700">
                       {data.entries.length === 0 ? (
                         <p className="text-center text-xs text-gray-500 py-5">Ninguém na fila ainda</p>
@@ -431,10 +481,12 @@ export default function ReservasPage() {
           {items.map(r => {
             const expired = r.isExpired || new Date(r.expiresAt) < new Date()
             const displayStatus = r.status === 'active' && expired ? 'expired' : r.status
+            const pct = progressPct(r.reservedAt, r.expiresAt)
+            const urgent = r.status === 'active' && !expired && pct > 75
             return (
               <div key={r.id} className="card flex gap-4 items-start">
                 {/* Imagem */}
-                <div className="w-14 h-14 rounded-lg bg-surface-700 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                <div className="w-16 h-16 rounded-xl bg-surface-700 flex-shrink-0 overflow-hidden flex items-center justify-center">
                   {r.productImageUrl
                     ? <img src={r.productImageUrl} alt={r.productName} className="w-full h-full object-cover" />
                     : <Package className="w-6 h-6 text-surface-500" />}
@@ -455,17 +507,29 @@ export default function ReservasPage() {
                     <span className="flex items-center gap-1"><UserIcon className="w-3 h-3" />{r.userName ?? 'Cliente'}</span>
                     <span className="flex items-center gap-1"><ShoppingBag className="w-3 h-3" />Qtd: <strong className="text-white">{r.quantity}</strong></span>
                     <span className="flex items-center gap-1"><Clock className="w-3 h-3" />Reservado: {fmtDate(r.reservedAt)}</span>
-                    {r.status === 'active' && !expired && (
-                      <span className="flex items-center gap-1 text-amber-400">
-                        <TimerIcon className="w-3 h-3" />Expira em: {timeUntil(r.expiresAt)}
-                      </span>
-                    )}
-                    {r.status === 'fulfilled' && r.fulfilledAt && (
-                      <span className="flex items-center gap-1 text-green-400">
-                        <CheckCircle className="w-3 h-3" />Homologada: {fmtDate(r.fulfilledAt)}
-                      </span>
-                    )}
                   </div>
+
+                  {r.status === 'active' && !expired && (
+                    <div className="mt-2 max-w-[240px]">
+                      <div className="flex items-center justify-between text-[10px] mb-1">
+                        <span className={clsx('flex items-center gap-1 font-bold', urgent ? 'text-red-400' : 'text-amber-400')}>
+                          <TimerIcon className="w-2.5 h-2.5" /> Expira em {timeUntil(r.expiresAt)}
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-surface-600 overflow-hidden">
+                        <div
+                          className={clsx('h-full rounded-full transition-all', urgent ? 'bg-red-400' : 'bg-amber-400')}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {r.status === 'fulfilled' && r.fulfilledAt && (
+                    <p className="flex items-center gap-1 text-xs text-green-400 mt-1.5">
+                      <CheckCircle className="w-3 h-3" />Homologada: {fmtDate(r.fulfilledAt)}
+                    </p>
+                  )}
 
                   {r.notes && <p className="text-xs text-gray-500 mt-1 italic">"{r.notes}"</p>}
                 </div>
