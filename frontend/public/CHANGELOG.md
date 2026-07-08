@@ -1,5 +1,14 @@
 # Changelog — Santuário Nerd
 
+## [v1.21.0] — 2026-07-08
+
+### Adicionado
+- **Cupom fiscal abre sozinho ao autorizar**: ao fechar uma comanda/venda com "Emitir cupom fiscal" marcado, o sistema agora espera a SEFAZ responder e já abre o cupom numa aba nova se autorizar (ou avisa o motivo se não). Antes a emissão era só em segundo plano, sem retorno nenhum na hora
+- **Cliente vê a própria nota fiscal**: nova aba "Notas Fiscais" em Meu Perfil — o cliente acessa e imprime o cupom de qualquer nota autorizada, sem precisar pedir pro admin
+
+### Corrigido
+- Botão "Emitir nota fiscal" manual (histórico de comandas/vendas) também abre o cupom sozinho quando autoriza, igual o fluxo automático
+
 ## [v1.20.1] — 2026-07-08
 
 ### Adicionado

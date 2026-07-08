@@ -88,6 +88,10 @@ export interface ComandaDto {
   /** Saldo de cashback/crédito do cliente em centavos. */
   userBalanceInCents: number
   profileImageUrl?: string | null
+  /** Preenchidos só quando o fechamento pediu emissão de NFC-e (emitirNotaFiscal=true). */
+  notaFiscalId?: string | null
+  notaFiscalStatus?: string | null
+  notaFiscalMotivoRejeicao?: string | null
 }
 
 export interface ComandaItemDto {
@@ -359,6 +363,10 @@ export interface VendaAvulsaDto {
     unitPriceInReais: number
     subtotalInReais: number
   }[]
+  /** Preenchidos só quando o registro pediu emissão de NFC-e (emitirNotaFiscal=true). */
+  notaFiscalId?: string | null
+  notaFiscalStatus?: string | null
+  notaFiscalMotivoRejeicao?: string | null
 }
 
 export const PAYMENT_METHODS = [
@@ -1226,6 +1234,16 @@ export const fiscalApi = {
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/comanda/${comandaId}`),
   emitirNotaVendaAvulsa: (vendaId: string) =>
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/venda-avulsa/${vendaId}`),
+}
+
+export interface MinhaNotaDto {
+  id: string; status: string; valorTotalEmCentavos: number
+  emitidoEm?: string; createdAt: string
+}
+
+export const minhasNotasApi = {
+  list: () => api.get<MinhaNotaDto[]>('/api/minhas-notas'),
+  obterCupom: (id: string) => api.get<CupomDto>(`/api/minhas-notas/${id}/cupom`),
 }
 
 // ── Personalização do site (nome, textos, cores da landing) ───────────────────

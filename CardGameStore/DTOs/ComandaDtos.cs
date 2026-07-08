@@ -60,6 +60,12 @@ public class ComandaDto
     /// <summary>Saldo de cashback do cliente em centavos — exibido na modal de fechamento.</summary>
     public int  UserBalanceInCents { get; set; }
     public string? ProfileImageUrl { get; set; }
+
+  /// <summary>Preenchidos só quando o fechamento pediu emissão de NFC-e (EmitirNotaFiscal=true) —
+  /// permite o front abrir o cupom automaticamente quando autoriza, ou avisar o motivo se não.</summary>
+  public Guid?   NotaFiscalId             { get; set; }
+  public string? NotaFiscalStatus         { get; set; }
+  public string? NotaFiscalMotivoRejeicao { get; set; }
 }
 
 /// <summary>Request para aplicar pontos a uma comanda.</summary>

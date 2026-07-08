@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto, championshipApi, MyParticipation,
-  waitListApi, MyWaitListEntry, reservationApi, MyReservation,
+  waitListApi, MyWaitListEntry, reservationApi, MyReservation, minhasNotasApi, MinhaNotaDto,
 } from '@/lib/api'
 import { getUserName, clearAuth } from '@/lib/auth'
 import { authApi } from '@/lib/api'
@@ -12,7 +12,7 @@ import {
   Star, User, Phone, CreditCard, Clock, AlertCircle, ArrowLeft, LogOut,
   CheckCircle, Wallet, CalendarClock, Receipt, ChevronDown, ChevronUp,
   ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail, Settings, BookOpen,
-  Bell, Package, X, Hourglass,
+  Bell, Package, X, Hourglass, FileText,
 } from 'lucide-react'
 import clsx from 'clsx'
 import toast, { Toaster } from 'react-hot-toast'
@@ -25,9 +25,10 @@ export default function PerfilPage() {
   const [participations, setParticipations] = useState<MyParticipation[]>([])
   const [waitlist,       setWaitlist]       = useState<MyWaitListEntry[]>([])
   const [reservations,   setReservations]   = useState<MyReservation[]>([])
+  const [notas,          setNotas]          = useState<MinhaNotaDto[]>([])
   const [loading,        setLoading]        = useState(true)
   const [expanded,       setExpanded]       = useState<string | null>(null)
-  const [tab,            setTab]            = useState<'pontos' | 'historico' | 'torneios' | 'crediario' | 'filas'>('pontos')
+  const [tab,            setTab]            = useState<'pontos' | 'historico' | 'torneios' | 'crediario' | 'filas' | 'notas'>('pontos')
   const [isUploading,    setIsUploading]    = useState(false)
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function PerfilPage() {
       championshipApi.myParticipations().then(r => setParticipations(r.data)).catch(() => {}),
       waitListApi.mine().then(r => setWaitlist(r.data)).catch(() => {}),
       reservationApi.mine().then(r => setReservations(r.data.filter((res: MyReservation) => res.status === 'active'))).catch(() => {}),
+      minhasNotasApi.list().then(r => setNotas(r.data)).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
 
@@ -115,6 +117,7 @@ export default function PerfilPage() {
     { id: 'torneios',  icon: Trophy,  label: 'Torneios' },
     { id: 'filas',     icon: Bell,    label: 'Filas', badge: waitlist.length + reservations.length },
     { id: 'crediario', icon: Wallet,  label: 'Dívida'   },
+    { id: 'notas',     icon: FileText, label: 'Notas Fiscais' },
   ] as const
 
   return (
@@ -505,6 +508,42 @@ export default function PerfilPage() {
                       * Compareça ao balcão para quitar sua dívida com o Maikon.
                     </p>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* ── TAB: NOTAS FISCAIS ── */}
+            {tab === 'notas' && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {notas.length === 0 ? (
+                  <div className="bg-white border border-gray-100 rounded-2xl py-14 text-center shadow-sm">
+                    <FileText className="w-10 h-10 mx-auto mb-3 text-gray-200" />
+                    <p className="text-sm text-gray-400 italic">Nenhuma nota fiscal emitida ainda.</p>
+                  </div>
+                ) : (
+                  notas.map(n => (
+                    <div key={n.id} className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-900">
+                          R$ {(n.valorTotalEmCentavos / 100).toFixed(2).replace('.', ',')}
+                        </p>
+                        <p className="text-[11px] text-gray-400">
+                          {new Date(n.emitidoEm ?? n.createdAt).toLocaleDateString('pt-BR')} · {n.status}
+                        </p>
+                      </div>
+                      {n.status === 'Autorizada' ? (
+                        <Link href={`/cliente/notas/${n.id}`} target="_blank"
+                          className="text-xs font-bold text-blue-500 hover:text-blue-600 transition-colors shrink-0 px-3 py-1.5 rounded-lg bg-blue-50">
+                          Ver cupom
+                        </Link>
+                      ) : (
+                        <span className="text-[11px] text-gray-400 italic shrink-0">aguardando</span>
+                      )}
+                    </div>
+                  ))
                 )}
               </div>
             )}

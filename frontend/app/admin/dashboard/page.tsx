@@ -19,6 +19,17 @@ import clsx from 'clsx'
 
 const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 
+/** Após um fechamento com "Emitir cupom fiscal" marcado: abre o cupom sozinho se autorizou,
+ * ou avisa o motivo se rejeitou/ficou pendente (SEFAZ fora do ar — o retry automático tenta de novo). */
+function handleNotaFiscalResult(notaId?: string | null, status?: string | null, motivo?: string | null) {
+  if (!status) return
+  if (status === 'Autorizada' && notaId) {
+    window.open(`/admin/fiscal/cupom/${notaId}`, '_blank')
+  } else {
+    toast.error(`Nota fiscal não autorizou ainda (${status})${motivo ? ' — ' + motivo : ''}. O sistema tenta de novo automaticamente.`)
+  }
+}
+
 /** Data de hoje no fuso de Brasília como YYYY-MM-DD (nunca usa UTC). */
 const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
 
@@ -1716,9 +1727,10 @@ export default function DashboardPage() {
 
   async function executarClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, crediarioExistenteId?: string, discountInCents?: number, emitirNotaFiscal?: boolean) {
     try {
-      await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal)
+      const { data } = await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal)
       const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
       toast.success(label)
+      handleNotaFiscalResult(data.notaFiscalId, data.notaFiscalStatus, data.notaFiscalMotivoRejeicao)
       fetchComandas()
       fetchHistory(histData)
     } catch (err: unknown) {
@@ -1763,8 +1775,12 @@ export default function DashboardPage() {
     setEmitindoNotaId(id)
     try {
       const { data } = await fiscalApi.emitirNotaComanda(id)
-      toast[data.status === 'Autorizada' ? 'success' : 'error'](
-        data.status === 'Autorizada' ? 'Nota fiscal autorizada!' : `Nota registrada, aguardando: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
+      if (data.status === 'Autorizada') {
+        toast.success('Nota fiscal autorizada!')
+        window.open(`/admin/fiscal/cupom/${data.id}`, '_blank')
+      } else {
+        toast.error(`Nota registrada, aguardando: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao emitir nota fiscal.')

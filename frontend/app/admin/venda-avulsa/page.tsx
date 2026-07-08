@@ -206,8 +206,12 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
     setEmitindoNota(true)
     try {
       const { data } = await fiscalApi.emitirNotaVendaAvulsa(venda.id)
-      toast[data.status === 'Autorizada' ? 'success' : 'error'](
-        data.status === 'Autorizada' ? 'Nota fiscal autorizada!' : `Nota registrada, aguardando: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
+      if (data.status === 'Autorizada') {
+        toast.success('Nota fiscal autorizada!')
+        window.open(`/admin/fiscal/cupom/${data.id}`, '_blank')
+      } else {
+        toast.error(`Nota registrada, aguardando: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao emitir nota fiscal.')
@@ -421,6 +425,17 @@ const PAYMENT_ICONS = PAYMENT_ICONS_INNER
 
 const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 
+/** Após um registro com "Emitir cupom fiscal" marcado: abre o cupom sozinho se autorizou,
+ * ou avisa o motivo se rejeitou/ficou pendente (SEFAZ fora do ar — o retry automático tenta de novo). */
+function handleNotaFiscalResult(notaId?: string | null, status?: string | null, motivo?: string | null) {
+  if (!status) return
+  if (status === 'Autorizada' && notaId) {
+    window.open(`/admin/fiscal/cupom/${notaId}`, '_blank')
+  } else {
+    toast.error(`Nota fiscal não autorizou ainda (${status})${motivo ? ' — ' + motivo : ''}. O sistema tenta de novo automaticamente.`)
+  }
+}
+
 // ── Wizard de nova venda (3 etapas) ──────────────────────────────────────────
 
 function VendaWizard({
@@ -617,6 +632,7 @@ function VendaWizard({
       )
       onComplete(data)
       toast.success('Venda registrada!')
+      handleNotaFiscalResult(data.notaFiscalId, data.notaFiscalStatus, data.notaFiscalMotivoRejeicao)
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao registrar venda.')

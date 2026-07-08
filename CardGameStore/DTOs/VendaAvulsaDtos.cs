@@ -65,6 +65,12 @@ public class VendaAvulsaDto
     public int                 DiscountPercent            { get; set; }
     public decimal             DiscountInReais            { get; set; }
     public List<VendaAvulsaItemDto> Items                 { get; set; } = new();
+
+    /// <summary>Preenchidos só quando o registro pediu emissão de NFC-e (EmitirNotaFiscal=true) —
+    /// permite o front abrir o cupom automaticamente quando autoriza, ou avisar o motivo se não.</summary>
+    public Guid?   NotaFiscalId             { get; set; }
+    public string? NotaFiscalStatus         { get; set; }
+    public string? NotaFiscalMotivoRejeicao { get; set; }
 }
 
 public class EditarPagamentoVendaAvulsaRequest

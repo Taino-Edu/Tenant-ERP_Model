@@ -683,22 +683,25 @@ public class ComandaService : IComandaService
 
         await _db.SaveChangesAsync();
 
-        // Emite a NFC-e referente a esta comanda de forma assíncrona — só quando o admin
-        // escolheu explicitamente emitir no fechamento (Maikon não quer nota emitida sem
-        // antes perguntar). Se não marcou, nenhuma NotaFiscalEmitida é criada; a emissão
-        // pode ser feita depois manualmente pelo histórico.
+        // Emite a NFC-e referente a esta comanda — só quando o admin escolheu explicitamente
+        // emitir no fechamento (Maikon não quer nota emitida sem antes perguntar). Aguarda o
+        // resultado (em vez de fire-and-forget) pra poder devolver o status pro caixa na hora
+        // e permitir abrir o cupom automaticamente quando autorizar — a chamada nunca lança
+        // exceção (garantia do NfceEmissionService), então não tem risco de travar o fechamento.
+        // Se não marcou, nenhuma NotaFiscalEmitida é criada; a emissão pode ser feita depois
+        // manualmente pelo histórico.
+        NotaFiscalEmitida? nota = null;
         if (emitirNotaFiscal)
         {
-            var comandaIdParaEmissao = comandaId;
-            _ = Task.Run(async () =>
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
-                await emissao.EmitirParaComandaAsync(comandaIdParaEmissao);
-            });
+            using var scope = _scopeFactory.CreateScope();
+            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+            nota = await emissao.EmitirParaComandaAsync(comandaId);
         }
 
         var dto = MapToDto(comanda);
+        dto.NotaFiscalId              = nota?.Id;
+        dto.NotaFiscalStatus          = nota?.Status.ToString();
+        dto.NotaFiscalMotivoRejeicao  = nota?.MotivoRejeicao;
         // Notifica o cliente que a comanda foi fechada
         await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
             .SendAsync("ComandaClosed", new { ComandaId = comandaId, PaymentMethod = paymentMethod });

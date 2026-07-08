@@ -184,19 +184,19 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         await _collection.InsertOneAsync(venda);
 
-        // Emite a NFC-e referente a esta venda avulsa de forma assíncrona — só quando o admin
-        // escolheu explicitamente emitir no fechamento (Maikon não quer nota emitida sem antes
-        // perguntar). Se não marcou, nenhuma NotaFiscalEmitida é criada; a emissão pode ser
-        // feita depois manualmente pelo histórico.
+        // Emite a NFC-e referente a esta venda avulsa — só quando o admin escolheu
+        // explicitamente emitir no fechamento (Maikon não quer nota emitida sem antes
+        // perguntar). Aguarda o resultado (em vez de fire-and-forget) pra devolver o status
+        // pro caixa na hora e permitir abrir o cupom automaticamente quando autorizar — a
+        // chamada nunca lança exceção (garantia do NfceEmissionService). Se não marcou,
+        // nenhuma NotaFiscalEmitida é criada; a emissão pode ser feita depois manualmente
+        // pelo histórico.
+        NotaFiscalEmitida? nota = null;
         if (request.EmitirNotaFiscal)
         {
-            var vendaIdParaEmissao = venda.Id;
-            _ = Task.Run(async () =>
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
-                await emissao.EmitirParaVendaAvulsaAsync(vendaIdParaEmissao);
-            });
+            using var scope = _scopeFactory.CreateScope();
+            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+            nota = await emissao.EmitirParaVendaAvulsaAsync(venda.Id);
         }
 
         var paymentSummary = secondPm != null
@@ -385,7 +385,11 @@ public class VendaAvulsaService : IVendaAvulsaService
             }
         }
 
-        return MapToDto(venda);
+        var dto = MapToDto(venda);
+        dto.NotaFiscalId             = nota?.Id;
+        dto.NotaFiscalStatus         = nota?.Status.ToString();
+        dto.NotaFiscalMotivoRejeicao = nota?.MotivoRejeicao;
+        return dto;
     }
 
     public async Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50, DateTime? desde = null)

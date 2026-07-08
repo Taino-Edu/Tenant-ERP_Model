@@ -2,7 +2,7 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.20.1'
+const VERSION = 'v1.21.0'
 const DATA = '08/07/2026'
 
 const SECOES = [
@@ -307,7 +307,9 @@ const SECOES = [
       { t: 'Emitir nota depois (manual)', d: 'Se a venda foi fechada sem nota, use o botão "Emitir nota fiscal" no histórico da comanda ou no detalhe da venda avulsa a qualquer momento depois.' },
       { t: 'Acompanhar notas emitidas', d: 'A lista de notas em Admin → Fiscal mostra status (Pendente, Autorizada, Rejeitada, Cancelada, Contingência) e o motivo quando não autoriza — ex: certificado não configurado, produto sem NCM.' },
       { t: 'Reprocessar e cancelar', d: 'Notas pendentes ou rejeitadas podem ser reprocessadas manualmente. Notas autorizadas podem ser canceladas dentro de 30 minutos da emissão, com justificativa de pelo menos 15 caracteres.' },
-      { t: 'Cupom e QR Code', d: 'Cada nota autorizada tem uma página de cupom pra imprimir ou mostrar pro cliente, com QR Code oficial da SEFAZ.' },
+      { t: 'Cupom e QR Code', d: 'Cada nota autorizada tem uma página de cupom pra imprimir ou mostrar pro cliente, com QR Code oficial da SEFAZ. Quando marca "Emitir cupom fiscal" no fechamento, o cupom abre sozinho numa aba nova assim que a SEFAZ autoriza — sem precisar ir procurar em Admin > Fiscal.' },
+      { t: 'Impressão térmica', d: 'O botão "Imprimir" da página do cupom usa o diálogo de impressão do navegador, formatado pra 80mm — funciona com qualquer impressora térmica instalada como impressora normal do Windows/sistema. Não é automático: alguém precisa clicar em Imprimir e escolher a térmica.' },
+      { t: 'Cliente vê a própria nota', d: 'Em Meu Perfil > Notas Fiscais, o cliente vê as próprias notas emitidas e pode abrir/imprimir o cupom de qualquer uma que já autorizou — sem precisar pedir pro admin.' },
       { t: 'Exportar XMLs pro contador', d: 'Exporte um ZIP com os XMLs autorizados e cancelados de qualquer período — manual, ou automático todo dia 1 do mês por e-mail pro contador cadastrado.' },
     ],
     dicas: [
