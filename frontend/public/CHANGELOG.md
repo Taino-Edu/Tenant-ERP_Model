@@ -1,5 +1,11 @@
 # Changelog — Santuário Nerd
 
+## [v1.18.0] — 2026-07-08
+
+### Mudado
+- **Mercado de Cartas deixou de ser C2C**: agora é uma vitrine só do Maikon — só o Admin anuncia carta (`/admin/marketplace`, botão "Novo anúncio"), clientes só navegam e marcam interesse, como sempre funcionou. O botão "Anunciar carta" que existia pro cliente (bloqueado desde antes, mostrava só um aviso) foi removido, junto com a aba "Meus anúncios" — ninguém além do Maikon nunca vai ter anúncio próprio agora
+- Interessados numa carta agora aparecem direto na tabela do admin (clique no número de interesses) — WhatsApp de quem autorizou contato, mensagem e data, sem precisar ir na página pública
+
 ## [v1.17.0] — 2026-07-08
 
 ### Melhorado

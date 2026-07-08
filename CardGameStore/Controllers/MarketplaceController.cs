@@ -3,9 +3,9 @@
 //
 // GET    /api/marketplace                → lista cartas disponíveis (público)
 // GET    /api/marketplace/mine           → minhas listagens (auth)
-// POST   /api/marketplace                → criar listagem (auth)
-// PUT    /api/marketplace/{id}           → editar listagem própria (auth)
-// DELETE /api/marketplace/{id}           → remover listagem (auth)
+// POST   /api/marketplace                → criar listagem — só Admin/Operator (é vitrine do Maikon, não C2C)
+// PUT    /api/marketplace/{id}           → editar listagem própria ou qualquer uma (admin) (auth)
+// DELETE /api/marketplace/{id}           → remover listagem própria ou qualquer uma (admin) (auth)
 // POST   /api/marketplace/{id}/interest  → toggle interesse (auth)
 // GET    /api/marketplace/{id}/interests → lista interessados — só dono/admin (auth)
 // =============================================================================
@@ -104,10 +104,12 @@ public class MarketplaceController : ControllerBase
         return Ok(listings.Select(l => ToDto(l, userId, includeInterests: true)));
     }
 
-    // ── POST /api/marketplace — criar listagem ───────────────────────────────
+    // ── POST /api/marketplace — criar listagem (só Admin/Operator) ───────────
+    // Marketplace é vitrine do Maikon, não C2C entre clientes — clientes só
+    // navegam e marcam interesse (ToggleInterest), nunca criam anúncio.
 
     [HttpPost]
-    [Authorize]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create([FromBody] CreateListingRequest req)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);

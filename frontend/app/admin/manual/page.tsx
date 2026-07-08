@@ -164,19 +164,19 @@ const SECOES = [
   },
   {
     num: '07d',
-    titulo: 'Mercado de Cartas (C2C)',
+    titulo: 'Mercado de Cartas (Vitrine)',
     cor: '#F472B6',
     itens: [
-      { t: 'O que é', d: 'Plataforma interna onde clientes compram e vendem cartas entre si. A loja não intermedeia financeiramente.' },
-      { t: 'Anunciar carta', d: 'Cliente acessa "Mercado de Cartas" no site → "Anunciar carta". Tira foto direto pelo celular, informa condição (NM/LP/MP/HP/DMG), preço e descrição.' },
+      { t: 'O que é', d: 'Vitrine de cartas avulsas do próprio Maikon — só o Admin anuncia. Clientes só navegam e marcam interesse, não postam anúncios (não é C2C).' },
+      { t: 'Anunciar carta', d: 'Admin → Mercado de Cartas → "Novo anúncio". Foto, jogo, condição (NM/LP/MP/HP/DMG), preço e descrição.' },
       { t: 'Condições de carta', d: 'NM = Near Mint (perfeita) • LP = Light Played (levemente usada) • MP = Moderate Played • HP = Heavy Played • DMG = Damaged (danificada).' },
-      { t: 'Interesse', d: 'Comprador clica "Tenho interesse" e pode deixar uma mensagem. Pode autorizar (ou não) compartilhar o WhatsApp com o vendedor.' },
-      { t: 'Fechar negócio', d: 'O vendedor vê os interessados. Se o comprador autorizou o contato, aparece botão de WhatsApp direto. Eles negociam e combinam presencialmente ou via WhatsApp.' },
-      { t: 'Moderação', d: 'Admin vê todos os anúncios em Gestão → Mercado de Cartas. Pode remover anúncios inapropriados ou alterar status (Disponível / Reservado / Vendido).' },
+      { t: 'Interesse', d: 'Cliente clica "Tenho interesse" na carta e pode deixar uma mensagem. Pode autorizar (ou não) compartilhar o WhatsApp com o Maikon.' },
+      { t: 'Ver interessados', d: 'Em Admin → Mercado de Cartas, clique no número de interesses da carta. Se o cliente autorizou o contato, aparece botão de WhatsApp direto pra combinar a venda.' },
+      { t: 'Gestão', d: 'Admin edita, remove ou muda o status do anúncio (Disponível / Reservado / Vendido) direto na tabela do Mercado de Cartas.' },
     ],
     dicas: [
-      'LGPD: o WhatsApp do comprador só aparece para o vendedor se o próprio comprador autorizou explicitamente.',
-      'Menores precisam declarar que têm 18 anos ou autorização dos responsáveis para anunciar ou marcar interesse.',
+      'LGPD: o WhatsApp do cliente só aparece pro Admin se o próprio cliente autorizou explicitamente ao marcar interesse.',
+      'Menores precisam declarar que têm 18 anos ou autorização dos responsáveis pra marcar interesse.',
     ],
   },
   {
