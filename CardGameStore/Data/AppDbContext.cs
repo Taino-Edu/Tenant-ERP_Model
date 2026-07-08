@@ -68,6 +68,9 @@ public class AppDbContext : DbContext
     // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
     public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
 
+    // ── Personalização da landing page ─────────────────────────────────────────
+    public DbSet<SiteConfig>         SiteConfigs          { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------

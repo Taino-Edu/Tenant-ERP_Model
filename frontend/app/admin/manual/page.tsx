@@ -2,8 +2,8 @@
 import { useEffect } from 'react'
 
 const LOJA = 'Santuário Nerd'
-const VERSION = 'v1.10.1'
-const DATA = '28/06/2026'
+const VERSION = 'v1.20.0'
+const DATA = '08/07/2026'
 
 const SECOES = [
   {
@@ -30,6 +30,8 @@ const SECOES = [
       { t: 'Como funciona', d: 'O cliente escaneia o QR Code da mesa e abre a própria comanda. O sistema identifica o cliente automaticamente pelo CPF ou WhatsApp.' },
       { t: 'Adicionar itens', d: 'No painel admin, clique na comanda aberta e pesquise o produto. Você também pode adicionar itens manualmente com nome e preço.' },
       { t: 'Fechar a comanda', d: 'Clique em "Fechar Comanda", escolha a forma de pagamento (Dinheiro, Pix, Cartão, Crediário, Pontos ou Cashback) e confirme. O sistema desconta o estoque automaticamente.' },
+      { t: 'Desconto em R$', d: 'No fechamento, informe um valor de desconto direto em reais (além do desconto em pontos que o cliente já tenha aplicado). Aparece separado no histórico e nos relatórios.' },
+      { t: 'Emitir cupom fiscal', d: 'No fechamento aparece o checkbox "Emitir cupom fiscal (NFC-e) agora" — a nota só é emitida se você marcar. Vem pré-marcado conforme a forma de pagamento estar configurada em Fiscal → Emissão automática, mas você sempre pode mudar na hora.' },
       { t: 'Split de pagamento', d: 'É possível usar duas formas de pagamento ao mesmo tempo. Selecione a segunda forma e informe o valor dela.' },
       { t: 'Cancelar comanda', d: 'Se o cliente desistir, use "Cancelar". O estoque não é alterado e a comanda some do painel.' },
       { t: 'Agrupar itens', d: 'Itens iguais são somados automaticamente na visualização para facilitar a conferência.' },
@@ -37,6 +39,7 @@ const SECOES = [
     dicas: [
       'Comandas com status "Aberta" ainda não têm itens. "Em Andamento" já tem pelo menos um item adicionado.',
       'O admin pode abrir uma comanda manualmente em nome de um cliente pelo botão "Nova Comanda".',
+      'Se fechar sem marcar "Emitir cupom fiscal", dá pra emitir depois pelo botão "Emitir nota fiscal" no histórico da comanda.',
     ],
   },
   {
@@ -48,13 +51,15 @@ const SECOES = [
       { t: 'Wizard 3 etapas', d: 'O PDV guia você por: 1) selecionar cliente, 2) adicionar produtos, 3) escolher pagamento. Navegue livremente entre etapas sem perder o carrinho.' },
       { t: 'Layout 2 colunas no step de produtos', d: 'Ao chegar na etapa de produtos, o modal expande mostrando o catálogo à esquerda e o carrinho à direita. Cada item adicionado aparece imediatamente no painel do carrinho com controles de quantidade — sem precisar avançar de etapa para ver o que foi adicionado.' },
       { t: 'Adicionar produtos', d: 'Pesquise pelo nome, categoria ou código de barras. Clique em + para adicionar; o produto vai direto para o carrinho ao lado.' },
-      { t: 'Desconto rápido', d: 'Aplique desconto percentual diretamente na etapa de pagamento. O desconto padrão é pré-configurável nas Preferências.' },
+      { t: 'Desconto — % ou R$', d: 'Na etapa de pagamento, escolha entre desconto percentual ou valor fixo em reais com o toggle % / R$. O desconto padrão (percentual) é pré-configurável nas Preferências.' },
+      { t: 'Emitir cupom fiscal', d: 'Igual na comanda: aparece o checkbox "Emitir cupom fiscal (NFC-e) agora" antes de confirmar a venda. Vem pré-marcado conforme a forma de pagamento estar configurada em Fiscal → Emissão automática.' },
       { t: 'Split de pagamento', d: 'Selecione uma segunda forma de pagamento e informe o valor. O saldo restante é calculado automaticamente.' },
       { t: 'Analytics do PDV', d: 'Histórico com gráfico de pico de horário, top produtos vendidos no período e breakdown por forma de pagamento.' },
     ],
     dicas: [
       'O desconto padrão (0 a 20%) pode ser pré-configurado em Configurações → Frente de Caixa.',
       'Sem cliente selecionado, a venda é anônima — aparece apenas nos relatórios gerais.',
+      'Se a venda foi registrada sem nota, dá pra emitir depois no detalhe da venda (histórico do PDV).',
     ],
   },
   {
@@ -121,10 +126,12 @@ const SECOES = [
       { t: 'Status do campeonato', d: '"Planejado" → "Inscrições Abertas" → "Em Andamento" → "Finalizado". Mude o status conforme o evento avança.' },
       { t: 'Inscrever participantes', d: 'No painel do campeonato, adicione participantes manualmente ou deixe que eles se inscrevam pela landing page pública.' },
       { t: 'Pré-inscrições da landing page', d: 'Clientes sem conta podem se pré-inscrever pelo link público. Você aprova ou rejeita as pré-inscrições no painel.' },
+      { t: 'Pix na inscrição (opcional)', d: 'O jogador pode pagar a taxa de inscrição na hora via Pix — botão "Pagar inscrição via Pix" em Meus Campeonatos, com QR Code/copia-e-cola e confirmação automática. A vaga já vale mesmo sem pagar, então pagamento no balcão continua funcionando normalmente.' },
+      { t: 'Acompanhar pagamentos', d: 'Na lista de participantes, veja quem já pagou (Pix ou balcão) e marque manualmente o pagamento de quem pagar no balcão.' },
       { t: 'Definir colocações', d: 'Após o campeonato, clique no participante e informe o lugar (1º, 2º, 3º...). O sistema monta o pódio automaticamente.' },
     ],
     dicas: [
-      'A taxa de inscrição é registrada manualmente — o sistema não cobra automaticamente.',
+      'A taxa de inscrição paga no balcão é registrada manualmente — só o Pix confirma sozinho.',
       'Use "Cancelado" para campeonatos que não aconteceram para manter o histórico limpo.',
     ],
   },
@@ -177,6 +184,21 @@ const SECOES = [
     dicas: [
       'LGPD: o WhatsApp do cliente só aparece pro Admin se o próprio cliente autorizou explicitamente ao marcar interesse.',
       'Menores precisam declarar que têm 18 anos ou autorização dos responsáveis pra marcar interesse.',
+    ],
+  },
+  {
+    num: '07e',
+    titulo: 'Fila de Espera (Pré-venda)',
+    cor: '#38BDF8',
+    itens: [
+      { t: 'O que é', d: 'Para produtos em pré-venda com estoque zerado, o cliente entra numa fila de espera pelo site em vez de reservar. Diferente da reserva de 48h (que exige estoque disponível).' },
+      { t: 'Aviso automático de reestoque', d: 'Quando o estoque do produto sai de zero, todo mundo na fila recebe aviso automático (in-app + push + e-mail) na hora, uma única vez por pessoa.' },
+      { t: 'Botão "Avisar fila"', d: 'Em Admin → Pré-vendas → Lista de Espera, o botão "Avisar fila" leva direto pra Mensageria com os clientes daquela fila já selecionados e o título/imagem do produto preenchidos — útil pra mandar um aviso extra além do automático.' },
+      { t: 'Minhas Filas (cliente)', d: 'No perfil do cliente, a aba "Filas" mostra a posição em cada lista de espera e as reservas ativas com prazo, com botão pra sair/cancelar.' },
+    ],
+    dicas: [
+      'A fila de espera não garante o produto — é por ordem de chegada quando o estoque volta.',
+      'Pré-vendas e Reservas ficam na mesma página (Admin → Pré-vendas), em abas separadas.',
     ],
   },
   {
@@ -272,6 +294,29 @@ const SECOES = [
     ],
   },
   {
+    num: '14',
+    titulo: 'Fiscal — Emissão de NFC-e',
+    cor: '#EAB308',
+    itens: [
+      { t: 'Configurar a empresa', d: 'Em Admin → Fiscal, preencha CNPJ, razão social, inscrição estadual, endereço completo e regime tributário (Simples Nacional). Todos os campos são obrigatórios pra emitir NFC-e.' },
+      { t: 'Certificado digital A1', d: 'Envie o arquivo .pfx do certificado A1 e a senha. O sistema valida e guarda criptografado — nunca aparece de novo em texto puro depois de salvo.' },
+      { t: 'Natureza de Operação', d: 'Cadastre CFOP/CSOSN uma vez (ex: "Venda dentro do estado") e marque uma como padrão. Produtos sem natureza específica usam a padrão automaticamente.' },
+      { t: 'NCM é obrigatório', d: 'Todo produto vendido por NFC-e precisa ter o NCM cadastrado (Admin → Estoque), copiado da nota fiscal de compra do produto — o sistema nunca inventa ou sugere um NCM sozinho.' },
+      { t: 'Emissão não é mais automática', d: 'Ao fechar uma comanda ou registrar uma venda avulsa, a nota só é emitida se você marcar o checkbox "Emitir cupom fiscal" no momento do fechamento — o sistema não emite nota sozinho sem perguntar.' },
+      { t: 'Formas de pagamento com auto-emissão', d: 'Em Fiscal → Emissão automática, marque quais formas de pagamento (Pix, Dinheiro, Cartão...) vêm com o checkbox já pré-marcado no fechamento. Por padrão nenhuma vem marcada — é sempre uma escolha explícita até você configurar isso.' },
+      { t: 'Emitir nota depois (manual)', d: 'Se a venda foi fechada sem nota, use o botão "Emitir nota fiscal" no histórico da comanda ou no detalhe da venda avulsa a qualquer momento depois.' },
+      { t: 'Acompanhar notas emitidas', d: 'A lista de notas em Admin → Fiscal mostra status (Pendente, Autorizada, Rejeitada, Cancelada, Contingência) e o motivo quando não autoriza — ex: certificado não configurado, produto sem NCM.' },
+      { t: 'Reprocessar e cancelar', d: 'Notas pendentes ou rejeitadas podem ser reprocessadas manualmente. Notas autorizadas podem ser canceladas dentro de 30 minutos da emissão, com justificativa de pelo menos 15 caracteres.' },
+      { t: 'Cupom e QR Code', d: 'Cada nota autorizada tem uma página de cupom pra imprimir ou mostrar pro cliente, com QR Code oficial da SEFAZ.' },
+      { t: 'Exportar XMLs pro contador', d: 'Exporte um ZIP com os XMLs autorizados e cancelados de qualquer período — manual, ou automático todo dia 1 do mês por e-mail pro contador cadastrado.' },
+    ],
+    dicas: [
+      'Retry automático: notas pendentes ou em contingência são retransmitidas à SEFAZ periodicamente sem precisar fazer nada.',
+      'O NCM tem que vir da nota de compra real do fornecedor — nunca é adivinhado, pra evitar risco de classificação fiscal errada.',
+      'Configure "Emissão automática" só depois de confirmar que a emissão manual está funcionando direito pra aquela forma de pagamento.',
+    ],
+  },
+  {
     num: '15',
     titulo: 'Cartas TCG & Deck Builder',
     cor: '#F59E0B',
@@ -313,6 +358,41 @@ const SECOES = [
     dicas: [
       'O microfone funciona melhor no Chrome e Edge — Firefox não tem suporte nativo ao reconhecimento de voz.',
       'Os dados enviados ao assistente são anonimizados (LGPD): nomes de clientes são substituídos por "Cliente #N" antes de ir ao Google Gemini.',
+    ],
+  },
+  {
+    num: '17',
+    titulo: 'Mensageria (Avisos aos Clientes)',
+    cor: '#7C3AED',
+    itens: [
+      { t: 'Como funciona', d: 'Envie um aviso (título, texto, imagem opcional e link) pra um grupo de clientes de uma vez — por notificação in-app, e-mail ou os dois.' },
+      { t: 'Passo a passo', d: 'Fluxo em 3 passos: escreva a mensagem, escolha o canal (in-app / e-mail / ambos), escolha os destinatários (segmento de clientes ou seleção manual).' },
+      { t: 'Preview ao vivo', d: 'Enquanto você digita, aparece uma prévia mostrando exatamente como a notificação vai aparecer pro cliente.' },
+      { t: 'Segmentos de clientes', d: 'Envie pra todos, só ativos, aniversariantes do mês, ou outros recortes prontos — sem precisar montar lista manualmente.' },
+      { t: 'Vindo da Lista de Espera', d: 'O botão "Avisar fila" em Pré-vendas já abre a Mensageria com os clientes daquela fila selecionados e o produto preenchido — só revisar e enviar.' },
+      { t: 'E-mail sem cara de spam', d: 'Os e-mails enviados por aqui têm versão em texto simples além do HTML e um link de descadastro no rodapé, seguindo boas práticas de entrega de e-mail em massa.' },
+    ],
+    dicas: [
+      'Use com moderação — mensagens em excesso fazem o cliente ignorar ou se descadastrar.',
+      'A prévia ao vivo ajuda a pegar erro de digitação antes de mandar pra centenas de clientes de uma vez.',
+    ],
+  },
+  {
+    num: '18',
+    titulo: 'Personalizar Site',
+    cor: '#F59E0B',
+    itens: [
+      { t: 'Onde fica', d: 'Admin → Personalizar Site (seção Administração no menu). Formulário simples — preenche e clica em Salvar, sem precisar mexer em código.' },
+      { t: 'Identidade', d: 'Nome do site (aparece na navbar, título principal e rodapé), frase de apresentação abaixo do título, endereço/cidade e nome de quem atende (usado em textos como "Falar com [nome]").' },
+      { t: 'Contato', d: 'Número de WhatsApp (com DDI, ex: 5517999999999) e e-mail de contato — usados no botão flutuante, rodapé e nos links de "falar no WhatsApp" da landing page.' },
+      { t: 'Cores', d: 'Cor primária (azul), cor de destaque (amarelo) e cor da navbar — escolha pelo seletor de cor ou digite o código hexadecimal.' },
+      { t: 'Textos da navbar', d: 'Nomes dos links (Torneios, Produtos, Mercado de Cartas, Pontos) e dos botões "Ver Eventos" / "Ver Torneios" / "Ver Produtos".' },
+      { t: 'Textos das seções', d: 'Etiqueta e título de cada seção da landing page (Torneios, Produtos, Pontos) e o parágrafo do programa de fidelidade.' },
+      { t: 'Ver o resultado', d: 'Clique em "Ver site" no topo da página pra abrir a landing em outra aba e conferir as mudanças.' },
+    ],
+    dicas: [
+      'Enquanto nada é preenchido, o site continua exatamente como está hoje — todo campo já vem com o valor atual como padrão.',
+      'Esse painel é a base pro sistema virar white-label no futuro — quanto mais aqui, menos precisa mexer em código depois.',
     ],
   },
 ]

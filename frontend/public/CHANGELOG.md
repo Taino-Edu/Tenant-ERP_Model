@@ -1,5 +1,25 @@
 # Changelog — Santuário Nerd
 
+## [v1.20.0] — 2026-07-08
+
+### Adicionado
+- **Personalização do site** (Admin → Personalizar Site): nome da loja, WhatsApp, e-mail, endereço, nome de quem atende, textos da navbar/botões, títulos das seções (Torneios/Produtos/Pontos) e cores (primária, destaque, navbar) agora são editáveis pelo admin num formulário — sem precisar mexer em código. Enquanto ninguém edita nada, o site continua exatamente igual a antes (todo campo tem o valor atual como padrão). Primeiro passo pra virar base de um sistema white-label/multi-tenant
+
+## [v1.19.0] — 2026-07-08
+
+### Adicionado
+- **Emissão de NFC-e deixa de ser automática**: ao fechar uma comanda ou registrar uma venda avulsa, agora aparece a opção "Emitir cupom fiscal (NFC-e) agora" — o admin decide na hora, em vez do sistema emitir sozinho sem avisar. Em Admin → Fiscal dá pra marcar quais formas de pagamento (Pix, Dinheiro, Cartão...) vêm com a opção pré-marcada por padrão; sem configurar nada, nenhuma emite sozinha
+- Vendas fechadas sem nota fiscal podem receber a nota depois — botão "Emitir nota fiscal" no histórico de comandas e no detalhe de vendas avulsas
+- Landing page: link "Mercado de Cartas" na navbar (desktop e mobile); "Produtos" e "Ver Produtos" agora navegam de verdade pra `/produtos` em vez de só rolar a página
+
+### Melhorado
+- E-mails de mensageria (anúncios) ganharam versão em texto puro além do HTML, cabeçalho `List-Unsubscribe` e link de descadastro no rodapé — reduz o risco de cair em spam
+- Mensagem de "Pendente" no fiscal (Admin → Fiscal) agora mostra o motivo real (ex: certificado não configurado, dados da empresa incompletos) em vez de ficar sem explicação
+- Push notification do navegador usa o logo do Santuário Nerd em vez do logo antigo do Maikon
+
+### Corrigido
+- Pontos aplicados numa comanda aberta não refletiam no total mostrado pro cliente nem no card do admin — o abatimento sempre foi real no fechamento, mas a tela deixava parecer que "usar pontos" não tinha feito nada
+
 ## [v1.18.0] — 2026-07-08
 
 ### Mudado

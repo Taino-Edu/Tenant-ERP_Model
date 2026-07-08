@@ -31,6 +31,9 @@ public class VendaAvulsaRequest
     [Range(0, int.MaxValue)]
     public int SecondPaymentAmountInCents { get; set; } = 0;
 
+    /// <summary>Se true, emite a NFC-e desta venda automaticamente. Ver CloseComandaRequest.EmitirNotaFiscal.</summary>
+    public bool EmitirNotaFiscal { get; set; } = false;
+
     public bool IsPaymentMethodValid() =>
         Models.MongoDB.PaymentMethod.IsValid(PaymentMethod) &&
         (SecondPaymentMethod == null || Models.MongoDB.PaymentMethod.IsValid(SecondPaymentMethod));

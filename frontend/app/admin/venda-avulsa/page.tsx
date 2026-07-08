@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { productApi, vendaAvulsaApi, userApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, ProductVariant, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest } from '@/lib/api'
+import { productApi, vendaAvulsaApi, userApi, fiscalApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, ProductVariant, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import { usePreferences } from '@/hooks/usePreferences'
 import toast from 'react-hot-toast'
@@ -200,6 +200,21 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
   const [newClient,  setNewClient]  = useState(venda.clientName ?? '')
   const [newDisc,    setNewDisc]    = useState(venda.discountInReais > 0 ? String(venda.discountInReais.toFixed(2).replace('.', ',')) : '')
   const [saving,     setSaving]     = useState(false)
+  const [emitindoNota, setEmitindoNota] = useState(false)
+
+  async function handleEmitirNota() {
+    setEmitindoNota(true)
+    try {
+      const { data } = await fiscalApi.emitirNotaVendaAvulsa(venda.id)
+      toast[data.status === 'Autorizada' ? 'success' : 'error'](
+        data.status === 'Autorizada' ? 'Nota fiscal autorizada!' : `Nota registrada, aguardando: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao emitir nota fiscal.')
+    } finally {
+      setEmitindoNota(false)
+    }
+  }
 
   async function handleSavePay() {
     setSaving(true)
@@ -362,19 +377,29 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
             </div>
           </div>
         ) : (
-        <div className="px-5 pb-5 flex gap-2">
+        <div className="px-5 pb-5 space-y-2">
           <button
-            onClick={() => printReceiptPDF(venda, payLabel)}
-            className="btn-secondary flex-1 justify-center text-sm"
+            onClick={handleEmitirNota}
+            disabled={emitindoNota}
+            className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-amber-400 hover:text-amber-300 hover:bg-amber-600/10 border border-amber-600/30 hover:border-amber-500/50 rounded-xl py-2 transition-colors disabled:opacity-50"
           >
-            <FileText className="w-4 h-4" /> Imprimir / PDF
+            {emitindoNota ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
+            Emitir nota fiscal
           </button>
-          <button onClick={() => setEditingPay(true)} className="btn-secondary flex-1 justify-center text-sm">
-            <Pencil className="w-4 h-4" /> Pagamento
-          </button>
-          <button onClick={onClose} className="btn-primary flex-1 justify-center text-sm">
-            Fechar
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => printReceiptPDF(venda, payLabel)}
+              className="btn-secondary flex-1 justify-center text-sm"
+            >
+              <FileText className="w-4 h-4" /> Imprimir / PDF
+            </button>
+            <button onClick={() => setEditingPay(true)} className="btn-secondary flex-1 justify-center text-sm">
+              <Pencil className="w-4 h-4" /> Pagamento
+            </button>
+            <button onClick={onClose} className="btn-primary flex-1 justify-center text-sm">
+              Fechar
+            </button>
+          </div>
         </div>
         )}
       </div>
@@ -438,6 +463,21 @@ function VendaWizard({
   const [splitEnabled, setSplit] = useState(false)
   const [secondPayment, setSecondPayment] = useState<string>(PAYMENT_METHODS[1].value)
   const [secondAmountStr, setSecondAmountStr] = useState('')
+
+  // Emissão de nota fiscal — o admin decide explicitamente no fechamento (Maikon não quer
+  // nota emitida sem antes perguntar); só vem pré-marcado pras formas de pagamento que ele
+  // configurou como auto-emissão em Admin > Fiscal.
+  const [autoEmitMethods, setAutoEmitMethods] = useState<string[]>([])
+  const [emitirNota, setEmitirNota] = useState(false)
+  const [notaTouched, setNotaTouched] = useState(false)
+
+  useEffect(() => {
+    fiscalApi.getConfig().then(r => setAutoEmitMethods(r.data.formasPagamentoAutoEmissao ?? [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!notaTouched) setEmitirNota(autoEmitMethods.includes(payment))
+  }, [payment, autoEmitMethods, notaTouched])
 
   useEffect(() => {
     if (step === 2) setTimeout(() => searchRef.current?.focus(), 80)
@@ -573,6 +613,7 @@ function VendaWizard({
         splitEnabled ? secondPayment : null,
         splitEnabled ? secondAmountCents : 0,
         discountMode === 'cents' ? discountCents : undefined,
+        emitirNota,
       )
       onComplete(data)
       toast.success('Venda registrada!')
@@ -580,7 +621,7 @@ function VendaWizard({
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao registrar venda.')
     } finally { setSubmitting(false) }
-  }, [cart, clientName, payment, discountMode, discountPct, discountCents, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid])
+  }, [cart, clientName, payment, discountMode, discountPct, discountCents, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid, emitirNota])
 
   const handleSubmit = useThrottle(submitRaw, 2000)
 
@@ -1138,6 +1179,29 @@ function VendaWizard({
                     </div>
                   )}
                 </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => { setEmitirNota(v => !v); setNotaTouched(true) }}
+                className={clsx(
+                  'w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all',
+                  emitirNota
+                    ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
+                    : 'border-surface-500 text-gray-500 hover:border-surface-400 hover:text-gray-300'
+                )}
+              >
+                <span>Emitir cupom fiscal (NFC-e) agora</span>
+                <span className={clsx('w-4 h-4 rounded border flex items-center justify-center text-xs shrink-0',
+                  emitirNota ? 'bg-brand-500 border-brand-500 text-white' : 'border-surface-400'
+                )}>
+                  {emitirNota && '✓'}
+                </span>
+              </button>
+              {!emitirNota && (
+                <p className="text-xs text-gray-500 -mt-1">
+                  Sem nota agora. Depois é possível emitir pelo histórico de vendas.
+                </p>
               )}
             </div>
           )}

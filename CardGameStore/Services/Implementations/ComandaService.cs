@@ -460,7 +460,7 @@ public class ComandaService : IComandaService
         return dto;
     }
 
-    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0)
+    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0, bool emitirNotaFiscal = false)
     {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -683,15 +683,20 @@ public class ComandaService : IComandaService
 
         await _db.SaveChangesAsync();
 
-        // Emite a NFC-e referente a esta comanda de forma assíncrona — falha na emissão
-        // fiscal nunca deve bloquear o fechamento da venda (NfceEmissionService trata isso).
-        var comandaIdParaEmissao = comandaId;
-        _ = Task.Run(async () =>
+        // Emite a NFC-e referente a esta comanda de forma assíncrona — só quando o admin
+        // escolheu explicitamente emitir no fechamento (Maikon não quer nota emitida sem
+        // antes perguntar). Se não marcou, nenhuma NotaFiscalEmitida é criada; a emissão
+        // pode ser feita depois manualmente pelo histórico.
+        if (emitirNotaFiscal)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
-            await emissao.EmitirParaComandaAsync(comandaIdParaEmissao);
-        });
+            var comandaIdParaEmissao = comandaId;
+            _ = Task.Run(async () =>
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+                await emissao.EmitirParaComandaAsync(comandaIdParaEmissao);
+            });
+        }
 
         var dto = MapToDto(comanda);
         // Notifica o cliente que a comanda foi fechada

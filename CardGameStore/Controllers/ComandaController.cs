@@ -184,7 +184,8 @@ public class ComandaController : ControllerBase
             var amount2    = request?.SecondPaymentAmountInCents ?? 0;
             var credId     = request?.CrediarioExistenteId;
             var desconto   = request?.DiscountInCents ?? 0;
-            var result     = await _service.CloseComandaAsync(id, adminId, method, obs, method2, amount2, credId, desconto);
+            var emitirNota = request?.EmitirNotaFiscal ?? false;
+            var result     = await _service.CloseComandaAsync(id, adminId, method, obs, method2, amount2, credId, desconto, emitirNota);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

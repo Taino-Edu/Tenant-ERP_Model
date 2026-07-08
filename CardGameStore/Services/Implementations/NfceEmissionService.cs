@@ -274,6 +274,9 @@ public class NfceEmissionService : INfceEmissionService
         catch (FiscalNaoConfiguradoException ex)
         {
             // Estado esperado enquanto o admin não termina de configurar — não é uma falha real.
+            nota.MotivoRejeicao = $"Configuração fiscal pendente: {ex.Message}";
+            await _db.SaveChangesAsync();
+
             _logger.LogInformation(
                 "NFC-e {NotaId} ({Origem}) não emitida — {Motivo} Nota registrada como PendenteEmissao.",
                 nota.Id, nota.Origem, ex.Message);
@@ -613,6 +616,7 @@ public class NfceEmissionService : INfceEmissionService
             nota.EmitidoEm    ??= DateTime.UtcNow;
             nota.XmlAutorizado  = retorno.EnvioStr;
             nota.UrlQrCode      = qrCodeUrl;
+            nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
         }
         else
         {

@@ -805,6 +805,41 @@ using (var scope = app.Services.CreateScope())
                 ALTER TABLE championship_participants ADD COLUMN IF NOT EXISTS entry_fee_payment_method VARCHAR(20) NULL;
                 ALTER TABLE pix_cobrancas ADD COLUMN IF NOT EXISTS championship_participant_id UUID NULL
                     REFERENCES championship_participants(id) ON DELETE CASCADE;
+
+                -- Fiscal: emissão de NFC-e deixa de ser automática por padrão — só as formas de
+                -- pagamento explicitamente listadas aqui emitem nota sozinhas ao fechar a venda.
+                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS formas_pagamento_auto_emissao TEXT NOT NULL DEFAULT '';
+
+                -- Personalização da landing page (nome, textos, cores) — singleton, defaults
+                -- iguais aos valores hardcoded originais pra não mudar nada até o admin editar.
+                CREATE TABLE IF NOT EXISTS site_config (
+                    id                      UUID PRIMARY KEY,
+                    site_name               VARCHAR(100) NOT NULL DEFAULT 'Santuário Nerd',
+                    hero_subtitle           VARCHAR(400) NOT NULL DEFAULT 'Produtos, torneios e a melhor experiência TCG da região. Acumule pontos, compre na mesa e participe de campeonatos.',
+                    address_line            VARCHAR(150) NOT NULL DEFAULT 'José Bonifácio — SP',
+                    contact_person_name     VARCHAR(60)  NOT NULL DEFAULT 'Maikon',
+                    whatsapp_number         VARCHAR(20)  NOT NULL DEFAULT '5517997633103',
+                    contact_email           VARCHAR(150) NOT NULL DEFAULT 'santuarionerd@gmail.com',
+                    nav_torneios_label      VARCHAR(40)  NOT NULL DEFAULT 'Torneios',
+                    nav_produtos_label      VARCHAR(40)  NOT NULL DEFAULT 'Produtos',
+                    nav_mercado_label       VARCHAR(40)  NOT NULL DEFAULT 'Mercado de Cartas',
+                    nav_pontos_label        VARCHAR(40)  NOT NULL DEFAULT 'Pontos',
+                    cta_ver_eventos_label   VARCHAR(40)  NOT NULL DEFAULT 'Ver Eventos',
+                    cta_ver_torneios_label  VARCHAR(40)  NOT NULL DEFAULT 'Ver Torneios',
+                    cta_ver_produtos_label  VARCHAR(40)  NOT NULL DEFAULT 'Ver Produtos',
+                    torneios_eyebrow        VARCHAR(60)  NOT NULL DEFAULT 'Agenda',
+                    torneios_title          VARCHAR(80)  NOT NULL DEFAULT 'Próximos Torneios',
+                    produtos_eyebrow        VARCHAR(60)  NOT NULL DEFAULT 'Vitrine',
+                    produtos_title          VARCHAR(80)  NOT NULL DEFAULT 'Em Destaque',
+                    pontos_eyebrow          VARCHAR(60)  NOT NULL DEFAULT 'Programa de Fidelidade',
+                    pontos_title            VARCHAR(80)  NOT NULL DEFAULT 'Ganhe pontos a cada visita',
+                    pontos_paragraph        VARCHAR(400) NOT NULL DEFAULT 'Acumule pontos nas suas compras e troque por descontos. Só com CPF e WhatsApp — nada de senha ou aplicativo.',
+                    color_primary           VARCHAR(9)   NOT NULL DEFAULT '#3EC2F2',
+                    color_accent            VARCHAR(9)   NOT NULL DEFAULT '#FFE45E',
+                    color_navy              VARCHAR(9)   NOT NULL DEFAULT '#0C3D5A',
+                    updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+                );
+                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS contact_person_name VARCHAR(60) NOT NULL DEFAULT 'Maikon';
             ");
         }
 

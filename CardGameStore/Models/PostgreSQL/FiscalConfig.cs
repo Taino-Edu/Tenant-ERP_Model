@@ -151,6 +151,15 @@ public class FiscalConfig
     [Column("dist_ultimo_nsu")]
     public long DistUltimoNsu { get; set; }
 
+    /// <summary>
+    /// Formas de pagamento (CSV: "Pix,Dinheiro,...") que emitem NFC-e automaticamente ao
+    /// fechar a venda, sem perguntar. Vazio por padrão — o Maikon não quer que o sistema
+    /// emita nota sem antes perguntar; o admin decide explicitamente a cada fechamento
+    /// via checkbox, que só vem pré-marcado para as formas listadas aqui.
+    /// </summary>
+    [Column("formas_pagamento_auto_emissao")]
+    public string FormasPagamentoAutoEmissao { get; set; } = string.Empty;
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

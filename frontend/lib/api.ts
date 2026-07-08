@@ -390,8 +390,8 @@ export const comandaApi = {
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
   updateItem:   (id: string, itemId: string, quantity: number) =>
     api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
-  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0) =>
-    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId, discountInCents }),
+  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0, emitirNotaFiscal = false) =>
+    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
   editar:       (id: string, request: EditarComandaRequest) => api.put<ComandaDto>(`/api/comanda/${id}/editar`, request),
   adminOpen:    (userId: string, tableIdentifier?: string) =>
@@ -540,11 +540,13 @@ export const vendaAvulsaApi = {
     secondPaymentMethod?: string | null,
     secondPaymentAmountInCents = 0,
     discountInCents?: number,
+    emitirNotaFiscal = false,
   ) =>
     api.post<VendaAvulsaDto>('/api/venda-avulsa', {
       clientName, paymentMethod, items, discountPercent, discountInCents, userId,
       secondPaymentMethod: secondPaymentMethod || null,
       secondPaymentAmountInCents,
+      emitirNotaFiscal,
     }),
   recent: (limit = 50) =>
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/recent', { params: { limit } }),
@@ -1150,6 +1152,7 @@ export interface FiscalConfigDto {
   certificadoConfigurado: boolean
   certificadoValidade?: string
   diasParaVencer?: number
+  formasPagamentoAutoEmissao: string[]
 }
 
 export interface NaturezaOperacaoDto {
@@ -1190,6 +1193,7 @@ export const fiscalApi = {
     codigoMunicipioIbge: string; municipio: string; uf: string; cep: string
     cscId: string; cscToken: string
     regimeTributario: string; ambiente: string; serieNfce: number; emailContador: string
+    formasPagamentoAutoEmissao: string[]
   }>) => api.put<FiscalConfigDto>('/api/fiscal/config', body),
 
   uploadCertificado: (file: File, senha: string) => {
@@ -1217,6 +1221,44 @@ export const fiscalApi = {
   cancelarNota: (id: string, justificativa: string) =>
     api.post<{ id: string; status: string }>(`/api/fiscal/notas/${id}/cancelar`, { justificativa }),
   obterCupom: (id: string) => api.get<CupomDto>(`/api/fiscal/notas/${id}/cupom`),
+
+  emitirNotaComanda: (comandaId: string) =>
+    api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/comanda/${comandaId}`),
+  emitirNotaVendaAvulsa: (vendaId: string) =>
+    api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/venda-avulsa/${vendaId}`),
+}
+
+// ── Personalização do site (nome, textos, cores da landing) ───────────────────
+
+export interface SiteConfigDto {
+  siteName: string
+  heroSubtitle: string
+  addressLine: string
+  contactPersonName: string
+  whatsappNumber: string
+  contactEmail: string
+  navTorneiosLabel: string
+  navProdutosLabel: string
+  navMercadoLabel: string
+  navPontosLabel: string
+  ctaVerEventosLabel: string
+  ctaVerTorneiosLabel: string
+  ctaVerProdutosLabel: string
+  torneiosEyebrow: string
+  torneiosTitle: string
+  produtosEyebrow: string
+  produtosTitle: string
+  pontosEyebrow: string
+  pontosTitle: string
+  pontosParagraph: string
+  colorPrimary: string
+  colorAccent: string
+  colorNavy: string
+}
+
+export const siteConfigApi = {
+  get:  () => api.get<SiteConfigDto>('/api/site-config'),
+  save: (body: Partial<SiteConfigDto>) => api.put<SiteConfigDto>('/api/site-config', body),
 }
 
 // ── Notificações in-app ───────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { comandaApi, crediarioApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, notificationsApi, waitListApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
+import { comandaApi, crediarioApi, userApi, productApi, analyticsApi, championshipApi, lgpdAdminApi, notificationsApi, waitListApi, fiscalApi, ComandaDto, ComandaItemDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
@@ -13,7 +13,7 @@ import {
   Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
   History, Search, Loader2, TableProperties, Trash2, CreditCard, ScanBarcode, Camera,
   AlertTriangle, DollarSign, BarChart2, Trophy, Medal, Star, FolderOpen, Package, Shield, MessageCircle,
-  Pencil, X, UserSearch, QrCode,
+  Pencil, X, UserSearch, QrCode, Receipt,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -581,18 +581,25 @@ function EscolherContaCrediarioModal({
 // ── Modal: selecionar pagamento ao fechar comanda ────────────────────────────
 
 function CloseComandaModal({
-  comanda, onConfirm, onCancel, onGerarPix,
+  comanda, onConfirm, onCancel, onGerarPix, autoEmitMethods,
 }: {
   comanda:   ComandaDto
-  onConfirm: (paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number) => void
+  onConfirm: (paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean) => void
   onCancel:  () => void
   onGerarPix: () => void
+  autoEmitMethods: string[]
 }) {
   const [method,        setMethod]        = useState('Dinheiro')
   const [splitEnabled,  setSplitEnabled]  = useState(false)
   const [secondMethod,  setSecondMethod]  = useState('Cashback')
   const [secondAmtStr,  setSecondAmtStr]  = useState('')
   const [descontoStr,   setDescontoStr]   = useState('')
+  const [emitirNota,    setEmitirNota]    = useState(() => autoEmitMethods.includes('Dinheiro'))
+  const [notaTouched,   setNotaTouched]   = useState(false)
+
+  useEffect(() => {
+    if (!notaTouched) setEmitirNota(autoEmitMethods.includes(method))
+  }, [method, autoEmitMethods, notaTouched])
 
   const totalAntesDesconto = comanda.totalInReais - comanda.pointsApplied / 100
   const descontoCents  = Math.min(
@@ -617,9 +624,9 @@ function CloseComandaModal({
 
   function handleConfirm() {
     if (splitEnabled && secondAmtCents > 0)
-      onConfirm(method, secondMethod, secondAmtCents, descontoCents)
+      onConfirm(method, secondMethod, secondAmtCents, descontoCents, emitirNota)
     else
-      onConfirm(method, undefined, undefined, descontoCents)
+      onConfirm(method, undefined, undefined, descontoCents, emitirNota)
   }
 
   return (
@@ -827,6 +834,30 @@ function CloseComandaModal({
             Cliente já pagou por fora? Use "Confirmar" direto. Pra gerar um QR Code de cobrança, use "Gerar QR Pix".
           </p>
         )}
+
+        <button
+          type="button"
+          onClick={() => { setEmitirNota(v => !v); setNotaTouched(true) }}
+          className={clsx(
+            'w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all',
+            emitirNota
+              ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
+              : 'border-surface-500 text-gray-500 hover:border-surface-400 hover:text-gray-300'
+          )}
+        >
+          <span>Emitir cupom fiscal (NFC-e) agora</span>
+          <span className={clsx('w-4 h-4 rounded border flex items-center justify-center text-xs shrink-0',
+            emitirNota ? 'bg-brand-500 border-brand-500 text-white' : 'border-surface-400'
+          )}>
+            {emitirNota && '✓'}
+          </span>
+        </button>
+        {!emitirNota && (
+          <p className="text-xs text-gray-500 -mt-1">
+            Sem nota agora. Depois é possível emitir pelo histórico da comanda.
+          </p>
+        )}
+
         <div className="flex gap-3 pt-1">
           <button onClick={onCancel} className="btn-secondary flex-1 justify-center">Voltar</button>
           {method === 'Pix' && !splitEnabled ? (
@@ -889,15 +920,16 @@ function ConfirmModal({
 // ── Card de Comanda ───────────────────────────────────────────────────────────
 
 function ComandaCard({
-  comanda, onClose, onCancel, onUpdate, onClosedExternally, isNew, recentChange,
+  comanda, onClose, onCancel, onUpdate, onClosedExternally, isNew, recentChange, autoEmitMethods,
 }: {
   comanda: ComandaDto
-  onClose:  (id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number) => void
+  onClose:  (id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean) => void
   onCancel: (id: string) => void
   onUpdate: (updated: ComandaDto, changeType?: 'add' | 'remove') => void
   onClosedExternally: () => void
   isNew:    boolean
   recentChange: 'add' | 'remove' | null
+  autoEmitMethods: string[]
 }) {
   const [expanded, setExpanded]   = useState(false)
   const [loading, setLoading]     = useState(false)
@@ -916,6 +948,10 @@ function ComandaCard({
     return () => clearInterval(id)
   }, [])
 
+  // Pontos só abatem "de verdade" no fechamento — enquanto aberta, mostra o total já líquido
+  // pra não parecer que "usar pontos" não fez nada.
+  const netTotal = Math.max(0, comanda.totalInReais - comanda.pointsApplied / 100)
+
   const statusMap: Record<string, string> = {
     Aberta: 'badge-aberta', EmAndamento: 'badge-andamento',
   }
@@ -923,10 +959,10 @@ function ComandaCard({
     Aberta: '● Aberta', EmAndamento: '● Em Andamento',
   }
 
-  async function handleClose(paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number) {
+  async function handleClose(paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean) {
     setCloseOpen(false)
     setLoading(true)
-    try { await onClose(comanda.id, paymentMethod, secondMethod, secondAmountInCents, discountInCents) } finally { setLoading(false) }
+    try { await onClose(comanda.id, paymentMethod, secondMethod, secondAmountInCents, discountInCents, emitirNotaFiscal) } finally { setLoading(false) }
   }
   async function handleCancel() {
     setConfirm(null)
@@ -989,6 +1025,7 @@ function ComandaCard({
           onConfirm={handleClose}
           onCancel={() => setCloseOpen(false)}
           onGerarPix={() => { setCloseOpen(false); setPixOpen(true) }}
+          autoEmitMethods={autoEmitMethods}
         />
       )}
       {pixOpen && (
@@ -1053,7 +1090,7 @@ function ComandaCard({
             </div>
           </div>
           <div className="text-right ml-3">
-            <p className="text-xl font-bold text-accent-gold">{fmt(comanda.totalInReais)}</p>
+            <p className="text-xl font-bold text-accent-gold">{fmt(netTotal)}</p>
             <div className={clsx('flex items-center gap-1 text-xs justify-end mt-0.5', elapsedColor(comanda.openedAt))}>
               <Clock className="w-3 h-3" />{elapsedLabel(comanda.openedAt)}
             </div>
@@ -1136,7 +1173,7 @@ function ComandaCard({
             )}
             <div className="border-t border-surface-500 pt-1.5 flex justify-between text-sm font-semibold">
               <span className="text-gray-300">Total</span>
-              <span className="text-accent-gold">{fmt(comanda.totalInReais)}</span>
+              <span className="text-accent-gold">{fmt(netTotal)}</span>
             </div>
           </div>
         )}
@@ -1475,9 +1512,11 @@ export default function DashboardPage() {
   const [editComanda, setEditComanda]   = useState<ComandaDto | null>(null)
   // Crediário — escolha de conta ao fechar comanda
   const [pendingClose, setPendingClose] = useState<{
-    id: string; pm: string; pm2?: string; amt2?: number; discount?: number
+    id: string; pm: string; pm2?: string; amt2?: number; discount?: number; emitirNota?: boolean
     userId: string; userName: string; valorPrincipal: number
   } | null>(null)
+  const [autoEmitMethods, setAutoEmitMethods] = useState<string[]>([])
+  const [emitindoNotaId, setEmitindoNotaId]   = useState<string | null>(null)
   const [contasAbertas, setContasAbertas] = useState<CrediariosDto[]>([])
   const [histSearch,   setHistSearch]   = useState('')
   const [histHoraDe,   setHistHoraDe]   = useState('')
@@ -1554,6 +1593,7 @@ export default function DashboardPage() {
     lgpdAdminApi.listRequests('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
     notificationsApi.unreadCount().then(r => setUnreadNotif(r.data.count)).catch(() => {})
     waitListApi.preVendaPendentesCount().then(r => setPendingPreVenda(r.data.count)).catch(() => {})
+    fiscalApi.getConfig().then(r => setAutoEmitMethods(r.data.formasPagamentoAutoEmissao ?? [])).catch(() => {})
   }, [])
 
   async function fetchProdutos(de: string, ate: string) {
@@ -1652,7 +1692,7 @@ export default function DashboardPage() {
     if (changeType) markChange(updated.id, changeType)
   }
 
-  async function handleClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number) {
+  async function handleClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean) {
     if (paymentMethod === 'Crediario') {
       // Descobre o cliente da comanda
       const comanda = comandas.find(c => c.id === id)
@@ -1664,19 +1704,19 @@ export default function DashboardPage() {
             // Calcula valor principal (total - desconto - segundo pagamento)
             const totalCents = comanda.items.reduce((s, i) => s + i.unitPriceInCents * i.quantity, 0)
             const valorPrincipal = totalCents - (discountInCents ?? 0) - (secondAmountInCents ?? 0)
-            setPendingClose({ id, pm: paymentMethod, pm2: secondMethod, amt2: secondAmountInCents, discount: discountInCents, userId: comanda.userId, userName: comanda.userName, valorPrincipal })
+            setPendingClose({ id, pm: paymentMethod, pm2: secondMethod, amt2: secondAmountInCents, discount: discountInCents, emitirNota: emitirNotaFiscal, userId: comanda.userId, userName: comanda.userName, valorPrincipal })
             setContasAbertas(abertas)
             return
           }
         } catch { /* se falhar na busca, fecha normalmente */ }
       }
     }
-    await executarClose(id, paymentMethod, secondMethod, secondAmountInCents, undefined, discountInCents)
+    await executarClose(id, paymentMethod, secondMethod, secondAmountInCents, undefined, discountInCents, emitirNotaFiscal)
   }
 
-  async function executarClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, crediarioExistenteId?: string, discountInCents?: number) {
+  async function executarClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, crediarioExistenteId?: string, discountInCents?: number, emitirNotaFiscal?: boolean) {
     try {
-      await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId, discountInCents)
+      await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal)
       const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
       toast.success(label)
       fetchComandas()
@@ -1716,6 +1756,20 @@ export default function DashboardPage() {
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg ?? 'Erro ao cancelar comanda.')
+    }
+  }
+
+  async function emitirNotaComanda(id: string) {
+    setEmitindoNotaId(id)
+    try {
+      const { data } = await fiscalApi.emitirNotaComanda(id)
+      toast[data.status === 'Autorizada' ? 'success' : 'error'](
+        data.status === 'Autorizada' ? 'Nota fiscal autorizada!' : `Nota registrada, aguardando: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Erro ao emitir nota fiscal.')
+    } finally {
+      setEmitindoNotaId(null)
     }
   }
 
@@ -1942,6 +1996,7 @@ export default function DashboardPage() {
                 onClosedExternally={() => { fetchComandas(); fetchHistory(histData) }}
                 isNew={newIds.has(c.id)}
                 recentChange={recentChanges.get(c.id)?.type ?? null}
+                autoEmitMethods={autoEmitMethods}
               />
             ))}
           </div>
@@ -2104,6 +2159,17 @@ export default function DashboardPage() {
                             onClick={e => { e.stopPropagation(); openEditModal(c) }}
                             className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-brand-400 hover:text-brand-300 hover:bg-brand-600/10 border border-brand-600/30 hover:border-brand-500/50 rounded-xl py-1.5 transition-colors">
                             <Pencil className="w-3.5 h-3.5" /> Editar comanda
+                          </button>
+                        )}
+                        {c.status === 'Fechada' && (
+                          <button
+                            disabled={emitindoNotaId === c.id}
+                            onClick={e => { e.stopPropagation(); emitirNotaComanda(c.id) }}
+                            className="mt-1.5 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300 hover:bg-amber-600/10 border border-amber-600/30 hover:border-amber-500/50 rounded-xl py-1.5 transition-colors disabled:opacity-50">
+                            {emitindoNotaId === c.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Receipt className="w-3.5 h-3.5" />}
+                            Emitir nota fiscal
                           </button>
                         )}
                         {c.status === 'Fechada' && c.paymentMethod && (() => {
@@ -2542,11 +2608,11 @@ export default function DashboardPage() {
           valorNovo={pendingClose.valorPrincipal}
           onEscolher={async (credId) => {
             setPendingClose(null)
-            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, credId, pendingClose.discount)
+            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, credId, pendingClose.discount, pendingClose.emitirNota)
           }}
           onNova={async () => {
             setPendingClose(null)
-            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, undefined, pendingClose.discount)
+            await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, undefined, pendingClose.discount, pendingClose.emitirNota)
           }}
           onCancel={() => setPendingClose(null)}
         />

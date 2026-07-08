@@ -537,6 +537,11 @@ export default function ClientePage() {
     } finally { setRemovingPts(false) }
   }
 
+  // Total líquido de pontos já aplicados — os pontos só abatem "de verdade" no fechamento
+  // (CloseComandaAsync), mas o cliente precisa ver o valor já descontado, senão parece que
+  // "usar pontos" não fez nada.
+  const netTotal = comanda ? Math.max(0, comanda.totalInReais - comanda.pointsApplied / 100) : 0
+
   // Backend já filtra isActive + showOnSite; exibimos todos inclusive sem estoque (badge "Indisponível")
   const activeProducts = products.filter(p => p.isActive)
 
@@ -901,7 +906,7 @@ export default function ClientePage() {
                   <div className="flex justify-between items-center mt-4 pt-4 border-t" style={{ borderColor: C.border }}>
                     <span className="font-black text-xs uppercase tracking-wide" style={{ color: C.muted }}>Total</span>
                     <span className="text-2xl font-black" style={{ color: C.navy }}>
-                      R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
+                      R$ {netTotal.toFixed(2).replace('.', ',')}
                     </span>
                   </div>
                 )}
@@ -1061,7 +1066,7 @@ export default function ClientePage() {
                       {comanda.items.length} {comanda.items.length === 1 ? 'item' : 'itens'}
                     </p>
                     <p className="text-base font-black leading-tight text-white">
-                      R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
+                      R$ {netTotal.toFixed(2).replace('.', ',')}
                     </p>
                   </div>
                 </div>
@@ -1101,7 +1106,7 @@ export default function ClientePage() {
                 <div className="flex justify-between items-center mt-4 pt-4 border-t" style={{ borderColor: C.border }}>
                   <span className="font-black text-xs uppercase tracking-wide" style={{ color: C.muted }}>Total</span>
                   <span className="text-2xl font-black" style={{ color: C.navy }}>
-                    R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}
+                    R$ {netTotal.toFixed(2).replace('.', ',')}
                   </span>
                 </div>
               </div>

@@ -4,6 +4,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Models.MongoDB;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -76,6 +77,15 @@ public class FiscalController : ControllerBase
         if (req.Ambiente is not null &&
             Enum.TryParse<AmbienteFiscal>(req.Ambiente, out var ambiente))
             cfg.Ambiente = ambiente;
+
+        if (req.FormasPagamentoAutoEmissao is not null)
+        {
+            var invalidas = req.FormasPagamentoAutoEmissao.Where(f => !PaymentMethod.IsValid(f)).ToList();
+            if (invalidas.Count > 0)
+                return BadRequest(new { Message = $"Forma(s) de pagamento inválida(s): {string.Join(", ", invalidas)}." });
+
+            cfg.FormasPagamentoAutoEmissao = string.Join(",", req.FormasPagamentoAutoEmissao.Distinct());
+        }
 
         cfg.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -293,6 +303,32 @@ public class FiscalController : ControllerBase
         });
     }
 
+    // ── POST /api/fiscal/emitir/comanda/{id} ──────────────────────────────────
+    // Emissão manual tardia — usada quando o admin optou por NÃO emitir no fechamento
+    // (checkbox desmarcado) e decidiu emitir depois pelo histórico.
+    [HttpPost("emitir/comanda/{id:guid}")]
+    public async Task<IActionResult> EmitirNotaComanda(Guid id)
+    {
+        var jaExiste = await _db.NotasFiscaisEmitidas.AnyAsync(n => n.Origem == NotaFiscalOrigem.Comanda && n.ComandaId == id);
+        if (jaExiste)
+            return Conflict(new { Message = "Já existe uma nota fiscal para esta comanda. Use reprocessar/cancelar em vez de emitir de novo." });
+
+        var nota = await _emissao.EmitirParaComandaAsync(id);
+        return Ok(new { nota.Id, Status = nota.Status.ToString(), nota.MotivoRejeicao });
+    }
+
+    // ── POST /api/fiscal/emitir/venda-avulsa/{id} ─────────────────────────────
+    [HttpPost("emitir/venda-avulsa/{id}")]
+    public async Task<IActionResult> EmitirNotaVendaAvulsa(string id)
+    {
+        var jaExiste = await _db.NotasFiscaisEmitidas.AnyAsync(n => n.Origem == NotaFiscalOrigem.VendaAvulsa && n.VendaAvulsaId == id);
+        if (jaExiste)
+            return Conflict(new { Message = "Já existe uma nota fiscal para esta venda. Use reprocessar/cancelar em vez de emitir de novo." });
+
+        var nota = await _emissao.EmitirParaVendaAvulsaAsync(id);
+        return Ok(new { nota.Id, Status = nota.Status.ToString(), nota.MotivoRejeicao });
+    }
+
     // ── POST /api/fiscal/notas/{id}/reprocessar ───────────────────────────────
     [HttpPost("notas/{id:guid}/reprocessar")]
     public async Task<IActionResult> ReprocessarNota(Guid id)
@@ -397,6 +433,9 @@ public class FiscalController : ControllerBase
             cfg.CertificadoConfigurado,
             cfg.CertificadoValidade,
             DiasParaVencer = diasParaVencer,
+            FormasPagamentoAutoEmissao = string.IsNullOrWhiteSpace(cfg.FormasPagamentoAutoEmissao)
+                ? Array.Empty<string>()
+                : cfg.FormasPagamentoAutoEmissao.Split(',', StringSplitOptions.RemoveEmptyEntries),
         };
     }
 }
@@ -422,6 +461,9 @@ public class SaveFiscalConfigRequest
     public string? Ambiente          { get; init; }
     public int?    SerieNfce         { get; init; }
     public string? EmailContador     { get; init; }
+
+    /// <summary>Formas de pagamento que emitem NFC-e automaticamente ao fechar a venda, sem perguntar. Null = não altera.</summary>
+    public string[]? FormasPagamentoAutoEmissao { get; init; }
 }
 
 public class CancelarNotaRequest

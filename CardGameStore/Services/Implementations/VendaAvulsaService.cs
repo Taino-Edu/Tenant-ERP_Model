@@ -184,15 +184,20 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         await _collection.InsertOneAsync(venda);
 
-        // Emite a NFC-e referente a esta venda avulsa de forma assíncrona — falha na emissão
-        // fiscal nunca deve bloquear o registro da venda (NfceEmissionService trata isso).
-        var vendaIdParaEmissao = venda.Id;
-        _ = Task.Run(async () =>
+        // Emite a NFC-e referente a esta venda avulsa de forma assíncrona — só quando o admin
+        // escolheu explicitamente emitir no fechamento (Maikon não quer nota emitida sem antes
+        // perguntar). Se não marcou, nenhuma NotaFiscalEmitida é criada; a emissão pode ser
+        // feita depois manualmente pelo histórico.
+        if (request.EmitirNotaFiscal)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
-            await emissao.EmitirParaVendaAvulsaAsync(vendaIdParaEmissao);
-        });
+            var vendaIdParaEmissao = venda.Id;
+            _ = Task.Run(async () =>
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+                await emissao.EmitirParaVendaAvulsaAsync(vendaIdParaEmissao);
+            });
+        }
 
         var paymentSummary = secondPm != null
             ? $"{request.PaymentMethod} + {secondPm} (R$ {secondAmt / 100m:N2})"

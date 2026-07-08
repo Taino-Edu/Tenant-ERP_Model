@@ -197,22 +197,6 @@ public class EmailService : IEmailService
               </p>
             """;
 
-        var body = $"""
-            <div style="font-family:sans-serif;max-width:520px">
-              {imagemHtml}
-              <h2 style="color:#7839F3;margin-top:0">{tituloHtml}</h2>
-              <div style="margin:16px 0;color:#333;line-height:1.6">
-                {corpoHtml}
-              </div>
-              {botaoHtml}
-              <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-              <p style="color:#888;font-size:12px">
-                Você recebe este email por ser cliente softNerd.<br/>
-                Dúvidas? Fale com o Maikon no balcão.
-              </p>
-            </div>
-            """;
-
         var host     = _config["SmtpSettings:Host"];
         var portStr  = _config["SmtpSettings:Port"];
         var user     = _config["SmtpSettings:Username"];
@@ -225,6 +209,36 @@ public class EmailService : IEmailService
             _logger.LogWarning("EmailService: SmtpSettings não configurado. Anúncio '{Titulo}' não foi enviado.", titulo);
             return 0;
         }
+
+        var unsubscribeMailto = $"mailto:{from}?subject={Uri.EscapeDataString("Cancelar inscrição - " + titulo)}";
+
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:520px">
+              {imagemHtml}
+              <h2 style="color:#7839F3;margin-top:0">{tituloHtml}</h2>
+              <div style="margin:16px 0;color:#333;line-height:1.6">
+                {corpoHtml}
+              </div>
+              {botaoHtml}
+              <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+              <p style="color:#888;font-size:12px">
+                Você recebe este email por ser cliente softNerd.<br/>
+                Dúvidas? Fale com o Maikon no balcão.<br/>
+                Não quer mais receber estes avisos? <a href="{unsubscribeMailto}" style="color:#888">Clique aqui para se descadastrar</a>.
+              </p>
+            </div>
+            """;
+
+        var textBody = $"""
+            {titulo}
+
+            {corpo}
+
+            {(string.IsNullOrWhiteSpace(link) ? "" : $"Ver no site: {AbsoluteUrl(link)}\n")}
+            --
+            Você recebe este email por ser cliente softNerd. Dúvidas? Fale com o Maikon no balcão.
+            Não quer mais receber estes avisos? Responda este email pedindo para ser descadastrado.
+            """;
 
         var port = int.TryParse(portStr, out var p) ? p : 587;
         using var client = new SmtpClient(host, port)
@@ -245,9 +259,11 @@ public class EmailService : IEmailService
                 {
                     From       = new MailAddress(from!, fromName),
                     Subject    = $"softNerd — {titulo}",
-                    Body       = body,
-                    IsBodyHtml = true,
+                    Body       = textBody,
+                    IsBodyHtml = false,
                 };
+                msg.AlternateViews.Add(AlternateView.CreateAlternateViewFromString(body, null, "text/html"));
+                msg.Headers.Add("List-Unsubscribe", $"<{unsubscribeMailto}>");
                 msg.To.Add(new MailAddress(email, name));
                 await client.SendMailAsync(msg);
                 enviados++;

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto } from '@/lib/api'
+import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
@@ -75,6 +75,11 @@ export default function FiscalPage() {
   // CSC (Código de Segurança do Contribuinte) — usado pro QR Code do cupom
   const [cscId, setCscId]       = useState('')
   const [cscToken, setCscToken] = useState('')
+
+  // Formas de pagamento que emitem NFC-e sozinhas ao fechar a venda, sem perguntar.
+  // Vazio por padrão — o admin decide a cada fechamento via checkbox (ver /admin/dashboard
+  // e /admin/venda-avulsa). Marcar aqui só muda o valor pré-marcado desse checkbox.
+  const [autoEmit, setAutoEmit] = useState<string[]>([])
 
   // Upload de certificado
   const [certFile, setCertFile] = useState<File | null>(null)
@@ -179,6 +184,7 @@ export default function FiscalPage() {
       setUf(cfg.uf ?? '')
       setCep(cfg.cep ?? '')
       setCscId(cfg.cscId ?? '')
+      setAutoEmit(cfg.formasPagamentoAutoEmissao ?? [])
       setNaturezas(nats)
     } catch {
       toast.error('Erro ao carregar dados fiscais')
@@ -198,6 +204,7 @@ export default function FiscalPage() {
         logradouro, numero, complemento, bairro,
         codigoMunicipioIbge, municipio, uf, cep,
         cscId, ...(cscToken ? { cscToken } : {}),
+        formasPagamentoAutoEmissao: autoEmit,
       })
       setConfig(data)
       toast.success('Configuração fiscal salva!')
@@ -206,6 +213,10 @@ export default function FiscalPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function toggleAutoEmit(method: string) {
+    setAutoEmit(prev => prev.includes(method) ? prev.filter(m => m !== method) : [...prev, method])
   }
 
   async function uploadCertificado() {
@@ -443,6 +454,44 @@ export default function FiscalPage() {
           Sem o CSC, o cupom funciona mas o QR Code fica sem o hash de segurança oficial.
         </p>
 
+        <button onClick={saveConfig} disabled={saving} className="btn-primary mt-4">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          Salvar
+        </button>
+      </div>
+
+      {/* Emissão automática por forma de pagamento */}
+      <div className="card p-5">
+        <h3 className="font-bold text-white mb-1">Emissão automática de nota fiscal</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Por padrão, nenhuma forma de pagamento emite nota sozinha — ao fechar uma venda, sempre
+          aparece a opção de escolher "Emitir cupom fiscal agora". Marque aqui só as formas de
+          pagamento em que essa opção deve vir <strong>pré-marcada</strong> (ainda é possível
+          desmarcar na hora do fechamento). Vendas sem nota emitida podem receber a nota depois,
+          pelo botão "Emitir nota fiscal" no histórico.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {COMANDA_PAYMENT_METHODS.map(m => (
+            <button
+              key={m.value}
+              type="button"
+              onClick={() => toggleAutoEmit(m.value)}
+              className={clsx(
+                'flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-sm transition-all text-left',
+                autoEmit.includes(m.value)
+                  ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
+                  : 'border-surface-500 text-gray-400 hover:border-surface-400 hover:text-gray-200'
+              )}
+            >
+              <span>{m.label}</span>
+              <span className={clsx('w-4 h-4 rounded border flex items-center justify-center text-xs shrink-0',
+                autoEmit.includes(m.value) ? 'bg-brand-500 border-brand-500 text-white' : 'border-surface-400'
+              )}>
+                {autoEmit.includes(m.value) && '✓'}
+              </span>
+            </button>
+          ))}
+        </div>
         <button onClick={saveConfig} disabled={saving} className="btn-primary mt-4">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Salvar
