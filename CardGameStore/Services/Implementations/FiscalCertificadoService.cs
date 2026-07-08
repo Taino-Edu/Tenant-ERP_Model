@@ -24,7 +24,10 @@ public class FiscalCertificadoService
             if (!cert.HasPrivateKey)
                 throw new CertificadoInvalidoException("O certificado não possui chave privada — verifique se é um .pfx/.p12 válido.");
 
-            return new CertificadoInfo(cert.Subject, cert.NotBefore, cert.NotAfter);
+            // X509Certificate2.NotBefore/NotAfter vêm com Kind=Local (conversão do .NET a
+            // partir do UTC original do certificado) — Npgsql rejeita gravar DateTime não-UTC
+            // em timestamptz. ToUniversalTime() converte preservando o instante real.
+            return new CertificadoInfo(cert.Subject, cert.NotBefore.ToUniversalTime(), cert.NotAfter.ToUniversalTime());
         }
         catch (CryptographicException ex)
         {
