@@ -8,14 +8,14 @@
 // =============================================================================
 import * as signalR from '@microsoft/signalr'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
 let connection: signalR.HubConnection | null = null
 
 export function getComandaHub(): signalR.HubConnection {
   if (!connection) {
     connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${BASE_URL}/hubs/comanda`, {
+      // Caminho relativo: nginx (produção) roteia /hubs/* pro mesmo host que
+      // serviu o frontend, não importa IP/domínio/subdomínio de tenant.
+      .withUrl('/hubs/comanda', {
         // Token via cookie HttpOnly — browser envia automaticamente
         withCredentials: true,
         // WebSocket primeiro (mais rápido), depois SSE, depois LongPolling

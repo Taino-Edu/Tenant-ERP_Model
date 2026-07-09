@@ -8,8 +8,6 @@ import {
   Loader2, Calendar,
 } from 'lucide-react'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
 export default function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
@@ -53,7 +51,7 @@ export default function PublicProfilePage() {
         <div className="absolute -bottom-14 left-6">
           {profile.profileImageUrl ? (
             <img
-              src={`${BASE}${profile.profileImageUrl}`}
+              src={profile.profileImageUrl}
               alt={profile.name}
               className="w-24 h-24 rounded-full border-4 border-surface-900 object-cover shadow-xl"
             />

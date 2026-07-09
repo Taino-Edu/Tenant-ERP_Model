@@ -171,10 +171,9 @@ export default function PerfilPage() {
             ) : profile?.profileImageUrl ? (
               <>
                 <img
-                  src={`${process.env.NEXT_PUBLIC_API_URL || ''}${profile.profileImageUrl}`}
+                  src={profile.profileImageUrl}
                   alt="Avatar"
                   className="w-full h-full object-cover"
-                  crossOrigin="anonymous"
                 />
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <span className="text-[9px] font-black uppercase tracking-wider text-white">Editar</span>

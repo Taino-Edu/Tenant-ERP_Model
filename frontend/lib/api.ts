@@ -8,10 +8,12 @@
 import axios from 'axios'
 import { clearAuth } from './auth'
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
+// baseURL vazio: todas as chamadas abaixo já incluem o prefixo /api/... —
+// o nginx (produção) e o rewrite do next.config.js (dev sem nginx) roteiam
+// esse prefixo pro backend no mesmo host que serviu o frontend, não importa
+// se o acesso é por IP, domínio ou subdomínio de tenant.
 export const api = axios.create({
-  baseURL: BASE_URL,
+  baseURL: '',
   headers: { 'Content-Type': 'application/json' },
   // withCredentials garante que o browser envie os cookies HttpOnly
   // (accessToken, refreshToken) em todas as requisições cross-origin.
@@ -25,7 +27,7 @@ let refreshPromise: Promise<void> | null = null
 async function doRefresh(): Promise<void> {
   // O refreshToken é enviado automaticamente via cookie HttpOnly (withCredentials).
   // O backend lê o cookie e retorna novos cookies — sem manipulação manual de tokens.
-  await axios.post(`${BASE_URL}/api/auth/refresh`, {}, { withCredentials: true })
+  await axios.post('/api/auth/refresh', {}, { withCredentials: true })
 }
 
 // Tenta renovar o token se receber 401

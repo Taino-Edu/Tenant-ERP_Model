@@ -29,20 +29,17 @@ const nextConfig = {
         : []),
     ],
   },
-  // Proxy para a API em desenvolvimento (evita CORS)
+  // Proxy pra API em dev local (next dev sem nginx na frente). O código do
+  // app sempre chama caminhos relativos (/api/..., /hubs/..., /uploads/...);
+  // em produção quem resolve isso é o nginx, que já roteia esses prefixos
+  // pro container da API antes mesmo de chegar no Next.js — este rewrite só
+  // entra em ação quando não há nginx no caminho (dev local).
   async rewrites() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
     return [
-      {
-        source: '/api/backend/:path*',
-        destination: `${apiUrl}/api/:path*`,
-      },
-      // Proxy de imagens: /uploads/xxx → API:5000/uploads/xxx
-      // (imagens salvas no servidor da API, não no frontend)
-      {
-        source: '/uploads/:path*',
-        destination: `${apiUrl}/uploads/:path*`,
-      },
+      { source: '/api/:path*',     destination: `${apiUrl}/api/:path*` },
+      { source: '/hubs/:path*',    destination: `${apiUrl}/hubs/:path*` },
+      { source: '/uploads/:path*', destination: `${apiUrl}/uploads/:path*` },
     ]
   },
 }
