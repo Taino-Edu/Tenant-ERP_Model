@@ -3,7 +3,7 @@
 # update.sh — Atualiza o SantuárioNerd no VPS com a última versão do GitHub
 #
 # USO:
-#   bash /opt/santuarionerd/deploy/update.sh
+#   bash /opt/tenant-erp/deploy/update.sh
 # =============================================================================
 
 set -e
@@ -12,7 +12,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-APP_DIR="/opt/santuarionerd"
+APP_DIR="/opt/tenant-erp"
 
 echo -e "${YELLOW}🔄 Atualizando SantuárioNerd...${NC}"
 

@@ -13,10 +13,10 @@
 # O que NÃO toca:
 #   - Volumes Docker (postgres_data, mongo_data, api_uploads) — dados da loja
 #   - Containers em execução (nginx, frontend, api, postgres, mongo)
-#   - Código em /opt/santuarionerd
+#   - Código em /opt/tenant-erp
 #
 # USO:
-#   bash /opt/santuarionerd/deploy/cleanup.sh
+#   bash /opt/tenant-erp/deploy/cleanup.sh
 # =============================================================================
 
 set -e
@@ -87,7 +87,7 @@ ok "Logs systemd compactados"
 # 7. Git gc — compacta histórico do repositório
 # =============================================================================
 step "Compactando histórico git..."
-cd /opt/santuarionerd
+cd /opt/tenant-erp
 git gc --prune=now --quiet
 ok "Histórico git compactado"
 
@@ -106,4 +106,4 @@ printf "  ║  Depois: %-35s║\n" "$AFTER usado"
 echo "  ╚══════════════════════════════════════════════╝"
 echo -e "${NC}"
 echo -e "  ${YELLOW}Containers ainda rodando:${NC}"
-docker compose -f /opt/santuarionerd/deploy/docker-compose.prod.yml ps
+docker compose -f /opt/tenant-erp/deploy/docker-compose.prod.yml ps

@@ -3,15 +3,15 @@
 # backup.sh — Backup diário de PostgreSQL e MongoDB
 #
 # USO MANUAL:
-#   cd /opt/santuarionerd && bash deploy/backup.sh
+#   cd /opt/tenant-erp && bash deploy/backup.sh
 #
 # CONFIGURAR CRON (uma vez no VPS):
 #   crontab -e
 #   # Backup às 03:00 todos os dias:
-#   0 3 * * * cd /opt/santuarionerd && bash deploy/backup.sh >> /var/log/santuarionerd-backup.log 2>&1
+#   0 3 * * * cd /opt/tenant-erp && bash deploy/backup.sh >> /var/log/santuarionerd-backup.log 2>&1
 #
 # VARIÁVEIS DE AMBIENTE (lidas do .env ou exportadas antes de chamar):
-#   BACKUP_DIR          Diretório de destino (default: /opt/santuarionerd/backups)
+#   BACKUP_DIR          Diretório de destino (default: /opt/tenant-erp/backups)
 #   BACKUP_RETAIN_DAYS  Dias de retenção (default: 7)
 #   POSTGRES_DB / POSTGRES_USER / MONGO_USER / MONGO_PASSWORD — lidos do .env
 # =============================================================================

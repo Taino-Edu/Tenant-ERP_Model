@@ -1,10 +1,10 @@
 #!/bin/bash
 # =============================================================================
-# setup.sh — Instalação automática SantuárioNerd no Hostinger VPS
-# Ubuntu 24.04 LTS | KVM 1 (4 GB RAM)
+# setup.sh — Instalação automática Tenant-ERP no VPS
+# Ubuntu 24.04 LTS
 #
 # USO (como root no VPS):
-#   curl -fsSL https://raw.githubusercontent.com/Taino-Edu/softNerd/main/deploy/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Taino-Edu/Tenant-ERP_Model/main/deploy/setup.sh | bash
 # =============================================================================
 
 set -e
@@ -16,13 +16,13 @@ RED='\033[0;31m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-APP_DIR="/opt/santuarionerd"
-REPO_URL="https://github.com/Taino-Edu/softNerd.git"
+APP_DIR="/opt/tenant-erp"
+REPO_URL="https://github.com/Taino-Edu/Tenant-ERP_Model.git"
 
 banner() {
     echo -e "${CYAN}${BOLD}"
     echo "  ╔═══════════════════════════════════════════════╗"
-    echo "  ║       🎲  SANTUÁRIO NERD  —  Setup VPS        ║"
+    echo "  ║          TENANT-ERP  —  Setup VPS             ║"
     echo "  ╚═══════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
@@ -97,10 +97,17 @@ if [ ! -f "$APP_DIR/.env" ]; then
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
     IP_SALT=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -base64 32)
+    PUBLIC_IP=$(curl -fsSL ifconfig.me || hostname -I | awk '{print $1}')
 
     cat > "$APP_DIR/.env" <<EOF
 # Gerado por setup.sh em $(date)
 # Edite este arquivo e preencha GEMINI_API_KEY e SMTP_PASSWORD
+
+# --- Acesso (sem domínio ainda — teste por IP direto, sem HTTPS) ---
+# Quando configurar domínio + Cloudflare: trocar pra https://seu-dominio.com
+# e mudar COOKIE_SECURE pra true.
+APP_URL=http://${PUBLIC_IP}
+COOKIE_SECURE=false
 
 # --- PostgreSQL ---
 POSTGRES_DB=cardgamestore
@@ -115,14 +122,11 @@ SMTP_HOST=smtp.resend.com
 SMTP_PORT=587
 SMTP_USERNAME=resend
 SMTP_PASSWORD=PREENCHA_COM_API_KEY_DO_RESEND
-SMTP_FROM_EMAIL=noreply@santuarionerd.tech
-SMTP_FROM_NAME=Santuário Nerd
+SMTP_FROM_EMAIL=noreply@tenant-erp.local
+SMTP_FROM_NAME=Tenant ERP
 
 # --- Google Gemini IA ---
 GEMINI_API_KEY=PREENCHA_COM_SUA_CHAVE_GEMINI
-
-# --- TCG APIs ---
-POKEMON_API_KEY=
 
 # --- Segurança ---
 IP_HASH_SALT=${IP_SALT}
@@ -132,7 +136,7 @@ IP_HASH_SALT=${IP_SALT}
 # antiga viram ilegíveis pra sempre. Faça backup deste valor.
 ENCRYPTION_KEY=${ENCRYPTION_KEY}
 EOF
-    ok ".env criado com senhas geradas automaticamente"
+    ok ".env criado com senhas geradas automaticamente (APP_URL=http://${PUBLIC_IP})"
     warn "Edite o .env antes de continuar:"
     warn "  nano $APP_DIR/.env"
     warn "Preencha: SMTP_PASSWORD e GEMINI_API_KEY"
@@ -173,18 +177,19 @@ for i in {1..30}; do
     sleep 3
 done
 
+APP_URL_LINE=$(grep '^APP_URL=' "$APP_DIR/.env" | cut -d= -f2-)
 echo ""
 echo -e "${GREEN}${BOLD}"
 echo "  ╔══════════════════════════════════════════════════════╗"
-echo "  ║      🎉  SantuárioNerd instalado com sucesso!        ║"
+echo "  ║      🎉  Tenant-ERP instalado com sucesso!            ║"
 echo "  ╠══════════════════════════════════════════════════════╣"
-echo "  ║  🌐 Site:     https://santuarionerd.tech             ║"
-echo "  ║  📁 Arquivos: /opt/santuarionerd/                    ║"
+echo "  ║  🌐 Site:     ${APP_URL_LINE}"
+echo "  ║  📁 Arquivos: $APP_DIR/"
 echo "  ╠══════════════════════════════════════════════════════╣"
 echo "  ║  Comandos úteis:                                     ║"
-echo "  ║  • Ver logs:    cd /opt/santuarionerd/deploy         ║"
+echo "  ║  • Ver logs:    cd $APP_DIR/deploy                   ║"
 echo "  ║                 docker compose logs -f               ║"
-echo "  ║  • Atualizar:   bash /opt/santuarionerd/deploy/update.sh  ║"
+echo "  ║  • Atualizar:   bash $APP_DIR/deploy/update.sh        ║"
 echo "  ║  • Reiniciar:   docker compose restart               ║"
 echo "  ╚══════════════════════════════════════════════════════╝"
 echo -e "${NC}"

@@ -52,7 +52,7 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        API_URL: https://santuarionerd.tech
+        API_URL: ${APP_URL:-http://localhost}
     image: santuarionerd_frontend:latest
     container_name: santuarionerd_frontend
     networks:
@@ -87,8 +87,8 @@ services:
       MongoDbSettings__DatabaseName: "cardgamestore_cache"
       # JWT
       JwtSettings__SecretKey: "${JWT_SECRET}"
-      JwtSettings__Issuer: "https://santuarionerd.tech"
-      JwtSettings__Audience: "CardGameStore-Frontend"
+      JwtSettings__Issuer: "${APP_URL:-http://localhost}"
+      JwtSettings__Audience: "TenantErp-Frontend"
       JwtSettings__AccessTokenExpirationMinutes: "60"
       JwtSettings__RefreshTokenExpirationDays: "30"
       # E-mail (Resend)
@@ -96,18 +96,18 @@ services:
       SmtpSettings__Port: "${SMTP_PORT:-587}"
       SmtpSettings__Username: "${SMTP_USERNAME:-resend}"
       SmtpSettings__Password: "${SMTP_PASSWORD}"
-      SmtpSettings__FromEmail: "${SMTP_FROM_EMAIL:-noreply@santuarionerd.tech}"
-      SmtpSettings__FromName: "${SMTP_FROM_NAME:-Santuário Nerd}"
-      SmtpSettings__AppUrl: "${APP_URL:-https://santuarionerd.tech}"
+      SmtpSettings__FromEmail: "${SMTP_FROM_EMAIL:-noreply@tenant-erp.local}"
+      SmtpSettings__FromName: "${SMTP_FROM_NAME:-Tenant ERP}"
+      SmtpSettings__AppUrl: "${APP_URL:-http://localhost}"
       # Integrações
       GeminiSettings__ApiKey: "${GEMINI_API_KEY}"
-      TcgSettings__PokemonApiKey: "${POKEMON_API_KEY:-}"
       # Inter PJ — certificado mTLS (Client ID/Secret são salvos via /admin/integracoes)
       Inter__CertificatePath: "/app/certs/inter/inter.crt"
       Inter__KeyPath: "/app/certs/inter/inter.key"
-      # Segurança — HTTPS via Cloudflare, cookies Secure=true
-      COOKIE_SECURE: "true"
-      CorsSettings__AllowedOrigins: "https://santuarionerd.tech,https://www.santuarionerd.tech"
+      # Segurança — só true quando estiver atrás de HTTPS (Cloudflare); em teste
+      # via IP puro/HTTP direto tem que ser false, senão o cookie nunca é aceito.
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      CorsSettings__AllowedOrigins: "${APP_URL:-http://localhost}"
       Security__IpHashSalt: "${IP_HASH_SALT}"
       Encryption__Key: "${ENCRYPTION_KEY}"
     volumes:
