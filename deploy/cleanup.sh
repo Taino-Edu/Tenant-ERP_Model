@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# cleanup.sh — Limpeza segura da VPS SantuárioNerd
+# cleanup.sh — Limpeza segura da VPS Tenant-ERP
 #
 # O que faz:
 #   1. Remove imagens Docker sem tag (dangling) de builds anteriores
@@ -32,7 +32,7 @@ ok()   { echo -e "  ${GREEN}✅ $1${NC}"; }
 
 echo -e "${CYAN}${BOLD}"
 echo "  ╔══════════════════════════════════════════════╗"
-echo "  ║      🧹  SantuárioNerd — Limpeza VPS         ║"
+echo "  ║      🧹  Tenant-ERP — Limpeza VPS            ║"
 echo "  ╚══════════════════════════════════════════════╝"
 echo -e "${NC}"
 

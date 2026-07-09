@@ -1,7 +1,7 @@
 {
-  "name": "Santuário Nerd",
-  "short_name": "Santuário Nerd",
-  "description": "Sistema de gestão da loja de Card Games",
+  "name": "Minha Loja",
+  "short_name": "Minha Loja",
+  "description": "Sistema de gestão para lojas e varejo",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#121215",
@@ -9,15 +9,15 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/logo-santuario.png",
-      "sizes": "192x192",
-      "type": "image/png",
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/logo-santuario.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "maskable"
     }
   ],

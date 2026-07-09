@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { BrainCircuit, X, Send, Loader2, ChevronDown, Sparkles, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
 import { aiApi } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -88,6 +89,7 @@ function speak(text: string) {
 export default function AiChatWidget() {
   const router      = useRouter()
   const { prefs }   = usePreferences()
+  const { site }    = useSiteConfig()
   const [open,      setOpen]      = useState(false)
   const [messages,  setMessages]  = useState<Message[]>([])
   const [input,     setInput]     = useState('')
@@ -263,7 +265,7 @@ export default function AiChatWidget() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white leading-tight">Assistente IA</p>
-                <p className="text-[10px] text-violet-400 leading-tight">Santuário Nerd · Gemini</p>
+                <p className="text-[10px] text-violet-400 leading-tight">{site.siteName} · Gemini</p>
               </div>
             </div>
             <div className="flex items-center gap-1">

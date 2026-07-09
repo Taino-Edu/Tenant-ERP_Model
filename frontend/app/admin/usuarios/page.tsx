@@ -696,7 +696,7 @@ export default function UsuariosPage() {
     setAdding(true)
     try {
       const { data } = await userApi.addPoints(selected.id, Number(points), reason || undefined)
-      toast.success(`${points} pontos Maikon adicionados para ${selected.name}!`)
+      toast.success(`${points} pontos de fidelidade adicionados para ${selected.name}!`)
       setUsers(prev => prev.map(u => u.id === data.id ? data : u))
       setSelected(data)
       setPoints('')
@@ -779,7 +779,7 @@ export default function UsuariosPage() {
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Users className="w-6 h-6 text-brand-400" /> Clientes & Equipe
           </h1>
-          <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes, pontos Maikon, cashback e operadores</p>
+          <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes, pontos de fidelidade, cashback e operadores</p>
         </div>
         <div className="flex gap-2">
           {tabSection === 'clientes' && (
@@ -1001,7 +1001,7 @@ export default function UsuariosPage() {
           {!selected ? (
             <div className="card h-full flex flex-col items-center justify-center text-gray-400 gap-3">
               <Star className="w-10 h-10" />
-              <p className="text-sm text-center">Selecione um cliente<br />para gerenciar pontos Maikon e cashback</p>
+              <p className="text-sm text-center">Selecione um cliente<br />para gerenciar pontos de fidelidade e cashback</p>
             </div>
           ) : (
             <div className="card space-y-5">
@@ -1182,11 +1182,11 @@ function PointsBadge({ user }: { user: UserSummary }) {
   if (user.pointsBalance > 0)
     return (
       <span className="flex items-center gap-1 text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full shrink-0 font-bold">
-        <Star className="w-3 h-3" /> {user.pointsBalance} pts Maikon
+        <Star className="w-3 h-3" /> {user.pointsBalance} pts
       </span>
     )
   return (
-    <span className="text-xs text-gray-400">0 pts Maikon</span>
+    <span className="text-xs text-gray-400">0 pts</span>
   )
 }
 

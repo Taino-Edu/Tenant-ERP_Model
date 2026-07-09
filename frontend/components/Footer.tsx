@@ -6,9 +6,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 export default function Footer() {
   const pathname = usePathname()
+  const { site } = useSiteConfig()
 
   // Não exibe o footer no painel admin
   if (pathname?.startsWith('/admin') || pathname?.startsWith('/login')) return null
@@ -24,13 +26,13 @@ export default function Footer() {
           <span className="text-gray-700">|</span>
           <Link href="/lgpd" className="hover:text-white transition-colors">Seus Direitos (LGPD)</Link>
           <span className="text-gray-700">|</span>
-          <a href="mailto:contato@santuarionerd.com.br" className="hover:text-white transition-colors">
-            contato@santuarionerd.com.br
+          <a href={`mailto:${site.contactEmail}`} className="hover:text-white transition-colors">
+            {site.contactEmail}
           </a>
         </nav>
         {/* Copyright */}
         <p className="text-center text-gray-600">
-          © {new Date().getFullYear()} <span className="text-gray-400">Santuário Nerd</span> — José Bonifácio, SP. Todos os direitos reservados.
+          © {new Date().getFullYear()} <span className="text-gray-400">{site.siteName}</span> — {site.addressLine}. Todos os direitos reservados.
         </p>
       </div>
     </footer>

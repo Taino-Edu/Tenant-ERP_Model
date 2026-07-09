@@ -49,6 +49,11 @@ public class SiteConfig
     [Column("contact_email")]
     public string ContactEmail { get; set; } = "contato@tenant-erp.local";
 
+    /// <summary>URL do logo (upload via /api/upload/image). Vazio = usa o ícone genérico padrão.</summary>
+    [MaxLength(300)]
+    [Column("logo_url")]
+    public string? LogoUrl { get; set; }
+
     // ── Textos da navbar ─────────────────────────────────────────────────────
     [MaxLength(40)]
     [Column("nav_produtos_label")]

@@ -294,8 +294,9 @@ public class ComandaController : ControllerBase
 
             var nomeDevedor = comanda.User?.Name;
             var cpf         = comanda.User?.Cpf?.Length == 11 ? comanda.User.Cpf : null;
+            var siteCfg     = await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
             var result = await _inter.CriarCobrancaAsync(
-                cfg, valorEmCentavos, nomeDevedor, cpf, "Santuário Nerd — Comanda");
+                cfg, valorEmCentavos, nomeDevedor, cpf, $"{siteCfg.SiteName} — Comanda");
 
             if (result.Error is not null)
                 return StatusCode(422, new { message = result.Error });

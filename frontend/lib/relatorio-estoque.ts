@@ -1,6 +1,6 @@
 // =============================================================================
 // lib/relatorio-estoque.ts — Relatórios de Estoque PDF padrão enterprise
-// Mesmo estilo visual do relatorio.ts (Santuário Nerd)
+// Mesmo estilo visual do relatorio.ts
 // =============================================================================
 
 import { Product, ProductCategory } from './api'
@@ -57,7 +57,7 @@ function checkPageBreak(doc: any, y: number, needed = 30): number {
   if (y + needed > 278) { doc.addPage(); return 16 }
   return y
 }
-function addFooters(doc: any) {
+function addFooters(doc: any, siteName: string) {
   const total = doc.internal.getNumberOfPages()
   for (let i = 1; i <= total; i++) {
     doc.setPage(i)
@@ -65,11 +65,11 @@ function addFooters(doc: any) {
     doc.setFontSize(7)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(...LGRAY)
-    doc.text('Santuário Nerd  ·  Documento confidencial  ·  Uso interno', ML, 289)
+    doc.text(`${siteName}  ·  Documento confidencial  ·  Uso interno`, ML, 289)
     doc.text(`Pág. ${i} / ${total}`, PW - MR, 289, { align: 'right' })
   }
 }
-function drawHeader(doc: any, subtitle: string): number {
+function drawHeader(doc: any, subtitle: string, siteName: string): number {
   // Faixa colorida no topo
   doc.setFillColor(...ACCENT)
   doc.rect(0, 0, PW, 1.5, 'F')
@@ -77,7 +77,7 @@ function drawHeader(doc: any, subtitle: string): number {
   doc.setTextColor(...BLACK)
   doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
-  doc.text('Santuário Nerd', ML, 14)
+  doc.text(siteName, ML, 14)
   // Subtítulo
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
@@ -118,6 +118,7 @@ function drawKpis(doc: any, y: number, kpis: { label: string; value: string; col
 export async function gerarRelatorioOperacional(
   products: Product[],
   _categories: ProductCategory[],
+  siteName = 'Minha Loja',
 ) {
   const JsPDF = await getJsPDF()
   const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any
@@ -128,7 +129,7 @@ export async function gerarRelatorioOperacional(
   const semEstoque    = ativos.filter(p => p.stockQuantity === 0).length
   const semCusto      = ativos.filter(p => p.costPriceInCents === 0).length
 
-  let y = drawHeader(doc, 'Relatório Operacional de Estoque')
+  let y = drawHeader(doc, 'Relatório Operacional de Estoque', siteName)
 
   y = drawKpis(doc, y, [
     { label: 'Patrimônio em Estoque',   value: fmt(patrimonio),          color: ACCENT },
@@ -209,7 +210,7 @@ export async function gerarRelatorioOperacional(
     },
   })
 
-  addFooters(doc)
+  addFooters(doc, siteName)
   doc.save(`estoque-operacional-${fmtDate(new Date()).replace(/\//g, '-')}.pdf`)
 }
 
@@ -220,6 +221,7 @@ export async function gerarRelatorioOperacional(
 export async function gerarRelatorioGerencial(
   products: Product[],
   _categories: ProductCategory[],
+  siteName = 'Minha Loja',
 ) {
   const JsPDF = await getJsPDF()
   const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any
@@ -234,7 +236,7 @@ export async function gerarRelatorioGerencial(
   const semCusto = ativos.filter(p => p.costPriceInCents === 0 && p.stockQuantity > 0)
   const capitalRisco = criticos.reduce((s, p) => s + (p.costPriceInCents / 100) * p.stockQuantity, 0)
 
-  let y = drawHeader(doc, 'Relatório Gerencial de Estoque')
+  let y = drawHeader(doc, 'Relatório Gerencial de Estoque', siteName)
 
   y = drawKpis(doc, y, [
     { label: 'Patrimônio Imobilizado', value: fmt(patrimonio),             color: ACCENT },
@@ -407,6 +409,6 @@ export async function gerarRelatorioGerencial(
     })
   }
 
-  addFooters(doc)
+  addFooters(doc, siteName)
   doc.save(`estoque-gerencial-${fmtDate(new Date()).replace(/\//g, '-')}.pdf`)
 }

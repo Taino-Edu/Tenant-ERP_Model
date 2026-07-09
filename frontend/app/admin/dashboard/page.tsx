@@ -5,6 +5,7 @@ import { usePreferences } from '@/hooks/usePreferences'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
 import { tocarSom, notificarBrowser, pedirPermissaoNotificacao, incrementBadge, clearBadge } from '@/lib/notificacoes'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import CameraScanner from '@/components/CameraScanner'
 import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
 import toast from 'react-hot-toast'
@@ -1500,6 +1501,9 @@ function EditarComandaModal({
 export default function DashboardPage() {
   const { prefs } = usePreferences()
   const dp = prefs.dashboard
+  const { site } = useSiteConfig()
+  const siteNameRef = useRef(site.siteName)
+  useEffect(() => { siteNameRef.current = site.siteName }, [site.siteName])
   const [tab, setTab]             = useState<'ativas' | 'historico' | 'analises'>('ativas')
   const [comandas, setComandas]   = useState<ComandaDto[]>([])
   const [history, setHistory]     = useState<ComandaDto[]>([])
@@ -1625,8 +1629,8 @@ export default function DashboardPage() {
         setTimeout(() => setNewIds(s => { const n = new Set(s); n.delete(event.comandaId); return n }), 3000)
         fetchComandas()
         tocarSom('nova')
-        incrementBadge()
-        notificarBrowser('Nova atividade — Santuário Nerd', `${event.userName}: +${event.lastItemAdded ?? 'item'}`)
+        incrementBadge(siteNameRef.current)
+        notificarBrowser(`Nova atividade — ${siteNameRef.current}`, `${event.userName}: +${event.lastItemAdded ?? 'item'}`)
         toast(`📋 ${event.userName}: +${event.lastItemAdded ?? 'item'}`, {
           icon: '🃏',
           style: { background: '#1A1A1F', color: '#fff', border: '1px solid #42B6EE', borderRadius: '12px' }
@@ -1648,7 +1652,7 @@ export default function DashboardPage() {
     }).catch(() => setConnected(false))
 
     // Limpa badge quando admin foca na aba
-    const onFocus = () => clearBadge()
+    const onFocus = () => clearBadge(siteNameRef.current)
     window.addEventListener('focus', onFocus)
 
     return () => {

@@ -8,8 +8,8 @@
 
 set -euo pipefail
 
-COMPOSE="docker compose -f /opt/santuarionerd/deploy/docker-compose.prod.yml"
-ENV_FILE="/opt/santuarionerd/.env"
+COMPOSE="docker compose -f /opt/tenant-erp/deploy/docker-compose.prod.yml"
+ENV_FILE="/opt/tenant-erp/.env"
 
 # 1. Garante que MONGO_PASSWORD está no .env
 if ! grep -q "MONGO_PASSWORD" "$ENV_FILE" 2>/dev/null; then
@@ -28,7 +28,7 @@ MONGO_PASS=$(grep "MONGO_PASSWORD" "$ENV_FILE" | cut -d= -f2)
 
 # 2. Cria o usuário root no mongo ATUAL (antes de habilitar auth)
 echo "[...] Criando usuário root no MongoDB atual..."
-docker exec santuarionerd_mongo mongosh --quiet --eval "
+docker exec cardgamestore_mongo mongosh --quiet --eval "
   use admin;
   const exists = db.getUser('${MONGO_USER}');
   if (exists) {
@@ -49,7 +49,7 @@ sleep 5
 
 # 4. Testa a conexão autenticada
 echo "[...] Testando conexão autenticada..."
-docker exec santuarionerd_mongo mongosh \
+docker exec cardgamestore_mongo mongosh \
   "mongodb://${MONGO_USER}:${MONGO_PASS}@localhost:27017/?authSource=admin" \
   --quiet --eval "db.runCommand({ ping: 1 })" \
   && echo "[ok] Autenticação funcionando" \

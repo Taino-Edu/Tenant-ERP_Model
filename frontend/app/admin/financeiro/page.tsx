@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto, PagamentoCrediarioPeriodoDto } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast from 'react-hot-toast'
 import {
   TrendingUp, TrendingDown, DollarSign, AlertCircle,
@@ -1321,6 +1322,7 @@ function getRange(preset: Preset) {
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 export default function FinanceiroPage() {
+  const { site } = useSiteConfig()
   const [preset,    setPreset]    = useState<Preset>('mes')
   const [inicio,    setInicio]    = useState(getRange('mes').inicio)
   const [fim,       setFim]       = useState(getRange('mes').fim)
@@ -1538,7 +1540,7 @@ export default function FinanceiroPage() {
             onClick={async () => {
               if (!d) return
               setExporting(true)
-              try { await gerarRelatorioPDF(d, { inicio, fim }) }
+              try { await gerarRelatorioPDF(d, { inicio, fim }, site.siteName) }
               catch { toast.error('Erro ao gerar PDF') }
               finally { setExporting(false) }
             }}

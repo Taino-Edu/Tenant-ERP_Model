@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   User, Hash, MessageCircle, Loader2,
@@ -19,6 +20,7 @@ interface SavedUser {
 }
 
 function PrivacyModal({ onClose }: { onClose: () => void }) {
+  const { site } = useSiteConfig()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
@@ -32,7 +34,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="p-6 overflow-y-auto text-sm text-gray-500 space-y-4 leading-relaxed">
-          <p><strong className="text-gray-900">Santuário Nerd — Política de Privacidade</strong></p>
+          <p><strong className="text-gray-900">{site.siteName} — Política de Privacidade</strong></p>
           <p>Em conformidade com a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018), informamos como tratamos seus dados.</p>
           <div className="space-y-3">
             <div className="bg-blue-50 p-4 rounded-2xl">
@@ -45,7 +47,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <p><strong className="text-gray-900">Seus direitos:</strong> Acesso, correção ou exclusão a qualquer momento pelo painel do cliente.</p>
-          <p className="text-[10px] text-gray-400 italic">Responsável: Santuário Nerd — José Bonifácio, SP.</p>
+          <p className="text-[10px] text-gray-400 italic">Responsável: {site.siteName} — {site.addressLine}.</p>
         </div>
         <div className="p-5 border-t border-gray-100">
           <button onClick={onClose} className="w-full py-4 font-black text-gray-900 rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-md"
@@ -59,6 +61,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function MesaPage() {
+  const { site } = useSiteConfig()
   const params  = useParams()
   const router  = useRouter()
   const mesa    = decodeURIComponent(params.mesa as string)
@@ -149,7 +152,7 @@ export default function MesaPage() {
 
       {/* Cabeçalho */}
       <div className="relative pt-10 pb-2 px-6 text-center">
-        <h1 className="text-xl font-black text-white leading-none tracking-wide">Santuário Nerd</h1>
+        <h1 className="text-xl font-black text-white leading-none tracking-wide">{site.siteName}</h1>
         <p className="text-[9px] font-bold text-white/65 uppercase tracking-[0.22em] mt-0.5">
           Seu Universo Geek Começa Aqui
         </p>
@@ -159,8 +162,8 @@ export default function MesaPage() {
       {/* Mascote — flutuando no gradiente, sem moldura */}
       <div className="relative flex justify-center py-4">
         <img
-          src="/logo-maikon.png"
-          alt="Mascote Maikon"
+          src={site.logoUrl || '/logo-placeholder.svg'}
+          alt={site.siteName}
           className="w-32 h-32 object-contain drop-shadow-[0_10px_28px_rgba(0,0,0,0.35)]"
         />
       </div>
@@ -279,7 +282,7 @@ export default function MesaPage() {
                   <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#3EC2F2] font-semibold underline underline-offset-2">
                     Política de Privacidade
                   </button>
-                  {' '}do Santuário Nerd, conforme a{' '}
+                  {' '}do {site.siteName}, conforme a{' '}
                   <strong className="text-gray-700">Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018)</strong>.
                 </span>
               </label>
@@ -303,7 +306,7 @@ export default function MesaPage() {
         )}
 
         <p className="text-center text-[10px] text-gray-300 mt-10 font-medium">
-          Powered by Santuário Nerd © 2025
+          Powered by {site.siteName} © {new Date().getFullYear()}
         </p>
       </div>
 

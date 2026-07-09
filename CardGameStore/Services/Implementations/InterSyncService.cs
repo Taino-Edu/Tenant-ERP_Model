@@ -143,7 +143,7 @@ public class InterSyncService
     // hospedada pelo Inter em cdpj.partners.bancointer.com.br.
     public async Task<PixCobrancaResult> CriarCobrancaAsync(
         IntegrationConfig cfg, int valorEmCentavos, string? nomeDevedor, string? cpfDevedor,
-        string descricao = "Cobrança Santuário Nerd")
+        string descricao = "Cobrança")
     {
         if (!IsConfigured(cfg))
             return new PixCobrancaResult { Error = "Inter não configurado (Client ID, Client Secret ou certificado ausente)." };

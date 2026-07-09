@@ -42,11 +42,11 @@ function hRule(doc: any, y: number, color = LGRAY) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function pageHeader(doc: any, title: string, subtitle: string) {
+function pageHeader(doc: any, title: string, subtitle: string, siteName: string) {
   doc.setFillColor(...ACCENT); doc.rect(0, 0, PW, 1.5, 'F')
   let y = 12
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(...BLACK)
-  doc.text('Santuário Nerd', ML, y); y += 6
+  doc.text(siteName, ML, y); y += 6
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRAY)
   doc.text(subtitle, ML, y)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...BLACK)
@@ -82,13 +82,13 @@ function sectionTitle(doc: any, y: number, title: string) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function addFooters(doc: any) {
+function addFooters(doc: any, siteName: string) {
   const total = doc.getNumberOfPages()
   for (let i = 1; i <= total; i++) {
     doc.setPage(i)
     hRule(doc, 285, LGRAY)
     doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...LGRAY)
-    doc.text('Santuário Nerd — Documento confidencial', ML, 290)
+    doc.text(`${siteName} — Documento confidencial`, ML, 290)
     doc.text(`${i} / ${total}`, PW - MR, 290, { align: 'right' })
   }
 }
@@ -96,7 +96,7 @@ function addFooters(doc: any) {
 // =============================================================================
 // 1. RELATÓRIO DE CLIENTES
 // =============================================================================
-export async function gerarRelatorioClientes(clientes: ClienteInsightDto[]) {
+export async function gerarRelatorioClientes(clientes: ClienteInsightDto[], siteName = 'Minha Loja') {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (JsPDF as any)({ orientation: 'landscape', unit: 'mm', format: 'a4' }) as any
@@ -106,7 +106,7 @@ export async function gerarRelatorioClientes(clientes: ClienteInsightDto[]) {
   const comPontos  = clientes.filter(c => c.pontos > 0)
   const totalGasto = clientes.reduce((s, c) => s + c.gastoTotal, 0)
 
-  let y = pageHeader(doc, 'Relatório de Clientes', `${clientes.length} clientes cadastrados`)
+  let y = pageHeader(doc, 'Relatório de Clientes', `${clientes.length} clientes cadastrados`, siteName)
 
   // KPIs
   y = kpiRow(doc, y, [
@@ -164,7 +164,7 @@ export async function gerarRelatorioClientes(clientes: ClienteInsightDto[]) {
     margin: { left: ML, right: MR },
   })
 
-  addFooters(doc)
+  addFooters(doc, siteName)
   doc.save(`clientes_${today().replace(/\//g, '-')}.pdf`)
 }
 
@@ -174,13 +174,14 @@ export async function gerarRelatorioClientes(clientes: ClienteInsightDto[]) {
 export async function gerarRelatorioPDV(
   data: FinanceiroDto,
   periodo: { inicio: string; fim: string; dias: number },
+  siteName = 'Minha Loja',
 ) {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any
 
   const subtitle = `${fmtDate(periodo.inicio)} a ${fmtDate(periodo.fim)} (últimos ${periodo.dias} dias)`
-  let y = pageHeader(doc, 'Relatório PDV', subtitle)
+  let y = pageHeader(doc, 'Relatório PDV', subtitle, siteName)
 
   // KPIs principais
   y = kpiRow(doc, y, [
@@ -267,14 +268,14 @@ export async function gerarRelatorioPDV(
     })
   }
 
-  addFooters(doc)
+  addFooters(doc, siteName)
   doc.save(`pdv_${periodo.dias}dias_${today().replace(/\//g, '-')}.pdf`)
 }
 
 // =============================================================================
 // 3. RELATÓRIO DE COMANDAS ABERTAS
 // =============================================================================
-export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: number) {
+export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: number, siteName = 'Minha Loja') {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (JsPDF as any)({ orientation: 'landscape', unit: 'mm', format: 'a4' }) as any
@@ -289,7 +290,7 @@ export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: numbe
     ? `Abertas nos últimos ${dias} dias · ${filtradas.length} comanda${filtradas.length !== 1 ? 's' : ''}`
     : `Todas as comandas abertas · ${filtradas.length} comanda${filtradas.length !== 1 ? 's' : ''}`
 
-  let y = pageHeader(doc, 'Comandas Abertas', subtitle)
+  let y = pageHeader(doc, 'Comandas Abertas', subtitle, siteName)
 
   y = kpiRow(doc, y, [
     { label: 'Comandas Abertas', value: String(filtradas.length) },
@@ -339,7 +340,7 @@ export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: numbe
     margin: { left: ML, right: MR },
   })
 
-  addFooters(doc)
+  addFooters(doc, siteName)
   doc.save(`comandas_abertas_${today().replace(/\//g, '-')}.pdf`)
 }
 
@@ -348,14 +349,14 @@ export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: numbe
 // =============================================================================
 const MESES_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
-export async function gerarRelatorioCrediario(data: RelatorioCrediarioDto) {
+export async function gerarRelatorioCrediario(data: RelatorioCrediarioDto, siteName = 'Minha Loja') {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any
 
   const mesLabel = `${MESES_SHORT[data.mes - 1]}/${data.ano}`
   const subtitle = `Situação atual · Pagamentos de ${mesLabel}`
-  let y = pageHeader(doc, 'Relatório de Crediário', subtitle)
+  let y = pageHeader(doc, 'Relatório de Crediário', subtitle, siteName)
 
   // KPIs
   y = kpiRow(doc, y, [
@@ -451,6 +452,6 @@ export async function gerarRelatorioCrediario(data: RelatorioCrediarioDto) {
     doc.text(`Nenhum pagamento registrado em ${mesLabel}.`, ML, y)
   }
 
-  addFooters(doc)
+  addFooters(doc, siteName)
   doc.save(`crediario_${mesLabel.replace('/', '-')}_${today().replace(/\//g, '-')}.pdf`)
 }

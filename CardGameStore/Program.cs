@@ -36,7 +36,7 @@ if (args.Contains("gen-vapid"))
     Console.WriteLine("# Adicione ao .env do VPS:");
     Console.WriteLine($"VAPID__PublicKey={keys.PublicKey}");
     Console.WriteLine($"VAPID__PrivateKey={keys.PrivateKey}");
-    Console.WriteLine("VAPID__Subject=mailto:contato@santuarionerd.tech");
+    Console.WriteLine("VAPID__Subject=mailto:contato@tenant-erp.local");
     return;
 }
 
@@ -329,7 +329,7 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title       = "CardGameStore API",
         Version     = "v1",
-        Description = "API para gestão da loja de Card Games — softNerd"
+        Description = "API do Tenant-ERP — sistema de gestão para lojas e varejo"
     });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -720,6 +720,7 @@ using (var scope = app.Services.CreateScope())
                 ALTER TABLE site_config ADD COLUMN IF NOT EXISTS contact_person_name VARCHAR(60) NOT NULL DEFAULT 'Atendimento';
                 ALTER TABLE site_config ADD COLUMN IF NOT EXISTS color_background VARCHAR(9) NOT NULL DEFAULT '#EBF7FD';
                 ALTER TABLE site_config ADD COLUMN IF NOT EXISTS color_card VARCHAR(9) NOT NULL DEFAULT '#FFFFFF';
+                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS logo_url VARCHAR(300) NULL;
             ");
         }
 
@@ -790,7 +791,7 @@ if (app.Environment.IsDevelopment())
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
         c.RoutePrefix   = "swagger"; // UI disponível em /swagger
-        c.DocumentTitle = "CardGameStore — softNerd";
+        c.DocumentTitle = "Tenant-ERP API";
     });
 }
 

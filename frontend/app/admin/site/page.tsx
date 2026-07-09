@@ -2,36 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { siteConfigApi, SiteConfigDto } from '@/lib/api'
+import { DEFAULT_SITE_CONFIG } from '@/contexts/SiteConfigContext'
 import toast, { Toaster } from 'react-hot-toast'
 import { Palette, Save, Loader2, ExternalLink } from 'lucide-react'
-
-const DEFAULTS: SiteConfigDto = {
-  siteName: 'Santuário Nerd',
-  heroSubtitle: 'Produtos, torneios e a melhor experiência TCG da região. Acumule pontos, compre na mesa e participe de campeonatos.',
-  addressLine: 'José Bonifácio — SP',
-  contactPersonName: 'Maikon',
-  whatsappNumber: '5517997633103',
-  contactEmail: 'santuarionerd@gmail.com',
-  navTorneiosLabel: 'Torneios',
-  navProdutosLabel: 'Produtos',
-  navMercadoLabel: 'Mercado de Cartas',
-  navPontosLabel: 'Pontos',
-  ctaVerEventosLabel: 'Ver Eventos',
-  ctaVerTorneiosLabel: 'Ver Torneios',
-  ctaVerProdutosLabel: 'Ver Produtos',
-  torneiosEyebrow: 'Agenda',
-  torneiosTitle: 'Próximos Torneios',
-  produtosEyebrow: 'Vitrine',
-  produtosTitle: 'Em Destaque',
-  pontosEyebrow: 'Programa de Fidelidade',
-  pontosTitle: 'Ganhe pontos a cada visita',
-  pontosParagraph: 'Acumule pontos nas suas compras e troque por descontos. Só com CPF e WhatsApp — nada de senha ou aplicativo.',
-  colorPrimary: '#3EC2F2',
-  colorAccent: '#FFE45E',
-  colorNavy: '#0C3D5A',
-  colorBackground: '#EBF7FD',
-  colorCard: '#FFFFFF',
-}
 
 function Field({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -137,7 +110,7 @@ function LivePreview({ cfg }: { cfg: SiteConfigDto }) {
 }
 
 export default function SiteConfigPage() {
-  const [cfg, setCfg]         = useState<SiteConfigDto>(DEFAULTS)
+  const [cfg, setCfg]         = useState<SiteConfigDto>(DEFAULT_SITE_CONFIG)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
 

@@ -2,7 +2,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getRole } from '@/lib/auth'
-import { productApi, announcementApi, siteConfigApi, Product, AnnouncementDto, SiteConfigDto } from '@/lib/api'
+import { productApi, announcementApi, Product, AnnouncementDto } from '@/lib/api'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import Link from 'next/link'
 import {
   ShoppingBag, Star,
@@ -10,36 +11,6 @@ import {
   CreditCard, Award, QrCode, Shield, ChevronRight, ChevronLeft,
   Sun, Moon, Mail,
 } from 'lucide-react'
-
-// Espelha os defaults do backend (SiteConfig) — usado até a config real carregar,
-// pra não piscar/mudar nada enquanto o admin nunca tiver personalizado o site.
-const DEFAULT_SITE: SiteConfigDto = {
-  siteName: 'Santuário Nerd',
-  heroSubtitle: 'Produtos, torneios e a melhor experiência TCG da região. Acumule pontos, compre na mesa e participe de campeonatos.',
-  addressLine: 'José Bonifácio — SP',
-  contactPersonName: 'Maikon',
-  whatsappNumber: '5517997633103',
-  contactEmail: 'santuarionerd@gmail.com',
-  navTorneiosLabel: 'Torneios',
-  navProdutosLabel: 'Produtos',
-  navMercadoLabel: 'Mercado de Cartas',
-  navPontosLabel: 'Pontos',
-  ctaVerEventosLabel: 'Ver Eventos',
-  ctaVerTorneiosLabel: 'Ver Torneios',
-  ctaVerProdutosLabel: 'Ver Produtos',
-  torneiosEyebrow: 'Agenda',
-  torneiosTitle: 'Próximos Torneios',
-  produtosEyebrow: 'Vitrine',
-  produtosTitle: 'Em Destaque',
-  pontosEyebrow: 'Programa de Fidelidade',
-  pontosTitle: 'Ganhe pontos a cada visita',
-  pontosParagraph: 'Acumule pontos nas suas compras e troque por descontos. Só com CPF e WhatsApp — nada de senha ou aplicativo.',
-  colorPrimary: '#3EC2F2',
-  colorAccent: '#FFE45E',
-  colorNavy: '#0C3D5A',
-  colorBackground: '#EBF7FD',
-  colorCard: '#FFFFFF',
-}
 
 /** Mistura duas cores hex — usado pra derivar o "cardAlt" (fundo de imagem dentro de card)
  * a partir da cor de card + um toque da cor primária, sem precisar de um campo próprio. */
@@ -83,7 +54,7 @@ export default function LandingPage() {
   const [navHover,      setNavHover]      = useState(false)
   const [bannerIdx,    setBannerIdx]  = useState(0)
   const [annIdx,       setAnnIdx]     = useState(0)
-  const [site,         setSite]       = useState<SiteConfigDto>(DEFAULT_SITE)
+  const { site } = useSiteConfig()
   const carouselRef   = useRef<HTMLDivElement>(null)
   const carouselPaused = useRef(false)
   const bannerPaused   = useRef(false)
@@ -173,7 +144,6 @@ export default function LandingPage() {
         setProducts(featured.length > 0 ? featured : visible)
       }),
       announcementApi.visible().then(r => setAnnouncements(r.data)),
-      siteConfigApi.get().then(r => setSite(r.data)),
     ]).finally(() => setLoading(false))
   }, [router])
 
@@ -336,7 +306,7 @@ export default function LandingPage() {
             <div className="relative shrink-0 w-full max-w-xs sm:max-w-sm md:max-w-md">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/logo-santuario.svg"
+                src={site.logoUrl || '/logo-placeholder.svg'}
                 alt={site.siteName}
                 className="w-full h-auto object-contain drop-shadow-[0_16px_48px_rgba(0,0,0,0.5)]"
               />
@@ -653,7 +623,7 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
             {/* Logo */}
             <div className="flex items-center gap-2.5">
-              <img src="/logo-maikon.png" alt={site.siteName} className="h-8 w-auto object-contain" />
+              <img src={site.logoUrl || '/logo-placeholder.svg'} alt={site.siteName} className="h-8 w-auto object-contain" />
               <div>
                 <p className="font-black text-sm leading-tight" style={{ color: C.navy }}>{site.siteName}</p>
                 <p className="text-[10px]" style={{ color: C.text }}>{site.addressLine}</p>

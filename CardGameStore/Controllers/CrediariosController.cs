@@ -454,11 +454,12 @@ public class CrediariosController : ControllerBase
         if (cfg == null)
             return BadRequest(new { Message = "Integração com o Inter não configurada em /admin/integracoes." });
 
-        var cpf = crediario.User.Cpf?.Length == 11 ? crediario.User.Cpf : null;
+        var cpf     = crediario.User.Cpf?.Length == 11 ? crediario.User.Cpf : null;
+        var siteCfg = await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
 
         var result = await _inter.CriarCobrancaAsync(
             cfg, crediario.SaldoRestanteEmCentavos, crediario.User.Name, cpf,
-            "Santuário Nerd — Crediário");
+            $"{siteCfg.SiteName} — Crediário");
 
         if (result.Error is not null)
             return StatusCode(422, new { message = result.Error });

@@ -1,6 +1,6 @@
 // =============================================================================
-// termos/page.tsx — Termos de Uso da Santuário Nerd
-// José Bonifácio, SP — Foro: Comarca de José Bonifácio, SP
+// termos/page.tsx — Termos de Uso da Minha Loja
+// Sua Cidade — UF — Foro: Comarca de Sua Cidade — UF
 // v1.1 junho/2026
 // =============================================================================
 
@@ -12,8 +12,8 @@ import { LegalActions } from '@/components/LegalActions'
 export const revalidate = 0
 
 export const metadata: Metadata = {
-  title: 'Termos de Uso — Santuário Nerd',
-  description: 'Termos e condições de uso dos serviços da Santuário Nerd, loja de card games em José Bonifácio, SP.',
+  title: 'Termos de Uso',
+  description: 'Termos e condições de uso dos serviços da Minha Loja, loja de card games em Sua Cidade — UF.',
 }
 
 const sections = [
@@ -37,7 +37,7 @@ export default function TermosPage() {
       <header className="bg-[#1a0a2e] text-white print:hidden">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-1 text-xl font-bold">
-            <span className="text-[#42B6EE]">Santuário</span><span> Nerd</span>
+            <span className="text-[#42B6EE]">Minha</span><span> Loja</span>
           </Link>
           <div className="flex items-center gap-3">
             <LegalActions />
@@ -55,16 +55,16 @@ export default function TermosPage() {
           <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">Termos de Uso</h1>
           <p className="text-gray-400 text-sm">
             Última atualização: <strong className="text-gray-300">Junho de 2026</strong> — Versão 1.1 ·{' '}
-            <span className="text-gray-500">Foro: Comarca de José Bonifácio, SP</span>
+            <span className="text-gray-500">Foro: Comarca de Sua Cidade — UF</span>
           </p>
         </div>
       </div>
 
       {/* ── Print header ─────────────────────────────────────────────────────── */}
       <div className="hidden print:block py-6 border-b border-gray-200 mb-6">
-        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Santuário Nerd — José Bonifácio, SP</p>
+        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Minha Loja — Sua Cidade — UF</p>
         <h1 className="text-2xl font-black text-gray-900">Termos de Uso</h1>
-        <p className="text-sm text-gray-500 mt-1">Junho de 2026 · Versão 1.1 · Foro: Comarca de José Bonifácio, SP</p>
+        <p className="text-sm text-gray-500 mt-1">Junho de 2026 · Versão 1.1 · Foro: Comarca de Sua Cidade — UF</p>
       </div>
 
       <div className="max-w-5xl mx-auto px-4 pb-16">
@@ -100,15 +100,15 @@ export default function TermosPage() {
 
             {/* Introdução */}
             <div className="rounded-2xl border p-5 mb-2 text-sm" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-              Ao utilizar o sistema digital da <strong style={{ color: 'var(--text-primary)' }}>Santuário Nerd</strong>, você
+              Ao utilizar o sistema digital da <strong style={{ color: 'var(--text-primary)' }}>Minha Loja</strong>, você
               concorda com os presentes Termos de Uso. Leia com atenção antes de prosseguir. Estes Termos são regidos
               pela legislação brasileira.
             </div>
 
             <Section id="s1" num="01" title="Serviços Oferecidos">
               <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                A <strong style={{ color: 'var(--text-primary)' }}>Santuário Nerd</strong> é uma loja física de card games
-                localizada em <strong style={{ color: 'var(--text-primary)' }}>José Bonifácio, SP</strong>. Nosso sistema digital oferece:
+                A <strong style={{ color: 'var(--text-primary)' }}>Minha Loja</strong> é uma loja física de card games
+                localizada em <strong style={{ color: 'var(--text-primary)' }}>Sua Cidade — UF</strong>. Nosso sistema digital oferece:
               </p>
               <ul className="grid sm:grid-cols-2 gap-2">
                 {[
@@ -152,7 +152,7 @@ export default function TermosPage() {
                   ['Limite simultâneo', 'Um crediário aberto por cliente por vez'],
                   ['Bloqueio', 'Crediários em aberto bloqueiam novas comandas'],
                   ['Inadimplência', 'Pode implicar restrição de acesso aos serviços'],
-                  ['Aprovação', 'A Santuário Nerd pode negar o crediário a qualquer cliente'],
+                  ['Aprovação', 'A Minha Loja pode negar o crediário a qualquer cliente'],
                 ].map(([label, desc]) => (
                   <div key={label} className="rounded-xl p-3 border text-sm" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-primary)' }}>
                     <p className="text-xs font-bold text-[#42B6EE] mb-0.5">{label}</p>
@@ -184,7 +184,7 @@ export default function TermosPage() {
                   'A taxa de inscrição pode ser cobrada antecipadamente e não é reembolsável, salvo cancelamento do evento pela organização',
                   'O participante deve apresentar deck válido conforme o regulamento do jogo',
                   'Comportamento antidesportivo pode resultar em desclassificação',
-                  'A Santuário Nerd reserva-se o direito de alterar datas e regras com aviso prévio',
+                  'A Minha Loja reserva-se o direito de alterar datas e regras com aviso prévio',
                 ].map(item => (
                   <li key={item} className="flex gap-2">
                     <span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span> {item}
@@ -197,12 +197,12 @@ export default function TermosPage() {
               <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                 <p>
                   Os nomes, logotipos e conteúdos de jogos de cartas (Pokémon, Magic: The Gathering, Yu-Gi-Oh!
-                  e outros) são propriedade de seus respectivos detentores. A Santuário Nerd não reivindica
+                  e outros) são propriedade de seus respectivos detentores. A Minha Loja não reivindica
                   qualquer direito sobre esses conteúdos.
                 </p>
                 <p>
-                  O sistema digital, o código-fonte e o design da plataforma Santuário Nerd são propriedade
-                  exclusiva da Santuário Nerd e não podem ser reproduzidos, modificados ou distribuídos sem
+                  O sistema digital, o código-fonte e o design da plataforma Minha Loja são propriedade
+                  exclusiva da Minha Loja e não podem ser reproduzidos, modificados ou distribuídos sem
                   autorização expressa.
                 </p>
               </div>
@@ -210,7 +210,7 @@ export default function TermosPage() {
 
             <Section id="s7" num="07" title="Limitação de Responsabilidade">
               <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                A Santuário Nerd não se responsabiliza por:
+                A Minha Loja não se responsabiliza por:
               </p>
               <ul className="space-y-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
                 {[
@@ -232,9 +232,9 @@ export default function TermosPage() {
                   <strong style={{ color: 'var(--text-primary)' }}>Código de Defesa do Consumidor (Lei nº 8.078/1990)</strong>.
                 </p>
                 <div className="rounded-xl border border-[#42B6EE]/20 bg-[#42B6EE]/5 px-4 py-3">
-                  <p>Em caso de reclamação, contate a Santuário Nerd em{' '}
-                    <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
-                      contato@santuarionerd.com.br
+                  <p>Em caso de reclamação, contate a Minha Loja em{' '}
+                    <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] underline">
+                      contato@tenant-erp.local
                     </a>{' '}
                     ou registre no portal{' '}
                     <a href="https://www.consumidor.gov.br" target="_blank" rel="noopener noreferrer"
@@ -250,7 +250,7 @@ export default function TermosPage() {
               <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                 Estes Termos são regidos pelas leis da República Federativa do Brasil. Para dirimir
                 quaisquer controvérsias, fica eleito o foro da{' '}
-                <strong style={{ color: 'var(--text-primary)' }}>Comarca de José Bonifácio, SP</strong>,
+                <strong style={{ color: 'var(--text-primary)' }}>Comarca de Sua Cidade — UF</strong>,
                 com renúncia expressa a qualquer outro, por mais privilegiado que seja.
               </p>
             </Section>
@@ -259,11 +259,11 @@ export default function TermosPage() {
               <div className="text-sm space-y-1" style={{ color: 'var(--text-muted)' }}>
                 <p>
                   <strong style={{ color: 'var(--text-primary)' }}>E-mail:</strong>{' '}
-                  <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">
-                    contato@santuarionerd.com.br
+                  <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] underline">
+                    contato@tenant-erp.local
                   </a>
                 </p>
-                <p><strong style={{ color: 'var(--text-primary)' }}>Local:</strong> Santuário Nerd — José Bonifácio, SP</p>
+                <p><strong style={{ color: 'var(--text-primary)' }}>Local:</strong> Minha Loja — Sua Cidade — UF</p>
               </div>
             </Section>
 
@@ -271,8 +271,8 @@ export default function TermosPage() {
             <div className="pt-6 mt-4 flex flex-wrap gap-4 text-sm border-t" style={{ borderColor: 'var(--border-color)' }}>
               <Link href="/privacidade" className="text-[#42B6EE] hover:underline">Política de Privacidade</Link>
               <Link href="/lgpd" className="text-[#42B6EE] hover:underline">Exercer meus Direitos (LGPD)</Link>
-              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] hover:underline">
-                contato@santuarionerd.com.br
+              <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] hover:underline">
+                contato@tenant-erp.local
               </a>
             </div>
 

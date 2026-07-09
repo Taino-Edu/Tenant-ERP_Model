@@ -8,6 +8,7 @@ import {
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import { gerarRelatorioClientes, gerarRelatorioPDV, gerarRelatorioComandas, gerarRelatorioCrediario } from '@/lib/relatorio-admin'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast from 'react-hot-toast'
 import {
   BarChart2, ChevronDown, ChevronUp, Loader2, Package,
@@ -254,6 +255,7 @@ type Aba    = 'vendas' | 'crediario'
 type PdfKey = 'financeiro' | 'operacional' | 'gerencial' | 'clientes' | 'pdv' | 'comandas' | 'crediario' | null
 
 export default function RelatoriosPage() {
+  const { site } = useSiteConfig()
   const hoje = new Date()
   const [mes, setMes] = useState(hoje.getMonth() + 1)
   const [ano, setAno] = useState(hoje.getFullYear())
@@ -271,37 +273,37 @@ export default function RelatoriosPage() {
       const fimDate = new Date(ano, mes, 0)
       const fim = `${fimDate.getFullYear()}-${String(fimDate.getMonth() + 1).padStart(2, '0')}-${String(fimDate.getDate()).padStart(2, '0')}`
       const { data } = await analyticsApi.financeiro(inicio, fim)
-      await gerarRelatorioPDF(data, { inicio, fim })
+      await gerarRelatorioPDF(data, { inicio, fim }, site.siteName)
     } catch { toast.error('Erro ao gerar PDF financeiro') }
     finally { setPdfLoading(null) }
-  }, [mes, ano])
+  }, [mes, ano, site.siteName])
 
   const handleOperacionalPDF = useCallback(async () => {
     setPdfLoading('operacional')
     try {
       const [{ data: products }, { data: categories }] = await Promise.all([productApi.listAdmin(), categoryApi.list()])
-      await gerarRelatorioOperacional(products, categories)
+      await gerarRelatorioOperacional(products, categories, site.siteName)
     } catch { toast.error('Erro ao gerar PDF operacional') }
     finally { setPdfLoading(null) }
-  }, [])
+  }, [site.siteName])
 
   const handleGerencialPDF = useCallback(async () => {
     setPdfLoading('gerencial')
     try {
       const [{ data: products }, { data: categories }] = await Promise.all([productApi.listAdmin(), categoryApi.list()])
-      await gerarRelatorioGerencial(products, categories)
+      await gerarRelatorioGerencial(products, categories, site.siteName)
     } catch { toast.error('Erro ao gerar PDF gerencial') }
     finally { setPdfLoading(null) }
-  }, [])
+  }, [site.siteName])
 
   const handleClientesPDF = useCallback(async () => {
     setPdfLoading('clientes')
     try {
       const { data } = await analyticsApi.clientes()
-      await gerarRelatorioClientes(data)
+      await gerarRelatorioClientes(data, site.siteName)
     } catch { toast.error('Erro ao gerar PDF de clientes') }
     finally { setPdfLoading(null) }
-  }, [])
+  }, [site.siteName])
 
   const handlePdvPDF = useCallback(async () => {
     setPdfLoading('pdv')
@@ -311,28 +313,28 @@ export default function RelatoriosPage() {
       const fim    = toLocal(new Date())
       const inicio = toLocal(new Date(Date.now() - diasPdv * 86_400_000))
       const { data } = await analyticsApi.financeiro(inicio, fim)
-      await gerarRelatorioPDV(data, { inicio, fim, dias: diasPdv })
+      await gerarRelatorioPDV(data, { inicio, fim, dias: diasPdv }, site.siteName)
     } catch { toast.error('Erro ao gerar PDF PDV') }
     finally { setPdfLoading(null) }
-  }, [diasPdv])
+  }, [diasPdv, site.siteName])
 
   const handleComandasPDF = useCallback(async () => {
     setPdfLoading('comandas')
     try {
       const { data } = await comandaApi.dashboard()
-      await gerarRelatorioComandas(data, diasComandas)
+      await gerarRelatorioComandas(data, diasComandas, site.siteName)
     } catch { toast.error('Erro ao gerar PDF de comandas') }
     finally { setPdfLoading(null) }
-  }, [diasComandas])
+  }, [diasComandas, site.siteName])
 
   const handleCrediarioPDF = useCallback(async () => {
     setPdfLoading('crediario')
     try {
       const { data } = await relatorioApi.crediario(mes, ano)
-      await gerarRelatorioCrediario(data)
+      await gerarRelatorioCrediario(data, site.siteName)
     } catch { toast.error('Erro ao gerar PDF de crediário') }
     finally { setPdfLoading(null) }
-  }, [mes, ano])
+  }, [mes, ano, site.siteName])
 
   // ── Cards de relatório ──────────────────────────────────────────────────────
   const reports = [

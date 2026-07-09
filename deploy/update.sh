@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# update.sh — Atualiza o SantuárioNerd no VPS com a última versão do GitHub
+# update.sh — Atualiza o Tenant-ERP no VPS com a última versão do GitHub
 #
 # USO:
 #   bash /opt/tenant-erp/deploy/update.sh
@@ -14,7 +14,7 @@ NC='\033[0m'
 
 APP_DIR="/opt/tenant-erp"
 
-echo -e "${YELLOW}🔄 Atualizando SantuárioNerd...${NC}"
+echo -e "${YELLOW}🔄 Atualizando Tenant-ERP...${NC}"
 
 # Puxa última versão do GitHub
 cd "$APP_DIR"

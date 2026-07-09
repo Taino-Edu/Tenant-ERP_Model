@@ -42,6 +42,7 @@ public class SiteConfigController : ControllerBase
         if (req.ContactPersonName    is not null) cfg.ContactPersonName    = req.ContactPersonName;
         if (req.WhatsappNumber       is not null) cfg.WhatsappNumber       = req.WhatsappNumber;
         if (req.ContactEmail         is not null) cfg.ContactEmail         = req.ContactEmail;
+        if (req.LogoUrl              is not null) cfg.LogoUrl              = req.LogoUrl;
         if (req.NavProdutosLabel     is not null) cfg.NavProdutosLabel     = req.NavProdutosLabel;
         if (req.NavPontosLabel       is not null) cfg.NavPontosLabel       = req.NavPontosLabel;
         if (req.CtaVerProdutosLabel  is not null) cfg.CtaVerProdutosLabel  = req.CtaVerProdutosLabel;
@@ -97,6 +98,7 @@ public class SaveSiteConfigRequest
     public string? ContactPersonName   { get; init; }
     public string? WhatsappNumber      { get; init; }
     public string? ContactEmail        { get; init; }
+    public string? LogoUrl             { get; init; }
     public string? NavProdutosLabel    { get; init; }
     public string? NavPontosLabel      { get; init; }
     public string? CtaVerProdutosLabel { get; init; }

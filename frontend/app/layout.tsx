@@ -20,21 +20,24 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
+// Metadados estáticos (build-time) — placeholder genérico. O nome real da loja
+// (SiteConfig.SiteName) é renderizado dinamicamente no client via useSiteConfig();
+// gerar esses metadados por tenant depende de resolução de subdomínio (fase futura).
 export const metadata: Metadata = {
-  title: { default: 'Santuário Nerd', template: '%s — Santuário Nerd' },
-  description: 'Sistema de gestão da loja de Card Games',
+  title: { default: 'Minha Loja', template: '%s — Minha Loja' },
+  description: 'Sistema de gestão para lojas e varejo',
   manifest: '/manifest.json',
   icons: {
     icon: [
-      { url: '/logo-maikon.png', type: 'image/png' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
     ],
-    apple: '/logo-maikon.png',
-    shortcut: '/logo-maikon.png',
+    apple: '/icon.svg',
+    shortcut: '/icon.svg',
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Santuário Nerd',
+    title: 'Minha Loja',
   },
 }
 

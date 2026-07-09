@@ -9,6 +9,7 @@ import {
   Megaphone, Image as ImageIcon, Link2, Smartphone, Wallet, Star, Sparkles,
 } from 'lucide-react'
 import clsx from 'clsx'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 type Channel    = 'inapp' | 'email' | 'both'
 type TargetMode = 'segment' | 'specific'
@@ -39,6 +40,7 @@ export default function MensageriaPage() {
 }
 
 function MensageriaForm() {
+  const { site } = useSiteConfig()
   const params = useSearchParams()
   const [title,      setTitle]      = useState('')
   const [body,       setBody]       = useState('')
@@ -340,7 +342,7 @@ function MensageriaForm() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold text-gray-300">Santuário Nerd</span>
+                      <span className="text-[11px] font-bold text-gray-300">{site.siteName}</span>
                       <span className="text-[10px] text-gray-600">agora</span>
                     </div>
                     <p className="text-sm font-bold text-white mt-0.5 truncate">

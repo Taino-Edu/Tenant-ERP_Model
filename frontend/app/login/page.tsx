@@ -3,12 +3,14 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast, { Toaster } from 'react-hot-toast'
 import { KeyRound, Mail, Loader2, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
 
 export default function LoginPage() {
   const router  = useRouter()
+  const { site } = useSiteConfig()
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
@@ -48,9 +50,9 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-brand-600/10 border border-brand-500/20 rounded-full mb-4">
-            <img src="/logo-maikon.png" alt="Santuário Nerd" className="w-14 h-14 object-contain" />
+            <img src={site.logoUrl || '/logo-placeholder.svg'} alt={site.siteName} className="w-14 h-14 object-contain" />
           </div>
-          <h1 className="text-3xl font-bold text-white">Santuário Nerd</h1>
+          <h1 className="text-3xl font-bold text-white">{site.siteName}</h1>
           <p className="text-gray-400 mt-1 text-sm">Painel de Gestão</p>
         </div>
 

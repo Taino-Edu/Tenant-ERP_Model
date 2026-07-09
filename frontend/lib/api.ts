@@ -1029,6 +1029,7 @@ export interface SiteConfigDto {
   contactPersonName: string
   whatsappNumber: string
   contactEmail: string
+  logoUrl?: string | null
   navTorneiosLabel: string
   navProdutosLabel: string
   navMercadoLabel: string

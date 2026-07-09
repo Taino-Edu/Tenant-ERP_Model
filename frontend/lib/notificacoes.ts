@@ -6,18 +6,18 @@
 // ── Badge na aba ──────────────────────────────────────────────────────────────
 let badgeCount = 0
 
-export function incrementBadge() {
+export function incrementBadge(storeName = 'Minha Loja') {
   badgeCount++
-  atualizarTitulo()
+  atualizarTitulo(storeName)
 }
 
-export function clearBadge() {
+export function clearBadge(storeName = 'Minha Loja') {
   badgeCount = 0
-  atualizarTitulo()
+  atualizarTitulo(storeName)
 }
 
-function atualizarTitulo() {
-  const base = 'Admin — Santuário Nerd'
+function atualizarTitulo(storeName: string) {
+  const base = `Admin — ${storeName}`
   document.title = badgeCount > 0 ? `(${badgeCount}) ${base}` : base
 }
 
@@ -71,7 +71,7 @@ export function notificarBrowser(titulo: string, corpo: string) {
       body:    corpo,
       icon:    '/favicon.ico',
       silent:  true, // o som vem do nosso tocarSom()
-      tag:     'santuario-nerd', // substitui notificação anterior em vez de empilhar
+      tag:     'admin-loja', // substitui notificação anterior em vez de empilhar
     })
   } catch {
     // ignora (ex: Firefox em modo privado)

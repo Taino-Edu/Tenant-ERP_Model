@@ -79,6 +79,7 @@ function checkPageBreak(doc: any, y: number, needed = 30): number {
 export async function gerarRelatorioPDF(
   d: FinanceiroDto,
   periodo: { inicio: string; fim: string },
+  siteName = 'Minha Loja',
 ) {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,7 +96,7 @@ export async function gerarRelatorioPDF(
   doc.setTextColor(...BLACK)
   doc.setFontSize(16)
   doc.setFont('helvetica', 'bold')
-  doc.text('Santuário Nerd', ML, 14)
+  doc.text(siteName, ML, 14)
 
   // Subtítulo
   doc.setFontSize(9)
@@ -311,7 +312,7 @@ export async function gerarRelatorioPDF(
     doc.setFontSize(7)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(...LGRAY)
-    doc.text('Santuário Nerd  ·  Documento confidencial  ·  Uso interno', ML, 289)
+    doc.text(`${siteName}  ·  Documento confidencial  ·  Uso interno`, ML, 289)
     doc.text(`Pág. ${i} / ${total}`, PW - MR, 289, { align: 'right' })
   }
 

@@ -8,6 +8,7 @@ import {
   Users, CreditCard, Trophy, BarChart2, Layers, Megaphone, Settings, Keyboard,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 // ── Minimal Markdown Renderer ──────────────────────────────────────────────────
 
@@ -196,7 +197,7 @@ const MANUAL: ManualSection[] = [
     color: 'text-purple-400',
     steps: [
       { title: 'Cadastrar cliente', desc: 'Clique em "Novo Cliente". Nome é obrigatório; CPF, WhatsApp e e-mail são opcionais mas ajudam na identificação.' },
-      { title: 'Pontos Maikon', desc: 'A cada R$1 gasto, o cliente ganha 1 ponto. Os pontos expiram em 30 dias após a última compra. Use para dar desconto em comandas e vendas avulsas.' },
+      { title: 'Pontos de Fidelidade', desc: 'A cada R$1 gasto, o cliente ganha 1 ponto. Os pontos expiram em 30 dias após a última compra. Use para dar desconto em comandas e vendas avulsas.' },
       { title: 'Adicionar pontos manualmente', desc: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Campeonato de Pokémon").' },
       { title: 'Cashback (Saldo)', desc: 'Diferente de pontos — é saldo em reais que o cliente pode usar como pagamento. Crédite ou débite manualmente pelo painel.' },
       { title: 'Histórico completo', desc: 'Clique em "Ver Histórico" no painel do cliente para ver todas as comandas, vendas no caixa, crediários e campeonatos do cliente em um único lugar.' },
@@ -367,6 +368,7 @@ function ManualSection({ section }: { section: ManualSection }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SobrePage() {
+  const { site } = useSiteConfig()
   const [raw,     setRaw]     = useState<string | null>(null)
   const [error,   setError]   = useState(false)
   const [version, setVersion] = useState('—')
@@ -394,7 +396,7 @@ export default function SobrePage() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-white">Sobre o Sistema</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Santuário Nerd — Plataforma de Gestão</p>
+          <p className="text-sm text-gray-500 mt-0.5">{site.siteName} — Plataforma de Gestão</p>
         </div>
         <div className="ml-auto flex items-center gap-3">
           <Tag className="w-4 h-4 text-brand-400" />

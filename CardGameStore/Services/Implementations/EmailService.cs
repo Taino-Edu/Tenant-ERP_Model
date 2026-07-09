@@ -6,38 +6,52 @@
 //   EmailSettings__Port     → 587
 //   EmailSettings__User     → seu@email.com
 //   EmailSettings__Password → senha-de-app ou api-key
-//   EmailSettings__From     → noreply@softnerd.com.br
-//   EmailSettings__AppUrl   → https://softnerd.com.br (para montar o link de reset)
+//   EmailSettings__From     → noreply@tenant-erp.local
+//   EmailSettings__AppUrl   → https://seudominio.com.br (para montar o link de reset)
 //
 // Para Gmail: ative "Senhas de app" nas configurações da conta Google.
 // Para SendGrid: use smtp.sendgrid.net:587, usuário "apikey", senha = API Key.
+//
+// Nome da loja/contato/endereço vêm de SiteConfig (singleton), não são hardcoded —
+// assim o mesmo template serve qualquer tenant sem precisar editar código.
 // =============================================================================
 
 using System.Net;
 using System.Net.Mail;
+using CardGameStore.Data;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Services.Implementations;
 
 public class EmailService : IEmailService
 {
     private readonly IConfiguration         _config;
+    private readonly AppDbContext           _db;
     private readonly ILogger<EmailService>  _logger;
 
-    public EmailService(IConfiguration config, ILogger<EmailService> logger)
+    public EmailService(IConfiguration config, AppDbContext db, ILogger<EmailService> logger)
     {
         _config = config;
+        _db     = db;
         _logger = logger;
     }
 
+    private async Task<SiteConfig> GetSiteConfigAsync() =>
+        await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
+
+    private string GetAppUrl() =>
+        (_config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://tenant-erp.local").TrimEnd('/');
+
     public async Task SendPasswordResetAsync(string toEmail, string toName, string resetToken)
     {
-        var appUrl = _config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://santuarionerd.tech";
-        var link   = $"{appUrl}/reset-password?token={Uri.EscapeDataString(resetToken)}";
+        var cfg    = await GetSiteConfigAsync();
+        var link   = $"{GetAppUrl()}/reset-password?token={Uri.EscapeDataString(resetToken)}";
 
         var body = $"""
             <p>Olá, <strong>{toName}</strong>!</p>
-            <p>Recebemos uma solicitação de redefinição de senha para sua conta no <strong>softNerd</strong>.</p>
+            <p>Recebemos uma solicitação de redefinição de senha para sua conta no <strong>{cfg.SiteName}</strong>.</p>
             <p>
               <a href="{link}" style="background:#f59e0b;color:#000;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">
                 Redefinir minha senha
@@ -48,29 +62,31 @@ public class EmailService : IEmailService
             </p>
             """;
 
-        await SendAsync(toEmail, toName, "Redefinição de senha — softNerd", body);
+        await SendAsync(toEmail, toName, $"Redefinição de senha — {cfg.SiteName}", body);
     }
 
     public async Task SendWelcomeAsync(string toEmail, string toName)
     {
+        var cfg  = await GetSiteConfigAsync();
         var body = $"""
-            <p>Olá, <strong>{toName}</strong>! Seja bem-vindo(a) ao softNerd!</p>
+            <p>Olá, <strong>{toName}</strong>! Seja bem-vindo(a) ao {cfg.SiteName}!</p>
             <p>Seu cadastro foi criado automaticamente ao escanear o QR Code da mesa.</p>
             <p>Acumule pontos a cada visita e troque por produtos na loja.</p>
             <p style="color:#888;font-size:12px;">
-              Dúvidas? Fale com o Maikon no balcão.
+              Dúvidas? Fale com {cfg.ContactPersonName} no balcão.
             </p>
             """;
 
-        await SendAsync(toEmail, toName, "Bem-vindo(a) ao softNerd!", body);
+        await SendAsync(toEmail, toName, $"Bem-vindo(a) ao {cfg.SiteName}!", body);
     }
 
     public async Task SendCrediarioAbertoAsync(string toEmail, string toName, decimal valor, DateTime vencimento)
     {
+        var cfg  = await GetSiteConfigAsync();
         var venc = vencimento.ToLocalTime().ToString("dd/MM/yyyy");
         var body = $"""
             <div style="font-family:sans-serif;max-width:500px">
-              <h2 style="color:#7839F3">softNerd — Crediário Aberto</h2>
+              <h2 style="color:#7839F3">{cfg.SiteName} — Crediário Aberto</h2>
               <p>Olá, <strong>{toName}</strong>!</p>
               <p>
                 Uma comanda foi registrada no seu crediário.
@@ -88,9 +104,9 @@ public class EmailService : IEmailService
               </table>
               <p>
                 Enquanto o crediário estiver em aberto, novas comandas ficarão bloqueadas.
-                Compareça à loja ou fale com o Maikon para quitar.
+                Compareça à loja ou fale com {cfg.ContactPersonName} para quitar.
               </p>
-              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+              <p style="color:#888;font-size:12px">{cfg.SiteName} — Sistema de Gestão</p>
             </div>
             """;
 
@@ -99,27 +115,29 @@ public class EmailService : IEmailService
 
     public async Task SendCrediarioPagoAsync(string toEmail, string toName, decimal valor)
     {
+        var cfg  = await GetSiteConfigAsync();
         var body = $"""
             <div style="font-family:sans-serif;max-width:500px">
-              <h2 style="color:#00F0A8">softNerd — Crediário Quitado</h2>
+              <h2 style="color:#00F0A8">{cfg.SiteName} — Crediário Quitado</h2>
               <p>Olá, <strong>{toName}</strong>!</p>
               <p>
                 Seu crediário de <strong>R$ {valor:N2}</strong> foi quitado com sucesso.
                 Obrigado pelo pagamento!
               </p>
               <p>Você já pode abrir uma nova comanda normalmente.</p>
-              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+              <p style="color:#888;font-size:12px">{cfg.SiteName} — Sistema de Gestão</p>
             </div>
             """;
 
-        await SendAsync(toEmail, toName, "Crediário quitado — softNerd", body);
+        await SendAsync(toEmail, toName, $"Crediário quitado — {cfg.SiteName}", body);
     }
 
     public async Task SendWaitListNotifiedAsync(string toEmail, string toName, string productName, string productUrl)
     {
+        var cfg  = await GetSiteConfigAsync();
         var body = $"""
             <div style="font-family:sans-serif;max-width:500px">
-              <h2 style="color:#7C3AED">softNerd — Chegou sua vez! 🎉</h2>
+              <h2 style="color:#7C3AED">{cfg.SiteName} — Chegou sua vez! 🎉</h2>
               <p>Olá, <strong>{toName}</strong>!</p>
               <p>
                 Boa notícia! Você é o próximo da lista de espera para o produto
@@ -134,7 +152,7 @@ public class EmailService : IEmailService
               <p style="color:#888;font-size:12px">
                 Se não conseguir finalizar a compra, entre em contato com a loja pelo WhatsApp.
               </p>
-              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+              <p style="color:#888;font-size:12px">{cfg.SiteName} — Sistema de Gestão</p>
             </div>
             """;
 
@@ -144,7 +162,8 @@ public class EmailService : IEmailService
     public async Task<int> SendAnuncioAsync(IEnumerable<(string email, string name)> destinatarios, string titulo, string corpo,
                                             string? imageUrl = null, string? link = null)
     {
-        var appUrl = (_config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://santuarionerd.tech").TrimEnd('/');
+        var cfg    = await GetSiteConfigAsync();
+        var appUrl = GetAppUrl();
 
         // Conteúdo vem de campos de texto livre do admin: escapa HTML e preserva quebras de linha.
         var tituloHtml = WebUtility.HtmlEncode(titulo);
@@ -172,7 +191,7 @@ public class EmailService : IEmailService
         var user     = _config["SmtpSettings:Username"];
         var password = _config["SmtpSettings:Password"];
         var from     = _config["SmtpSettings:FromEmail"] ?? user;
-        var fromName = _config["SmtpSettings:FromName"] ?? "softNerd";
+        var fromName = _config["SmtpSettings:FromName"] ?? cfg.SiteName;
 
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
         {
@@ -192,8 +211,8 @@ public class EmailService : IEmailService
               {botaoHtml}
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
               <p style="color:#888;font-size:12px">
-                Você recebe este email por ser cliente softNerd.<br/>
-                Dúvidas? Fale com o Maikon no balcão.<br/>
+                Você recebe este email por ser cliente {cfg.SiteName}.<br/>
+                Dúvidas? Fale com {cfg.ContactPersonName} no balcão.<br/>
                 Não quer mais receber estes avisos? <a href="{unsubscribeMailto}" style="color:#888">Clique aqui para se descadastrar</a>.
               </p>
             </div>
@@ -206,7 +225,7 @@ public class EmailService : IEmailService
 
             {(string.IsNullOrWhiteSpace(link) ? "" : $"Ver no site: {AbsoluteUrl(link)}\n")}
             --
-            Você recebe este email por ser cliente softNerd. Dúvidas? Fale com o Maikon no balcão.
+            Você recebe este email por ser cliente {cfg.SiteName}. Dúvidas? Fale com {cfg.ContactPersonName} no balcão.
             Não quer mais receber estes avisos? Responda este email pedindo para ser descadastrado.
             """;
 
@@ -228,7 +247,7 @@ public class EmailService : IEmailService
                 using var msg = new MailMessage
                 {
                     From       = new MailAddress(from!, fromName),
-                    Subject    = $"softNerd — {titulo}",
+                    Subject    = $"{cfg.SiteName} — {titulo}",
                     Body       = textBody,
                     IsBodyHtml = false,
                 };
@@ -257,14 +276,16 @@ public class EmailService : IEmailService
         string   requestType,
         DateTime deadline)
     {
+        var cfg   = await GetSiteConfigAsync();
         var prazo = deadline.ToLocalTime().ToString("dd/MM/yyyy");
+        var lgpdUrl = $"{GetAppUrl()}/lgpd";
         var body = $"""
             <div style="font-family:sans-serif;max-width:560px;color:#222">
-              <h2 style="color:#7839F3">softNerd — Solicitação LGPD Recebida</h2>
+              <h2 style="color:#7839F3">{cfg.SiteName} — Solicitação LGPD Recebida</h2>
               <p>Olá, <strong>{toName}</strong>!</p>
               <p>
                 Sua solicitação de <strong>{requestType}</strong> de dados pessoais foi recebida
-                com sucesso pela <strong>softNerd</strong>.
+                com sucesso pela <strong>{cfg.SiteName}</strong>.
               </p>
               <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">
                 <tr style="background:#f5f0ff">
@@ -287,12 +308,12 @@ public class EmailService : IEmailService
               <p>
                 Guarde seu número de protocolo para acompanhar o andamento em:
                 <br/>
-                <a href="https://softnerd.com.br/lgpd" style="color:#7839F3">softnerd.com.br/lgpd</a>
+                <a href="{lgpdUrl}" style="color:#7839F3">{lgpdUrl}</a>
               </p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
               <p style="color:#888;font-size:12px">
-                Dúvidas? Entre em contato: <a href="mailto:privacidade@softnerd.com.br">privacidade@softnerd.com.br</a><br/>
-                softNerd — São José do Rio Preto, SP
+                Dúvidas? Entre em contato: <a href="mailto:{cfg.ContactEmail}">{cfg.ContactEmail}</a><br/>
+                {cfg.SiteName} — {cfg.AddressLine}
               </p>
             </div>
             """;
@@ -307,16 +328,17 @@ public class EmailService : IEmailService
         string requestType,
         string response)
     {
+        var cfg  = await GetSiteConfigAsync();
         var body = $"""
             <div style="font-family:sans-serif;max-width:560px;color:#222">
-              <h2 style="color:#7839F3">softNerd — Resposta à sua Solicitação LGPD</h2>
+              <h2 style="color:#7839F3">{cfg.SiteName} — Resposta à sua Solicitação LGPD</h2>
               <p>Olá, <strong>{toName}</strong>!</p>
               <p>
                 Sua solicitação de <strong>{requestType}</strong> (Protocolo: <code>{protocol}</code>)
-                foi analisada e respondida pela <strong>softNerd</strong>.
+                foi analisada e respondida pela <strong>{cfg.SiteName}</strong>.
               </p>
               <div style="background:#f5f0ff;border-left:4px solid #7839F3;padding:16px;margin:20px 0;border-radius:4px">
-                <p style="margin:0;font-weight:bold;color:#555;font-size:13px;margin-bottom:8px">RESPOSTA DA SOFTNERD:</p>
+                <p style="margin:0;font-weight:bold;color:#555;font-size:13px;margin-bottom:8px">RESPOSTA:</p>
                 <p style="margin:0;white-space:pre-wrap">{response}</p>
               </div>
               <p>
@@ -326,8 +348,8 @@ public class EmailService : IEmailService
               </p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
               <p style="color:#888;font-size:12px">
-                Dúvidas? Entre em contato: <a href="mailto:privacidade@softnerd.com.br">privacidade@softnerd.com.br</a><br/>
-                softNerd — São José do Rio Preto, SP
+                Dúvidas? Entre em contato: <a href="mailto:{cfg.ContactEmail}">{cfg.ContactEmail}</a><br/>
+                {cfg.SiteName} — {cfg.AddressLine}
               </p>
             </div>
             """;
@@ -337,8 +359,9 @@ public class EmailService : IEmailService
 
     public async Task<bool> SendDiagnosticEmailAsync(string toEmail)
     {
+        var cfg  = await GetSiteConfigAsync();
         var body = $"""
-            <h2>Teste de Diagnóstico — softNerd</h2>
+            <h2>Teste de Diagnóstico — {cfg.SiteName}</h2>
             <p>Se você está lendo isso, a configuração de SMTP do servidor está <strong>funcional</strong>!</p>
             <hr/>
             <p><strong>Timestamp:</strong> {DateTime.Now:dd/MM/yyyy HH:mm:ss}</p>
@@ -347,7 +370,7 @@ public class EmailService : IEmailService
 
         try
         {
-            await SendAsync(toEmail, "Admin Teste", "Diagnóstico de Email — softNerd", body);
+            await SendAsync(toEmail, "Admin Teste", $"Diagnóstico de Email — {cfg.SiteName}", body);
             return true;
         }
         catch
@@ -360,10 +383,11 @@ public class EmailService : IEmailService
 
     public async Task SendCertificadoVencendoAsync(string toEmail, string toName, int diasRestantes, DateTime validade)
     {
+        var cfg  = await GetSiteConfigAsync();
         var venc = validade.ToLocalTime().ToString("dd/MM/yyyy");
         var body = $"""
             <div style="font-family:sans-serif;max-width:520px">
-              <h2 style="color:#dc2626">softNerd — Certificado Digital Vencendo</h2>
+              <h2 style="color:#dc2626">{cfg.SiteName} — Certificado Digital Vencendo</h2>
               <p>Olá, <strong>{toName}</strong>!</p>
               <p>
                 O certificado digital A1 usado para emitir NFC-e vence em
@@ -373,24 +397,25 @@ public class EmailService : IEmailService
                 Acesse <strong>Admin &gt; Fiscal</strong> e envie o novo certificado antes do vencimento
                 para não interromper a emissão de notas.
               </p>
-              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+              <p style="color:#888;font-size:12px">{cfg.SiteName} — Sistema de Gestão</p>
             </div>
             """;
 
-        await SendAsync(toEmail, toName, $"Certificado fiscal vence em {diasRestantes} dia(s) — softNerd", body);
+        await SendAsync(toEmail, toName, $"Certificado fiscal vence em {diasRestantes} dia(s) — {cfg.SiteName}", body);
     }
 
     public async Task SendXmlsMensalContadorAsync(string toEmail, string mesReferencia, byte[] zipBytes, string zipFileName)
     {
+        var cfg  = await GetSiteConfigAsync();
         var body = $"""
             <div style="font-family:sans-serif;max-width:520px">
-              <h2 style="color:#7839F3">softNerd — XMLs Fiscais do Mês</h2>
+              <h2 style="color:#7839F3">{cfg.SiteName} — XMLs Fiscais do Mês</h2>
               <p>Olá!</p>
               <p>
                 Segue em anexo o ZIP com os XMLs das NFC-e autorizadas e canceladas
                 referentes a <strong>{mesReferencia}</strong>.
               </p>
-              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
+              <p style="color:#888;font-size:12px">{cfg.SiteName} — Sistema de Gestão</p>
             </div>
             """;
 
@@ -402,12 +427,13 @@ public class EmailService : IEmailService
     private async Task SendWithAttachmentAsync(
         string toEmail, string toName, string subject, string htmlBody, byte[] attachmentBytes, string attachmentName)
     {
+        var cfg      = await GetSiteConfigAsync();
         var host     = _config["SmtpSettings:Host"];
         var portStr  = _config["SmtpSettings:Port"];
         var user     = _config["SmtpSettings:Username"];
         var password = _config["SmtpSettings:Password"];
         var from     = _config["SmtpSettings:FromEmail"] ?? user;
-        var fromName = _config["SmtpSettings:FromName"] ?? "softNerd";
+        var fromName = _config["SmtpSettings:FromName"] ?? cfg.SiteName;
 
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
         {
@@ -450,12 +476,13 @@ public class EmailService : IEmailService
 
     private async Task SendAsync(string toEmail, string toName, string subject, string htmlBody)
     {
+        var cfg      = await GetSiteConfigAsync();
         var host     = _config["SmtpSettings:Host"];
         var portStr  = _config["SmtpSettings:Port"];
         var user     = _config["SmtpSettings:Username"];
         var password = _config["SmtpSettings:Password"];
         var from     = _config["SmtpSettings:FromEmail"] ?? user;
-        var fromName = _config["SmtpSettings:FromName"] ?? "softNerd";
+        var fromName = _config["SmtpSettings:FromName"] ?? cfg.SiteName;
 
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
         {

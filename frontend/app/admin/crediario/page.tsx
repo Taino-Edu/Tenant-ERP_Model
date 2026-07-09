@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { ItemCrediarioDto } from '@/lib/api'
 import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import clsx from 'clsx'
 
 const fmt     = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
@@ -722,7 +723,7 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
 
 // ── Card do crediário ─────────────────────────────────────────────────────────
 
-function imprimirItens(c: CrediariosDto) {
+function imprimirItens(c: CrediariosDto, siteName: string) {
   const w = window.open('', '_blank', 'width=480,height=640')
   if (!w) { alert('Permita pop-ups para imprimir'); return }
   const data = new Date(c.dataAbertura).toLocaleDateString('pt-BR')
@@ -749,7 +750,7 @@ function imprimirItens(c: CrediariosDto) {
   @media print { button { display: none; } }
 </style>
 </head><body>
-<h1>Santuário Nerd — Crediário</h1>
+<h1>${siteName} — Crediário</h1>
 <p class="sub">Cliente: <strong>${c.userName}</strong> · Data: ${data}</p>
 <table>
   <thead><tr><th>Item</th><th style="text-align:right">Unit.</th><th style="text-align:right">Total</th></tr></thead>
@@ -777,6 +778,7 @@ function CrediarioCard({
   onDeletar: (c: CrediariosDto) => void
   onCobrancaPix: (c: CrediariosDto) => void
 }) {
+  const { site } = useSiteConfig()
   const [expandido,   setExpandido]   = useState(false)
   const [expandItens, setExpandItens] = useState(compact) // auto-expande itens dentro do card de pessoa
 
@@ -912,7 +914,7 @@ function CrediarioCard({
               {expandItens ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
             </button>
             <button
-              onClick={() => imprimirItens(c)}
+              onClick={() => imprimirItens(c, site.siteName)}
               className="flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors"
               title="Imprimir lista de produtos"
             >

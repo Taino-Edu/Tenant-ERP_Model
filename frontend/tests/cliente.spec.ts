@@ -12,8 +12,8 @@ test.describe('Cliente - Comanda UI', () => {
     // Supondo que a aplicação esteja rodando na porta 3000
     await page.goto('http://localhost:3000/mesa/Mesa1');
     
-    // Verifica se o título O Santuário Nerd está visível
-    await expect(page.locator('h1').filter({ hasText: 'O Santuário' })).toBeVisible();
+    // Verifica se o título com o nome da loja está visível
+    await expect(page.locator('h1').filter({ hasText: 'Minha Loja' })).toBeVisible();
     
     // Verifica a presença dos botões do formulário
     await expect(page.locator('button', { hasText: 'Abrir Comanda' })).toBeVisible();

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect } from 'react'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
-const LOJA = 'Santuário Nerd'
 const VERSION = 'v1.21.0'
 const DATA = '08/07/2026'
 
@@ -88,7 +88,7 @@ const SECOES = [
     cor: '#C084FC',
     itens: [
       { t: 'Cadastrar cliente', d: 'Clique em "Novo Cliente". Nome é obrigatório; CPF, WhatsApp e e-mail são opcionais, mas ajudam na identificação.' },
-      { t: 'Pontos Maikon', d: 'A cada R$1 gasto, o cliente ganha 1 ponto. Os pontos expiram em 30 dias após a última compra e podem ser usados como desconto.' },
+      { t: 'Pontos de Fidelidade', d: 'A cada R$1 gasto, o cliente ganha 1 ponto. Os pontos expiram em 30 dias após a última compra e podem ser usados como desconto.' },
       { t: 'Pontos não acumulam com cashback', d: 'Se qualquer parte do pagamento usar cashback, o cliente não acumula pontos naquela venda.' },
       { t: 'Adicionar pontos manualmente', d: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Campeonato de Pokémon").' },
       { t: 'Cashback (Saldo)', d: 'Diferente de pontos — é saldo em reais que o cliente pode usar como pagamento. Crédite ou débite manualmente pelo painel.' },
@@ -174,10 +174,10 @@ const SECOES = [
     titulo: 'Mercado de Cartas (Vitrine)',
     cor: '#F472B6',
     itens: [
-      { t: 'O que é', d: 'Vitrine de cartas avulsas do próprio Maikon — só o Admin anuncia. Clientes só navegam e marcam interesse, não postam anúncios (não é C2C).' },
+      { t: 'O que é', d: 'Vitrine de produtos avulsos do próprio Admin — só o Admin anuncia. Clientes só navegam e marcam interesse, não postam anúncios (não é C2C).' },
       { t: 'Anunciar carta', d: 'Admin → Mercado de Cartas → "Novo anúncio". Foto, jogo, condição (NM/LP/MP/HP/DMG), preço e descrição.' },
       { t: 'Condições de carta', d: 'NM = Near Mint (perfeita) • LP = Light Played (levemente usada) • MP = Moderate Played • HP = Heavy Played • DMG = Damaged (danificada).' },
-      { t: 'Interesse', d: 'Cliente clica "Tenho interesse" na carta e pode deixar uma mensagem. Pode autorizar (ou não) compartilhar o WhatsApp com o Maikon.' },
+      { t: 'Interesse', d: 'Cliente clica "Tenho interesse" no produto e pode deixar uma mensagem. Pode autorizar (ou não) compartilhar o WhatsApp com o Admin.' },
       { t: 'Ver interessados', d: 'Em Admin → Mercado de Cartas, clique no número de interesses da carta. Se o cliente autorizou o contato, aparece botão de WhatsApp direto pra combinar a venda.' },
       { t: 'Gestão', d: 'Admin edita, remove ou muda o status do anúncio (Disponível / Reservado / Vendido) direto na tabela do Mercado de Cartas.' },
     ],
@@ -402,9 +402,10 @@ const SECOES = [
 ]
 
 export default function ManualPdfPage() {
+  const { site } = useSiteConfig()
   useEffect(() => {
-    document.title = `Manual do Sistema — ${LOJA} ${VERSION}`
-  }, [])
+    document.title = `Manual do Sistema — ${site.siteName} ${VERSION}`
+  }, [site.siteName])
 
   return (
     <>
@@ -559,7 +560,7 @@ export default function ManualPdfPage() {
         {/* Capa */}
         <div className="capa">
           <div className="capa-badge">Manual do Usuário</div>
-          <h1>{LOJA} — Sistema de Gestão</h1>
+          <h1>{site.siteName} — Sistema de Gestão</h1>
           <div className="capa-meta">
             Versão {VERSION} &nbsp;·&nbsp; Atualizado em {DATA} &nbsp;·&nbsp; Uso interno
           </div>
@@ -610,7 +611,7 @@ export default function ManualPdfPage() {
 
         {/* Rodapé */}
         <div className="rodape">
-          <span>{LOJA} · Sistema de Gestão Interno</span>
+          <span>{site.siteName} · Sistema de Gestão Interno</span>
           <span>{VERSION} · {DATA}</span>
         </div>
       </div>

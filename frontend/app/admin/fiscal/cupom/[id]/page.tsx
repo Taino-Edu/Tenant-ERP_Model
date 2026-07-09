@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { fiscalApi, CupomDto } from '@/lib/api'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 function fmtMoeda(centavos: number) {
   return (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -19,6 +20,7 @@ function fmtChave(chave?: string) {
 }
 
 export default function CupomNfcePage() {
+  const { site } = useSiteConfig()
   const params = useParams()
   const id = params?.id as string
   const [cupom, setCupom] = useState<CupomDto | null>(null)
@@ -121,7 +123,7 @@ export default function CupomNfcePage() {
         )}
 
         <div style={{ textAlign: 'center', fontSize: 10, marginTop: 8 }}>
-          Documento emitido eletronicamente pelo Santuário Nerd
+          Documento emitido eletronicamente pelo {site.siteName}
         </div>
       </div>
     </>

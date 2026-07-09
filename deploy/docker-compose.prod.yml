@@ -1,15 +1,15 @@
 # =============================================================================
-# docker-compose.prod.yml — Produção SantuárioNerd (Hostinger KVM 1)
+# docker-compose.prod.yml — Produção Tenant-ERP
 #
 # COMO USAR (primeira vez):
-#   cd /opt/santuarionerd
+#   cd /opt/tenant-erp
 #   docker compose -f docker-compose.prod.yml build
 #   docker compose -f docker-compose.prod.yml up -d
 #
 # Atualizar código:
 #   git pull && docker compose -f docker-compose.prod.yml build && docker compose -f docker-compose.prod.yml up -d
 #
-# Acesso público: https://santuarionerd.tech  (Cloudflare → porta 80)
+# Acesso público: via domínio configurado em APP_URL (Cloudflare → porta 80)
 # =============================================================================
 
 services:
@@ -20,7 +20,7 @@ services:
   # ---------------------------------------------------------------------------
   nginx:
     image: nginx:1.27-alpine
-    container_name: santuarionerd_nginx
+    container_name: cardgamestore_nginx
     ports:
       - "80:80"
     volumes:
@@ -53,8 +53,8 @@ services:
       dockerfile: Dockerfile
       args:
         API_URL: ${APP_URL:-http://localhost}
-    image: santuarionerd_frontend:latest
-    container_name: santuarionerd_frontend
+    image: cardgamestore_frontend:latest
+    container_name: cardgamestore_frontend
     networks:
       - cardgame_network
     restart: unless-stopped
@@ -76,8 +76,8 @@ services:
     build:
       context: ../CardGameStore
       dockerfile: Dockerfile
-    image: santuarionerd_api:latest
-    container_name: santuarionerd_api
+    image: cardgamestore_api:latest
+    container_name: cardgamestore_api
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
@@ -143,7 +143,7 @@ services:
   # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: santuarionerd_postgres
+    container_name: cardgamestore_postgres
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-cardgamestore}
       POSTGRES_USER:     ${POSTGRES_USER:-cardgame_user}
@@ -174,7 +174,7 @@ services:
   # ---------------------------------------------------------------------------
   mongo:
     image: mongo:7-jammy
-    container_name: santuarionerd_mongo
+    container_name: cardgamestore_mongo
     environment:
       MONGO_INITDB_ROOT_USERNAME: "${MONGO_USER:-mongo_admin}"
       MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}"

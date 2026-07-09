@@ -1,6 +1,6 @@
 // =============================================================================
-// privacidade/page.tsx — Política de Privacidade da Santuário Nerd
-// José Bonifácio, SP — LGPD (Lei 13.709/2018) — v1.2 junho/2026
+// privacidade/page.tsx — Política de Privacidade da Minha Loja
+// Sua Cidade — UF — LGPD (Lei 13.709/2018) — v1.2 junho/2026
 // =============================================================================
 
 import Link from 'next/link'
@@ -11,8 +11,8 @@ import { LegalActions } from '@/components/LegalActions'
 export const revalidate = 0
 
 export const metadata: Metadata = {
-  title: 'Política de Privacidade — Santuário Nerd',
-  description: 'Como a Santuário Nerd coleta, usa e protege seus dados pessoais em conformidade com a LGPD.',
+  title: 'Política de Privacidade',
+  description: 'Como a Minha Loja coleta, usa e protege seus dados pessoais em conformidade com a LGPD.',
 }
 
 const sections = [
@@ -37,7 +37,7 @@ export default function PrivacidadePage() {
       <header className="bg-[#1a0a2e] text-white print:hidden">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-1 text-xl font-bold">
-            <span className="text-[#42B6EE]">Santuário</span><span> Nerd</span>
+            <span className="text-[#42B6EE]">Minha</span><span> Loja</span>
           </Link>
           <div className="flex items-center gap-3">
             <LegalActions />
@@ -55,14 +55,14 @@ export default function PrivacidadePage() {
           <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">Política de Privacidade</h1>
           <p className="text-gray-400 text-sm">
             Última atualização: <strong className="text-gray-300">Junho de 2026</strong> — Versão 1.2 ·{' '}
-            <span className="text-gray-500">José Bonifácio, SP</span>
+            <span className="text-gray-500">Sua Cidade — UF</span>
           </p>
         </div>
       </div>
 
       {/* ── Print header (apenas no PDF) ────────────────────────────────────── */}
       <div className="hidden print:block py-6 border-b border-gray-200 mb-6">
-        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Santuário Nerd — José Bonifácio, SP</p>
+        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Minha Loja — Sua Cidade — UF</p>
         <h1 className="text-2xl font-black text-gray-900">Política de Privacidade</h1>
         <p className="text-sm text-gray-500 mt-1">Junho de 2026 · Versão 1.2 · LGPD (Lei 13.709/2018)</p>
       </div>
@@ -100,14 +100,14 @@ export default function PrivacidadePage() {
 
             <Section id="s1" num="01" title="Quem Somos">
               <p>
-                A <strong>Santuário Nerd</strong> é uma loja de card games em <strong>José Bonifácio, SP</strong>.
+                A <strong>Minha Loja</strong> é uma loja de card games em <strong>Sua Cidade — UF</strong>.
                 Operamos um sistema digital de comandas, campeonatos, crediário e programa de pontos para nossos clientes.
               </p>
               <InfoBox>
                 <p className="font-semibold mb-0.5">Controlador dos dados</p>
-                <p>Santuário Nerd — José Bonifácio, SP</p>
-                <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE]">
-                  contato@santuarionerd.com.br
+                <p>Minha Loja — Sua Cidade — UF</p>
+                <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE]">
+                  contato@tenant-erp.local
                 </a>
               </InfoBox>
             </Section>
@@ -196,7 +196,7 @@ export default function PrivacidadePage() {
               </div>
               <InfoBox>
                 Acesse o <Link href="/lgpd" className="text-[#42B6EE] font-semibold underline">formulário LGPD</Link> para exercer seus direitos
-                ou envie e-mail para <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">contato@santuarionerd.com.br</a>.
+                ou envie e-mail para <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] underline">contato@tenant-erp.local</a>.
                 Respondemos em até <strong>15 dias corridos</strong> (Art. 18 § 5º).
               </InfoBox>
             </Section>
@@ -244,9 +244,9 @@ export default function PrivacidadePage() {
             <Section id="s10" num="10" title="Contato e Reclamações">
               <div className="text-sm space-y-1" style={{ color: 'var(--text-muted)' }}>
                 <p><strong style={{ color: 'var(--text-primary)' }}>E-mail:</strong>{' '}
-                  <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] underline">contato@santuarionerd.com.br</a>
+                  <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] underline">contato@tenant-erp.local</a>
                 </p>
-                <p><strong style={{ color: 'var(--text-primary)' }}>Local:</strong> Santuário Nerd — José Bonifácio, SP</p>
+                <p><strong style={{ color: 'var(--text-primary)' }}>Local:</strong> Minha Loja — Sua Cidade — UF</p>
               </div>
               <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>
                 Insatisfeito com nossa resposta? Registre reclamação na{' '}
@@ -268,8 +268,8 @@ export default function PrivacidadePage() {
             <div className="pt-6 mt-4 flex flex-wrap gap-4 text-sm border-t" style={{ borderColor: 'var(--border-color)' }}>
               <Link href="/termos" className="text-[#42B6EE] hover:underline">Termos de Uso</Link>
               <Link href="/lgpd" className="text-[#42B6EE] hover:underline">Exercer meus Direitos (LGPD)</Link>
-              <a href="mailto:contato@santuarionerd.com.br" className="text-[#42B6EE] hover:underline">
-                contato@santuarionerd.com.br
+              <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] hover:underline">
+                contato@tenant-erp.local
               </a>
             </div>
 

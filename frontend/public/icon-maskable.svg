@@ -1,10 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <!-- Fundo sólido (maskable: safe zone é o círculo de 80% no centro) -->
-  <rect width="100" height="100" fill="#6C3FC5"/>
-  <!-- Carta traseira (verde) -->
-  <rect x="42" y="30" width="26" height="38" rx="4" fill="#00F0A8" opacity="0.95"/>
-  <!-- Carta frente (branca) -->
-  <rect x="28" y="24" width="26" height="38" rx="4" fill="#ffffff"/>
-  <!-- S na carta -->
-  <text x="41" y="50" font-family="Arial,sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#6C3FC5">S</text>
+  <rect width="100" height="100" fill="#3EC2F2"/>
+  <path d="M35 40 L38 32 H62 L65 40 Z" fill="#0C3D5A"/>
+  <path d="M33 40 H67 V45 Q67 48 64 48 Q61 48 61 45 V44 H56 V45 Q56 48 53 48 Q50 48 50 45 V44 H44 V45 Q44 48 41 48 Q38 48 38 45 V44 H33 Z" fill="#ffffff"/>
+  <rect x="36" y="49" width="28" height="20" rx="2" fill="#ffffff"/>
+  <rect x="46" y="55" width="8" height="14" rx="1.5" fill="#3EC2F2"/>
 </svg>

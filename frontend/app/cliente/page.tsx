@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { api, comandaApi, userApi, productApi, categoryApi, waitListApi, variantApi, ComandaDto, Product, ProductCategory, UserProfile, ProductVariant, PixCobrancaDto } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import NotificationBell from '@/components/cliente/NotificationBell'
 import { startHub, stopHub, ComandaOpenedEvent } from '@/lib/signalr'
 import toast, { Toaster } from 'react-hot-toast'
@@ -227,6 +228,7 @@ function PixPagamentoCard({ pix }: { pix: PixCobrancaDto }) {
 }
 
 export default function ClientePage() {
+  const { site }       = useSiteConfig()
   const [comanda,      setComanda]      = useState<ComandaDto | null>(null)
   const [products,     setProducts]     = useState<Product[]>([])
   const [categories,   setCategories]   = useState<ProductCategory[]>([])
@@ -571,9 +573,9 @@ export default function ClientePage() {
       <header style={{ backgroundColor: C.navy }}>
         <div className="max-w-lg mx-auto px-5 pt-10 pb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo-maikon.png" alt="Santuário Nerd" className="w-10 h-10 object-contain drop-shadow-md" />
+            <img src={site.logoUrl || '/logo-placeholder.svg'} alt={site.siteName} className="w-10 h-10 object-contain drop-shadow-md" />
             <div>
-              <p className="text-white font-black text-base leading-tight">Santuário Nerd</p>
+              <p className="text-white font-black text-base leading-tight">{site.siteName}</p>
               {profile && (
                 <p className="text-xs font-bold mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>
                   Olá, {profile.name.split(' ')[0]}!

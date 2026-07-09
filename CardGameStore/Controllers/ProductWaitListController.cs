@@ -192,7 +192,7 @@ public class ProductWaitListController : ControllerBase
         var product = await _db.Products.FindAsync(productId);
         if (product == null) return NotFound(new { Message = "Produto não encontrado." });
 
-        var appUrl  = _config["EmailSettings:AppUrl"] ?? "https://santuarionerd.tech";
+        var appUrl  = _config["EmailSettings:AppUrl"] ?? "https://tenant-erp.local";
         var url     = $"{appUrl}/produtos/{productId}";
         var email   = entry.User?.Email ?? string.Empty;
         var name    = entry.Name;

@@ -15,7 +15,7 @@ const config: Config = {
           200: '#B3DEF4',
           300: '#7EC8EC',
           400: '#5BBDE8',
-          500: '#3EC2F2', // primary — azul Santuário Nerd
+          500: '#3EC2F2', // primary — azul padrão (configurável em SiteConfig.ColorPrimary)
           600: '#1AAFD9', // primary darker
           700: '#167AAB',
           800: '#186288',

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { productApi, waitListApi, authApi, userApi, Product, UserProfile } from '@/lib/api'
 import { saveAuth, isLoggedIn, getUserName } from '@/lib/auth'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import Link from 'next/link'
 import { ChevronLeft, Package, ShoppingBag, MessageCircle, Sun, Moon, Share2, Tag, CheckCircle, Clock, LogIn, X, Loader2, Mail, KeyRound, User as UserIcon } from 'lucide-react'
 
@@ -13,6 +14,7 @@ const WA_NUM = '5517997633103'
 function fmt(v: number) { return `R$ ${v.toFixed(2).replace('.', ',')}` }
 
 export default function ProductPage() {
+  const { site } = useSiteConfig()
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
   const [product,  setProduct]  = useState<Product | null>(null)
@@ -342,7 +344,7 @@ export default function ProductPage() {
             {/* Cabeçalho */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#3EC2F2' }}>Santuário Nerd</p>
+                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#3EC2F2' }}>{site.siteName}</p>
                 <h2 className="text-xl font-black mt-0.5" style={{ color: '#0C3D5A' }}>Entre na sua conta</h2>
               </div>
               <button onClick={() => setShowLogin(false)}

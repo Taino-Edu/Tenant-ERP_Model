@@ -34,9 +34,8 @@ public class LgpdController : ControllerBase
     private readonly IEmailService  _email;
     private readonly IAuditService  _audit;
     private readonly ILogger<LgpdController> _logger;
+    private readonly IConfiguration _config;
     private readonly string         _ipSalt;
-
-    private const string PrivacidadeEmail = "privacidade@softnerd.com.br";
 
     public LgpdController(
         AppDbContext          db,
@@ -49,8 +48,15 @@ public class LgpdController : ControllerBase
         _email  = email;
         _audit  = audit;
         _logger = logger;
-        _ipSalt = configuration["Security:IpHashSalt"] ?? "softnerd-ip-salt-dev";
+        _config = configuration;
+        _ipSalt = configuration["Security:IpHashSalt"] ?? "tenant-erp-ip-salt-dev";
     }
+
+    private async Task<SiteConfig> GetSiteConfigAsync() =>
+        await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
+
+    private string GetAppUrl() =>
+        (_config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://tenant-erp.local").TrimEnd('/');
 
     // =========================================================================
     // PÚBLICO — Abertura de solicitação
@@ -95,6 +101,8 @@ public class LgpdController : ControllerBase
         _db.LgpdRequests.Add(request);
         await _db.SaveChangesAsync();
 
+        var cfg = await GetSiteConfigAsync();
+
         // Registra no audit log
         await _audit.LogAsync(
             action:      "SolicitacaoLgpdAberta",
@@ -122,7 +130,7 @@ public class LgpdController : ControllerBase
 
         // Email de notificação interna
         await _email.SendAnuncioAsync(
-            destinatarios: [(PrivacidadeEmail, "softNerd — Privacidade")],
+            destinatarios: [(cfg.ContactEmail, $"{cfg.SiteName} — Privacidade")],
             titulo:        $"Nova solicitação LGPD: {request.RequestType}",
             corpo: $"""
                 <p>Uma nova solicitação LGPD foi recebida.</p>
@@ -134,7 +142,7 @@ public class LgpdController : ControllerBase
                   <li><strong>Prazo:</strong> {request.Deadline:dd/MM/yyyy}</li>
                   {(safeDesc != null ? $"<li><strong>Descrição:</strong> {safeDesc}</li>" : "")}
                 </ul>
-                <p>Acesse o painel admin para responder: <a href="https://softnerd.com.br/admin/lgpd">Admin › LGPD</a></p>
+                <p>Acesse o painel admin para responder: <a href="{GetAppUrl()}/admin/lgpd">Admin › LGPD</a></p>
                 """
         );
 

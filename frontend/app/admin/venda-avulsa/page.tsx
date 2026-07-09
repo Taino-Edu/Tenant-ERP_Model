@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import VariantPicker from '@/components/admin/VariantPicker'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 interface CartItem {
   product: Product
@@ -34,7 +35,7 @@ const PAY_COLORS: Record<string, string> = {
 
 // ── Geração de PDF via print window ──────────────────────────────────────────
 
-function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string) {
+function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string, siteName: string) {
   const w = window.open('', '_blank', 'width=420,height=640')
   if (!w) { alert('Permita pop-ups para gerar o PDF'); return }
 
@@ -56,7 +57,7 @@ function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string) {
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
-<title>Comprovante — Santuário Nerd</title>
+<title>Comprovante — ${siteName}</title>
 <style>
   @page { size: 80mm auto; margin: 6mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -72,7 +73,7 @@ function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string) {
   @media print { body { padding: 0; } }
 </style>
 </head><body>
-<h1>Santuário Nerd</h1>
+<h1>${siteName}</h1>
 <p class="sub">${date}</p>
 ${receipt.clientName ? `<p class="sub">Cliente: <strong>${receipt.clientName}</strong></p>` : ''}
 <hr>
@@ -95,7 +96,7 @@ ${receipt.clientName ? `<p class="sub">Cliente: <strong>${receipt.clientName}</s
   w.document.close()
 }
 
-function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYMENT_METHODS) {
+function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYMENT_METHODS, siteName: string) {
   const w = window.open('', '_blank', 'width=700,height=900')
   if (!w) { alert('Permita pop-ups para gerar o PDF'); return }
 
@@ -131,7 +132,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
-<title>Relatório Diário — Santuário Nerd</title>
+<title>Relatório Diário — ${siteName}</title>
 <style>
   @page { size: A4; margin: 15mm; }
   * { box-sizing: border-box; }
@@ -151,7 +152,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   @media print { body { padding: 0; } }
 </style>
 </head><body>
-<h1>Santuário Nerd — Relatório Diário</h1>
+<h1>${siteName} — Relatório Diário</h1>
 <p class="meta">Data: ${today} &nbsp;|&nbsp; Gerado em: ${new Date().toLocaleTimeString('pt-BR')}</p>
 
 <div class="cards">
@@ -192,6 +193,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
 // ── Modal de detalhes de uma venda ────────────────────────────────────────────
 
 function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto; onClose: () => void; onUpdate: (updated: VendaAvulsaDto) => void }) {
+  const { site } = useSiteConfig()
   const payLabel = PAYMENT_METHODS.find(m => m.value === venda.paymentMethod)?.label ?? venda.paymentMethod
   const [editingPay, setEditingPay] = useState(false)
   const [newPm,      setNewPm]      = useState(venda.paymentMethod)
@@ -392,7 +394,7 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
           </button>
           <div className="flex gap-2">
             <button
-              onClick={() => printReceiptPDF(venda, payLabel)}
+              onClick={() => printReceiptPDF(venda, payLabel, site.siteName)}
               className="btn-secondary flex-1 justify-center text-sm"
             >
               <FileText className="w-4 h-4" /> Imprimir / PDF
@@ -1285,6 +1287,7 @@ function VendaWizard({
 // ── Página principal ──────────────────────────────────────────────────────────
 
 export default function VendaAvulsaPage() {
+  const { site } = useSiteConfig()
   const { prefs } = usePreferences()
   const [tab, setTab]               = useState<'venda' | 'historico'>('venda')
   const [products, setProducts]     = useState<Product[]>([])
@@ -1402,7 +1405,7 @@ export default function VendaAvulsaPage() {
           <p className="text-xs text-gray-400">{new Date(receipt.soldAt).toLocaleString('pt-BR')}</p>
           <div className="flex gap-2">
             <button
-              onClick={() => printReceiptPDF(receipt, payLabel)}
+              onClick={() => printReceiptPDF(receipt, payLabel, site.siteName)}
               className="btn-secondary flex-1 justify-center"
             >
               <FileText className="w-4 h-4" /> Imprimir / PDF
@@ -1712,6 +1715,7 @@ function HistoricoTab({ history, loading, date, onDateChange, onVendaUpdate }: {
   onDateChange: (d: string) => void
   onVendaUpdate: (updated: VendaAvulsaDto) => void
 }) {
+  const { site } = useSiteConfig()
   const [selectedVenda, setSelectedVenda] = useState<VendaAvulsaDto | null>(null)
 
   const totalDia = history.reduce((s, v) => s + v.totalInReais, 0)
@@ -1773,7 +1777,7 @@ function HistoricoTab({ history, loading, date, onDateChange, onVendaUpdate }: {
         </div>
         {history.length > 0 && (
           <button
-            onClick={() => printDailyReportPDF(history, PAYMENT_METHODS)}
+            onClick={() => printDailyReportPDF(history, PAYMENT_METHODS, site.siteName)}
             className="btn-secondary text-sm flex items-center gap-2 ml-auto"
           >
             <FileText className="w-4 h-4" /> Exportar PDF

@@ -171,7 +171,7 @@ export default function PerfilPage() {
             ) : profile?.profileImageUrl ? (
               <>
                 <img
-                  src={`${process.env.NEXT_PUBLIC_API_URL || 'https://santuarionerd.tech'}${profile.profileImageUrl}`}
+                  src={`${process.env.NEXT_PUBLIC_API_URL || ''}${profile.profileImageUrl}`}
                   alt="Avatar"
                   className="w-full h-full object-cover"
                   crossOrigin="anonymous"
@@ -443,7 +443,7 @@ export default function PerfilPage() {
                     </div>
                     <div className="space-y-1">
                       <p className="font-black text-gray-900 text-lg">Tudo limpo!</p>
-                      <p className="text-gray-400 text-sm">Você não possui dívidas ativas no santuário.</p>
+                      <p className="text-gray-400 text-sm">Você não possui dívidas ativas na loja.</p>
                     </div>
                   </div>
                 ) : (
@@ -466,7 +466,7 @@ export default function PerfilPage() {
                       </div>
                     </div>
                     <p className="text-[10px] text-gray-400 italic">
-                      * Compareça ao balcão para quitar sua dívida com o Maikon.
+                      * Compareça ao balcão para quitar sua dívida.
                     </p>
                   </div>
                 )}

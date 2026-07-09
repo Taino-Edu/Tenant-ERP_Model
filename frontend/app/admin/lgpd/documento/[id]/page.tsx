@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { api } from '@/lib/api'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 interface DadosCadastrais {
   nome: string
@@ -58,6 +59,7 @@ function Row({ label, value }: { label: string; value?: string | number | null }
 }
 
 export default function DocumentoLgpdPage() {
+  const { site } = useSiteConfig()
   const params   = useParams()
   const id       = params?.id as string
   const [data,   setData]    = useState<Relatorio | null>(null)
@@ -135,7 +137,7 @@ export default function DocumentoLgpdPage() {
         {/* Cabeçalho */}
         <div style={{ borderBottom: '2px solid #111', paddingBottom: 16, marginBottom: 24 }}>
           <p style={{ margin: 0, fontSize: 11, color: '#666', letterSpacing: 1, textTransform: 'uppercase' }}>
-            Santuário Nerd — José Bonifácio, SP
+            {site.siteName} — {site.addressLine}
           </p>
           <h1 style={{ margin: '8px 0 4px', fontSize: 22, fontWeight: 700, color: '#111' }}>
             Relatório de Dados Pessoais
@@ -238,13 +240,13 @@ export default function DocumentoLgpdPage() {
         {/* Rodapé legal */}
         <div style={{ borderTop: '1px solid #ddd', paddingTop: 16, fontSize: 11, color: '#888', lineHeight: 1.6 }}>
           <p style={{ margin: 0 }}>
-            Este documento foi gerado automaticamente pelo sistema Santuário Nerd em {data.geradoEm} (UTC)
+            Este documento foi gerado automaticamente pelo sistema {site.siteName} em {data.geradoEm} (UTC)
             em atendimento ao exercício de direitos previstos no Art. 18 da Lei nº 13.709/2018 (LGPD).
             Os dados apresentados refletem o estado atual do cadastro no momento da geração.
           </p>
           <p style={{ margin: '6px 0 0' }}>
-            <strong>Controlador:</strong> Santuário Nerd — José Bonifácio, SP |{' '}
-            <strong>E-mail:</strong> privacidade@softnerd.com.br
+            <strong>Controlador:</strong> {site.siteName} — {site.addressLine} |{' '}
+            <strong>E-mail:</strong> {site.contactEmail}
           </p>
         </div>
       </div>

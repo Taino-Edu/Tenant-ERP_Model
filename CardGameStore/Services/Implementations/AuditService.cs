@@ -32,7 +32,7 @@ public class AuditService : IAuditService
         _httpContextAccessor = httpContextAccessor;
         _logger              = logger;
         // Salt impede ataque de dicionário sobre o hash de IP (espaço IPv4 é finito)
-        _ipSalt              = configuration["Security:IpHashSalt"] ?? "softnerd-ip-salt-dev";
+        _ipSalt              = configuration["Security:IpHashSalt"] ?? "tenant-erp-ip-salt-dev";
     }
 
     /// <inheritdoc/>

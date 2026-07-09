@@ -1,12 +1,12 @@
 self.addEventListener('push', event => {
   const data = event.data?.json() ?? {}
   event.waitUntil(
-    self.registration.showNotification(data.title ?? 'Santuário Nerd', {
+    self.registration.showNotification(data.title ?? 'Minha Loja', {
       body:  data.body  ?? '',
       image: data.image ?? undefined,
-      icon:  '/logo-santuario.png',
-      badge: '/logo-santuario.png',
-      tag:   'santuario-nerd-notif',
+      icon:  '/icon.svg',
+      badge: '/icon.svg',
+      tag:   'loja-notif',
       data:  { url: data.link ?? '/cliente' },
     })
   )

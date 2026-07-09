@@ -2,11 +2,13 @@
 import { useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast from 'react-hot-toast'
 import { Sword, Loader2, CheckCircle, KeyRound, Mail } from 'lucide-react'
 import Link from 'next/link'
 
 function ResetPasswordForm() {
+  const { site } = useSiteConfig()
   const params  = useSearchParams()
   const router  = useRouter()
   const token   = params.get('token') ?? ''
@@ -59,7 +61,7 @@ function ResetPasswordForm() {
           <div className="w-10 h-10 bg-brand-600/30 border border-brand-500/30 rounded-xl flex items-center justify-center">
             <Sword className="w-5 h-5 text-brand-400" />
           </div>
-          <span className="font-bold text-white text-xl">Santuário Nerd</span>
+          <span className="font-bold text-white text-xl">{site.siteName}</span>
         </div>
 
         <div className="card">

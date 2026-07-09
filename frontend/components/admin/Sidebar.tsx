@@ -14,6 +14,7 @@ import {
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
 import { SIDEBAR_SHORTCUT_KEYS } from '@/components/admin/KeyboardShortcutsOverlay'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 const sections = [
   {
@@ -125,6 +126,8 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta }: { pathname: 
 export default function Sidebar() {
   const pathname      = usePathname()
   const router        = useRouter()
+  const { site }       = useSiteConfig()
+  const logoSrc         = site.logoUrl || '/logo-placeholder.svg'
   const [loggingOut,   setLoggingOut]   = useState(false)
   const [mobileOpen,   setMobileOpen]   = useState(false)
   const [unreadCount,  setUnreadCount]  = useState(0)
@@ -214,7 +217,7 @@ export default function Sidebar() {
       {/* Mobile top bar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-30 flex items-center justify-between bg-surface-800 border-b border-surface-500 px-4 py-3">
         <div className="flex items-center gap-2">
-          <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-9" />
+          <img src={logoSrc} alt={site.siteName} className="h-9" />
           <span className="text-xs text-brand-400 font-bold">Admin</span>
         </div>
         <button onClick={() => setMobileOpen(true)} className="text-gray-400 hover:text-white p-1">
@@ -237,9 +240,9 @@ export default function Sidebar() {
       )}>
         <div className="flex items-center justify-between px-6 py-6 shrink-0">
           <div className="flex items-center gap-3">
-            <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
+            <img src={logoSrc} alt={site.siteName} className="h-10 w-10 object-contain shrink-0" />
             <div>
-              <p className="text-white text-base leading-tight">Santuário Nerd</p>
+              <p className="text-white text-base leading-tight">{site.siteName}</p>
               <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
             </div>
           </div>
@@ -254,9 +257,9 @@ export default function Sidebar() {
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-[260px] min-h-screen bg-surface-900 border-r border-surface-500 flex-col shrink-0">
         <div className="px-6 py-7 shrink-0 flex items-center gap-3">
-          <img src="/logo-maikon.png" alt="Santuário Nerd" className="h-10 w-10 object-contain shrink-0" />
+          <img src={logoSrc} alt={site.siteName} className="h-10 w-10 object-contain shrink-0" />
           <div>
-            <p className="text-white text-base leading-tight">Santuário Nerd</p>
+            <p className="text-white text-base leading-tight">{site.siteName}</p>
             <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
           </div>
         </div>

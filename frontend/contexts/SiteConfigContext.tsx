@@ -1,0 +1,67 @@
+'use client'
+
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { siteConfigApi, SiteConfigDto } from '@/lib/api'
+
+// Espelha os defaults do backend (SiteConfig.cs) — usado até a config real
+// carregar, e como base pra qualquer tenant que não tenha personalizado nada.
+export const DEFAULT_SITE_CONFIG: SiteConfigDto = {
+  siteName: 'Minha Loja',
+  heroSubtitle: 'Produtos e a melhor experiência de atendimento da região. Acumule pontos e compre direto na mesa.',
+  addressLine: 'Sua Cidade — UF',
+  contactPersonName: 'Atendimento',
+  whatsappNumber: '',
+  contactEmail: 'contato@tenant-erp.local',
+  logoUrl: null,
+  navTorneiosLabel: '',
+  navProdutosLabel: 'Produtos',
+  navMercadoLabel: '',
+  navPontosLabel: 'Pontos',
+  ctaVerEventosLabel: '',
+  ctaVerTorneiosLabel: '',
+  ctaVerProdutosLabel: 'Ver Produtos',
+  torneiosEyebrow: '',
+  torneiosTitle: '',
+  produtosEyebrow: 'Vitrine',
+  produtosTitle: 'Em Destaque',
+  pontosEyebrow: 'Programa de Fidelidade',
+  pontosTitle: 'Ganhe pontos a cada visita',
+  pontosParagraph: 'Acumule pontos nas suas compras e troque por descontos. Só com CPF e WhatsApp — nada de senha ou aplicativo.',
+  colorPrimary: '#3EC2F2',
+  colorAccent: '#FFE45E',
+  colorNavy: '#0C3D5A',
+  colorBackground: '#EBF7FD',
+  colorCard: '#FFFFFF',
+}
+
+interface SiteConfigContextValue {
+  site:    SiteConfigDto
+  loading: boolean
+}
+
+const SiteConfigContext = createContext<SiteConfigContextValue | null>(null)
+
+export function SiteConfigProvider({ children }: { children: ReactNode }) {
+  const [site,    setSite]    = useState<SiteConfigDto>(DEFAULT_SITE_CONFIG)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    siteConfigApi.get()
+      .then(({ data }: { data: SiteConfigDto }) => setSite(data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  return (
+    <SiteConfigContext.Provider value={{ site, loading }}>
+      {children}
+    </SiteConfigContext.Provider>
+  )
+}
+
+/** Nome/contato/endereço/logo da loja atual — busca única cacheada no provider raiz. */
+export function useSiteConfig() {
+  const ctx = useContext(SiteConfigContext)
+  if (!ctx) throw new Error('useSiteConfig must be used inside SiteConfigProvider')
+  return ctx
+}

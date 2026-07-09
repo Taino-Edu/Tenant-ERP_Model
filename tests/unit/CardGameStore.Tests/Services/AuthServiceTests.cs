@@ -98,7 +98,7 @@ public class AuthServiceTests
         {
             Id           = Guid.NewGuid(),
             Name         = "Admin",
-            Email        = "admin@softnerd.com",
+            Email        = "admin@tenant-erp.local",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Senha123!"),
             Role         = "Admin",
         };
@@ -106,7 +106,7 @@ public class AuthServiceTests
         await db.SaveChangesAsync();
 
         // Act
-        var encontrado = await db.Users.FirstOrDefaultAsync(u => u.Email == "admin@softnerd.com");
+        var encontrado = await db.Users.FirstOrDefaultAsync(u => u.Email == "admin@tenant-erp.local");
 
         // Assert
         encontrado.Should().NotBeNull();
@@ -318,7 +318,7 @@ public class AuthServiceTests
         {
             Id           = Guid.NewGuid(),
             Name         = "Inativo",
-            Email        = "inativo@softnerd.com",
+            Email        = "inativo@tenant-erp.local",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Senha123!"),
             Role         = UserRole.Admin,
             IsActive     = false, // conta desativada
@@ -326,7 +326,7 @@ public class AuthServiceTests
         await db.SaveChangesAsync();
         var service = CreateAuthService(db);
 
-        var act = async () => await service.LoginAsync(new LoginRequest("inativo@softnerd.com", "Senha123!"));
+        var act = async () => await service.LoginAsync(new LoginRequest("inativo@tenant-erp.local", "Senha123!"));
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>(
             "usuário inativo não pode fazer login mesmo com senha correta");
@@ -340,7 +340,7 @@ public class AuthServiceTests
         {
             Id           = Guid.NewGuid(),
             Name         = "Admin",
-            Email        = "admin2@softnerd.com",
+            Email        = "admin2@tenant-erp.local",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("SenhaCorreta!"),
             Role         = UserRole.Admin,
             IsActive     = true,
@@ -348,7 +348,7 @@ public class AuthServiceTests
         await db.SaveChangesAsync();
         var service = CreateAuthService(db);
 
-        var act = async () => await service.LoginAsync(new LoginRequest("admin2@softnerd.com", "SenhaErrada!"));
+        var act = async () => await service.LoginAsync(new LoginRequest("admin2@tenant-erp.local", "SenhaErrada!"));
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>("senha incorreta deve ser rejeitada");
     }
@@ -363,7 +363,7 @@ public class AuthServiceTests
         {
             Id                 = Guid.NewGuid(),
             Name               = "Cliente",
-            Email              = "cliente@softnerd.com",
+            Email              = "cliente@tenant-erp.local",
             PasswordHash       = BCrypt.Net.BCrypt.HashPassword("Senha123!"),
             Role               = UserRole.Customer,
             IsActive           = true,
@@ -400,7 +400,7 @@ public class AuthServiceTests
         {
             Id           = Guid.NewGuid(),
             Name         = "Cliente Reset",
-            Email        = "reset@softnerd.com",
+            Email        = "reset@tenant-erp.local",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("OldPass123!"),
             Role         = UserRole.Customer,
             IsActive     = true,
@@ -409,7 +409,7 @@ public class AuthServiceTests
         await db.SaveChangesAsync();
         var service = CreateAuthService(db);
 
-        await service.ForgotPasswordAsync(new ForgotPasswordRequest("reset@softnerd.com"));
+        await service.ForgotPasswordAsync(new ForgotPasswordRequest("reset@tenant-erp.local"));
 
         var atualizado = await db.Users.FindAsync(user.Id);
         atualizado!.PasswordResetToken.Should().NotBeNullOrWhiteSpace(
@@ -426,7 +426,7 @@ public class AuthServiceTests
 
         // Resposta silenciosa — não revelar se e-mail existe (proteção contra user enumeration)
         var act = async () => await service.ForgotPasswordAsync(
-            new ForgotPasswordRequest("nao.cadastrado@softnerd.com"));
+            new ForgotPasswordRequest("nao.cadastrado@tenant-erp.local"));
 
         await act.Should().NotThrowAsync();
     }
@@ -442,7 +442,7 @@ public class AuthServiceTests
         {
             Id                       = Guid.NewGuid(),
             Name                     = "Cliente",
-            Email                    = "troca@softnerd.com",
+            Email                    = "troca@tenant-erp.local",
             PasswordHash             = BCrypt.Net.BCrypt.HashPassword("SenhaAntiga!"),
             Role                     = UserRole.Customer,
             IsActive                 = true,
@@ -470,7 +470,7 @@ public class AuthServiceTests
         {
             Id                       = Guid.NewGuid(),
             Name                     = "Cliente",
-            Email                    = "expired@softnerd.com",
+            Email                    = "expired@tenant-erp.local",
             PasswordHash             = BCrypt.Net.BCrypt.HashPassword("Senha123!"),
             Role                     = UserRole.Customer,
             IsActive                 = true,
@@ -497,7 +497,7 @@ public class AuthServiceTests
         {
             Id                       = Guid.NewGuid(),
             Name                     = "Cliente",
-            Email                    = "session@softnerd.com",
+            Email                    = "session@tenant-erp.local",
             PasswordHash             = BCrypt.Net.BCrypt.HashPassword("OldPass!"),
             Role                     = UserRole.Customer,
             IsActive                 = true,
