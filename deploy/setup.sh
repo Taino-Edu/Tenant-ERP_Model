@@ -94,6 +94,7 @@ step 5 "Configurando .env de produção..."
 if [ ! -f "$APP_DIR/.env" ]; then
     # Gera segredos automaticamente
     POSTGRES_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    MONGO_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
     IP_SALT=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -base64 32)
@@ -113,6 +114,10 @@ COOKIE_SECURE=false
 POSTGRES_DB=cardgamestore
 POSTGRES_USER=cardgame_user
 POSTGRES_PASSWORD=${POSTGRES_PASS}
+
+# --- MongoDB (cache de vendas avulsas) ---
+MONGO_USER=mongo_admin
+MONGO_PASSWORD=${MONGO_PASS}
 
 # --- JWT (não altere após primeiro deploy) ---
 JWT_SECRET=${JWT_SECRET}
