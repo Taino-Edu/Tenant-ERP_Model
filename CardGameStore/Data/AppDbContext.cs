@@ -159,7 +159,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<NotaFiscalEmitida>(entity =>
         {
             entity.Property(n => n.Origem).HasConversion<string>();
-            entity.Property(n => n.Status).HasConversion<string>();
+            entity.Property(n => n.Status).HasConversion<string>().HasMaxLength(30);
 
             entity.HasIndex(n => n.Status)
                   .HasDatabaseName("ix_notas_fiscais_status");
@@ -381,6 +381,70 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(v => v.UserId)
                   .HasDatabaseName("ix_vendas_avulsas_user_id");
+        });
+
+        // =====================================================================
+        // Índices que só existiam no bloco de SQL bruto do Program.cs (nunca
+        // declarados no model) — trazidos pra cá na squash de migrations pra
+        // que o schema gerado pelas migrations bata com o de produção.
+        // =====================================================================
+        modelBuilder.Entity<ProductVariant>(entity =>
+        {
+            entity.HasIndex(v => v.ProductId)
+                  .HasDatabaseName("ix_product_variants_product");
+        });
+
+        modelBuilder.Entity<ProductWaitList>(entity =>
+        {
+            entity.HasIndex(w => w.ProductId)
+                  .HasDatabaseName("ix_product_waitlist_product");
+
+            entity.HasIndex(w => w.UserId)
+                  .HasFilter("user_id IS NOT NULL")
+                  .HasDatabaseName("ix_product_waitlist_user");
+        });
+
+        modelBuilder.Entity<ProductReservation>(entity =>
+        {
+            entity.HasIndex(r => r.UserId)
+                  .HasDatabaseName("ix_product_reservations_user");
+
+            entity.HasIndex(r => r.ProductId)
+                  .HasDatabaseName("ix_product_reservations_product");
+
+            entity.HasIndex(r => r.Status)
+                  .HasDatabaseName("ix_product_reservations_status");
+        });
+
+        modelBuilder.Entity<ExternalTransaction>(entity =>
+        {
+            entity.HasIndex(t => new { t.Source, t.ExternalId })
+                  .IsUnique()
+                  .HasFilter("external_id IS NOT NULL")
+                  .HasDatabaseName("ix_ext_tx_source_external_id");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.HasIndex(n => n.UserId)
+                  .HasDatabaseName("ix_notifications_user");
+        });
+
+        modelBuilder.Entity<PushSubscription>(entity =>
+        {
+            entity.HasIndex(p => p.Endpoint)
+                  .IsUnique()
+                  .HasDatabaseName("ix_push_subscriptions_endpoint");
+        });
+
+        modelBuilder.Entity<NotaDestinada>(entity =>
+        {
+            entity.HasIndex(n => n.ChaveAcesso)
+                  .IsUnique()
+                  .HasDatabaseName("ix_notas_destinadas_chave");
+
+            entity.HasIndex(n => n.Status)
+                  .HasDatabaseName("ix_notas_destinadas_status");
         });
     }
 }
