@@ -20,7 +20,7 @@ public interface INfceEmissionService
     /// Registra e tenta emitir a NFC-e referente a uma Venda Avulsa (balcão).
     /// Mesma garantia de não lançar exceção.
     /// </summary>
-    Task<NotaFiscalEmitida> EmitirParaVendaAvulsaAsync(string vendaAvulsaId);
+    Task<NotaFiscalEmitida> EmitirParaVendaAvulsaAsync(Guid vendaAvulsaId);
 
     /// <summary>
     /// Tenta emitir de novo uma nota PendenteEmissao ou Rejeitada. Nunca lança exceção.

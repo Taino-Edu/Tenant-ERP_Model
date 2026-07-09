@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using CardGameStore.Models.MongoDB;
+// Alias necessário: as classes abaixo têm uma propriedade de instância "PaymentMethod",
+// que sombreia o nome do tipo estático — sem o alias, "PaymentMethod.IsValid(...)" não compila.
+using PaymentMethods = CardGameStore.Models.PostgreSQL.PaymentMethod;
 
 namespace CardGameStore.DTOs;
 
@@ -14,7 +16,7 @@ public class VendaAvulsaRequest
     public Guid? UserId { get; set; }
 
     [Required]
-    public string PaymentMethod { get; set; } = Models.MongoDB.PaymentMethod.Pix;
+    public string PaymentMethod { get; set; } = PaymentMethods.Pix;
 
     [Range(0, 100)]
     public int DiscountPercent { get; set; } = 0;
@@ -35,8 +37,8 @@ public class VendaAvulsaRequest
     public bool EmitirNotaFiscal { get; set; } = false;
 
     public bool IsPaymentMethodValid() =>
-        Models.MongoDB.PaymentMethod.IsValid(PaymentMethod) &&
-        (SecondPaymentMethod == null || Models.MongoDB.PaymentMethod.IsValid(SecondPaymentMethod));
+        PaymentMethods.IsValid(PaymentMethod) &&
+        (SecondPaymentMethod == null || PaymentMethods.IsValid(SecondPaymentMethod));
 }
 
 public class VendaAvulsaItemRequest
@@ -53,7 +55,7 @@ public class VendaAvulsaItemRequest
 
 public class VendaAvulsaDto
 {
-    public string              Id                         { get; set; } = string.Empty;
+    public Guid                Id                         { get; set; }
     public string?             ClientName                 { get; set; }
     public string              PaymentMethod              { get; set; } = string.Empty;
     public string?             SecondPaymentMethod        { get; set; }
@@ -76,7 +78,7 @@ public class VendaAvulsaDto
 public class EditarPagamentoVendaAvulsaRequest
 {
     [Required]
-    public string PaymentMethod { get; set; } = Models.MongoDB.PaymentMethod.Pix;
+    public string PaymentMethod { get; set; } = PaymentMethods.Pix;
 
     public string? SecondPaymentMethod { get; set; }
 

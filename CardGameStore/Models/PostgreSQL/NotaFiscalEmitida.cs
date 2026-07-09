@@ -46,10 +46,9 @@ public class NotaFiscalEmitida
     [Column("comanda_id")]
     public Guid? ComandaId { get; set; }
 
-    /// <summary>ObjectId (string) da VendaAvulsa no MongoDB (quando Origem == VendaAvulsa).</summary>
-    [MaxLength(50)]
+    /// <summary>Id da VendaAvulsa (quando Origem == VendaAvulsa).</summary>
     [Column("venda_avulsa_id")]
-    public string? VendaAvulsaId { get; set; }
+    public Guid? VendaAvulsaId { get; set; }
 
     [Column("status")]
     public NotaFiscalStatus Status { get; set; } = NotaFiscalStatus.PendenteEmissao;

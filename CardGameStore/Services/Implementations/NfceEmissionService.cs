@@ -42,7 +42,6 @@ using DFe.Classes.Entidades;
 using DFe.Classes.Flags;
 using DFe.Utils;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 using NFe.Classes;
 using NFe.Classes.Informacoes;
 using NFe.Classes.Informacoes.Destinatario;
@@ -100,14 +99,12 @@ public class NfceEmissionService : INfceEmissionService
         || (ex.InnerException is not null && EhFalhaDeConectividade(ex.InnerException));
 
     private readonly AppDbContext                _db;
-    private readonly IMongoDatabase              _mongo;
-    private readonly EncryptionService           _enc;
+        private readonly EncryptionService           _enc;
     private readonly ILogger<NfceEmissionService> _logger;
 
-    public NfceEmissionService(AppDbContext db, IMongoDatabase mongo, EncryptionService enc, ILogger<NfceEmissionService> logger)
+    public NfceEmissionService(AppDbContext db, EncryptionService enc, ILogger<NfceEmissionService> logger)
     {
         _db     = db;
-        _mongo  = mongo;
         _enc    = enc;
         _logger = logger;
     }
@@ -115,7 +112,7 @@ public class NfceEmissionService : INfceEmissionService
     public async Task<NotaFiscalEmitida> EmitirParaComandaAsync(Guid comandaId) =>
         await EmitirAsync(NotaFiscalOrigem.Comanda, comandaId, null);
 
-    public async Task<NotaFiscalEmitida> EmitirParaVendaAvulsaAsync(string vendaAvulsaId) =>
+    public async Task<NotaFiscalEmitida> EmitirParaVendaAvulsaAsync(Guid vendaAvulsaId) =>
         await EmitirAsync(NotaFiscalOrigem.VendaAvulsa, null, vendaAvulsaId);
 
     public async Task<NotaFiscalEmitida> ReprocessarAsync(Guid notaId)
@@ -141,7 +138,7 @@ public class NfceEmissionService : INfceEmissionService
         {
             var dados = nota.Origem == NotaFiscalOrigem.Comanda
                 ? await CarregarDadosComandaAsync(nota.ComandaId!.Value)
-                : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!);
+                : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value);
 
             nota.ValorTotalEmCentavos = dados.Itens.Sum(i => i.SubtotalCentavos);
             await TransmitirAsync(nota, dados);
@@ -197,7 +194,7 @@ public class NfceEmissionService : INfceEmissionService
 
         var dados = nota.Origem == NotaFiscalOrigem.Comanda
             ? await CarregarDadosComandaAsync(nota.ComandaId!.Value)
-            : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!);
+            : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value);
 
         var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
         var endereco = cfg is null ? "" : $"{cfg.Logradouro}, {cfg.Numero} - {cfg.Bairro} - {cfg.Municipio}/{cfg.Uf}";
@@ -220,7 +217,7 @@ public class NfceEmissionService : INfceEmissionService
 
     // ── Orquestração ──────────────────────────────────────────────────────────
 
-    private async Task<NotaFiscalEmitida> EmitirAsync(NotaFiscalOrigem origem, Guid? comandaId, string? vendaAvulsaId)
+    private async Task<NotaFiscalEmitida> EmitirAsync(NotaFiscalOrigem origem, Guid? comandaId, Guid? vendaAvulsaId)
     {
         var nota = new NotaFiscalEmitida
         {
@@ -236,7 +233,7 @@ public class NfceEmissionService : INfceEmissionService
         {
             var dados = origem == NotaFiscalOrigem.Comanda
                 ? await CarregarDadosComandaAsync(comandaId!.Value)
-                : await CarregarDadosVendaAvulsaAsync(vendaAvulsaId!);
+                : await CarregarDadosVendaAvulsaAsync(vendaAvulsaId!.Value);
 
             nota.ValorTotalEmCentavos = dados.Itens.Sum(i => i.SubtotalCentavos);
             await TransmitirAsync(nota, dados);
@@ -337,10 +334,9 @@ public class NfceEmissionService : INfceEmissionService
             comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents);
     }
 
-    private async Task<DadosEmissao> CarregarDadosVendaAvulsaAsync(string vendaAvulsaId)
+    private async Task<DadosEmissao> CarregarDadosVendaAvulsaAsync(Guid vendaAvulsaId)
     {
-        var collection = _mongo.GetCollection<CardGameStore.Models.MongoDB.VendaAvulsa>("vendas_avulsas");
-        var venda = await collection.Find(v => v.Id == vendaAvulsaId).FirstOrDefaultAsync()
+        var venda = await _db.VendasAvulsas.AsNoTracking().FirstOrDefaultAsync(v => v.Id == vendaAvulsaId)
             ?? throw new InvalidOperationException($"Venda avulsa {vendaAvulsaId} não encontrada para emissão fiscal.");
 
         var productIds = venda.Items.Select(i => i.ProductId).Distinct().ToList();

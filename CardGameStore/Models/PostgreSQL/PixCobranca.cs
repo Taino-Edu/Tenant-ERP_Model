@@ -43,10 +43,9 @@ public class PixCobranca
     [ForeignKey(nameof(ComandaId))]
     public Comanda? Comanda { get; set; }
 
-    /// <summary>Preenchido quando Origem = VendaAvulsa (id do documento MongoDB — sem FK relacional).</summary>
-    [MaxLength(50)]
+    /// <summary>Preenchido quando Origem = VendaAvulsa (sem FK relacional).</summary>
     [Column("venda_avulsa_id")]
-    public string? VendaAvulsaId { get; set; }
+    public Guid? VendaAvulsaId { get; set; }
 
     /// <summary>Identificador único da transação Pix (gerado por nós, enviado ao Inter).</summary>
     [Required, MaxLength(35)]

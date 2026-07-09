@@ -1,11 +1,9 @@
 using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
-using CardGameStore.Models.MongoDB;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 
 namespace CardGameStore.Services.Implementations;
 
@@ -29,17 +27,13 @@ public class VendaAvulsaService : IVendaAvulsaService
     }
 
     private readonly AppDbContext                    _db;
-    private readonly IMongoCollection<VendaAvulsa>  _collection;
     private readonly ILogger<VendaAvulsaService>    _logger;
     private readonly IServiceScopeFactory           _scopeFactory;
 
-    private const string CollectionName = "vendas_avulsas";
-
     public VendaAvulsaService(
-        AppDbContext db, IMongoDatabase mongo, ILogger<VendaAvulsaService> logger, IServiceScopeFactory scopeFactory)
+        AppDbContext db, ILogger<VendaAvulsaService> logger, IServiceScopeFactory scopeFactory)
     {
         _db           = db;
-        _collection   = mongo.GetCollection<VendaAvulsa>(CollectionName);
         _logger       = logger;
         _scopeFactory = scopeFactory;
     }
@@ -156,7 +150,7 @@ public class VendaAvulsaService : IVendaAvulsaService
         // Valor cobrado pelo método principal (total menos a parcela do segundo método)
         var primaryAmt = finalTotal - secondAmt;
 
-        // ── 3. Persistir evento de caixa no MongoDB ──────────────────────────────
+        // ── 3. Persistir evento de caixa (PostgreSQL) ──────────────────────────────
         // Resolve nome do cliente: prioriza nome explícito, depois busca no banco pelo userId
         string? clientNameResolved = string.IsNullOrWhiteSpace(request.ClientName) ? null : request.ClientName.Trim();
         if (clientNameResolved == null && request.UserId.HasValue)
@@ -182,7 +176,8 @@ public class VendaAvulsaService : IVendaAvulsaService
             SoldByAdminName            = adminName,
         };
 
-        await _collection.InsertOneAsync(venda);
+        _db.VendasAvulsas.Add(venda);
+        await _db.SaveChangesAsync();
 
         // Emite a NFC-e referente a esta venda avulsa — só quando o admin escolheu
         // explicitamente emitir no fechamento (Maikon não quer nota emitida sem antes
@@ -394,14 +389,13 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     public async Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50, DateTime? desde = null)
     {
-        var filter = desde.HasValue
-            ? Builders<VendaAvulsa>.Filter.Gte(v => v.SoldAt, desde.Value)
-            : Builders<VendaAvulsa>.Filter.Empty;
+        var query = _db.VendasAvulsas.AsNoTracking().AsQueryable();
+        if (desde.HasValue)
+            query = query.Where(v => v.SoldAt >= desde.Value);
 
-        var vendas = await _collection
-            .Find(filter)
-            .SortByDescending(v => v.SoldAt)
-            .Limit(limit)
+        var vendas = await query
+            .OrderByDescending(v => v.SoldAt)
+            .Take(limit)
             .ToListAsync();
 
         return vendas.Select(MapToDto);
@@ -413,13 +407,9 @@ public class VendaAvulsaService : IVendaAvulsaService
         // uma venda às 22h BR (= 01h UTC do dia seguinte) aparecia como "hoje".
         var (inicio, fim) = DiaBrasil(date);
 
-        var filter = Builders<VendaAvulsa>.Filter.And(
-            Builders<VendaAvulsa>.Filter.Gte(v => v.SoldAt, inicio),
-            Builders<VendaAvulsa>.Filter.Lt(v => v.SoldAt, fim));
-
-        var vendas = await _collection
-            .Find(filter)
-            .SortByDescending(v => v.SoldAt)
+        var vendas = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= inicio && v.SoldAt < fim)
+            .OrderByDescending(v => v.SoldAt)
             .ToListAsync();
 
         return vendas.Select(MapToDto);
@@ -427,10 +417,9 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     public async Task<IEnumerable<VendaAvulsaDto>> GetByUserAsync(Guid userId)
     {
-        var filter = Builders<VendaAvulsa>.Filter.Eq(v => v.UserId, userId);
-        var vendas = await _collection
-            .Find(filter)
-            .SortByDescending(v => v.SoldAt)
+        var vendas = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.UserId == userId)
+            .OrderByDescending(v => v.SoldAt)
             .ToListAsync();
         return vendas.Select(MapToDto);
     }
@@ -446,14 +435,19 @@ public class VendaAvulsaService : IVendaAvulsaService
         var custoMap = produtos.ToDictionary(p => p.Id, p => p.CostPriceInCents);
 
         // Busca todas as vendas avulsas (sem limite — backfill é operação administrativa)
-        var todasVendas = await _collection.Find(Builders<VendaAvulsa>.Filter.Empty).ToListAsync();
+        var todasVendas = await _db.VendasAvulsas.ToListAsync();
 
         var totalAtualizados = 0;
 
         foreach (var venda in todasVendas)
         {
-            var modificou = false;
-            foreach (var item in venda.Items)
+            // Reatribui a lista inteira (não só os itens) para que o value comparer do
+            // conversor JSONB detecte a mudança — mutar item.UnitCostInCents in-place
+            // não seria percebido pelo change tracker.
+            var novosItens = venda.Items;
+            var modificou  = false;
+
+            foreach (var item in novosItens)
             {
                 if (custoMap.TryGetValue(item.ProductId, out var custo) && item.UnitCostInCents != custo)
                 {
@@ -464,18 +458,16 @@ public class VendaAvulsaService : IVendaAvulsaService
             }
 
             if (modificou)
-            {
-                await _collection.ReplaceOneAsync(
-                    Builders<VendaAvulsa>.Filter.Eq(v => v.Id, venda.Id),
-                    venda);
-            }
+                venda.Items = new List<VendaAvulsaItem>(novosItens);
         }
+
+        await _db.SaveChangesAsync();
 
         _logger.LogInformation("BackfillCosts: {N} item(s) de venda avulsa atualizados com custo.", totalAtualizados);
         return totalAtualizados;
     }
 
-    public async Task<VendaAvulsaDto> EditarPagamentoAsync(string id, EditarPagamentoVendaAvulsaRequest request)
+    public async Task<VendaAvulsaDto> EditarPagamentoAsync(Guid id, EditarPagamentoVendaAvulsaRequest request)
     {
         if (!PaymentMethod.IsValid(request.PaymentMethod))
             throw new ArgumentException($"Forma de pagamento inválida: {request.PaymentMethod}");
@@ -483,40 +475,34 @@ public class VendaAvulsaService : IVendaAvulsaService
         if (request.SecondPaymentMethod != null && !PaymentMethod.IsValid(request.SecondPaymentMethod))
             throw new ArgumentException($"Segundo pagamento inválido: {request.SecondPaymentMethod}");
 
-        // Busca a venda para calcular novo total se desconto mudar
-        var filter  = Builders<VendaAvulsa>.Filter.Eq(v => v.Id, id);
-        var current = await _collection.Find(filter).FirstOrDefaultAsync()
+        var venda = await _db.VendasAvulsas.FindAsync(id)
             ?? throw new KeyNotFoundException($"Venda avulsa {id} não encontrada.");
 
-        var updateDef = Builders<VendaAvulsa>.Update
-            .Set(v => v.PaymentMethod,              request.PaymentMethod)
-            .Set(v => v.SecondPaymentMethod,        request.SecondPaymentMethod)
-            .Set(v => v.SecondPaymentAmountInCents, request.SecondPaymentAmountInCents);
+        venda.PaymentMethod              = request.PaymentMethod;
+        venda.SecondPaymentMethod        = request.SecondPaymentMethod;
+        venda.SecondPaymentAmountInCents = request.SecondPaymentAmountInCents;
 
         // Nome do cliente
         if (request.ClearClientName)
-            updateDef = updateDef.Set(v => v.ClientName, (string?)null);
+            venda.ClientName = null;
         else if (!string.IsNullOrWhiteSpace(request.ClientName))
-            updateDef = updateDef.Set(v => v.ClientName, request.ClientName.Trim());
+            venda.ClientName = request.ClientName.Trim();
 
         // Desconto — recalcula TotalInCents se mudar
         if (request.DiscountInCents.HasValue)
         {
-            var originalTotal = current.TotalInCents + current.DiscountInCents;
+            var originalTotal = venda.TotalInCents + venda.DiscountInCents;
             var newDiscount   = Math.Min(request.DiscountInCents.Value, originalTotal);
-            updateDef = updateDef
-                .Set(v => v.DiscountInCents,  newDiscount)
-                .Set(v => v.DiscountPercent,  0)
-                .Set(v => v.TotalInCents,     originalTotal - newDiscount);
+            venda.DiscountInCents = newDiscount;
+            venda.DiscountPercent = 0;
+            venda.TotalInCents    = originalTotal - newDiscount;
         }
 
-        var opts   = new FindOneAndUpdateOptions<VendaAvulsa> { ReturnDocument = ReturnDocument.After };
-        var result = await _collection.FindOneAndUpdateAsync(filter, updateDef, opts)
-            ?? throw new KeyNotFoundException($"Venda avulsa {id} não encontrada.");
+        await _db.SaveChangesAsync();
 
         _logger.LogInformation("Venda avulsa {Id} atualizada: pagamento={PM}, cliente={CN}, desconto={Desc}.",
-            id, request.PaymentMethod, result.ClientName, result.DiscountInCents);
-        return MapToDto(result);
+            id, request.PaymentMethod, venda.ClientName, venda.DiscountInCents);
+        return MapToDto(venda);
     }
 
     private static VendaAvulsaDto MapToDto(VendaAvulsa v) => new()

@@ -65,7 +65,7 @@ public class AnalyticsController : ControllerBase
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ontemInicio && c.ClosedAt < hojeInicio)
             .SumAsync(c => (long)c.TotalInCents);
 
-        // ── Vendas avulsas (MongoDB) — 60 dias cobre todas as métricas do dashboard ──
+        // ── Vendas avulsas — 60 dias cobre todas as métricas do dashboard ──
         var vendas60Dias = (await _vendas.GetRecentAsync(5000, ha60Dias)).ToList();
         var vendasHoje   = vendas60Dias.Where(v => v.SoldAt >= hojeInicio).ToList();
         var vendasOntem  = vendas60Dias.Where(v => v.SoldAt >= ontemInicio && v.SoldAt < hojeInicio).ToList();
@@ -271,7 +271,7 @@ public class AnalyticsController : ControllerBase
         var receitaComandas = await comandasBaseQ
             .SumAsync(c => (decimal)c.TotalInCents) / 100m;
 
-        // ── Vendas avulsas (MongoDB) ──────────────────────────────────────────
+        // ── Vendas avulsas ──────────────────────────────────────────
         var todasVendas = (await _vendas.GetRecentAsync(2000, ini)).ToList();
         var avulsasPeriodo = todasVendas
             .Where(v => v.SoldAt >= ini && v.SoldAt < end);

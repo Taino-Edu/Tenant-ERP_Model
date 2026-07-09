@@ -1,52 +1,71 @@
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization.Attributes;
+// =============================================================================
+// VendaAvulsa.cs — Evento de caixa: venda imediata no balcão sem QR Code.
+// Antes vivia no MongoDB (documento autocontido); migrado pro PostgreSQL como
+// parte da consolidação multi-tenant (um único banco, isolado por schema).
+// Items é serializado como JSONB — mesmo espírito do Crediario.ItensJson, mas
+// mapeado direto na List<T> via conversor (ver AppDbContext.OnModelCreating).
+// =============================================================================
 
-namespace CardGameStore.Models.MongoDB;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
-/// <summary>
-/// Evento de caixa — venda imediata no balcão sem QR Code.
-/// Documento autocontido: todos os dados são snapshot no momento da venda.
-/// Nenhuma FK para PostgreSQL — propositalmente desacoplado.
-/// </summary>
-[BsonIgnoreExtraElements]
+namespace CardGameStore.Models.PostgreSQL;
+
+[Table("vendas_avulsas")]
 public class VendaAvulsa
 {
-    [BsonId]
-    [BsonRepresentation(BsonType.ObjectId)]
-    public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
+    [Key]
+    [Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
 
+    /// <summary>Snapshot dos itens vendidos. Mapeado como JSONB — ver OnModelCreating.</summary>
     public List<VendaAvulsaItem> Items { get; set; } = new();
 
+    [Column("total_in_cents")]
     public int TotalInCents { get; set; }
 
     /// <summary>Pix | Dinheiro | CartaoCredito | CartaoDebito | Crediario | Pontos | Cashback</summary>
-    public string PaymentMethod { get; set; } = CardGameStore.Models.MongoDB.PaymentMethod.Pix;
+    [Column("payment_method")]
+    public string PaymentMethod { get; set; } = CardGameStore.Models.PostgreSQL.PaymentMethod.Pix;
 
     /// <summary>Segundo método (Cashback ou Pontos) quando o pagamento é dividido. Nullable.</summary>
+    [Column("second_payment_method")]
     public string? SecondPaymentMethod { get; set; }
 
     /// <summary>Valor pago no segundo método em centavos. Zero quando não há divisão.</summary>
+    [Column("second_payment_amount_in_cents")]
     public int SecondPaymentAmountInCents { get; set; } = 0;
 
+    [Column("client_name")]
     public string? ClientName { get; set; }
 
+    [Column("sold_at")]
     public DateTime SoldAt { get; set; } = DateTime.UtcNow;
 
     // Snapshot do admin no momento da venda
-    public Guid   SoldByAdminId   { get; set; }
+    [Column("sold_by_admin_id")]
+    public Guid SoldByAdminId { get; set; }
+
+    [Column("sold_by_admin_name")]
     public string SoldByAdminName { get; set; } = string.Empty;
 
     /// <summary>Cliente identificado no momento da venda (nullable — vendas anônimas não têm UserId).</summary>
-    public Guid?   UserId   { get; set; }
+    [Column("user_id")]
+    public Guid? UserId { get; set; }
+
+    [Column("user_name")]
     public string? UserName { get; set; }
 
+    [Column("discount_percent")]
     public int DiscountPercent { get; set; } = 0;
+
+    [Column("discount_in_cents")]
     public int DiscountInCents { get; set; } = 0;
 
-    [BsonIgnore]
+    [NotMapped]
     public decimal TotalInReais => TotalInCents / 100m;
 
-    [BsonIgnore]
+    [NotMapped]
     public decimal DiscountInReais => DiscountInCents / 100m;
 }
 
@@ -65,9 +84,7 @@ public class VendaAvulsaItem
     /// <summary>Snapshot do label da variante, ex: "M / Preto".</summary>
     public string? VariantLabel { get; set; }
 
-    [BsonIgnore]
-    public decimal SubtotalInReais => SubtotalInCents / 100m;
-    [BsonIgnore]
+    public decimal SubtotalInReais  => SubtotalInCents / 100m;
     public decimal TotalCostInReais => UnitCostInCents * Quantity / 100m;
 }
 

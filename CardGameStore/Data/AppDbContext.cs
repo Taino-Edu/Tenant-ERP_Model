@@ -3,8 +3,10 @@
 // Configura mapeamentos, índices, conversões e seeds iniciais.
 // =============================================================================
 
+using System.Text.Json;
 using CardGameStore.Models.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace CardGameStore.Data;
 
@@ -31,6 +33,7 @@ public class AppDbContext : DbContext
     public DbSet<PixCobranca>             PixCobrancas             { get; set; }
     public DbSet<Perfil>                  Perfis                   { get; set; }
     public DbSet<ProductWaitList>         ProductWaitLists         { get; set; }
+    public DbSet<VendaAvulsa>             VendasAvulsas            { get; set; }
 
     // ── LGPD — Compliance e privacidade ──────────────────────────────────────
     public DbSet<LgpdRequest>   LgpdRequests   { get; set; }
@@ -354,5 +357,30 @@ public class AppDbContext : DbContext
                   .HasDatabaseName("ix_audit_logs_created_at");
         });
 
+        // =====================================================================
+        // VENDA AVULSA
+        // =====================================================================
+        modelBuilder.Entity<VendaAvulsa>(entity =>
+        {
+            // HasConversion troca a comparação padrão (por referência) por uma que serializa
+            // pra JSON — sem isso, ExecuteUpdateAsync à parte, mutações in-place na List (como
+            // em BackfillCostsAsync) não seriam detectadas pelo change tracker no SaveChangesAsync.
+            entity.Property(v => v.Items)
+                  .HasColumnName("items_json")
+                  .HasColumnType("jsonb")
+                  .HasConversion(
+                      v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                      v => JsonSerializer.Deserialize<List<VendaAvulsaItem>>(v, (JsonSerializerOptions?)null) ?? new List<VendaAvulsaItem>())
+                  .Metadata.SetValueComparer(new ValueComparer<List<VendaAvulsaItem>>(
+                      (a, b) => JsonSerializer.Serialize(a, (JsonSerializerOptions?)null) == JsonSerializer.Serialize(b, (JsonSerializerOptions?)null),
+                      v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null).GetHashCode(),
+                      v => JsonSerializer.Deserialize<List<VendaAvulsaItem>>(JsonSerializer.Serialize(v, (JsonSerializerOptions?)null), (JsonSerializerOptions?)null)!));
+
+            entity.HasIndex(v => v.SoldAt)
+                  .HasDatabaseName("ix_vendas_avulsas_sold_at");
+
+            entity.HasIndex(v => v.UserId)
+                  .HasDatabaseName("ix_vendas_avulsas_user_id");
+        });
     }
 }

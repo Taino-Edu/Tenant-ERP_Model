@@ -19,7 +19,6 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using MongoDB.Driver;
 
 // Comando utilitário: dotnet run -- gen-key  →  imprime nova chave AES-256 em Base64
 if (args.Contains("gen-key"))
@@ -45,11 +44,9 @@ var builder = WebApplication.CreateBuilder(args);
 // ---------------------------------------------------------------------------
 // 1. CONFIGURAÇÕES
 // ---------------------------------------------------------------------------
-var jwtSettings   = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
-var mongoSettings = builder.Configuration.GetSection("MongoDbSettings").Get<MongoDbSettings>()!;
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
-builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDbSettings"));
 
 // ---------------------------------------------------------------------------
 // 2. BANCO RELACIONAL — SQLite (dev local) ou PostgreSQL (produção/Docker)
@@ -71,32 +68,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5)
         );
     }
-});
-
-// ---------------------------------------------------------------------------
-// 3. BANCO DE DOCUMENTOS — MongoDB — opcional em dev
-// ---------------------------------------------------------------------------
-var mongoConStr = mongoSettings?.ConnectionString;
-if (string.IsNullOrWhiteSpace(mongoConStr))
-{
-    var startupLogger = builder.Services.BuildServiceProvider()
-        .GetRequiredService<ILogger<Program>>();
-    startupLogger.LogWarning("MongoDB: ConnectionString não configurada — TCG cache e VendaAvulsa podem não funcionar.");
-    mongoConStr = "mongodb://localhost:27017";
-}
-
-// Registro sempre ocorre — o MongoDB driver só conecta na primeira query (lazy connection).
-builder.Services.AddSingleton<IMongoClient>(_ =>
-{
-    var settings = MongoClientSettings.FromConnectionString(mongoConStr);
-    settings.ServerSelectionTimeout = TimeSpan.FromSeconds(3);
-    return new MongoClient(settings);
-});
-
-builder.Services.AddSingleton(sp =>
-{
-    var client = sp.GetRequiredService<IMongoClient>();
-    return client.GetDatabase(mongoSettings?.DatabaseName ?? "cardgamestore_cache");
 });
 
 // ---------------------------------------------------------------------------
@@ -260,11 +231,10 @@ builder.Services.AddHttpClient("gemini", client =>
 });
 
 // ---------------------------------------------------------------------------
-// 10. HEALTH CHECKS — Postgres + MongoDB via IHealthCheck com injeção correta
+// 10. HEALTH CHECKS — Postgres via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
 builder.Services.AddHealthChecks()
-    .AddCheck<DbHealthCheck>   ("postgres", tags: ["db", "postgres"])
-    .AddCheck<MongoHealthCheck>("mongodb",  tags: ["db", "mongo"]);
+    .AddCheck<DbHealthCheck>("postgres", tags: ["db", "postgres"]);
 
 // ---------------------------------------------------------------------------
 // 11. SERVIÇOS DE APLICAÇÃO
