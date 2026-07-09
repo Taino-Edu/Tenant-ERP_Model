@@ -1,6 +1,5 @@
 // =============================================================================
 // ComandaItem.cs — Linha de item dentro de uma Comanda (PostgreSQL)
-// Suporta dois tipos: produto físico (FK para Product) ou carta TCG (referência MongoDB)
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
@@ -9,8 +8,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace CardGameStore.Models.PostgreSQL;
 
 /// <summary>
-/// Representa um item dentro de uma comanda.
-/// Pode ser um produto físico do estoque OU uma carta TCG (via cache MongoDB).
+/// Representa um item dentro de uma comanda: um produto físico do estoque.
 /// </summary>
 [Table("comanda_items")]
 public class ComandaItem
@@ -31,7 +29,7 @@ public class ComandaItem
     public Comanda Comanda { get; set; } = null!;
 
     // -------------------------------------------------------------------------
-    // Tipo de item: Produto físico OU Carta TCG
+    // Produto físico
     // -------------------------------------------------------------------------
 
     /// <summary>
@@ -43,15 +41,6 @@ public class ComandaItem
 
     [ForeignKey(nameof(ProductId))]
     public Product? Product { get; set; }
-
-    /// <summary>
-    /// ID da carta no MongoDB (nullable).
-    /// Preenchido apenas quando o item é uma carta TCG.
-    /// Ex: "tcg_pokemon_pikachu_xy1_001"
-    /// </summary>
-    [MaxLength(100)]
-    [Column("card_cache_id")]
-    public string? CardCacheId { get; set; }
 
     /// <summary>Variante escolhida (tamanho/cor) quando produto tem grade. Null para produtos simples.</summary>
     [Column("variant_id")]

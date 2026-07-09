@@ -41,7 +41,7 @@ public sealed class ValidCpfAttribute : ValidationAttribute
 // Requests (entrada)
 // -------------------------------------------------------------------------
 
-/// <summary>Login completo: Admin e clientes de Campeonatos.</summary>
+/// <summary>Login completo: Admin e clientes.</summary>
 public record LoginRequest(
     [Required, EmailAddress] string Email,
     [Required, MinLength(8)] string Password

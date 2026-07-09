@@ -1,9 +1,10 @@
 // =============================================================================
-// KycController.cs — Verificação de maioridade (KYC)
+// KycController.cs — Verificação de idade (KYC)
 //
 // STATUS: INATIVO — não gera rotas, não está ligado em nada.
-// Existe só como documentação da estrutura futura.
-// Ver KYC_PLANNING.md para decisão com Maikon.
+// Existe só como documentação da estrutura futura. Útil para qualquer tenant
+// que venda produto com restrição etária (bebida alcoólica, etc).
+// Ver KYC_PLANNING.md para decisão de implementação.
 // =============================================================================
 
 namespace CardGameStore.Controllers;

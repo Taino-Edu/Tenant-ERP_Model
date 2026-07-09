@@ -26,9 +26,6 @@
 //
 // Simplificações conhecidas ainda pendentes (documentadas para revisão futura
 // com o contador):
-//  - Itens sem Product vinculado (cartas TCG avulsas) usam NCM/CFOP/CSOSN de
-//    fallback (NCM 9504.40.00 "cartas para jogar" + a Natureza de Operação
-//    marcada como padrão).
 //  - Não há modo de contingência formal da SEFAZ (offline/EPEC/SVC) — se a
 //    SEFAZ estiver fora do ar, a nota só fica PendenteEmissao aguardando o
 //    retry automático. Pra um volume pequeno de vendas isso tende a resolver

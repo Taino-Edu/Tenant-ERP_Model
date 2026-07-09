@@ -16,7 +16,6 @@ public enum PixCobrancaOrigem
     Crediario,
     Comanda,
     VendaAvulsa,
-    Campeonato,
 }
 
 [Table("pix_cobrancas")]
@@ -48,13 +47,6 @@ public class PixCobranca
     [MaxLength(50)]
     [Column("venda_avulsa_id")]
     public string? VendaAvulsaId { get; set; }
-
-    /// <summary>Preenchido quando Origem = Campeonato (taxa de inscrição do participante).</summary>
-    [Column("championship_participant_id")]
-    public Guid? ChampionshipParticipantId { get; set; }
-
-    [ForeignKey(nameof(ChampionshipParticipantId))]
-    public ChampionshipParticipant? ChampionshipParticipant { get; set; }
 
     /// <summary>Identificador único da transação Pix (gerado por nós, enviado ao Inter).</summary>
     [Required, MaxLength(35)]

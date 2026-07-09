@@ -99,9 +99,7 @@ public class RelatoriosController : ControllerBase
         // Comandas
         foreach (var item in comandaItems)
         {
-            var cat = item.ProductId.HasValue
-                ? (item.Product?.Category ?? "Outros")
-                : (item.CardCacheId != null ? "Cartas TCG" : "Outros");
+            var cat = item.Product?.Category ?? "Outros";
 
             Acumular(cat, item.ItemNameSnapshot, item.Quantity, item.UnitPriceInCents);
         }

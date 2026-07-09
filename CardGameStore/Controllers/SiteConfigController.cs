@@ -42,15 +42,9 @@ public class SiteConfigController : ControllerBase
         if (req.ContactPersonName    is not null) cfg.ContactPersonName    = req.ContactPersonName;
         if (req.WhatsappNumber       is not null) cfg.WhatsappNumber       = req.WhatsappNumber;
         if (req.ContactEmail         is not null) cfg.ContactEmail         = req.ContactEmail;
-        if (req.NavTorneiosLabel     is not null) cfg.NavTorneiosLabel     = req.NavTorneiosLabel;
         if (req.NavProdutosLabel     is not null) cfg.NavProdutosLabel     = req.NavProdutosLabel;
-        if (req.NavMercadoLabel      is not null) cfg.NavMercadoLabel      = req.NavMercadoLabel;
         if (req.NavPontosLabel       is not null) cfg.NavPontosLabel       = req.NavPontosLabel;
-        if (req.CtaVerEventosLabel   is not null) cfg.CtaVerEventosLabel   = req.CtaVerEventosLabel;
-        if (req.CtaVerTorneiosLabel  is not null) cfg.CtaVerTorneiosLabel  = req.CtaVerTorneiosLabel;
         if (req.CtaVerProdutosLabel  is not null) cfg.CtaVerProdutosLabel  = req.CtaVerProdutosLabel;
-        if (req.TorneiosEyebrow      is not null) cfg.TorneiosEyebrow      = req.TorneiosEyebrow;
-        if (req.TorneiosTitle        is not null) cfg.TorneiosTitle        = req.TorneiosTitle;
         if (req.ProdutosEyebrow      is not null) cfg.ProdutosEyebrow      = req.ProdutosEyebrow;
         if (req.ProdutosTitle        is not null) cfg.ProdutosTitle        = req.ProdutosTitle;
         if (req.PontosEyebrow        is not null) cfg.PontosEyebrow        = req.PontosEyebrow;
@@ -103,15 +97,9 @@ public class SaveSiteConfigRequest
     public string? ContactPersonName   { get; init; }
     public string? WhatsappNumber      { get; init; }
     public string? ContactEmail        { get; init; }
-    public string? NavTorneiosLabel    { get; init; }
     public string? NavProdutosLabel    { get; init; }
-    public string? NavMercadoLabel     { get; init; }
     public string? NavPontosLabel      { get; init; }
-    public string? CtaVerEventosLabel  { get; init; }
-    public string? CtaVerTorneiosLabel { get; init; }
     public string? CtaVerProdutosLabel { get; init; }
-    public string? TorneiosEyebrow     { get; init; }
-    public string? TorneiosTitle       { get; init; }
     public string? ProdutosEyebrow     { get; init; }
     public string? ProdutosTitle       { get; init; }
     public string? PontosEyebrow       { get; init; }

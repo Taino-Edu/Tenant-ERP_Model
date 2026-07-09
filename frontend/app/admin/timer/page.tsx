@@ -328,7 +328,7 @@ export default function TimerPage() {
     <div className="space-y-6 p-4 sm:p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">⏱ Timers de Torneio</h1>
+          <h1 className="text-2xl font-bold text-white">⏱ Timers</h1>
           <p className="text-gray-400 text-sm mt-1">
             Crie e gerencie múltiplos timers simultâneos. O estado é persistente — sobrevive a refresh.
           </p>

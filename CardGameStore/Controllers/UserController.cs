@@ -277,13 +277,6 @@ public class UserController : ControllerBase
             .OrderByDescending(c => c.DataAbertura)
             .ToListAsync();
 
-        // Campeonatos
-        var campeonatos = await _db.ChampionshipParticipants
-            .Include(p => p.Championship)
-            .Where(p => p.UserId == id)
-            .OrderByDescending(p => p.Championship.StartDate)
-            .ToListAsync();
-
         // Vendas avulsas (apenas as que têm UserId — vendas com cliente identificado a partir de agora)
         var vendasAvulsas = await _vendaService.GetByUserAsync(id);
 
@@ -346,19 +339,6 @@ public class UserController : ControllerBase
                 DataVencimento = c.DataVencimento,
                 DataPagamento  = c.DataPagamento,
                 Observacao     = c.Observacao,
-            }).ToList(),
-
-            Campeonatos = campeonatos.Select(p => new CampeonatoHistoricoDto
-            {
-                ChampionshipId   = p.ChampionshipId,
-                ChampionshipName = p.Championship.Name,
-                Game             = p.Championship.Game,
-                Status           = p.Championship.Status.ToString(),
-                StartDate        = p.Championship.StartDate,
-                PlayerNumber     = p.PlayerNumber,
-                DeckName         = p.DeckName,
-                Placement        = p.Placement,
-                RegisteredAt     = p.RegisteredAt,
             }).ToList(),
         };
 

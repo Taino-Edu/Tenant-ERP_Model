@@ -1,7 +1,6 @@
 // =============================================================================
 // Product.cs — Estoque fixo da loja (PostgreSQL)
-// Representa itens físicos: refrigerantes, salgadinhos, acessórios, etc.
-// Cartas de TCG NÃO entram aqui — elas usam o CardCache (MongoDB) + serviço TCG.
+// Representa itens físicos do catálogo da loja.
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;

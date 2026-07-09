@@ -74,16 +74,6 @@ public class Comanda
     public int SecondPaymentAmountInCents { get; set; }
 
     // -------------------------------------------------------------------------
-    // Campeonato (opcional) — comanda pode estar vinculada a um torneio
-    // -------------------------------------------------------------------------
-
-    [Column("championship_id")]
-    public Guid? ChampionshipId { get; set; }
-
-    [ForeignKey(nameof(ChampionshipId))]
-    public Championship? Championship { get; set; }
-
-    // -------------------------------------------------------------------------
     // Totalizadores (calculados e sincronizados a cada item adicionado)
     // -------------------------------------------------------------------------
 

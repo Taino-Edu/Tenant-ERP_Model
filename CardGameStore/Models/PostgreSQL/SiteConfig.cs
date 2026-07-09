@@ -22,71 +22,47 @@ public class SiteConfig
     // ── Identidade ───────────────────────────────────────────────────────────
     [Required, MaxLength(100)]
     [Column("site_name")]
-    public string SiteName { get; set; } = "Santuário Nerd";
+    public string SiteName { get; set; } = "Minha Loja";
 
     [MaxLength(400)]
     [Column("hero_subtitle")]
     public string HeroSubtitle { get; set; } =
-        "Produtos, torneios e a melhor experiência TCG da região. Acumule pontos, compre na mesa e participe de campeonatos.";
+        "Produtos e a melhor experiência de atendimento da região. Acumule pontos e compre direto na mesa.";
 
     [MaxLength(150)]
     [Column("address_line")]
-    public string AddressLine { get; set; } = "José Bonifácio — SP";
+    public string AddressLine { get; set; } = "Sua Cidade — UF";
 
     /// <summary>Nome da pessoa de contato (ex: dono da loja) — usado em textos tipo "Falar com o
     /// {nome}" ou "{nome} vai confirmar...". Separado do nome do site de propósito: um é a marca,
     /// o outro é quem atende no WhatsApp/balcão.</summary>
     [MaxLength(60)]
     [Column("contact_person_name")]
-    public string ContactPersonName { get; set; } = "Maikon";
+    public string ContactPersonName { get; set; } = "Atendimento";
 
     // ── Contato ──────────────────────────────────────────────────────────────
     [MaxLength(20)]
     [Column("whatsapp_number")]
-    public string WhatsappNumber { get; set; } = "5517997633103";
+    public string WhatsappNumber { get; set; } = "";
 
     [MaxLength(150)]
     [Column("contact_email")]
-    public string ContactEmail { get; set; } = "santuarionerd@gmail.com";
+    public string ContactEmail { get; set; } = "contato@tenant-erp.local";
 
     // ── Textos da navbar ─────────────────────────────────────────────────────
     [MaxLength(40)]
-    [Column("nav_torneios_label")]
-    public string NavTorneiosLabel { get; set; } = "Torneios";
-
-    [MaxLength(40)]
     [Column("nav_produtos_label")]
     public string NavProdutosLabel { get; set; } = "Produtos";
-
-    [MaxLength(40)]
-    [Column("nav_mercado_label")]
-    public string NavMercadoLabel { get; set; } = "Mercado de Cartas";
 
     [MaxLength(40)]
     [Column("nav_pontos_label")]
     public string NavPontosLabel { get; set; } = "Pontos";
 
     [MaxLength(40)]
-    [Column("cta_ver_eventos_label")]
-    public string CtaVerEventosLabel { get; set; } = "Ver Eventos";
-
-    [MaxLength(40)]
-    [Column("cta_ver_torneios_label")]
-    public string CtaVerTorneiosLabel { get; set; } = "Ver Torneios";
-
-    [MaxLength(40)]
     [Column("cta_ver_produtos_label")]
     public string CtaVerProdutosLabel { get; set; } = "Ver Produtos";
 
     // ── Textos das seções ────────────────────────────────────────────────────
-    [MaxLength(60)]
-    [Column("torneios_eyebrow")]
-    public string TorneiosEyebrow { get; set; } = "Agenda";
-
-    [MaxLength(80)]
-    [Column("torneios_title")]
-    public string TorneiosTitle { get; set; } = "Próximos Torneios";
-
     [MaxLength(60)]
     [Column("produtos_eyebrow")]
     public string ProdutosEyebrow { get; set; } = "Vitrine";
@@ -127,7 +103,7 @@ public class SiteConfig
     [Column("color_background")]
     public string ColorBackground { get; set; } = "#EBF7FD";
 
-    /// <summary>Fundo dos cards/caixas (produto, torneio, etc.) na landing page — só tema claro.</summary>
+    /// <summary>Fundo dos cards/caixas (produto, etc.) na landing page — só tema claro.</summary>
     [MaxLength(9)]
     [Column("color_card")]
     public string ColorCard { get; set; } = "#FFFFFF";

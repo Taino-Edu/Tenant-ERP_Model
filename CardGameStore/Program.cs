@@ -244,70 +244,12 @@ builder.Services.AddSignalR(options =>
 // ---------------------------------------------------------------------------
 // 9. HTTP CLIENTS — APIs externas
 // ---------------------------------------------------------------------------
-builder.Services.AddHttpClient("PokemonTcgApi", client =>
-{
-    client.BaseAddress = new Uri("https://api.pokemontcg.io/");
-    client.Timeout     = TimeSpan.FromSeconds(10);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
-
-builder.Services.AddHttpClient("ScryfallApi", client =>
-{
-    client.BaseAddress = new Uri("https://api.scryfall.com/");
-    client.Timeout     = TimeSpan.FromSeconds(10);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
-});
-
-builder.Services.AddHttpClient("YugiohApi", client =>
-{
-    client.BaseAddress = new Uri("https://db.ygoprodeck.com/");
-    client.Timeout     = TimeSpan.FromSeconds(10);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
-
 // AwesomeAPI — Cotação USD/BRL em tempo real (gratuita, sem autenticação)
 builder.Services.AddHttpClient("AwesomeApi", client =>
 {
     client.BaseAddress = new Uri("https://economia.awesomeapi.com.br/");
     client.Timeout     = TimeSpan.FromSeconds(5);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
-
-// LoL Riftbound — Riftcodex API (gratuita, sem auth) https://api.riftcodex.com
-builder.Services.AddHttpClient("RiftboundApi", client =>
-{
-    client.BaseAddress = new Uri("https://api.riftcodex.com/");
-    client.Timeout     = TimeSpan.FromSeconds(15);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
-});
-
-// Scrydex API — fonte paralela com preços de mercado (requer TcgSettings:ScrydexApiKey e ScrydexTeamId)
-builder.Services.AddHttpClient("ScrydexApi", client =>
-{
-    client.BaseAddress = new Uri("https://api.scrydex.com/");
-    client.Timeout     = TimeSpan.FromSeconds(15);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
-});
-
-// OPTCG API — One Piece TCG (gratuita, sem auth, cobre OP-01..OP-15 + starter decks)
-builder.Services.AddHttpClient("OptcgApi", client =>
-{
-    client.BaseAddress = new Uri("https://optcgapi.com/");
-    client.Timeout     = TimeSpan.FromSeconds(30);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
-});
-
-// TCGdex — fonte multilíngue de cartas Pokémon (suporte a português nativo, gratuita, sem auth)
-builder.Services.AddHttpClient("TcgDexApi", client =>
-{
-    client.BaseAddress = new Uri("https://api.tcgdex.net/");
-    client.Timeout     = TimeSpan.FromSeconds(10);
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-    client.DefaultRequestHeaders.Add("User-Agent", "CardGameStore/1.0 (softnerd.com.br)");
 });
 
 // Gemini 2.0 Flash — assistente IA conversacional
@@ -331,15 +273,12 @@ builder.Services.AddScoped<IAuthService,         AuthService>();
 builder.Services.AddScoped<IComandaService,      ComandaService>();
 builder.Services.AddScoped<IProductService,      ProductService>();
 builder.Services.AddScoped<ICategoryService,     CategoryService>();
-builder.Services.AddScoped<IChampionshipService, ChampionshipService>();
 builder.Services.AddScoped<IUserService,         UserService>();
 builder.Services.AddScoped<IVendaAvulsaService,  VendaAvulsaService>();
 builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
-builder.Services.AddSingleton<ITcgApiClient,     TcgApiClient>();
-builder.Services.AddSingleton<ITcgService,       TcgService>();
 builder.Services.AddSingleton<CurrencyService>();
 builder.Services.AddMemoryCache();
 
@@ -476,21 +415,6 @@ using (var scope = app.Services.CreateScope())
                 ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_nome VARCHAR(255) NULL;
                 ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_dados BYTEA NULL;
 
-                CREATE TABLE IF NOT EXISTS decks (
-                    id          UUID         NOT NULL DEFAULT gen_random_uuid(),
-                    user_id     UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    name        VARCHAR(100) NOT NULL,
-                    game        VARCHAR(50)  NOT NULL DEFAULT 'Pokemon',
-                    format      VARCHAR(20)  NOT NULL DEFAULT 'Standard',
-                    cards_json  TEXT         NOT NULL DEFAULT '[]',
-                    is_public   BOOLEAN      NOT NULL DEFAULT FALSE,
-                    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    CONSTRAINT pk_decks PRIMARY KEY (id)
-                );
-                CREATE INDEX IF NOT EXISTS ix_decks_user        ON decks (user_id);
-                CREATE INDEX IF NOT EXISTS ix_decks_user_public ON decks (user_id, is_public);
-
                 CREATE TABLE IF NOT EXISTS product_waitlist (
                     id          UUID        NOT NULL DEFAULT gen_random_uuid(),
                     product_id  UUID        NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -505,12 +429,7 @@ using (var scope = app.Services.CreateScope())
                 CREATE INDEX IF NOT EXISTS ix_product_waitlist_product ON product_waitlist (product_id);
                 CREATE INDEX IF NOT EXISTS ix_product_waitlist_user    ON product_waitlist (user_id) WHERE user_id IS NOT NULL;
 
-                -- Deck em pré-inscrição e participante de campeonato
-                ALTER TABLE championship_preinscricoes ADD COLUMN IF NOT EXISTS deck_id   UUID         NULL;
-                ALTER TABLE championship_preinscricoes ADD COLUMN IF NOT EXISTS deck_name VARCHAR(200) NULL;
-                ALTER TABLE championship_participants   ADD COLUMN IF NOT EXISTS deck_id   UUID         NULL;
-
-                -- Timers de torneio
+                -- Timers
                 CREATE TABLE IF NOT EXISTS timers (
                     id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
                     name             VARCHAR(100) NOT NULL DEFAULT 'Timer',
@@ -523,37 +442,6 @@ using (var scope = app.Services.CreateScope())
                     created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
                     updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
                 );
-
-                -- Marketplace de cartas entre usuários
-                CREATE TABLE IF NOT EXISTS card_listings (
-                    id             UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-                    user_id        UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    card_name      VARCHAR(200)  NOT NULL,
-                    card_game      VARCHAR(100)  NULL,
-                    card_image_url VARCHAR(500)  NULL,
-                    price_in_cents INTEGER       NOT NULL DEFAULT 0,
-                    condition      VARCHAR(50)   NOT NULL DEFAULT 'NM',
-                    description    VARCHAR(1000) NULL,
-                    status         VARCHAR(20)   NOT NULL DEFAULT 'Available',
-                    created_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-                    updated_at     TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-                );
-                CREATE INDEX IF NOT EXISTS ix_card_listings_user   ON card_listings (user_id);
-                CREATE INDEX IF NOT EXISTS ix_card_listings_status ON card_listings (status);
-
-                CREATE TABLE IF NOT EXISTS listing_interests (
-                    id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                    listing_id UUID         NOT NULL REFERENCES card_listings(id) ON DELETE CASCADE,
-                    user_id    UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    message    VARCHAR(500) NULL,
-                    created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    UNIQUE (listing_id, user_id)
-                );
-                CREATE INDEX IF NOT EXISTS ix_listing_interests_listing ON listing_interests (listing_id);
-                CREATE INDEX IF NOT EXISTS ix_listing_interests_user    ON listing_interests (user_id);
-
-                -- Consentimento LGPD: comprador autoriza expor WhatsApp ao vendedor
-                ALTER TABLE listing_interests ADD COLUMN IF NOT EXISTS share_contact BOOLEAN NOT NULL DEFAULT FALSE;
 
                 -- Variantes de produto (grade tamanho/cor para roupas e similares)
                 ALTER TABLE products ADD COLUMN IF NOT EXISTS has_variants BOOLEAN NOT NULL DEFAULT FALSE;
@@ -800,12 +688,6 @@ using (var scope = app.Services.CreateScope())
                 -- Fila de espera: controle de quem já foi avisado do reestoque
                 ALTER TABLE product_waitlist ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ NULL;
 
-                -- Campeonatos: pagamento opcional da taxa de inscrição (Pix ou balcão)
-                ALTER TABLE championship_participants ADD COLUMN IF NOT EXISTS entry_fee_paid_at        TIMESTAMPTZ NULL;
-                ALTER TABLE championship_participants ADD COLUMN IF NOT EXISTS entry_fee_payment_method VARCHAR(20) NULL;
-                ALTER TABLE pix_cobrancas ADD COLUMN IF NOT EXISTS championship_participant_id UUID NULL
-                    REFERENCES championship_participants(id) ON DELETE CASCADE;
-
                 -- Fiscal: emissão de NFC-e deixa de ser automática por padrão — só as formas de
                 -- pagamento explicitamente listadas aqui emitem nota sozinhas ao fechar a venda.
                 ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS formas_pagamento_auto_emissao TEXT NOT NULL DEFAULT '';
@@ -814,21 +696,15 @@ using (var scope = app.Services.CreateScope())
                 -- iguais aos valores hardcoded originais pra não mudar nada até o admin editar.
                 CREATE TABLE IF NOT EXISTS site_config (
                     id                      UUID PRIMARY KEY,
-                    site_name               VARCHAR(100) NOT NULL DEFAULT 'Santuário Nerd',
-                    hero_subtitle           VARCHAR(400) NOT NULL DEFAULT 'Produtos, torneios e a melhor experiência TCG da região. Acumule pontos, compre na mesa e participe de campeonatos.',
-                    address_line            VARCHAR(150) NOT NULL DEFAULT 'José Bonifácio — SP',
-                    contact_person_name     VARCHAR(60)  NOT NULL DEFAULT 'Maikon',
-                    whatsapp_number         VARCHAR(20)  NOT NULL DEFAULT '5517997633103',
-                    contact_email           VARCHAR(150) NOT NULL DEFAULT 'santuarionerd@gmail.com',
-                    nav_torneios_label      VARCHAR(40)  NOT NULL DEFAULT 'Torneios',
+                    site_name               VARCHAR(100) NOT NULL DEFAULT 'Minha Loja',
+                    hero_subtitle           VARCHAR(400) NOT NULL DEFAULT 'Produtos e a melhor experiência de atendimento da região. Acumule pontos e compre direto na mesa.',
+                    address_line            VARCHAR(150) NOT NULL DEFAULT 'Sua Cidade — UF',
+                    contact_person_name     VARCHAR(60)  NOT NULL DEFAULT 'Atendimento',
+                    whatsapp_number         VARCHAR(20)  NOT NULL DEFAULT '',
+                    contact_email           VARCHAR(150) NOT NULL DEFAULT 'contato@tenant-erp.local',
                     nav_produtos_label      VARCHAR(40)  NOT NULL DEFAULT 'Produtos',
-                    nav_mercado_label       VARCHAR(40)  NOT NULL DEFAULT 'Mercado de Cartas',
                     nav_pontos_label        VARCHAR(40)  NOT NULL DEFAULT 'Pontos',
-                    cta_ver_eventos_label   VARCHAR(40)  NOT NULL DEFAULT 'Ver Eventos',
-                    cta_ver_torneios_label  VARCHAR(40)  NOT NULL DEFAULT 'Ver Torneios',
                     cta_ver_produtos_label  VARCHAR(40)  NOT NULL DEFAULT 'Ver Produtos',
-                    torneios_eyebrow        VARCHAR(60)  NOT NULL DEFAULT 'Agenda',
-                    torneios_title          VARCHAR(80)  NOT NULL DEFAULT 'Próximos Torneios',
                     produtos_eyebrow        VARCHAR(60)  NOT NULL DEFAULT 'Vitrine',
                     produtos_title          VARCHAR(80)  NOT NULL DEFAULT 'Em Destaque',
                     pontos_eyebrow          VARCHAR(60)  NOT NULL DEFAULT 'Programa de Fidelidade',
@@ -841,14 +717,14 @@ using (var scope = app.Services.CreateScope())
                     color_card              VARCHAR(9)   NOT NULL DEFAULT '#FFFFFF',
                     updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
                 );
-                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS contact_person_name VARCHAR(60) NOT NULL DEFAULT 'Maikon';
+                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS contact_person_name VARCHAR(60) NOT NULL DEFAULT 'Atendimento';
                 ALTER TABLE site_config ADD COLUMN IF NOT EXISTS color_background VARCHAR(9) NOT NULL DEFAULT '#EBF7FD';
                 ALTER TABLE site_config ADD COLUMN IF NOT EXISTS color_card VARCHAR(9) NOT NULL DEFAULT '#FFFFFF';
             ");
         }
 
         // Seed: cria o admin se não existir
-        if (!db.Users.Any(u => u.Email == "admin@cardgamestore.com.br"))
+        if (!db.Users.Any(u => u.Email == "admin@tenant-erp.local"))
         {
             var adminPassword = Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD") ?? "SenhaForte@123";
             if (adminPassword == "SenhaForte@123")
@@ -857,8 +733,8 @@ using (var scope = app.Services.CreateScope())
             db.Users.Add(new CardGameStore.Models.PostgreSQL.User
             {
                 Id           = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                Name         = "Maikon",
-                Email        = "admin@cardgamestore.com.br",
+                Name         = "Admin",
+                Email        = "admin@tenant-erp.local",
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
                 Role         = CardGameStore.Models.PostgreSQL.UserRole.Admin,
                 IsActive     = true,

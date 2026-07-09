@@ -46,18 +46,16 @@ public static class Permissao
     public const string Categorias  = "categorias";
     public const string Usuarios    = "usuarios";
     public const string Crediario   = "crediario";
-    public const string Campeonatos = "campeonatos";
     public const string Financeiro  = "financeiro";
     public const string Relatorios  = "relatorios";
     public const string Anuncios    = "anuncios";
-    public const string Cartas      = "cartas";
     public const string QrCodes     = "qrcodes";
     public const string Lgpd        = "lgpd";
 
     public static readonly string[] Todos = [
         Dashboard, Pdv, Comandas, Estoque, Categorias,
-        Usuarios, Crediario, Campeonatos, Financeiro,
-        Relatorios, Anuncios, Cartas, QrCodes, Lgpd,
+        Usuarios, Crediario, Financeiro,
+        Relatorios, Anuncios, QrCodes, Lgpd,
     ];
 
     /// <summary>Mapeamento de permissão → prefixos de rota da API que ela protege.</summary>
@@ -70,11 +68,9 @@ public static class Permissao
         [Categorias]  = ["/api/category"],
         [Usuarios]    = ["/api/user"],
         [Crediario]   = ["/api/crediarios"],
-        [Campeonatos] = ["/api/championship"],
         [Financeiro]  = ["/api/analytics/financeiro", "/api/relatorios/financeiro", "/api/relatorios/pdv"],
         [Relatorios]  = ["/api/relatorios"],
         [Anuncios]    = ["/api/announcements"],
-        [Cartas]      = ["/api/tcg"],
         [QrCodes]     = ["/api/qrcode"],
         [Lgpd]        = ["/api/lgpd", "/api/audit"],
     };

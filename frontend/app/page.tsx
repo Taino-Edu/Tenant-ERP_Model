@@ -2,10 +2,10 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getRole } from '@/lib/auth'
-import { championshipApi, productApi, announcementApi, deckApi, siteConfigApi, Championship, Product, AnnouncementDto, DeckListDto, SiteConfigDto } from '@/lib/api'
+import { productApi, announcementApi, siteConfigApi, Product, AnnouncementDto, SiteConfigDto } from '@/lib/api'
 import Link from 'next/link'
 import {
-  Trophy, ShoppingBag, Star, Calendar, Users,
+  ShoppingBag, Star,
   X, MessageCircle, CheckCircle, Package,
   CreditCard, Award, QrCode, Shield, ChevronRight, ChevronLeft,
   Sun, Moon, Mail,
@@ -72,11 +72,9 @@ type Theme = { bg: string; card: string; cardAlt: string; border: string; blue: 
 
 export default function LandingPage() {
   const router = useRouter()
-  const [championships, setChampionships] = useState<Championship[]>([])
   const [products,      setProducts]      = useState<Product[]>([])
   const [announcements, setAnnouncements] = useState<AnnouncementDto[]>([])
   const [loading,       setLoading]       = useState(true)
-  const [registerModal, setRegisterModal] = useState<Championship | null>(null)
   const [productModal,  setProductModal]  = useState<Product | null>(null)
   const [annModal,      setAnnModal]      = useState<AnnouncementDto | null>(null)
   const [mobileMenu,    setMobileMenu]    = useState(false)
@@ -169,9 +167,6 @@ export default function LandingPage() {
       return
     }
     Promise.allSettled([
-      championshipApi.list().then(r =>
-        setChampionships(r.data.filter(c => c.status === 'Planejado' || c.status === 'Inscricoes').slice(0, 8))
-      ),
       productApi.list().then(r => {
         const visible  = r.data.filter(p => p.isActive && p.stockQuantity > 0 && p.showOnMarketplace !== false)
         const featured = visible.filter(p => p.isFeatured)
@@ -204,9 +199,7 @@ export default function LandingPage() {
 
           {/* Links desktop — esquerda */}
           <div className="hidden md:flex items-center gap-7 text-sm font-medium">
-            <a href="#eventos"  style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navTorneiosLabel}</a>
             <Link href="/produtos" style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navProdutosLabel}</Link>
-            <Link href="/cliente/mercado" style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navMercadoLabel}</Link>
             <a href="#pontos"   style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navPontosLabel}</a>
             <button
               onClick={() => (document.querySelector('[vw-access-button]') as HTMLElement | null)?.click()}
@@ -232,11 +225,11 @@ export default function LandingPage() {
               style={{ color: '#ffffff', borderColor: 'rgba(255,255,255,0.40)' }}>
               Minha Conta
             </Link>
-            <a href="#eventos"
+            <Link href="/produtos"
               className="hidden md:block text-sm font-black px-5 py-2 rounded-xl transition-all active:scale-95"
               style={{ backgroundColor: C.yellow, color: site.colorNavy }}>
-              {site.ctaVerEventosLabel}
-            </a>
+              {site.ctaVerProdutosLabel}
+            </Link>
             <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: '#ffffff' }}>
               <div className="space-y-1.5">
                 <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
@@ -252,17 +245,9 @@ export default function LandingPage() {
       {mobileMenu && (
         <div className="fixed inset-x-0 top-16 z-40 border-b md:hidden px-5 py-4 space-y-1"
           style={{ backgroundColor: site.colorNavy, borderColor: 'rgba(255,255,255,0.10)' }}>
-          <a href="#eventos" onClick={() => setMobileMenu(false)}
-            className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
-            {site.navTorneiosLabel}
-          </a>
           <Link href="/produtos" onClick={() => setMobileMenu(false)}
             className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
             {site.navProdutosLabel}
-          </Link>
-          <Link href="/cliente/mercado" onClick={() => setMobileMenu(false)}
-            className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
-            {site.navMercadoLabel}
           </Link>
           <a href="#pontos" onClick={() => setMobileMenu(false)}
             className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
@@ -286,11 +271,11 @@ export default function LandingPage() {
               style={{ color: 'rgba(255,255,255,0.70)', borderColor: 'rgba(255,255,255,0.25)' }}>
               Libras
             </button>
-            <a href="#eventos" onClick={() => setMobileMenu(false)}
+            <Link href="/produtos" onClick={() => setMobileMenu(false)}
               className="flex-1 text-center py-2.5 text-sm rounded-xl font-black"
               style={{ backgroundColor: C.blue, color: '#fff' }}>
-              Eventos
-            </a>
+              Produtos
+            </Link>
           </div>
         </div>
       )}
@@ -339,14 +324,9 @@ export default function LandingPage() {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-                <a href="#eventos"
+                <Link href="/produtos"
                   className="inline-flex items-center justify-center gap-2 font-black px-7 py-3.5 rounded-xl transition-all active:scale-95"
                   style={{ backgroundColor: C.yellow, color: site.colorNavy, boxShadow: `0 8px 28px rgba(255,228,94,0.22)` }}>
-                  <Trophy className="w-5 h-5" /> {site.ctaVerTorneiosLabel}
-                </a>
-                <Link href="/produtos"
-                  className="inline-flex items-center justify-center gap-2 font-semibold px-7 py-3.5 rounded-xl border transition-all hover:border-white/30 hover:text-white"
-                  style={{ borderColor: 'rgba(255,255,255,0.35)', color: 'rgba(255,255,255,0.85)' }}>
                   <ShoppingBag className="w-5 h-5" /> {site.ctaVerProdutosLabel}
                 </Link>
               </div>
@@ -499,44 +479,6 @@ export default function LandingPage() {
           </div>
         </section>
       )}
-
-      {/* ── TORNEIOS ────────────────────────────────────────────────────── */}
-      <section id="eventos" className="py-16 px-5 border-t" style={{ borderColor: C.border }}>
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-baseline justify-between mb-8">
-            <div>
-              <p className="text-xs font-black uppercase tracking-widest mb-1.5" style={{ color: C.blue }}>{site.torneiosEyebrow}</p>
-              <h2 className="text-2xl md:text-3xl font-black" style={{ color: C.navy }}>{site.torneiosTitle}</h2>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="flex justify-center py-14">
-              <div className="w-7 h-7 border-2 rounded-full animate-spin"
-                style={{ borderColor: C.blue, borderTopColor: 'transparent' }} />
-            </div>
-          ) : championships.length === 0 ? (
-            <div className="text-center py-14 rounded-2xl border" style={{ borderColor: C.border, backgroundColor: C.card }}>
-              <Trophy className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: C.navy }} />
-              <p className="font-medium opacity-50" style={{ color: C.navy }}>Nenhum evento agendado no momento.</p>
-              <p className="text-sm mt-1 opacity-40" style={{ color: C.text }}>Fique de olho nas novidades.</p>
-            </div>
-          ) : (
-            <div className="flex flex-col lg:flex-row gap-6">
-              {/* Calendário */}
-              <div className="shrink-0 lg:w-64">
-                <EventCalendar championships={championships} onSelect={c => setRegisterModal(c)} C={C} />
-              </div>
-              {/* Cards */}
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
-                {championships.map(c => (
-                  <ChampionshipCard key={c.id} championship={c} onRegister={() => setRegisterModal(c)} C={C} />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* ── PRODUTOS ────────────────────────────────────────────────────── */}
       <section id="produtos" className="py-16 px-5 border-t" style={{ borderColor: C.border }}>
@@ -773,191 +715,9 @@ export default function LandingPage() {
       {/* ── MODAIS ──────────────────────────────────────────────────────── */}
       {annModal      && <AnnouncementModal ann={annModal}               onClose={() => setAnnModal(null)}      C={C} />}
       {productModal  && <ProductModal      product={productModal}       onClose={() => setProductModal(null)}  C={C} />}
-      {registerModal && <RegisterModal     championship={registerModal} onClose={() => setRegisterModal(null)} C={C} whatsapp={site.whatsappNumber} contactPersonName={site.contactPersonName} />}
     </div>
   )
 }
-
-// ── Event Calendar ────────────────────────────────────────────────────────────
-
-function EventCalendar({ championships, onSelect, C }: {
-  championships: Championship[]
-  onSelect: (c: Championship) => void
-  C: Theme
-}) {
-  const [view, setView] = useState(() => new Date())
-  const year  = view.getFullYear()
-  const month = view.getMonth()
-
-  const firstWeekDay  = new Date(year, month, 1).getDay()
-  const daysInMonth   = new Date(year, month + 1, 0).getDate()
-  const monthLabel    = view.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-
-  // { day: Championship } para o mês visível
-  const eventDays = championships.reduce<Record<number, Championship>>((acc, c) => {
-    const d = new Date(c.startDate)
-    if (d.getMonth() === month && d.getFullYear() === year) acc[d.getDate()] = c
-    return acc
-  }, {})
-
-  const today    = new Date()
-  const isToday  = (d: number) => d === today.getDate() && month === today.getMonth() && year === today.getFullYear()
-  const prevMonth = () => setView(new Date(year, month - 1, 1))
-  const nextMonth = () => setView(new Date(year, month + 1, 1))
-
-  const cells: (number | null)[] = [
-    ...Array(firstWeekDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-
-  return (
-    <div className="rounded-2xl border p-4" style={{ backgroundColor: C.card, borderColor: C.border }}>
-      {/* Cabeçalho do mês */}
-      <div className="flex items-center justify-between mb-3">
-        <button onClick={prevMonth}
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors"
-          style={{ color: C.text, backgroundColor: C.cardAlt }}>
-          ‹
-        </button>
-        <p className="text-xs font-black capitalize" style={{ color: C.navy }}>{monthLabel}</p>
-        <button onClick={nextMonth}
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-colors"
-          style={{ color: C.text, backgroundColor: C.cardAlt }}>
-          ›
-        </button>
-      </div>
-
-      {/* Dias da semana */}
-      <div className="grid grid-cols-7 mb-1">
-        {['D','S','T','Q','Q','S','S'].map((d, i) => (
-          <div key={i} className="text-center text-[10px] font-black pb-1" style={{ color: C.text }}>{d}</div>
-        ))}
-      </div>
-
-      {/* Células */}
-      <div className="grid grid-cols-7 gap-y-1">
-        {cells.map((day, i) => {
-          if (!day) return <div key={i} />
-          const hasEvent = !!eventDays[day]
-          const todayCell = isToday(day)
-          return (
-            <button
-              key={i}
-              onClick={() => hasEvent && onSelect(eventDays[day])}
-              disabled={!hasEvent}
-              className="relative flex flex-col items-center justify-center h-8 rounded-lg text-xs font-bold transition-all"
-              style={{
-                color:           hasEvent ? '#fff' : todayCell ? C.navy : C.text,
-                backgroundColor: hasEvent ? C.blue  : todayCell ? `${C.blue}20` : 'transparent',
-                fontWeight:      todayCell || hasEvent ? 900 : 500,
-                cursor:          hasEvent ? 'pointer' : 'default',
-              }}
-            >
-              {day}
-              {hasEvent && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white opacity-80" />
-              )}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Legenda */}
-      {Object.keys(eventDays).length > 0 && (
-        <div className="mt-3 pt-3 border-t space-y-1.5" style={{ borderColor: C.border }}>
-          {Object.entries(eventDays).map(([day, c]) => (
-            <button key={day} onClick={() => onSelect(c)}
-              className="w-full text-left flex items-center gap-2 text-[11px] hover:opacity-80 transition-opacity">
-              <span className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 font-black text-white text-[10px]"
-                style={{ backgroundColor: C.blue }}>{day}</span>
-              <span className="line-clamp-1 font-semibold" style={{ color: C.navy }}>{c.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Championship Card ─────────────────────────────────────────────────────────
-
-function ChampionshipCard({ championship: c, onRegister, C }: { championship: Championship; onRegister: () => void; C: Theme }) {
-  const gameColors: Record<string, { bg: string; text: string }> = {
-    'Pokemon':   { bg: 'rgba(234,179,8,0.15)',  text: '#FBBF24' },
-    'Magic':     { bg: 'rgba(99,102,241,0.15)', text: '#818CF8' },
-    'Yu-Gi-Oh':  { bg: 'rgba(168,85,247,0.15)', text: '#C084FC' },
-    'One Piece': { bg: 'rgba(239,68,68,0.15)',  text: '#F87171' },
-  }
-  const gc = gameColors[c.game] ?? { bg: 'rgba(62,194,242,0.12)', text: '#3EC2F2' }
-
-  return (
-    <div className="rounded-2xl overflow-hidden flex flex-col group transition-all hover:translate-y-[-2px]"
-      style={{ backgroundColor: C.card, border: `1px solid ${C.border}` }}>
-
-      {/* Imagem */}
-      {c.imageUrl ? (
-        <div className="w-full h-36 overflow-hidden">
-          <img src={c.imageUrl} alt={c.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-        </div>
-      ) : (
-        <div className="w-full h-36 flex items-center justify-center"
-          style={{ background: `linear-gradient(135deg, ${gc.bg}, ${C.cardAlt})` }}>
-          <Trophy className="w-9 h-9 opacity-30" style={{ color: gc.text }} />
-        </div>
-      )}
-
-      <div className="p-4 flex flex-col flex-1 gap-3">
-        {/* Game badge + status */}
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full"
-            style={{ backgroundColor: gc.bg, color: gc.text }}>
-            {c.game}
-          </span>
-          {c.status === 'Inscricoes' && (
-            <span className="text-[10px] font-bold px-2 py-1 rounded-full"
-              style={{ backgroundColor: 'rgba(34,197,94,0.12)', color: '#4ADE80' }}>
-              Inscrições abertas
-            </span>
-          )}
-        </div>
-
-        {/* Nome */}
-        <h3 className="font-black text-sm leading-snug line-clamp-2" style={{ color: C.navy }}>{c.name}</h3>
-
-        {/* Data + vagas */}
-        <div className="space-y-1.5 text-xs" style={{ color: C.text }}>
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 shrink-0" style={{ color: C.blue }} />
-            {new Date(c.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-          {c.maxParticipants && (
-            <div className="flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 shrink-0" style={{ color: C.blue }} />
-              Até {c.maxParticipants} jogadores
-            </div>
-          )}
-        </div>
-
-        {/* Taxa + botão */}
-        <div className="mt-auto pt-3 border-t flex items-center justify-between gap-2"
-          style={{ borderColor: C.border }}>
-          <span className="text-sm font-black" style={{ color: C.yellow }}>
-            R$ {(c.entryFeeInCents / 100).toFixed(2).replace('.', ',')}
-          </span>
-          <button
-            onClick={onRegister}
-            className="text-xs font-black px-3.5 py-2 rounded-xl flex items-center gap-1 transition-all active:scale-95"
-            style={{ backgroundColor: C.blue, color: '#fff' }}>
-            Inscrever <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Product Card ──────────────────────────────────────────────────────────────
 
 function ProductCard({ product: p, onClick, C }: { product: Product; onClick: () => void; C: Theme }) {
   return (
@@ -1224,127 +984,3 @@ function ProductModal({ product: p, onClose, C }: { product: Product; onClose: (
   )
 }
 
-function RegisterModal({ championship, onClose, C, whatsapp, contactPersonName }: { championship: Championship; onClose: () => void; C: Theme; whatsapp: string; contactPersonName: string }) {
-  const [name,       setName]       = useState('')
-  const [phone,      setPhone]      = useState('')
-  const [done,       setDone]       = useState(false)
-  const [loading,    setLoading]    = useState(false)
-  const [decks,      setDecks]      = useState<DeckListDto[]>([])
-  const [selectedDeck, setSelectedDeck] = useState<string>('')
-
-  const isLoggedIn = getRole() === 'Customer' || getRole() === 'Admin'
-
-  useEffect(() => {
-    if (!isLoggedIn || !championship.game) return
-    deckApi.list(championship.game).then(r => setDecks(r.data)).catch(() => {})
-  }, [isLoggedIn, championship.game])
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!name.trim() || !phone.trim()) return
-    setLoading(true)
-    const deck = decks.find(d => d.id === selectedDeck)
-    try {
-      await championshipApi.addPreInscricao(championship.id, name.trim(), phone.trim(), deck?.id, deck?.name)
-    } catch { /* silently continue — WhatsApp still opens */ }
-    finally { setLoading(false) }
-    const msg = encodeURIComponent(
-      `Olá! Quero me inscrever no *${championship.name}*.\n` +
-      `Nome: ${name.trim()}\nWhatsApp: ${phone.trim()}\n` +
-      (deck ? `Deck: ${deck.name}\n` : '') +
-      `Confirmo o pagamento de R$ ${(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')} na chegada.`
-    )
-    window.open(`https://wa.me/${whatsapp}?text=${msg}`, '_blank')
-    setDone(true)
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/70 backdrop-blur-sm">
-      <div className="w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl border border-b-0 sm:border-b p-6 pb-8 sm:pb-6"
-        style={{ backgroundColor: C.card, borderColor: C.border }}>
-        {/* Handle visual — mobile only */}
-        <div className="flex justify-center -mt-3 mb-4 sm:hidden">
-          <div className="w-10 h-1 rounded-full opacity-30" style={{ backgroundColor: C.navy }} />
-        </div>
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <h3 className="font-black text-lg" style={{ color: C.navy }}>Inscrição</h3>
-            <p className="text-sm mt-0.5" style={{ color: C.text }}>{championship.name}</p>
-          </div>
-          <button onClick={onClose} className="p-1 transition-colors" style={{ color: C.text }}>
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {done ? (
-          <div className="text-center py-6">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              style={{ backgroundColor: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
-              <CheckCircle className="w-7 h-7 text-green-500" />
-            </div>
-            <p className="font-black mb-1" style={{ color: C.navy }}>Solicitação enviada!</p>
-            <p className="text-sm leading-relaxed" style={{ color: C.text }}>
-              {contactPersonName} vai confirmar sua vaga pelo WhatsApp. Pague na chegada.
-            </p>
-            <button onClick={onClose}
-              className="mt-5 w-full py-2.5 text-sm rounded-xl border transition-colors"
-              style={{ color: C.text, borderColor: C.border }}>
-              Fechar
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="text-sm px-4 py-3 rounded-xl border"
-              style={{ color: C.blue, borderColor: `${C.blue}30`, backgroundColor: `${C.blue}08` }}>
-              Taxa: <strong>R$ {(championship.entryFeeInCents / 100).toFixed(2).replace('.', ',')}</strong> — pague na chegada
-            </div>
-            <div>
-              <label className="block text-xs font-bold mb-1.5" style={{ color: C.navy }}>Seu nome</label>
-              <input
-                className="w-full rounded-xl px-4 py-3 text-sm outline-none border transition-all"
-                style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, color: C.navy }}
-                placeholder="Nome completo"
-                value={name} onChange={e => setName(e.target.value)} required
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold mb-1.5" style={{ color: C.navy }}>Seu WhatsApp</label>
-              <input
-                className="w-full rounded-xl px-4 py-3 text-sm outline-none border transition-all"
-                style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, color: C.navy }}
-                placeholder="(17) 99999-9999"
-                value={phone} onChange={e => setPhone(e.target.value)} required
-              />
-            </div>
-            {decks.length > 0 && (
-              <div>
-                <label className="block text-xs font-bold mb-1.5" style={{ color: C.navy }}>Deck (opcional)</label>
-                <select
-                  className="w-full rounded-xl px-4 py-3 text-sm outline-none border transition-all"
-                  style={{ backgroundColor: C.cardAlt, border: `1px solid ${C.border}`, color: C.navy }}
-                  value={selectedDeck} onChange={e => setSelectedDeck(e.target.value)}>
-                  <option value="">Não informar deck</option>
-                  {decks.map(d => (
-                    <option key={d.id} value={d.id}>{d.name} ({d.cardCount} cartas)</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <button type="submit" disabled={loading}
-              className="w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-xl transition-all active:scale-95 disabled:opacity-60"
-              style={{ backgroundColor: C.blue, color: '#fff' }}>
-              {loading
-                ? <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 62.8" /></svg>
-                : <MessageCircle className="w-4 h-4" />
-              }
-              {loading ? 'Registrando...' : 'Confirmar pelo WhatsApp'}
-            </button>
-            <p className="text-xs text-center" style={{ color: C.text }}>
-              Você será redirecionado para o WhatsApp.
-            </p>
-          </form>
-        )}
-      </div>
-    </div>
-  )
-}

@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSummary, PerfilDto, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, Trophy, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
+import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
 import Link from 'next/link'
 
 // ── Modal: Novo Cliente ───────────────────────────────────────────────────────
@@ -363,7 +363,7 @@ const pmLabel = (v: string | null) =>
 function HistoricoDrawer({ user, onClose, onAnonimized }: { user: UserSummary; onClose: () => void; onAnonimized: () => void }) {
   const [data, setData]         = useState<ClienteHistoricoDto | null>(null)
   const [loading, setLoading]   = useState(true)
-  const [tab, setTab]           = useState<'comandas' | 'pdv' | 'crediarios' | 'campeonatos'>('comandas')
+  const [tab, setTab]           = useState<'comandas' | 'pdv' | 'crediarios'>('comandas')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [confirmAnon, setConfirmAnon] = useState(false)
   const [anonimizing, setAnonimizing] = useState(false)
@@ -500,7 +500,6 @@ function HistoricoDrawer({ user, onClose, onAnonimized }: { user: UserSummary; o
                 { key: 'comandas',    label: 'Comandas',   icon: <ShoppingBag className="w-3.5 h-3.5" />, count: data.comandas.length },
                 { key: 'pdv',         label: 'Caixa (PDV)', icon: <ShoppingCart className="w-3.5 h-3.5" />, count: data.vendasAvulsas.length },
                 { key: 'crediarios',  label: 'Crediário',  icon: <CreditCard className="w-3.5 h-3.5" />, count: data.crediarios.length },
-                { key: 'campeonatos', label: 'Campeonatos', icon: <Trophy className="w-3.5 h-3.5" />, count: data.campeonatos.length },
               ] as const).map(t => (
                 <button
                   key={t.key}
@@ -607,35 +606,6 @@ function HistoricoDrawer({ user, onClose, onAnonimized }: { user: UserSummary; o
                           <p className="font-bold text-accent-gold">{fmt(c.valorEmReais)}</p>
                           {c.status === 'Aberto' && c.saldoRestante !== c.valorEmReais && (
                             <p className="text-xs text-orange-400">Restante: {fmt(c.saldoRestante)}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-              )}
-
-              {/* Campeonatos */}
-              {tab === 'campeonatos' && (
-                data.campeonatos.length === 0
-                  ? <Empty text="Não participou de campeonatos" />
-                  : data.campeonatos.map(c => (
-                    <div key={c.championshipId} className="card text-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-white truncate">{c.championshipName}</p>
-                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                            <span className="text-xs text-gray-500">{c.game}</span>
-                            <span className="text-xs text-gray-500">· {fmtDate(c.startDate)}</span>
-                            <span className={`text-xs ${statusColor[c.status] ?? 'text-gray-400'}`}>· {c.status}</span>
-                          </div>
-                          {c.deckName && <p className="text-xs text-gray-400 mt-0.5">Deck: {c.deckName}</p>}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs text-gray-500">Nº {c.playerNumber}</p>
-                          {c.placement && (
-                            <p className={`text-sm font-bold ${c.placement === 1 ? 'text-yellow-400' : c.placement === 2 ? 'text-gray-300' : c.placement === 3 ? 'text-orange-400' : 'text-gray-400'}`}>
-                              {c.placement === 1 ? '🥇' : c.placement === 2 ? '🥈' : c.placement === 3 ? '🥉' : `${c.placement}º`}
-                            </p>
                           )}
                         </div>
                       </div>

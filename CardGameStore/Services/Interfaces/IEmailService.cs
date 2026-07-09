@@ -22,11 +22,6 @@ public interface IEmailService
     /// <summary>Notifica o cliente que seu crediário foi quitado.</summary>
     Task SendCrediarioPagoAsync(string toEmail, string toName, decimal valor);
 
-    // ── Campeonatos ───────────────────────────────────────────────────────────
-
-    /// <summary>Confirmação de inscrição em campeonato.</summary>
-    Task SendCampeonatoInscricaoAsync(string toEmail, string toName, string campeonato, DateTime data, decimal entryFee);
-
     // ── Pré-venda / Lista de espera ───────────────────────────────────────────
 
     /// <summary>Avisa o cliente que chegou sua vez na lista de espera.</summary>

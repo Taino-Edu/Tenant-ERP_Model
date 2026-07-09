@@ -2,7 +2,7 @@
 // KycVerification.cs — Verificação de identidade / maioridade (KYC)
 //
 // STATUS: ESQUELETO — NÃO IMPLEMENTADO
-// Aguardando decisão com Maikon sobre método de verificação.
+// Aguardando decisão de negócio sobre método de verificação.
 // Ver: /KYC_PLANNING.md
 // =============================================================================
 
@@ -12,7 +12,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace CardGameStore.Models.PostgreSQL;
 
 /// <summary>
-/// Registro de verificação de identidade de um usuário para acesso ao Marketplace.
+/// Registro de verificação de identidade de um usuário para acesso a produtos/serviços
+/// com restrição etária (ex: bebida alcoólica), quando o tenant precisar disso.
 /// Um usuário pode ter no máximo uma entrada ativa (última verificação).
 /// </summary>
 [Table("kyc_verifications")]
@@ -30,7 +31,7 @@ public class KycVerification
 
     /// <summary>
     /// Método usado: "self_declaration" | "cpf_receita" | "document_photo"
-    /// TODO: decidir com Maikon qual implementar.
+    /// TODO: decidir qual implementar.
     /// </summary>
     [MaxLength(50)]
     [Column("method")]
@@ -79,7 +80,7 @@ public class KycVerification
 
     /// <summary>
     /// Verificações expiram após este prazo e precisam ser renovadas.
-    /// TODO: decidir prazo com Maikon (sugestão: 1 ano).
+    /// TODO: decidir prazo (sugestão: 1 ano).
     /// </summary>
     [Column("expires_at")]
     public DateTime? ExpiresAt { get; set; }

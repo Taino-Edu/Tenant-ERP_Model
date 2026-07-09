@@ -206,7 +206,6 @@ public class ComandaService : IComandaService
         {
             ComandaId                = comanda.Id,
             ProductId                = request.ProductId,
-            CardCacheId              = request.CardCacheId,
             VariantId                = request.VariantId,
             ItemNameSnapshot         = itemName,
             UnitPriceInCents         = priceInCents,
@@ -292,7 +291,6 @@ public class ComandaService : IComandaService
         {
             ComandaId                = comanda.Id,
             ProductId                = request.ProductId,
-            CardCacheId              = request.CardCacheId,
             VariantId                = request.VariantId,
             ItemNameSnapshot         = itemName,
             UnitPriceInCents         = priceInCents,

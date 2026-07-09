@@ -115,36 +115,6 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, "Crediário quitado — softNerd", body);
     }
 
-    public async Task SendCampeonatoInscricaoAsync(string toEmail, string toName, string campeonato, DateTime data, decimal entryFee)
-    {
-        var dataFmt = data.ToLocalTime().ToString("dd/MM/yyyy 'às' HH:mm");
-        var body = $"""
-            <div style="font-family:sans-serif;max-width:500px">
-              <h2 style="color:#7839F3">softNerd — Inscrição Confirmada</h2>
-              <p>Olá, <strong>{toName}</strong>!</p>
-              <p>Sua inscrição no campeonato abaixo foi confirmada:</p>
-              <table style="width:100%;border-collapse:collapse;margin:16px 0">
-                <tr>
-                  <td style="padding:8px;color:#666">Campeonato</td>
-                  <td style="padding:8px;font-weight:bold">{campeonato}</td>
-                </tr>
-                <tr style="background:#f9f9f9">
-                  <td style="padding:8px;color:#666">Data</td>
-                  <td style="padding:8px;font-weight:bold">{dataFmt}</td>
-                </tr>
-                <tr>
-                  <td style="padding:8px;color:#666">Taxa de Inscrição</td>
-                  <td style="padding:8px;font-weight:bold">R$ {entryFee:N2}</td>
-                </tr>
-              </table>
-              <p>Apareça na loja no dia do evento. Boa sorte!</p>
-              <p style="color:#888;font-size:12px">softNerd — Sistema de Gestão</p>
-            </div>
-            """;
-
-        await SendAsync(toEmail, toName, $"Inscrição confirmada: {campeonato}", body);
-    }
-
     public async Task SendWaitListNotifiedAsync(string toEmail, string toName, string productName, string productUrl)
     {
         var body = $"""

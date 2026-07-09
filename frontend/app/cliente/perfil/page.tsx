@@ -3,15 +3,15 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto, championshipApi, MyParticipation,
+  userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto,
   waitListApi, MyWaitListEntry, reservationApi, MyReservation, minhasNotasApi, MinhaNotaDto,
 } from '@/lib/api'
 import { getUserName, clearAuth } from '@/lib/auth'
 import { authApi } from '@/lib/api'
 import {
   Star, User, Phone, CreditCard, Clock, AlertCircle, ArrowLeft, LogOut,
-  CheckCircle, Wallet, CalendarClock, Receipt, ChevronDown, ChevronUp,
-  ShoppingBag, XCircle, Trophy, Coins, ShieldCheck, Mail, Settings, BookOpen,
+  CheckCircle, Wallet, Receipt, ChevronDown, ChevronUp,
+  ShoppingBag, XCircle, ShieldCheck, Mail, Settings,
   Bell, Package, X, Hourglass, FileText,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -22,13 +22,12 @@ export default function PerfilPage() {
   const [profile,        setProfile]        = useState<UserProfile | null>(null)
   const [crediarios,     setCrediarios]     = useState<CrediariosDto[]>([])
   const [history,        setHistory]        = useState<ComandaDto[]>([])
-  const [participations, setParticipations] = useState<MyParticipation[]>([])
   const [waitlist,       setWaitlist]       = useState<MyWaitListEntry[]>([])
   const [reservations,   setReservations]   = useState<MyReservation[]>([])
   const [notas,          setNotas]          = useState<MinhaNotaDto[]>([])
   const [loading,        setLoading]        = useState(true)
   const [expanded,       setExpanded]       = useState<string | null>(null)
-  const [tab,            setTab]            = useState<'pontos' | 'historico' | 'torneios' | 'crediario' | 'filas' | 'notas'>('pontos')
+  const [tab,            setTab]            = useState<'pontos' | 'historico' | 'crediario' | 'filas' | 'notas'>('pontos')
   const [isUploading,    setIsUploading]    = useState(false)
 
   useEffect(() => {
@@ -36,7 +35,6 @@ export default function PerfilPage() {
       userApi.me().then(r => setProfile(r.data)).catch(() => {}),
       crediarioApi.meuHistorico().then(r => setCrediarios(r.data)).catch(() => {}),
       comandaApi.myHistory().then(r => setHistory(r.data)).catch(() => {}),
-      championshipApi.myParticipations().then(r => setParticipations(r.data)).catch(() => {}),
       waitListApi.mine().then(r => setWaitlist(r.data)).catch(() => {}),
       reservationApi.mine().then(r => setReservations(r.data.filter((res: MyReservation) => res.status === 'active'))).catch(() => {}),
       minhasNotasApi.list().then(r => setNotas(r.data)).catch(() => {}),
@@ -114,7 +112,6 @@ export default function PerfilPage() {
   const tabs = [
     { id: 'pontos',    icon: Star,    label: 'Pontos'   },
     { id: 'historico', icon: Receipt, label: 'Histórico' },
-    { id: 'torneios',  icon: Trophy,  label: 'Torneios' },
     { id: 'filas',     icon: Bell,    label: 'Filas', badge: waitlist.length + reservations.length },
     { id: 'crediario', icon: Wallet,  label: 'Dívida'   },
     { id: 'notas',     icon: FileText, label: 'Notas Fiscais' },
@@ -365,42 +362,6 @@ export default function PerfilPage() {
               </div>
             )}
 
-            {/* ── TAB: TORNEIOS ── */}
-            {tab === 'torneios' && (
-              <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {participations.length === 0 ? (
-                  <div className="bg-white border border-gray-100 rounded-2xl py-14 text-center shadow-sm">
-                    <Trophy className="w-10 h-10 mx-auto mb-3 text-gray-200" />
-                    <p className="text-sm text-gray-400 italic">Você ainda não entrou em batalhas...</p>
-                  </div>
-                ) : (
-                  participations.map(p => (
-                    <div key={p.participationId} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <p className="text-[11px] font-black text-[#42B6EE] uppercase tracking-widest">{p.game}</p>
-                          <h3 className="text-base font-black text-gray-900 leading-tight mt-0.5">{p.championshipName}</h3>
-                        </div>
-                        <div className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-[10px] font-black text-emerald-600 uppercase shrink-0">
-                          Inscrito
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
-                          <CalendarClock className="w-3.5 h-3.5 text-[#42B6EE]" />
-                          {new Date(p.startDate).toLocaleDateString('pt-BR')}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
-                          <Coins className="w-3.5 h-3.5 text-[#42B6EE]" />
-                          R$ {p.entryFeeInReais.toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
             {/* ── TAB: FILAS (lista de espera + reservas) ── */}
             {tab === 'filas' && (
               <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -547,23 +508,6 @@ export default function PerfilPage() {
                 )}
               </div>
             )}
-            {/* ── MEUS DECKS ── */}
-            <Link
-              href="/cliente/decks"
-              className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-sm mt-4 hover:bg-gray-50 transition-colors active:scale-[0.98]"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-purple-50 border border-purple-100 flex items-center justify-center">
-                  <BookOpen className="w-5 h-5 text-purple-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-gray-900">Meus Decks</p>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Crie e gerencie seus decks</p>
-                </div>
-              </div>
-              <ChevronDown className="w-4 h-4 text-gray-300 -rotate-90" />
-            </Link>
-
             {/* ── CONFIGURAÇÕES ── */}
             <Link
               href="/cliente/configuracoes"

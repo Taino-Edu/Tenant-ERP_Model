@@ -1,9 +1,10 @@
-# KYC — Verificação de Maioridade para o Marketplace
+# KYC — Verificação de Maioridade
 
-**Status:** Esqueleto criado, implementação PENDENTE  
-**Decisão pendente com:** Maikon  
-**Contexto:** Marketplace de cartas entre usuários. Menores de 16 são absolutamente
-incapazes de contratar (Código Civil art. 3º); 16-18 relativamente incapazes (art. 4º, I).
+**Status:** Esqueleto criado, implementação PENDENTE
+**Decisão pendente:** com o responsável de negócio do tenant que precisar disso
+**Contexto:** útil para qualquer tenant que venda produto/serviço com restrição etária
+(ex: bebida alcoólica). Menores de 16 são absolutamente incapazes de contratar
+(Código Civil art. 3º); 16-18 relativamente incapazes (art. 4º, I).
 O ECA reforça proteção a menores em transações comerciais.
 
 ---
@@ -22,11 +23,12 @@ O ECA reforça proteção a menores em transações comerciais.
 - `frontend/app/admin/kyc/page.tsx` — painel admin (lista + override manual)
 - DDL no `Program.cs` para criar a tabela `kyc_verifications`
 - Registrar `IKycService` no DI em `Program.cs`
-- Adicionar `CanAccessMarketplaceAsync` como guard no `MarketplaceController`
+- Adicionar `CanAccessRestrictedContentAsync` como guard nos fluxos que vendem
+  produto/serviço com restrição etária
 
 ---
 
-## Opções de implementação — DECIDIR COM MAIKON
+## Opções de implementação
 
 ### Opção 1 — Autodeclaração (mais simples, zero custo)
 - Usuário informa data de nascimento no perfil
@@ -53,10 +55,10 @@ O ECA reforça proteção a menores em transações comerciais.
 
 ---
 
-## Perguntas para discutir com Maikon
+## Perguntas para decidir antes de implementar
 
 1. **Qual opção de verificação implementar?** (1, 2 ou uma combinação)
-2. **Verificação é obrigatória para todos?** Ou só para quem tentar anunciar/comprar no Marketplace?
+2. **Verificação é obrigatória para todos?** Ou só para quem tentar comprar produto restrito?
 3. **Prazo de validade da verificação?** Sugestão: 1 ano (usuário revalida anualmente)
 4. **O que fazer com usuários já cadastrados?** Bloqueio gradual ou imediato?
 5. **Admin pode aprovar manualmente?** (ex: menor atendido na loja com responsável presente)
@@ -68,7 +70,7 @@ O ECA reforça proteção a menores em transações comerciais.
 ## Fluxo proposto (Opção 2 — CPF)
 
 ```
-Usuário clica "Anunciar" ou "Marcar interesse" no Marketplace
+Usuário tenta comprar produto com restrição etária
         ↓
 GET /api/kyc/status
         ↓
@@ -83,7 +85,7 @@ POST /api/kyc/cpf
 Backend chama BrasilAPI → compara dados
         ↓
 idade < 18? → status = "rejected" → bloquear com mensagem legal
-idade ≥ 18? → status = "approved" → liberar Marketplace
+idade ≥ 18? → status = "approved" → libera a compra
 ```
 
 ---
@@ -97,13 +99,5 @@ idade ≥ 18? → status = "approved" → liberar Marketplace
 - **Tabela:** ver `KycVerification.cs` — DDL deve ser adicionado no bloco `ExecuteSqlRawAsync`
   do `Program.cs` com `IF NOT EXISTS` (padrão do projeto)
 - **DI:** registrar `services.AddScoped<IKycService, KycService>()` em `Program.cs`
-- **Guard no Marketplace:** antes de criar listagem ou marcar interesse, chamar
-  `await _kyc.CanAccessMarketplaceAsync(userId)` → retorna 403 se não verificado
-
----
-
-## Proteção atual (temporária, enquanto KYC não é implementado)
-
-No modal de interesse e no modal de anúncio há um **checkbox de autodeclaração** que o usuário
-deve marcar antes de prosseguir. Isso é a Opção 1 de forma simplificada — sem persistência no banco.
-Serve como proteção mínima até o KYC real ser implementado.
+- **Guard:** antes de concluir a venda de um produto restrito, chamar
+  `await _kyc.CanAccessRestrictedContentAsync(userId)` → retorna 403 se não verificado

@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { clearAuth, getUserName, getRole, hasPermission } from '@/lib/auth'
 import { authApi, notificationsApi, fiscalApi } from '@/lib/api'
 import {
-  LayoutDashboard, Package, Trophy, Search, QrCode,
+  LayoutDashboard, Package, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
   Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette,
@@ -37,10 +37,7 @@ const sections = [
       { href: '/admin/categorias',  label: 'Categorias',   icon: Tag,         perm: 'categorias' },
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,       perm: 'anuncios' },
       { href: '/admin/mensageria', label: 'Mensageria',   icon: MessageSquare,   perm: 'anuncios' },
-      { href: '/admin/cartas',      label: 'Cartas TCG',   icon: Search,      perm: 'cartas' },
-      { href: '/admin/campeonatos',  label: 'Campeonatos',  icon: Trophy,      perm: 'campeonatos' },
-      { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: 'campeonatos' },
-      { href: '/admin/marketplace',  label: 'Mercado de Cartas', icon: Store, perm: 'estoque' },
+      { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: null },
     ],
   },
   {

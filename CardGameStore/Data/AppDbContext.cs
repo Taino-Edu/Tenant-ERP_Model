@@ -25,15 +25,11 @@ public class AppDbContext : DbContext
     public DbSet<ProductCategory>         ProductCategories        { get; set; }
     public DbSet<Comanda>                 Comandas                 { get; set; }
     public DbSet<ComandaItem>             ComandaItems             { get; set; }
-    public DbSet<Championship>            Championships            { get; set; }
-    public DbSet<ChampionshipParticipant>  ChampionshipParticipants  { get; set; }
-    public DbSet<ChampionshipPreInscricao> ChampionshipPreInscricoes { get; set; }
     public DbSet<Announcement>            Announcements            { get; set; }
     public DbSet<Crediario>               Crediarios               { get; set; }
     public DbSet<PagamentoCrediario>      PagamentosCrediario      { get; set; }
     public DbSet<PixCobranca>             PixCobrancas             { get; set; }
     public DbSet<Perfil>                  Perfis                   { get; set; }
-    public DbSet<Deck>                    Decks                    { get; set; }
     public DbSet<ProductWaitList>         ProductWaitLists         { get; set; }
 
     // ── LGPD — Compliance e privacidade ──────────────────────────────────────
@@ -41,10 +37,6 @@ public class AppDbContext : DbContext
     public DbSet<CookieConsent> CookieConsents { get; set; }
     public DbSet<AuditLog>      AuditLogs      { get; set; }
     public DbSet<TimerEntity>   Timers         { get; set; }
-
-    // ── Marketplace ────────────────────────────────────────────────────────────
-    public DbSet<CardListing>     CardListings     { get; set; }
-    public DbSet<ListingInterest> ListingInterests { get; set; }
 
     // ── Estoque: variantes e reservas ─────────────────────────────────────────
     public DbSet<ProductVariant>     ProductVariants     { get; set; }
@@ -195,19 +187,10 @@ public class AppDbContext : DbContext
             entity.HasIndex(c => c.Status)
                   .HasDatabaseName("ix_comandas_status");
 
-            entity.HasIndex(c => c.ChampionshipId)
-                  .HasDatabaseName("ix_comandas_championship");
-
             entity.HasOne(c => c.User)
                   .WithMany(u => u.Comandas)
                   .HasForeignKey(c => c.UserId)
                   .OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasOne(c => c.Championship)
-                  .WithMany(ch => ch.Comandas)
-                  .HasForeignKey(c => c.ChampionshipId)
-                  .OnDelete(DeleteBehavior.SetNull)
-                  .IsRequired(false);
         });
 
         // =====================================================================
@@ -231,47 +214,6 @@ public class AppDbContext : DbContext
         });
 
         // =====================================================================
-        // CHAMPIONSHIP
-        // =====================================================================
-        modelBuilder.Entity<Championship>(entity =>
-        {
-            entity.Property(c => c.Status)
-                  .HasConversion<string>();
-
-            entity.HasIndex(c => c.Status)
-                  .HasDatabaseName("ix_championships_status");
-
-            entity.HasIndex(c => c.StartDate)
-                  .HasDatabaseName("ix_championships_start_date");
-        });
-
-        // =====================================================================
-        // CHAMPIONSHIP PARTICIPANT
-        // =====================================================================
-        modelBuilder.Entity<ChampionshipParticipant>(entity =>
-        {
-            entity.HasIndex(p => new { p.ChampionshipId, p.UserId })
-                  .IsUnique()
-                  .HasDatabaseName("ix_championship_participants_unique");
-
-            entity.HasOne(p => p.Championship)
-                  .WithMany(c => c.Participants)
-                  .HasForeignKey(p => p.ChampionshipId)
-                  .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(p => p.User)
-                  .WithMany(u => u.ChampionshipParticipants)
-                  .HasForeignKey(p => p.UserId)
-                  .OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasOne(p => p.Comanda)
-                  .WithMany()
-                  .HasForeignKey(p => p.ComandaId)
-                  .OnDelete(DeleteBehavior.SetNull)
-                  .IsRequired(false);
-        });
-
-        // =====================================================================
         // PERFIL
         // =====================================================================
         modelBuilder.Entity<Perfil>(entity =>
@@ -284,23 +226,6 @@ public class AppDbContext : DbContext
                   .HasForeignKey(u => u.PerfilId)
                   .OnDelete(DeleteBehavior.SetNull)
                   .IsRequired(false);
-        });
-
-        // =====================================================================
-        // DECK
-        // =====================================================================
-        modelBuilder.Entity<Deck>(entity =>
-        {
-            entity.HasIndex(d => d.UserId)
-                  .HasDatabaseName("ix_decks_user");
-
-            entity.HasIndex(d => new { d.UserId, d.IsPublic })
-                  .HasDatabaseName("ix_decks_user_public");
-
-            entity.HasOne(d => d.User)
-                  .WithMany()
-                  .HasForeignKey(d => d.UserId)
-                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         // =====================================================================

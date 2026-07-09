@@ -125,7 +125,7 @@ public class AddPointsRequest
     public int Points { get; set; }
 
     [MaxLength(255)]
-    public string? Reason { get; set; }  // Motivo (opcional, ex: "Campeonato de Pokémon")
+    public string? Reason { get; set; }  // Motivo (opcional, ex: "Bônus de aniversário")
 }
 
 /// <summary>
@@ -212,7 +212,6 @@ public class ClienteHistoricoDto
     public List<ComandaHistoricoDto>     Comandas      { get; set; } = new();
     public List<VendaAvulsaHistoricoDto> VendasAvulsas { get; set; } = new();
     public List<CrediariosHistoricoDto>  Crediarios    { get; set; } = new();
-    public List<CampeonatoHistoricoDto>  Campeonatos   { get; set; } = new();
 }
 
 public class ComandaHistoricoDto
@@ -264,17 +263,4 @@ public class CrediariosHistoricoDto
     public DateTime  DataVencimento  { get; set; }
     public DateTime? DataPagamento   { get; set; }
     public string?   Observacao      { get; set; }
-}
-
-public class CampeonatoHistoricoDto
-{
-    public Guid     ChampionshipId   { get; set; }
-    public string   ChampionshipName { get; set; } = string.Empty;
-    public string   Game             { get; set; } = string.Empty;
-    public string   Status           { get; set; } = string.Empty;
-    public DateTime StartDate        { get; set; }
-    public int      PlayerNumber     { get; set; }
-    public string?  DeckName         { get; set; }
-    public int?     Placement        { get; set; }
-    public DateTime RegisteredAt     { get; set; }
 }

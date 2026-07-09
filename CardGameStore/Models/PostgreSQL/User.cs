@@ -30,7 +30,7 @@ public class User
     public string Name { get; set; } = string.Empty;
 
     /// <summary>
-    /// E-mail: obrigatório para Admin e para registro em Campeonatos.
+    /// E-mail: obrigatório para Admin.
     /// Para o login rápido de Customer, pode ser nulo.
     /// </summary>
     [MaxLength(255)]
@@ -182,9 +182,6 @@ public class User
 
     /// <summary>Comandas abertas ou históricas deste usuário.</summary>
     public ICollection<Comanda> Comandas { get; set; } = new List<Comanda>();
-
-    /// <summary>Participações em campeonatos.</summary>
-    public ICollection<ChampionshipParticipant> ChampionshipParticipants { get; set; } = new List<ChampionshipParticipant>();
 }
 
 /// <summary>
