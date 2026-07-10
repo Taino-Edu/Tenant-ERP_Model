@@ -56,6 +56,15 @@ export default function InstitucionalPage() {
     setIsDark(localStorage.getItem('institucional-theme') === 'dark')
   }, [])
 
+  // Esconde os widgets da loja (footer global da vitrine, botão de instalar
+  // PWA) — esta página tem footer próprio e não é o app instalável. Feito por
+  // classe no body porque o middleware reescreve "/" pra cá mantendo a URL,
+  // então usePathname() nos componentes globais não enxerga "/institucional".
+  useEffect(() => {
+    document.body.classList.add('institucional-page')
+    return () => document.body.classList.remove('institucional-page')
+  }, [])
+
   const toggleTheme = () => {
     const next = !isDark
     setIsDark(next)
@@ -67,8 +76,8 @@ export default function InstitucionalPage() {
     header:  'bg-[#121215]/95 border-white/10',
     card:    'bg-[#1A1A1F] border-white/10 hover:border-brand-500/40',
     heading: 'text-white',
-    body:    'text-white/65',
-    muted:   'text-white/45',
+    body:    'text-white/70',
+    muted:   'text-white/50',
     section: 'bg-[#17171B]',
     border:  'border-white/10',
     chip:    'bg-brand-500/15 text-brand-300',

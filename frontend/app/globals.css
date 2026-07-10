@@ -41,6 +41,13 @@
   ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 9999px; }
 }
 
+/* Página institucional tem footer próprio e não é o app instalável — esconde
+   os widgets globais da loja (a classe é aplicada pelo useEffect da página). */
+body.institucional-page .js-global-footer,
+body.institucional-page .js-pwa-install {
+  display: none;
+}
+
 @layer components {
   .btn-primary {
     @apply inline-flex items-center gap-2 px-4 py-2 bg-brand-500 hover:bg-brand-400
