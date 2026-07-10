@@ -2,6 +2,7 @@ using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,13 +30,16 @@ public class VendaAvulsaService : IVendaAvulsaService
     private readonly AppDbContext                    _db;
     private readonly ILogger<VendaAvulsaService>    _logger;
     private readonly IServiceScopeFactory           _scopeFactory;
+    private readonly ITenantContext                 _tenantContext;
 
     public VendaAvulsaService(
-        AppDbContext db, ILogger<VendaAvulsaService> logger, IServiceScopeFactory scopeFactory)
+        AppDbContext db, ILogger<VendaAvulsaService> logger, IServiceScopeFactory scopeFactory,
+        ITenantContext tenantContext)
     {
-        _db           = db;
-        _logger       = logger;
-        _scopeFactory = scopeFactory;
+        _db            = db;
+        _logger        = logger;
+        _scopeFactory  = scopeFactory;
+        _tenantContext = tenantContext;
     }
 
     public async Task<VendaAvulsaDto> RegisterAsync(VendaAvulsaRequest request, Guid adminId, string adminName)
@@ -190,6 +194,12 @@ public class VendaAvulsaService : IVendaAvulsaService
         if (request.EmitirNotaFiscal)
         {
             using var scope = _scopeFactory.CreateScope();
+            // O novo escopo tem seu próprio ITenantContext (default = tenant-zero) —
+            // sem propagar o tenant resolvido pela requisição, o AppDbContext deste
+            // escopo conecta no schema errado (nunca acha a venda que acabou de
+            // gravar, ou grava a nota no schema de outro tenant).
+            scope.ServiceProvider.GetRequiredService<ITenantContext>()
+                .Set(_tenantContext.TenantId, _tenantContext.SchemaName);
             var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
             nota = await emissao.EmitirParaVendaAvulsaAsync(venda.Id);
         }

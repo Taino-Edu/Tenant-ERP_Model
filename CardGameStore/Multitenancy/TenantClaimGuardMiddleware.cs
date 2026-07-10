@@ -26,7 +26,12 @@ public class TenantClaimGuardMiddleware
 
     public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext)
     {
-        if (context.User.Identity?.IsAuthenticated == true)
+        var endpoint = context.GetEndpoint();
+        var requiresAuth =
+            endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.IAuthorizeData>() is not null
+            && endpoint.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.IAllowAnonymous>() is null;
+
+        if (requiresAuth && context.User.Identity?.IsAuthenticated == true)
         {
             var claimValue = context.User.FindFirst(TenantConstants.TenantIdClaimType)?.Value;
             // Tokens sem a claim (emitidos antes desta feature existir) são tratados

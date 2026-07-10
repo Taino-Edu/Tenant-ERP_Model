@@ -41,13 +41,20 @@ public class TenantResolutionMiddleware
             {
                 entry.AbsoluteExpirationRelativeToNow = CacheTtl;
                 return await catalog.Tenants
-                    .Where(t => t.Slug == slug && t.Status == TenantStatus.Active)
-                    .Select(t => new { t.Id, t.SchemaName })
+                    .Where(t => t.Slug == slug)
+                    .Select(t => new { t.Id, t.SchemaName, t.Status })
                     .FirstOrDefaultAsync();
             });
 
             if (tenant is not null)
             {
+                if (tenant.Status != TenantStatus.Active)
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await context.Response.WriteAsJsonAsync(new { Message = "Esta loja está temporariamente suspensa." });
+                    return;
+                }
+
                 tenantContext.Set(tenant.Id, tenant.SchemaName);
                 await _next(context);
                 return;

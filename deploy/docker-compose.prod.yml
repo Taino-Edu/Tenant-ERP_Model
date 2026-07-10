@@ -106,6 +106,10 @@ services:
       # via IP puro/HTTP direto tem que ser false, senão o cookie nunca é aceito.
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
       CorsSettings__AllowedOrigins: "${APP_URL:-http://localhost}"
+      # Multi-tenancy — domínio raiz dos subdomínios de tenant (ex: loja.SEU_DOMINIO).
+      # Sem isso, TenantResolutionMiddleware.ExtractSlug() nunca acha slug nenhum e
+      # toda requisição cai em tenant-zero, mesmo com o wildcard configurado no Nginx.
+      Multitenancy__RootDomain: "${MULTITENANCY_ROOT_DOMAIN}"
       Security__IpHashSalt: "${IP_HASH_SALT}"
       Encryption__Key: "${ENCRYPTION_KEY}"
     volumes:

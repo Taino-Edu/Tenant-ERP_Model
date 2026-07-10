@@ -39,20 +39,30 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
     public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
     {
         // EF Core abre conexão de forma síncrona em alguns caminhos (ex: Database.OpenConnection()).
-        SetSearchPathAsync(connection, CancellationToken.None).GetAwaiter().GetResult();
+        // Versão síncrona dedicada — nunca bloquear sobre a Task async aqui, isso
+        // esgota o thread pool sob carga (sync-over-async).
+        SetSearchPath(connection);
         base.ConnectionOpened(connection, eventData);
+    }
+
+    private void SetSearchPath(DbConnection connection)
+    {
+        var schema = ValidateSchemaName();
+
+        using var setCmd = connection.CreateCommand();
+        setCmd.CommandText = $"SET search_path TO \"{schema}\", public;";
+        setCmd.ExecuteNonQuery();
+
+        using var checkCmd = connection.CreateCommand();
+        checkCmd.CommandText = "SELECT current_schema();";
+        var current = (string?)checkCmd.ExecuteScalar();
+
+        LogAndVerify(schema, current);
     }
 
     private async Task SetSearchPathAsync(DbConnection connection, CancellationToken ct)
     {
-        var schema = _tenantContext.SchemaName;
-
-        // O nome do schema só vem do catálogo de tenants ou da constante de
-        // tenant-zero — nunca de input livre de usuário. Ainda assim validamos o
-        // formato antes de interpolar no SQL, porque search_path não aceita
-        // parâmetro bind (é uma configuração de sessão, não uma query parametrizável).
-        if (!IsValidSchemaName(schema))
-            throw new InvalidOperationException($"Nome de schema de tenant inválido: '{schema}'.");
+        var schema = ValidateSchemaName();
 
         await using var setCmd = connection.CreateCommand();
         setCmd.CommandText = $"SET search_path TO \"{schema}\", public;";
@@ -66,6 +76,25 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         checkCmd.CommandText = "SELECT current_schema();";
         var current = (string?)await checkCmd.ExecuteScalarAsync(ct);
 
+        LogAndVerify(schema, current);
+    }
+
+    private string ValidateSchemaName()
+    {
+        var schema = _tenantContext.SchemaName;
+
+        // O nome do schema só vem do catálogo de tenants ou da constante de
+        // tenant-zero — nunca de input livre de usuário. Ainda assim validamos o
+        // formato antes de interpolar no SQL, porque search_path não aceita
+        // parâmetro bind (é uma configuração de sessão, não uma query parametrizável).
+        if (!IsValidSchemaName(schema))
+            throw new InvalidOperationException($"Nome de schema de tenant inválido: '{schema}'.");
+
+        return schema;
+    }
+
+    private void LogAndVerify(string schema, string? current)
+    {
         _logger.LogDebug("Conexão isolada no schema '{Schema}' (current_schema() = '{Current}').", schema, current);
 
         if (!string.Equals(current, schema, StringComparison.Ordinal))

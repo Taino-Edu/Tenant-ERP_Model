@@ -41,6 +41,14 @@ if ! [[ "$NEW_SCHEMA" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
   exit 1
 fi
 
+# Slug de tenant: mesma validação usada no cadastro/catálogo — evita SQL
+# injection na hora de montar o INSERT abaixo (slug entra interpolado no SQL
+# porque psql -v não sanitiza aspas em CommandText livre, só em :'var').
+if ! [[ "$TENANT_SLUG" =~ ^[a-z0-9][a-z0-9-]{0,62}$ ]]; then
+  echo "Slug de tenant inválido: '$TENANT_SLUG' (só a-z, 0-9, hífen; não pode começar com hífen; máx 63 chars)." >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
@@ -96,10 +104,13 @@ SQL_FILE=$(mktemp)
   for t in "${TABLES[@]}"; do
     echo "ALTER TABLE public.\"$t\" SET SCHEMA \"$NEW_SCHEMA\";"
   done
-  # __EFMigrationsHistory do AppDbContext também precisa ir junto — o schema
-  # novo precisa da própria história de migrations pra MigrateAsync() futuro
-  # funcionar contra ele isoladamente.
-  echo "ALTER TABLE public.\"__EFMigrationsHistory\" SET SCHEMA \"$NEW_SCHEMA\";"
+  # O schema novo precisa da própria história de migrations pra MigrateAsync()
+  # futuro funcionar contra ele isoladamente — mas public também precisa manter
+  # a sua (CatalogDbContext.MigrateAsync() roda contra "public" a cada startup),
+  # senão ele não encontra a própria história e tenta recriar "tenants", que
+  # já existe. Por isso COPY, nunca MOVE, dessa tabela específica.
+  echo "CREATE TABLE \"$NEW_SCHEMA\".\"__EFMigrationsHistory\" (LIKE public.\"__EFMigrationsHistory\" INCLUDING ALL);"
+  echo "INSERT INTO \"$NEW_SCHEMA\".\"__EFMigrationsHistory\" SELECT * FROM public.\"__EFMigrationsHistory\";"
   echo "INSERT INTO public.tenants (id, slug, schema_name, status, created_at)"
   echo "VALUES (gen_random_uuid(), '$TENANT_SLUG', '$NEW_SCHEMA', 'Active', now());"
   echo "COMMIT;"
