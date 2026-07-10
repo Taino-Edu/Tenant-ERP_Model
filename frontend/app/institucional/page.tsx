@@ -1,14 +1,17 @@
-import type { Metadata } from 'next'
+'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Store, ShieldCheck, Layers, Smartphone, Receipt, Sparkles, ArrowRight, CheckCircle2,
+  Store, ShieldCheck, Layers, Smartphone, Receipt, TrendingUp,
+  ArrowRight, CheckCircle2, Sun, Moon, Menu, X,
 } from 'lucide-react'
 
-export const metadata: Metadata = {
-  title: '2Esysten — ERP completo para lojas e varejo',
-  description:
-    'Plataforma de gestão white-label para lojistas: PDV, estoque, fiscal, crediário e app próprio — tudo em um só sistema.',
-}
+const NAV_LINKS = [
+  { href: '#quem-somos',    label: 'Quem somos' },
+  { href: '#o-que-fazemos', label: 'O que fazemos' },
+  { href: '#clientes',      label: 'Clientes' },
+  { href: '#contato',       label: 'Contato' },
+]
 
 const PILARES = [
   {
@@ -37,62 +40,157 @@ const PILARES = [
     desc: 'Cada loja opera em um espaço isolado no banco de dados — o que é de um cliente nunca se mistura com o de outro.',
   },
   {
-    icon: Sparkles,
+    icon: TrendingUp,
     title: 'Feito pra crescer junto',
     desc: 'Arquitetura pensada para atender de uma loja só a uma rede inteira, sem trocar de sistema no meio do caminho.',
   },
 ]
 
 export default function InstitucionalPage() {
+  // Tema claro (branco + azul) é o padrão da identidade — o escuro é opcional
+  // e fica salvo no navegador do visitante.
+  const [isDark,   setIsDark]   = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    setIsDark(localStorage.getItem('institucional-theme') === 'dark')
+  }, [])
+
+  const toggleTheme = () => {
+    const next = !isDark
+    setIsDark(next)
+    localStorage.setItem('institucional-theme', next ? 'dark' : 'light')
+  }
+
+  const C = isDark ? {
+    bg:      'bg-[#121215]',
+    header:  'bg-[#121215]/95 border-white/10',
+    card:    'bg-[#1A1A1F] border-white/10 hover:border-brand-500/40',
+    heading: 'text-white',
+    body:    'text-white/65',
+    muted:   'text-white/45',
+    section: 'bg-[#17171B]',
+    border:  'border-white/10',
+    chip:    'bg-brand-500/15 text-brand-300',
+    navLink: 'text-white/70 hover:text-white',
+    outline: 'border-white/25 text-white hover:bg-white/5',
+  } : {
+    bg:      'bg-white',
+    header:  'bg-white/95 border-[#0C3D5A]/10',
+    card:    'bg-white border-[#0C3D5A]/10 hover:border-brand-500/60',
+    heading: 'text-[#0C3D5A]',
+    body:    'text-[#3E5A6E]',
+    muted:   'text-[#6B8598]',
+    section: 'bg-brand-50',
+    border:  'border-[#0C3D5A]/10',
+    chip:    'bg-brand-100 text-brand-700',
+    navLink: 'text-[#3E5A6E] hover:text-[#0C3D5A]',
+    outline: 'border-[#0C3D5A]/25 text-[#0C3D5A] hover:bg-brand-50',
+  }
+
   return (
-    <main className="min-h-screen bg-[#0C1220] text-white">
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden border-b border-white/10">
-        <div className="absolute inset-0 bg-gradient-to-br from-brand-700/30 via-transparent to-transparent" />
-        <div className="relative mx-auto max-w-6xl px-6 py-24 sm:py-32">
-          <span className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-500/10 px-4 py-1.5 text-sm font-semibold text-brand-300">
-            <Sparkles size={16} /> Plataforma de gestão para lojistas
-          </span>
-          <h1 className="mt-6 max-w-3xl text-4xl font-extrabold leading-tight sm:text-6xl">
-            O ERP que veste a{' '}
-            <span className="bg-gradient-to-r from-brand-400 to-brand-200 bg-clip-text text-transparent">
-              cara da sua loja
-            </span>
-          </h1>
-          <p className="mt-6 max-w-2xl text-lg text-white/70">
-            Somos a 2Esysten: construímos um sistema de gestão completo — PDV, estoque, fiscal,
-            crediário e app próprio — que cada lojista pode chamar de seu, sem abrir mão da
-            praticidade de uma plataforma pronta.
-          </p>
-          <div className="mt-10 flex flex-wrap gap-4">
-            <a
-              href="#contato"
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-6 py-3 font-semibold text-[#0C1220] transition hover:bg-brand-400"
+    <main className={`min-h-screen ${C.bg}`}>
+      {/* ── Navbar ───────────────────────────────────────────────────────── */}
+      <header className={`sticky top-0 z-40 border-b backdrop-blur ${C.header}`}>
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          <Link href="/" className={`text-xl font-extrabold tracking-tight ${C.heading}`}>
+            <span className="text-brand-600">2E</span>systen
+          </Link>
+
+          <nav className="hidden items-center gap-8 md:flex">
+            {NAV_LINKS.map(({ href, label }) => (
+              <a key={href} href={href} className={`text-sm font-semibold transition ${C.navLink}`}>
+                {label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              aria-label={isDark ? 'Tema claro' : 'Tema escuro'}
+              className={`rounded-lg border p-2 transition ${C.outline}`}
             >
-              Quero minha loja no sistema <ArrowRight size={18} />
-            </a>
-            <a
-              href="#clientes"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-6 py-3 font-semibold text-white/90 transition hover:bg-white/5"
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <Link
+              href="/login"
+              className="hidden rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 sm:inline-flex"
             >
-              Ver quem já usa
-            </a>
+              Entrar
+            </Link>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              aria-label="Menu"
+              className={`rounded-lg border p-2 md:hidden ${C.outline}`}
+            >
+              {menuOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
           </div>
+        </div>
+
+        {menuOpen && (
+          <nav className={`border-t px-6 py-4 md:hidden ${C.border}`}>
+            <div className="flex flex-col gap-4">
+              {NAV_LINKS.map(({ href, label }) => (
+                <a
+                  key={href}
+                  href={href}
+                  onClick={() => setMenuOpen(false)}
+                  className={`text-sm font-semibold ${C.navLink}`}
+                >
+                  {label}
+                </a>
+              ))}
+              <Link href="/login" className="text-sm font-semibold text-brand-600">
+                Entrar
+              </Link>
+            </div>
+          </nav>
+        )}
+      </header>
+
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <section className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
+        <p className="text-sm font-bold uppercase tracking-widest text-brand-600">
+          Plataforma de gestão para lojistas
+        </p>
+        <h1 className={`mt-4 max-w-3xl text-4xl font-extrabold leading-tight sm:text-5xl ${C.heading}`}>
+          O ERP completo, <span className="text-brand-600">com a cara da sua loja</span>
+        </h1>
+        <p className={`mt-6 max-w-2xl text-lg ${C.body}`}>
+          Somos a 2Esysten: construímos um sistema de gestão completo — PDV, estoque, fiscal,
+          crediário e app próprio — que cada lojista pode chamar de seu, sem abrir mão da
+          praticidade de uma plataforma pronta.
+        </p>
+        <div className="mt-10 flex flex-wrap gap-4">
+          <a
+            href="#contato"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-6 py-3 font-semibold text-white transition hover:bg-brand-700"
+          >
+            Quero minha loja no sistema <ArrowRight size={18} />
+          </a>
+          <a
+            href="#clientes"
+            className={`inline-flex items-center gap-2 rounded-lg border px-6 py-3 font-semibold transition ${C.outline}`}
+          >
+            Ver quem já usa
+          </a>
         </div>
       </section>
 
       {/* ── Quem somos ───────────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="grid gap-12 md:grid-cols-2 md:items-center">
+      <section id="quem-somos" className={`scroll-mt-20 border-y ${C.border} ${C.section}`}>
+        <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 md:grid-cols-2 md:items-center">
           <div>
-            <h2 className="text-sm font-bold uppercase tracking-widest text-brand-400">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-brand-600">
               Quem somos
             </h2>
-            <p className="mt-4 text-2xl font-bold leading-snug sm:text-3xl">
+            <p className={`mt-4 text-2xl font-bold leading-snug sm:text-3xl ${C.heading}`}>
               Nascemos dentro de uma loja de verdade, resolvendo problema de verdade.
             </p>
           </div>
-          <div className="space-y-4 text-white/70">
+          <div className={`space-y-4 ${C.body}`}>
             <p>
               A 2Esysten começou como o sistema interno de uma loja de card games, construído pra
               resolver o dia a dia de quem vende, emite nota, controla estoque e fecha caixa —
@@ -109,89 +207,97 @@ export default function InstitucionalPage() {
         </div>
       </section>
 
-      {/* ── Pilares / o que fazemos ─────────────────────────────────────── */}
-      <section className="border-y border-white/10 bg-white/[0.02] py-20">
-        <div className="mx-auto max-w-6xl px-6">
-          <h2 className="text-sm font-bold uppercase tracking-widest text-brand-400">
-            O que fazemos
-          </h2>
-          <p className="mt-3 max-w-2xl text-2xl font-bold sm:text-3xl">
-            Um sistema só, cobrindo o que hoje toma cinco ferramentas diferentes.
-          </p>
+      {/* ── O que fazemos ────────────────────────────────────────────────── */}
+      <section id="o-que-fazemos" className="mx-auto max-w-6xl scroll-mt-20 px-6 py-20">
+        <h2 className="text-sm font-bold uppercase tracking-widest text-brand-600">
+          O que fazemos
+        </h2>
+        <p className={`mt-3 max-w-2xl text-2xl font-bold sm:text-3xl ${C.heading}`}>
+          Um sistema só, cobrindo o que hoje toma cinco ferramentas diferentes.
+        </p>
 
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {PILARES.map(({ icon: Icon, title, desc }) => (
-              <div
-                key={title}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-brand-400/40 hover:bg-white/[0.05]"
-              >
-                <div className="mb-4 inline-flex rounded-xl bg-brand-500/15 p-3 text-brand-300">
-                  <Icon size={22} />
-                </div>
-                <h3 className="font-bold">{title}</h3>
-                <p className="mt-2 text-sm text-white/60">{desc}</p>
+        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {PILARES.map(({ icon: Icon, title, desc }) => (
+            <div key={title} className={`rounded-xl border p-6 transition ${C.card}`}>
+              <div className={`mb-4 inline-flex rounded-lg p-3 ${C.chip}`}>
+                <Icon size={22} />
               </div>
-            ))}
-          </div>
+              <h3 className={`font-bold ${C.heading}`}>{title}</h3>
+              <p className={`mt-2 text-sm ${C.body}`}>{desc}</p>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* ── Clientes ─────────────────────────────────────────────────────── */}
-      <section id="clientes" className="mx-auto max-w-6xl px-6 py-20">
-        <h2 className="text-sm font-bold uppercase tracking-widest text-brand-400">
-          Quem já usa
-        </h2>
-        <p className="mt-3 max-w-2xl text-2xl font-bold sm:text-3xl">
-          Primeira loja rodando, muitas outras vindo por aí.
-        </p>
+      <section id="clientes" className={`scroll-mt-20 border-y ${C.border} ${C.section}`}>
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-brand-600">
+            Quem já usa
+          </h2>
+          <p className={`mt-3 max-w-2xl text-2xl font-bold sm:text-3xl ${C.heading}`}>
+            Primeira loja rodando, muitas outras vindo por aí.
+          </p>
 
-        <div className="mt-10 grid gap-6 sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-brand-500/10 to-transparent p-8">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-500/20 font-bold text-brand-300">
-                SN
+          <div className="mt-10 grid gap-6 sm:grid-cols-2">
+            <div className={`rounded-xl border p-8 ${C.card}`}>
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 font-bold text-white">
+                  SN
+                </div>
+                <div>
+                  <p className={`font-bold ${C.heading}`}>Santuário Nerd</p>
+                  <p className={`text-sm ${C.muted}`}>Loja de card games</p>
+                </div>
               </div>
-              <div>
-                <p className="font-bold">Santuário Nerd</p>
-                <p className="text-sm text-white/50">Loja de card games</p>
-              </div>
+              <p className={`mt-4 text-sm ${C.body}`}>
+                Primeira loja a rodar a plataforma — PDV, comandas, crediário e emissão fiscal no
+                dia a dia, com a marca própria do Santuário do início ao fim.
+              </p>
             </div>
-            <p className="mt-4 text-sm text-white/70">
-              Primeira loja a rodar a plataforma — PDV, comandas, crediário e emissão fiscal no
-              dia a dia, com a marca própria do Santuário do início ao fim.
-            </p>
-          </div>
 
-          <div className="flex flex-col items-start justify-center rounded-2xl border border-dashed border-white/15 p-8 text-white/50">
-            <CheckCircle2 className="mb-3 text-brand-400" size={24} />
-            <p className="font-semibold text-white/80">A próxima pode ser a sua loja</p>
-            <p className="mt-2 text-sm">
-              Estamos abrindo espaço para novos lojistas conforme a plataforma cresce.
-            </p>
+            <div className={`flex flex-col items-start justify-center rounded-xl border border-dashed p-8 ${C.border}`}>
+              <CheckCircle2 className="mb-3 text-brand-600" size={24} />
+              <p className={`font-semibold ${C.heading}`}>A próxima pode ser a sua loja</p>
+              <p className={`mt-2 text-sm ${C.muted}`}>
+                Estamos abrindo espaço para novos lojistas conforme a plataforma cresce.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* ── CTA final ────────────────────────────────────────────────────── */}
-      <section id="contato" className="border-t border-white/10 bg-white/[0.02] py-20">
+      <section id="contato" className="scroll-mt-20 bg-[#0C3D5A] py-20">
         <div className="mx-auto max-w-3xl px-6 text-center">
-          <h2 className="text-3xl font-extrabold sm:text-4xl">
+          <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
             Quer sua loja rodando com a sua cara?
           </h2>
-          <p className="mt-4 text-white/70">
+          <p className="mt-4 text-white/75">
             Fala com a gente e a gente monta seu espaço na plataforma — subdomínio, identidade
             visual e módulo fiscal configurados pra você vender no mesmo dia.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-4">
             <Link
               href="/cadastro"
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-6 py-3 font-semibold text-[#0C1220] transition hover:bg-brand-400"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-6 py-3 font-semibold text-[#0C3D5A] transition hover:bg-brand-400"
             >
               Falar com a gente <ArrowRight size={18} />
             </Link>
           </div>
         </div>
       </section>
+
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
+      <footer className={`border-t px-6 py-8 ${C.border}`}>
+        <div className={`mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm sm:flex-row ${C.muted}`}>
+          <p>© {new Date().getFullYear()} 2Esysten — Sistema de gestão para lojas e varejo.</p>
+          <div className="flex gap-6">
+            <Link href="/termos" className="transition hover:text-brand-600">Termos de uso</Link>
+            <Link href="/privacidade" className="transition hover:text-brand-600">Privacidade</Link>
+          </div>
+        </div>
+      </footer>
     </main>
   )
 }
