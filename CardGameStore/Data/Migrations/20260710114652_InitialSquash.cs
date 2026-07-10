@@ -260,6 +260,7 @@ namespace CardGameStore.Data.Migrations
                     contact_person_name = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false),
                     whatsapp_number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     contact_email = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    logo_url = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
                     nav_produtos_label = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     nav_pontos_label = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     cta_ver_produtos_label = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),

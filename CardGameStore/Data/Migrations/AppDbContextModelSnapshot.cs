@@ -1692,6 +1692,11 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("character varying(400)")
                         .HasColumnName("hero_subtitle");
 
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("logo_url");
+
                     b.Property<string>("NavPontosLabel")
                         .IsRequired()
                         .HasMaxLength(40)

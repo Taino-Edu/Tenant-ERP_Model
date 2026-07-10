@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260709204852_InitialSquash")]
+    [Migration("20260710114652_InitialSquash")]
     partial class InitialSquash
     {
         /// <inheritdoc />
@@ -1694,6 +1694,11 @@ namespace CardGameStore.Data.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("character varying(400)")
                         .HasColumnName("hero_subtitle");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("logo_url");
 
                     b.Property<string>("NavPontosLabel")
                         .IsRequired()
