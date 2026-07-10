@@ -12,6 +12,7 @@ using CardGameStore.Data;
 using CardGameStore.HealthChecks;
 using CardGameStore.Hubs;
 using CardGameStore.Middleware;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -54,11 +55,45 @@ builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSet
 var pgConnStr = builder.Configuration.GetConnectionString("PostgreSQL");
 var useSqlite = string.IsNullOrWhiteSpace(pgConnStr);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+// ITenantContext é scoped — cada request (ou cada escopo manual criado por um
+// hosted service) tem sua própria instância, com o valor padrão já apontando
+// pro tenant-zero (schema "public").
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 {
     if (useSqlite)
     {
+        // SQLite não tem conceito de schema/search_path — o interceptor de
+        // tenant só faz sentido contra Postgres.
         var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "cardgamestore.db");
+        options.UseSqlite($"Data Source={dbPath}");
+    }
+    else
+    {
+        options.UseNpgsql(
+            pgConnStr,
+            npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5)
+        );
+        // Resolve do próprio IServiceProvider scoped (sp) — pega a MESMA
+        // instância de ITenantContext que o TenantResolutionMiddleware populou
+        // nesta requisição, não uma nova.
+        options.AddInterceptors(new TenantConnectionInterceptor(
+            sp.GetRequiredService<ITenantContext>(),
+            sp.GetRequiredService<ILogger<TenantConnectionInterceptor>>()));
+    }
+});
+
+// Catálogo de tenants — em Postgres é o mesmo banco físico do AppDbContext
+// (schema "public"), contexto leve e independente, sem o interceptor de
+// search_path. Em SQLite (dev) usa um arquivo próprio: EnsureCreatedAsync só
+// olha se o arquivo/banco já existe, não se as tabelas do model atual estão
+// lá — dois contextos apontando pro mesmo arquivo faria o segundo virar no-op.
+builder.Services.AddDbContext<CatalogDbContext>(options =>
+{
+    if (useSqlite)
+    {
+        var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "cardgamestore_catalog.db");
         options.UseSqlite($"Data Source={dbPath}");
     }
     else
@@ -277,12 +312,31 @@ builder.Services.AddHostedService<SefazDistBackgroundService>();
 var corsOrigins = (builder.Configuration["CorsSettings:AllowedOrigins"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+// RootDomain (mesma config usada pelo TenantResolutionMiddleware) libera
+// qualquer subdomínio de tenant, em paralelo com a lista de origens fixas
+// acima (IP de teste, domínio raiz) — nenhuma substitui a outra.
+var corsRootDomain = builder.Configuration["Multitenancy:RootDomain"];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
         policy
-            .WithOrigins(corsOrigins)
+            .SetIsOriginAllowed(origin =>
+            {
+                if (corsOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+                    return true;
+
+                if (string.IsNullOrWhiteSpace(corsRootDomain))
+                    return false;
+
+                if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
+                    return false;
+
+                var host = originUri.Host;
+                return host.Equals(corsRootDomain, StringComparison.OrdinalIgnoreCase)
+                    || host.EndsWith("." + corsRootDomain, StringComparison.OrdinalIgnoreCase);
+            })
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -336,8 +390,9 @@ var app = builder.Build();
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
-    var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var db      = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var catalog = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
+    var logger  = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     try
     {
@@ -348,11 +403,13 @@ using (var scope = app.Services.CreateScope())
             // SQLite (dev local sem Postgres configurado) não tem migrations —
             // schema é gerado direto do model atual a cada start.
             await db.Database.EnsureCreatedAsync();
+            await catalog.Database.EnsureCreatedAsync();
         }
         else
         {
             // Postgres — schema versionado via EF Core Migrations (Data/Migrations).
             await db.Database.MigrateAsync();
+            await catalog.Database.MigrateAsync();
         }
 
         logger.LogInformation("Banco pronto.");
@@ -416,6 +473,11 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Resolve o tenant da requisição (por Host) antes de qualquer coisa que possa
+// tocar o AppDbContext — o schema que o TenantConnectionInterceptor usa vem
+// do ITenantContext que este middleware popula.
+app.UseTenantResolution();
+
 // Swagger apenas em desenvolvimento — evita expor a estrutura da API em produção
 if (app.Environment.IsDevelopment())
 {
@@ -434,6 +496,7 @@ app.UseCors("FrontendPolicy");
 app.UseRateLimiter();
 app.UseRequestTimeouts();
 app.UseAuthentication();
+app.UseTenantClaimGuard();
 app.UseAuthorization();
 app.UseOperatorPermissions();
 

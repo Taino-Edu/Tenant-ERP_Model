@@ -5,6 +5,7 @@ using CardGameStore.Configuration;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -27,19 +28,22 @@ public class AuthService : IAuthService
     private readonly ILogger<AuthService>  _logger;
     private readonly IComandaService       _comandaService;
     private readonly IEmailService         _email;
+    private readonly ITenantContext        _tenant;
 
     public AuthService(
         AppDbContext db,
         IOptions<JwtSettings> jwt,
         ILogger<AuthService> logger,
         IComandaService comandaService,
-        IEmailService email)
+        IEmailService email,
+        ITenantContext tenant)
     {
         _db             = db;
         _jwt            = jwt.Value;
         _logger         = logger;
         _comandaService = comandaService;
         _email          = email;
+        _tenant         = tenant;
     }
 
     // =========================================================================
@@ -185,7 +189,12 @@ public class AuthService : IAuthService
             new(JwtRegisteredClaimNames.Sub,   user.Id.ToString()),
             new(JwtRegisteredClaimNames.Name,  user.Name),
             new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
-            new(ClaimTypes.Role,               user.Role)
+            new(ClaimTypes.Role,               user.Role),
+            // Guid do tenant (não o schema) resolvido pra esta requisição — o
+            // TenantClaimGuardMiddleware compara contra o tenant resolvido por
+            // Host na requisição seguinte (defesa em profundidade; o schema que
+            // roteia a conexão é sempre o resolvido por Host, não esta claim).
+            new(TenantConstants.TenantIdClaimType, _tenant.TenantId.ToString())
         };
 
         if (!string.IsNullOrEmpty(user.Email))

@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# backup.sh — Backup diário de PostgreSQL e MongoDB
+# backup.sh — Backup diário de PostgreSQL
 #
 # USO MANUAL:
 #   cd /opt/tenant-erp && bash deploy/backup.sh
@@ -13,7 +13,7 @@
 # VARIÁVEIS DE AMBIENTE (lidas do .env ou exportadas antes de chamar):
 #   BACKUP_DIR          Diretório de destino (default: /opt/tenant-erp/backups)
 #   BACKUP_RETAIN_DAYS  Dias de retenção (default: 7)
-#   POSTGRES_DB / POSTGRES_USER / MONGO_USER / MONGO_PASSWORD — lidos do .env
+#   POSTGRES_DB / POSTGRES_USER — lidos do .env
 # =============================================================================
 
 set -euo pipefail
@@ -37,7 +37,6 @@ fi
 
 POSTGRES_DB="${POSTGRES_DB:-cardgamestore}"
 POSTGRES_USER="${POSTGRES_USER:-cardgame_user}"
-MONGO_USER="${MONGO_USER:-mongo_admin}"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] === Iniciando backup Tenant-ERP ==="
 
@@ -52,25 +51,8 @@ docker exec cardgamestore_postgres \
 PG_SIZE=$(du -sh "$PG_FILE" | cut -f1)
 echo "[$(date '+%H:%M:%S')] PostgreSQL OK ($PG_SIZE)"
 
-# ── MongoDB ────────────────────────────────────────────────────────────────────
-MONGO_FILE="$BACKUP_DIR/mongo_${TIMESTAMP}.archive.gz"
-echo "[$(date '+%H:%M:%S')] MongoDB → $MONGO_FILE"
-
-docker exec cardgamestore_mongo \
-  mongodump \
-    --username "$MONGO_USER" \
-    --password "$MONGO_PASSWORD" \
-    --authenticationDatabase admin \
-    --db cardgamestore_cache \
-    --archive \
-    --gzip \
-  > "$MONGO_FILE"
-
-MONGO_SIZE=$(du -sh "$MONGO_FILE" | cut -f1)
-echo "[$(date '+%H:%M:%S')] MongoDB OK ($MONGO_SIZE)"
-
 # ── Limpeza de backups antigos ─────────────────────────────────────────────────
-REMOVED=$(find "$BACKUP_DIR" \( -name "*.sql.gz" -o -name "*.archive.gz" \) \
+REMOVED=$(find "$BACKUP_DIR" -name "*.sql.gz" \
   -mtime +"$MAX_DAYS" -print -delete | wc -l)
 echo "[$(date '+%H:%M:%S')] $REMOVED arquivo(s) com mais de $MAX_DAYS dias removidos"
 
