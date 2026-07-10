@@ -4,7 +4,6 @@
 // =============================================================================
 
 using CardGameStore.Data;
-using CardGameStore.Models.MongoDB;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -318,8 +317,8 @@ public class FiscalController : ControllerBase
     }
 
     // ── POST /api/fiscal/emitir/venda-avulsa/{id} ─────────────────────────────
-    [HttpPost("emitir/venda-avulsa/{id}")]
-    public async Task<IActionResult> EmitirNotaVendaAvulsa(string id)
+    [HttpPost("emitir/venda-avulsa/{id:guid}")]
+    public async Task<IActionResult> EmitirNotaVendaAvulsa(Guid id)
     {
         var jaExiste = await _db.NotasFiscaisEmitidas.AnyAsync(n => n.Origem == NotaFiscalOrigem.VendaAvulsa && n.VendaAvulsaId == id);
         if (jaExiste)

@@ -8,9 +8,3 @@ public class JwtSettings
     public int AccessTokenExpirationMinutes { get; set; } = 60;
     public int RefreshTokenExpirationDays { get; set; } = 30;
 }
-
-public class MongoDbSettings
-{
-    public string ConnectionString { get; set; } = "mongodb://localhost:27017";
-    public string DatabaseName { get; set; } = "cardgamestore_cache";
-}

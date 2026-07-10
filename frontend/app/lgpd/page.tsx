@@ -10,8 +10,6 @@ import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { useState } from 'react'
 import { Shield, Search, ChevronDown } from 'lucide-react'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
-
 const TIPOS_SOLICITACAO = [
   { value: 'Acesso',       label: 'Acesso — Quero saber quais dados vocês têm sobre mim' },
   { value: 'Retificacao',  label: 'Retificação — Quero corrigir dados incorretos' },
@@ -75,7 +73,7 @@ export default function LgpdPage() {
 
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/lgpd/request`, {
+      const res = await fetch('/api/lgpd/request', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ ...form, requesterCpf: cpfLimpo }),
@@ -102,7 +100,7 @@ export default function LgpdPage() {
     setConsultaLoading(true)
     try {
       const params = new URLSearchParams({ email: consultaEmail.trim() })
-      const res = await fetch(`${API_BASE}/api/lgpd/request/${consultaId.trim()}?${params}`)
+      const res = await fetch(`/api/lgpd/request/${consultaId.trim()}?${params}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.message || 'Protocolo não encontrado.')
       setConsultaResult(data)

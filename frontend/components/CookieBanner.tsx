@@ -11,7 +11,6 @@ import { useState, useEffect } from 'react'
 import { X } from 'lucide-react'
 
 const STORAGE_KEY = 'cookieConsent'
-const API_BASE    = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
 export default function CookieBanner() {
   const [visible,  setVisible]  = useState(false)
@@ -34,7 +33,7 @@ export default function CookieBanner() {
 
     // Registra consentimento no backend (sem bloquear o fluxo)
     try {
-      await fetch(`${API_BASE}/api/lgpd/consent`, {
+      await fetch('/api/lgpd/consent', {
         method:      'POST',
         headers:     { 'Content-Type': 'application/json' },
         credentials: 'include',

@@ -14,7 +14,6 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using MongoDB.Driver;
 using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual;
 using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual.Tipos;
 
@@ -120,7 +119,7 @@ public class NfceEmissionServiceTests
         using var db = CreateDb();
         var service = CreateService(db);
 
-        var nota = await service.EmitirParaVendaAvulsaAsync(MongoDB.Bson.ObjectId.GenerateNewId().ToString());
+        var nota = await service.EmitirParaVendaAvulsaAsync(Guid.NewGuid());
 
         nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
         nota.Origem.Should().Be(NotaFiscalOrigem.VendaAvulsa);

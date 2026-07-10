@@ -2,8 +2,8 @@
 // VendaAvulsaController.cs — Endpoints de Venda Avulsa (caixa do balcão)
 //
 // POST /api/venda-avulsa          → Registra venda no balcão (Admin)
-//                                    Valida estoque, decrementa PostgreSQL,
-//                                    persiste evento imutável no MongoDB.
+//                                    Valida estoque, decrementa e persiste o
+//                                    evento, tudo no PostgreSQL.
 // GET  /api/venda-avulsa/recent   → Últimas N vendas (dashboard/histórico)
 //
 // Separado do ComandaController intencionalmente:
@@ -12,7 +12,7 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
-using CardGameStore.Models.MongoDB;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,7 +31,7 @@ public class VendaAvulsaController : ControllerBase
 
     /// <summary>
     /// Registra uma venda avulsa no balcão.
-    /// Decrementa estoque (PostgreSQL) e persiste o evento no MongoDB.
+    /// Decrementa estoque e persiste o evento, tudo no PostgreSQL.
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(VendaAvulsaDto), 201)]
@@ -92,12 +92,12 @@ public class VendaAvulsaController : ControllerBase
     /// Usa o custo atual de cada produto no PostgreSQL como referência.
     /// </summary>
     /// <summary>Corrige a forma de pagamento de uma venda avulsa já registrada (Admin only).</summary>
-    [HttpPatch("{id}/pagamento")]
+    [HttpPatch("{id:guid}/pagamento")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(VendaAvulsaDto), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
-    public async Task<IActionResult> EditarPagamento(string id, [FromBody] EditarPagamentoVendaAvulsaRequest request)
+    public async Task<IActionResult> EditarPagamento(Guid id, [FromBody] EditarPagamentoVendaAvulsaRequest request)
     {
         try
         {

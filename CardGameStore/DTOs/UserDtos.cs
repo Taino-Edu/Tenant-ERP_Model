@@ -237,7 +237,7 @@ public class ComandaItemHistoricoDto
 
 public class VendaAvulsaHistoricoDto
 {
-    public string   Id            { get; set; } = string.Empty;
+    public Guid     Id            { get; set; }
     public decimal  TotalInReais  { get; set; }
     public string   PaymentMethod { get; set; } = string.Empty;
     public DateTime SoldAt        { get; set; }

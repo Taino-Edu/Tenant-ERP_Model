@@ -3,19 +3,17 @@
 //
 // GET /api/relatorios/vendas?mes=5&ano=2026
 //   Combina:
-//   • Comanda items  (PostgreSQL) — comandas Fechadas no mês
-//   • VendaAvulsa items (MongoDB) — vendas de balcão no mês
+//   • Comanda items     (PostgreSQL) — comandas Fechadas no mês
+//   • VendaAvulsa items (PostgreSQL) — vendas de balcão no mês
 //   Agrupa por categoria → produto, soma quantidades e totais.
 // =============================================================================
 
 using CardGameStore.Data;
 using CardGameStore.DTOs;
-using CardGameStore.Models.MongoDB;
 using CardGameStore.Models.PostgreSQL;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 using System.Linq;
 
 namespace CardGameStore.Controllers;
@@ -32,13 +30,11 @@ public class RelatoriosController : ControllerBase
         catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
     }
 
-    private readonly AppDbContext                   _db;
-    private readonly IMongoCollection<VendaAvulsa> _vendas;
+    private readonly AppDbContext _db;
 
-    public RelatoriosController(AppDbContext db, IMongoDatabase mongo)
+    public RelatoriosController(AppDbContext db)
     {
-        _db     = db;
-        _vendas = mongo.GetCollection<VendaAvulsa>("vendas_avulsas");
+        _db = db;
     }
 
     // -------------------------------------------------------------------------
@@ -72,11 +68,10 @@ public class RelatoriosController : ControllerBase
                 i.Comanda.ClosedAt.Value < fim)
             .ToListAsync();
 
-        // ── 2. VendasAvulsas no mês (MongoDB) ────────────────────────────────
-        var filter = Builders<VendaAvulsa>.Filter.And(
-            Builders<VendaAvulsa>.Filter.Gte(v => v.SoldAt, inicio),
-            Builders<VendaAvulsa>.Filter.Lt(v => v.SoldAt, fim));
-        var vendasAvulsas = await _vendas.Find(filter).ToListAsync();
+        // ── 2. VendasAvulsas no mês ───────────────────────────────────────────
+        var vendasAvulsas = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= inicio && v.SoldAt < fim)
+            .ToListAsync();
 
         // ── 3. Acumula em dicionário categoria → produto → (qty, total) ───────
         // Estrutura: dict[categoria][produto] = (qty, totalCentavos)
@@ -104,7 +99,7 @@ public class RelatoriosController : ControllerBase
             Acumular(cat, item.ItemNameSnapshot, item.Quantity, item.UnitPriceInCents);
         }
 
-        // Vendas avulsas (MongoDB)
+        // Vendas avulsas
         foreach (var venda in vendasAvulsas)
         foreach (var item in venda.Items)
         {

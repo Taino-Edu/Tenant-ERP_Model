@@ -83,8 +83,6 @@ services:
       ASPNETCORE_URLS: http://+:5000
       # Banco de dados
       ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_USER:-cardgame_user};Password=${POSTGRES_PASSWORD}"
-      MongoDbSettings__ConnectionString: "mongodb://${MONGO_USER:-mongo_admin}:${MONGO_PASSWORD}@mongo:27017/?authSource=admin"
-      MongoDbSettings__DatabaseName: "cardgamestore_cache"
       # JWT
       JwtSettings__SecretKey: "${JWT_SECRET}"
       JwtSettings__Issuer: "${APP_URL:-http://localhost}"
@@ -108,6 +106,10 @@ services:
       # via IP puro/HTTP direto tem que ser false, senão o cookie nunca é aceito.
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
       CorsSettings__AllowedOrigins: "${APP_URL:-http://localhost}"
+      # Multi-tenancy — domínio raiz dos subdomínios de tenant (ex: loja.SEU_DOMINIO).
+      # Sem isso, TenantResolutionMiddleware.ExtractSlug() nunca acha slug nenhum e
+      # toda requisição cai em tenant-zero, mesmo com o wildcard configurado no Nginx.
+      Multitenancy__RootDomain: "${MULTITENANCY_ROOT_DOMAIN}"
       Security__IpHashSalt: "${IP_HASH_SALT}"
       Encryption__Key: "${ENCRYPTION_KEY}"
     volumes:
@@ -116,8 +118,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      mongo:
-        condition: service_started
     networks:
       - cardgame_network
     restart: unless-stopped
@@ -169,37 +169,11 @@ services:
       timeout: 5s
       retries: 5
 
-  # ---------------------------------------------------------------------------
-  # MONGODB — Cache de cartas TCG (Pokémon, MTG, etc.)
-  # ---------------------------------------------------------------------------
-  mongo:
-    image: mongo:7-jammy
-    container_name: cardgamestore_mongo
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: "${MONGO_USER:-mongo_admin}"
-      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_PASSWORD}"
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - cardgame_network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
 # -----------------------------------------------------------------------------
 # Volumes persistentes (dados sobrevivem a reinicios e redeploys)
 # -----------------------------------------------------------------------------
 volumes:
   postgres_data:
-  mongo_data:
   api_uploads:
 
 # -----------------------------------------------------------------------------

@@ -12,6 +12,7 @@ using CardGameStore.Data;
 using CardGameStore.HealthChecks;
 using CardGameStore.Hubs;
 using CardGameStore.Middleware;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -19,7 +20,6 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using MongoDB.Driver;
 
 // Comando utilitário: dotnet run -- gen-key  →  imprime nova chave AES-256 em Base64
 if (args.Contains("gen-key"))
@@ -45,11 +45,9 @@ var builder = WebApplication.CreateBuilder(args);
 // ---------------------------------------------------------------------------
 // 1. CONFIGURAÇÕES
 // ---------------------------------------------------------------------------
-var jwtSettings   = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
-var mongoSettings = builder.Configuration.GetSection("MongoDbSettings").Get<MongoDbSettings>()!;
+var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSettings>()!;
 
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
-builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("MongoDbSettings"));
 
 // ---------------------------------------------------------------------------
 // 2. BANCO RELACIONAL — SQLite (dev local) ou PostgreSQL (produção/Docker)
@@ -57,10 +55,17 @@ builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection("Mo
 var pgConnStr = builder.Configuration.GetConnectionString("PostgreSQL");
 var useSqlite = string.IsNullOrWhiteSpace(pgConnStr);
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+// ITenantContext é scoped — cada request (ou cada escopo manual criado por um
+// hosted service) tem sua própria instância, com o valor padrão já apontando
+// pro tenant-zero (schema "public").
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 {
     if (useSqlite)
     {
+        // SQLite não tem conceito de schema/search_path — o interceptor de
+        // tenant só faz sentido contra Postgres.
         var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "cardgamestore.db");
         options.UseSqlite($"Data Source={dbPath}");
     }
@@ -70,33 +75,34 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             pgConnStr,
             npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5)
         );
+        // Resolve do próprio IServiceProvider scoped (sp) — pega a MESMA
+        // instância de ITenantContext que o TenantResolutionMiddleware populou
+        // nesta requisição, não uma nova.
+        options.AddInterceptors(new TenantConnectionInterceptor(
+            sp.GetRequiredService<ITenantContext>(),
+            sp.GetRequiredService<ILogger<TenantConnectionInterceptor>>()));
     }
 });
 
-// ---------------------------------------------------------------------------
-// 3. BANCO DE DOCUMENTOS — MongoDB — opcional em dev
-// ---------------------------------------------------------------------------
-var mongoConStr = mongoSettings?.ConnectionString;
-if (string.IsNullOrWhiteSpace(mongoConStr))
+// Catálogo de tenants — em Postgres é o mesmo banco físico do AppDbContext
+// (schema "public"), contexto leve e independente, sem o interceptor de
+// search_path. Em SQLite (dev) usa um arquivo próprio: EnsureCreatedAsync só
+// olha se o arquivo/banco já existe, não se as tabelas do model atual estão
+// lá — dois contextos apontando pro mesmo arquivo faria o segundo virar no-op.
+builder.Services.AddDbContext<CatalogDbContext>(options =>
 {
-    var startupLogger = builder.Services.BuildServiceProvider()
-        .GetRequiredService<ILogger<Program>>();
-    startupLogger.LogWarning("MongoDB: ConnectionString não configurada — TCG cache e VendaAvulsa podem não funcionar.");
-    mongoConStr = "mongodb://localhost:27017";
-}
-
-// Registro sempre ocorre — o MongoDB driver só conecta na primeira query (lazy connection).
-builder.Services.AddSingleton<IMongoClient>(_ =>
-{
-    var settings = MongoClientSettings.FromConnectionString(mongoConStr);
-    settings.ServerSelectionTimeout = TimeSpan.FromSeconds(3);
-    return new MongoClient(settings);
-});
-
-builder.Services.AddSingleton(sp =>
-{
-    var client = sp.GetRequiredService<IMongoClient>();
-    return client.GetDatabase(mongoSettings?.DatabaseName ?? "cardgamestore_cache");
+    if (useSqlite)
+    {
+        var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "cardgamestore_catalog.db");
+        options.UseSqlite($"Data Source={dbPath}");
+    }
+    else
+    {
+        options.UseNpgsql(
+            pgConnStr,
+            npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5)
+        );
+    }
 });
 
 // ---------------------------------------------------------------------------
@@ -260,11 +266,10 @@ builder.Services.AddHttpClient("gemini", client =>
 });
 
 // ---------------------------------------------------------------------------
-// 10. HEALTH CHECKS — Postgres + MongoDB via IHealthCheck com injeção correta
+// 10. HEALTH CHECKS — Postgres via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
 builder.Services.AddHealthChecks()
-    .AddCheck<DbHealthCheck>   ("postgres", tags: ["db", "postgres"])
-    .AddCheck<MongoHealthCheck>("mongodb",  tags: ["db", "mongo"]);
+    .AddCheck<DbHealthCheck>("postgres", tags: ["db", "postgres"]);
 
 // ---------------------------------------------------------------------------
 // 11. SERVIÇOS DE APLICAÇÃO
@@ -307,12 +312,31 @@ builder.Services.AddHostedService<SefazDistBackgroundService>();
 var corsOrigins = (builder.Configuration["CorsSettings:AllowedOrigins"] ?? "http://localhost:3000")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+// RootDomain (mesma config usada pelo TenantResolutionMiddleware) libera
+// qualquer subdomínio de tenant, em paralelo com a lista de origens fixas
+// acima (IP de teste, domínio raiz) — nenhuma substitui a outra.
+var corsRootDomain = builder.Configuration["Multitenancy:RootDomain"];
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
         policy
-            .WithOrigins(corsOrigins)
+            .SetIsOriginAllowed(origin =>
+            {
+                if (corsOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase))
+                    return true;
+
+                if (string.IsNullOrWhiteSpace(corsRootDomain))
+                    return false;
+
+                if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
+                    return false;
+
+                var host = originUri.Host;
+                return host.Equals(corsRootDomain, StringComparison.OrdinalIgnoreCase)
+                    || host.EndsWith("." + corsRootDomain, StringComparison.OrdinalIgnoreCase);
+            })
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -362,367 +386,33 @@ builder.Services.AddControllers();
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------
-// 15. BANCO DE DADOS — EnsureCreated em dev, Migrations em produção
+// 15. BANCO DE DADOS — EnsureCreated em dev sem Postgres (SQLite), Migrations em Postgres
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
-    var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var db      = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var catalog = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
+    var logger  = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     try
     {
-        // EnsureCreated usa o provider correto (SQLite em dev, Npgsql em prod)
-        // e cria as tabelas com os tipos nativos de cada banco.
-        // Migrations virão numa próxima fase quando o schema estiver estável.
         logger.LogInformation("Inicializando banco de dados...");
-        await db.Database.EnsureCreatedAsync();
-        logger.LogInformation("Banco pronto.");
 
-        // Cria tabelas/colunas novas que EnsureCreated não alcança em bancos já existentes.
-        // EnsureCreated retorna false sem alterar nada se já existirem tabelas no banco,
-        // por isso usamos DDL explícito com IF NOT EXISTS para tornar o startup idempotente.
-        if (!useSqlite)
+        if (useSqlite)
         {
-            await db.Database.ExecuteSqlRawAsync(@"
-                CREATE TABLE IF NOT EXISTS perfis (
-                    id                  UUID         NOT NULL DEFAULT gen_random_uuid(),
-                    nome                VARCHAR(100) NOT NULL,
-                    permissoes_json     TEXT         NOT NULL DEFAULT '[]',
-                    criado_por_admin_id UUID         NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-                    criado_em           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    atualizado_em       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    CONSTRAINT pk_perfis PRIMARY KEY (id)
-                );
-                CREATE INDEX IF NOT EXISTS ix_perfis_nome ON perfis (nome);
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS perfil_id                    UUID         REFERENCES perfis(id) ON DELETE SET NULL;
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token        VARCHAR(200) NULL;
-                ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expiry TIMESTAMPTZ  NULL;
-
-                CREATE TABLE IF NOT EXISTS product_variants (
-                    id              UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                    product_id      UUID         NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                    size            VARCHAR(50)  NULL,
-                    color           VARCHAR(100) NULL,
-                    stock_quantity  INTEGER      NOT NULL DEFAULT 0,
-                    price_in_cents  INTEGER      NULL,
-                    sku             VARCHAR(100) NULL,
-                    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-                );
-                CREATE INDEX IF NOT EXISTS ix_product_variants_product ON product_variants (product_id);
-
-                ALTER TABLE comanda_items ADD COLUMN IF NOT EXISTS variant_id UUID NULL REFERENCES product_variants(id) ON DELETE SET NULL;
-                ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_nome VARCHAR(255) NULL;
-                ALTER TABLE lgpd_requests ADD COLUMN IF NOT EXISTS anexo_dados BYTEA NULL;
-
-                CREATE TABLE IF NOT EXISTS product_waitlist (
-                    id          UUID        NOT NULL DEFAULT gen_random_uuid(),
-                    product_id  UUID        NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                    user_id     UUID        REFERENCES users(id) ON DELETE SET NULL,
-                    name        VARCHAR(150) NOT NULL,
-                    whatsapp    VARCHAR(20)  NOT NULL,
-                    position    INT          NOT NULL,
-                    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    notified_at TIMESTAMPTZ,
-                    CONSTRAINT pk_product_waitlist PRIMARY KEY (id)
-                );
-                CREATE INDEX IF NOT EXISTS ix_product_waitlist_product ON product_waitlist (product_id);
-                CREATE INDEX IF NOT EXISTS ix_product_waitlist_user    ON product_waitlist (user_id) WHERE user_id IS NOT NULL;
-
-                -- Timers
-                CREATE TABLE IF NOT EXISTS timers (
-                    id               UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                    name             VARCHAR(100) NOT NULL DEFAULT 'Timer',
-                    duration_seconds INTEGER      NOT NULL DEFAULT 1800,
-                    paused_remaining INTEGER      NULL,
-                    state            INTEGER      NOT NULL DEFAULT 0,
-                    started_at       TIMESTAMPTZ  NULL,
-                    sound_preset     VARCHAR(50)  NOT NULL DEFAULT 'bell',
-                    warn_at_seconds  INTEGER      NOT NULL DEFAULT 60,
-                    created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-                );
-
-                -- Variantes de produto (grade tamanho/cor para roupas e similares)
-                ALTER TABLE products ADD COLUMN IF NOT EXISTS has_variants BOOLEAN NOT NULL DEFAULT FALSE;
-
-                -- Reservas de produtos via site (não usadas no PDV)
-                CREATE TABLE IF NOT EXISTS product_reservations (
-                    id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                    user_id       UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    product_id    UUID         NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-                    variant_id    UUID         NULL REFERENCES product_variants(id) ON DELETE SET NULL,
-                    quantity      INTEGER      NOT NULL DEFAULT 1,
-                    status        VARCHAR(20)  NOT NULL DEFAULT 'active',
-                    notes         VARCHAR(500) NULL,
-                    reserved_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    expires_at    TIMESTAMPTZ  NOT NULL,
-                    fulfilled_at  TIMESTAMPTZ  NULL,
-                    cancelled_at  TIMESTAMPTZ  NULL
-                );
-                CREATE INDEX IF NOT EXISTS ix_product_reservations_user    ON product_reservations (user_id);
-                CREATE INDEX IF NOT EXISTS ix_product_reservations_product ON product_reservations (product_id);
-                CREATE INDEX IF NOT EXISTS ix_product_reservations_status  ON product_reservations (status);
-
-                -- Fiscal: emissão de NFC-e (certificado A1, config da empresa emitente)
-                CREATE TABLE IF NOT EXISTS fiscal_config (
-                    id                                UUID         NOT NULL DEFAULT gen_random_uuid(),
-                    cnpj                              VARCHAR(18)  NOT NULL,
-                    inscricao_estadual                VARCHAR(20)  NULL,
-                    regime_tributario                 VARCHAR(30)  NOT NULL DEFAULT 'SimplesNacional',
-                    ambiente                          VARCHAR(20)  NOT NULL DEFAULT 'Homologacao',
-                    serie_nfce                        INTEGER      NOT NULL DEFAULT 1,
-                    proximo_numero_nfce               INTEGER      NOT NULL DEFAULT 1,
-                    email_contador                    VARCHAR(200) NULL,
-                    certificado_pfx_encrypted         TEXT         NULL,
-                    certificado_senha_encrypted       TEXT         NULL,
-                    certificado_validade              TIMESTAMPTZ  NULL,
-                    certificado_uploaded_at           TIMESTAMPTZ  NULL,
-                    certificado_ultimo_alerta_limiar  INTEGER      NULL,
-                    created_at                        TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    updated_at                         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    CONSTRAINT pk_fiscal_config PRIMARY KEY (id)
-                );
-                CREATE INDEX IF NOT EXISTS ix_fiscal_config_cnpj ON fiscal_config (cnpj);
-
-                -- Fiscal: endereço do estabelecimento (obrigatório no XML da NFC-e)
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS razao_social         VARCHAR(150) NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS logradouro           VARCHAR(150) NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS numero               VARCHAR(20)  NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS complemento          VARCHAR(100) NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS bairro               VARCHAR(100) NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS codigo_municipio_ibge VARCHAR(7)  NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS municipio            VARCHAR(100) NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS uf                   VARCHAR(2)  NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS cep                  VARCHAR(9)  NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS csc_id               VARCHAR(10) NULL;
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS csc_token            VARCHAR(100) NULL;
-
-                -- Fiscal: natureza de operação reutilizável (CFOP/CSOSN, estilo Bling)
-                CREATE TABLE IF NOT EXISTS naturezas_operacao (
-                    id          UUID         NOT NULL DEFAULT gen_random_uuid(),
-                    descricao   VARCHAR(150) NOT NULL,
-                    cfop        VARCHAR(4)   NOT NULL,
-                    csosn       VARCHAR(3)   NULL,
-                    is_padrao   BOOLEAN      NOT NULL DEFAULT FALSE,
-                    is_active   BOOLEAN      NOT NULL DEFAULT TRUE,
-                    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    CONSTRAINT pk_naturezas_operacao PRIMARY KEY (id)
-                );
-                CREATE INDEX IF NOT EXISTS ix_naturezas_operacao_descricao ON naturezas_operacao (descricao);
-                CREATE UNIQUE INDEX IF NOT EXISTS ix_naturezas_operacao_unica_padrao
-                    ON naturezas_operacao (is_padrao) WHERE is_padrao = true;
-
-                -- Fiscal: % de crédito de ICMS (pCredSN), usado só quando CSOSN = 101
-                ALTER TABLE naturezas_operacao ADD COLUMN IF NOT EXISTS percentual_credito_sn NUMERIC(5,2) NULL;
-
-                -- Fiscal: NCM e natureza de operação por produto
-                ALTER TABLE products ADD COLUMN IF NOT EXISTS ncm VARCHAR(8) NULL;
-                ALTER TABLE products ADD COLUMN IF NOT EXISTS natureza_operacao_id UUID NULL REFERENCES naturezas_operacao(id) ON DELETE SET NULL;
-                CREATE INDEX IF NOT EXISTS ix_products_natureza_operacao ON products (natureza_operacao_id);
-
-                -- Fiscal: controle do envio mensal automático do ZIP de XMLs pro contador
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS ultimo_envio_mensal_xmls TIMESTAMPTZ NULL;
-
-                -- Fiscal: notas fiscais emitidas (NFC-e por Comanda/Venda Avulsa)
-                CREATE TABLE IF NOT EXISTS notas_fiscais_emitidas (
-                    id                       UUID         NOT NULL DEFAULT gen_random_uuid(),
-                    origem                   VARCHAR(20)  NOT NULL,
-                    comanda_id               UUID         NULL,
-                    venda_avulsa_id          VARCHAR(50)  NULL,
-                    status                   VARCHAR(20)  NOT NULL DEFAULT 'PendenteEmissao',
-                    valor_total_em_centavos  INTEGER      NOT NULL DEFAULT 0,
-                    serie                    INTEGER      NULL,
-                    numero                   INTEGER      NULL,
-                    chave_acesso             VARCHAR(44)  NULL,
-                    protocolo                VARCHAR(30)  NULL,
-                    motivo_rejeicao          TEXT         NULL,
-                    xml_autorizado           TEXT         NULL,
-                    emitido_em               TIMESTAMPTZ  NULL,
-                    cancelado_em             TIMESTAMPTZ  NULL,
-                    created_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    updated_at               TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    CONSTRAINT pk_notas_fiscais_emitidas PRIMARY KEY (id)
-                );
-                CREATE INDEX IF NOT EXISTS ix_notas_fiscais_status      ON notas_fiscais_emitidas (status);
-                CREATE INDEX IF NOT EXISTS ix_notas_fiscais_comanda     ON notas_fiscais_emitidas (comanda_id);
-                CREATE INDEX IF NOT EXISTS ix_notas_fiscais_emitido_em  ON notas_fiscais_emitidas (emitido_em);
-                CREATE UNIQUE INDEX IF NOT EXISTS ix_notas_fiscais_chave_acesso
-                    ON notas_fiscais_emitidas (chave_acesso) WHERE chave_acesso IS NOT NULL;
-
-                -- Fiscal: cancelamento, inutilização e controle de reprocessamento
-                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS justificativa_cancelamento TEXT        NULL;
-                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS inutilizado_em             TIMESTAMPTZ NULL;
-                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS protocolo_inutilizacao      VARCHAR(30) NULL;
-                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS tentativas_reprocessamento  INTEGER     NOT NULL DEFAULT 0;
-
-                -- Fiscal: URL do QR Code calculada pela lib no momento da autorização (evita recalcular)
-                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS url_qrcode TEXT NULL;
-
-                -- Fiscal: contingência offline (tpEmis=9) — status novo é mais longo que 20 chars
-                ALTER TABLE notas_fiscais_emitidas ALTER COLUMN status TYPE VARCHAR(30);
-                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS cnf_contingencia            INTEGER     NULL;
-                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS dh_contingencia             TIMESTAMPTZ NULL;
-                ALTER TABLE notas_fiscais_emitidas ADD COLUMN IF NOT EXISTS justificativa_contingencia  TEXT        NULL;
-
-                -- Financeiro: chave Pix cadastrada no Inter (para emitir cobrança via API)
-                ALTER TABLE integration_configs ADD COLUMN IF NOT EXISTS pix_key VARCHAR(100) NULL;
-
-                -- Financeiro: cobranças Pix imediatas (Crediário, Comanda ou Venda Avulsa)
-                CREATE TABLE IF NOT EXISTS pix_cobrancas (
-                    id                   UUID         NOT NULL DEFAULT gen_random_uuid(),
-                    origem               VARCHAR(20)  NOT NULL DEFAULT 'Crediario',
-                    crediario_id         UUID         NULL REFERENCES crediarios(id) ON DELETE CASCADE,
-                    comanda_id           UUID         NULL REFERENCES comandas(id) ON DELETE CASCADE,
-                    venda_avulsa_id      VARCHAR(50)  NULL,
-                    tx_id                VARCHAR(35)  NOT NULL,
-                    valor_em_centavos    INTEGER      NOT NULL DEFAULT 0,
-                    status               VARCHAR(40)  NOT NULL DEFAULT 'ATIVA',
-                    pix_copia_cola       TEXT         NULL,
-                    imagem_qrcode        TEXT         NULL,
-                    nome_devedor         VARCHAR(200) NULL,
-                    criado_por_admin_id  UUID         NOT NULL,
-                    criado_em            TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-                    expira_em            TIMESTAMPTZ  NULL,
-                    pago_em              TIMESTAMPTZ  NULL,
-                    CONSTRAINT pk_pix_cobrancas PRIMARY KEY (id)
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS ix_pix_cobrancas_tx_id    ON pix_cobrancas (tx_id);
-                CREATE INDEX IF NOT EXISTS ix_pix_cobrancas_crediario      ON pix_cobrancas (crediario_id);
-                CREATE INDEX IF NOT EXISTS ix_pix_cobrancas_comanda        ON pix_cobrancas (comanda_id);
-
-                -- Financeiro: tabelas que dependiam só do EnsureCreated (no-op em banco já existente)
-                CREATE TABLE IF NOT EXISTS external_transactions (
-                    id          UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-                    source      VARCHAR(30)     NOT NULL DEFAULT 'manual',
-                    external_id VARCHAR(200)    NULL,
-                    type        VARCHAR(10)     NOT NULL DEFAULT 'expense',
-                    amount      NUMERIC(10,2)   NOT NULL DEFAULT 0,
-                    description VARCHAR(500)    NOT NULL DEFAULT '',
-                    due_date    TIMESTAMPTZ     NULL,
-                    paid_at     TIMESTAMPTZ     NULL,
-                    status      VARCHAR(20)     NOT NULL DEFAULT 'pending',
-                    category    VARCHAR(100)    NULL,
-                    supplier    VARCHAR(200)    NULL,
-                    nfe_key     VARCHAR(44)     NULL,
-                    notes       VARCHAR(2000)   NULL,
-                    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-                    updated_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS ix_ext_tx_source_external_id
-                    ON external_transactions (source, external_id)
-                    WHERE external_id IS NOT NULL;
-
-                CREATE TABLE IF NOT EXISTS integration_configs (
-                    id            UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-                    source        VARCHAR(30)   NOT NULL UNIQUE,
-                    access_token  VARCHAR(2000) NULL,
-                    refresh_token VARCHAR(2000) NULL,
-                    client_id     VARCHAR(200)  NULL,
-                    client_secret VARCHAR(200)  NULL,
-                    expires_at    TIMESTAMPTZ   NULL,
-                    is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
-                    cnpj          VARCHAR(18)   NULL,
-                    last_sync_at  TIMESTAMPTZ   NULL,
-                    created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-                    updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-                );
-
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-                    user_id    UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    title      VARCHAR(120) NOT NULL,
-                    body       VARCHAR(500) NOT NULL,
-                    link       VARCHAR(300) NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    read_at    TIMESTAMPTZ NULL
-                );
-                CREATE INDEX IF NOT EXISTS ix_notifications_user ON notifications (user_id);
-
-                -- Mensageria: imagem opcional na notificação (banner de campanha)
-                ALTER TABLE notifications ADD COLUMN IF NOT EXISTS image_url VARCHAR(500) NULL;
-
-                CREATE TABLE IF NOT EXISTS push_subscriptions (
-                    id         UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
-                    user_id    UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    endpoint   VARCHAR(600) NOT NULL,
-                    p256dh     VARCHAR(300) NOT NULL,
-                    auth       VARCHAR(150) NOT NULL,
-                    created_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS ix_push_subscriptions_endpoint ON push_subscriptions (endpoint);
-
-                -- Fiscal: Manifestação do Destinatário (DDA) — NF-e destinadas ao CNPJ da loja
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS dist_ultimo_nsu BIGINT NOT NULL DEFAULT 0;
-
-                CREATE TABLE IF NOT EXISTS notas_destinadas (
-                    id                UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-                    chave_acesso      VARCHAR(44)   NOT NULL,
-                    nsu               BIGINT        NOT NULL DEFAULT 0,
-                    emitente_cnpj     VARCHAR(14)   NULL,
-                    emitente_nome     VARCHAR(150)  NULL,
-                    valor             NUMERIC(12,2) NOT NULL DEFAULT 0,
-                    data_emissao      TIMESTAMPTZ   NULL,
-                    situacao          INTEGER       NOT NULL DEFAULT 1,
-                    status            VARCHAR(30)   NOT NULL DEFAULT 'resumo',
-                    ciencia_protocolo VARCHAR(30)   NULL,
-                    ciencia_em        TIMESTAMPTZ   NULL,
-                    xml_proc          TEXT          NULL,
-                    contas_geradas    INTEGER       NOT NULL DEFAULT 0,
-                    erro              VARCHAR(500)  NULL,
-                    created_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-                    updated_at        TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-                );
-                CREATE UNIQUE INDEX IF NOT EXISTS ix_notas_destinadas_chave  ON notas_destinadas (chave_acesso);
-                CREATE INDEX IF NOT EXISTS ix_notas_destinadas_status        ON notas_destinadas (status);
-
-                -- Financeiro: remove lançamentos do Inter importados pelo sync antigo, que lia
-                -- campos errados da API (tudo virava despesa e sem external_id não há dedup).
-                -- O próximo sync (janela de 7 dias) reimporta corretamente com idTransacao.
-                DELETE FROM external_transactions WHERE source = 'inter' AND external_id IS NULL;
-
-                -- Comanda: desconto administrativo em R$, separado dos pontos de fidelidade
-                ALTER TABLE comandas ADD COLUMN IF NOT EXISTS discount_in_cents INTEGER NOT NULL DEFAULT 0;
-
-                -- Fila de espera: controle de quem já foi avisado do reestoque
-                ALTER TABLE product_waitlist ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ NULL;
-
-                -- Fiscal: emissão de NFC-e deixa de ser automática por padrão — só as formas de
-                -- pagamento explicitamente listadas aqui emitem nota sozinhas ao fechar a venda.
-                ALTER TABLE fiscal_config ADD COLUMN IF NOT EXISTS formas_pagamento_auto_emissao TEXT NOT NULL DEFAULT '';
-
-                -- Personalização da landing page (nome, textos, cores) — singleton, defaults
-                -- iguais aos valores hardcoded originais pra não mudar nada até o admin editar.
-                CREATE TABLE IF NOT EXISTS site_config (
-                    id                      UUID PRIMARY KEY,
-                    site_name               VARCHAR(100) NOT NULL DEFAULT 'Minha Loja',
-                    hero_subtitle           VARCHAR(400) NOT NULL DEFAULT 'Produtos e a melhor experiência de atendimento da região. Acumule pontos e compre direto na mesa.',
-                    address_line            VARCHAR(150) NOT NULL DEFAULT 'Sua Cidade — UF',
-                    contact_person_name     VARCHAR(60)  NOT NULL DEFAULT 'Atendimento',
-                    whatsapp_number         VARCHAR(20)  NOT NULL DEFAULT '',
-                    contact_email           VARCHAR(150) NOT NULL DEFAULT 'contato@tenant-erp.local',
-                    nav_produtos_label      VARCHAR(40)  NOT NULL DEFAULT 'Produtos',
-                    nav_pontos_label        VARCHAR(40)  NOT NULL DEFAULT 'Pontos',
-                    cta_ver_produtos_label  VARCHAR(40)  NOT NULL DEFAULT 'Ver Produtos',
-                    produtos_eyebrow        VARCHAR(60)  NOT NULL DEFAULT 'Vitrine',
-                    produtos_title          VARCHAR(80)  NOT NULL DEFAULT 'Em Destaque',
-                    pontos_eyebrow          VARCHAR(60)  NOT NULL DEFAULT 'Programa de Fidelidade',
-                    pontos_title            VARCHAR(80)  NOT NULL DEFAULT 'Ganhe pontos a cada visita',
-                    pontos_paragraph        VARCHAR(400) NOT NULL DEFAULT 'Acumule pontos nas suas compras e troque por descontos. Só com CPF e WhatsApp — nada de senha ou aplicativo.',
-                    color_primary           VARCHAR(9)   NOT NULL DEFAULT '#3EC2F2',
-                    color_accent            VARCHAR(9)   NOT NULL DEFAULT '#FFE45E',
-                    color_navy              VARCHAR(9)   NOT NULL DEFAULT '#0C3D5A',
-                    color_background        VARCHAR(9)   NOT NULL DEFAULT '#EBF7FD',
-                    color_card              VARCHAR(9)   NOT NULL DEFAULT '#FFFFFF',
-                    updated_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-                );
-                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS contact_person_name VARCHAR(60) NOT NULL DEFAULT 'Atendimento';
-                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS color_background VARCHAR(9) NOT NULL DEFAULT '#EBF7FD';
-                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS color_card VARCHAR(9) NOT NULL DEFAULT '#FFFFFF';
-                ALTER TABLE site_config ADD COLUMN IF NOT EXISTS logo_url VARCHAR(300) NULL;
-            ");
+            // SQLite (dev local sem Postgres configurado) não tem migrations —
+            // schema é gerado direto do model atual a cada start.
+            await db.Database.EnsureCreatedAsync();
+            await catalog.Database.EnsureCreatedAsync();
         }
+        else
+        {
+            // Postgres — schema versionado via EF Core Migrations (Data/Migrations).
+            await db.Database.MigrateAsync();
+            await catalog.Database.MigrateAsync();
+        }
+
+        logger.LogInformation("Banco pronto.");
 
         // Seed: cria o admin se não existir
         if (!db.Users.Any(u => u.Email == "admin@tenant-erp.local"))
@@ -783,6 +473,11 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// Resolve o tenant da requisição (por Host) antes de qualquer coisa que possa
+// tocar o AppDbContext — o schema que o TenantConnectionInterceptor usa vem
+// do ITenantContext que este middleware popula.
+app.UseTenantResolution();
+
 // Swagger apenas em desenvolvimento — evita expor a estrutura da API em produção
 if (app.Environment.IsDevelopment())
 {
@@ -801,6 +496,7 @@ app.UseCors("FrontendPolicy");
 app.UseRateLimiter();
 app.UseRequestTimeouts();
 app.UseAuthentication();
+app.UseTenantClaimGuard();
 app.UseAuthorization();
 app.UseOperatorPermissions();
 

@@ -15,7 +15,6 @@ using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using MongoDB.Driver;
 
 namespace CardGameStore.Controllers;
 
@@ -26,13 +25,11 @@ namespace CardGameStore.Controllers;
 public class MinhasNotasController : ControllerBase
 {
     private readonly AppDbContext         _db;
-    private readonly IMongoDatabase       _mongo;
     private readonly INfceEmissionService _emissao;
 
-    public MinhasNotasController(AppDbContext db, IMongoDatabase mongo, INfceEmissionService emissao)
+    public MinhasNotasController(AppDbContext db, INfceEmissionService emissao)
     {
         _db      = db;
-        _mongo   = mongo;
         _emissao = emissao;
     }
 
@@ -46,15 +43,15 @@ public class MinhasNotasController : ControllerBase
             .Select(c => c.Id)
             .ToListAsync();
 
-        var vendaIds = await _mongo.GetCollection<Models.MongoDB.VendaAvulsa>("vendas_avulsas")
-            .Find(v => v.UserId == userId)
-            .Project(v => v.Id)
+        var vendaIds = await _db.VendasAvulsas
+            .Where(v => v.UserId == userId)
+            .Select(v => v.Id)
             .ToListAsync();
 
         var notas = await _db.NotasFiscaisEmitidas
             .Where(n =>
                 (n.Origem == NotaFiscalOrigem.Comanda && n.ComandaId != null && comandaIds.Contains(n.ComandaId.Value)) ||
-                (n.Origem == NotaFiscalOrigem.VendaAvulsa && n.VendaAvulsaId != null && vendaIds.Contains(n.VendaAvulsaId)))
+                (n.Origem == NotaFiscalOrigem.VendaAvulsa && n.VendaAvulsaId != null && vendaIds.Contains(n.VendaAvulsaId.Value)))
             .OrderByDescending(n => n.CreatedAt)
             .Select(n => new
             {
@@ -84,9 +81,8 @@ public class MinhasNotasController : ControllerBase
         }
         else if (nota.Origem == NotaFiscalOrigem.VendaAvulsa && nota.VendaAvulsaId is not null)
         {
-            pertence = await _mongo.GetCollection<Models.MongoDB.VendaAvulsa>("vendas_avulsas")
-                .Find(v => v.Id == nota.VendaAvulsaId && v.UserId == userId)
-                .AnyAsync();
+            pertence = await _db.VendasAvulsas
+                .AnyAsync(v => v.Id == nota.VendaAvulsaId && v.UserId == userId);
         }
 
         if (!pertence) return Forbid();
