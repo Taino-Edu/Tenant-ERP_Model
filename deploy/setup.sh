@@ -98,7 +98,11 @@ if [ ! -f "$APP_DIR/.env" ]; then
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
     IP_SALT=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -base64 32)
-    PUBLIC_IP=$(curl -fsSL ifconfig.me || hostname -I | awk '{print $1}')
+    # -4 força IPv4 — em VPS com IPv6 configurado, ifconfig.me sem essa flag pode
+    # devolver o endereço IPv6, que fica inacessível pro navegador (bug real já visto
+    # em produção: NEXT_PUBLIC_API_URL/JwtSettings:Issuer gravados com IPv6 e o login
+    # falhava silenciosamente, sem nenhuma requisição de rede sequer aparecer).
+    PUBLIC_IP=$(curl -4 -fsSL ifconfig.me || hostname -I | tr ' ' '\n' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
 
     cat > "$APP_DIR/.env" <<EOF
 # Gerado por setup.sh em $(date)
