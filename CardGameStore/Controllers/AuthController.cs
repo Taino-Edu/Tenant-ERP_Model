@@ -27,6 +27,7 @@ public class AuthController : ControllerBase
     private readonly ILogger<AuthController> _logger;
     private readonly JwtSettings             _jwt;
     private readonly IWebHostEnvironment     _env;
+    private readonly IConfiguration          _config;
     private readonly IEmailService           _emailService;
     private readonly IAuditService           _audit;
 
@@ -35,6 +36,7 @@ public class AuthController : ControllerBase
         ILogger<AuthController> logger,
         IOptions<JwtSettings>   jwt,
         IWebHostEnvironment     env,
+        IConfiguration      configuration,
         IEmailService       emailService,
         IAuditService       audit)
     {
@@ -43,6 +45,7 @@ public class AuthController : ControllerBase
         _jwt          = jwt.Value;
         _audit        = audit;
         _env          = env;
+        _config       = configuration;
         _emailService = emailService;
     }
 
@@ -57,7 +60,9 @@ public class AuthController : ControllerBase
     private void SetAuthCookies(string accessToken, string refreshToken)
     {
         // Secure = true em produção (HTTPS via Cloudflare). Em desenvolvimento HTTP local, false.
-        var secureCookies = !_env.IsDevelopment();
+        // COOKIE_SECURE explícito tem prioridade — permite testar em produção via IP puro/HTTP
+        // (sem domínio/HTTPS ainda) sem o cookie ser descartado pelo navegador.
+        var secureCookies = _config.GetValue<bool?>("COOKIE_SECURE") ?? !_env.IsDevelopment();
 
         var cookieOptions = new CookieOptions
         {
