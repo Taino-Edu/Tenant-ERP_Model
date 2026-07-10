@@ -53,6 +53,7 @@ services:
       dockerfile: Dockerfile
       args:
         API_URL: ${APP_URL:-http://localhost}
+        ROOT_DOMAIN: ${MULTITENANCY_ROOT_DOMAIN:-}
     image: cardgamestore_frontend:latest
     container_name: cardgamestore_frontend
     networks:

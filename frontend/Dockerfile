@@ -18,6 +18,11 @@ COPY . .
 # que o BROWSER vai acessar (não o nome interno do container Docker).
 ARG API_URL=http://localhost:5000
 ENV NEXT_PUBLIC_API_URL=$API_URL
+# Domínio raiz da plataforma (ex: "2esysten.com.br") — usado pelo middleware pra
+# decidir se mostra a página institucional (domínio raiz) ou a vitrine de loja
+# (qualquer subdomínio de tenant). Vazio = nunca mostra institucional (dev local).
+ARG ROOT_DOMAIN=
+ENV NEXT_PUBLIC_ROOT_DOMAIN=$ROOT_DOMAIN
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build
