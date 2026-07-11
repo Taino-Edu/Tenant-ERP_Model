@@ -95,6 +95,11 @@ export default function LoginPage() {
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <KeyRound className="w-5 h-5" />}
             {loading ? 'Entrando...' : 'Entrar no Painel'}
           </button>
+          <div className="text-center">
+            <Link href="/reset-password?from=admin" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+              Esqueci minha senha
+            </Link>
+          </div>
         </form>
 
         <div className="text-center mt-6 space-y-1">

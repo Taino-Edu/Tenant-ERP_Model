@@ -9,9 +9,13 @@ import Link from 'next/link'
 
 function ResetPasswordForm() {
   const { site } = useSiteConfig()
-  const params  = useSearchParams()
-  const router  = useRouter()
-  const token   = params.get('token') ?? ''
+  const params    = useSearchParams()
+  const router    = useRouter()
+  const token     = params.get('token') ?? ''
+  // Login de admin/operador (/login) e área do cliente (/entrar) compartilham
+  // esta mesma tela — "from=admin" (setado pelo link em /login) decide pra
+  // onde volta depois, sem precisar de duas páginas quase idênticas.
+  const loginPath = params.get('from') === 'admin' ? '/login' : '/entrar'
 
   // Fase 1: pedir email para receber o link
   const [email,    setEmail]    = useState('')
@@ -73,7 +77,7 @@ function ResetPasswordForm() {
                 <p className="font-bold text-white text-lg">Senha redefinida!</p>
                 <p className="text-gray-400 text-sm mt-1">Sua nova senha foi salva com sucesso.</p>
               </div>
-              <button onClick={() => router.push('/entrar')} className="btn-primary w-full justify-center">
+              <button onClick={() => router.push(loginPath)} className="btn-primary w-full justify-center">
                 Ir para o login
               </button>
             </div>
@@ -152,7 +156,7 @@ function ResetPasswordForm() {
                 </button>
               </form>
               <div className="mt-4 text-center">
-                <Link href="/entrar" className="text-xs text-gray-500 hover:text-gray-300 transition">
+                <Link href={loginPath} className="text-xs text-gray-500 hover:text-gray-300 transition">
                   Voltar para o login
                 </Link>
               </div>
