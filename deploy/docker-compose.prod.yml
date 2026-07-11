@@ -113,6 +113,13 @@ services:
       Multitenancy__RootDomain: "${MULTITENANCY_ROOT_DOMAIN}"
       Security__IpHashSalt: "${IP_HASH_SALT}"
       Encryption__Key: "${ENCRYPTION_KEY}"
+      # Seed do dono da plataforma (painel /plataforma) — só roda se preenchido.
+      PLATFORM_OWNER_EMAIL: "${PLATFORM_OWNER_EMAIL}"
+      PLATFORM_OWNER_SEED_PASSWORD: "${PLATFORM_OWNER_SEED_PASSWORD}"
+      # Senha do admin@tenant-erp.local seedado no primeiro boot — faltava aqui,
+      # então mesmo configurado no .env nunca chegava ao container (sempre caía
+      # no fallback "SenhaForte@123"). Só afeta a criação inicial, não retroage.
+      ADMIN_SEED_PASSWORD: "${ADMIN_SEED_PASSWORD}"
     volumes:
       - api_uploads:/app/wwwroot/uploads
       - ./certs/inter:/app/certs/inter
