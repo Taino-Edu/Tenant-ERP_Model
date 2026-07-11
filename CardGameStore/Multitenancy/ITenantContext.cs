@@ -25,17 +25,23 @@ public interface ITenantContext
 {
     Guid TenantId { get; }
     string SchemaName { get; }
-    void Set(Guid tenantId, string schemaName);
+    /// <summary>Módulos pagos habilitados pro tenant resolvido (ex: "fiscal") — ver
+    /// RequireModuleAttribute. Default preserva o módulo fiscal pra qualquer código
+    /// que rode fora do pipeline HTTP normal (mesmo espírito do resto desta classe).</summary>
+    string[] EnabledModules { get; }
+    void Set(Guid tenantId, string schemaName, string[] enabledModules);
 }
 
 public class TenantContext : ITenantContext
 {
     public Guid TenantId { get; private set; } = TenantConstants.TenantZeroId;
     public string SchemaName { get; private set; } = TenantConstants.TenantZeroSchema;
+    public string[] EnabledModules { get; private set; } = new[] { "fiscal" };
 
-    public void Set(Guid tenantId, string schemaName)
+    public void Set(Guid tenantId, string schemaName, string[] enabledModules)
     {
         TenantId = tenantId;
         SchemaName = schemaName;
+        EnabledModules = enabledModules;
     }
 }

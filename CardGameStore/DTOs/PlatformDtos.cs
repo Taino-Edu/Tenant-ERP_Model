@@ -25,10 +25,24 @@ public class TenantSummaryDto
     public string SchemaName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+    public string PlanName { get; set; } = string.Empty;
+    public string PaymentStatus { get; set; } = string.Empty;
+    public string[] EnabledModules { get; set; } = Array.Empty<string>();
 }
 
 public class UpdateTenantStatusRequest
 {
     [Required]
     public string Status { get; set; } = string.Empty;
+}
+
+public class UpdateTenantBillingRequest
+{
+    [Required, MaxLength(63)]
+    public string PlanName { get; set; } = string.Empty;
+
+    [Required]
+    public string PaymentStatus { get; set; } = string.Empty;
+
+    public string[] EnabledModules { get; set; } = Array.Empty<string>();
 }

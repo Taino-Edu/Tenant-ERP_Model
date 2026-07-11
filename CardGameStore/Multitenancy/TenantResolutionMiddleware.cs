@@ -42,7 +42,7 @@ public class TenantResolutionMiddleware
                 entry.AbsoluteExpirationRelativeToNow = CacheTtl;
                 return await catalog.Tenants
                     .Where(t => t.Slug == slug)
-                    .Select(t => new { t.Id, t.SchemaName, t.Status })
+                    .Select(t => new { t.Id, t.SchemaName, t.Status, t.EnabledModules })
                     .FirstOrDefaultAsync();
             });
 
@@ -55,14 +55,14 @@ public class TenantResolutionMiddleware
                     return;
                 }
 
-                tenantContext.Set(tenant.Id, tenant.SchemaName);
+                tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
                 await _next(context);
                 return;
             }
         }
 
         // Sem slug reconhecido (ou tenant não encontrado/inativo) — tenant-zero.
-        tenantContext.Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema);
+        tenantContext.Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
         await _next(context);
     }
 

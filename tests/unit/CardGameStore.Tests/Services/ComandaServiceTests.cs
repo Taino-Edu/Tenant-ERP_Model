@@ -8,6 +8,7 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
@@ -56,12 +57,18 @@ public class ComandaServiceTests
         return mockHub.Object;
     }
 
-    private static ComandaService CreateService(AppDbContext db) =>
-        new(db,
+    private static ComandaService CreateService(AppDbContext db)
+    {
+        var tenantContext = new Mock<ITenantContext>();
+        tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal" });
+
+        return new(db,
             new Mock<IEmailService>().Object,
             NullLogger<ComandaService>.Instance,
             new Mock<IServiceScopeFactory>().Object,
-            CreateHubMock());
+            CreateHubMock(),
+            tenantContext.Object);
+    }
 
     private static async Task<(User user, Product product, Comanda comanda)> SeedAsync(AppDbContext db)
     {

@@ -3,6 +3,7 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -43,14 +44,16 @@ public class ComandaService : IComandaService
     private readonly ILogger<ComandaService> _logger;
     private readonly IServiceScopeFactory    _scopeFactory;
     private readonly IHubContext<ComandaHub> _hub;
+    private readonly ITenantContext          _tenant;
 
-    public ComandaService(AppDbContext db, IEmailService email, ILogger<ComandaService> logger, IServiceScopeFactory scopeFactory, IHubContext<ComandaHub> hub)
+    public ComandaService(AppDbContext db, IEmailService email, ILogger<ComandaService> logger, IServiceScopeFactory scopeFactory, IHubContext<ComandaHub> hub, ITenantContext tenant)
     {
         _db           = db;
         _email        = email;
         _logger       = logger;
         _scopeFactory = scopeFactory;
         _hub          = hub;
+        _tenant       = tenant;
     }
 
     public async Task<ComandaDto> OpenComandaAsync(Guid userId, string? tableIdentifier = null)
@@ -687,9 +690,11 @@ public class ComandaService : IComandaService
         // e permitir abrir o cupom automaticamente quando autorizar — a chamada nunca lança
         // exceção (garantia do NfceEmissionService), então não tem risco de travar o fechamento.
         // Se não marcou, nenhuma NotaFiscalEmitida é criada; a emissão pode ser feita depois
-        // manualmente pelo histórico.
+        // manualmente pelo histórico. Defesa em profundidade: se a loja não contratou o
+        // módulo fiscal, ignora a flag silenciosamente (mesmo comportamento gracioso de
+        // "não marcou") mesmo que um request forjado tente forçar emitirNotaFiscal=true.
         NotaFiscalEmitida? nota = null;
-        if (emitirNotaFiscal)
+        if (emitirNotaFiscal && _tenant.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
         {
             using var scope = _scopeFactory.CreateScope();
             var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();

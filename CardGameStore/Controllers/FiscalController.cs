@@ -5,6 +5,7 @@
 
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +18,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/fiscal")]
 [Authorize(Policy = "AdminOnly")]
+[RequireModule("fiscal")]
 [Produces("application/json")]
 public class FiscalController : ControllerBase
 {

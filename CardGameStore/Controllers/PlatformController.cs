@@ -35,11 +35,14 @@ public class PlatformController : ControllerBase
 
     private static TenantSummaryDto ToDto(Tenant t) => new()
     {
-        Id         = t.Id,
-        Slug       = t.Slug,
-        SchemaName = t.SchemaName,
-        Status     = t.Status.ToString(),
-        CreatedAt  = t.CreatedAt,
+        Id             = t.Id,
+        Slug           = t.Slug,
+        SchemaName     = t.SchemaName,
+        Status         = t.Status.ToString(),
+        CreatedAt      = t.CreatedAt,
+        PlanName       = t.PlanName,
+        PaymentStatus  = t.PaymentStatus.ToString(),
+        EnabledModules = t.EnabledModules,
     };
 
     [HttpGet("tenants")]
@@ -85,6 +88,25 @@ public class PlatformController : ControllerBase
         if (tenant is null) return NotFound();
 
         tenant.Status = status;
+        await _catalog.SaveChangesAsync();
+
+        return Ok(ToDto(tenant));
+    }
+
+    [HttpPatch("tenants/{id:guid}/billing")]
+    public async Task<IActionResult> UpdateBilling(Guid id, [FromBody] UpdateTenantBillingRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        if (!Enum.TryParse<TenantPaymentStatus>(request.PaymentStatus, out var paymentStatus))
+            return BadRequest(new { Message = $"Status de pagamento inválido: '{request.PaymentStatus}'." });
+
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        tenant.PlanName       = request.PlanName;
+        tenant.PaymentStatus  = paymentStatus;
+        tenant.EnabledModules = request.EnabledModules;
         await _catalog.SaveChangesAsync();
 
         return Ok(ToDto(tenant));

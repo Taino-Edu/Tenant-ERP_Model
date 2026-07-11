@@ -70,7 +70,7 @@ public class TenantProvisioningService : ITenantProvisioningService
 
             using var scope = _scopeFactory.CreateScope();
             var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
-            tenantContext.Set(tenant.Id, schemaName);
+            tenantContext.Set(tenant.Id, schemaName, tenant.EnabledModules);
 
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await db.Database.MigrateAsync();

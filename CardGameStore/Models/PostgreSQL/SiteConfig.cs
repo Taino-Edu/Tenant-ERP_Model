@@ -115,4 +115,11 @@ public class SiteConfig
 
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Módulos pagos habilitados pro tenant atual (ex: "fiscal") — não persiste
+    /// aqui, é preenchido pelo SiteConfigController a partir do ITenantContext na hora da
+    /// resposta. Só "pegando carona" no fetch de SiteConfig (já chamado em toda página) pra
+    /// evitar um round-trip novo — não é config de site de verdade.</summary>
+    [NotMapped]
+    public string[] EnabledModules { get; set; } = Array.Empty<string>();
 }

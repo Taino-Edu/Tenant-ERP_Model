@@ -15,6 +15,15 @@ public enum TenantStatus
     Suspended,
 }
 
+/// <summary>Status de pagamento do tenant — rastreio manual pelo dono da plataforma
+/// (ciclo 1 de billing, sem gateway de pagamento integrado ainda).</summary>
+public enum TenantPaymentStatus
+{
+    Pago,
+    Atrasado,
+    Isento,
+}
+
 [Table("tenants")]
 public class Tenant
 {
@@ -37,4 +46,17 @@ public class Tenant
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Nome do plano contratado — texto livre (sem enum fixo, pricing ainda não fechado).</summary>
+    [Required, MaxLength(63)]
+    [Column("plan_name")]
+    public string PlanName { get; set; } = "Completo";
+
+    [Column("payment_status")]
+    public TenantPaymentStatus PaymentStatus { get; set; } = TenantPaymentStatus.Pago;
+
+    /// <summary>Módulos pagos habilitados pra este tenant (ex: "fiscal"). Módulos que são
+    /// fundação do sistema (ex: estoque) não entram aqui — ver RequireModuleAttribute.</summary>
+    [Column("enabled_modules")]
+    public string[] EnabledModules { get; set; } = new[] { "fiscal" };
 }

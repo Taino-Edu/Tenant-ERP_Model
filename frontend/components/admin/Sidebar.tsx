@@ -82,7 +82,7 @@ const sections = [
   },
 ]
 
-function NavItems({ pathname, onClose, unreadCount, fiscalAlerta }: { pathname: string; onClose?: () => void; unreadCount: number; fiscalAlerta: boolean }) {
+function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules }: { pathname: string; onClose?: () => void; unreadCount: number; fiscalAlerta: boolean; enabledModules: string[] }) {
   const role = getRole()
   const isAdmin = role === 'Admin'
 
@@ -90,7 +90,10 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta }: { pathname: 
     <nav className="flex-1 flex flex-col gap-1 px-3 pb-6 overflow-y-auto">
       {sections.map(({ label, items, adminOnly }) => {
         if (adminOnly && !isAdmin) return null
-        const visibleItems = items.filter(({ perm }) => perm === null || hasPermission(perm))
+        const visibleItems = items.filter(({ perm, href }) =>
+          (perm === null || hasPermission(perm))
+          && (href !== '/admin/fiscal' || enabledModules.includes('fiscal'))
+        )
         if (visibleItems.length === 0) return null
         return (
           <div key={label} className="mb-2">
@@ -165,7 +168,7 @@ export default function Sidebar() {
   // Dot do Fiscal usa um sinal próprio (validade do certificado), não o unreadCount
   // genérico de notificações — evita acender junto com o dot de Mensageria.
   useEffect(() => {
-    if (getRole() !== 'Admin') return
+    if (getRole() !== 'Admin' || !site.enabledModules.includes('fiscal')) return
     let mounted = true
     const poll = async () => {
       try {
@@ -177,7 +180,7 @@ export default function Sidebar() {
     poll()
     const id = setInterval(poll, 5 * 60_000)
     return () => { mounted = false; clearInterval(id) }
-  }, [])
+  }, [site.enabledModules])
 
   async function handleLogout() {
     if (loggingOut) return
@@ -266,7 +269,7 @@ export default function Sidebar() {
             <X className="w-5 h-5" />
           </button>
         </div>
-        <NavItems pathname={pathname} onClose={() => setMobileOpen(false)} unreadCount={unreadCount} fiscalAlerta={fiscalAlerta} />
+        <NavItems pathname={pathname} onClose={() => setMobileOpen(false)} unreadCount={unreadCount} fiscalAlerta={fiscalAlerta} enabledModules={site.enabledModules} />
         {footer}
       </aside>
 
@@ -279,7 +282,7 @@ export default function Sidebar() {
             <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
           </div>
         </div>
-        <NavItems pathname={pathname} unreadCount={unreadCount} fiscalAlerta={fiscalAlerta} />
+        <NavItems pathname={pathname} unreadCount={unreadCount} fiscalAlerta={fiscalAlerta} enabledModules={site.enabledModules} />
         {footer}
       </aside>
     </>

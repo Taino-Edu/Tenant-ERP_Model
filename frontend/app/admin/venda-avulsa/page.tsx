@@ -386,14 +386,16 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
           </div>
         ) : (
         <div className="px-5 pb-5 space-y-2">
-          <button
-            onClick={handleEmitirNota}
-            disabled={emitindoNota}
-            className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-amber-400 hover:text-amber-300 hover:bg-amber-600/10 border border-amber-600/30 hover:border-amber-500/50 rounded-xl py-2 transition-colors disabled:opacity-50"
-          >
-            {emitindoNota ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
-            Emitir nota fiscal
-          </button>
+          {site.enabledModules.includes('fiscal') && (
+            <button
+              onClick={handleEmitirNota}
+              disabled={emitindoNota}
+              className="w-full flex items-center justify-center gap-1.5 text-sm font-semibold text-amber-400 hover:text-amber-300 hover:bg-amber-600/10 border border-amber-600/30 hover:border-amber-500/50 rounded-xl py-2 transition-colors disabled:opacity-50"
+            >
+              {emitindoNota ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4" />}
+              Emitir nota fiscal
+            </button>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => printReceiptPDF(venda, payLabel, site.siteName)}
@@ -453,6 +455,7 @@ function VendaWizard({
   onComplete: (receipt: VendaAvulsaDto) => void
   onClose: () => void
 }) {
+  const { site } = useSiteConfig()
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
   // Etapa 1 — cliente
@@ -632,7 +635,7 @@ function VendaWizard({
         splitEnabled ? secondPayment : null,
         splitEnabled ? secondAmountCents : 0,
         discountMode === 'cents' ? discountCents : undefined,
-        emitirNota,
+        site.enabledModules.includes('fiscal') && emitirNota,
       )
       onComplete(data)
       toast.success('Venda registrada!')
@@ -641,7 +644,7 @@ function VendaWizard({
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao registrar venda.')
     } finally { setSubmitting(false) }
-  }, [cart, clientName, payment, discountMode, discountPct, discountCents, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid, emitirNota])
+  }, [cart, clientName, payment, discountMode, discountPct, discountCents, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid, emitirNota, site.enabledModules])
 
   const handleSubmit = useThrottle(submitRaw, 2000)
 
@@ -1201,27 +1204,31 @@ function VendaWizard({
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={() => { setEmitirNota(v => !v); setNotaTouched(true) }}
-                className={clsx(
-                  'w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all',
-                  emitirNota
-                    ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
-                    : 'border-surface-500 text-gray-500 hover:border-surface-400 hover:text-gray-300'
-                )}
-              >
-                <span>Emitir cupom fiscal (NFC-e) agora</span>
-                <span className={clsx('w-4 h-4 rounded border flex items-center justify-center text-xs shrink-0',
-                  emitirNota ? 'bg-brand-500 border-brand-500 text-white' : 'border-surface-400'
-                )}>
-                  {emitirNota && '✓'}
-                </span>
-              </button>
-              {!emitirNota && (
-                <p className="text-xs text-gray-500 -mt-1">
-                  Sem nota agora. Depois é possível emitir pelo histórico de vendas.
-                </p>
+              {site.enabledModules.includes('fiscal') && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setEmitirNota(v => !v); setNotaTouched(true) }}
+                    className={clsx(
+                      'w-full flex items-center justify-between px-3 py-2.5 rounded-xl border text-sm transition-all',
+                      emitirNota
+                        ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
+                        : 'border-surface-500 text-gray-500 hover:border-surface-400 hover:text-gray-300'
+                    )}
+                  >
+                    <span>Emitir cupom fiscal (NFC-e) agora</span>
+                    <span className={clsx('w-4 h-4 rounded border flex items-center justify-center text-xs shrink-0',
+                      emitirNota ? 'bg-brand-500 border-brand-500 text-white' : 'border-surface-400'
+                    )}>
+                      {emitirNota && '✓'}
+                    </span>
+                  </button>
+                  {!emitirNota && (
+                    <p className="text-xs text-gray-500 -mt-1">
+                      Sem nota agora. Depois é possível emitir pelo histórico de vendas.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           )}

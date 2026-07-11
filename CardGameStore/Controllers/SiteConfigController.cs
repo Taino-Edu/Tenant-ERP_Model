@@ -7,6 +7,7 @@
 
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -19,14 +20,23 @@ namespace CardGameStore.Controllers;
 public class SiteConfigController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenant;
 
-    public SiteConfigController(AppDbContext db) => _db = db;
+    public SiteConfigController(AppDbContext db, ITenantContext tenant)
+    {
+        _db     = db;
+        _tenant = tenant;
+    }
 
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> Get()
     {
         var cfg = await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
+        // Inofensivo expor via endpoint público: só diz quais módulos pagos a loja
+        // habilitou, não vaza dado sensível nenhum (mesmo espírito de expor a cor/nome
+        // da loja aqui, que já é público).
+        cfg.EnabledModules = _tenant.EnabledModules;
         return Ok(cfg);
     }
 

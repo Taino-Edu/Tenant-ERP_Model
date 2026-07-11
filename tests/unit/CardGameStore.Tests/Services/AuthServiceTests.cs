@@ -8,6 +8,7 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
@@ -72,12 +73,16 @@ public class AuthServiceTests
             RefreshTokenExpirationDays   = 30,
         });
 
+        var tenantContext = new Mock<ITenantContext>();
+        tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal" });
+
         var comandaService = new ComandaService(
             db,
             new Mock<IEmailService>().Object,
             NullLogger<ComandaService>.Instance,
             new Mock<IServiceScopeFactory>().Object,
-            CreateHubMock());
+            CreateHubMock(),
+            tenantContext.Object);
 
         return new AuthService(
             db,

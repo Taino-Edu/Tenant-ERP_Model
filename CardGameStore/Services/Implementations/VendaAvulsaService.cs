@@ -190,8 +190,10 @@ public class VendaAvulsaService : IVendaAvulsaService
         // chamada nunca lança exceção (garantia do NfceEmissionService). Se não marcou,
         // nenhuma NotaFiscalEmitida é criada; a emissão pode ser feita depois manualmente
         // pelo histórico.
+        // Defesa em profundidade: se a loja não contratou o módulo fiscal, ignora a
+        // flag silenciosamente mesmo que um request forjado tente forçar EmitirNotaFiscal=true.
         NotaFiscalEmitida? nota = null;
-        if (request.EmitirNotaFiscal)
+        if (request.EmitirNotaFiscal && _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
         {
             using var scope = _scopeFactory.CreateScope();
             // O novo escopo tem seu próprio ITenantContext (default = tenant-zero) —
@@ -199,7 +201,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             // escopo conecta no schema errado (nunca acha a venda que acabou de
             // gravar, ou grava a nota no schema de outro tenant).
             scope.ServiceProvider.GetRequiredService<ITenantContext>()
-                .Set(_tenantContext.TenantId, _tenantContext.SchemaName);
+                .Set(_tenantContext.TenantId, _tenantContext.SchemaName, _tenantContext.EnabledModules);
             var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
             nota = await emissao.EmitirParaVendaAvulsaAsync(venda.Id);
         }

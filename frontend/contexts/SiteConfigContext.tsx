@@ -32,6 +32,9 @@ export const DEFAULT_SITE_CONFIG: SiteConfigDto = {
   colorNavy: '#0C3D5A',
   colorBackground: '#EBF7FD',
   colorCard: '#FFFFFF',
+  // Default permissivo (não bloqueia nada) até o fetch real responder — mesmo
+  // espírito do resto destes defaults, que espelham o comportamento atual.
+  enabledModules: ['fiscal'],
 }
 
 interface SiteConfigContextValue {

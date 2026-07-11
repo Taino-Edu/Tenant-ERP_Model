@@ -659,14 +659,20 @@ export const aiApi = {
 // ── Painel do dono da plataforma (gestão de tenants) ──────────────────────────
 
 export type TenantStatus = 'Active' | 'Suspended'
+export type TenantPaymentStatus = 'Pago' | 'Atrasado' | 'Isento'
 
 export interface TenantSummary {
   id: string; slug: string; schemaName: string
   status: TenantStatus; createdAt: string
+  planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
 }
 
 export interface CreateTenantRequest {
   slug: string; adminEmail: string; adminPassword: string
+}
+
+export interface UpdateTenantBillingRequest {
+  planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
 }
 
 export const platformApi = {
@@ -676,6 +682,8 @@ export const platformApi = {
     api.post<TenantSummary>('/api/platform/tenants', req),
   updateTenantStatus: (id: string, status: TenantStatus) =>
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/status`, { status }),
+  updateTenantBilling: (id: string, req: UpdateTenantBillingRequest) =>
+    api.patch<TenantSummary>(`/api/platform/tenants/${id}/billing`, req),
 }
 
 // ── Upload de imagem ──────────────────────────────────────────────────────────
@@ -1073,6 +1081,9 @@ export interface SiteConfigDto {
   colorNavy: string
   colorBackground: string
   colorCard: string
+  /** Módulos pagos habilitados pro tenant atual (ex: "fiscal") — "carona" no fetch
+   * de SiteConfig pra evitar round-trip novo, não é config de site de verdade. */
+  enabledModules: string[]
 }
 
 export const siteConfigApi = {
