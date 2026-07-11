@@ -263,3 +263,11 @@ html.light .text-accent-gold { color: #1e293b !important; }
   main, [class*="p-6"] { padding: 0 !important; }
 }
 
+/* VLibras (widget oficial do governo) não tem layout responsivo — em telas
+   pequenas o próprio plugin cobre boa parte da tela e atrapalha mais do que
+   ajuda. Esconde só em mobile; desktop continua controlado pelo toggle de
+   preferências em VLibrasController.tsx. */
+@media (max-width: 640px) {
+  [vw] { display: none !important; }
+}
+
