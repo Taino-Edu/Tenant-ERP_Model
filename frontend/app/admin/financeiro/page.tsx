@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto, PagamentoCrediarioPeriodoDto } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import PageHeader from '@/components/admin/PageHeader'
+import StatCard from '@/components/admin/StatCard'
 import toast from 'react-hot-toast'
 import {
   TrendingUp, TrendingDown, DollarSign, AlertCircle,
@@ -597,52 +599,10 @@ function KpiChartModal({
   )
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, color = 'brand', icon: Icon, onClick, change }: {
-  label: string; value: string; sub?: string
-  color?: string; icon: React.ElementType
-  onClick?: () => void
-  change?: number | null
-}) {
-  const colors: Record<string, string> = {
-    brand: 'text-brand-400', green: 'text-emerald-400',
-    red:   'text-red-400',   yellow: 'text-yellow-400',
-  }
-  const bgs: Record<string, string> = {
-    brand: 'bg-brand-600/15', green: 'bg-emerald-500/15',
-    red:   'bg-red-500/15',   yellow: 'bg-yellow-500/15',
-  }
-  return (
-    <button
-      onClick={onClick}
-      className={`card flex flex-col gap-3 text-left w-full transition-all ${
-        onClick ? 'hover:border-surface-400 hover:bg-surface-700/50 cursor-pointer active:scale-[0.98]' : ''
-      }`}
-    >
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">{label}</p>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${bgs[color]}`}>
-          <Icon className={`w-4 h-4 ${colors[color]}`} />
-        </div>
-      </div>
-      <p className={`text-2xl font-bold font-mono ${colors[color] ?? colors.brand}`}>{value}</p>
-      {change != null && (
-        <div className={`flex items-center gap-1 text-xs font-semibold ${change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-          {change >= 0
-            ? <TrendingUp  className="w-3 h-3 shrink-0" />
-            : <TrendingDown className="w-3 h-3 shrink-0" />}
-          <span>{change >= 0 ? '+' : ''}{change.toFixed(1)}%</span>
-          <span className="text-gray-500 font-normal">vs mês ant.</span>
-        </div>
-      )}
-      {sub && (
-        <p className="text-xs text-gray-500 flex items-center gap-1">
-          {sub}
-          {onClick && <span className="ml-auto text-[10px] text-gray-400">clique para detalhar</span>}
-        </p>
-      )}
-    </button>
-  )
+// KPI card unificado em components/admin/StatCard.tsx — mapeamento de tone:
+// green→success, red→danger, yellow→warning, brand→brand.
+function kpiTrend(change: number | null): { value: number; label: string } | undefined {
+  return change != null ? { value: change, label: 'vs mês ant.' } : undefined
 }
 
 // ── Formas de pagamento com filtros ───────────────────────────────────────────
@@ -1529,52 +1489,52 @@ export default function FinanceiroPage() {
       {/* Modal de detalhe do dia */}
       {dayModal && <DayDetailModal day={dayModal} onClose={() => setDayModal(null)} />}
 
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Controle Financeiro</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Receita, custo e margem do período</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={async () => {
-              if (!d) return
-              setExporting(true)
-              try { await gerarRelatorioPDF(d, { inicio, fim }, site.siteName) }
-              catch { toast.error('Erro ao gerar PDF') }
-              finally { setExporting(false) }
-            }}
-            disabled={!d || exporting}
-            className="btn-secondary text-sm print:hidden"
-          >
-            <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline">{exporting ? 'Gerando...' : 'Exportar PDF'}</span>
-          </button>
-          <button
-            onClick={async () => {
-              if (backfilling) return
-              setBackfilling(true)
-              try {
-                const r = await vendaAvulsaApi.backfillCosts()
-                toast.success(r.data.mensagem)
-                load(inicio, fim)
-              } catch {
-                toast.error('Erro ao corrigir custos históricos')
-              } finally {
-                setBackfilling(false)
-              }
-            }}
-            disabled={backfilling}
-            title="Preenche custo zero em vendas avulsas antigas usando o custo atual dos produtos"
-            className="btn-secondary text-sm print:hidden"
-          >
-            <RefreshCw className={`w-4 h-4 ${backfilling ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{backfilling ? 'Corrigindo...' : 'Corrigir custos'}</span>
-          </button>
-          <button onClick={() => load(inicio, fim, filterPaymentMethod)} disabled={loading} className="btn-secondary text-sm">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+      <div className="print:hidden">
+        <PageHeader
+          icon={TrendingUp}
+          title="Controle Financeiro"
+          description="Receita, custo e margem do período"
+          actions={<>
+            <button
+              onClick={async () => {
+                if (!d) return
+                setExporting(true)
+                try { await gerarRelatorioPDF(d, { inicio, fim }, site.siteName) }
+                catch { toast.error('Erro ao gerar PDF') }
+                finally { setExporting(false) }
+              }}
+              disabled={!d || exporting}
+              className="btn-secondary text-sm print:hidden"
+            >
+              <Printer className="w-4 h-4" />
+              <span className="hidden sm:inline">{exporting ? 'Gerando...' : 'Exportar PDF'}</span>
+            </button>
+            <button
+              onClick={async () => {
+                if (backfilling) return
+                setBackfilling(true)
+                try {
+                  const r = await vendaAvulsaApi.backfillCosts()
+                  toast.success(r.data.mensagem)
+                  load(inicio, fim)
+                } catch {
+                  toast.error('Erro ao corrigir custos históricos')
+                } finally {
+                  setBackfilling(false)
+                }
+              }}
+              disabled={backfilling}
+              title="Preenche custo zero em vendas avulsas antigas usando o custo atual dos produtos"
+              className="btn-secondary text-sm print:hidden"
+            >
+              <RefreshCw className={`w-4 h-4 ${backfilling ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{backfilling ? 'Corrigindo...' : 'Corrigir custos'}</span>
+            </button>
+            <button onClick={() => load(inicio, fim, filterPaymentMethod)} disabled={loading} className="btn-secondary text-sm">
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </>}
+        />
       </div>
 
       {/* ── Filtros ── sticky no topo */}
@@ -1665,11 +1625,11 @@ export default function FinanceiroPage() {
             const prevTicket = prevTx > 0 && prevData ? prevData.receita / prevTx : 0
             return (
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <KpiCard label="Receita total"      value={fmt(d.receita)}     sub={`${d.diaDia.length} dias`}                      color="green"  icon={TrendingUp}   onClick={() => setKpiModal('receita')}    change={pctChange(d.receita,    prevData?.receita    ?? 0)} />
-                <KpiCard label="Custo estimado"     value={fmt(d.custo)}       sub="Clique para detalhar por produto"               color="red"    icon={ShoppingBag}  onClick={() => setKpiModal('custo')}      change={pctChange(d.custo,      prevData?.custo      ?? 0)} />
-                <KpiCard label="Margem média"        value={`${d.margemPercent.toFixed(1)}%`} sub={`${fmt(d.margem)} sobre custo`} color={d.margem >= 0 ? 'brand' : 'red'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} change={pctChange(d.margemPercent, prevData?.margemPercent ?? 0)} />
-                <KpiCard label="Ticket médio"       value={fmt(ticketMedio)}   sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  color="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')}     change={pctChange(ticketMedio,  prevTicket)} />
-                <KpiCard label="Crediários abertos" value={fmt(d.crediarios)}  sub={d.recebidoCrediario > 0 ? `Recebido no período: ${fmt(d.recebidoCrediario)}` : 'A receber · clique para detalhar'} color="yellow" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} change={pctChange(d.crediarios, prevData?.crediarios ?? 0)} />
+                <StatCard label="Receita total"      value={fmt(d.receita)}     sub={`${d.diaDia.length} dias`}                      tone="success" icon={TrendingUp}   onClick={() => setKpiModal('receita')}    trend={kpiTrend(pctChange(d.receita,    prevData?.receita    ?? 0))} />
+                <StatCard label="Custo estimado"     value={fmt(d.custo)}       sub="Clique para detalhar por produto"               tone="danger"  icon={ShoppingBag}  onClick={() => setKpiModal('custo')}      trend={kpiTrend(pctChange(d.custo,      prevData?.custo      ?? 0))} />
+                <StatCard label="Margem média"        value={`${d.margemPercent.toFixed(1)}%`} sub={`${fmt(d.margem)} sobre custo`} tone={d.margem >= 0 ? 'brand' : 'danger'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} trend={kpiTrend(pctChange(d.margemPercent, prevData?.margemPercent ?? 0))} />
+                <StatCard label="Ticket médio"       value={fmt(ticketMedio)}   sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  tone="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')}     trend={kpiTrend(pctChange(ticketMedio,  prevTicket))} />
+                <StatCard label="Crediários abertos" value={fmt(d.crediarios)}  sub={d.recebidoCrediario > 0 ? `Recebido no período: ${fmt(d.recebidoCrediario)}` : 'A receber · clique para detalhar'} tone="warning" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} trend={kpiTrend(pctChange(d.crediarios, prevData?.crediarios ?? 0))} />
               </div>
             )
           })()}

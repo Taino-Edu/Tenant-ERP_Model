@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSummary, PerfilDto, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
+import PageHeader from '@/components/admin/PageHeader'
 import Link from 'next/link'
 
 // ── Modal: Novo Cliente ───────────────────────────────────────────────────────
@@ -773,26 +774,24 @@ export default function UsuariosPage() {
         />
       )}
 
-      {/* Header */}
-      <div className="mb-4 sm:mb-6 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Users className="w-6 h-6 text-brand-400" /> Clientes & Equipe
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">Gerencie clientes, pontos de fidelidade, cashback e operadores</p>
-        </div>
-        <div className="flex gap-2">
-          {tabSection === 'clientes' && (
-            <button onClick={() => setShowNovoCliente(true)} className="btn-primary whitespace-nowrap">
-              <UserPlus className="w-4 h-4" /> Novo Cliente
-            </button>
-          )}
-          {tabSection === 'operadores' && (
-            <button onClick={() => setShowNovoOperador(true)} className="btn-primary whitespace-nowrap">
-              <UserCog className="w-4 h-4" /> Novo Operador
-            </button>
-          )}
-        </div>
+      <div className="mb-4 sm:mb-6">
+        <PageHeader
+          icon={Users}
+          title="Clientes & Equipe"
+          description="Gerencie clientes, pontos de fidelidade, cashback e operadores"
+          actions={<>
+            {tabSection === 'clientes' && (
+              <button onClick={() => setShowNovoCliente(true)} className="btn-primary whitespace-nowrap">
+                <UserPlus className="w-4 h-4" /> Novo Cliente
+              </button>
+            )}
+            {tabSection === 'operadores' && (
+              <button onClick={() => setShowNovoOperador(true)} className="btn-primary whitespace-nowrap">
+                <UserCog className="w-4 h-4" /> Novo Operador
+              </button>
+            )}
+          </>}
+        />
       </div>
 
       {/* Tab principal: Clientes / Operadores */}

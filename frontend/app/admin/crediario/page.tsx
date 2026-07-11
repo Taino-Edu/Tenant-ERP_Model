@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { ItemCrediarioDto } from '@/lib/api'
 import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
+import PageHeader from '@/components/admin/PageHeader'
+import StatCard from '@/components/admin/StatCard'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import clsx from 'clsx'
 
@@ -1179,42 +1181,23 @@ export default function CrediarioPage() {
         />
       )}
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-brand-400" /> Crediário
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">
-            Clientes com pagamento em aberto — suporta pagamentos parciais
-          </p>
-        </div>
-        <button
-          onClick={() => setShowNovaDivida(true)}
-          className="btn-primary shrink-0"
-        >
-          <Plus className="w-4 h-4" /> Nova Dívida
-        </button>
-      </div>
+      <PageHeader
+        icon={CreditCard}
+        title="Crediário"
+        description="Clientes com pagamento em aberto — suporta pagamentos parciais"
+        actions={
+          <button onClick={() => setShowNovaDivida(true)} className="btn-primary shrink-0">
+            <Plus className="w-4 h-4" /> Nova Dívida
+          </button>
+        }
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Em Aberto',      value: totais.abertos,              icon: CreditCard,     color: 'text-amber-400',    bg: 'bg-amber-500/10'  },
-          { label: 'Vencidos',       value: totais.vencidos,             icon: AlertTriangle,  color: 'text-red-400',      bg: 'bg-red-500/10'    },
-          { label: 'Saldo Restante', value: fmt(totais.valorAberto),     icon: DollarSign,     color: 'text-accent-gold',  bg: 'bg-amber-500/10'  },
-          { label: 'Quitados',       value: totais.pagos,                icon: CheckCircle,    color: 'text-accent-green', bg: 'bg-accent-green/10'},
-        ].map(m => (
-          <div key={m.label} className="card flex items-center gap-3 py-3">
-            <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center shrink-0', m.bg)}>
-              <m.icon className={clsx('w-5 h-5', m.color)} />
-            </div>
-            <div className="min-w-0">
-              <p className="text-lg font-bold text-white truncate">{m.value}</p>
-              <p className="text-xs text-gray-400">{m.label}</p>
-            </div>
-          </div>
-        ))}
+        <StatCard icon={CreditCard}    label="Em Aberto"      value={totais.abertos}          tone="warning" />
+        <StatCard icon={AlertTriangle} label="Vencidos"       value={totais.vencidos}         tone="danger" />
+        <StatCard icon={DollarSign}    label="Saldo Restante" value={fmt(totais.valorAberto)} tone="warning" />
+        <StatCard icon={CheckCircle}   label="Quitados"       value={totais.pagos}            tone="success" />
       </div>
 
       {/* Filtro + Busca */}

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import VariantPicker from '@/components/admin/VariantPicker'
+import PageHeader from '@/components/admin/PageHeader'
+import StatCard from '@/components/admin/StatCard'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 interface CartItem {
@@ -1450,15 +1452,11 @@ export default function VendaAvulsaPage() {
         document.body
       )}
 
-      {/* Header */}
-      <div className="flex items-end justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ShoppingBag className="w-6 h-6 text-brand-400" /> Frente de Caixa
-          </h1>
-          <p className="text-gray-400 text-sm mt-0.5">Venda direta no balcão</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        icon={ShoppingBag}
+        title="Frente de Caixa"
+        description="Venda direta no balcão"
+        actions={<>
           <div className="flex gap-1 bg-surface-800 border border-surface-600 p-1 rounded-xl">
             <button
               onClick={() => setTab('venda')}
@@ -1484,8 +1482,8 @@ export default function VendaAvulsaPage() {
               <Plus className="w-4 h-4" /> Começar venda
             </button>
           )}
-        </div>
-      </div>
+        </>}
+      />
 
       {/* ── Tab: PDV ──────────────────────────────────────────────────────── */}
       {tab === 'venda' && (
@@ -1493,20 +1491,10 @@ export default function VendaAvulsaPage() {
 
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { icon: <Receipt className="w-4 h-4 text-brand-400" />,      bg: 'bg-brand-600/10',    val: todaySales,                                  label: 'Vendas hoje',    color: 'text-white'        },
-              { icon: <TrendingUp className="w-4 h-4 text-accent-gold" />, bg: 'bg-amber-500/10',    val: fmt(todayTotal),                             label: 'Total hoje',     color: 'text-accent-gold'  },
-              { icon: <CreditCard className="w-4 h-4 text-brand-400" />,   bg: 'bg-brand-600/10',    val: todaySales > 0 ? fmt(ticketMedio) : '—',     label: 'Ticket médio',   color: 'text-brand-300'    },
-              { icon: <PackageOpen className="w-4 h-4 text-gray-400" />,   bg: 'bg-surface-600',     val: products.length,                             label: 'Produtos ativos',color: 'text-white'        },
-            ].map((k, i) => (
-              <div key={i} className="card flex items-center gap-3 py-3">
-                <div className={clsx('w-9 h-9 rounded-xl flex items-center justify-center shrink-0', k.bg)}>{k.icon}</div>
-                <div>
-                  <p className={clsx('text-lg font-bold leading-tight', k.color)}>{k.val}</p>
-                  <p className="text-xs text-gray-400">{k.label}</p>
-                </div>
-              </div>
-            ))}
+            <StatCard icon={Receipt}     label="Vendas hoje"     value={todaySales} tone="brand" />
+            <StatCard icon={TrendingUp}  label="Total hoje"      value={fmt(todayTotal)} tone="warning" />
+            <StatCard icon={CreditCard}  label="Ticket médio"    value={todaySales > 0 ? fmt(ticketMedio) : '—'} tone="brand" />
+            <StatCard icon={PackageOpen} label="Produtos ativos" value={products.length} tone="neutral" />
           </div>
 
           {/* Analytics — só aparece se houver vendas hoje */}
@@ -1792,24 +1780,8 @@ function HistoricoTab({ history, loading, date, onDateChange, onVendaUpdate }: {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <div className="card flex items-center gap-4">
-              <div className="w-11 h-11 rounded-xl bg-brand-600/10 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-brand-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-white">{countDia}</p>
-                <p className="text-xs text-gray-400">Vendas {labelData}</p>
-              </div>
-            </div>
-            <div className="card flex items-center gap-4">
-              <div className="w-11 h-11 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                <Banknote className="w-5 h-5 text-accent-gold" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-accent-gold">{fmt(totalDia)}</p>
-                <p className="text-xs text-gray-400">Total {labelData}</p>
-              </div>
-            </div>
+            <StatCard icon={TrendingUp} label={`Vendas ${labelData}`} value={countDia} tone="brand" />
+            <StatCard icon={Banknote}   label={`Total ${labelData}`}  value={fmt(totalDia)} tone="warning" />
           </div>
 
           {history.length === 0 ? (

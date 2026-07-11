@@ -4,6 +4,8 @@ import { productApi, variantApi, categoryApi, waitListApi, fiscalApi, Product, P
 import toast from 'react-hot-toast'
 import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp, Users, Bell } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
+import PageHeader from '@/components/admin/PageHeader'
+import StatCard from '@/components/admin/StatCard'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import CameraScanner from '@/components/CameraScanner'
@@ -844,13 +846,11 @@ export default function EstoquePage() {
         />
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Estoque</h1>
-          <p className="text-gray-400 text-sm mt-0.5">{products.length} produtos cadastrados</p>
-        </div>
-        <div className="flex gap-2 flex-wrap">
+      <PageHeader
+        icon={Package}
+        title="Estoque"
+        description={`${products.length} produtos cadastrados`}
+        actions={<>
           <button onClick={exportCsv} className="btn-secondary" title="Exportar CSV">
             <Download className="w-4 h-4" /> <span className="hidden sm:inline">CSV</span>
           </button>
@@ -871,59 +871,43 @@ export default function EstoquePage() {
           <button onClick={() => setModal(null)} className="btn-primary">
             <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo Produto</span><span className="sm:hidden">Novo</span>
           </button>
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Cards de resumo */}
       {!loading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <button onClick={() => setStockFilter('todos')}
-            className={`card flex items-center gap-3 text-left transition-all hover:border-surface-400 ${stockFilter === 'todos' ? 'border-brand-500/50 bg-brand-600/5' : ''}`}>
-            <div className="w-9 h-9 rounded-lg bg-brand-600/15 flex items-center justify-center shrink-0">
-              <Layers className="w-4 h-4 text-brand-400" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Total de peças</p>
-              <p className="text-xl font-black font-mono text-brand-400">{totalPecas.toLocaleString('pt-BR')}</p>
-            </div>
-          </button>
-
-          <button onClick={() => setStockFilter('todos')}
-            className="card flex items-center gap-3 text-left transition-all hover:border-surface-400">
-            <div className="w-9 h-9 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
-              <DollarSign className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Valor imobilizado</p>
-              <p className="text-sm font-black font-mono text-emerald-400">
-                {valorImob >= 1000
-                  ? `R$ ${(valorImob / 1000).toFixed(1).replace('.', ',')}k`
-                  : `R$ ${valorImob.toFixed(0)}`}
-              </p>
-            </div>
-          </button>
-
-          <button onClick={() => setStockFilter(stockFilter === 'baixo' ? 'todos' : 'baixo')}
-            className={`card flex items-center gap-3 text-left transition-all hover:border-amber-500/40 ${stockFilter === 'baixo' ? 'border-amber-500/50 bg-amber-500/5' : ''}`}>
-            <div className="w-9 h-9 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
-              <TrendingDown className="w-4 h-4 text-amber-400" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Estoque baixo</p>
-              <p className="text-xl font-black font-mono text-amber-400">{qtdBaixo}</p>
-            </div>
-          </button>
-
-          <button onClick={() => setStockFilter(stockFilter === 'zerado' ? 'todos' : 'zerado')}
-            className={`card flex items-center gap-3 text-left transition-all hover:border-red-500/40 ${stockFilter === 'zerado' ? 'border-red-500/50 bg-red-500/5' : ''}`}>
-            <div className="w-9 h-9 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0">
-              <CircleOff className="w-4 h-4 text-red-400" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Sem estoque</p>
-              <p className="text-xl font-black font-mono text-red-400">{qtdZerado}</p>
-            </div>
-          </button>
+          <StatCard
+            icon={Layers}
+            label="Total de peças"
+            value={totalPecas.toLocaleString('pt-BR')}
+            tone="brand"
+            selected={stockFilter === 'todos'}
+            onClick={() => setStockFilter('todos')}
+          />
+          <StatCard
+            icon={DollarSign}
+            label="Valor imobilizado"
+            value={valorImob >= 1000 ? `R$ ${(valorImob / 1000).toFixed(1).replace('.', ',')}k` : `R$ ${valorImob.toFixed(0)}`}
+            tone="success"
+            onClick={() => setStockFilter('todos')}
+          />
+          <StatCard
+            icon={TrendingDown}
+            label="Estoque baixo"
+            value={qtdBaixo}
+            tone="warning"
+            selected={stockFilter === 'baixo'}
+            onClick={() => setStockFilter(stockFilter === 'baixo' ? 'todos' : 'baixo')}
+          />
+          <StatCard
+            icon={CircleOff}
+            label="Sem estoque"
+            value={qtdZerado}
+            tone="danger"
+            selected={stockFilter === 'zerado'}
+            onClick={() => setStockFilter(stockFilter === 'zerado' ? 'todos' : 'zerado')}
+          />
         </div>
       )}
 
