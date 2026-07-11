@@ -20,7 +20,8 @@ const sections = [
   {
     label: 'Operacional',
     items: [
-      { href: '/admin/dashboard',    label: 'Painel Geral',    icon: LayoutDashboard, badge: 'LIVE', perm: 'dashboard' },
+      { href: '/admin/comanda',      label: 'Comanda',         icon: Users,           badge: 'LIVE', perm: 'dashboard' },
+      { href: '/admin/dashboard',    label: 'Painel Geral',    icon: LayoutDashboard,                perm: 'dashboard' },
       { href: '/admin/venda-avulsa', label: 'Frente de Caixa', icon: ShoppingBag,                    perm: 'pdv' },
       { href: '/admin/qrcodes',      label: 'Gatilhos QR Code', icon: QrCode,                         perm: 'qrcodes' },
     ],

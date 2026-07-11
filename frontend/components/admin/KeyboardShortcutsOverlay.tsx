@@ -11,7 +11,8 @@ interface Shortcut {
 }
 
 const SHORTCUTS: Shortcut[] = [
-  { key: 'd', label: 'D', description: 'Painel Geral (Dashboard)',    category: 'Navegação' },
+  { key: 'd', label: 'D', description: 'Comanda (ao vivo)',           category: 'Navegação' },
+  { key: 'g', label: 'G', description: 'Painel Geral',                category: 'Navegação' },
   { key: 'p', label: 'P', description: 'Frente de Caixa (PDV)',       category: 'Navegação' },
   { key: 'e', label: 'E', description: 'Estoque',                     category: 'Navegação' },
   { key: 'u', label: 'U', description: 'Clientes / Usuários',         category: 'Navegação' },
@@ -23,7 +24,8 @@ const SHORTCUTS: Shortcut[] = [
 ]
 
 const NAV_MAP: Record<string, string> = {
-  d: '/admin/dashboard',
+  d: '/admin/comanda',
+  g: '/admin/dashboard',
   p: '/admin/venda-avulsa',
   e: '/admin/estoque',
   u: '/admin/usuarios',
@@ -33,7 +35,8 @@ const NAV_MAP: Record<string, string> = {
 }
 
 export const SIDEBAR_SHORTCUT_KEYS: Record<string, string> = {
-  '/admin/dashboard':    'D',
+  '/admin/comanda':      'D',
+  '/admin/dashboard':    'G',
   '/admin/venda-avulsa': 'P',
   '/admin/estoque':      'E',
   '/admin/usuarios':     'U',

@@ -77,7 +77,7 @@ export default function FiscalPage() {
   const [cscToken, setCscToken] = useState('')
 
   // Formas de pagamento que emitem NFC-e sozinhas ao fechar a venda, sem perguntar.
-  // Vazio por padrão — o admin decide a cada fechamento via checkbox (ver /admin/dashboard
+  // Vazio por padrão — o admin decide a cada fechamento via checkbox (ver /admin/comanda
   // e /admin/venda-avulsa). Marcar aqui só muda o valor pré-marcado desse checkbox.
   const [autoEmit, setAutoEmit] = useState<string[]>([])
 
