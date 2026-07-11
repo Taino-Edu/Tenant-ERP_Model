@@ -1,5 +1,18 @@
 # Backlog — Tenant-ERP
 
+## Bug conhecido — falta tela de "esqueci minha senha"
+- O backend já tem os endpoints (`POST /api/auth/forgot-password`,
+  `POST /api/auth/reset-password` em `AuthController.cs`), mas **não existe
+  nenhum link ou tela no `/login` que aciona isso** — descoberto ao tentar
+  recuperar a senha de um admin de tenant de teste criado nesta sessão. Hoje,
+  se um lojista esquece a senha, não tem self-service nenhum: só recuperando
+  via banco direto.
+- Precisa: link "Esqueci minha senha" no `/login`, tela pra pedir o reset
+  (input de e-mail), e tela de definir nova senha com o token recebido por
+  e-mail (o backend já deve emitir esse e-mail — confirmar em
+  `EmailService.cs`/`AuthService.ForgotPasswordAsync` antes de só plugar o
+  frontend).
+
 ## Concluído (sessão 2026-07-09/10)
 - Branding genericizado: nome/e-mail/endereço/logo da loja vêm de `SiteConfig` dinâmico
   em vez de string fixa "softNerd"/"Santuário Nerd" — backend (`EmailService`,
