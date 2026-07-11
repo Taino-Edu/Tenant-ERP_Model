@@ -437,6 +437,31 @@ using (var scope = app.Services.CreateScope())
             await db.SaveChangesAsync();
             logger.LogInformation("Usuário admin criado com sucesso.");
         }
+
+        // Seed: cria o dono da plataforma se não existir — mesma ideia do admin
+        // acima, mas com role PlatformOwner. Vive no schema "public" (tenant-zero),
+        // então só loga de verdade pelo domínio raiz (fora de qualquer subdomínio
+        // de tenant) — ver TenantResolutionMiddleware/TenantClaimGuardMiddleware.
+        var platformOwnerEmail = Environment.GetEnvironmentVariable("PLATFORM_OWNER_EMAIL");
+        if (!string.IsNullOrWhiteSpace(platformOwnerEmail) && !db.Users.Any(u => u.Email == platformOwnerEmail))
+        {
+            var ownerPassword = Environment.GetEnvironmentVariable("PLATFORM_OWNER_SEED_PASSWORD") ?? "SenhaForte@123";
+            if (ownerPassword == "SenhaForte@123")
+                logger.LogWarning("ATENÇÃO: dono da plataforma criado com senha padrão. Defina PLATFORM_OWNER_SEED_PASSWORD no ambiente de produção!");
+
+            db.Users.Add(new CardGameStore.Models.PostgreSQL.User
+            {
+                Name         = "Dono da Plataforma",
+                Email        = platformOwnerEmail,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(ownerPassword),
+                Role         = CardGameStore.Models.PostgreSQL.UserRole.PlatformOwner,
+                IsActive     = true,
+                CreatedAt    = DateTime.UtcNow,
+                UpdatedAt    = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync();
+            logger.LogInformation("Usuário dono da plataforma criado com sucesso.");
+        }
     }
     catch (Exception ex)
     {
