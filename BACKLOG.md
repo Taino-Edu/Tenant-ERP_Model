@@ -51,6 +51,16 @@
   search_path da mesma forma que a leitura real, causando um segundo mismatch depois
   do fix nº1). Commits `276fb88`, `ffce231`. Validado em produção: tenant de teste
   isolado corretamente, só com seu próprio admin, sem vazar pra `public`.
+- **Ressalva confirmada ao testar suspensão**: suspender um tenant bloqueia as
+  chamadas de API (`/api/*` retorna 403 — validado com `product`, `announcements`,
+  `site-config` todos bloqueados), mas a casca estática do frontend (HTML/JS do
+  Next.js) continua carregando normalmente, porque o `TenantResolutionMiddleware`
+  que checa `TenantStatus` vive só no backend (.NET) — o container do frontend não
+  passa por ele. Resultado: o visitante vê a página carregar mas sem nenhum dado
+  (produtos/config vazios por causa dos 403), em vez de uma tela clara de "loja
+  suspensa". Melhoria futura: página dedicada de "loja suspensa" no frontend
+  (checagem via alguma rota leve tipo `/api/tenant-status` antes de renderizar o
+  resto), ou aceitar o comportamento atual como suficiente por ora.
 
 ## Em andamento
 - Nada em execução no momento — painel de tenants testado e validado de ponta a
