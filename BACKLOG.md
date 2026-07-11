@@ -28,8 +28,19 @@
   responsabilidades misturadas) em `/admin/comanda` (comanda ao vivo, SignalR) e
   `/admin/dashboard` (Painel Geral, analytics) — ver commits `595976e`..`b94a785`.
 
+## Concluído (sessão 2026-07-11)
+- Painel do dono da plataforma (`/plataforma`): listar/cadastrar/suspender-reativar
+  tenants. Cadastrar provisiona o schema Postgres novo, roda as migrations
+  (`InitialSquash`) nele e já cria o admin inicial da loja — tudo síncrono no mesmo
+  request. Role `PlatformOwner` + policy dedicada; login do dono reusa a tela normal
+  de `/login`, só muda o redirect. Seed do primeiro dono da plataforma é automático
+  no boot via `PLATFORM_OWNER_EMAIL`/`PLATFORM_OWNER_SEED_PASSWORD` no `.env` (mesmo
+  padrão do seed do admin) — commits `0998437`..`fbaf89d`.
+  Só gestão de tenant, sem billing (ver item de cobrança abaixo).
+
 ## Em andamento
-- Nada em execução remota no momento.
+- Teste de ponta a ponta do painel de tenants (criar um tenant de teste de verdade,
+  confirmar login no subdomínio novo) — pendente de alguém logar manualmente.
 
 ## Bug conhecido, não corrigido
 - Hidratação React (erros minificados #425/#418/#423 no console) aparece em toda
@@ -84,6 +95,34 @@
   o que impediu testar o fluxo completo de abrir/fechar comanda no navegador).
 - Escopo a decidir: botão "gerar dados de exemplo" no onboarding do tenant, um
   script/seed de dev, ou os dois.
+
+## Backlog — domínio próprio por tenant (BYO domain)
+- Hoje só funciona subdomínio de `2esysten.com.br` (`loja.2esysten.com.br`) —
+  `TenantResolutionMiddleware` só extrai slug de um subdomínio do `RootDomain`
+  configurado, e o certificado SSL (Cloudflare Universal SSL) só cobre
+  `2esysten.com.br`/`*.2esysten.com.br`. Um domínio de terceiro apontando pra nossa
+  VPS hoje cairia em tenant-zero (sem match) e sem certificado válido.
+- Pra suportar domínio próprio do lojista: campo `CustomDomain` no `Tenant`
+  (nullable, único), `TenantResolutionMiddleware` passa a checar também por esse
+  campo além do slug, e — o pedaço difícil — automação de certificado TLS por
+  domínio novo (Let's Encrypt automático via HTTP-01/DNS-01 a cada domínio
+  cadastrado, ou produto tipo Cloudflare for SaaS). Esforço bem maior que o resto
+  do painel de tenants; não fazer de forma apressada.
+- Fluxo esperado: lojista aponta o domínio dele (CNAME/A) pra nossa VPS, cadastra o
+  domínio no painel, sistema verifica propagação de DNS e emite o certificado
+  automaticamente antes de ativar.
+
+## Backlog — motor financeiro (previsão + análises)
+- Reformular o sistema financeiro pra virar um motor de análise de verdade, com
+  foco em ciência de dados: previsão financeira mais robusta (hoje é só projeção
+  linear simples em `dashboard/page.tsx`), fechamento de dia/semana/mês formal
+  (não só o resumo "hoje" que existe agora), comparativos período-a-período,
+  tendências, sazonalidade.
+- Escopo ainda não detalhado: quais métricas exatas, se é evolução do
+  `financeiro/page.tsx` atual (Curva ABC, DRE simplificado) ou uma seção nova
+  dedicada a analytics, e se algum modelo estatístico/preditivo entra ou fica só
+  em agregações mais ricas — confirmar com o usuário antes de planejar a
+  arquitetura.
 
 ## Backlog — migração de dados (import/export)
 - Aceitar importação de dados de outros sistemas na hora do tenant migrar pro
