@@ -95,7 +95,10 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
 
     private void LogAndVerify(string schema, string? current)
     {
-        _logger.LogDebug("Conexão isolada no schema '{Schema}' (current_schema() = '{Current}').", schema, current);
+        // TEMP DEBUG (2026-07-11): LogInformation em vez de LogDebug só pra
+        // diagnosticar o bug do provisionamento de tenant caindo no schema
+        // errado — reverter pra LogDebug depois de achar a causa.
+        _logger.LogInformation("[TEMP-DEBUG] Conexão isolada no schema '{Schema}' (current_schema() = '{Current}').", schema, current);
 
         if (!string.Equals(current, schema, StringComparison.Ordinal))
         {
