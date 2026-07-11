@@ -26,18 +26,33 @@ const sections = [
     ],
   },
   {
-    label: 'Gestão & Loja',
+    label: 'Vendas & Clientes',
     items: [
       { href: '/admin/usuarios',    label: 'Clientes',     icon: Users,       perm: 'usuarios' },
       { href: '/admin/crediario',   label: 'Crediário',    icon: CreditCard,  perm: 'crediario' },
+      { href: '/admin/reservas',    label: 'Pré-vendas',   icon: ClipboardList, perm: 'estoque' },
+    ],
+  },
+  {
+    label: 'Estoque & Catálogo',
+    items: [
       { href: '/admin/estoque',     label: 'Estoque',      icon: Package,     perm: 'estoque' },
-      { href: '/admin/financeiro',      label: 'Financeiro',        icon: TrendingUp,    perm: 'financeiro' },
-      { href: '/admin/contas-receber', label: 'Contas a Pagar/Rec', icon: Wallet,        perm: 'financeiro' },
-      { href: '/admin/reservas',        label: 'Pré-vendas',         icon: ClipboardList, perm: 'estoque' },
-      { href: '/admin/relatorios',      label: 'Relatórios',         icon: BarChart2,     perm: 'relatorios' },
       { href: '/admin/categorias',  label: 'Categorias',   icon: Tag,         perm: 'categorias' },
-      { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,       perm: 'anuncios' },
-      { href: '/admin/mensageria', label: 'Mensageria',   icon: MessageSquare,   perm: 'anuncios' },
+    ],
+  },
+  {
+    label: 'Financeiro',
+    items: [
+      { href: '/admin/financeiro',     label: 'Financeiro',        icon: TrendingUp,    perm: 'financeiro' },
+      { href: '/admin/contas-receber', label: 'Contas a Pagar/Rec', icon: Wallet,        perm: 'financeiro' },
+      { href: '/admin/relatorios',     label: 'Relatórios',         icon: BarChart2,     perm: 'relatorios' },
+    ],
+  },
+  {
+    label: 'Comunicação',
+    items: [
+      { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,     perm: 'anuncios' },
+      { href: '/admin/mensageria', label: 'Mensageria',   icon: MessageSquare,  perm: 'anuncios' },
       { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: null },
     ],
   },

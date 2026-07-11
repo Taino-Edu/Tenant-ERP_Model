@@ -18,7 +18,6 @@ const SHORTCUTS: Shortcut[] = [
   { key: 'c', label: 'C', description: 'Crediário',                   category: 'Navegação' },
   { key: 'f', label: 'F', description: 'Financeiro',                  category: 'Navegação' },
   { key: 'r', label: 'R', description: 'Relatórios',                  category: 'Navegação' },
-  { key: 'a', label: 'A', description: 'Campeonatos',                 category: 'Navegação' },
   { key: '?', label: '?', description: 'Mostrar / esconder esta ajuda', category: 'Geral'    },
   { key: 'Escape', label: 'Esc', description: 'Fechar modal ou painel aberto', category: 'Geral' },
 ]
@@ -31,7 +30,6 @@ const NAV_MAP: Record<string, string> = {
   c: '/admin/crediario',
   f: '/admin/financeiro',
   r: '/admin/relatorios',
-  a: '/admin/campeonatos',
 }
 
 export const SIDEBAR_SHORTCUT_KEYS: Record<string, string> = {
@@ -42,7 +40,6 @@ export const SIDEBAR_SHORTCUT_KEYS: Record<string, string> = {
   '/admin/crediario':    'C',
   '/admin/financeiro':   'F',
   '/admin/relatorios':   'R',
-  '/admin/campeonatos':  'A',
 }
 
 export default function KeyboardShortcutsOverlay() {
