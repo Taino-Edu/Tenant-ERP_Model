@@ -50,7 +50,8 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         var schema = ValidateSchemaName();
 
         using var setCmd = connection.CreateCommand();
-        setCmd.CommandText = $"SET search_path TO \"{schema}\", public;";
+        // Sem fallback pro "public" — ver comentário em SetSearchPathAsync.
+        setCmd.CommandText = $"SET search_path TO \"{schema}\";";
         setCmd.ExecuteNonQuery();
 
         using var checkCmd = connection.CreateCommand();
@@ -65,7 +66,15 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         var schema = ValidateSchemaName();
 
         await using var setCmd = connection.CreateCommand();
-        setCmd.CommandText = $"SET search_path TO \"{schema}\", public;";
+        // SEM fallback pro "public" no search_path: "public" aqui é o schema de
+        // dados de verdade do tenant-zero (não um schema "compartilhado" de
+        // extensões/funções). Um fallback faria qualquer tabela ausente no
+        // schema do tenant (ex: logo após CREATE SCHEMA, antes da migration
+        // rodar) resolver silenciosamente pra tabela de public via busca de
+        // nome do Postgres — inclusive a própria "__EFMigrationsHistory", o que
+        // faz o EF achar "já migrado" e nunca criar nada no schema novo (bug
+        // real encontrado ao provisionar o primeiro tenant nesta sessão).
+        setCmd.CommandText = $"SET search_path TO \"{schema}\";";
         await setCmd.ExecuteNonQueryAsync(ct);
 
         // Rede de segurança barata: confirma que o search_path realmente apontou
@@ -95,10 +104,7 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
 
     private void LogAndVerify(string schema, string? current)
     {
-        // TEMP DEBUG (2026-07-11): LogInformation em vez de LogDebug só pra
-        // diagnosticar o bug do provisionamento de tenant caindo no schema
-        // errado — reverter pra LogDebug depois de achar a causa.
-        _logger.LogInformation("[TEMP-DEBUG] Conexão isolada no schema '{Schema}' (current_schema() = '{Current}').", schema, current);
+        _logger.LogDebug("Conexão isolada no schema '{Schema}' (current_schema() = '{Current}').", schema, current);
 
         if (!string.Equals(current, schema, StringComparison.Ordinal))
         {

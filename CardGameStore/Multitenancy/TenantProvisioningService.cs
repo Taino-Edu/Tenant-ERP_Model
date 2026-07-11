@@ -71,13 +71,9 @@ public class TenantProvisioningService : ITenantProvisioningService
             using var scope = _scopeFactory.CreateScope();
             var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
             tenantContext.Set(tenant.Id, schemaName);
-            _logger.LogInformation("[TEMP-DEBUG] tenantContext setado pra TenantId={TenantId} SchemaName={SchemaName} (instance {Hash})",
-                tenantContext.TenantId, tenantContext.SchemaName, tenantContext.GetHashCode());
 
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            _logger.LogInformation("[TEMP-DEBUG] Antes do MigrateAsync — tenantContext.SchemaName={SchemaName}", tenantContext.SchemaName);
             await db.Database.MigrateAsync();
-            _logger.LogInformation("[TEMP-DEBUG] Depois do MigrateAsync — tenantContext.SchemaName={SchemaName}", tenantContext.SchemaName);
 
             db.Users.Add(new User
             {
