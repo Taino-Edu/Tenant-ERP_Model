@@ -14,6 +14,16 @@
     --text-primary: #F3F4F6;
     --text-muted:   #9CA3AF;
     --text-faint:   #4B5563;
+
+    /* Cor de marca do tenant — "R G B" espaço-separado (não hex), consumido pelo
+       token brand-400/500/600 do Tailwind via rgb(var(--brand-500) / <alpha-value>).
+       Valores default = paleta estática original (#5BBDE8/#3EC2F2/#1AAFD9).
+       Sobrescrito em runtime por TenantColorInjector (app/admin/layout.tsx) a
+       partir de SiteConfig.ColorPrimary — mesma cor em todos os temas, não
+       varia entre dark/light. */
+    --brand-400: 91 189 232;
+    --brand-500: 62 194 242;
+    --brand-600: 26 175 217;
   }
 
   /* Tema claro: ativado via class="light" no <html> */
@@ -111,8 +121,8 @@ body.institucional-page .js-pwa-install {
 
   /* Flash de novo item no dashboard */
   @keyframes flash-new {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(66, 182, 238, 0); }
-    50%       { box-shadow: 0 0 0 4px rgba(66, 182, 238, 0.5); }
+    0%, 100% { box-shadow: 0 0 0 0 rgb(var(--brand-500) / 0); }
+    50%       { box-shadow: 0 0 0 4px rgb(var(--brand-500) / 0.5); }
   }
   .flash-new { animation: flash-new 1s ease-in-out 2; }
 
@@ -126,17 +136,17 @@ body.institucional-page .js-pwa-install {
   /* Transição suave ao trocar tema */
   html { transition: background-color 0.2s ease, color 0.2s ease; }
 
-  /* Nav sidebar — item ativo adaptado ao tema */
+  /* Nav sidebar — item ativo, cor de marca do tenant em ambos os temas */
   .nav-item-active {
-    background-color: rgba(66, 182, 238, 0.15);
-    color: #42B6EE;
+    background-color: rgb(var(--brand-500) / 0.15);
+    color: rgb(var(--brand-400));
   }
   .nav-item-label { color: inherit; }
   html.light .nav-item-active {
-    background-color: #E3F5FD;
-    color: #0e7ab5;
+    background-color: rgb(var(--brand-500) / 0.12);
+    color: rgb(var(--brand-600));
   }
-  html.light .nav-item-active .nav-item-label { color: #0e7ab5; }
+  html.light .nav-item-active .nav-item-label { color: rgb(var(--brand-600)); }
 
   /* Fundo do painel admin com gradiente que usa variável de tema */
   .admin-main {

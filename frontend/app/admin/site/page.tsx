@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { siteConfigApi, SiteConfigDto } from '@/lib/api'
 import { DEFAULT_SITE_CONFIG } from '@/contexts/SiteConfigContext'
+import { mixHex } from '@/lib/colors'
 import toast, { Toaster } from 'react-hot-toast'
 import { Palette, Save, Loader2, ExternalLink } from 'lucide-react'
 
@@ -36,20 +37,6 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
       </div>
     </div>
   )
-}
-
-/** Mistura duas cores hex — mesmo helper usado na landing pra derivar o fundo de imagem dentro do card. */
-function mixHex(a: string, b: string, ratio: number): string {
-  const parse = (h: string) => {
-    const m = /^#?([0-9a-f]{6})$/i.exec(h.trim())
-    if (!m) return null
-    const n = parseInt(m[1], 16)
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-  }
-  const pa = parse(a), pb = parse(b)
-  if (!pa || !pb) return a
-  const mix = pa.map((c, i) => Math.round(c * (1 - ratio) + pb[i] * ratio))
-  return '#' + mix.map(c => c.toString(16).padStart(2, '0')).join('')
 }
 
 /** Preview ao vivo — miniatura da navbar + hero + card da landing page, refletindo o

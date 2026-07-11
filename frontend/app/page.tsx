@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { getRole } from '@/lib/auth'
 import { productApi, announcementApi, Product, AnnouncementDto } from '@/lib/api'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import { mixHex } from '@/lib/colors'
 import Link from 'next/link'
 import {
   ShoppingBag, Star,
@@ -11,21 +12,6 @@ import {
   CreditCard, Award, QrCode, Shield, ChevronRight, ChevronLeft,
   Sun, Moon, Mail,
 } from 'lucide-react'
-
-/** Mistura duas cores hex — usado pra derivar o "cardAlt" (fundo de imagem dentro de card)
- * a partir da cor de card + um toque da cor primária, sem precisar de um campo próprio. */
-function mixHex(a: string, b: string, ratio: number): string {
-  const parse = (h: string) => {
-    const m = /^#?([0-9a-f]{6})$/i.exec(h.trim())
-    if (!m) return null
-    const n = parseInt(m[1], 16)
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255]
-  }
-  const pa = parse(a), pb = parse(b)
-  if (!pa || !pb) return a
-  const mix = pa.map((c, i) => Math.round(c * (1 - ratio) + pb[i] * ratio))
-  return '#' + mix.map(c => c.toString(16).padStart(2, '0')).join('')
-}
 
 /** Formata "5517999998888" como "(17) 99999-8888" — se não bater o formato esperado, devolve como veio. */
 function formatWhatsapp(raw: string): string {

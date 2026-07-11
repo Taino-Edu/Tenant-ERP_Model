@@ -8,15 +8,22 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Paleta alinhada com o design Maikon
+        // 400/500/600 são dinâmicos — ligados a --brand-400/500/600 (CSS custom
+        // properties setadas em runtime por TenantColorInjector a partir de
+        // SiteConfig.ColorPrimary, ver app/admin/layout.tsx). O padrão
+        // rgb(var(--x) / <alpha-value>) é suportado nativamente pelo Tailwind
+        // (resolve /20, /30 etc. e gradientes from-brand-600/to-brand-400) sem
+        // precisar de hack !important como o tema claro faz hoje com `surface`.
+        // 50-300/700-900 continuam estáticos (não são consumidos por
+        // componentes que precisam refletir a cor do tenant).
         brand: {
           50:  '#EEF7FD',
           100: '#D9EFF9',
           200: '#B3DEF4',
           300: '#7EC8EC',
-          400: '#5BBDE8',
-          500: '#3EC2F2', // primary — azul padrão (configurável em SiteConfig.ColorPrimary)
-          600: '#1AAFD9', // primary darker
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)', // primary (default #3EC2F2, configurável em SiteConfig.ColorPrimary)
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
           700: '#167AAB',
           800: '#186288',
           900: '#1A5170',
