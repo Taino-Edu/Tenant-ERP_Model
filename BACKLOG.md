@@ -1,18 +1,5 @@
 # Backlog — Tenant-ERP
 
-## Bug conhecido — falta tela de "esqueci minha senha"
-- O backend já tem os endpoints (`POST /api/auth/forgot-password`,
-  `POST /api/auth/reset-password` em `AuthController.cs`), mas **não existe
-  nenhum link ou tela no `/login` que aciona isso** — descoberto ao tentar
-  recuperar a senha de um admin de tenant de teste criado nesta sessão. Hoje,
-  se um lojista esquece a senha, não tem self-service nenhum: só recuperando
-  via banco direto.
-- Precisa: link "Esqueci minha senha" no `/login`, tela pra pedir o reset
-  (input de e-mail), e tela de definir nova senha com o token recebido por
-  e-mail (o backend já deve emitir esse e-mail — confirmar em
-  `EmailService.cs`/`AuthService.ForgotPasswordAsync` antes de só plugar o
-  frontend).
-
 ## Concluído (sessão 2026-07-09/10)
 - Branding genericizado: nome/e-mail/endereço/logo da loja vêm de `SiteConfig` dinâmico
   em vez de string fixa "softNerd"/"Santuário Nerd" — backend (`EmailService`,
@@ -83,6 +70,22 @@
   ignorando a flag de emissão se o módulo estiver desligado). Painel
   `/plataforma` ganhou edição de plano/pagamento/módulos por tenant. Sem gateway
   de pagamento — só rastreio manual, por decisão explícita.
+- **Bug real de vazamento de tema corrigido**: o toggle claro/escuro do painel
+  admin salva a preferência (classe `light` no `<html>`) em localStorage, que
+  cascateia pra QUALQUER página do site, não só `/admin`. Os overrides
+  `!important` de tema claro (classes Tailwind cruas E as variáveis CSS
+  `--bg-card`/`--text-primary`/etc.) vazavam pra páginas com esquema de cor
+  próprio (institucional, `/plataforma`) — texto branco sobre fundo virando
+  branco também, ficando invisível. Corrigido escopando tudo numa classe nova
+  `.admin-shell` (wrapper que envolve Sidebar + conteúdo no layout do admin,
+  não só o `<main>`) — commits `ff71519` (primeira tentativa, incompleta),
+  `00a3492` (fix completo).
+- **Gap fechado**: tela de "esqueci minha senha" já existia pronta
+  (`/reset-password`, backend com `forgot-password`/`reset-password` em
+  `AuthController.cs`), mas só era alcançável a partir do login do cliente
+  (`/entrar`) — o login do admin (`/login`) não linkava pra ela. Adicionado o
+  link, com `?from=admin` pra voltar pro lugar certo depois do reset —
+  commit `1b7d41b`.
 
 ## Backlog — módulo Estoque como opcional/cobrável
 - Cobrar Estoque separadamente foi cogitado no ciclo 1 de billing, mas a
