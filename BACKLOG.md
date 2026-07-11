@@ -37,10 +37,24 @@
   no boot via `PLATFORM_OWNER_EMAIL`/`PLATFORM_OWNER_SEED_PASSWORD` no `.env` (mesmo
   padrão do seed do admin) — commits `0998437`..`fbaf89d`.
   Só gestão de tenant, sem billing (ver item de cobrança abaixo).
+- **Bug real de isolamento corrigido, encontrado testando o provisionamento pela
+  primeira vez**: o `search_path` era setado como `"<schema>", public` (fallback
+  pro public). Como `public` é o schema de dados de verdade do tenant-zero (não um
+  schema neutro de extensões), qualquer tabela ainda ausente no schema recém-criado
+  — inclusive a própria `__EFMigrationsHistory`, antes da primeira migration rodar —
+  resolvia silenciosamente pra `public` via busca de nome do Postgres. O EF achava
+  "já migrado" e nunca criava nada no schema novo; o admin inicial da loja caía em
+  `public.users` em vez do schema isolado. Corrigido em duas partes: (1) removido o
+  fallback do search_path (só o schema do tenant), (2) `MigrationsHistoryTable`
+  configurado com o schema explícito do tenant atual (a checagem interna do
+  provider Npgsql pra saber se a tabela de histórico existe não era scoped pelo
+  search_path da mesma forma que a leitura real, causando um segundo mismatch depois
+  do fix nº1). Commits `276fb88`, `ffce231`. Validado em produção: tenant de teste
+  isolado corretamente, só com seu próprio admin, sem vazar pra `public`.
 
 ## Em andamento
-- Teste de ponta a ponta do painel de tenants (criar um tenant de teste de verdade,
-  confirmar login no subdomínio novo) — pendente de alguém logar manualmente.
+- Nada em execução no momento — painel de tenants testado e validado de ponta a
+  ponta em produção (provisionar, isolar, suspender/reativar).
 
 ## Bug conhecido, não corrigido
 - Hidratação React (erros minificados #425/#418/#423 no console) aparece em toda
