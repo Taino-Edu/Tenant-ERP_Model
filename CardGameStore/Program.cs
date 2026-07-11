@@ -71,9 +71,20 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
     }
     else
     {
+        // A tabela de histórico de migrations (__EFMigrationsHistory) precisa de
+        // schema explícito, não pode depender do search_path como o resto do
+        // model: a checagem "a tabela existe?" do provider Npgsql não é
+        // consistentemente scoped pelo search_path da mesma forma que a query
+        // real de leitura, o que causava um mismatch — a checagem "achava" a
+        // tabela (via public, de outro tenant) mas a leitura real (isolada só
+        // no schema do tenant atual) não encontrava nada, derrubando o
+        // provisionamento de tenant novo com "relation does not exist".
+        var tenantSchemaForHistory = sp.GetRequiredService<ITenantContext>().SchemaName;
         options.UseNpgsql(
             pgConnStr,
-            npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5)
+            npgsqlOptions => npgsqlOptions
+                .EnableRetryOnFailure(maxRetryCount: 5)
+                .MigrationsHistoryTable("__EFMigrationsHistory", tenantSchemaForHistory)
         );
         // Resolve do próprio IServiceProvider scoped (sp) — pega a MESMA
         // instância de ITenantContext que o TenantResolutionMiddleware populou
