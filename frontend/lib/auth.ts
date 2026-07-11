@@ -28,6 +28,7 @@ export function getUserName():    string    { return Cookies.get('userName') || 
 export function getUserId():      string    { return Cookies.get('userId')   || '' }
 export function isAdmin():        boolean   { return getRole() === 'Admin' }
 export function isOperator():     boolean   { return getRole() === 'Operator' }
+export function isPlatformOwner(): boolean  { return getRole() === 'PlatformOwner' }
 export function isLoggedIn():     boolean   { return !!Cookies.get('userRole') }
 
 export function getPermissions(): string[] {

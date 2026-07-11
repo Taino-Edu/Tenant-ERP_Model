@@ -160,8 +160,9 @@ builder.Services
 builder.Services.AddAuthorization(options =>
 {
     // AdminOnly: Admin e Operator passam — OperatorPermissionMiddleware cuida do controle granular por rota.
-    options.AddPolicy("AdminOnly",       policy => policy.RequireRole("Admin", "Operator"));
-    options.AddPolicy("CustomerOrAdmin", policy => policy.RequireRole("Admin", "Customer", "Operator"));
+    options.AddPolicy("AdminOnly",         policy => policy.RequireRole("Admin", "Operator"));
+    options.AddPolicy("CustomerOrAdmin",   policy => policy.RequireRole("Admin", "Customer", "Operator"));
+    options.AddPolicy("PlatformOwnerOnly", policy => policy.RequireRole("PlatformOwner"));
 });
 
 // ---------------------------------------------------------------------------
@@ -284,6 +285,7 @@ builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
+builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
 builder.Services.AddSingleton<CurrencyService>();
 builder.Services.AddMemoryCache();
 

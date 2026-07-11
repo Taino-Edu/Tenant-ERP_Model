@@ -656,6 +656,28 @@ export const aiApi = {
     api.post<AiChatResponse>('/api/ai/chat', { message }),
 }
 
+// ── Painel do dono da plataforma (gestão de tenants) ──────────────────────────
+
+export type TenantStatus = 'Active' | 'Suspended'
+
+export interface TenantSummary {
+  id: string; slug: string; schemaName: string
+  status: TenantStatus; createdAt: string
+}
+
+export interface CreateTenantRequest {
+  slug: string; adminEmail: string; adminPassword: string
+}
+
+export const platformApi = {
+  listTenants: () =>
+    api.get<TenantSummary[]>('/api/platform/tenants'),
+  createTenant: (req: CreateTenantRequest) =>
+    api.post<TenantSummary>('/api/platform/tenants', req),
+  updateTenantStatus: (id: string, status: TenantStatus) =>
+    api.patch<TenantSummary>(`/api/platform/tenants/${id}/status`, { status }),
+}
+
 // ── Upload de imagem ──────────────────────────────────────────────────────────
 
 export const uploadApi = {

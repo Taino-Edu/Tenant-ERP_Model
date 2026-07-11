@@ -190,7 +190,8 @@ public class User
 /// </summary>
 public static class UserRole
 {
-    public const string Admin    = "Admin";
-    public const string Operator = "Operator";
-    public const string Customer = "Customer";
+    public const string Admin         = "Admin";
+    public const string Operator      = "Operator";
+    public const string Customer      = "Customer";
+    public const string PlatformOwner = "PlatformOwner";
 }

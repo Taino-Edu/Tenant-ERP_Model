@@ -23,7 +23,7 @@ export default function LoginPage() {
       const { data } = await authApi.login(email, password)
       saveAuth(data)
       toast.success(`Bem-vindo, ${data.userName}!`)
-      router.push(data.role === 'Customer' ? '/cliente' : '/admin/comanda')
+      router.push(data.role === 'Customer' ? '/cliente' : data.role === 'PlatformOwner' ? '/plataforma' : '/admin/comanda')
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
       if (status === 429) {
