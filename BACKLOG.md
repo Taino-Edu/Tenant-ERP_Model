@@ -62,9 +62,41 @@
   (checagem via alguma rota leve tipo `/api/tenant-status` antes de renderizar o
   resto), ou aceitar o comportamento atual como suficiente por ora.
 
+## Concluído (sessão 2026-07-11, continuação)
+- Billing ciclo 1: `Tenant` ganha `PlanName`/`PaymentStatus`
+  (Pago/Atrasado/Isento)/`EnabledModules` no catálogo. Só o módulo **Fiscal**
+  entra no gate técnico (`RequireModuleAttribute` no `FiscalController`, 403 se
+  desabilitado; defesa em profundidade em `ComandaService`/`VendaAvulsaService`
+  ignorando a flag de emissão se o módulo estiver desligado). Painel
+  `/plataforma` ganhou edição de plano/pagamento/módulos por tenant. Sem gateway
+  de pagamento — só rastreio manual, por decisão explícita.
+
+## Backlog — módulo Estoque como opcional/cobrável
+- Cobrar Estoque separadamente foi cogitado no ciclo 1 de billing, mas a
+  exploração confirmou que **hoje não dá** sem quebrar a loja: venda avulsa
+  exige `Product` (FK não-nula, baixa de estoque é o próprio core do fluxo),
+  vitrine pública é 100% dependente de `Product`, e patrimônio/Curva ABC no
+  Dashboard/Financeiro são calculados direto sobre dados de `Product` (front e
+  back). Travar Estoque sem tenant pagante quebraria em cascata: vitrine, PDV de
+  venda avulsa inteiro, financeiro, relatórios.
+- Pré-requisito antes de cobrar por isso: (1) item genérico/avulso também na
+  venda avulsa (comanda já suporta, `ComandaService.cs:918-925`), (2) desacoplar
+  o cálculo de patrimônio/Curva ABC de leitura direta de `Product` (hoje em
+  `dashboard/page.tsx:169-174`, `financeiro/page.tsx` `CurvaABCSection`,
+  `AnalyticsController.cs:289-322`). É uma iniciativa de refatoramento própria,
+  não um toggle simples como foi o Fiscal.
+
+## Backlog — billing ciclo 2 (gateway de pagamento)
+- Integrar Inter (já usado no projeto pra Pix) e/ou Mercado Pago pra cobrança
+  recorrente de verdade, e suspensão automática por inadimplência (hoje é
+  manual, pelo painel `/plataforma`).
+- Página pública de planos/preços e self-signup de tenant com pagamento (hoje
+  só o dono da plataforma cadastra manualmente via `/plataforma`).
+
 ## Em andamento
-- Nada em execução no momento — painel de tenants testado e validado de ponta a
-  ponta em produção (provisionar, isolar, suspender/reativar).
+- Nada em execução no momento — painel de tenants e billing ciclo 1 testados e
+  validados (isolamento, suspender/reativar; billing ainda falta testar em
+  produção depois do deploy).
 
 ## Bug conhecido, não corrigido
 - Hidratação React (erros minificados #425/#418/#423 no console) aparece em toda
