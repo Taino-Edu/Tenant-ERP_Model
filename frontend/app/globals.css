@@ -26,8 +26,13 @@
     --brand-600: 26 175 217;
   }
 
-  /* Tema claro: ativado via class="light" no <html> */
-  html.light {
+  /* Tema claro: ativado via class="light" no <html>, mas só tem efeito dentro
+     de ".admin-shell" (o wrapper do layout do /admin, ver app/admin/layout.tsx)
+     — a classe "light" persiste em localStorage e cascateia pro <html> em
+     QUALQUER página do site, então sem esse escopo essas variáveis também
+     mudavam o fundo/texto de páginas com tema próprio (institucional,
+     /plataforma, vitrine pública), que nunca pediram tema claro. */
+  html.light .admin-shell {
     color-scheme: light;
     --bg-primary:   #F5F5F7;
     --bg-card:      #FFFFFF;
@@ -156,77 +161,77 @@ body.institucional-page .js-pwa-install {
 }
 
 /* ── Overrides de tema claro para classes Tailwind fixas ──────────────────── */
-/* Escopado em ".admin-main" (só existe dentro do layout do /admin) — o toggle
+/* Escopado em ".admin-shell" (só existe dentro do layout do /admin) — o toggle
    claro/escuro do admin fica salvo em localStorage e a classe "light" no
    <html> persiste entre navegações, então sem esse escopo esses overrides
    vazam pra qualquer outra página do site (institucional, vitrine pública,
    área do cliente) que também use essas mesmas classes Tailwind cruas, com
    seu próprio esquema de cor — foi o que quebrou o texto da institucional. */
 /* Fundo de página */
-html.light .admin-main .bg-surface-900 { background-color: #F5F5F7 !important; }
-html.light .admin-main .bg-surface-800 { background-color: #FFFFFF !important; }
-html.light .admin-main .bg-surface-700 { background-color: #F0F0F5 !important; }
-html.light .admin-main .bg-surface-600 { background-color: #EBEBF0 !important; }
-html.light .admin-main .bg-surface-500 { background-color: #D1D1DB !important; }
+html.light .admin-shell .bg-surface-900 { background-color: #F5F5F7 !important; }
+html.light .admin-shell .bg-surface-800 { background-color: #FFFFFF !important; }
+html.light .admin-shell .bg-surface-700 { background-color: #F0F0F5 !important; }
+html.light .admin-shell .bg-surface-600 { background-color: #EBEBF0 !important; }
+html.light .admin-shell .bg-surface-500 { background-color: #D1D1DB !important; }
 
 /* Bordas */
-html.light .admin-main .border-surface-500 { border-color: #D1D1DB !important; }
-html.light .admin-main .border-surface-400 { border-color: #C0C0CC !important; }
+html.light .admin-shell .border-surface-500 { border-color: #D1D1DB !important; }
+html.light .admin-shell .border-surface-400 { border-color: #C0C0CC !important; }
 
 /* Textos */
-html.light .admin-main .text-white     { color: #111118 !important; }
-html.light .admin-main .text-gray-100  { color: #1a1a24 !important; }
-html.light .admin-main .text-gray-200  { color: #2a2a38 !important; }
-html.light .admin-main .text-gray-300  { color: #444455 !important; }
-html.light .admin-main .text-gray-400  { color: #555566 !important; }
-html.light .admin-main .text-gray-500  { color: #777788 !important; }
-html.light .admin-main .text-gray-600  { color: #999AAA !important; }
+html.light .admin-shell .text-white     { color: #111118 !important; }
+html.light .admin-shell .text-gray-100  { color: #1a1a24 !important; }
+html.light .admin-shell .text-gray-200  { color: #2a2a38 !important; }
+html.light .admin-shell .text-gray-300  { color: #444455 !important; }
+html.light .admin-shell .text-gray-400  { color: #555566 !important; }
+html.light .admin-shell .text-gray-500  { color: #777788 !important; }
+html.light .admin-shell .text-gray-600  { color: #999AAA !important; }
 
 /* Inputs e selects com bg fixo */
-html.light .admin-main .bg-surface-700.input,
-html.light .admin-main .input {
+html.light .admin-shell .bg-surface-700.input,
+html.light .admin-shell .input {
   background-color: #F0F0F5 !important;
   color: #111118 !important;
   border-color: #D1D1DB !important;
 }
 
 /* Admin sidebar */
-html.light .admin-main .bg-\[#1E1E2D\] { background-color: #EAE8FF !important; }
+html.light .admin-shell .bg-\[#1E1E2D\] { background-color: #EAE8FF !important; }
 
 /* Hover states */
-html.light .admin-main .hover\:bg-surface-700:hover { background-color: #EAEAF0 !important; }
-html.light .admin-main .hover\:bg-surface-500:hover { background-color: #D5D5DF !important; }
+html.light .admin-shell .hover\:bg-surface-700:hover { background-color: #EAEAF0 !important; }
+html.light .admin-shell .hover\:bg-surface-500:hover { background-color: #D5D5DF !important; }
 
 /* Placeholders */
-html.light .admin-main ::placeholder { color: #AAAAAA !important; }
+html.light .admin-shell ::placeholder { color: #AAAAAA !important; }
 
 /* Gradientes de surface — o Tailwind resolve from-/to-/via- em build time,
    então precisamos sobrescrever as variáveis CSS de gradiente manualmente */
-html.light .admin-main .from-surface-900 {
+html.light .admin-shell .from-surface-900 {
   --tw-gradient-from: #F5F5F7 var(--tw-gradient-from-position);
   --tw-gradient-to: rgb(245 245 247 / 0) var(--tw-gradient-to-position);
 }
-html.light .admin-main .from-surface-800 {
+html.light .admin-shell .from-surface-800 {
   --tw-gradient-from: #FFFFFF var(--tw-gradient-from-position);
   --tw-gradient-to: rgb(255 255 255 / 0) var(--tw-gradient-to-position);
 }
-html.light .admin-main .from-surface-700 {
+html.light .admin-shell .from-surface-700 {
   --tw-gradient-from: #F0F0F5 var(--tw-gradient-from-position);
   --tw-gradient-to: rgb(240 240 245 / 0) var(--tw-gradient-to-position);
 }
-html.light .admin-main .to-surface-900   { --tw-gradient-to: #F5F5F7 var(--tw-gradient-to-position); }
-html.light .admin-main .to-surface-800   { --tw-gradient-to: #FFFFFF var(--tw-gradient-to-position); }
-html.light .admin-main .to-surface-700   { --tw-gradient-to: #F0F0F5 var(--tw-gradient-to-position); }
-html.light .admin-main [class*="via-surface-800"] {
+html.light .admin-shell .to-surface-900   { --tw-gradient-to: #F5F5F7 var(--tw-gradient-to-position); }
+html.light .admin-shell .to-surface-800   { --tw-gradient-to: #FFFFFF var(--tw-gradient-to-position); }
+html.light .admin-shell .to-surface-700   { --tw-gradient-to: #F0F0F5 var(--tw-gradient-to-position); }
+html.light .admin-shell [class*="via-surface-800"] {
   --tw-gradient-via: #FFFFFF var(--tw-gradient-via-position);
   --tw-gradient-to: rgb(255 255 255 / 0) var(--tw-gradient-to-position);
 }
 
 /* ── text-accent-gold: branco neutro no dark, escuro no light ─────────────── */
 /* bg-accent-gold (botões da landing) permanece amarelo — só o texto muda.
-   Mesmo escopo de ".admin-main" que o bloco acima, e pelo mesmo motivo. */
+   Mesmo escopo de ".admin-shell" que o bloco acima, e pelo mesmo motivo. */
 .text-accent-gold { color: #F3F4F6 !important; }
-html.light .admin-main .text-accent-gold { color: #1e293b !important; }
+html.light .admin-shell .text-accent-gold { color: #1e293b !important; }
 
 /* ── Animação scan de câmera ───────────────────────────────────────────────── */
 @keyframes scan-line {

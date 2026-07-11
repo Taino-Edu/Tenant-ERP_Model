@@ -33,7 +33,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [])
 
   return (
-    <div className="flex min-h-screen bg-surface-900">
+    <div className="admin-shell flex min-h-screen bg-surface-900">
       <script dangerouslySetInnerHTML={{ __html: BRAND_FOUC_SCRIPT }} />
       <TenantColorInjector />
       <Sidebar />
