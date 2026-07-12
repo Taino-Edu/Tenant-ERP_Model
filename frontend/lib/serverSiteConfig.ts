@@ -39,7 +39,15 @@ export async function getTenantIconsForHost(host: string | null): Promise<Tenant
   if (!host) return null
 
   try {
-    const res = await fetch(`${INTERNAL_API_URL}/api/site-config`, {
+    // Query param só pra diferenciar a chave de cache do fetch do Next.js por
+    // tenant — o cache dele é baseado na URL (+ alguns options), NÃO no header
+    // Host custom que a gente manda pra rotear pro tenant certo. Sem isso,
+    // como a URL de baixo é sempre a mesma pra todos os tenants, o primeiro
+    // fetch que caísse aqui ficava em cache por 5min e era servido (errado)
+    // pra qualquer outra loja que pedisse depois — bug real, achado testando
+    // ao vivo (confirmado: o backend respondia certo via curl/wget direto,
+    // só o cache do lado do Next.js estava embaralhando os tenants).
+    const res = await fetch(`${INTERNAL_API_URL}/api/site-config?_h=${encodeURIComponent(host)}`, {
       headers: { Host: host },
       signal: AbortSignal.timeout(2000),
       next: { revalidate: 300 },
