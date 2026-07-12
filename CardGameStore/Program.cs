@@ -174,6 +174,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly",         policy => policy.RequireRole("Admin", "Operator"));
     options.AddPolicy("CustomerOrAdmin",   policy => policy.RequireRole("Admin", "Customer", "Operator"));
     options.AddPolicy("PlatformOwnerOnly", policy => policy.RequireRole("PlatformOwner"));
+    options.AddPolicy("ContadorOnly",      policy => policy.RequireRole("Contador"));
 });
 
 // ---------------------------------------------------------------------------

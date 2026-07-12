@@ -167,7 +167,7 @@ public class AdminCreateUserRequest
     [MaxLength(100)]
     public string? Password { get; set; }
 
-    /// <summary>"Customer" (padrão) ou "Operator".</summary>
+    /// <summary>"Customer" (padrão), "Operator" ou "Contador".</summary>
     [MaxLength(20)]
     public string? Role { get; set; }
 

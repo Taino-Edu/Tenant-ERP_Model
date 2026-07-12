@@ -1052,6 +1052,30 @@ export const minhasNotasApi = {
   obterCupom: (id: string) => api.get<CupomDto>(`/api/minhas-notas/${id}/cupom`),
 }
 
+// ── Portal do contador (acesso fiscal read-only) ──────────────────────────────
+
+export interface ContadorNotaDto {
+  id: string; origem: string; status: string
+  valorTotalEmCentavos: number
+  serie?: number; numero?: number; chaveAcesso?: string
+  emitidoEm?: string; canceladoEm?: string; createdAt: string
+}
+
+export interface ContadorConfigDto {
+  cnpj?: string; razaoSocial?: string; inscricaoEstadual?: string
+  logradouro?: string; numero?: string; complemento?: string; bairro?: string
+  municipio?: string; uf?: string; cep?: string
+  regimeTributario: string
+}
+
+export const contadorApi = {
+  listNotas: (params?: { inicio?: string; fim?: string; status?: string; page?: number; pageSize?: number }) =>
+    api.get<{ items: ContadorNotaDto[]; total: number; totalPages: number }>('/api/contador/notas', { params }),
+  exportarXmls: (inicio: string, fim: string) =>
+    api.get('/api/contador/exportar-xmls', { params: { inicio, fim }, responseType: 'blob' }),
+  getConfig: () => api.get<ContadorConfigDto>('/api/contador/config'),
+}
+
 // ── Personalização do site (nome, textos, cores da landing) ───────────────────
 
 export interface SiteConfigDto {

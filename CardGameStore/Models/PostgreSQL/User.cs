@@ -65,7 +65,7 @@ public class User
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Perfil RBAC. Valores válidos: "Admin" | "Customer"
+    /// Perfil RBAC. Valores válidos: "Admin" | "Operator" | "Customer" | "PlatformOwner" | "Contador"
     /// Use a enum UserRole para evitar strings mágicas no código.
     /// </summary>
     [Required, MaxLength(20)]
@@ -194,4 +194,5 @@ public static class UserRole
     public const string Operator      = "Operator";
     public const string Customer      = "Customer";
     public const string PlatformOwner = "PlatformOwner";
+    public const string Contador      = "Contador";
 }
