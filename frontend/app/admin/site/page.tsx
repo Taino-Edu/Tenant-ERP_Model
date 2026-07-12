@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { siteConfigApi, SiteConfigDto } from '@/lib/api'
+import { siteConfigApi, uploadApi, SiteConfigDto } from '@/lib/api'
 import { DEFAULT_SITE_CONFIG } from '@/contexts/SiteConfigContext'
 import { mixHex } from '@/lib/colors'
 import toast, { Toaster } from 'react-hot-toast'
-import { Palette, Save, Loader2, ExternalLink } from 'lucide-react'
+import { Palette, Save, Loader2, ExternalLink, Upload, Image as ImageIcon } from 'lucide-react'
 
 function Field({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
   return (
@@ -35,6 +35,37 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
           className="input w-full font-mono text-sm"
         />
       </div>
+    </div>
+  )
+}
+
+/** Upload de um ícone (favicon/PWA/admin) — envia na hora pro servidor e guarda a URL
+ * retornada no estado local do formulário; só persiste de verdade quando o admin clica
+ * em "Salvar", igual todo o resto desta tela. */
+function IconUploadField({
+  label, desc, value, uploading, onUpload,
+}: { label: string; desc: string; value: string | null | undefined; uploading: boolean; onUpload: (file: File) => void }) {
+  return (
+    <div>
+      <label className="text-xs text-gray-400 font-semibold mb-1 block">{label}</label>
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-lg border border-surface-500 bg-surface-800 flex items-center justify-center overflow-hidden shrink-0">
+          {value ? (
+            <img src={value} alt={label} className="w-full h-full object-contain" />
+          ) : (
+            <ImageIcon className="w-5 h-5 text-gray-600" />
+          )}
+        </div>
+        <label className="btn-secondary text-sm py-1.5 cursor-pointer">
+          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          Enviar
+          <input
+            type="file" accept="image/*" className="hidden" disabled={uploading}
+            onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = '' }}
+          />
+        </label>
+      </div>
+      <p className="text-[11px] text-gray-500 mt-1">{desc}</p>
     </div>
   )
 }
@@ -100,6 +131,7 @@ export default function SiteConfigPage() {
   const [cfg, setCfg]         = useState<SiteConfigDto>(DEFAULT_SITE_CONFIG)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
+  const [uploadingIcon, setUploadingIcon] = useState<'faviconUrl' | 'pwaIconUrl' | 'adminIconUrl' | null>(null)
 
   useEffect(() => {
     siteConfigApi.get()
@@ -110,6 +142,19 @@ export default function SiteConfigPage() {
 
   function set<K extends keyof SiteConfigDto>(key: K, value: SiteConfigDto[K]) {
     setCfg(prev => ({ ...prev, [key]: value }))
+  }
+
+  async function uploadIcon(field: 'faviconUrl' | 'pwaIconUrl' | 'adminIconUrl', file: File) {
+    setUploadingIcon(field)
+    try {
+      const { data } = await uploadApi.image(file)
+      set(field, data.url)
+      toast.success('Enviado! Clique em Salvar pra aplicar.')
+    } catch {
+      toast.error('Erro ao enviar imagem')
+    } finally {
+      setUploadingIcon(null)
+    }
   }
 
   async function save() {
@@ -195,6 +240,28 @@ export default function SiteConfigPage() {
           <ColorField label="Fundo dos cards" value={cfg.colorCard} onChange={v => set('colorCard', v)} />
         </div>
         <p className="text-[11px] text-gray-500">Fundo e cards só valem no modo claro — o modo escuro mantém a paleta própria dele.</p>
+      </div>
+
+      {/* Ícones */}
+      <div className="card p-5 space-y-4">
+        <h3 className="font-bold text-white mb-1">Ícones</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <IconUploadField
+            label="Favicon do site" desc="Aparece na aba do navegador"
+            value={cfg.faviconUrl} uploading={uploadingIcon === 'faviconUrl'}
+            onUpload={f => uploadIcon('faviconUrl', f)}
+          />
+          <IconUploadField
+            label="Ícone do PWA" desc="Usado ao instalar o site como app no celular"
+            value={cfg.pwaIconUrl} uploading={uploadingIcon === 'pwaIconUrl'}
+            onUpload={f => uploadIcon('pwaIconUrl', f)}
+          />
+          <IconUploadField
+            label="Ícone do admin" desc="Aparece no menu lateral do painel — sem esse, usa o logo"
+            value={cfg.adminIconUrl} uploading={uploadingIcon === 'adminIconUrl'}
+            onUpload={f => uploadIcon('adminIconUrl', f)}
+          />
+        </div>
       </div>
 
       {/* Textos da navbar */}

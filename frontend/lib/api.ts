@@ -1148,6 +1148,9 @@ export interface SiteConfigDto {
   whatsappNumber: string
   contactEmail: string
   logoUrl?: string | null
+  faviconUrl?: string | null
+  pwaIconUrl?: string | null
+  adminIconUrl?: string | null
   navTorneiosLabel: string
   navProdutosLabel: string
   navMercadoLabel: string

@@ -147,7 +147,7 @@ export default function Sidebar() {
   const pathname      = usePathname()
   const router        = useRouter()
   const { site }       = useSiteConfig()
-  const logoSrc         = site.logoUrl || '/logo-placeholder.svg'
+  const logoSrc         = site.adminIconUrl || site.logoUrl || '/logo-placeholder.svg'
   const [loggingOut,   setLoggingOut]   = useState(false)
   const [mobileOpen,   setMobileOpen]   = useState(false)
   const [unreadCount,  setUnreadCount]  = useState(0)
