@@ -1,5 +1,17 @@
 # Backlog — Tenant-ERP
 
+## Concluído (sessão 2026-07-11, portal do contador)
+- Novo papel `Contador`, login próprio, área `/contador` read-only (lista de
+  notas fiscais, exportar XML por período, dados cadastrais da empresa) — sem
+  certificado/CSC nem ação administrativa. Corrigido de quebra um bug real:
+  `UserService.AdminCreateUserAsync` hardcodeava o role (qualquer coisa que não
+  fosse `"Operator"` virava `Customer` silenciosamente) — agora reconhece
+  `Contador` também. Commit `dfa7d5f`.
+- **Gap conhecido**: a aba "operadores" de `/admin/usuarios` só lista usuários
+  com `role=Operator` — um Contador recém-criado não aparece em lugar nenhum da
+  UI depois de criado (só o botão "Novo Contador" existe, sem tela de gestão/
+  listagem/exclusão). Decidir se vale um filtro de aba ou seção própria.
+
 ## Concluído (sessão 2026-07-09/10)
 - Branding genericizado: nome/e-mail/endereço/logo da loja vêm de `SiteConfig` dinâmico
   em vez de string fixa "softNerd"/"Santuário Nerd" — backend (`EmailService`,
