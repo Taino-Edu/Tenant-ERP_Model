@@ -1,5 +1,36 @@
 # Backlog — Tenant-ERP
 
+## Concluído (sessão 2026-07-12, achados da análise técnica externa)
+- Documento externo (`analise_tecnica.md`, feito pelo usuário com Gemini/outra
+  ferramenta) apontou vários riscos — verificados um a um contra o código
+  atual antes de agir (vários já estavam mitigados ou desatualizados: SQL
+  injection no search_path já tem allowlist, refresh token já é hasheado,
+  secret do JWT já está fora do Docker build, o vazamento de SignalR descrito
+  não existe do jeito relatado).
+- **Corrigido** (commit `06b921d`): `ComandaHub.AdminGroup` era uma constante
+  ÚNICA compartilhada por todos os tenants — todo admin conectado recebia
+  atualizações de comanda de TODAS as lojas, não só a própria. Virou
+  `GetAdminGroup(tenantId)`.
+- **Corrigido** (commit `06b921d`): em `ComandaService.ResolveItemAsync`, uma
+  linha resalvava `product.StockQuantity` na entidade rastreada depois do
+  decremento atômico (que já era seguro) — o próximo `SaveChangesAsync` da
+  mesma requisição sobrescrevia esse valor sem trava, apagando silenciosamente
+  o decremento de qualquer venda concorrente do mesmo produto. Removida.
+
+## Backlog — achados de menor urgência (mesma análise, não corrigidos ainda)
+- Sem lock de concorrência na criação de tenant (`TenantProvisioningService`)
+  — real, mas ação rara/admin-only, baixo risco prático.
+- `Program.cs` (570 linhas) e `CrediariosController.cs` (700 linhas) — god
+  classes de verdade, valeria quebrar em serviços/extension methods menores.
+- `ComandaHub.JoinComandaGroup`/hub sem rate limiting dedicado (a validação
+  de dono da comanda já existe, mas não impede spam de conexões).
+- Middleware do Next.js (`middleware.ts`) não valida tenant do JWT vs
+  subdomínio sozinho — mitigado hoje pelo `TenantClaimGuardMiddleware` no
+  backend, mas seria mais robusto ter as duas camadas.
+- Não verificado ainda: se o fechamento de comanda (baixa de estoque + pontos
+  + contas a receber) usa transação explícita ou depende só da atomicidade de
+  um único `SaveChangesAsync` — precisa investigação própria antes de agir.
+
 ## Backlog — diretório de lojas + personalização por tenant
 - Pedido original (ainda não implementado): no site institucional principal,
   uma seção/página listando os tenants ativos com link direto pra
