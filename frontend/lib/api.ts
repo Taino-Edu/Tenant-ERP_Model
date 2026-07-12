@@ -1177,6 +1177,18 @@ export const siteConfigApi = {
   save: (body: Partial<SiteConfigDto>) => api.put<SiteConfigDto>('/api/site-config', body),
 }
 
+// ── Diretório público de lojas (site institucional) ──────────────────────────
+
+export interface PublicTenantDto {
+  slug: string
+  displayName: string
+  logoUrl: string | null
+}
+
+export const publicDirectoryApi = {
+  listTenants: () => api.get<PublicTenantDto[]>('/api/public/tenants'),
+}
+
 // ── Notificações in-app ───────────────────────────────────────────────────────
 
 export interface AppNotification {

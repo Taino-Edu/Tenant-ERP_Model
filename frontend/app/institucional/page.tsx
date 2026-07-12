@@ -5,6 +5,9 @@ import {
   Store, ShieldCheck, Layers, Smartphone, Receipt, TrendingUp,
   ArrowRight, CheckCircle2, Sun, Moon, Menu, X,
 } from 'lucide-react'
+import { publicDirectoryApi, PublicTenantDto } from '@/lib/api'
+
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
 
 const NAV_LINKS = [
   { href: '#quem-somos',    label: 'Quem somos' },
@@ -51,9 +54,20 @@ export default function InstitucionalPage() {
   // e fica salvo no navegador do visitante.
   const [isDark,   setIsDark]   = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [tenants,  setTenants]  = useState<PublicTenantDto[]>([])
 
   useEffect(() => {
     setIsDark(localStorage.getItem('institucional-theme') === 'dark')
+  }, [])
+
+  // Diretório de lojas ativas — falha silenciosa de propósito: essa seção é
+  // um bônus da página institucional, uma API fora do ar aqui nunca pode
+  // quebrar o resto da página (sem loading spinner, sem tela de erro — só
+  // fica com a lista vazia e o card de CTA sozinho, ver abaixo).
+  useEffect(() => {
+    publicDirectoryApi.listTenants()
+      .then(r => setTenants(r.data))
+      .catch(() => {})
   }, [])
 
   // Esconde os widgets da loja (footer global da vitrine, botão de instalar
@@ -245,25 +259,35 @@ export default function InstitucionalPage() {
             Quem já usa
           </h2>
           <p className={`mt-3 max-w-2xl text-2xl font-bold sm:text-3xl ${C.heading}`}>
-            Primeira loja rodando, muitas outras vindo por aí.
+            {tenants.length > 0
+              ? 'Lojas de verdade, rodando na plataforma agora.'
+              : 'Primeira loja rodando, muitas outras vindo por aí.'}
           </p>
 
           <div className="mt-10 grid gap-6 sm:grid-cols-2">
-            <div className={`rounded-xl border p-8 ${C.card}`}>
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 font-bold text-white">
-                  SN
+            {tenants.map(t => (
+              <a
+                key={t.slug}
+                href={ROOT_DOMAIN ? `https://${t.slug}.${ROOT_DOMAIN}` : '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`rounded-xl border p-8 transition ${C.card}`}
+              >
+                <div className="flex items-center gap-3">
+                  {t.logoUrl ? (
+                    <img src={t.logoUrl} alt={t.displayName} className="h-12 w-12 rounded-full object-cover" />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-600 font-bold text-white">
+                      {t.displayName.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <p className={`font-bold ${C.heading}`}>{t.displayName}</p>
+                    <p className={`text-sm ${C.muted}`}>{t.slug}.{ROOT_DOMAIN}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className={`font-bold ${C.heading}`}>Santuário Nerd</p>
-                  <p className={`text-sm ${C.muted}`}>Loja de card games</p>
-                </div>
-              </div>
-              <p className={`mt-4 text-sm ${C.body}`}>
-                Primeira loja a rodar a plataforma — PDV, comandas, crediário e emissão fiscal no
-                dia a dia, com a marca própria do Santuário do início ao fim.
-              </p>
-            </div>
+              </a>
+            ))}
 
             <div className={`flex flex-col items-start justify-center rounded-xl border border-dashed p-8 ${C.border}`}>
               <CheckCircle2 className="mb-3 text-brand-600" size={24} />
