@@ -92,7 +92,7 @@ ${receipt.clientName ? `<p class="sub">Cliente: <strong>${receipt.clientName}</s
 </table>
 <p class="payment">Pagamento: ${payLabel}</p>
 <hr>
-<p class="footer">Obrigado pela preferência! 🃏</p>
+<p class="footer">Obrigado pela preferência!</p>
 <script>window.onload = function() { window.print(); }<\/script>
 </body></html>`)
   w.document.close()

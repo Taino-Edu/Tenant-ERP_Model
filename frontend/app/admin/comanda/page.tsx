@@ -33,6 +33,133 @@ function handleNotaFiscalResult(notaId?: string | null, status?: string | null, 
   }
 }
 
+/** Comprovante térmico (80mm) do fechamento de comanda — mesmo padrão de
+ * frontend/app/admin/venda-avulsa/page.tsx, pra quem fecha sem emitir NFC-e
+ * (loja sem módulo Fiscal, ou nota não marcada) ainda sair com algum papel. */
+function printComandaReceiptPDF(comanda: ComandaDto, payLabel: string, siteName: string) {
+  const w = window.open('', '_blank', 'width=420,height=640')
+  if (!w) { alert('Permita pop-ups para gerar o PDF'); return }
+
+  const date = new Date(comanda.closedAt ?? Date.now()).toLocaleString('pt-BR')
+  const itemsHTML = comanda.items.map(it => `
+    <tr>
+      <td>${it.quantity}× ${it.itemNameSnapshot}</td>
+      <td align="right">R$&nbsp;${it.subtotalInReais.toFixed(2).replace('.', ',')}</td>
+    </tr>
+  `).join('')
+
+  const discountRow = comanda.discountInCents > 0 ? `
+    <tr style="color:#16a34a;">
+      <td>Desconto</td>
+      <td align="right">−R$&nbsp;${(comanda.discountInCents / 100).toFixed(2).replace('.', ',')}</td>
+    </tr>
+  ` : ''
+
+  w.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<title>Comprovante — ${siteName}</title>
+<style>
+  @page { size: 80mm auto; margin: 6mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Courier New', monospace; font-size: 11px; color: #111; padding: 8px; }
+  h1 { font-size: 15px; text-align: center; letter-spacing: 1px; }
+  .sub { text-align: center; font-size: 10px; color: #555; margin-bottom: 8px; }
+  hr { border: none; border-top: 1px dashed #999; margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 2px 0; vertical-align: top; }
+  .total-row td { font-size: 14px; font-weight: bold; padding-top: 4px; }
+  .payment { font-size: 10px; color: #555; margin-top: 4px; }
+  .footer { text-align: center; font-size: 10px; color: #777; margin-top: 10px; }
+  @media print { body { padding: 0; } }
+</style>
+</head><body>
+<h1>${siteName}</h1>
+<p class="sub">${date}</p>
+<p class="sub">Cliente: <strong>${comanda.userName}</strong>${comanda.tableIdentifier ? ` — ${comanda.tableIdentifier}` : ''}</p>
+<hr>
+<table>
+  ${itemsHTML}
+  ${discountRow}
+</table>
+<hr>
+<table>
+  <tr class="total-row">
+    <td>TOTAL</td>
+    <td align="right">R$&nbsp;${comanda.totalInReais.toFixed(2).replace('.', ',')}</td>
+  </tr>
+</table>
+<p class="payment">Pagamento: ${payLabel}</p>
+<hr>
+<p class="footer">Obrigado pela preferência!</p>
+<script>window.onload = function() { window.print(); }<\/script>
+</body></html>`)
+  w.document.close()
+}
+
+/** Resumo da comanda recém-fechada + botão de imprimir comprovante — some
+ * sozinho, não bloqueia nada; só existe pra sempre sobrar algum papel/PDF
+ * da venda mesmo quando não emite NFC-e. */
+function ComandaReceiptModal({ comanda, siteName, onClose }: {
+  comanda: ComandaDto
+  siteName: string
+  onClose: () => void
+}) {
+  const payLabel = COMANDA_PAYMENT_METHODS.find(m => m.value === comanda.paymentMethod)?.label ?? comanda.paymentMethod ?? '—'
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600 sticky top-0 bg-surface-800">
+          <h3 className="font-semibold text-white flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-400" /> Comanda fechada
+          </h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="bg-surface-900 rounded-xl divide-y divide-surface-600 text-left">
+            {comanda.items.map((item, idx) => (
+              <div key={idx} className="flex justify-between items-center px-4 py-2.5 text-sm">
+                <span className="text-gray-300">{item.quantity}× {item.itemNameSnapshot}</span>
+                <span className="text-gray-400 font-mono">{fmt(item.subtotalInReais)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between items-center px-4 py-2.5 font-bold">
+              <span className="text-white">Total</span>
+              <span className="text-accent-gold text-lg">{fmt(comanda.totalInReais)}</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">Pagamento: {payLabel}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => printComandaReceiptPDF(comanda, payLabel, siteName)}
+              className="btn-secondary flex-1 justify-center"
+            >
+              <Receipt className="w-4 h-4" /> Imprimir / PDF
+            </button>
+            <button onClick={onClose} className="btn-primary flex-1 justify-center">
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Data de hoje no fuso de Brasília como YYYY-MM-DD (nunca usa UTC). */
 const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
 
@@ -1472,6 +1599,7 @@ export default function ComandaPage() {
   const [openModal, setOpenModal] = useState(false)
   const [expandedHist, setExpandedHist] = useState<string | null>(null)
   const [editComanda, setEditComanda]   = useState<ComandaDto | null>(null)
+  const [closedReceipt, setClosedReceipt] = useState<ComandaDto | null>(null)
   // Crediário — escolha de conta ao fechar comanda
   const [pendingClose, setPendingClose] = useState<{
     id: string; pm: string; pm2?: string; amt2?: number; discount?: number; emitirNota?: boolean
@@ -1540,7 +1668,7 @@ export default function ComandaPage() {
         incrementBadge(siteNameRef.current)
         notificarBrowser(`Nova atividade — ${siteNameRef.current}`, `${event.userName}: +${event.lastItemAdded ?? 'item'}`)
         toast(`📋 ${event.userName}: +${event.lastItemAdded ?? 'item'}`, {
-          icon: '🃏',
+          icon: '🔔',
           style: { background: '#1A1A1F', color: '#fff', border: '1px solid rgb(var(--brand-500))', borderRadius: '12px' }
         })
       })
@@ -1637,6 +1765,10 @@ export default function ComandaPage() {
       const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
       toast.success(label)
       handleNotaFiscalResult(data.notaFiscalId, data.notaFiscalStatus, data.notaFiscalMotivoRejeicao)
+      // Comprovante não-fiscal sempre disponível — nem toda loja tem módulo
+      // Fiscal, e nem todo fechamento pede NFC-e; sem isso, fechar sem nota
+      // não deixava nenhum papel/PDF pra provar a venda.
+      setClosedReceipt(data)
       fetchComandas()
       fetchHistory(histData)
     } catch (err: unknown) {
@@ -2107,6 +2239,14 @@ export default function ComandaPage() {
             await executarClose(pendingClose.id, pendingClose.pm, pendingClose.pm2, pendingClose.amt2, undefined, pendingClose.discount, pendingClose.emitirNota)
           }}
           onCancel={() => setPendingClose(null)}
+        />
+      )}
+
+      {closedReceipt && (
+        <ComandaReceiptModal
+          comanda={closedReceipt}
+          siteName={site.siteName}
+          onClose={() => setClosedReceipt(null)}
         />
       )}
     </div>

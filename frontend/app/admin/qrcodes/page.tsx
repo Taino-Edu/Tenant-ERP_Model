@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
 import { QrCode, Download, Printer, Plus, Trash2, Table2 } from 'lucide-react'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 interface Mesa { id: string; nome: string; url: string; qrDataUrl: string }
 
@@ -15,7 +16,8 @@ function useBaseUrl() {
 }
 
 export default function QRCodesPage() {
-  const baseUrl  = useBaseUrl()
+  const { site }  = useSiteConfig()
+  const baseUrl   = useBaseUrl()
   const [mesas, setMesas]     = useState<Mesa[]>([])
   const [newNome, setNewNome] = useState('')
   const [loading, setLoading] = useState(true)
@@ -77,7 +79,7 @@ export default function QRCodesPage() {
     const w = window.open('', '_blank', 'width=900,height=700')
     if (!w) return
     w.document.write(`
-      <html><head><title>QR Codes — CardGameStore</title>
+      <html><head><title>QR Codes — ${site.siteName}</title>
       <style>
         body { background: #1a1a1a; color: #fff; font-family: Inter, sans-serif; padding: 16px; }
         .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
@@ -87,7 +89,7 @@ export default function QRCodesPage() {
         .url  { font-size: 9px; color: #666; margin-top: 4px; word-break: break-all; }
         @media print { body { background: #fff; color: #000; } .card { background: #fff; border: 1px solid #ddd; } .url { color: #999; } }
       </style></head><body>
-      <h2 style="text-align:center;margin-bottom:20px;font-size:18px;">🃏 CardGameStore — QR Codes das Mesas</h2>
+      <h2 style="text-align:center;margin-bottom:20px;font-size:18px;">${site.siteName} — QR Codes das Mesas</h2>
       <div class="grid">
         ${mesas.map(m => `
           <div class="card">
