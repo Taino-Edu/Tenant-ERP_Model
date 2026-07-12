@@ -1,370 +1,215 @@
-# Santuário Nerd — Sistema de Gestão para Loja de Card Games
+# Tenant-ERP (Plataforma 2esysten)
 
-> Plataforma completa para gerenciamento de lojas de card games (Pokémon, Magic: The Gathering, Yu-Gi-Oh! e outros). Painel administrativo moderno, frente de caixa, comandas por QR Code, crediário, assistente IA e conformidade LGPD.
+> **Plataforma SaaS Multi-tenant de Gestão para Lojas e Varejo**
+> Plataforma white-label completa para gerenciamento de lojas — nasceu como sistema local de uma loja de card games e virou genérica para qualquer varejo. Oferece isolamento físico de dados por schema no PostgreSQL, painel administrativo personalizado por loja, frente de caixa (PDV), comandas por QR Code com SignalR, crediário, portal do contador cross-tenant, super-admin do dono da plataforma, assistente IA com Gemini e conformidade com a LGPD.
 
-**Produção:** [santuarionerd.tech](https://santuarionerd.tech)
-
----
-
-## Funcionalidades
-
-### Frente de Caixa (Venda Avulsa)
-- Venda direta no balcão sem QR Code
-- Catálogo com busca por nome, categoria e código de barras
-- Carrinho com controle de estoque em tempo real
-- Desconto percentual por venda
-- Múltiplas formas de pagamento: Pix, Dinheiro, Cartão Crédito/Débito, Crediário, Pontos, Cashback
-- Geração de comprovante para impressão térmica (80mm) e PDF
-- Histórico navegável por qualquer data com popup de detalhes
-
-### Comandas por QR Code
-- Clientes escaneiam QR Code na mesa e abrem comanda pelo celular
-- Login rápido por CPF + WhatsApp com consentimento LGPD integrado
-- Dashboard ao vivo com SignalR — novas comandas aparecem sem recarregar
-- Admin pode adicionar itens, fechar (com seleção de pagamento) ou cancelar comandas
-- Leitor de código de barras via câmera ou USB no painel admin
-- Saldo de pontos e cashback do cliente exibido na modal de fechamento (bloqueia se insuficiente)
-- Cliente pode aplicar e remover pontos de fidelidade antes do fechamento
-- Desconto de pontos aplicados deduzido do `TotalInCents` no fechamento (analytics corretos)
-
-### Crediário
-- Criação automática ao fechar comanda/venda no crédito
-- Acumula dívidas em aberto por cliente
-- Registro de pagamentos parciais com histórico
-- Relatório de inadimplência
-
-### Estoque e Produtos
-- Cadastro de cards com integração às APIs: Pokémon TCG, Magic (Scryfall) e Yu-Gi-Oh!
-- Busca automática de imagens e metadados via APIs externas
-- Upload de imagens (JPEG/PNG/WebP, máx 5 MB)
-- Alertas de estoque baixo
-- Categorias customizáveis
-
-### Campeonatos
-- Cadastro com imagem de capa, jogo (texto livre), data, vagas e prêmio
-- Inscrições com controle de vagas
-- Listagem pública e painel admin
-
-### Relatórios Financeiros
-- Dashboard com receita, custo e margem por período
-- Gráfico de barras diário
-- Breakdown por forma de pagamento com drill-down de transações
-- Filtros por data, cliente e faixa de valor
-- Exportação em PDF
-
-### Assistente IA
-- Chat flutuante no painel admin alimentado pelo **Google Gemini 2.5 Flash**
-- Contexto automático do negócio (comandas, estoque, crediário)
-- Sugestões rápidas de perguntas
-
-### Área do Cliente
-- Histórico de comandas com detalhamento de itens
-- Saldo de pontos de fidelidade e cashback/crédito na loja
-- Perfil editável com upload de foto (JPEG/PNG/WebP, máx 5 MB)
-- ThemeToggle (modo claro/escuro persistido)
-- Modo RPG — comanda exibida como "pergaminho" temático
-- Histórico de campeonatos e inscrições
-
-### Gestão Administrativa
-- Gestão de usuários com funções (Admin / Customer)
-- Pontos de fidelidade e saldo cashback por cliente
-- Inscrição manual de clientes em campeonatos; remoção de participantes
-- Nova dívida (crediário) com lista de itens e cálculo automático do total
-- Anúncios e promoções
-- Geração de QR Codes para mesas
-- Painel LGPD para resposta de solicitações de titulares
-
-### Conformidade LGPD
-- Formulário público `/lgpd` com validação de CPF (Módulo 11)
-- Audit log imutável com IP anonimizado (SHA-256)
-- Política de Privacidade e Termos de Uso
-- Painel admin para gestão de solicitações dentro do prazo legal
+**Produção:** [2esysten.com.br](https://2esysten.com.br) / Domínios dos lojistas (ex: [santuarionerd.tech](https://santuarionerd.tech))
 
 ---
 
-## Stack Tecnológico
+## Principais Funcionalidades
+
+### 🌐 Multi-tenancy e Gestão de Plataforma
+- **Isolamento por Schema:** Cada loja (tenant) possui seu próprio schema lógico no banco de dados PostgreSQL (isolado via `search_path`), garantindo total privacidade e segurança de dados.
+- **Painel do Dono da Plataforma (`/plataforma`):** Interface super-admin para listar, cadastrar e suspender/reativar tenants.
+- **Provisionamento Dinâmico:** Cadastrar uma loja provisiona o schema no PostgreSQL de forma síncrona, executa as migrations iniciais e cria o administrador padrão da loja.
+- **Planos e Módulos (Billing Ciclo 1 e 2):** Controle manual de planos (`PlanName`), status de pagamento (`PaymentStatus`: Pago/Atrasado/Isento) e módulos habilitados (`EnabledModules`), com gates técnicos no backend e frontend (ex: restrição do módulo Fiscal e recursos avançados de Estoque).
+
+### 🧾 Portal do Contador Cross-Tenant (`/contador`)
+- **Acesso Multi-Loja:** Contadores possuem conta global no catálogo e gerenciam múltiplas lojas (tenants) vinculadas de forma independente.
+- **Dois Fluxos de Vínculo:** O lojista pode convidar o contador por e-mail (vincula direto caso o contador já tenha cadastro) ou o contador pode solicitar acesso informando o slug da loja (aguarda aprovação do lojista em `/admin/fiscal`).
+- **Painel de Monitoramento (Badges de Saúde):** Indicadores visuais de saúde da loja: validade do Certificado Digital A1 e tempo desde a última emissão de nota fiscal ("sem nota há X dias" ou "nenhuma nota emitida").
+- **Mural de Avisos Compartilhado:** Canal direto de avisos/mensagens entre o contador e o lojista no Painel Geral.
+- **Lembrete de Vencimento do DAS:** Alerta visual do dia 20 para lojas optantes pelo Simples Nacional.
+- **Resumo do Período:** Agrupamento e drill-down de notas fiscais autorizadas, canceladas e faturamento calculado a partir dos dados locais da loja.
+
+### 🏪 Frente de Caixa (PDV / Venda Avulsa)
+- **Venda Direta:** Registro de vendas diretamente no balcão sem necessidade de login do cliente.
+- **Estoque em Tempo Real:** Catálogo de produtos integrado ao fluxo de venda, persistindo os itens vendidos no PostgreSQL em formato JSONB.
+- **Impressão Térmica:** Geração de comprovante para impressão térmica (80mm) ou exportação em PDF.
+
+### 📱 Comandas Digitais por QR Code
+- **Autoatendimento:** Clientes escaneiam o QR Code na mesa e abrem/acompanham sua comanda pelo smartphone.
+- **Login Simplificado:** Acesso rápido via CPF (validação Módulo 11) + WhatsApp, com consentimento LGPD integrado.
+- **Painel Admin em Tempo Real:** Dashboard administrativo atualizado via **SignalR**; novas comandas e alterações de itens aparecem na hora sem recarregar a página.
+- **Fidelidade (Pontos e Cashback):** Aplicação de pontos ou cashback acumulados direto na comanda para desconto no fechamento, com recalque automático do total. Programa de pontos é opcional — cada loja liga/desliga em Personalizar Site, sem apagar saldo/histórico existente.
+
+### 💳 Crediário e Contas a Receber
+- **Geração Automática:** Criação de débito automático ao fechar comandas/vendas na modalidade crediário.
+- **Histórico e Quitações:** Registro de pagamentos parciais e controle completo de inadimplência por cliente.
+
+### 📦 Estoque e Catálogo
+- **Categorias:** Aba própria dentro de Estoque (emoji, ordem de exibição) — sem tela separada.
+- **Gestão Avançada:** Alertas de estoque baixo, suporte a variantes de produtos (grades de tamanho/cor/tipo) e análise de Curva ABC.
+
+### 🤖 Assistente IA (Gemini)
+- **Chat no Admin:** Widget de chat flutuante alimentado pelo **Google Gemini 2.5 Flash** integrado diretamente via HTTP (sem SDK).
+- **IA Contextual:** O assistente tem acesso dinâmico aos dados da loja (estoque atual, comandas abertas, crediários) para responder a perguntas operacionais e sugerir melhorias.
+
+### 🛡️ Conformidade LGPD
+- **Painel de Direitos do Titular:** Página pública `/lgpd` para consulta de dados cadastrais e solicitação de exclusão ou portabilidade.
+- **Segurança de Logs:** Logs de auditoria imutáveis com anonimização de IP utilizando hash SHA-256 com salt configurável.
+
+---
+
+## Stack Tecnológica
 
 ### Backend — `CardGameStore/`
-
-| Tecnologia | Finalidade |
-|---|---|
-| ASP.NET Core 8 | API REST |
-| Entity Framework Core 8 | ORM — PostgreSQL (sem migrations automáticas) |
-| PostgreSQL 16 | Usuários, produtos, comandas, crediários, campeonatos |
-| MongoDB 7 | Vendas avulsas (event store imutável) |
-| SignalR | Tempo real — comandas ao vivo |
-| JWT (HttpOnly Cookies) | Autenticação stateless |
-| BCrypt.Net | Hash de senhas |
-| Google Gemini 2.5 Flash | Assistente IA (HTTP direto, sem SDK) |
-| xUnit + Moq + FluentAssertions | Testes unitários |
+- **Framework:** ASP.NET Core 8 (C#)
+- **Banco de Dados:** PostgreSQL 16
+- **ORM:** Entity Framework Core 8 (sem migrations automáticas globais; isolado por Tenant no `TenantConnectionInterceptor`)
+- **Comunicação em Tempo Real:** SignalR (SSE + Long Polling)
+- **Autenticação:** JWT (HttpOnly Cookies + Refresh Token)
+- **Segurança de Senhas:** BCrypt.Net
 
 ### Frontend — `frontend/`
+- **Framework:** Next.js 14 (App Router, React SSR)
+- **Tipagem:** TypeScript 5
+- **Estilização:** Tailwind CSS 3
+- **Cliente HTTP:** Axios (com interceptor para renovação silenciosa de token via refresh token)
+- **Comunicação:** `@microsoft/signalr`
 
-| Tecnologia | Finalidade |
-|---|---|
-| Next.js 14 (App Router) | Framework React SSR |
-| TypeScript 5 | Tipagem estática |
-| Tailwind CSS 3 | Estilização |
-| Axios | Chamadas HTTP com interceptors de refresh token |
-| @microsoft/signalr | Cliente SignalR |
-| lucide-react | Ícones |
-| react-hot-toast | Notificações |
-| clsx | Classes condicionais |
-
-### Infraestrutura
-
-| Tecnologia | Finalidade |
-|---|---|
-| Docker + Docker Compose | Containerização |
-| Nginx 1.27 Alpine | Proxy reverso — porta 80 |
-| Hostinger VPS (Ubuntu 24.04, 4 GB RAM) | Servidor de produção |
-| Cloudflare | DNS + SSL/TLS (HTTPS) |
+### Infraestrutura e Deploy
+- **Containers:** Docker + Docker Compose
+- **Proxy Reverso:** Nginx (configuração de proxy reverso e headers forward)
+- **Gerenciamento de DNS/SSL:** Cloudflare (SSL/TLS Flexible em desenvolvimento/produção)
 
 ---
 
 ## Estrutura do Projeto
 
 ```
-softNerd/
-├── CardGameStore/              # ASP.NET Core 8 — API REST
-│   ├── Controllers/            # Endpoints (Auth, Product, Comanda, Venda, Upload, ...)
-│   ├── Services/               # Lógica de negócio
-│   ├── Models/
-│   │   ├── PostgreSQL/         # Entidades EF Core
-│   │   └── MongoDB/            # Documentos (VendaAvulsa)
-│   ├── DTOs/                   # Requests e responses
-│   ├── Data/                   # AppDbContext
-│   └── Dockerfile
+Tenant-ERP/
+├── CardGameStore/                  # Backend ASP.NET Core 8
+│   ├── Controllers/                # Controllers (Auth, Product, Comanda, Contador, Platform...)
+│   ├── Multitenancy/               # Lógica de Multi-tenant, isolamento, provisionamento e catálogo
+│   │   ├── CatalogDbContext.cs     # Contexto global do catálogo (tenants, contadores)
+│   │   ├── Tenant.cs               # Entidade do Tenant (loja, plano, módulos, status)
+│   │   ├── ContadorAccount.cs      # Conta cross-tenant do Contador
+│   │   ├── TenantConnectionInterceptor.cs  # Intercepta conexões para aplicar search_path por tenant
+│   │   └── TenantResolutionMiddleware.cs    # Resolução do tenant com base no subdomínio da requisição
+│   ├── Data/                       # DbContext específico do Tenant e migrations
+│   ├── Hubs/                       # Hubs SignalR (ComandaHub)
+│   ├── Models/                     # Entidades PostgreSQL do Tenant (Product, Comanda, Crediario...)
+│   └── Program.cs                  # Configuração do pipeline da API e injeção de dependências
 │
-├── frontend/                   # Next.js 14 App Router
+├── frontend/                       # Frontend Next.js 14
 │   ├── app/
-│   │   ├── admin/              # Painel administrativo
-│   │   │   ├── dashboard/      # Comandas ao vivo
-│   │   │   ├── venda-avulsa/   # Frente de caixa
-│   │   │   ├── crediario/      # Gestão de crediário
-│   │   │   ├── estoque/        # Produtos e estoque
-│   │   │   ├── campeonatos/    # Gestão de campeonatos
-│   │   │   ├── financeiro/     # Relatórios
-│   │   │   ├── usuarios/       # Gestão de clientes
-│   │   │   ├── anuncios/       # Anúncios e promoções
-│   │   │   ├── qrcodes/        # QR Codes de mesas
-│   │   │   └── lgpd/           # Painel LGPD
-│   │   ├── cliente/            # Área do cliente logado
-│   │   ├── mesa/[mesa]/        # Login por QR Code
-│   │   ├── lgpd/               # Formulário público LGPD
-│   │   ├── privacidade/        # Política de Privacidade
-│   │   └── termos/             # Termos de Uso
-│   ├── components/
-│   │   └── admin/
-│   │       └── AiChatWidget.tsx  # Chat IA flutuante
-│   ├── lib/
-│   │   ├── api.ts              # Todos os endpoints tipados
-│   │   ├── auth.ts             # Gestão de sessão
-│   │   └── signalr.ts          # Hub de tempo real
-│   └── Dockerfile
+│   │   ├── admin/                  # Painel da loja (estoque, comanda, financeiro, fiscal...)
+│   │   ├── plataforma/             # Painel do Dono da Plataforma (gerenciador de tenants)
+│   │   ├── contador/               # Portal do Contador (cross-tenant, convites, mural)
+│   │   ├── institucional/          # Landing page institucional da plataforma 2esysten
+│   │   ├── cliente/                # Área do cliente (histórico, pontos, cashback)
+│   │   └── mesa/[mesa]/            # Autoatendimento via QR Code
+│   ├── components/                 # Componentes compartilhados
+│   └── lib/                        # Integração com API (api.ts) e SignalR
 │
 ├── tests/
-│   ├── api/                    # Testes de endpoints (.http — REST Client)
-│   └── unit/                   # Testes unitários xUnit (10 serviços)
+│   ├── unit/                       # Testes de unidade com xUnit e Moq
+│   └── api/                        # Testes rápidos de endpoints (.http)
 │
-├── deploy/
-│   ├── docker-compose.prod.yml # Stack de produção completa
-│   ├── nginx/nginx.conf        # Configuração do proxy reverso
-│   ├── setup.sh                # Instalação automática no VPS
-│   ├── update.sh               # Atualização (git pull + rebuild)
-│   └── cleanup.sh              # Limpeza segura de espaço em disco
-│
-├── softNerd.sln                # Solução Visual Studio
-├── run-tests.ps1               # Runner de testes unitários
-└── .gitignore
+└── deploy/                         # Scripts de implantação e Dockerfiles
+    ├── docker-compose.prod.yml     # Orquestração de produção
+    ├── nginx/                      # Configurações do Nginx
+    ├── setup.sh                    # Setup automático da VPS (instala Docker, clona e gera envs)
+    └── update.sh                   # Script de deploy automatizado via git pull e docker rebuild
 ```
+
+---
+
+## Configuração do Ambiente (.env)
+
+Copie e configure as variáveis de ambiente necessárias no arquivo `.env` localizado na raiz do projeto ou no diretório de deploy:
+
+```env
+# --- Banco de Dados ---
+POSTGRES_DB=cardgamestore
+POSTGRES_USER=cardgame_user
+POSTGRES_PASSWORD=sua_senha_segura
+
+# --- Segurança e JWT ---
+JWT_SECRET=seu_segredo_jwt_super_longo_e_seguro
+COOKIE_SECURE=false # Defina como true em produção (com HTTPS configurado)
+IP_HASH_SALT=sal_aleatorio_para_anonimizar_ip
+
+# --- Seeds do Sistema (Executados no primeiro boot) ---
+PLATFORM_OWNER_EMAIL=dono@2esysten.com.br
+PLATFORM_OWNER_SEED_PASSWORD=senha_forte_dono_plataforma
+ADMIN_SEED_PASSWORD=senha_forte_admin_loja_padrao
+
+# --- Serviços Externos ---
+GEMINI_API_KEY=chave_do_google_ai_studio
+SMTP_PASSWORD=chave_de_envio_do_resend
+```
+
+---
+
+## Como Executar Localmente
+
+### Pré-requisitos
+- .NET 8 SDK e Node.js 20+.
+
+### Passos
+1. Backend — sem configurar `ConnectionStrings:PostgreSQL`, o sistema cai sozinho pra SQLite local (zero setup):
+   ```bash
+   cd CardGameStore
+   dotnet run
+   ```
+   API em `http://localhost:5000`, Swagger em `http://localhost:5000/swagger` (só em ambiente Development).
+2. Frontend:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Site em `http://localhost:3000`.
+
+Não existe `docker-compose.yml` na raiz — o Compose (`deploy/docker-compose.prod.yml`) é só pra produção/VPS (ver seção de Deploy abaixo).
 
 ---
 
 ## Deploy em Produção
 
 ### Primeira instalação no VPS
-
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Taino-Edu/softNerd/main/deploy/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Taino-Edu/Tenant-ERP_Model/main/deploy/setup.sh | bash
 ```
-
-O script instala Docker, configura o firewall (UFW), clona o repositório, gera segredos e sobe os containers.
+Instala Docker, configura firewall (UFW), clona o repositório em `/opt/tenant-erp`, gera segredos e sobe os containers.
 
 ### Atualizar após novo commit
-
 ```bash
-bash /opt/santuarionerd/deploy/update.sh
+bash /opt/tenant-erp/deploy/update.sh
 ```
 
-Ou manualmente:
-
+### Backup do PostgreSQL
 ```bash
-cd /opt/santuarionerd
-git pull
-docker compose -f deploy/docker-compose.prod.yml build api frontend
-docker compose -f deploy/docker-compose.prod.yml up -d
+bash /opt/tenant-erp/deploy/backup.sh   # manual, ou agendado via cron (instruções no próprio script)
 ```
 
 ### Limpar espaço em disco (build cache acumula rápido)
-
 ```bash
-bash /opt/santuarionerd/deploy/cleanup.sh
-```
-
----
-
-## Variáveis de Ambiente
-
-Copie `deploy/.env.example` para `/opt/santuarionerd/.env` e preencha:
-
-```env
-# PostgreSQL
-POSTGRES_DB=cardgamestore
-POSTGRES_USER=cardgame_user
-POSTGRES_PASSWORD=<gerado pelo setup.sh>
-
-# JWT (não altere após o primeiro deploy)
-JWT_SECRET=<gerado pelo setup.sh>
-
-# E-mail via Resend
-SMTP_PASSWORD=<API Key do resend.com>
-
-# Google Gemini IA
-GEMINI_API_KEY=<chave do Google AI Studio>
-
-# Segurança
-IP_HASH_SALT=<gerado pelo setup.sh>
-
-# Senha do admin inicial (opcional — só tem efeito no PRIMEIRO boot com banco vazio)
-# Se omitido, usa "SenhaForte@123" e emite LogWarning
-ADMIN_SEED_PASSWORD=<senha forte para o admin inicial>
+bash /opt/tenant-erp/deploy/cleanup.sh
 ```
 
 ---
 
 ## Testes
 
-### Unitários (xUnit)
-
+### Executar Testes Unitários (Backend)
 ```bash
-# Windows
-.\run-tests.ps1
-
-# Linux/macOS
+# Executa todos os testes do xUnit
 dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
 ```
 
-Cobertura: 134 testes unitários, 100% aprovados. Serviços: Auth, Product, Comanda, VendaAvulsa, Crediário, Championship, User, Announcement, Audit, LGPD.
-
-### E2E (Playwright)
-
+### Executar Testes E2E (Frontend)
 ```bash
 cd frontend
 npx playwright test
 ```
-
-Infraestrutura de testes E2E configurada em `frontend/tests/`.
-
-### API (.http files — REST Client)
-
-Abra os arquivos em `tests/api/` com a extensão **REST Client** no VS Code.  
-Configure as variáveis em `tests/api/http-client.env.json`.
-
----
-
-## Principais Endpoints
-
-### Autenticação
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `POST` | `/api/auth/login` | Login — define cookies HttpOnly |
-| `POST` | `/api/auth/refresh` | Renova accessToken |
-| `POST` | `/api/auth/logout` | Encerra sessão |
-| `POST` | `/api/auth/quick-login` | Login via QR Code (mesa) |
-
-### Produtos
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `GET` | `/api/product` | Lista produtos com filtros |
-| `POST` | `/api/product` | Cria produto |
-| `PUT` | `/api/product/{id}` | Atualiza produto |
-| `DELETE` | `/api/product/{id}` | Desativa produto |
-| `GET` | `/api/product/barcode/{code}` | Busca por código de barras |
-| `GET` | `/api/product/low-stock` | Produtos com estoque baixo |
-
-### Comandas
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `GET` | `/api/comanda/dashboard` | Comandas ativas (tempo real) |
-| `POST` | `/api/comanda/{id}/items` | Adiciona item |
-| `DELETE` | `/api/comanda/{id}/items/{itemId}` | Remove item |
-| `PUT` | `/api/comanda/{id}/close` | Fecha comanda |
-| `PUT` | `/api/comanda/{id}/cancel` | Cancela comanda |
-| `POST` | `/api/comanda/{id}/apply-points` | Aplica pontos de fidelidade |
-| `DELETE` | `/api/comanda/{id}/apply-points` | Remove pontos aplicados |
-
-### Venda Avulsa
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `POST` | `/api/venda-avulsa` | Registra venda no balcão |
-| `GET` | `/api/venda-avulsa/recent` | Últimas N vendas |
-| `GET` | `/api/venda-avulsa/by-date?date=YYYY-MM-DD` | Vendas de um dia específico |
-
-### Crediário
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `GET` | `/api/crediario` | Lista crediários com filtros |
-| `POST` | `/api/crediario` | Cria crediário manual |
-| `POST` | `/api/crediario/{id}/pagamento` | Registra pagamento |
-
-### Campeonatos
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `GET` | `/api/championship` | Lista campeonatos públicos |
-| `GET` | `/api/championship/admin/all` | Lista todos (admin, com busca) |
-| `POST` | `/api/championship` | Cria campeonato |
-| `PUT` | `/api/championship/{id}/image` | Define imagem de capa |
-| `DELETE` | `/api/championship/{id}` | Remove campeonato finalizado/cancelado |
-| `POST` | `/api/championship/{id}/admin-register` | Inscreve cliente manualmente |
-| `DELETE` | `/api/championship/{id}/participants/{pid}` | Remove participante |
-
-### Upload
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `POST` | `/api/upload/image` | Upload de imagem de produto (máx 5 MB) |
-| `POST` | `/api/upload/profile-image` | Upload de foto de perfil do usuário (máx 5 MB) |
-
-### IA
-| Método | Endpoint | Descrição |
-|---|---|---|
-| `POST` | `/api/ai/chat` | Chat com Gemini 2.5 Flash |
-
----
-
-## Segurança
-
-| Medida | Implementação |
-|---|---|
-| Autenticação | JWT em HttpOnly Cookies (tokens nunca expostos no body JSON) |
-| Senhas | BCrypt com salt aleatório; admin seed via `ADMIN_SEED_PASSWORD` |
-| CSRF | SameSite=Lax |
-| Rate Limiting | GlobalLimiter 300 req/min por IP; políticas "auth" (5/min) e "api" (200/min) |
-| Content-Security-Policy | `default-src 'none'; frame-ancestors 'none'` |
-| SQL Injection | EF Core (queries parametrizadas) |
-| HTML Injection | `HtmlEncoder.Default.Encode()` em campos livres enviados por e-mail |
-| IP em logs | Anonimizado via SHA-256 |
-| HTTPS | Forçado via Cloudflare + `COOKIE_SECURE=true` |
-| Proxy reverso | `UseForwardedHeaders` + `X-Forwarded-For` |
-| Claims nulas | `Guid.TryParse` em todos os controllers — nunca null-forgiving operator |
 
 ---
 
 ## Licença
 
 Software proprietário e confidencial. Todos os direitos reservados.  
-Consulte [LICENSE](./LICENSE) para os termos completos.
-
----
-
-*Santuário Nerd — Gestão inteligente para lojas de card games.*
+Consulte o arquivo [LICENSE](./LICENSE) para termos de uso.
