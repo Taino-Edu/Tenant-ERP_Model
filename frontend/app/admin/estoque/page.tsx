@@ -1,13 +1,15 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { productApi, variantApi, categoryApi, waitListApi, fiscalApi, Product, ProductCategory, ProductVariant, WaitListEntry, NaturezaOperacaoDto } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp, Users, Bell } from 'lucide-react'
+import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp, Users, Bell, Tag, GripVertical } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import { hasPermission } from '@/lib/auth'
 import CameraScanner from '@/components/CameraScanner'
 
 // ── Drawer de detalhe do produto ─────────────────────────────────────────────
@@ -759,8 +761,139 @@ function ProductModal({
   )
 }
 
+// ── Categorias (sub-aba de Estoque) ──────────────────────────────────────────
+const EMOJI_SUGESTOES = [
+  '🃏','🎴','🎲','🧩','🎮','🕹️','🏆','🎯','🪄','🔮','⚔️','🛡️','🐉','🧙','👾',
+  '💎','🪙','🌟','🎁','📦','🧤','🗂️','🖊️','📐','🎨','🪆','🤖','🦄','🧸','🪀',
+  '🥤','🧃','☕','🍫','🍿','🍕','🍭','🧇','🫗','🧋',
+  '🏅','🥇','🎪','🎠','🌸','🎸','⭐','🔥','💫','🎉',
+]
+
+function CategoryModal({
+  category, onClose, onSave,
+}: {
+  category: Partial<ProductCategory> | null
+  onClose: () => void
+  onSave:  (c: Partial<ProductCategory>) => Promise<void>
+}) {
+  const [form, setForm]     = useState<Partial<ProductCategory>>(
+    category ?? { name: '', emoji: '', displayOrder: 0, isActive: true }
+  )
+  const [saving, setSaving] = useState(false)
+  const set = (k: keyof ProductCategory, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    try { await onSave(form) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="card w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6 sticky top-0 bg-inherit">
+          <h2 className="text-lg font-bold text-white">
+            {form.id ? 'Editar Categoria' : 'Nova Categoria'}
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="label">Nome *</label>
+            <input
+              className="input" required
+              value={form.name ?? ''}
+              onChange={e => set('name', e.target.value)}
+              placeholder="Ex: Bebida"
+            />
+          </div>
+
+          <div>
+            <label className="label">Emoji</label>
+            <div className="flex gap-2">
+              <input
+                className="input w-20 text-center text-xl"
+                value={form.emoji ?? ''}
+                onChange={e => set('emoji', e.target.value)}
+                placeholder="🎮"
+                maxLength={4}
+              />
+              <div className="flex flex-wrap gap-1.5 flex-1">
+                {EMOJI_SUGESTOES.map(e => (
+                  <button
+                    key={e} type="button"
+                    onClick={() => set('emoji', e)}
+                    className="w-8 h-8 rounded-lg hover:bg-surface-500 transition-colors text-lg flex items-center justify-center"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">Ordem de exibição</label>
+            <input
+              className="input" type="number" min="0"
+              value={form.displayOrder ?? 0}
+              onChange={e => set('displayOrder', parseInt(e.target.value))}
+            />
+            <p className="text-xs text-gray-400 mt-1">Menor número aparece primeiro.</p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox" id="isActive"
+              checked={form.isActive ?? true}
+              onChange={e => set('isActive', e.target.checked)}
+              className="w-4 h-4 rounded accent-brand-500"
+            />
+            <label htmlFor="isActive" className="text-sm text-gray-300">Categoria ativa</label>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function EstoquePage() {
+  return (
+    <Suspense fallback={null}>
+      <EstoqueContent />
+    </Suspense>
+  )
+}
+
+function EstoqueContent() {
   const { site } = useSiteConfig()
+  const params = useSearchParams()
+  const router = useRouter()
+  const podeVerCategorias = hasPermission('categorias')
+  const [tabSection, setTabSection] = useState<'produtos' | 'categorias'>(
+    params.get('tab') === 'categorias' ? 'categorias' : 'produtos'
+  )
+  const [categoriaModal, setCategoriaModal] = useState<Partial<ProductCategory> | null | undefined>(undefined)
   const [products, setProducts]       = useState<Product[]>([])
   const [categories, setCategories]   = useState<ProductCategory[]>([])
   const [naturezas, setNaturezas]     = useState<NaturezaOperacaoDto[]>([])
@@ -846,11 +979,37 @@ export default function EstoquePage() {
     catch { toast.error('Estoque insuficiente') }
   }
 
+  function changeTab(tab: 'produtos' | 'categorias') {
+    setTabSection(tab)
+    router.replace(`/admin/estoque${tab === 'categorias' ? '?tab=categorias' : ''}`)
+  }
+
+  async function handleSaveCategoria(form: Partial<ProductCategory>) {
+    try {
+      if (form.id) await categoryApi.update(form.id, form)
+      else         await categoryApi.create(form)
+      toast.success(form.id ? 'Categoria atualizada!' : 'Categoria criada!')
+      setCategoriaModal(undefined)
+      fetch()
+    } catch { toast.error('Erro ao salvar. Verifique se o nome já existe.') }
+  }
+
+  async function handleDeleteCategoria(id: string, name: string) {
+    if (!confirm(`Remover a categoria "${name}"? Produtos com essa categoria ficam sem categoria definida.`)) return
+    try {
+      await categoryApi.delete(id)
+      toast.success('Categoria removida.')
+      fetch()
+    } catch { toast.error('Erro ao remover categoria.') }
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {modal !== undefined && (
         <ProductModal product={modal} categories={categories} naturezas={naturezas} onClose={() => setModal(undefined)} onSave={handleSave} />
+      )}
+      {categoriaModal !== undefined && (
+        <CategoryModal category={categoriaModal} onClose={() => setCategoriaModal(undefined)} onSave={handleSaveCategoria} />
       )}
       {drawer && (
         <ProductDrawer
@@ -864,8 +1023,14 @@ export default function EstoquePage() {
       <PageHeader
         icon={Package}
         title="Estoque"
-        description={`${products.length} produtos cadastrados`}
-        actions={<>
+        description={tabSection === 'categorias'
+          ? `${categories.length} categorias cadastradas`
+          : `${products.length} produtos cadastrados`}
+        actions={tabSection === 'categorias' ? <>
+          <button onClick={() => setCategoriaModal(null)} className="btn-primary">
+            <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nova Categoria</span><span className="sm:hidden">Nova</span>
+          </button>
+        </> : <>
           <button onClick={exportCsv} className="btn-secondary" title="Exportar CSV">
             <Download className="w-4 h-4" /> <span className="hidden sm:inline">CSV</span>
           </button>
@@ -893,8 +1058,90 @@ export default function EstoquePage() {
         </>}
       />
 
+      {podeVerCategorias && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => changeTab('produtos')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tabSection === 'produtos' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+          >
+            <Package className="w-4 h-4" /> Produtos
+          </button>
+          <button
+            onClick={() => changeTab('categorias')}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${tabSection === 'categorias' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+          >
+            <Tag className="w-4 h-4" /> Categorias
+          </button>
+        </div>
+      )}
+
+      {tabSection === 'categorias' && (
+        categories.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="w-16 h-16 bg-surface-700 rounded-2xl flex items-center justify-center mb-4">
+              <Tag className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-gray-400 font-medium">Nenhuma categoria cadastrada</p>
+            <p className="text-gray-400 text-sm mt-1">Crie categorias para organizar os produtos</p>
+          </div>
+        ) : (
+          <div className="card p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[460px]">
+              <thead className="bg-surface-800 border-b border-surface-500">
+                <tr className="text-left">
+                  {['', 'Categoria', 'Emoji', 'Ordem', 'Status', 'Ações'].map(h => (
+                    <th key={h} className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-surface-500">
+                {categories.map(c => (
+                  <tr key={c.id} className="hover:bg-surface-500/30 transition-colors">
+                    <td className="px-3 py-3 text-gray-500">
+                      <GripVertical className="w-4 h-4" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-white">{c.name}</p>
+                    </td>
+                    <td className="px-4 py-3 text-2xl">
+                      {c.emoji ?? <span className="text-gray-400 text-sm">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-400">{c.displayOrder}</td>
+                    <td className="px-4 py-3">
+                      <span className={c.isActive
+                        ? 'badge bg-accent-green/10 text-accent-green border-accent-green/30'
+                        : 'badge bg-surface-600 text-gray-500 border-surface-500'}>
+                        {c.isActive ? 'Ativa' : 'Inativa'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setCategoriaModal(c)}
+                          className="p-1.5 rounded hover:bg-brand-600/20 text-gray-500 hover:text-brand-400 transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategoria(c.id, c.name)}
+                          className="p-1.5 rounded hover:bg-red-600/20 text-gray-500 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            </div>
+          </div>
+        )
+      )}
+
       {/* Cards de resumo */}
-      {!loading && (
+      {tabSection === 'produtos' && !loading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
             icon={Layers}
@@ -930,6 +1177,7 @@ export default function EstoquePage() {
         </div>
       )}
 
+      {tabSection === 'produtos' && <>
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -1137,6 +1385,7 @@ export default function EstoquePage() {
         </div>
         </>
       )}
+      </>}
     </div>
   )
 }

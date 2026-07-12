@@ -8,7 +8,7 @@ import { authApi, notificationsApi, fiscalApi } from '@/lib/api'
 import {
   LayoutDashboard, Package, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, Tag, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
+  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
   Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -27,6 +27,19 @@ const sections = [
     ],
   },
   {
+    // Fica logo após Operacional de propósito: Perfis de Acesso precisa
+    // existir ANTES de cadastrar um Operador (em Vendas & Clientes) — quem
+    // configura a loja passa por aqui primeiro.
+    label: 'Administração',
+    adminOnly: true,
+    items: [
+      { href: '/admin/perfis',      label: 'Perfis de Acesso', icon: UserCog, perm: null },
+      { href: '/admin/integracoes', label: 'Integrações',      icon: Plug,    perm: null },
+      { href: '/admin/fiscal',      label: 'Fiscal',           icon: Receipt, perm: null },
+      { href: '/admin/site',        label: 'Personalizar Site', icon: Palette, perm: null },
+    ],
+  },
+  {
     label: 'Vendas & Clientes',
     items: [
       { href: '/admin/usuarios',    label: 'Clientes',     icon: Users,       perm: 'usuarios' },
@@ -38,7 +51,6 @@ const sections = [
     label: 'Estoque & Catálogo',
     items: [
       { href: '/admin/estoque',     label: 'Estoque',      icon: Package,     perm: 'estoque' },
-      { href: '/admin/categorias',  label: 'Categorias',   icon: Tag,         perm: 'categorias' },
     ],
   },
   {
@@ -55,16 +67,6 @@ const sections = [
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,     perm: 'anuncios' },
       { href: '/admin/mensageria', label: 'Mensageria',   icon: MessageSquare,  perm: 'anuncios' },
       { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: null },
-    ],
-  },
-  {
-    label: 'Administração',
-    adminOnly: true,
-    items: [
-      { href: '/admin/perfis',      label: 'Perfis de Acesso', icon: UserCog, perm: null },
-      { href: '/admin/integracoes', label: 'Integrações',      icon: Plug,    perm: null },
-      { href: '/admin/fiscal',      label: 'Fiscal',           icon: Receipt, perm: null },
-      { href: '/admin/site',        label: 'Personalizar Site', icon: Palette, perm: null },
     ],
   },
   {
