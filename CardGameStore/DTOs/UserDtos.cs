@@ -4,6 +4,7 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using CardGameStore.Validation;
 
 namespace CardGameStore.DTOs;
 
@@ -153,6 +154,7 @@ public class AdminCreateUserRequest
     public string Name { get; set; } = string.Empty;
 
     [MaxLength(11)]
+    [CpfValid]
     public string? Cpf { get; set; }
 
     [MaxLength(20)]

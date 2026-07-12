@@ -6,6 +6,29 @@ import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wal
 import PageHeader from '@/components/admin/PageHeader'
 import Link from 'next/link'
 
+// ── Validação de CPF (dígito verificador, Módulo 11) — espelha
+// CardGameStore/Validation/CpfValidAttribute.cs pro erro aparecer na hora,
+// sem precisar de round-trip ao backend. ─────────────────────────────────────
+function isValidCpf(digits: string): boolean {
+  if (digits.length !== 11 || !/^\d{11}$/.test(digits)) return false
+  if (new Set(digits).size === 1) return false
+  const calc = (len: number) => {
+    let soma = 0
+    for (let i = 0; i < len; i++) soma += Number(digits[i]) * (len + 1 - i)
+    const d = 11 - (soma % 11)
+    return d >= 10 ? 0 : d
+  }
+  return calc(9) === Number(digits[9]) && calc(10) === Number(digits[10])
+}
+
+function formatCpf(v: string): string {
+  const digits = v.replace(/\D/g, '').slice(0, 11)
+  return digits
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+}
+
 // ── Modal: Novo Cliente ───────────────────────────────────────────────────────
 function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (u: UserSummary) => void }) {
   const [nome, setNome]       = useState('')
@@ -18,11 +41,13 @@ function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!nome.trim()) { toast.error('Nome é obrigatório'); return }
+    const cpfDigits = cpf.replace(/\D/g, '')
+    if (cpfDigits && !isValidCpf(cpfDigits)) { toast.error('CPF inválido'); return }
     setLoading(true)
     try {
       const { data } = await userApi.adminCreate({
         name: nome.trim(),
-        cpf: cpf.trim() || undefined,
+        cpf: cpfDigits || undefined,
         whatsApp: whats.trim() || undefined,
         email: email.trim() || undefined,
         password: senha || undefined,
@@ -54,7 +79,7 @@ function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSucce
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">CPF</label>
-              <input className="input" placeholder="12345678901" value={cpf} onChange={e => setCpf(e.target.value)} maxLength={11} />
+              <input className="input" placeholder="123.456.789-01" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))} maxLength={14} />
             </div>
             <div>
               <label className="label">WhatsApp</label>

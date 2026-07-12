@@ -422,12 +422,12 @@ export default function ClientePage() {
       {variantModal && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setVariantModal(null)}>
-          <div className="w-full max-w-lg rounded-t-3xl shadow-2xl"
+          <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-t-3xl shadow-2xl"
             style={{ backgroundColor: C.white }}
             onClick={e => e.stopPropagation()}>
 
             {/* Handle */}
-            <div className="flex justify-center pt-3 pb-1">
+            <div className="flex justify-center pt-3 pb-1 sticky top-0" style={{ backgroundColor: C.white }}>
               <div className="w-10 h-1 rounded-full" style={{ backgroundColor: C.border.replace('0.18', '0.4') }} />
             </div>
 

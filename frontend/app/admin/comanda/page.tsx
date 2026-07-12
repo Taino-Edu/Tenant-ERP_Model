@@ -441,11 +441,22 @@ function EscolherContaCrediarioModal({
 }) {
   const [escolhido, setEscolhido] = useState<string | null>(null)
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onCancel()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onCancel])
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
+      onClick={e => { if (e.target === e.currentTarget) onCancel() }}
+    >
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 border-b border-surface-600">
+        <div className="flex items-start justify-between px-6 py-4 border-b border-surface-600 sticky top-0 bg-surface-800">
           <div>
             <h2 className="font-bold text-white text-lg flex items-center gap-2">
               <CreditCard className="w-5 h-5 text-amber-400" /> Conta de Crediário
