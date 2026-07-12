@@ -16,6 +16,15 @@ public class TenantProvisioningService : ITenantProvisioningService
     private static readonly Regex SlugPattern = new(@"^[a-z0-9-]{1,20}$", RegexOptions.Compiled);
     private static readonly string[] ReservedSlugs = ["public", "www", "api", "admin"];
 
+    // Provisionamento (criar schema + rodar migrations + admin inicial) não
+    // tinha nenhuma trava de concorrência: dois cadastros de tenant no mesmo
+    // instante podiam interferir um no outro. Ação rara/admin-only, então um
+    // semáforo em memória (só serializa dentro do MESMO processo) já resolve
+    // — essa app roda como instância única (docker-compose mono-nó, sem
+    // múltiplas réplicas). Se um dia isso mudar, aí sim precisa de lock
+    // distribuído de verdade (ex: advisory lock do Postgres).
+    private static readonly SemaphoreSlim _provisionLock = new(1, 1);
+
     private readonly CatalogDbContext     _catalog;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<TenantProvisioningService> _logger;
@@ -31,6 +40,19 @@ public class TenantProvisioningService : ITenantProvisioningService
     }
 
     public async Task<Tenant> ProvisionAsync(string slug, string adminEmail, string adminPassword)
+    {
+        await _provisionLock.WaitAsync();
+        try
+        {
+            return await ProvisionLockedAsync(slug, adminEmail, adminPassword);
+        }
+        finally
+        {
+            _provisionLock.Release();
+        }
+    }
+
+    private async Task<Tenant> ProvisionLockedAsync(string slug, string adminEmail, string adminPassword)
     {
         slug = slug.Trim().ToLowerInvariant();
 
