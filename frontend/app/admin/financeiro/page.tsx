@@ -1426,14 +1426,6 @@ export default function FinanceiroPage() {
 
   const d = data
 
-  // ── Projeção do mês ───────────────────────────────────────────────────────
-  const hoje = new Date()
-  const diasNoMes      = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()
-  const diaAtual       = hoje.getDate()
-  const diasRestantes  = diasNoMes - diaAtual
-  const mediaDiaria    = d && d.diaDia.length > 0 ? d.receita / d.diaDia.length : 0
-  const projecaoMes    = d ? d.receita + mediaDiaria * diasRestantes : 0
-
   // ── Dados dos modais de KPI ────────────────────────────────────────────────
   const totalTx = d ? d.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0) : 0
   const ticketMedio = totalTx > 0 && d ? d.receita / totalTx : 0
@@ -1802,15 +1794,15 @@ export default function FinanceiroPage() {
                     )}
 
                     {/* Projeção */}
-                    {diasRestantes > 0 && mediaDiaria > 0 && preset === 'mes' && (
+                    {preset === 'mes' && d.projecao && (
                       <div className="flex items-center justify-between py-3 mt-1 rounded-xl bg-brand-500/8 px-4 -mx-0">
                         <div>
                           <p className="text-xs font-semibold text-brand-300">📈 Projeção para o mês completo</p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">
-                            {diasRestantes} dias restantes · média {fmt(mediaDiaria)}/dia
-                          </p>
+                          {d.projecao.metodo === 'ponderado' && (
+                            <p className="text-[11px] text-gray-500 mt-0.5">baseado nas últimas semanas, por dia da semana</p>
+                          )}
                         </div>
-                        <span className="font-black font-mono text-brand-400 text-lg">{fmt(projecaoMes)}</span>
+                        <span className="font-black font-mono text-brand-400 text-lg">{fmt(d.projecao.valorProjetado)}</span>
                       </div>
                     )}
                   </>

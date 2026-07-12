@@ -835,6 +835,14 @@ export interface FinanceiroDto {
   topProdutos: TopProductFinDto[]
   pagamentosPorForma: FormaPagamentoTotalDto[]
   pagamentosCrediarioPeriodo: PagamentoCrediarioPeriodoDto[]
+  /** Só vem preenchido quando o período consultado é "1º do mês até hoje". */
+  projecao?: ProjecaoDto | null
+}
+
+export interface ProjecaoDto {
+  valorProjetado: number
+  metodo: 'ponderado' | 'flat'
+  detalhePorDiaSemana?: { diaSemana: string; mediaHistorica: number; ocorrencias: number }[]
 }
 
 export interface FechamentoPeriodoDto {

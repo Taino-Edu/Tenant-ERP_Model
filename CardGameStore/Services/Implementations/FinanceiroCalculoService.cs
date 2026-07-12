@@ -303,6 +303,16 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
             CreatedAt       = p.CreatedAt,
         }).ToList();
 
+        // ── Projeção do restante do mês ───────────────────────────────────────
+        // Só calculada quando o recorte pedido é exatamente "1º do mês até hoje"
+        // — mesma condição em que dashboard/financeiro já mostravam projeção
+        // antes (não faz sentido projetar um período de 7 dias ou um mês já
+        // fechado no passado).
+        var agoraBr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone).Date;
+        ProjecaoDto? projecao = null;
+        if (dataBrIni.Date == new DateTime(dataBrFim.Year, dataBrFim.Month, 1) && dataBrFim.Date == agoraBr)
+            projecao = await CalcularProjecaoMesAsync(receita, agoraBr);
+
         return new FinanceiroDto
         {
             Receita                    = Math.Round(receita, 2),
@@ -317,6 +327,78 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
             TopProdutos                = topProdutos,
             PagamentosPorForma         = todasFormas,
             PagamentosCrediarioPeriodo = pagamentosCrediarioPeriodo,
+            Projecao                   = projecao,
+        };
+    }
+
+    /// <summary>
+    /// Projeta o restante do mês corrente: pra cada dia que falta (amanhã até
+    /// o fim do mês), usa a média histórica DAQUELE dia da semana nas últimas
+    /// 8 semanas de fechamentos "Dia" já gravados — só cai pra uma média flat
+    /// (todos os dias fechados disponíveis, ou a própria média do mês corrente
+    /// se não houver nenhum fechamento ainda) quando aquele dia da semana tem
+    /// menos de 2 ocorrências no histórico. Sem NENHUM fechamento gravado
+    /// (tenant novo, ou logo após o deploy desta feature), o resultado é
+    /// matematicamente idêntico ao método flat antigo (receita/diaAtual ×
+    /// diasRestantes) — não existe caminho de erro/0 por falta de dado.
+    /// </summary>
+    private async Task<ProjecaoDto> CalcularProjecaoMesAsync(decimal receitaAteAgora, DateTime agoraBr)
+    {
+        var diaAtual      = agoraBr.Day;
+        var diasNoMes     = DateTime.DaysInMonth(agoraBr.Year, agoraBr.Month);
+        var diasRestantes = diasNoMes - diaAtual;
+
+        if (diasRestantes <= 0)
+            return new ProjecaoDto { ValorProjetado = Math.Round(receitaAteAgora, 2), Metodo = "flat" };
+
+        var cutoff = agoraBr.AddDays(-56); // ~8 semanas de histórico
+        var historico = await _db.FechamentosPeriodo
+            .Where(f => f.Tipo == TipoFechamento.Dia && f.DataInicio >= cutoff && f.DataInicio < agoraBr)
+            .Select(f => new { f.DataInicio, ReceitaCents = f.ReceitaComandas + f.ReceitaAvulsa })
+            .ToListAsync();
+
+        var porDiaSemana = historico
+            .GroupBy(h => h.DataInicio.DayOfWeek)
+            .ToDictionary(g => g.Key, g => (Media: g.Average(h => (decimal)h.ReceitaCents) / 100m, Ocorrencias: g.Count()));
+
+        // Fallback flat: média de todos os dias já fechados no histórico; sem
+        // nenhum fechamento ainda, usa a própria média do mês corrente até
+        // agora (mesmo cálculo que o método antigo fazia sozinho no frontend).
+        var mediaFlat = historico.Count > 0
+            ? historico.Average(h => (decimal)h.ReceitaCents) / 100m
+            : (diaAtual > 0 ? receitaAteAgora / diaAtual : 0m);
+
+        var todosPonderados = historico.Count > 0;
+        var totalProjetadoRestante = 0m;
+
+        for (var d = 1; d <= diasRestantes; d++)
+        {
+            var dia = agoraBr.AddDays(d).DayOfWeek;
+            if (porDiaSemana.TryGetValue(dia, out var stats) && stats.Ocorrencias >= 2)
+            {
+                totalProjetadoRestante += stats.Media;
+            }
+            else
+            {
+                totalProjetadoRestante += mediaFlat;
+                todosPonderados = false;
+            }
+        }
+
+        var detalhe = porDiaSemana.Count > 0
+            ? porDiaSemana.Select(kvp => new ProjecaoDiaSemanaDto
+              {
+                  DiaSemana      = kvp.Key.ToString(),
+                  MediaHistorica = Math.Round(kvp.Value.Media, 2),
+                  Ocorrencias    = kvp.Value.Ocorrencias,
+              }).ToList()
+            : null;
+
+        return new ProjecaoDto
+        {
+            ValorProjetado      = Math.Round(receitaAteAgora + totalProjetadoRestante, 2),
+            Metodo              = todosPonderados ? "ponderado" : "flat",
+            DetalhePorDiaSemana = detalhe,
         };
     }
 

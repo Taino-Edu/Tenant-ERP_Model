@@ -80,6 +80,29 @@ public class FinanceiroDto
     public List<TopProductFinDto>               TopProdutos                { get; set; } = new();
     public List<FormaPagamentoTotalDto>         PagamentosPorForma         { get; set; } = new();
     public List<PagamentoCrediarioPeriodoDto>   PagamentosCrediarioPeriodo { get; set; } = new();
+    /// <summary>
+    /// Projeção do restante do mês corrente — só calculada quando o período
+    /// consultado é "1º do mês até hoje" (a mesma condição em que as telas já
+    /// mostravam projeção antes); null pra qualquer outro recorte (7 dias,
+    /// mês fechado no passado, etc.), já que não faz sentido projetar um
+    /// período que não termina hoje.
+    /// </summary>
+    public ProjecaoDto? Projecao { get; set; }
+}
+
+public class ProjecaoDto
+{
+    public decimal ValorProjetado { get; set; }
+    /// <summary>"ponderado" (usou média histórica por dia da semana pra todo dia restante) ou "flat" (algum dia restante caiu no fallback de média simples, ou não há histórico nenhum).</summary>
+    public string  Metodo         { get; set; } = "flat";
+    public List<ProjecaoDiaSemanaDto>? DetalhePorDiaSemana { get; set; }
+}
+
+public class ProjecaoDiaSemanaDto
+{
+    public string  DiaSemana      { get; set; } = string.Empty; // "Monday", "Tuesday" etc. (DayOfWeek.ToString())
+    public decimal MediaHistorica { get; set; }
+    public int     Ocorrencias    { get; set; }
 }
 
 public class PagamentoCrediarioPeriodoDto

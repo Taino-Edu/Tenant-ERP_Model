@@ -123,6 +123,7 @@ export default function DashboardPage() {
   const [avisos, setAvisos] = useState<AvisoContadorDto[]>([])
   const [fin7d, setFin7d]         = useState<FinanceiroDto | null>(null)
   const [finHoje, setFinHoje]     = useState<FinanceiroDto | null>(null)
+  const [finMes, setFinMes]       = useState<FinanceiroDto | null>(null)
   const [lowStock, setLowStock]   = useState(0)
   const [allProducts, setAllProducts] = useState<Product[]>([])
   const [ranking, setRanking]     = useState<ClienteInsightDto[]>([])
@@ -149,9 +150,17 @@ export default function DashboardPage() {
     const hoje  = brToday()
     const ini7d = new Date(); ini7d.setDate(ini7d.getDate() - 6)
     const ini7s = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(ini7d)
+    const agora = new Date()
+    const iniMes = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' })
+      .format(new Date(agora.getFullYear(), agora.getMonth(), 1))
 
     analyticsApi.financeiro(hoje, hoje).then(r => setFinHoje(r.data)).catch(() => {})
     analyticsApi.financeiro(ini7s, hoje).then(r => { setFin7d(r.data); setFinProdutos(r.data) }).catch(() => {})
+    // Mês corrente até hoje — única origem da projeção (fin.projecao), pra não
+    // duplicar o cálculo de previsão que antes era feito aqui em cima de uma
+    // média móvel de 7 dias (número diferente do que a página financeiro
+    // mostrava, calculado com a média do mês-a-data).
+    analyticsApi.financeiro(iniMes, hoje).then(r => setFinMes(r.data)).catch(() => {})
     productApi.listAdmin().then(r => {
       const prods = r.data.filter(p => p.isActive)
       setLowStock(prods.filter(p => p.isLowStock).length)
@@ -180,20 +189,23 @@ export default function DashboardPage() {
     return { patrimonioCusto: custo, patrimonioVenda: venda, lucroEstoque: lucro, totalPecas: pecas }
   }, [allProducts])
 
-  const prevFin = fin7d && fin7d.diaDia.length > 0 ? (() => {
+  // Projeção vem de finMes.projecao (calculada uma vez só, no backend) — aqui
+  // só derivamos os números de calendário (dias restantes etc.) e a margem
+  // projetada a partir da própria proporção do mês-a-data, sem reinventar o
+  // valor da projeção em si.
+  const prevFin = finMes?.projecao ? (() => {
     const hojeStr = brToday()
     const diaAtual = parseInt(hojeStr.slice(8))
     const now = new Date()
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
     const diasRestantes = daysInMonth - diaAtual
-    const n = fin7d.diaDia.length
-    const mediaDiaria = fin7d.receita / n
-    const projecaoMes = mediaDiaria * daysInMonth
-    const margemPct = fin7d.receita > 0 ? fin7d.margem / fin7d.receita : 0
+    const projecaoMes = finMes.projecao.valorProjetado
+    const margemPct = finMes.receita > 0 ? finMes.margem / finMes.receita : 0
     const projecaoMargem = projecaoMes * margemPct
-    const realizadoEstimado = mediaDiaria * diaAtual
-    const percentual = Math.min(realizadoEstimado / projecaoMes, 1)
-    return { mediaDiaria, projecaoMes, projecaoMargem, diasRestantes, daysInMonth, percentual, diaAtual, realizadoEstimado, n }
+    const realizadoEstimado = finMes.receita
+    const percentual = projecaoMes > 0 ? Math.min(realizadoEstimado / projecaoMes, 1) : 0
+    const mediaDiaria = diaAtual > 0 ? finMes.receita / diaAtual : 0
+    return { mediaDiaria, projecaoMes, projecaoMargem, diasRestantes, daysInMonth, percentual, diaAtual, realizadoEstimado, metodo: finMes.projecao.metodo }
   })() : null
 
   return (
@@ -315,11 +327,13 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-brand-400">{fmt(prevFin.mediaDiaria)}<span className="text-xs font-normal text-gray-500">/dia</span></p>
-                          <p className="text-xs text-gray-500 mt-0.5">média últimos {prevFin.n}d</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {prevFin.metodo === 'ponderado' ? 'média ponderada por dia da semana' : 'média mês atual'}
+                          </p>
                         </div>
                       </div>
                       <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                        <span>Estimado realizado: {fmt(prevFin.realizadoEstimado)}</span>
+                        <span>Realizado no mês: {fmt(prevFin.realizadoEstimado)}</span>
                         <span>{Math.round(prevFin.percentual * 100)}% do mês ({prevFin.diaAtual}/{prevFin.daysInMonth})</span>
                       </div>
                       <div className="h-2 rounded-full bg-surface-600 overflow-hidden">
