@@ -109,6 +109,12 @@ public record ConvidarContadorRequest(
     [Required, EmailAddress] string Email
 );
 
+/// <summary>Aviso trocado entre contador e lojista, preso a um ContadorTenantLink.</summary>
+public record AvisoContadorRequest(
+    [Required, MaxLength(2000)] string Mensagem,
+    Guid? LinkId = null
+);
+
 /// <summary>Resposta da busca por CPF.</summary>
 public record CpfLookupResponse(
     string Name,

@@ -16,6 +16,7 @@ public class CatalogDbContext : DbContext
     public DbSet<Tenant> Tenants { get; set; }
     public DbSet<ContadorAccount> ContadorAccounts { get; set; }
     public DbSet<ContadorTenantLink> ContadorTenantLinks { get; set; }
+    public DbSet<ContadorAviso> ContadorAvisos { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -58,6 +59,17 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(l => new { l.ContadorAccountId, l.TenantId })
                   .IsUnique()
                   .HasDatabaseName("ix_contador_tenant_links_pair");
+        });
+
+        modelBuilder.Entity<ContadorAviso>(entity =>
+        {
+            entity.HasOne<ContadorTenantLink>()
+                  .WithMany()
+                  .HasForeignKey(a => a.ContadorTenantLinkId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(a => a.ContadorTenantLinkId)
+                  .HasDatabaseName("ix_contador_avisos_link_id");
         });
     }
 }

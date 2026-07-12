@@ -446,6 +446,69 @@ public class FiscalController : ControllerBase
         return Ok(new { Message = "Solicitação aprovada." });
     }
 
+    // ── GET /api/fiscal/contador/avisos ───────────────────────────────────────
+    // Traz os avisos de TODOS os vínculos aprovados desta loja (pode haver mais
+    // de um contador vinculado, ex: troca de escritório em andamento).
+    [HttpGet("contador/avisos")]
+    public async Task<IActionResult> ListAvisosContador()
+    {
+        var linkIds = await _catalog.ContadorTenantLinks
+            .Where(l => l.TenantId == _tenant.TenantId && l.Status == ContadorLinkStatus.Approved)
+            .Select(l => l.Id)
+            .ToListAsync();
+
+        var avisos = await _catalog.ContadorAvisos
+            .Where(a => linkIds.Contains(a.ContadorTenantLinkId))
+            .OrderBy(a => a.CreatedAt)
+            .Select(a => new { a.Id, a.Autor, a.Mensagem, a.CreatedAt })
+            .ToListAsync();
+
+        return Ok(avisos);
+    }
+
+    // ── POST /api/fiscal/contador/avisos ──────────────────────────────────────
+    [HttpPost("contador/avisos")]
+    public async Task<IActionResult> PostAvisoContador([FromBody] AvisoContadorRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var linksAprovados = await _catalog.ContadorTenantLinks
+            .Where(l => l.TenantId == _tenant.TenantId && l.Status == ContadorLinkStatus.Approved)
+            .ToListAsync();
+
+        if (linksAprovados.Count == 0)
+            return NotFound(new { Message = "Nenhum contador vinculado a esta loja." });
+
+        ContadorTenantLink link;
+        if (linksAprovados.Count == 1)
+        {
+            link = linksAprovados[0];
+        }
+        else
+        {
+            if (request.LinkId is null)
+                return BadRequest(new { Message = "Há mais de um contador vinculado — informe qual (linkId)." });
+
+            // Filtra pelos vínculos JÁ carregados (todos garantidamente desta loja),
+            // em vez de buscar o linkId direto no banco — impede que um lojista
+            // escreva num vínculo de outra loja adivinhando o Guid.
+            var encontrado = linksAprovados.FirstOrDefault(l => l.Id == request.LinkId.Value);
+            if (encontrado is null)
+                return NotFound(new { Message = "Vínculo não encontrado para esta loja." });
+            link = encontrado;
+        }
+
+        _catalog.ContadorAvisos.Add(new ContadorAviso
+        {
+            ContadorTenantLinkId = link.Id,
+            Autor                = "Lojista",
+            Mensagem             = request.Mensagem.Trim(),
+        });
+        await _catalog.SaveChangesAsync();
+
+        return Ok(new { Message = "Aviso enviado." });
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>

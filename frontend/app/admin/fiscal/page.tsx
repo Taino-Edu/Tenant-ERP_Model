@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
+import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
   Plus, Trash2, Download, ShieldCheck, Star, RefreshCw, Ban, ScrollText, Printer,
-  Calculator, UserPlus, Check, Clock,
+  Calculator, UserPlus, Check, Clock, CalendarClock, Send, MessageSquare,
 } from 'lucide-react'
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
@@ -118,6 +118,12 @@ export default function FiscalPage() {
   const [loadingSolicitacoes, setLoadingSolicitacoes] = useState(true)
   const [aprovandoId, setAprovandoId] = useState<string | null>(null)
 
+  // Contador — avisos (mural de recados entre lojista e contador)
+  const [avisos, setAvisos] = useState<AvisoContadorDto[]>([])
+  const [loadingAvisos, setLoadingAvisos] = useState(true)
+  const [novoAviso, setNovoAviso] = useState('')
+  const [enviandoAviso, setEnviandoAviso] = useState(false)
+
   async function loadNotas() {
     setNotasLoading(true)
     try {
@@ -146,7 +152,11 @@ export default function FiscalPage() {
     }
   }
 
-  useEffect(() => { loadSolicitacoes() }, [])
+  useEffect(() => {
+    loadSolicitacoes()
+    const interval = setInterval(loadSolicitacoes, 20000)
+    return () => clearInterval(interval)
+  }, [])
 
   async function convidarContador(e: React.FormEvent) {
     e.preventDefault()
@@ -174,6 +184,35 @@ export default function FiscalPage() {
       toast.error(err?.response?.data?.message ?? 'Erro ao aprovar solicitação')
     } finally {
       setAprovandoId(null)
+    }
+  }
+
+  async function loadAvisos() {
+    setLoadingAvisos(true)
+    try {
+      const { data } = await fiscalApi.listAvisosContador()
+      setAvisos(data)
+    } catch {
+      toast.error('Erro ao carregar avisos do contador')
+    } finally {
+      setLoadingAvisos(false)
+    }
+  }
+
+  useEffect(() => { loadAvisos() }, [])
+
+  async function enviarAviso(e: React.FormEvent) {
+    e.preventDefault()
+    if (!novoAviso.trim()) return
+    setEnviandoAviso(true)
+    try {
+      await fiscalApi.postAvisoContador(novoAviso.trim())
+      setNovoAviso('')
+      loadAvisos()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao enviar aviso')
+    } finally {
+      setEnviandoAviso(false)
     }
   }
 
@@ -342,6 +381,9 @@ export default function FiscalPage() {
       setExporting(false)
     }
   }
+
+  const hojeDia = new Date().getDate()
+  const dasProximoAoVencimento = hojeDia <= 20 && (20 - hojeDia) <= 5
 
   const diasParaVencer = config?.diasParaVencer
   const certStatusColor = !config?.certificadoConfigurado
@@ -644,6 +686,16 @@ export default function FiscalPage() {
           ele solicitou acesso por conta própria, aprove a solicitação na lista.
         </p>
 
+        {regime === 'SimplesNacional' && (
+          <div className={clsx(
+            'flex items-center gap-2 text-sm rounded-lg p-3 mb-4',
+            dasProximoAoVencimento ? 'bg-amber-500/10 text-amber-400' : 'bg-surface-800/50 text-gray-400'
+          )}>
+            <CalendarClock className="w-4 h-4 shrink-0" />
+            Lembrete: DAS vence todo dia 20.
+          </div>
+        )}
+
         <form onSubmit={convidarContador} className="flex flex-col sm:flex-row gap-3 mb-4">
           <input
             type="email" className="input flex-1" placeholder="contador@escritorio.com"
@@ -685,6 +737,36 @@ export default function FiscalPage() {
             ))}
           </div>
         )}
+
+        <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold mt-5 mb-3 flex items-center gap-1.5">
+          <MessageSquare className="w-3.5 h-3.5" /> Avisos
+        </h4>
+        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto mb-3">
+          {loadingAvisos ? (
+            <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-brand-400" /></div>
+          ) : avisos.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-2">Nenhum aviso ainda.</p>
+          ) : (
+            avisos.map(a => (
+              <div key={a.id} className={clsx(
+                'rounded-xl p-3 text-sm max-w-[85%]',
+                a.autor === 'Lojista' ? 'bg-brand-600/10 border border-brand-500/20 self-end text-right' : 'bg-surface-800/50 border border-surface-700/50'
+              )}>
+                <p className="text-white">{a.mensagem}</p>
+                <p className="text-[11px] text-gray-500 mt-1">{a.autor} · {new Date(a.createdAt).toLocaleString('pt-BR')}</p>
+              </div>
+            ))
+          )}
+        </div>
+        <form onSubmit={enviarAviso} className="flex gap-2">
+          <input
+            className="input flex-1" placeholder="Escrever um aviso pro contador..."
+            value={novoAviso} onChange={e => setNovoAviso(e.target.value)}
+          />
+          <button type="submit" disabled={enviandoAviso} className="btn-primary justify-center">
+            {enviandoAviso ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </button>
+        </form>
       </div>
 
       {/* Histórico de notas emitidas */}

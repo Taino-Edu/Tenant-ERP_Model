@@ -1049,6 +1049,10 @@ export const fiscalApi = {
     api.get<SolicitacaoContadorDto[]>('/api/fiscal/contador/solicitacoes'),
   aprovarSolicitacaoContador: (linkId: string) =>
     api.post<{ message: string }>(`/api/fiscal/contador/solicitacoes/${linkId}/aprovar`),
+  listAvisosContador: () =>
+    api.get<AvisoContadorDto[]>('/api/fiscal/contador/avisos'),
+  postAvisoContador: (mensagem: string, linkId?: string) =>
+    api.post<{ message: string }>('/api/fiscal/contador/avisos', { mensagem, linkId }),
 }
 
 export interface MinhaNotaDto {
@@ -1065,6 +1069,11 @@ export const minhasNotasApi = {
 
 export interface ContadorClienteDto {
   tenantId: string; slug: string; status: 'Pending' | 'Approved'
+  certificadoValidade?: string; ultimaNotaEm?: string
+}
+
+export interface AvisoContadorDto {
+  id: string; autor: 'Contador' | 'Lojista'; mensagem: string; createdAt: string
 }
 
 export interface ContadorNotaDto {
@@ -1095,6 +1104,9 @@ export const contadorApi = {
   exportarXmls: (tenantId: string, inicio: string, fim: string) =>
     api.get(`/api/contador-portal/clientes/${tenantId}/exportar-xmls`, { params: { inicio, fim }, responseType: 'blob' }),
   getConfig: (tenantId: string) => api.get<ContadorConfigDto>(`/api/contador-portal/clientes/${tenantId}/config`),
+  listAvisos: (tenantId: string) => api.get<AvisoContadorDto[]>(`/api/contador-portal/clientes/${tenantId}/avisos`),
+  postAviso: (tenantId: string, mensagem: string) =>
+    api.post<{ message: string }>(`/api/contador-portal/clientes/${tenantId}/avisos`, { mensagem }),
 }
 
 // ── Personalização do site (nome, textos, cores da landing) ───────────────────

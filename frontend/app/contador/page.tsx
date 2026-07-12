@@ -1,12 +1,21 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorConfigDto } from '@/lib/api'
+import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorConfigDto, AvisoContadorDto } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Calculator, Download, Loader2, FileText, Building2, ChevronLeft, Clock, Plus } from 'lucide-react'
+import { Calculator, Download, Loader2, FileText, Building2, ChevronLeft, Clock, Plus, AlertTriangle, Send, MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
 
 const fmt = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
 const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
+
+function diasAte(dataIso?: string): number | null {
+  if (!dataIso) return null
+  return Math.ceil((new Date(dataIso).getTime() - Date.now()) / 86400000)
+}
+function diasDesde(dataIso?: string): number | null {
+  if (!dataIso) return null
+  return Math.floor((Date.now() - new Date(dataIso).getTime()) / 86400000)
+}
 
 const STATUS_STYLES: Record<string, string> = {
   Autorizada:              'bg-accent-green/10 text-accent-green border-accent-green/30',
@@ -100,31 +109,52 @@ export default function ContadorPage() {
           </div>
         ) : (
           <div className="divide-y divide-surface-700">
-            {clientes.map(c => (
-              <button
-                key={c.tenantId}
-                disabled={c.status !== 'Approved'}
-                onClick={() => setSelected(c)}
-                className={clsx(
-                  'w-full flex items-center justify-between gap-3 px-4 py-4 text-left transition-colors',
-                  c.status === 'Approved' ? 'hover:bg-surface-800/60 cursor-pointer' : 'cursor-not-allowed opacity-70'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <Building2 className="w-4 h-4 text-gray-500" />
-                  <span className="text-white font-medium">{c.slug}</span>
-                </div>
-                {c.status === 'Approved' ? (
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-green/10 text-accent-green border-accent-green/30">
-                    Aprovado
-                  </span>
-                ) : (
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> Aguardando aprovação
-                  </span>
-                )}
-              </button>
-            ))}
+            {clientes.map(c => {
+              const diasCert = c.status === 'Approved' ? diasAte(c.certificadoValidade) : null
+              const diasSemNota = c.status === 'Approved' ? diasDesde(c.ultimaNotaEm) : null
+              return (
+                <button
+                  key={c.tenantId}
+                  disabled={c.status !== 'Approved'}
+                  onClick={() => setSelected(c)}
+                  className={clsx(
+                    'w-full flex items-center justify-between gap-3 px-4 py-4 text-left transition-colors flex-wrap',
+                    c.status === 'Approved' ? 'hover:bg-surface-800/60 cursor-pointer' : 'cursor-not-allowed opacity-70'
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <Building2 className="w-4 h-4 text-gray-500" />
+                    <span className="text-white font-medium">{c.slug}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {diasCert !== null && diasCert <= 30 && (
+                      <span className={clsx(
+                        'text-xs font-medium px-2 py-0.5 rounded-full border flex items-center gap-1',
+                        diasCert <= 7 ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      )}>
+                        <AlertTriangle className="w-3 h-3" />
+                        {diasCert < 0 ? 'Certificado vencido' : `Certificado vence em ${diasCert}d`}
+                      </span>
+                    )}
+                    {c.status === 'Approved' && (c.ultimaNotaEm == null || (diasSemNota !== null && diasSemNota > 7)) && (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        {c.ultimaNotaEm == null ? 'Nenhuma nota emitida ainda' : `Sem nota há ${diasSemNota}d`}
+                      </span>
+                    )}
+                    {c.status === 'Approved' ? (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-green/10 text-accent-green border-accent-green/30">
+                        Aprovado
+                      </span>
+                    ) : (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> Aguardando aprovação
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -138,6 +168,11 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
   const [notas, setNotas]       = useState<ContadorNotaDto[]>([])
   const [loading, setLoading]   = useState(true)
   const [exporting, setExporting] = useState(false)
+
+  const [avisos, setAvisos] = useState<AvisoContadorDto[]>([])
+  const [loadingAvisos, setLoadingAvisos] = useState(true)
+  const [novoAviso, setNovoAviso] = useState('')
+  const [enviandoAviso, setEnviandoAviso] = useState(false)
 
   const [inicio, setInicio] = useState(() => {
     const d = new Date()
@@ -159,6 +194,36 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
   useEffect(() => {
     contadorApi.getConfig(cliente.tenantId).then(r => setConfig(r.data)).catch(() => {})
   }, [cliente.tenantId])
+
+  const loadAvisos = useCallback(() => {
+    setLoadingAvisos(true)
+    contadorApi.listAvisos(cliente.tenantId)
+      .then(r => setAvisos(r.data))
+      .catch(() => toast.error('Erro ao carregar avisos'))
+      .finally(() => setLoadingAvisos(false))
+  }, [cliente.tenantId])
+
+  useEffect(() => { loadAvisos() }, [loadAvisos])
+
+  async function enviarAviso(e: React.FormEvent) {
+    e.preventDefault()
+    if (!novoAviso.trim()) return
+    setEnviandoAviso(true)
+    try {
+      await contadorApi.postAviso(cliente.tenantId, novoAviso.trim())
+      setNovoAviso('')
+      loadAvisos()
+    } catch {
+      toast.error('Erro ao enviar aviso')
+    } finally {
+      setEnviandoAviso(false)
+    }
+  }
+
+  const totalAutorizadas   = notas.filter(n => n.status === 'Autorizada' || n.status === 'AutorizadaContingencia')
+  const totalCanceladas    = notas.filter(n => n.status === 'Cancelada')
+  const somaAutorizadas    = totalAutorizadas.reduce((acc, n) => acc + n.valorTotalEmCentavos, 0)
+  const somaCanceladas     = totalCanceladas.reduce((acc, n) => acc + n.valorTotalEmCentavos, 0)
 
   async function exportarXmls() {
     if (!inicio || !fim) { toast.error('Selecione o período (início e fim).'); return }
@@ -204,6 +269,23 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
           </div>
         </div>
       )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="card p-4">
+          <p className="text-xs text-gray-500">Faturamento (autorizadas)</p>
+          <p className="text-lg font-black text-white mt-1">{fmt(somaAutorizadas)}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{totalAutorizadas.length} nota(s)</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-gray-500">Notas no período</p>
+          <p className="text-lg font-black text-white mt-1">{notas.length}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-gray-500">Canceladas</p>
+          <p className="text-lg font-black text-white mt-1">{fmt(somaCanceladas)}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{totalCanceladas.length} nota(s)</p>
+        </div>
+      </div>
 
       <div className="card space-y-4">
         <div className="flex flex-wrap items-end gap-3">
@@ -262,6 +344,38 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
             </table>
           </div>
         )}
+      </div>
+
+      <div className="card space-y-3">
+        <h3 className="font-bold text-white flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-brand-400" /> Avisos
+        </h3>
+        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+          {loadingAvisos ? (
+            <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-brand-400" /></div>
+          ) : avisos.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-2">Nenhum aviso ainda.</p>
+          ) : (
+            avisos.map(a => (
+              <div key={a.id} className={clsx(
+                'rounded-xl p-3 text-sm max-w-[85%]',
+                a.autor === 'Contador' ? 'bg-brand-600/10 border border-brand-500/20 self-end text-right' : 'bg-surface-800/50 border border-surface-700/50'
+              )}>
+                <p className="text-white">{a.mensagem}</p>
+                <p className="text-[11px] text-gray-500 mt-1">{a.autor} · {new Date(a.createdAt).toLocaleString('pt-BR')}</p>
+              </div>
+            ))
+          )}
+        </div>
+        <form onSubmit={enviarAviso} className="flex gap-2">
+          <input
+            className="input flex-1" placeholder="Escrever um aviso pro lojista..."
+            value={novoAviso} onChange={e => setNovoAviso(e.target.value)}
+          />
+          <button type="submit" disabled={enviandoAviso} className="btn-primary justify-center">
+            {enviandoAviso ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </button>
+        </form>
       </div>
     </div>
   )

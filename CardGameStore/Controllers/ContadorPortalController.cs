@@ -56,15 +56,44 @@ public class ContadorPortalController : ControllerBase
     {
         var contadorId = GetContadorId();
 
-        var clientes = await _catalog.ContadorTenantLinks
+        var links = await _catalog.ContadorTenantLinks
             .Where(l => l.ContadorAccountId == contadorId)
-            .Join(_catalog.Tenants, l => l.TenantId, t => t.Id, (l, t) => new
-            {
-                TenantId = t.Id,
-                t.Slug,
-                Status = l.Status.ToString(),
-            })
+            .Join(_catalog.Tenants, l => l.TenantId, t => t.Id, (l, t) => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules, l.Status })
             .ToListAsync();
+
+        var clientes = new List<object>();
+        foreach (var link in links)
+        {
+            DateTime? certificadoValidade = null;
+            DateTime? ultimaNotaEm       = null;
+
+            // Só vale a pena abrir o schema do tenant se o vínculo já está
+            // aprovado — Pending não tem acesso a dado nenhum mesmo.
+            if (link.Status == ContadorLinkStatus.Approved)
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+                tenantContext.Set(link.Id, link.SchemaName, link.EnabledModules);
+
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var cfg = await db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
+                certificadoValidade = cfg?.CertificadoValidade;
+
+                ultimaNotaEm = await db.NotasFiscaisEmitidas
+                    .OrderByDescending(n => n.CreatedAt)
+                    .Select(n => (DateTime?)n.CreatedAt)
+                    .FirstOrDefaultAsync();
+            }
+
+            clientes.Add(new
+            {
+                TenantId = link.Id,
+                link.Slug,
+                Status = link.Status.ToString(),
+                CertificadoValidade = certificadoValidade,
+                UltimaNotaEm        = ultimaNotaEm,
+            });
+        }
 
         return Ok(clientes);
     }
@@ -191,6 +220,52 @@ public class ContadorPortalController : ControllerBase
         var fileName = $"xmls-fiscais-{inicio:yyyy-MM-dd}-a-{fim:yyyy-MM-dd}.zip";
 
         return File(zipBytes, "application/zip", fileName);
+    }
+
+    // ── GET /api/contador-portal/clientes/{tenantId}/avisos ───────────────────
+    [HttpGet("clientes/{tenantId:guid}/avisos")]
+    public async Task<IActionResult> ListAvisos(Guid tenantId)
+    {
+        var tenant = await AutorizarEObterTenantAsync(tenantId);
+        if (tenant is null) return Forbid();
+
+        var contadorId = GetContadorId();
+        var link = await _catalog.ContadorTenantLinks.FirstOrDefaultAsync(l =>
+            l.ContadorAccountId == contadorId && l.TenantId == tenantId && l.Status == ContadorLinkStatus.Approved);
+        if (link is null) return Forbid();
+
+        var avisos = await _catalog.ContadorAvisos
+            .Where(a => a.ContadorTenantLinkId == link.Id)
+            .OrderBy(a => a.CreatedAt)
+            .Select(a => new { a.Id, a.Autor, a.Mensagem, a.CreatedAt })
+            .ToListAsync();
+
+        return Ok(avisos);
+    }
+
+    // ── POST /api/contador-portal/clientes/{tenantId}/avisos ──────────────────
+    [HttpPost("clientes/{tenantId:guid}/avisos")]
+    public async Task<IActionResult> PostAviso(Guid tenantId, [FromBody] AvisoContadorRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var tenant = await AutorizarEObterTenantAsync(tenantId);
+        if (tenant is null) return Forbid();
+
+        var contadorId = GetContadorId();
+        var link = await _catalog.ContadorTenantLinks.FirstOrDefaultAsync(l =>
+            l.ContadorAccountId == contadorId && l.TenantId == tenantId && l.Status == ContadorLinkStatus.Approved);
+        if (link is null) return Forbid();
+
+        _catalog.ContadorAvisos.Add(new ContadorAviso
+        {
+            ContadorTenantLinkId = link.Id,
+            Autor                = "Contador",
+            Mensagem             = request.Mensagem.Trim(),
+        });
+        await _catalog.SaveChangesAsync();
+
+        return Ok(new { Message = "Aviso enviado." });
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
