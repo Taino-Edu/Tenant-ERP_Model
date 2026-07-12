@@ -51,7 +51,20 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     siteConfigApi.get()
       .then(({ data }: { data: SiteConfigDto }) => setSite(data))
-      .catch(() => {})
+      .catch((err: unknown) => {
+        // TenantResolutionMiddleware já bloqueia TODA chamada de API com 403
+        // pra tenant suspenso — em vez de deixar a página carregar vazia (sem
+        // produtos/config), redireciona pra uma tela clara. Não mexe no
+        // painel /admin (o lojista já sabe do status por /plataforma, e
+        // mandar ele pra uma tela de cliente seria confuso).
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (typeof window !== 'undefined' && status === 403) {
+          const path = window.location.pathname
+          if (!path.startsWith('/admin') && path !== '/loja-suspensa') {
+            window.location.href = '/loja-suspensa'
+          }
+        }
+      })
       .finally(() => setLoading(false))
   }, [])
 
