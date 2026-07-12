@@ -26,24 +26,41 @@
   restaurado, um retry do cancelamento restauraria o mesmo estoque de novo
   (a guarda de "já cancelada" não pegava esse estado intermediário). Envolvido
   numa transação explícita.
-- **Pendente de teste**: prova ao vivo do isolamento do SignalR (item acima)
-  ficou faltando por não haver cliente cadastrado nos tenants de teste — SQL
-  de seed preparado, falta só rodar (ver mensagem da sessão de 2026-07-12
-  madrugada pro comando exato).
+- **Testado ao vivo e confirmado** (madrugada de 2026-07-12): seed de cliente
+  de teste rodado em `loja-final`/`loja-teste3`, comanda aberta numa loja não
+  apareceu na outra — vazamento do `AdminGroup` confirmado corrigido.
+- **Corrigido** (commit `45fe05b`), achado testando o fix do `CancelComandaAsync`
+  ao vivo: `AppDbContext` usa `EnableRetryOnFailure(5)`, e uma transação manual
+  solta (`BeginTransactionAsync` sem `CreateExecutionStrategy()`) não é
+  suportada com execution strategy que faz retry — o EF lança
+  `InvalidOperationException` dentro do `SaveChangesAsync`, quebrando o
+  cancelamento com 500. Corrigido ali e em mais 2 casos pré-existentes com o
+  mesmo bug latente (nunca exercitados em produção) em
+  `FiscalController.CreateNatureza`/`UpdateNatureza`.
+- **Corrigido** (commit `b655e34`): lock de concorrência na criação de tenant —
+  `SemaphoreSlim` em memória (proporcional à app rodar como instância única;
+  precisaria de lock distribuído de verdade só se um dia virar multi-réplica).
+- **Corrigido** (commit `11ef5e3`): rate limit dedicado (30/min por IP) nas
+  conexões do `ComandaHub` — só conta negotiate/upgrade, não mensagens de uma
+  conexão já estabelecida.
+- **Corrigido** (commit `677c0a1`): página dedicada de "loja suspensa" — antes
+  a casca do frontend carregava vazia (sem produtos/config) em vez de avisar
+  claramente. Reaproveitou o fetch de `SiteConfigContext` já existente (que
+  silenciava todo erro) em vez de endpoint+middleware novos.
+- **Corrigido** (commit `0c2d42b`): VLibras escondido no mobile via media
+  query — mecanismo de toggle já existia, só faltava isso.
+- **Corrigido** (commit `d83cc5c`): 2 gaps do portal do contador — convite
+  cego (convidar por e-mail antes de existir conta, vira `Approved` na hora
+  que o contador se cadastra) e endpoint de recusar solicitação pendente
+  (apaga o vínculo, não bloqueia um re-pedido futuro), mais o seletor de
+  "pra qual contador" no formulário de aviso quando há mais de um aprovado.
 
 ## Backlog — achados de menor urgência (mesma análise, não corrigidos ainda)
-- Sem lock de concorrência na criação de tenant (`TenantProvisioningService`)
-  — real, mas ação rara/admin-only, baixo risco prático.
 - `Program.cs` (570 linhas) e `CrediariosController.cs` (700 linhas) — god
   classes de verdade, valeria quebrar em serviços/extension methods menores.
-- `ComandaHub.JoinComandaGroup`/hub sem rate limiting dedicado (a validação
-  de dono da comanda já existe, mas não impede spam de conexões).
 - Middleware do Next.js (`middleware.ts`) não valida tenant do JWT vs
   subdomínio sozinho — mitigado hoje pelo `TenantClaimGuardMiddleware` no
   backend, mas seria mais robusto ter as duas camadas.
-- Não verificado ainda: se o fechamento de comanda (baixa de estoque + pontos
-  + contas a receber) usa transação explícita ou depende só da atomicidade de
-  um único `SaveChangesAsync` — precisa investigação própria antes de agir.
 
 ## Backlog — diretório de lojas + personalização por tenant
 - Pedido original (ainda não implementado): no site institucional principal,
