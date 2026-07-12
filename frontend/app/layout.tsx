@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from 'next'
 import { Nunito } from 'next/font/google'
+import { headers } from 'next/headers'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
 import VLibrasController from '@/components/VLibrasController'
 import ClientProviders from '@/components/ClientProviders'
+import { getTenantIconsForHost, withCacheBust } from '@/lib/serverSiteConfig'
 
 const nunito = Nunito({
   subsets: ['latin'],
@@ -20,25 +22,35 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
-// Metadados estáticos (build-time) — placeholder genérico. O nome real da loja
-// (SiteConfig.SiteName) é renderizado dinamicamente no client via useSiteConfig();
-// gerar esses metadados por tenant depende de resolução de subdomínio (fase futura).
-export const metadata: Metadata = {
-  title: { default: 'Minha Loja', template: '%s — Minha Loja' },
-  description: 'Sistema de gestão para lojas e varejo',
-  manifest: '/manifest.json',
-  icons: {
-    icon: [
-      { url: '/icon.svg', type: 'image/svg+xml' },
-    ],
-    apple: '/icon.svg',
-    shortcut: '/icon.svg',
-  },
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Minha Loja',
-  },
+// Ícone/favicon por tenant, resolvido pelo Host da requisição — o resto dos
+// metadados (nome, descrição) continua fixo/genérico de propósito (fora de
+// escopo aqui; o nome real da loja já é renderizado no client via
+// useSiteConfig() em outros pontos da página). Fallback pros ícones estáticos
+// de sempre em qualquer falha — getTenantIconsForHost nunca lança.
+export async function generateMetadata(): Promise<Metadata> {
+  const host = headers().get('host')
+  const icons = await getTenantIconsForHost(host)
+
+  const iconUrl = icons?.faviconUrl
+    ? withCacheBust(icons.faviconUrl, icons.updatedAt)
+    : '/icon.svg'
+
+  return {
+    title: { default: 'Minha Loja', template: '%s — Minha Loja' },
+    description: 'Sistema de gestão para lojas e varejo',
+    icons: {
+      icon: [
+        { url: iconUrl, type: icons?.faviconUrl ? undefined : 'image/svg+xml' },
+      ],
+      apple: iconUrl,
+      shortcut: iconUrl,
+    },
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'black-translucent',
+      title: 'Minha Loja',
+    },
+  }
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -48,7 +60,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* iOS Safari PWA meta tags */}
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-touch-fullscreen" content="yes" />
-        <link rel="apple-touch-icon" href="/icon.svg" />
+        {/* apple-touch-icon já vem de generateMetadata (icons.apple) — link estático
+            removido daqui pra não duplicar/entrar em conflito com o dinâmico. */}
         {/* Aplica o tema salvo antes do primeiro render para evitar flash */}
         <script
           dangerouslySetInnerHTML={{
