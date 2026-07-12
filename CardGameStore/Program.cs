@@ -382,7 +382,7 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title       = "CardGameStore API",
+        Title       = "Tenant-ERP API",
         Version     = "v1",
         Description = "API do Tenant-ERP — sistema de gestão para lojas e varejo"
     });
