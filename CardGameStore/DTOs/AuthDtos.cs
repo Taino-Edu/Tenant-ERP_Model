@@ -142,6 +142,14 @@ public record TestEmailRequest(
 // -------------------------------------------------------------------------
 
 /// <summary>Resposta interna de autenticação — inclui tokens para uso nos cookies.</summary>
+/// <param name="AccessToken">JWT de acesso — nunca vai no body pro cliente, só como cookie HttpOnly.</param>
+/// <param name="RefreshToken">Token de renovação — mesmo espírito do AccessToken, cookie HttpOnly separado.</param>
+/// <param name="ExpiresAt">Expiração do AccessToken.</param>
+/// <param name="Role">Papel do usuário autenticado (Admin, Operator, Customer, Contador...).</param>
+/// <param name="UserName">Nome de exibição.</param>
+/// <param name="UserId">Id do usuário autenticado.</param>
+/// <param name="ComandaId">ID da comanda ativa — preenchido apenas no quick-login (cliente via QR Code). Null no login completo do Admin.</param>
+/// <param name="Permissions">Permissões do Operator. Null para Admin e Customer.</param>
 public record AuthResponse(
     string   AccessToken,
     string   RefreshToken,
@@ -149,12 +157,7 @@ public record AuthResponse(
     string   Role,
     string   UserName,
     Guid     UserId,
-    /// <summary>
-    /// ID da comanda ativa — preenchido apenas no quick-login (cliente via QR Code).
-    /// Null no login completo do Admin.
-    /// </summary>
     Guid?    ComandaId   = null,
-    /// <summary>Permissões do Operator. Null para Admin e Customer.</summary>
     string[]? Permissions = null
 );
 

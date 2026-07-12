@@ -6,6 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>CardGameStore</RootNamespace>
     <AssemblyName>CardGameStore</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: "tipo/membro público sem comentário XML" — não queremos exigir
+         doc em TUDO (DTOs internos, etc.), só aproveitar os comentários que
+         já existem/forem adicionados nos controllers pro Swagger. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

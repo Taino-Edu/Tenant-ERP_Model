@@ -27,6 +27,7 @@ public interface IFinanceiroCalculoService
     /// sobrescreve — é assim que "reabrir fechamento" funciona, não existe
     /// um endpoint de "unlock" separado.
     /// </summary>
+    /// <param name="tipo">Granularidade da janela (Dia, Semana ou Mês).</param>
     /// <param name="dataInicioBr">Primeiro dia da janela, calendário de Brasília.</param>
     /// <param name="dataFimBrInclusive">Último dia da janela (inclusive), calendário de Brasília.</param>
     Task<FechamentoPeriodo> FecharJanelaAsync(TipoFechamento tipo, DateTime dataInicioBr, DateTime dataFimBrInclusive);

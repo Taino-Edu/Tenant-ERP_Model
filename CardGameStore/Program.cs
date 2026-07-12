@@ -397,16 +397,16 @@ builder.Services.AddSwaggerGen(c =>
         Description  = "Informe: Bearer {seu_token}"
     });
 
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
-            },
-            Array.Empty<string>()
-        }
-    });
+    // Requisito de segurança é adicionado por operação (ver AuthorizeCheckOperationFilter),
+    // não aqui globalmente — um requisito global de documento faz TODO endpoint mostrar
+    // cadeado no Swagger UI, inclusive os [AllowAnonymous] (limitação do formato OpenAPI:
+    // uma lista de segurança vazia por operação é omitida do JSON, não sobrescreve o default).
+    c.OperationFilter<CardGameStore.Swagger.AuthorizeCheckOperationFilter>();
+
+    // Comentários /// dos controllers/DTOs viram descrição de endpoint/campo na doc.
+    var xmlFile = Path.Combine(AppContext.BaseDirectory, $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml");
+    if (File.Exists(xmlFile))
+        c.IncludeXmlComments(xmlFile, includeControllerXmlComments: true);
 });
 
 builder.Services.AddControllers();

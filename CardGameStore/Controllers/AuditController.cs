@@ -31,6 +31,7 @@ public class AuditController : ControllerBase
     /// <param name="page">Número da página (base 1, padrão 1).</param>
     /// <param name="pageSize">Registros por página (padrão 50, máximo 200).</param>
     /// <param name="entityType">Filtro por tipo de entidade (ex: "User", "LgpdRequest").</param>
+    /// <param name="action">Filtro por ação registrada (ex: "Create", "Update", "Delete").</param>
     /// <param name="actorUserId">Filtro por ID do ator.</param>
     [HttpGet]
     [ProducesResponseType(typeof(AuditLogPagedResponse), 200)]
