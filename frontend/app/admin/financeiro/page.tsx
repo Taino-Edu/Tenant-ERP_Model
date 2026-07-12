@@ -506,6 +506,14 @@ function KpiChartModal({
   const maxVal = Math.max(...points.map(p => p.value), 1)
   const hasData = points.some(p => p.value > 0)
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   const colorMap: Record<string, { bar: string; text: string }> = {
     green:  { bar: '#10b981', text: 'text-emerald-400' },
     red:    { bar: 'rgba(239,68,68,0.7)', text: 'text-red-400' },
@@ -524,9 +532,9 @@ function KpiChartModal({
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-lg shadow-2xl">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600 sticky top-0 bg-surface-800">
           <h3 className="font-semibold text-white">{title}</h3>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
             <X className="w-5 h-5" />
@@ -817,6 +825,14 @@ function DayDetailModal({ day, onClose }: {
   const [animated, setAnimated] = useState(false)
   useEffect(() => { const id = requestAnimationFrame(() => setAnimated(true)); return () => cancelAnimationFrame(id) }, [])
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   const dayLabel = (() => {
     try {
       return new Date(day.dia + 'T12:00:00').toLocaleDateString('pt-BR', {
@@ -830,9 +846,9 @@ function DayDetailModal({ day, onClose }: {
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-surface-600 bg-gradient-to-r from-brand-600/10 to-transparent flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-surface-600 bg-gradient-to-r from-brand-600/10 to-transparent flex items-center justify-between sticky top-0">
           <div>
             <p className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">Resumo do dia</p>
             <h3 className="font-semibold text-white capitalize mt-0.5">{dayLabel}</h3>
