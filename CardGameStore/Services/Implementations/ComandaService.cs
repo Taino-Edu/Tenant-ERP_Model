@@ -742,30 +742,41 @@ public class ComandaService : IComandaService
         // sido restaurado, a comanda continua parecendo aberta — e um retry
         // do cancelamento restauraria o mesmo estoque de novo (duplicado),
         // já que a guarda acima só bloqueia comandas já marcadas Cancelada.
-        using var transaction = await _db.Database.BeginTransactionAsync();
-
-        foreach (var item in comanda.Items.Where(i => i.ProductId.HasValue))
+        //
+        // AppDbContext usa EnableRetryOnFailure — uma transação manual
+        // (BeginTransactionAsync solto) não é permitida com uma execution
+        // strategy que faz retry (o EF lança InvalidOperationException: use
+        // a strategy pra executar o bloco inteiro como unidade retentável).
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            await _db.Products
-                .Where(p => p.Id == item.ProductId!.Value)
-                .ExecuteUpdateAsync(s => s.SetProperty(
-                    p => p.StockQuantity, p => p.StockQuantity + item.Quantity));
-        }
+            using var transaction = await _db.Database.BeginTransactionAsync();
 
-        // Devolve pontos que o cliente havia aplicado nesta comanda
+            foreach (var item in comanda.Items.Where(i => i.ProductId.HasValue))
+            {
+                await _db.Products
+                    .Where(p => p.Id == item.ProductId!.Value)
+                    .ExecuteUpdateAsync(s => s.SetProperty(
+                        p => p.StockQuantity, p => p.StockQuantity + item.Quantity));
+            }
+
+            // Devolve pontos que o cliente havia aplicado nesta comanda
+            if (comanda.PointsApplied > 0 && comanda.User != null)
+            {
+                comanda.User.PointsBalance += comanda.PointsApplied;
+                comanda.User.UpdatedAt      = DateTime.UtcNow;
+            }
+
+            comanda.Status   = ComandaStatus.Cancelada;
+            comanda.ClosedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
+
         if (comanda.PointsApplied > 0 && comanda.User != null)
-        {
-            comanda.User.PointsBalance += comanda.PointsApplied;
-            comanda.User.UpdatedAt      = DateTime.UtcNow;
             _logger.LogInformation(
                 "Comanda {Id} cancelada — {Pts} pontos devolvidos ao usuário {UserId}.",
                 comandaId, comanda.PointsApplied, comanda.UserId);
-        }
-
-        comanda.Status   = ComandaStatus.Cancelada;
-        comanda.ClosedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-        await transaction.CommitAsync();
 
         _logger.LogInformation("Comanda {Id} cancelada — estoque restaurado para {Count} produto(s).",
             comandaId, comanda.Items.Count(i => i.ProductId.HasValue));
