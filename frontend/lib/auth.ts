@@ -17,10 +17,14 @@ export function saveAuth(auth: AuthResponse) {
     Cookies.set('userPermissions', JSON.stringify(auth.permissions), { expires: 30 })
   else
     Cookies.remove('userPermissions')
+  // Login normal nunca seta esse cookie (só o redeem de impersonação, no
+  // backend) — remove qualquer resíduo de uma sessão de impersonação
+  // anterior no mesmo navegador, pra nunca mostrar o banner errado.
+  Cookies.remove('impersonating')
 }
 
 export function clearAuth() {
-  ;['userRole', 'userName', 'userId', 'userPermissions'].forEach(k => Cookies.remove(k))
+  ;['userRole', 'userName', 'userId', 'userPermissions', 'impersonating'].forEach(k => Cookies.remove(k))
 }
 
 export function getRole():        string    { return Cookies.get('userRole') || '' }
@@ -31,6 +35,7 @@ export function isOperator():     boolean   { return getRole() === 'Operator' }
 export function isPlatformOwner(): boolean  { return getRole() === 'PlatformOwner' }
 export function isContador():      boolean  { return getRole() === 'Contador' }
 export function isLoggedIn():     boolean   { return !!Cookies.get('userRole') }
+export function getImpersonatingOwnerName(): string | null { return Cookies.get('impersonating') || null }
 
 export function getPermissions(): string[] {
   try {

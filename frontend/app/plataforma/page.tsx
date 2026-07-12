@@ -1,13 +1,39 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus } from '@/lib/api'
+import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus, PlatformOverviewDto } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
+import StatCard from '@/components/admin/StatCard'
 import toast from 'react-hot-toast'
-import { Building2, Plus, Loader2, X, Power, PowerOff, Check } from 'lucide-react'
+import { Building2, Plus, Loader2, X, Power, PowerOff, Check, DollarSign, Layers, CreditCard, LogIn } from 'lucide-react'
 import clsx from 'clsx'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function fmtReais(cents: number) {
+  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+/** "há X min/h/dias" — null = nunca teve atividade registrada. */
+function fmtRelative(iso: string | null): { text: string; tone: 'success' | 'warning' | 'danger' } {
+  if (!iso) return { text: 'sem atividade', tone: 'danger' }
+  const diffMs   = Date.now() - new Date(iso).getTime()
+  const diffDays = diffMs / 86_400_000
+  const tone: 'success' | 'warning' | 'danger' = diffDays <= 3 ? 'success' : diffDays <= 14 ? 'warning' : 'danger'
+
+  if (diffMs < 0)          return { text: 'agora', tone: 'success' }
+  const diffMin = diffMs / 60_000
+  if (diffMin < 60)        return { text: `há ${Math.max(1, Math.round(diffMin))} min`, tone }
+  const diffH = diffMin / 60
+  if (diffH < 24)          return { text: `há ${Math.round(diffH)}h`, tone }
+  return { text: `há ${Math.round(diffDays)} dia${diffDays >= 2 ? 's' : ''}`, tone }
+}
+
+const ACTIVITY_TONE: Record<'success' | 'warning' | 'danger', string> = {
+  success: 'text-emerald-400',
+  warning: 'text-amber-400',
+  danger:  'text-gray-500',
 }
 
 function StatusBadge({ status }: { status: TenantStatus }) {
@@ -96,10 +122,11 @@ function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCrea
 
 // ── Linha da tabela: status + billing (plano/pagamento/módulos) ──────────────
 
-function TenantRow({ tenant, onChanged }: { tenant: TenantSummary; onChanged: () => void }) {
+function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummary; lastActivityAt: string | null | undefined; onChanged: () => void }) {
   const [planName, setPlanName]   = useState(tenant.planName)
   const [savingBilling, setSavingBilling] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [impersonating, setImpersonating] = useState(false)
 
   useEffect(() => { setPlanName(tenant.planName) }, [tenant.planName])
 
@@ -140,6 +167,23 @@ function TenantRow({ tenant, onChanged }: { tenant: TenantSummary; onChanged: ()
       ? tenant.enabledModules.filter(m => m !== module)
       : [...tenant.enabledModules, module]
     saveBilling({ enabledModules: nextModules })
+  }
+
+  async function acessarAdmin() {
+    setImpersonating(true)
+    try {
+      const { data } = await platformApi.impersonate(tenant.id)
+      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN
+      const url = `${window.location.protocol}//${tenant.slug}.${rootDomain}/api/auth/impersonate?ticket=${encodeURIComponent(data.ticket)}`
+      window.open(url, '_blank', 'noopener')
+    } catch (err: any) {
+      const msg = err?.response?.status === 409
+        ? 'Loja suspensa — reative antes de acessar.'
+        : 'Erro ao gerar acesso de simulação.'
+      toast.error(msg)
+    } finally {
+      setImpersonating(false)
+    }
   }
 
   return (
@@ -195,18 +239,35 @@ function TenantRow({ tenant, onChanged }: { tenant: TenantSummary; onChanged: ()
         </div>
       </td>
       <td className="py-3 text-gray-400">{fmtDate(tenant.createdAt)}</td>
+      <td className="py-3">
+        {(() => {
+          const activity = fmtRelative(lastActivityAt ?? null)
+          return <span className={clsx('text-xs font-medium', ACTIVITY_TONE[activity.tone])}>{activity.text}</span>
+        })()}
+      </td>
       <td className="py-3 text-right">
-        <button
-          onClick={toggleStatus}
-          disabled={updatingStatus}
-          className={clsx('btn-secondary text-xs py-1 px-2.5 ml-auto',
-            tenant.status === 'Active' ? 'hover:text-red-400' : 'hover:text-accent-green')}
-        >
-          {updatingStatus
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            : tenant.status === 'Active' ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
-          {tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
-        </button>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={acessarAdmin}
+            disabled={impersonating || tenant.status !== 'Active'}
+            title={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
+            className="btn-secondary text-xs py-1 px-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {impersonating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
+            Acessar admin
+          </button>
+          <button
+            onClick={toggleStatus}
+            disabled={updatingStatus}
+            className={clsx('btn-secondary text-xs py-1 px-2.5',
+              tenant.status === 'Active' ? 'hover:text-red-400' : 'hover:text-accent-green')}
+          >
+            {updatingStatus
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : tenant.status === 'Active' ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+            {tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
+          </button>
+        </div>
       </td>
     </tr>
   )
@@ -218,6 +279,7 @@ export default function PlataformaPage() {
   const [tenants, setTenants] = useState<TenantSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
+  const [overview, setOverview] = useState<PlatformOverviewDto | null>(null)
 
   const fetchTenants = useCallback(() => {
     setLoading(true)
@@ -227,7 +289,23 @@ export default function PlataformaPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const fetchOverview = useCallback(() => {
+    // Falha aqui não pode derrubar a tabela de tenants — só os cards/coluna
+    // de atividade ficam vazios (overview permanece null).
+    platformApi.getOverview()
+      .then(r => setOverview(r.data))
+      .catch(() => {})
+  }, [])
+
   useEffect(() => { fetchTenants() }, [fetchTenants])
+  useEffect(() => { fetchOverview() }, [fetchOverview])
+
+  const activityByTenant = new Map((overview?.tenants ?? []).map(t => [t.tenantId, t.lastActivityAt]))
+  const paymentAtrasado  = overview?.paymentStatusCounts?.Atrasado ?? 0
+  const paymentPago      = overview?.paymentStatusCounts?.Pago ?? 0
+  const moduleSub = overview
+    ? Object.entries(overview.moduleAdoptionCounts).map(([m, c]) => `${m}: ${c}`).join(' · ') || 'nenhum módulo ativo'
+    : undefined
 
   return (
     <div className="space-y-5">
@@ -241,6 +319,36 @@ export default function PlataformaPage() {
           </button>
         }
       />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          icon={DollarSign}
+          label="Receita do mês"
+          value={overview ? fmtReais(overview.receitaMesAtualCents) : '—'}
+          tone="success"
+        />
+        <StatCard
+          icon={Building2}
+          label="Tenants ativos"
+          value={overview ? overview.activeTenants : '—'}
+          sub={overview ? `${overview.suspendedTenants} suspensos` : undefined}
+          tone="brand"
+        />
+        <StatCard
+          icon={Layers}
+          label="Adoção de módulos"
+          value={overview ? Object.values(overview.moduleAdoptionCounts).reduce((a, b) => a + b, 0) : '—'}
+          sub={moduleSub}
+          tone="neutral"
+        />
+        <StatCard
+          icon={CreditCard}
+          label="Pagamento em dia"
+          value={overview ? paymentPago : '—'}
+          sub={overview && paymentAtrasado > 0 ? `${paymentAtrasado} atrasado(s)` : undefined}
+          tone={paymentAtrasado > 0 ? 'warning' : 'success'}
+        />
+      </div>
 
       <div className="card overflow-x-auto">
         {loading ? (
@@ -259,12 +367,13 @@ export default function PlataformaPage() {
                 <th className="py-2 font-medium">Pagamento</th>
                 <th className="py-2 font-medium">Módulos</th>
                 <th className="py-2 font-medium">Criado em</th>
+                <th className="py-2 font-medium">Última atividade</th>
                 <th className="py-2 font-medium text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
               {tenants.map(t => (
-                <TenantRow key={t.id} tenant={t} onChanged={fetchTenants} />
+                <TenantRow key={t.id} tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={fetchTenants} />
               ))}
             </tbody>
           </table>

@@ -678,6 +678,18 @@ export interface UpdateTenantBillingRequest {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
 }
 
+export interface TenantActivity {
+  tenantId: string; receitaMesAtualCents: number; lastActivityAt: string | null
+}
+
+export interface PlatformOverviewDto {
+  activeTenants: number; suspendedTenants: number
+  receitaMesAtualCents: number
+  paymentStatusCounts: Record<string, number>
+  moduleAdoptionCounts: Record<string, number>
+  tenants: TenantActivity[]
+}
+
 export const platformApi = {
   listTenants: () =>
     api.get<TenantSummary[]>('/api/platform/tenants'),
@@ -687,6 +699,10 @@ export const platformApi = {
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/status`, { status }),
   updateTenantBilling: (id: string, req: UpdateTenantBillingRequest) =>
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/billing`, req),
+  getOverview: () =>
+    api.get<PlatformOverviewDto>('/api/platform/overview'),
+  impersonate: (id: string) =>
+    api.post<{ ticket: string }>(`/api/platform/tenants/${id}/impersonate`, {}),
 }
 
 // ── Upload de imagem ──────────────────────────────────────────────────────────
