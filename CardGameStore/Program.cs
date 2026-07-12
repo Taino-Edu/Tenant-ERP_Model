@@ -210,7 +210,7 @@ builder.Services.AddRateLimiter(options =>
 
     options.AddFixedWindowLimiter("auth", opt =>
     {
-        opt.PermitLimit              = 5;
+        opt.PermitLimit              = 15; // era 5 — QA testando várias contas com autofill errado batia nisso toda hora
         opt.Window                   = TimeSpan.FromMinutes(1);
         opt.QueueProcessingOrder     = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit               = 0; // sem fila — rejeita imediatamente
