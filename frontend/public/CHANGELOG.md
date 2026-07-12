@@ -1,4 +1,93 @@
-# Changelog — Santuário Nerd
+# Changelog — Tenant-ERP
+
+## [v2.5.1] — 2026-07-12
+
+### Corrigido
+- Rate limit do login (5/min) causava tela travada em "Entrando..." pra quem errava a senha algumas vezes — subido pra 15/min
+- Modal de categoria não tinha limite de altura nem scroll — em telas menores o botão de fechar ficava inacessível (mesmo problema corrigido também no modal de conta de crediário e no seletor de variante da loja do cliente)
+- **CPF sem validação** no cadastro de cliente pelo admin — era o único ponto do sistema que aceitava CPF sem checar o dígito verificador
+- Mismatch de hidratação do React no carregamento inicial (script de tema mexendo no `<html>` antes da hidratação; painel geral salvando preferência de card aberto/fechado direto do `localStorage` sem equalizar com o servidor)
+
+### Mudado
+- Menu reorganizado: Perfis de Acesso (necessário pra cadastrar operador) agora aparece antes da tela de cadastro de operador, não depois
+- Categorias deixou de ser uma tela própria e virou uma aba dentro de Estoque
+
+---
+
+## [v2.5.0] — 2026-07-12
+
+### Adicionado
+- **Central do Dono da Plataforma**: painel `/plataforma` ganhou visão agregada (receita do mês, lojas ativas/suspensas, adoção de módulos, pagamento em dia) e coluna de última atividade por loja
+- **Acessar admin de qualquer loja com um clique**: botão que abre o painel daquela loja já autenticado, sem digitar subdomínio nem logar de novo — sessão de simulação expira sozinha em 20 min e nunca mexe na conta real do admin daquela loja
+
+---
+
+## [v2.4.0] — 2026-07-12
+
+### Adicionado
+- **Identidade visual por loja**: favicon, ícone do PWA e ícone do menu admin próprios de cada tenant (upload em Personalizar Site), aplicados via SSR — cada subdomínio carrega o ícone certo desde o primeiro request
+- **Diretório de lojas**: página institucional lista as lojas ativas com nome e logo reais
+- **Loja suspensa**: página dedicada explicando a suspensão em vez de uma tela vazia
+- Convite de contador "às cegas" (convida por e-mail mesmo sem conta ainda criada) + botão de recusar solicitação + seletor ao vincular múltiplos contadores
+
+### Corrigido
+- **Crítico**: migrations do banco só rodavam no schema padrão no boot — lojas já provisionadas nunca recebiam atualizações de schema novas; agora todo tenant ativo migra automaticamente a cada deploy
+- **Crítico**: uso de transação manual incompatível com a política de retry do banco causava erro ao cancelar comanda e ao salvar natureza de operação fiscal
+
+---
+
+## [v2.3.0] — 2026-07-12
+
+### Adicionado
+- **Motor financeiro**: fechamento formal (dia/semana/mês) rodando em background pra todas as lojas, com projeção de faturamento do mês ponderada por dia da semana; comparação período-a-período generalizada pra todos os filtros de data
+
+### Corrigido
+- **Segurança**: grupo de admin do SignalR (dashboard ao vivo) era compartilhado entre TODAS as lojas — uma loja podia ver eventos em tempo real de outra; agora isolado por tenant
+- Cancelamento de comanda podia duplicar a devolução de estoque numa corrida de banco — transação explícita corrige
+- Bug que zerava estoque de item concorrente ao resolver item de comanda
+- Rate limit nas conexões da comanda em tempo real (30/min por IP)
+- Provisionamento de loja nova serializado — dois cadastros simultâneos não colidem mais
+
+---
+
+## [v2.2.0] — 2026-07-11
+
+### Adicionado
+- **Planos e módulos por loja**: dono da plataforma controla manualmente o plano, status de pagamento e quais módulos (Fiscal, Estoque) cada loja tem habilitado
+- **Portal do Contador** (`/contador`): contadores ganham conta própria e acesso cross-tenant só-leitura às lojas vinculadas — solicitação de acesso, lembrete de DAS, resumo do período, indicadores de saúde fiscal e mural de avisos
+- Tela de "esqueci minha senha" ligada ao login do admin
+
+### Corrigido
+- Vazamento de tema claro do admin pra fora do próprio admin
+- Isolamento de tenant: fallback indevido pro schema `public` removido; histórico de migrations qualificado por schema
+
+---
+
+## [v2.1.0] — 2026-07-10
+
+### Adicionado
+- **Multi-tenant de verdade**: cada loja ganha seu próprio schema isolado no PostgreSQL — catálogo central de tenants, roteamento por subdomínio via nginx wildcard, provisionamento automático ao cadastrar uma loja nova
+- **Painel do Dono da Plataforma** (`/plataforma`): primeira versão — lista, cadastra e suspende/reativa lojas
+- **Página institucional** separada da vitrine de cada loja, com identidade visual própria
+- Cor de destaque de cada loja (Personalizar Site) agora também vale dentro do painel admin, não só no site público
+
+### Melhorado
+- Painel administrativo ganhou cabeçalho de página e cards de indicador padronizados nas 5 telas de maior uso
+- Painel Geral separado da Comanda ao vivo — cada um foca no que faz sentido
+- Menu lateral reagrupado, atalhos e rotas órfãs removidos
+
+### Corrigido
+- Widget de acessibilidade (VLibras) escondido em telas pequenas — atrapalhava mais do que ajudava no mobile
+
+---
+
+## [v2.0.0] — 2026-07-09
+
+### Mudado
+- **Sistema deixou de ser exclusivo pra card games e virou uma plataforma de gestão genérica multi-tenant** (Tenant-ERP) — toda referência fixa a card games, Pokémon/MTG/YGO e à marca antiga saiu do produto; nome da loja, cores e identidade visual agora vêm 100% da configuração de cada tenant
+- Vendas avulsas migraram de MongoDB pro PostgreSQL
+
+---
 
 ## [v1.21.0] — 2026-07-08
 
