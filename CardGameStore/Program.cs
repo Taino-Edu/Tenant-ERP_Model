@@ -559,8 +559,13 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-XSS-Protection"]        = "1; mode=block";
     context.Response.Headers["Referrer-Policy"]         = "no-referrer";
     context.Response.Headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()";
-    // CSP: API retorna apenas JSON/binários — bloquear todo conteúdo ativo
-    context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
+    // CSP: API retorna apenas JSON/binários — bloquear todo conteúdo ativo.
+    // Exceção: /swagger (só existe em Development) precisa carregar seu próprio
+    // CSS/JS/imagens — mesma origem, sem CDN externo — pra sequer renderizar.
+    context.Response.Headers["Content-Security-Policy"] =
+        context.Request.Path.StartsWithSegments("/swagger")
+            ? "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
+            : "default-src 'none'; frame-ancestors 'none'";
     await next();
 });
 
@@ -575,7 +580,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "CardGameStore API v1");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Tenant-ERP API v1");
         c.RoutePrefix   = "swagger"; // UI disponível em /swagger
         c.DocumentTitle = "Tenant-ERP API";
     });
