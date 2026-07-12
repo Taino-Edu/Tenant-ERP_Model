@@ -245,6 +245,8 @@ export const authApi = {
     api.post('/api/auth/forgot-password', { email }),
   resetPassword:  (token: string, newPassword: string) =>
     api.post('/api/auth/reset-password', { token, newPassword }),
+  registerContador: (name: string, email: string, password: string, tenantSlug: string) =>
+    api.post<AuthResponse>('/api/auth/contador/register', { name, email, password, tenantSlug }),
   uploadProfileImage: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -1040,6 +1042,13 @@ export const fiscalApi = {
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/comanda/${comandaId}`),
   emitirNotaVendaAvulsa: (vendaId: string) =>
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/venda-avulsa/${vendaId}`),
+
+  convidarContador: (email: string) =>
+    api.post<{ message: string }>('/api/fiscal/contador/convidar', { email }),
+  listSolicitacoesContador: () =>
+    api.get<SolicitacaoContadorDto[]>('/api/fiscal/contador/solicitacoes'),
+  aprovarSolicitacaoContador: (linkId: string) =>
+    api.post<{ message: string }>(`/api/fiscal/contador/solicitacoes/${linkId}/aprovar`),
 }
 
 export interface MinhaNotaDto {
@@ -1052,7 +1061,11 @@ export const minhasNotasApi = {
   obterCupom: (id: string) => api.get<CupomDto>(`/api/minhas-notas/${id}/cupom`),
 }
 
-// ── Portal do contador (acesso fiscal read-only) ──────────────────────────────
+// ── Portal do contador (cross-tenant — uma conta, vários clientes) ────────────
+
+export interface ContadorClienteDto {
+  tenantId: string; slug: string; status: 'Pending' | 'Approved'
+}
 
 export interface ContadorNotaDto {
   id: string; origem: string; status: string
@@ -1068,12 +1081,20 @@ export interface ContadorConfigDto {
   regimeTributario: string
 }
 
+export interface SolicitacaoContadorDto {
+  linkId: string; name: string; email: string
+  status: 'Pending' | 'Approved'; createdAt: string
+}
+
 export const contadorApi = {
-  listNotas: (params?: { inicio?: string; fim?: string; status?: string; page?: number; pageSize?: number }) =>
-    api.get<{ items: ContadorNotaDto[]; total: number; totalPages: number }>('/api/contador/notas', { params }),
-  exportarXmls: (inicio: string, fim: string) =>
-    api.get('/api/contador/exportar-xmls', { params: { inicio, fim }, responseType: 'blob' }),
-  getConfig: () => api.get<ContadorConfigDto>('/api/contador/config'),
+  listClientes: () => api.get<ContadorClienteDto[]>('/api/contador-portal/clientes'),
+  solicitarAcesso: (tenantSlug: string) =>
+    api.post<{ message: string }>('/api/contador-portal/solicitar-acesso', { tenantSlug }),
+  listNotas: (tenantId: string, params?: { inicio?: string; fim?: string; status?: string; page?: number; pageSize?: number }) =>
+    api.get<{ items: ContadorNotaDto[]; total: number; totalPages: number }>(`/api/contador-portal/clientes/${tenantId}/notas`, { params }),
+  exportarXmls: (tenantId: string, inicio: string, fim: string) =>
+    api.get(`/api/contador-portal/clientes/${tenantId}/exportar-xmls`, { params: { inicio, fim }, responseType: 'blob' }),
+  getConfig: (tenantId: string) => api.get<ContadorConfigDto>(`/api/contador-portal/clientes/${tenantId}/config`),
 }
 
 // ── Personalização do site (nome, textos, cores da landing) ───────────────────

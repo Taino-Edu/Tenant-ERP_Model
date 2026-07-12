@@ -44,4 +44,10 @@ public interface IAuthService
 
     /// <summary>Cria uma conta nova de cliente pelo site, sem depender de CPF pré-cadastrado.</summary>
     Task<AuthResponse> RegisterAsync(RegisterRequest request);
+
+    /// <summary>
+    /// Cadastro público de Contador — cria a conta cross-tenant (catálogo) e já
+    /// solicita acesso (Pending) à loja informada pelo slug, sujeito à aprovação do lojista.
+    /// </summary>
+    Task<AuthResponse> RegisterContadorAsync(ContadorRegisterRequest request);
 }

@@ -14,6 +14,8 @@ public class CatalogDbContext : DbContext
     public CatalogDbContext(DbContextOptions<CatalogDbContext> options) : base(options) { }
 
     public DbSet<Tenant> Tenants { get; set; }
+    public DbSet<ContadorAccount> ContadorAccounts { get; set; }
+    public DbSet<ContadorTenantLink> ContadorTenantLinks { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +32,32 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(t => t.SchemaName)
                   .IsUnique()
                   .HasDatabaseName("ix_tenants_schema_name");
+        });
+
+        modelBuilder.Entity<ContadorAccount>(entity =>
+        {
+            entity.HasIndex(c => c.Email)
+                  .IsUnique()
+                  .HasDatabaseName("ix_contador_accounts_email");
+        });
+
+        modelBuilder.Entity<ContadorTenantLink>(entity =>
+        {
+            entity.Property(l => l.Status).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasOne<Tenant>()
+                  .WithMany()
+                  .HasForeignKey(l => l.TenantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne<ContadorAccount>()
+                  .WithMany()
+                  .HasForeignKey(l => l.ContadorAccountId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(l => new { l.ContadorAccountId, l.TenantId })
+                  .IsUnique()
+                  .HasDatabaseName("ix_contador_tenant_links_pair");
         });
     }
 }

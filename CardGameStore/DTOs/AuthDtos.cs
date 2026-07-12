@@ -91,6 +91,24 @@ public record ClientLoginRequest(
     [Required]                  string Password
 );
 
+/// <summary>Cadastro público do Contador — cria a conta e já solicita acesso (Pending) à loja pelo slug.</summary>
+public record ContadorRegisterRequest(
+    [Required, MaxLength(150)]  string Name,
+    [Required, EmailAddress]    string Email,
+    [Required, MinLength(8)]    string Password,
+    [Required, MaxLength(20)]   string TenantSlug
+);
+
+/// <summary>Solicita acesso do contador já autenticado a uma loja adicional, pelo slug.</summary>
+public record SolicitarAcessoRequest(
+    [Required, MaxLength(20)] string TenantSlug
+);
+
+/// <summary>Lojista convida um contador (já cadastrado) por e-mail — vínculo nasce Approved.</summary>
+public record ConvidarContadorRequest(
+    [Required, EmailAddress] string Email
+);
+
 /// <summary>Resposta da busca por CPF.</summary>
 public record CpfLookupResponse(
     string Name,

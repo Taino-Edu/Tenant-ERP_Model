@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
+import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
   Plus, Trash2, Download, ShieldCheck, Star, RefreshCw, Ban, ScrollText, Printer,
+  Calculator, UserPlus, Check, Clock,
 } from 'lucide-react'
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
@@ -110,6 +111,13 @@ export default function FiscalPage() {
   const [cancelJustificativa, setCancelJustificativa] = useState('')
   const [cancelling, setCancelling] = useState(false)
 
+  // Contador — convite e aprovação de solicitações de acesso
+  const [convidarEmail, setConvidarEmail] = useState('')
+  const [convidando, setConvidando] = useState(false)
+  const [solicitacoes, setSolicitacoes] = useState<SolicitacaoContadorDto[]>([])
+  const [loadingSolicitacoes, setLoadingSolicitacoes] = useState(true)
+  const [aprovandoId, setAprovandoId] = useState<string | null>(null)
+
   async function loadNotas() {
     setNotasLoading(true)
     try {
@@ -125,6 +133,49 @@ export default function FiscalPage() {
   }
 
   useEffect(() => { loadNotas() }, [])
+
+  async function loadSolicitacoes() {
+    setLoadingSolicitacoes(true)
+    try {
+      const { data } = await fiscalApi.listSolicitacoesContador()
+      setSolicitacoes(data)
+    } catch {
+      toast.error('Erro ao carregar solicitações de contador')
+    } finally {
+      setLoadingSolicitacoes(false)
+    }
+  }
+
+  useEffect(() => { loadSolicitacoes() }, [])
+
+  async function convidarContador(e: React.FormEvent) {
+    e.preventDefault()
+    if (!convidarEmail.trim()) return
+    setConvidando(true)
+    try {
+      const { data } = await fiscalApi.convidarContador(convidarEmail.trim())
+      toast.success(data.message)
+      setConvidarEmail('')
+      loadSolicitacoes()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao convidar contador')
+    } finally {
+      setConvidando(false)
+    }
+  }
+
+  async function aprovarSolicitacao(linkId: string) {
+    setAprovandoId(linkId)
+    try {
+      await fiscalApi.aprovarSolicitacaoContador(linkId)
+      toast.success('Solicitação aprovada!')
+      loadSolicitacoes()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao aprovar solicitação')
+    } finally {
+      setAprovandoId(null)
+    }
+  }
 
   async function reprocessarNota(id: string) {
     setReprocessingId(id)
@@ -580,6 +631,60 @@ export default function FiscalPage() {
             Baixar ZIP
           </button>
         </div>
+      </div>
+
+      {/* Contador — convite e aprovação de acesso */}
+      <div className="card p-5">
+        <h3 className="font-bold text-white flex items-center gap-2 mb-1">
+          <Calculator className="w-4 h-4 text-brand-400" /> Contador
+        </h3>
+        <p className="text-xs text-gray-400 mb-4">
+          O contador cria a própria conta em <strong>/contador/cadastro</strong> e escolhe o slug da
+          sua loja. Se ele já tiver conta, convide pelo e-mail abaixo (acesso liberado na hora). Se
+          ele solicitou acesso por conta própria, aprove a solicitação na lista.
+        </p>
+
+        <form onSubmit={convidarContador} className="flex flex-col sm:flex-row gap-3 mb-4">
+          <input
+            type="email" className="input flex-1" placeholder="contador@escritorio.com"
+            value={convidarEmail} onChange={e => setConvidarEmail(e.target.value)} required
+          />
+          <button type="submit" disabled={convidando} className="btn-primary justify-center">
+            {convidando ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+            Convidar
+          </button>
+        </form>
+
+        {loadingSolicitacoes ? (
+          <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
+        ) : solicitacoes.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-2">Nenhum contador vinculado ainda.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {solicitacoes.map(s => (
+              <div key={s.linkId} className="flex items-center gap-3 bg-surface-800/50 rounded-xl p-3 border border-surface-700/50">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{s.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{s.email}</p>
+                </div>
+                {s.status === 'Approved' ? (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-green/10 text-accent-green border-accent-green/30 flex items-center gap-1 shrink-0">
+                    <Check className="w-3 h-3" /> Aprovado
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => aprovarSolicitacao(s.linkId)}
+                    disabled={aprovandoId === s.linkId}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600/10 hover:bg-brand-600/20 border border-brand-500/30 text-sm text-brand-300 shrink-0"
+                  >
+                    {aprovandoId === s.linkId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+                    Aprovar
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Histórico de notas emitidas */}

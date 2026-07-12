@@ -303,6 +303,26 @@ public class AuthController : ControllerBase
     }
 
     // =========================================================================
+    // CADASTRO PÚBLICO DE CONTADOR — cria a conta cross-tenant e solicita acesso
+    // (Pending) à loja pelo slug. Sem [Authorize] — acessível pelo domínio raiz.
+    // =========================================================================
+    [HttpPost("contador/register")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> RegisterContador([FromBody] ContadorRegisterRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        try
+        {
+            var response = await _authService.RegisterContadorAsync(request);
+            SetAuthCookies(response.AccessToken, response.RefreshToken);
+            return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId));
+        }
+        catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
+        catch (KeyNotFoundException ex)      { return NotFound(new { Message = ex.Message }); }
+    }
+
+    // =========================================================================
     // FORGOT PASSWORD — Solicitar reset por email
     // =========================================================================
 

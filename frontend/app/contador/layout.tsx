@@ -1,21 +1,29 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { isContador, clearAuth } from '@/lib/auth'
 import { Toaster } from 'react-hot-toast'
 import { LogOut, Calculator } from 'lucide-react'
 
+// /contador/cadastro precisa ficar acessível sem sessão — é onde o contador cria
+// a própria conta pela primeira vez. Fica dentro da mesma árvore de rotas (só
+// pra reaproveitar o header), mas o layout não pode aplicar o guard aqui.
+const PUBLIC_PATHS = ['/contador/cadastro']
+
 export default function ContadorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const [checked, setChecked] = useState(false)
+  const pathname = usePathname()
+  const isPublic = PUBLIC_PATHS.includes(pathname)
+  const [checked, setChecked] = useState(isPublic)
 
   useEffect(() => {
+    if (isPublic) { setChecked(true); return }
     if (!isContador()) {
       router.push('/login')
       return
     }
     setChecked(true)
-  }, [router])
+  }, [router, pathname, isPublic])
 
   function handleLogout() {
     clearAuth()
@@ -40,9 +48,11 @@ export default function ContadorLayout({ children }: { children: React.ReactNode
             <Calculator className="w-5 h-5 text-brand-400" />
             Portal do Contador
           </div>
-          <button onClick={handleLogout} className="btn-secondary text-sm py-1.5">
-            <LogOut className="w-4 h-4" /> Sair
-          </button>
+          {!isPublic && (
+            <button onClick={handleLogout} className="btn-secondary text-sm py-1.5">
+              <LogOut className="w-4 h-4" /> Sair
+            </button>
+          )}
         </div>
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8">

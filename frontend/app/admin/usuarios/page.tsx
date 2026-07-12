@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSummary, PerfilDto, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield, Calculator } from 'lucide-react'
+import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
 import PageHeader from '@/components/admin/PageHeader'
 import Link from 'next/link'
 
@@ -155,72 +155,6 @@ function NovoOperadorModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
               {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando...</> : <><UserCog className="w-4 h-4" /> Criar Operador</>}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-// ── Modal: Novo Contador (acesso read-only ao fiscal, sem perfil de operador) ──
-function NovoContadorModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [nome, setNome]       = useState('')
-  const [email, setEmail]     = useState('')
-  const [senha, setSenha]     = useState('')
-  const [loading, setLoading] = useState(false)
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!nome.trim()) { toast.error('Nome é obrigatório'); return }
-    if (!email.trim()) { toast.error('E-mail é obrigatório para contadores'); return }
-    if (senha.length < 8) { toast.error('Senha deve ter no mínimo 8 caracteres'); return }
-    setLoading(true)
-    try {
-      await userApi.adminCreate({
-        name: nome.trim(), email: email.trim(),
-        password: senha, role: 'Contador',
-      })
-      toast.success(`Contador ${nome} criado!`)
-      onSuccess()
-      onClose()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao criar contador')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
-          <h2 className="font-bold text-white text-lg flex items-center gap-2">
-            <Calculator className="w-5 h-5 text-brand-400" /> Novo Contador
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
-          <div>
-            <label className="label">Nome completo *</label>
-            <input className="input" placeholder="José Contabilidade" value={nome} onChange={e => setNome(e.target.value)} required />
-          </div>
-          <div>
-            <label className="label">E-mail *</label>
-            <input type="email" className="input" placeholder="contador@escritorio.com" value={email} onChange={e => setEmail(e.target.value)} required />
-          </div>
-          <div>
-            <label className="label">Senha *</label>
-            <input type="password" className="input" placeholder="Mínimo 8 caracteres" value={senha} onChange={e => setSenha(e.target.value)} minLength={8} required />
-          </div>
-          <p className="text-xs text-gray-500">
-            O contador vai poder logar em <strong>/login</strong> e ver, no próprio portal, só a lista
-            de notas fiscais e a exportação de XMLs — sem acesso a mais nenhuma parte do sistema.
-          </p>
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
-            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando...</> : <><Calculator className="w-4 h-4" /> Criar Contador</>}
             </button>
           </div>
         </form>
@@ -711,7 +645,6 @@ export default function UsuariosPage() {
   const [adjustingBalance, setAdjustingBalance] = useState(false)
   const [showNovoCliente, setShowNovoCliente]   = useState(false)
   const [showNovoOperador, setShowNovoOperador] = useState(false)
-  const [showNovoContador, setShowNovoContador] = useState(false)
   const [showRedefinirSenha, setShowRedefinirSenha] = useState(false)
   const [showHistorico, setShowHistorico]     = useState(false)
   const [editandoOperador, setEditandoOperador] = useState<UserSummary | null>(null)
@@ -819,12 +752,6 @@ export default function UsuariosPage() {
           onSuccess={fetchOperators}
         />
       )}
-      {showNovoContador && (
-        <NovoContadorModal
-          onClose={() => setShowNovoContador(false)}
-          onSuccess={() => {}}
-        />
-      )}
       {showRedefinirSenha && selected && (
         <RedefinirSenhaModal
           user={selected}
@@ -859,14 +786,9 @@ export default function UsuariosPage() {
               </button>
             )}
             {tabSection === 'operadores' && (
-              <>
-                <button onClick={() => setShowNovoOperador(true)} className="btn-primary whitespace-nowrap">
-                  <UserCog className="w-4 h-4" /> Novo Operador
-                </button>
-                <button onClick={() => setShowNovoContador(true)} className="btn-secondary whitespace-nowrap">
-                  <Calculator className="w-4 h-4" /> Novo Contador
-                </button>
-              </>
+              <button onClick={() => setShowNovoOperador(true)} className="btn-primary whitespace-nowrap">
+                <UserCog className="w-4 h-4" /> Novo Operador
+              </button>
             )}
           </>}
         />

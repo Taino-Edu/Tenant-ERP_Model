@@ -4,6 +4,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -27,16 +28,21 @@ public class FiscalController : ControllerBase
     private readonly FiscalCertificadoService  _certificado;
     private readonly FiscalXmlExportService    _export;
     private readonly INfceEmissionService      _emissao;
+    private readonly CatalogDbContext          _catalog;
+    private readonly ITenantContext            _tenant;
 
     public FiscalController(
         AppDbContext db, EncryptionService enc, FiscalCertificadoService certificado,
-        FiscalXmlExportService export, INfceEmissionService emissao)
+        FiscalXmlExportService export, INfceEmissionService emissao,
+        CatalogDbContext catalog, ITenantContext tenant)
     {
         _db          = db;
         _enc         = enc;
         _certificado = certificado;
         _export      = export;
         _emissao     = emissao;
+        _catalog     = catalog;
+        _tenant      = tenant;
     }
 
     // ── GET /api/fiscal/config ────────────────────────────────────────────────
@@ -372,6 +378,72 @@ public class FiscalController : ControllerBase
         var fileName = $"xmls-fiscais-{inicio:yyyy-MM-dd}-a-{fim:yyyy-MM-dd}.zip";
 
         return File(zipBytes, "application/zip", fileName);
+    }
+
+    // ── POST /api/fiscal/contador/convidar ────────────────────────────────────
+    // Vincula um contador JÁ CADASTRADO (via /contador/cadastro) a esta loja,
+    // com o vínculo nascendo Approved direto — quem convida é o próprio lojista.
+    // Se o e-mail ainda não tem conta de contador, não dá pra pré-criar o vínculo
+    // (ContadorTenantLink.ContadorAccountId exige uma conta já existente);
+    // o lojista precisa pedir pro contador se cadastrar primeiro.
+    [HttpPost("contador/convidar")]
+    public async Task<IActionResult> ConvidarContador([FromBody] ConvidarContadorRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var email = request.Email.Trim().ToLowerInvariant();
+        var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c => c.Email == email);
+        if (conta is null)
+            return NotFound(new { Message = "Nenhum contador cadastrado com este e-mail. Peça para ele se cadastrar em /contador/cadastro e convide novamente." });
+
+        var jaVinculado = await _catalog.ContadorTenantLinks
+            .AnyAsync(l => l.ContadorAccountId == conta.Id && l.TenantId == _tenant.TenantId);
+        if (jaVinculado)
+            return Conflict(new { Message = "Este contador já tem acesso (ou solicitação pendente) a esta loja." });
+
+        _catalog.ContadorTenantLinks.Add(new ContadorTenantLink
+        {
+            ContadorAccountId = conta.Id,
+            TenantId          = _tenant.TenantId,
+            Status            = ContadorLinkStatus.Approved,
+        });
+        await _catalog.SaveChangesAsync();
+
+        return Ok(new { Message = $"Contador {conta.Name} vinculado com sucesso." });
+    }
+
+    // ── GET /api/fiscal/contador/solicitacoes ─────────────────────────────────
+    [HttpGet("contador/solicitacoes")]
+    public async Task<IActionResult> ListSolicitacoesContador()
+    {
+        var solicitacoes = await _catalog.ContadorTenantLinks
+            .Where(l => l.TenantId == _tenant.TenantId)
+            .Join(_catalog.ContadorAccounts, l => l.ContadorAccountId, c => c.Id, (l, c) => new
+            {
+                LinkId = l.Id,
+                c.Name,
+                c.Email,
+                Status = l.Status.ToString(),
+                l.CreatedAt,
+            })
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync();
+
+        return Ok(solicitacoes);
+    }
+
+    // ── POST /api/fiscal/contador/solicitacoes/{linkId}/aprovar ───────────────
+    [HttpPost("contador/solicitacoes/{linkId:guid}/aprovar")]
+    public async Task<IActionResult> AprovarSolicitacaoContador(Guid linkId)
+    {
+        var link = await _catalog.ContadorTenantLinks
+            .FirstOrDefaultAsync(l => l.Id == linkId && l.TenantId == _tenant.TenantId);
+        if (link is null) return NotFound();
+
+        link.Status = ContadorLinkStatus.Approved;
+        await _catalog.SaveChangesAsync();
+
+        return Ok(new { Message = "Solicitação aprovada." });
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

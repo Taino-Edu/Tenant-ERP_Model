@@ -24,6 +24,7 @@ namespace CardGameStore.Services.Implementations;
 public class AuthService : IAuthService
 {
     private readonly AppDbContext          _db;
+    private readonly CatalogDbContext      _catalog;
     private readonly JwtSettings           _jwt;
     private readonly ILogger<AuthService>  _logger;
     private readonly IComandaService       _comandaService;
@@ -32,6 +33,7 @@ public class AuthService : IAuthService
 
     public AuthService(
         AppDbContext db,
+        CatalogDbContext catalog,
         IOptions<JwtSettings> jwt,
         ILogger<AuthService> logger,
         IComandaService comandaService,
@@ -39,6 +41,7 @@ public class AuthService : IAuthService
         ITenantContext tenant)
     {
         _db             = db;
+        _catalog        = catalog;
         _jwt            = jwt.Value;
         _logger         = logger;
         _comandaService = comandaService;
@@ -47,7 +50,7 @@ public class AuthService : IAuthService
     }
 
     // =========================================================================
-    // LOGIN COMPLETO — Admin e jogadores de campeonato
+    // LOGIN COMPLETO — Admin, jogadores de campeonato e Contador (conta cross-tenant)
     // =========================================================================
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
@@ -56,10 +59,17 @@ public class AuthService : IAuthService
 
         // PasswordHash pode ser null para clientes de quick-login.
         // Verificar null antes de chamar BCrypt.Verify evita NullReferenceException.
-        if (user == null || user.PasswordHash == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            throw new UnauthorizedAccessException("E-mail ou senha inválidos.");
+        if (user != null && user.PasswordHash != null && BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            return await GenerateAuthResponseAsync(user);
 
-        return await GenerateAuthResponseAsync(user);
+        // Contador não é um User de tenant nenhum — vive só no catálogo (schema
+        // "public"), então cai aqui como segunda tentativa antes de recusar o login.
+        var email = request.Email.Trim().ToLowerInvariant();
+        var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c => c.Email == email);
+        if (conta != null && BCrypt.Net.BCrypt.Verify(request.Password, conta.PasswordHash))
+            return await GenerateContadorAuthResponseAsync(conta);
+
+        throw new UnauthorizedAccessException("E-mail ou senha inválidos.");
     }
 
     // =========================================================================
@@ -126,10 +136,18 @@ public class AuthService : IAuthService
             u => u.RefreshToken == hashedToken && u.IsActive
         );
 
-        if (user == null || user.RefreshTokenExpiry < DateTime.UtcNow)
+        if (user != null)
+        {
+            if (user.RefreshTokenExpiry < DateTime.UtcNow)
+                throw new UnauthorizedAccessException("Refresh token inválido ou expirado.");
+            return await GenerateAuthResponseAsync(user);
+        }
+
+        var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c => c.RefreshToken == hashedToken);
+        if (conta == null || conta.RefreshTokenExpiry < DateTime.UtcNow)
             throw new UnauthorizedAccessException("Refresh token inválido ou expirado.");
 
-        return await GenerateAuthResponseAsync(user);
+        return await GenerateContadorAuthResponseAsync(conta);
     }
 
     // =========================================================================
@@ -144,6 +162,16 @@ public class AuthService : IAuthService
             user.RefreshTokenExpiry = null;
             user.UpdatedAt          = DateTime.UtcNow;
             await _db.SaveChangesAsync();
+            return;
+        }
+
+        var conta = await _catalog.ContadorAccounts.FindAsync(userId);
+        if (conta != null)
+        {
+            conta.RefreshToken       = null;
+            conta.RefreshTokenExpiry = null;
+            conta.UpdatedAt          = DateTime.UtcNow;
+            await _catalog.SaveChangesAsync();
         }
     }
 
@@ -179,17 +207,39 @@ public class AuthService : IAuthService
         return new AuthResponse(accessToken, refreshToken, expiresAt, user.Role, user.Name, user.Id, comandaId, permissions);
     }
 
-    private string GenerateJwt(User user, string[]? permissions = null)
+    /// <summary>
+    /// Gera o AuthResponse do Contador — mesmo formato do User, mas a conta e o
+    /// refresh token vivem no CatalogDbContext (schema "public"), não no AppDbContext
+    /// do tenant. Role é sempre "Contador" — não existe PerfilId/permissions aqui.
+    /// </summary>
+    private async Task<AuthResponse> GenerateContadorAuthResponseAsync(ContadorAccount conta)
+    {
+        var accessToken  = GenerateJwt(conta.Id, conta.Name, conta.Email, UserRole.Contador);
+        var refreshToken = GenerateRefreshToken();
+        var expiresAt    = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenExpirationMinutes);
+
+        conta.RefreshToken       = HashRefreshToken(refreshToken);
+        conta.RefreshTokenExpiry = DateTime.UtcNow.AddDays(_jwt.RefreshTokenExpirationDays);
+        conta.UpdatedAt          = DateTime.UtcNow;
+        await _catalog.SaveChangesAsync();
+
+        return new AuthResponse(accessToken, refreshToken, expiresAt, UserRole.Contador, conta.Name, conta.Id);
+    }
+
+    private string GenerateJwt(User user, string[]? permissions = null) =>
+        GenerateJwt(user.Id, user.Name, user.Email, user.Role, permissions);
+
+    private string GenerateJwt(Guid id, string name, string? email, string role, string[]? permissions = null)
     {
         var key     = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.SecretKey));
         var creds   = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub,   user.Id.ToString()),
-            new(JwtRegisteredClaimNames.Name,  user.Name),
+            new(JwtRegisteredClaimNames.Sub,   id.ToString()),
+            new(JwtRegisteredClaimNames.Name,  name),
             new(JwtRegisteredClaimNames.Jti,   Guid.NewGuid().ToString()),
-            new(ClaimTypes.Role,               user.Role),
+            new(ClaimTypes.Role,               role),
             // Guid do tenant (não o schema) resolvido pra esta requisição — o
             // TenantClaimGuardMiddleware compara contra o tenant resolvido por
             // Host na requisição seguinte (defesa em profundidade; o schema que
@@ -197,8 +247,8 @@ public class AuthService : IAuthService
             new(TenantConstants.TenantIdClaimType, _tenant.TenantId.ToString())
         };
 
-        if (!string.IsNullOrEmpty(user.Email))
-            claims.Add(new(JwtRegisteredClaimNames.Email, user.Email));
+        if (!string.IsNullOrEmpty(email))
+            claims.Add(new(JwtRegisteredClaimNames.Email, email));
 
         if (permissions != null && permissions.Length > 0)
             claims.Add(new("permissions", System.Text.Json.JsonSerializer.Serialize(permissions)));
@@ -312,28 +362,46 @@ public class AuthService : IAuthService
     public async Task ForgotPasswordAsync(ForgotPasswordRequest request)
     {
         // Sempre retorna sem erro — não revelar se email existe (evita user enumeration)
-        var user = await _db.Users
-            .FirstOrDefaultAsync(u => u.Email == request.Email.ToLowerInvariant() && u.IsActive);
+        var email = request.Email.Trim().ToLowerInvariant();
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email && u.IsActive);
 
-        if (user == null)
+        // Gera token seguro (256 bits), reaproveitado pra User e ContadorAccount.
+        static string NovoToken()
         {
-            await Task.Delay(Random.Shared.Next(200, 500)); // timing equalization
+            var tokenBytes = new byte[32];
+            using var rng  = RandomNumberGenerator.Create();
+            rng.GetBytes(tokenBytes);
+            return Convert.ToBase64String(tokenBytes);
+        }
+
+        if (user != null)
+        {
+            var token = NovoToken();
+            user.PasswordResetToken       = token;
+            user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(2);
+            user.UpdatedAt                = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+
+            await _email.SendPasswordResetAsync(user.Email!, user.Name, token);
+            _logger.LogInformation("Solicitação de reset de senha para {Email}", MaskEmail(request.Email));
             return;
         }
 
-        // Gera token seguro e salva com expiração de 2h
-        var tokenBytes = new byte[32];
-        using var rng  = RandomNumberGenerator.Create();
-        rng.GetBytes(tokenBytes);
-        var token = Convert.ToBase64String(tokenBytes);
+        var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c => c.Email == email);
+        if (conta != null)
+        {
+            var token = NovoToken();
+            conta.PasswordResetToken       = token;
+            conta.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(2);
+            conta.UpdatedAt                = DateTime.UtcNow;
+            await _catalog.SaveChangesAsync();
 
-        user.PasswordResetToken       = token;
-        user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(2);
-        user.UpdatedAt                = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+            await _email.SendPasswordResetAsync(conta.Email, conta.Name, token);
+            _logger.LogInformation("Solicitação de reset de senha (contador) para {Email}", MaskEmail(request.Email));
+            return;
+        }
 
-        await _email.SendPasswordResetAsync(user.Email!, user.Name, token);
-        _logger.LogInformation("Solicitação de reset de senha para {Email}", MaskEmail(request.Email));
+        await Task.Delay(Random.Shared.Next(200, 500)); // timing equalization
     }
 
     public async Task ResetPasswordAsync(ResetPasswordRequest request)
@@ -343,18 +411,78 @@ public class AuthService : IAuthService
             u.PasswordResetTokenExpiry > DateTime.UtcNow &&
             u.IsActive);
 
-        if (user == null)
+        if (user != null)
+        {
+            user.PasswordHash             = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            user.PasswordResetToken       = null;
+            user.PasswordResetTokenExpiry = null;
+            user.RefreshToken             = null; // invalida sessões ativas
+            user.RefreshTokenExpiry       = null;
+            user.UpdatedAt                = DateTime.UtcNow;
+
+            await _db.SaveChangesAsync();
+            _logger.LogInformation("Senha redefinida para usuário {UserId}", user.Id);
+            return;
+        }
+
+        var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c =>
+            c.PasswordResetToken == request.Token &&
+            c.PasswordResetTokenExpiry > DateTime.UtcNow);
+
+        if (conta == null)
             throw new UnauthorizedAccessException("Token inválido ou expirado.");
 
-        user.PasswordHash             = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-        user.PasswordResetToken       = null;
-        user.PasswordResetTokenExpiry = null;
-        user.RefreshToken             = null; // invalida sessões ativas
-        user.RefreshTokenExpiry       = null;
-        user.UpdatedAt                = DateTime.UtcNow;
+        conta.PasswordHash             = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        conta.PasswordResetToken       = null;
+        conta.PasswordResetTokenExpiry = null;
+        conta.RefreshToken             = null;
+        conta.RefreshTokenExpiry       = null;
+        conta.UpdatedAt                = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync();
-        _logger.LogInformation("Senha redefinida para usuário {UserId}", user.Id);
+        await _catalog.SaveChangesAsync();
+        _logger.LogInformation("Senha redefinida para contador {ContadorId}", conta.Id);
+    }
+
+    // =========================================================================
+    // CADASTRO PÚBLICO DE CONTADOR — cria a conta cross-tenant e já solicita
+    // acesso (Pending) à loja informada pelo slug. Aprovação fica a cargo do
+    // lojista em /admin/fiscal.
+    // =========================================================================
+    public async Task<AuthResponse> RegisterContadorAsync(ContadorRegisterRequest request)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+
+        var emailInUse = await _catalog.ContadorAccounts.AnyAsync(c => c.Email == email);
+        if (emailInUse)
+            throw new InvalidOperationException("Este e-mail já está cadastrado. Tente fazer login.");
+
+        var slug = request.TenantSlug.Trim().ToLowerInvariant();
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Slug == slug);
+        if (tenant is null)
+            throw new KeyNotFoundException("Loja não encontrada. Confira o código/slug informado com o lojista.");
+
+        var conta = new ContadorAccount
+        {
+            Name         = request.Name.Trim(),
+            Email        = email,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+        };
+        _catalog.ContadorAccounts.Add(conta);
+
+        _catalog.ContadorTenantLinks.Add(new ContadorTenantLink
+        {
+            ContadorAccountId = conta.Id,
+            TenantId          = tenant.Id,
+            Status            = ContadorLinkStatus.Pending,
+        });
+
+        await _catalog.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Novo contador cadastrado: {Name} ({Email}), solicitando acesso à loja '{Slug}'",
+            conta.Name, conta.Email, slug);
+
+        return await GenerateContadorAuthResponseAsync(conta);
     }
 
     private static string MaskEmail(string email)

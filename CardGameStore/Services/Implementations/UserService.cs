@@ -217,16 +217,14 @@ public class UserService : IUserService
                 throw new InvalidOperationException($"Já existe um cadastro com o e-mail {request.Email}.");
         }
 
-        var role = request.Role == UserRole.Operator ? UserRole.Operator
-                 : request.Role == UserRole.Contador ? UserRole.Contador
-                 : UserRole.Customer;
+        var role = request.Role == UserRole.Operator ? UserRole.Operator : UserRole.Customer;
 
-        if (role == UserRole.Operator || role == UserRole.Contador)
+        if (role == UserRole.Operator)
         {
             if (string.IsNullOrWhiteSpace(request.Email))
-                throw new InvalidOperationException("E-mail é obrigatório para Operadores e Contadores.");
+                throw new InvalidOperationException("E-mail é obrigatório para Operadores.");
             if (string.IsNullOrWhiteSpace(request.Password))
-                throw new InvalidOperationException("Senha é obrigatória para Operadores e Contadores.");
+                throw new InvalidOperationException("Senha é obrigatória para Operadores.");
         }
 
         var user = new User
