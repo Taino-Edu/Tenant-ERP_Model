@@ -247,6 +247,7 @@ export default function ConfiguracoesPage() {
               { key: 'produtos',      label: 'Top Produtos (7 dias)' },
               { key: 'lgpd',          label: 'LGPD' },
               { key: 'preVenda',      label: 'Lista de espera pré-venda' },
+              { key: 'avisosContador', label: 'Avisos do contador' },
             ] as { key: keyof DashboardPanels; label: string }[]).map(({ key, label }) => (
               <Row key={key} label={label}>
                 <Toggle

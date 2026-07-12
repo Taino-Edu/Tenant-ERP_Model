@@ -1,5 +1,19 @@
 # Backlog — Tenant-ERP
 
+## Backlog — diretório de lojas + personalização por tenant
+- Pedido original (ainda não implementado): no site institucional principal,
+  uma seção/página listando os tenants ativos com link direto pra
+  landing-page de cada um (uma espécie de redirecionador — "veja as lojas que
+  usam a plataforma").
+- Personalização por tenant do próprio visual do sistema deles: ícone do PWA,
+  favicon do site institucional da loja, e o ícone que aparece no admin —
+  hoje só existe personalização de nome/textos/cores via `SiteConfig`
+  (`frontend/contexts/SiteConfigContext.tsx`), não de ícones/imagens.
+- Escopo a decidir: upload de imagem por tenant (onde fica armazenado — hoje
+  não há serviço de blob storage no projeto, só `uploadProfileImage` local
+  pra perfil de usuário) e se o ícone do PWA precisa de manifest.json gerado
+  dinamicamente por tenant (hoje é estático).
+
 ## Concluído (sessão 2026-07-11/12, melhorias do portal do contador)
 - Polling de 20s na lista de solicitações pendentes em `/admin/fiscal` (só
   enquanto a página está aberta) — antes só carregava uma vez no mount, então

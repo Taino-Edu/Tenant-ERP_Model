@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
-import { productApi, analyticsApi, lgpdAdminApi, waitListApi, Product, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme } from '@/lib/api'
+import { productApi, analyticsApi, lgpdAdminApi, waitListApi, fiscalApi, Product, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme, AvisoContadorDto } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import PageHeader from '@/components/admin/PageHeader'
@@ -8,7 +8,7 @@ import StatCard from '@/components/admin/StatCard'
 import Link from 'next/link'
 import {
   TrendingUp, ChevronDown, ChevronUp, AlertTriangle, DollarSign, BarChart2,
-  Trophy, Medal, Star, Package, Shield, LayoutDashboard, ArrowRight,
+  Trophy, Medal, Star, Package, Shield, LayoutDashboard, ArrowRight, MessageSquare,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -119,6 +119,8 @@ export default function DashboardPage() {
   const dp = prefs.dashboard
   const { site } = useSiteConfig()
   const hasEstoqueModule = site.enabledModules.includes('estoque')
+  const hasFiscalModule = site.enabledModules.includes('fiscal')
+  const [avisos, setAvisos] = useState<AvisoContadorDto[]>([])
   const [fin7d, setFin7d]         = useState<FinanceiroDto | null>(null)
   const [finHoje, setFinHoje]     = useState<FinanceiroDto | null>(null)
   const [lowStock, setLowStock]   = useState(0)
@@ -158,7 +160,8 @@ export default function DashboardPage() {
     analyticsApi.clientes().then(r => setRanking(r.data.filter(c => c.gastoTotal > 0).slice(0, 5))).catch(() => {})
     lgpdAdminApi.listRequests('Pendente').then(r => setPendingLgpd(r.data)).catch(() => {})
     waitListApi.preVendaPendentesCount().then(r => setPendingPreVenda(r.data.count)).catch(() => {})
-  }, [])
+    if (hasFiscalModule) fiscalApi.listAvisosContador().then(r => setAvisos(r.data)).catch(() => {})
+  }, [hasFiscalModule])
 
   async function fetchProdutos(de: string, ate: string) {
     try {
@@ -334,7 +337,7 @@ export default function DashboardPage() {
         )}
 
         {/* ── Rankings & Alertas ── */}
-        {((dp.panels.patrimonio && hasEstoqueModule) || dp.panels.clientes || dp.panels.lgpd) && (
+        {((dp.panels.patrimonio && hasEstoqueModule) || dp.panels.clientes || dp.panels.lgpd || (dp.panels.avisosContador && hasFiscalModule)) && (
           <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest -mb-3">Rankings & alertas</p>
         )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -452,6 +455,29 @@ export default function DashboardPage() {
                     {pendingLgpd.length}
                   </span>
                 </a>
+              )}
+            </div>
+          )}
+
+          {dp.panels.avisosContador && hasFiscalModule && (
+            <div className="card">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-brand-400" /> Avisos do contador
+                </h3>
+                <a href="/admin/fiscal" className="text-xs text-brand-400 hover:text-brand-300 transition-colors ml-2">Ver tudo →</a>
+              </div>
+              {avisos.length === 0 ? (
+                <p className="text-xs text-gray-500 py-4 text-center">Nenhum aviso ainda</p>
+              ) : (
+                <div className="space-y-2 mt-3">
+                  {avisos.slice(-3).reverse().map(a => (
+                    <div key={a.id} className="text-xs py-1.5 border-b border-surface-600 last:border-0">
+                      <p className="text-white truncate">{a.mensagem}</p>
+                      <p className="text-gray-500 mt-0.5">{a.autor} · {new Date(a.createdAt).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           )}

@@ -200,6 +200,7 @@ export interface DashboardPanels {
   produtos:      boolean
   lgpd:          boolean
   preVenda:      boolean
+  avisosContador: boolean
 }
 
 export interface UserPreferences {
@@ -212,7 +213,7 @@ export interface UserPreferences {
 
 export const DEFAULT_DASHBOARD_PANELS: DashboardPanels = {
   finHoje: true, grafico: true, previsao: true, patrimonio: true,
-  clientes: true, produtos: true, lgpd: true, preVenda: true,
+  clientes: true, produtos: true, lgpd: true, preVenda: true, avisosContador: true,
 }
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
