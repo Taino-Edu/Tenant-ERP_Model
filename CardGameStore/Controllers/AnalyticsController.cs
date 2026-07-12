@@ -261,4 +261,61 @@ public class AnalyticsController : ControllerBase
         var dto = await _financeiro.CalcularAsync(ini, end, dataBrIni, dataBrFim, filterPaymentMethod);
         return Ok(dto);
     }
+
+    // -------------------------------------------------------------------------
+    // GET /api/analytics/fechamentos?tipo=Mes&inicio=2026-06-01&fim=2026-06-30
+    // Consulta um snapshot de período já fechado, se existir — usado pra
+    // preferir o número congelado em vez de recalcular ao vivo.
+    // -------------------------------------------------------------------------
+    [HttpGet("fechamentos")]
+    public async Task<ActionResult<FechamentoPeriodoDto>> GetFechamento(
+        [FromQuery] string   tipo,
+        [FromQuery] DateTime inicio,
+        [FromQuery] DateTime fim)
+    {
+        if (!Enum.TryParse<TipoFechamento>(tipo, ignoreCase: true, out var tipoEnum))
+            return BadRequest(new { Message = "Tipo inválido — use Dia, Semana ou Mes." });
+
+        var fechamento = await _db.FechamentosPeriodo.FirstOrDefaultAsync(f =>
+            f.Tipo == tipoEnum && f.DataInicio == inicio.Date && f.DataFim == fim.Date);
+
+        if (fechamento is null) return NotFound();
+
+        return Ok(MapFechamento(fechamento));
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/analytics/fechamentos/fechar-agora
+    // Fecha (ou refecha) uma janela na hora — serve tanto de backfill (se o
+    // job noturno não rodou) quanto de "reabrir" (rodar de novo sobre uma
+    // janela já fechada recalcula e sobrescreve, é upsert).
+    // -------------------------------------------------------------------------
+    [HttpPost("fechamentos/fechar-agora")]
+    public async Task<ActionResult<FechamentoPeriodoDto>> FecharAgora([FromBody] FecharJanelaRequest request)
+    {
+        if (!Enum.TryParse<TipoFechamento>(request.Tipo, ignoreCase: true, out var tipoEnum))
+            return BadRequest(new { Message = "Tipo inválido — use Dia, Semana ou Mes." });
+
+        if (request.DataFim.Date < request.DataInicio.Date)
+            return BadRequest(new { Message = "DataFim não pode ser antes de DataInicio." });
+
+        var fechamento = await _financeiro.FecharJanelaAsync(tipoEnum, request.DataInicio, request.DataFim);
+        return Ok(MapFechamento(fechamento));
+    }
+
+    private static FechamentoPeriodoDto MapFechamento(FechamentoPeriodo f) => new()
+    {
+        Id              = f.Id,
+        Tipo            = f.Tipo.ToString(),
+        DataInicio      = f.DataInicio.ToString("yyyy-MM-dd"),
+        DataFim         = f.DataFim.ToString("yyyy-MM-dd"),
+        ReceitaComandas = f.ReceitaComandas / 100m,
+        ReceitaAvulsa   = f.ReceitaAvulsa   / 100m,
+        Receita         = (f.ReceitaComandas + f.ReceitaAvulsa) / 100m,
+        CustoComandas   = f.CustoComandas / 100m,
+        CustoAvulsa     = f.CustoAvulsa   / 100m,
+        Custo           = (f.CustoComandas + f.CustoAvulsa) / 100m,
+        Margem          = f.Margem / 100m,
+        CreatedAt       = f.CreatedAt,
+    };
 }

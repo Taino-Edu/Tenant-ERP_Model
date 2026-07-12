@@ -319,4 +319,90 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
             PagamentosCrediarioPeriodo = pagamentosCrediarioPeriodo,
         };
     }
+
+    /// <summary>Converte uma data local de Brasília no início UTC daquele dia.</summary>
+    private static DateTime BrDateToUtcStart(DateTime brDate) =>
+        TimeZoneInfo.ConvertTimeToUtc(
+            DateTime.SpecifyKind(brDate.Date, DateTimeKind.Unspecified), BrazilZone);
+
+    public async Task<FechamentoPeriodo> FecharJanelaAsync(TipoFechamento tipo, DateTime dataInicioBr, DateTime dataFimBrInclusive)
+    {
+        var dataIni = dataInicioBr.Date;
+        var dataFim = dataFimBrInclusive.Date;
+        var ini = BrDateToUtcStart(dataIni);
+        var end = BrDateToUtcStart(dataFim.AddDays(1));
+
+        var dto = await CalcularAsync(ini, end, dataIni, dataFim);
+        var (custoComandasCents, custoAvulsaCents) = await CalcularCustoSeparadoCentsAsync(ini, end);
+
+        var receitaComandasCents = (long)Math.Round(dto.ReceitaComandas * 100m, MidpointRounding.AwayFromZero);
+        var receitaAvulsaCents   = (long)Math.Round(dto.ReceitaAvulsa   * 100m, MidpointRounding.AwayFromZero);
+        var margemCents          = receitaComandasCents + receitaAvulsaCents - custoComandasCents - custoAvulsaCents;
+
+        var fechamento = await _db.FechamentosPeriodo.FirstOrDefaultAsync(f =>
+            f.Tipo == tipo && f.DataInicio == dataIni && f.DataFim == dataFim);
+
+        if (fechamento is null)
+        {
+            fechamento = new FechamentoPeriodo { Tipo = tipo, DataInicio = dataIni, DataFim = dataFim };
+            _db.FechamentosPeriodo.Add(fechamento);
+        }
+
+        fechamento.ReceitaComandas = receitaComandasCents;
+        fechamento.ReceitaAvulsa   = receitaAvulsaCents;
+        fechamento.CustoComandas   = custoComandasCents;
+        fechamento.CustoAvulsa     = custoAvulsaCents;
+        fechamento.Margem          = margemCents;
+        fechamento.CreatedAt       = DateTime.UtcNow;
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException) when (_db.Entry(fechamento).State == EntityState.Added)
+        {
+            // Corrida: outra chamada concorrente inseriu essa janela entre o
+            // FirstOrDefaultAsync e o SaveChanges — o índice único em
+            // (Tipo, DataInicio, DataFim) é a rede de segurança de verdade,
+            // essa checagem prévia só evita ruído de log no caso comum.
+            // Descarta a tentativa local e reaplica como update em cima da
+            // linha que a outra chamada já criou.
+            _db.Entry(fechamento).State = EntityState.Detached;
+            fechamento = await _db.FechamentosPeriodo.FirstAsync(f =>
+                f.Tipo == tipo && f.DataInicio == dataIni && f.DataFim == dataFim);
+            fechamento.ReceitaComandas = receitaComandasCents;
+            fechamento.ReceitaAvulsa   = receitaAvulsaCents;
+            fechamento.CustoComandas   = custoComandasCents;
+            fechamento.CustoAvulsa     = custoAvulsaCents;
+            fechamento.Margem          = margemCents;
+            fechamento.CreatedAt       = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        return fechamento;
+    }
+
+    /// <summary>
+    /// Só o custo, separado por origem, em centavos — usado pelo fechamento
+    /// (que grava CustoComandas/CustoAvulsa separados). Mesma regra de
+    /// filtro/join que CalcularAsync usa pro custo, sem o resto do
+    /// levantamento (categoria, nome do item etc.) que o fechamento não precisa.
+    /// </summary>
+    private async Task<(long ComandasCents, long AvulsaCents)> CalcularCustoSeparadoCentsAsync(DateTime ini, DateTime end)
+    {
+        var custoComandasCents = await _db.ComandaItems
+            .Where(i => i.Comanda!.ClosedAt >= ini
+                     && i.Comanda.ClosedAt < end
+                     && i.Comanda.Status == ComandaStatus.Fechada
+                     && i.ProductId != null)
+            .SumAsync(i => (long)i.CostPriceSnapshotInCents * i.Quantity);
+
+        var vendas = await _vendas.GetRecentAsync(2000, ini);
+        var custoAvulsaCents = vendas
+            .Where(v => v.SoldAt >= ini && v.SoldAt < end)
+            .SelectMany(v => v.Items)
+            .Sum(i => (long)i.UnitCostInCents * i.Quantity);
+
+        return (custoComandasCents, custoAvulsaCents);
+    }
 }

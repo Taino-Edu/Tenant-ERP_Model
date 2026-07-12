@@ -1,4 +1,5 @@
 using CardGameStore.DTOs;
+using CardGameStore.Models.PostgreSQL;
 
 namespace CardGameStore.Services.Interfaces;
 
@@ -18,4 +19,15 @@ public interface IFinanceiroCalculoService
         DateTime iniUtc, DateTime endUtc,
         DateTime dataBrIni, DateTime dataBrFim,
         string? filterPaymentMethod = null);
+
+    /// <summary>
+    /// Fecha (ou refecha, se já existir) uma janela de período — grava um
+    /// snapshot congelado em FechamentoPeriodo. Upsert por (Tipo, DataInicio,
+    /// DataFim): rodar de novo sobre uma janela já fechada recalcula e
+    /// sobrescreve — é assim que "reabrir fechamento" funciona, não existe
+    /// um endpoint de "unlock" separado.
+    /// </summary>
+    /// <param name="dataInicioBr">Primeiro dia da janela, calendário de Brasília.</param>
+    /// <param name="dataFimBrInclusive">Último dia da janela (inclusive), calendário de Brasília.</param>
+    Task<FechamentoPeriodo> FecharJanelaAsync(TipoFechamento tipo, DateTime dataInicioBr, DateTime dataFimBrInclusive);
 }

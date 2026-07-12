@@ -137,3 +137,31 @@ public class TransacaoFinDto
     [System.Text.Json.Serialization.JsonIgnore]
     public string Forma { get; set; } = string.Empty;
 }
+
+// ── Fechamento formal de período ──────────────────────────────────────────────
+
+/// <summary>Corpo do endpoint manual de fechamento ("Fechar agora" / reabrir).</summary>
+public class FecharJanelaRequest
+{
+    /// <summary>"Dia", "Semana" ou "Mes".</summary>
+    public string   Tipo        { get; set; } = string.Empty;
+    public DateTime DataInicio  { get; set; }
+    public DateTime DataFim     { get; set; }
+}
+
+/// <summary>Snapshot congelado de um período já fechado (valores em reais).</summary>
+public class FechamentoPeriodoDto
+{
+    public Guid     Id               { get; set; }
+    public string   Tipo             { get; set; } = string.Empty;
+    public string   DataInicio       { get; set; } = string.Empty; // yyyy-MM-dd
+    public string   DataFim          { get; set; } = string.Empty; // yyyy-MM-dd
+    public decimal  ReceitaComandas  { get; set; }
+    public decimal  ReceitaAvulsa    { get; set; }
+    public decimal  Receita          { get; set; }
+    public decimal  CustoComandas    { get; set; }
+    public decimal  CustoAvulsa      { get; set; }
+    public decimal  Custo            { get; set; }
+    public decimal  Margem           { get; set; }
+    public DateTime CreatedAt        { get; set; }
+}
