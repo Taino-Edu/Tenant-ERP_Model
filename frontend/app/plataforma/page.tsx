@@ -134,11 +134,11 @@ function TenantRow({ tenant, onChanged }: { tenant: TenantSummary; onChanged: ()
     }
   }
 
-  function toggleFiscal() {
-    const has = tenant.enabledModules.includes('fiscal')
+  function toggleModule(module: string) {
+    const has = tenant.enabledModules.includes(module)
     const nextModules = has
-      ? tenant.enabledModules.filter(m => m !== 'fiscal')
-      : [...tenant.enabledModules, 'fiscal']
+      ? tenant.enabledModules.filter(m => m !== module)
+      : [...tenant.enabledModules, module]
     saveBilling({ enabledModules: nextModules })
   }
 
@@ -173,21 +173,26 @@ function TenantRow({ tenant, onChanged }: { tenant: TenantSummary; onChanged: ()
         </span>
       </td>
       <td className="py-3">
-        <button
-          type="button"
-          onClick={toggleFiscal}
-          disabled={savingBilling}
-          className={clsx('flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg border transition-colors',
-            tenant.enabledModules.includes('fiscal')
-              ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
-              : 'border-surface-500 text-gray-500 hover:border-surface-400 hover:text-gray-300')}
-        >
-          <span className={clsx('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0',
-            tenant.enabledModules.includes('fiscal') ? 'bg-brand-500 border-brand-500' : 'border-surface-400')}>
-            {tenant.enabledModules.includes('fiscal') && <Check className="w-2.5 h-2.5 text-white" />}
-          </span>
-          Fiscal
-        </button>
+        <div className="flex flex-wrap gap-1.5">
+          {(['fiscal', 'estoque'] as const).map(module => (
+            <button
+              key={module}
+              type="button"
+              onClick={() => toggleModule(module)}
+              disabled={savingBilling}
+              className={clsx('flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg border transition-colors capitalize',
+                tenant.enabledModules.includes(module)
+                  ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
+                  : 'border-surface-500 text-gray-500 hover:border-surface-400 hover:text-gray-300')}
+            >
+              <span className={clsx('w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0',
+                tenant.enabledModules.includes(module) ? 'bg-brand-500 border-brand-500' : 'border-surface-400')}>
+                {tenant.enabledModules.includes(module) && <Check className="w-2.5 h-2.5 text-white" />}
+              </span>
+              {module}
+            </button>
+          ))}
+        </div>
       </td>
       <td className="py-3 text-gray-400">{fmtDate(tenant.createdAt)}</td>
       <td className="py-3 text-right">
