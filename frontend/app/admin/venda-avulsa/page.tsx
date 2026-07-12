@@ -196,6 +196,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
 
 function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto; onClose: () => void; onUpdate: (updated: VendaAvulsaDto) => void }) {
   const { site } = useSiteConfig()
+  const paymentMethods = site.pontosFidelidadeAtivo ? PAYMENT_METHODS : PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
   const payLabel = PAYMENT_METHODS.find(m => m.value === venda.paymentMethod)?.label ?? venda.paymentMethod
   const [editingPay, setEditingPay] = useState(false)
   const [newPm,      setNewPm]      = useState(venda.paymentMethod)
@@ -353,7 +354,7 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
               <label className="text-xs text-gray-500 mb-1 block">Forma de pagamento</label>
               <select value={newPm} onChange={e => setNewPm(e.target.value)}
                 className="w-full bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
-                {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                {paymentMethods.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
 
@@ -364,7 +365,7 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
                 <select value={newPm2} onChange={e => setNewPm2(e.target.value)}
                   className="flex-1 bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
                   <option value="">Nenhum</option>
-                  {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  {paymentMethods.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
                 {newPm2 && (
                   <input type="number" step="0.01" min="0" value={pm2val} onChange={e => setPm2val(e.target.value)}
@@ -456,6 +457,7 @@ function VendaWizard({
   onClose: () => void
 }) {
   const { site } = useSiteConfig()
+  const paymentMethods = site.pontosFidelidadeAtivo ? PAYMENT_METHODS : PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
   // Etapa 1 — cliente
@@ -737,7 +739,7 @@ function VendaWizard({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{selectedUser.name}</p>
                     <div className="flex gap-2 mt-0.5">
-                      {selectedUser.pointsBalance > 0 && (
+                      {site.pontosFidelidadeAtivo && selectedUser.pointsBalance > 0 && (
                         <span className="text-[10px] text-amber-400">{selectedUser.pointsBalance} pts</span>
                       )}
                       {selectedUser.balanceInCents > 0 && (
@@ -1027,14 +1029,14 @@ function VendaWizard({
                   {splitEnabled ? 'Pagamento principal (restante)' : 'Forma de pagamento'}
                 </p>
                 <div className="grid grid-cols-1 gap-2">
-                  {PAYMENT_METHODS.map(m => (
+                  {paymentMethods.map(m => (
                     <button
                       key={m.value}
                       onClick={() => {
                         setPayment(m.value)
                         setReceived('')
                         if (splitEnabled && m.value === secondPayment)
-                          setSecondPayment(PAYMENT_METHODS.find(p => p.value !== m.value)?.value ?? 'Dinheiro')
+                          setSecondPayment(paymentMethods.find(p => p.value !== m.value)?.value ?? 'Dinheiro')
                       }}
                       className={clsx(
                         'flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-medium transition-all text-left',
@@ -1101,7 +1103,7 @@ function VendaWizard({
                       onChange={e => setSecondPayment(e.target.value)}
                       className="input text-sm w-full"
                     >
-                      {PAYMENT_METHODS
+                      {paymentMethods
                         .filter(m => m.value !== payment)
                         .map(m => (
                           <option key={m.value} value={m.value}>{m.label}</option>

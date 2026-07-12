@@ -30,6 +30,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfigDto = {
   pontosEyebrow: 'Programa de Fidelidade',
   pontosTitle: 'Ganhe pontos a cada visita',
   pontosParagraph: 'Acumule pontos nas suas compras e troque por descontos. Só com CPF e WhatsApp — nada de senha ou aplicativo.',
+  pontosFidelidadeAtivo: true,
   colorPrimary: '#3EC2F2',
   colorAccent: '#FFE45E',
   colorNavy: '#0C3D5A',

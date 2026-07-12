@@ -156,7 +156,9 @@ export default function LandingPage() {
           {/* Links desktop — esquerda */}
           <div className="hidden md:flex items-center gap-7 text-sm font-medium">
             <Link href="/produtos" style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navProdutosLabel}</Link>
-            <a href="#pontos"   style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navPontosLabel}</a>
+            {site.pontosFidelidadeAtivo && (
+              <a href="#pontos"   style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navPontosLabel}</a>
+            )}
             <button
               onClick={() => (document.querySelector('[vw-access-button]') as HTMLElement | null)?.click()}
               title="Acessibilidade em Libras"
@@ -205,10 +207,12 @@ export default function LandingPage() {
             className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
             {site.navProdutosLabel}
           </Link>
-          <a href="#pontos" onClick={() => setMobileMenu(false)}
-            className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
-            {site.navPontosLabel}
-          </a>
+          {site.pontosFidelidadeAtivo && (
+            <a href="#pontos" onClick={() => setMobileMenu(false)}
+              className="block py-2.5 text-sm hover:text-white transition-colors" style={{ color: 'rgba(255,255,255,0.70)' }}>
+              {site.navPontosLabel}
+            </a>
+          )}
           <div className="flex gap-2 pt-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.10)' }}>
             <Link href="/entrar" onClick={() => setMobileMenu(false)}
               className="flex-1 text-center py-2.5 text-sm rounded-xl border font-medium hover:text-white transition-colors"
@@ -543,6 +547,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── PONTOS / FIDELIDADE ─────────────────────────────────────────── */}
+      {site.pontosFidelidadeAtivo && (
       <section id="pontos" className="py-16 px-5 border-t" style={{ borderColor: C.border }}>
         <div className="max-w-6xl mx-auto">
           <div className="rounded-2xl overflow-hidden border"
@@ -601,6 +606,7 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── FOOTER ──────────────────────────────────────────────────────── */}
       <footer className="border-t pt-8 pb-6 px-5" style={{ borderColor: C.border }}>

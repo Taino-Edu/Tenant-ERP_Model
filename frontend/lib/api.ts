@@ -1181,6 +1181,7 @@ export interface SiteConfigDto {
   pontosEyebrow: string
   pontosTitle: string
   pontosParagraph: string
+  pontosFidelidadeAtivo: boolean
   colorPrimary: string
   colorAccent: string
   colorNavy: string

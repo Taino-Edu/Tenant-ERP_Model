@@ -8,6 +8,7 @@ import {
 } from '@/lib/api'
 import { getUserName, clearAuth } from '@/lib/auth'
 import { authApi } from '@/lib/api'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import {
   Star, User, Phone, CreditCard, Clock, AlertCircle, ArrowLeft, LogOut,
   CheckCircle, Wallet, Receipt, ChevronDown, ChevronUp,
@@ -29,6 +30,15 @@ export default function PerfilPage() {
   const [expanded,       setExpanded]       = useState<string | null>(null)
   const [tab,            setTab]            = useState<'pontos' | 'historico' | 'crediario' | 'filas' | 'notas'>('pontos')
   const [isUploading,    setIsUploading]    = useState(false)
+  const { site } = useSiteConfig()
+
+  // Some do 'pontos' se o programa estiver desligado nesta loja — sem
+  // sobrescrever se o usuário já navegou pra outra aba antes do config carregar.
+  useEffect(() => {
+    if (!site.pontosFidelidadeAtivo) {
+      setTab(prev => prev === 'pontos' ? 'historico' : prev)
+    }
+  }, [site.pontosFidelidadeAtivo])
 
   useEffect(() => {
     Promise.all([
@@ -109,13 +119,14 @@ export default function PerfilPage() {
 
   const isExpired = profile?.pointsExpired
 
-  const tabs = [
-    { id: 'pontos',    icon: Star,    label: 'Pontos'   },
+  const allTabs = [
+    { id: 'pontos',    icon: Star,    label: site.navPontosLabel || 'Pontos' },
     { id: 'historico', icon: Receipt, label: 'Histórico' },
     { id: 'filas',     icon: Bell,    label: 'Filas', badge: waitlist.length + reservations.length },
     { id: 'crediario', icon: Wallet,  label: 'Dívida'   },
     { id: 'notas',     icon: FileText, label: 'Notas Fiscais' },
   ] as const
+  const tabs = site.pontosFidelidadeAtivo ? allTabs : allTabs.filter(t => t.id !== 'pontos')
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -222,22 +233,45 @@ export default function PerfilPage() {
         ) : (
           <>
             {/* ── STATS RÁPIDOS ── */}
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                <p className="text-[10px] font-black text-[#42B6EE] uppercase tracking-wider mb-1">Pontos Nerd</p>
-                <p className="text-2xl font-black text-gray-900">{profile?.pointsBalance ?? 0}</p>
-                {isExpired && (
-                  <p className="text-[9px] text-red-500 font-bold mt-0.5 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" /> Expirado
-                  </p>
-                )}
-              </div>
+            <div className={clsx('grid gap-3 mb-5', site.pontosFidelidadeAtivo ? 'grid-cols-2' : 'grid-cols-1')}>
+              {site.pontosFidelidadeAtivo && (
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                  <p className="text-[10px] font-black text-[#42B6EE] uppercase tracking-wider mb-1">{site.navPontosLabel || 'Pontos'}</p>
+                  <p className="text-2xl font-black text-gray-900">{profile?.pointsBalance ?? 0}</p>
+                  {isExpired && (
+                    <p className="text-[9px] text-red-500 font-bold mt-0.5 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> Expirado
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                 <p className="text-[10px] font-black text-[#42B6EE] uppercase tracking-wider mb-1">Gasto no Mês</p>
                 <p className="text-2xl font-black text-gray-900">
                   R$ {consumoMensal.toFixed(2).replace('.', ',')}
                 </p>
               </div>
+            </div>
+
+            {/* ── STATUS + CASHBACK (independente do programa de pontos) ── */}
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Status</p>
+                  <p className="text-sm font-black text-emerald-500">Ativo</p>
+                </div>
+              </div>
+              {profile && profile.balanceInCents > 0 && (
+                <div className="text-right">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Cashback</p>
+                  <p className="text-sm font-black text-emerald-500">
+                    R$ {(profile.balanceInCents / 100).toFixed(2).replace('.', ',')}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* ── TABS ── */}
@@ -266,39 +300,19 @@ export default function PerfilPage() {
             </nav>
 
             {/* ── TAB: PONTOS ── */}
-            {tab === 'pontos' && (
+            {tab === 'pontos' && site.pontosFidelidadeAtivo && (
               <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm relative overflow-hidden">
                   <Star className="absolute -right-4 -bottom-4 w-24 h-24 text-[#42B6EE] opacity-[0.06]" />
                   <p className="text-xs font-black text-[#42B6EE] uppercase tracking-widest mb-1">Saldo de Experiência</p>
                   <div className="flex items-baseline gap-2">
                     <span className="text-4xl font-black text-gray-900">{profile?.pointsBalance ?? 0}</span>
-                    <span className="text-gray-400 font-bold uppercase text-xs tracking-widest">Pontos</span>
+                    <span className="text-gray-400 font-bold uppercase text-xs tracking-widest">{site.navPontosLabel || 'Pontos'}</span>
                   </div>
                   {isExpired && (
                     <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-500 text-xs font-medium">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       Seus pontos expiraram. Continue frequentando para ganhar novos!
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-                      <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Status</p>
-                      <p className="text-sm font-black text-emerald-500">Ativo</p>
-                    </div>
-                  </div>
-                  {profile && profile.balanceInCents > 0 && (
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Cashback</p>
-                      <p className="text-sm font-black text-emerald-500">
-                        R$ {(profile.balanceInCents / 100).toFixed(2).replace('.', ',')}
-                      </p>
                     </div>
                   )}
                 </div>

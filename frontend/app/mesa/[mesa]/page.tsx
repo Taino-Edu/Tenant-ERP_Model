@@ -43,7 +43,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="bg-blue-50 p-4 rounded-2xl">
               <p className="font-bold text-gray-800 text-[11px] uppercase mb-1">Finalidade</p>
-              <p>Identificação do cliente para abertura de comanda e registro de pontos de fidelidade.</p>
+              <p>Identificação do cliente para abertura de comanda{site.pontosFidelidadeAtivo ? ' e registro de pontos de fidelidade' : ''}.</p>
             </div>
           </div>
           <p><strong className="text-gray-900">Seus direitos:</strong> Acesso, correção ou exclusão a qualquer momento pelo painel do cliente.</p>

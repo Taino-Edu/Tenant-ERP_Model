@@ -104,6 +104,13 @@ public class SiteConfig
     public string PontosParagraph { get; set; } =
         "Acumule pontos nas suas compras e troque por descontos. Só com CPF e WhatsApp — nada de senha ou aplicativo.";
 
+    /// <summary>Liga/desliga o programa de fidelidade (pontos) da loja inteira — decisão do
+    /// próprio admin do tenant, não do dono da plataforma (diferente de EnabledModules).
+    /// Default true: lojas existentes que já usam pontos continuam exatamente como estão até
+    /// o admin decidir desligar; saldos e histórico nunca são apagados ao desligar.</summary>
+    [Column("pontos_fidelidade_ativo")]
+    public bool PontosFidelidadeAtivo { get; set; } = true;
+
     // ── Cores ────────────────────────────────────────────────────────────────
     [MaxLength(9)]
     [Column("color_primary")]

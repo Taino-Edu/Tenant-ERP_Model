@@ -469,6 +469,14 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
+        // Programa de pontos é opcional por loja (SiteConfig.PontosFidelidadeAtivo,
+        // decisão do próprio admin do tenant) — sem linha ainda = default true. Defesa em
+        // profundidade: rejeita aqui mesmo que um request forjado tente usar pontos com o
+        // programa desligado.
+        var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
+        if (!pontosAtivo && (paymentMethod == PaymentPontos || secondPaymentMethod == PaymentPontos))
+            throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
+
         if (discountInCents > 0 && discountInCents > comanda.TotalInCents - comanda.PointsApplied)
             throw new InvalidOperationException(
                 $"O desconto (R$ {discountInCents / 100m:N2}) não pode ser maior que o total da comanda (R$ {(comanda.TotalInCents - comanda.PointsApplied) / 100m:N2}).");
@@ -658,8 +666,9 @@ public class ComandaService : IComandaService
         comanda.PaymentMethod = paymentMethod;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
-        // Não acumula quando qualquer parte do pagamento usa cashback, pontos ou crediário.
-        if (comanda.User != null && paymentMethod != PaymentCrediario
+        // Não acumula quando qualquer parte do pagamento usa cashback, pontos ou crediário,
+        // nem quando o programa de pontos está desligado nesta loja.
+        if (pontosAtivo && comanda.User != null && paymentMethod != PaymentCrediario
                                  && paymentMethod != PaymentPontos
                                  && paymentMethod != PaymentCashback
                                  && secondPaymentMethod != PaymentCashback)
@@ -853,6 +862,10 @@ public class ComandaService : IComandaService
 
         if (comanda.PointsApplied > 0)
             throw new InvalidOperationException("Pontos já foram aplicados nesta comanda.");
+
+        var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
+        if (!pontosAtivo)
+            throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
 
         var user = await _db.Users.FindAsync(userId)
             ?? throw new InvalidOperationException("Usuário não encontrado.");

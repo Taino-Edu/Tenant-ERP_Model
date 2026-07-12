@@ -690,6 +690,9 @@ function CloseComandaModal({
   autoEmitMethods: string[]
   fiscalEnabled: boolean
 }) {
+  const { site } = useSiteConfig()
+  const paymentMethods = site.pontosFidelidadeAtivo ? COMANDA_PAYMENT_METHODS : COMANDA_PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
+  const secondPaymentMethods = site.pontosFidelidadeAtivo ? SECOND_PAYMENT_METHODS : SECOND_PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
   const [method,        setMethod]        = useState('Dinheiro')
   const [splitEnabled,  setSplitEnabled]  = useState(false)
   const [secondMethod,  setSecondMethod]  = useState('Cashback')
@@ -739,9 +742,9 @@ function CloseComandaModal({
           <p className="text-gray-400 text-sm mt-1">
             {comanda.userName} · <span className="text-accent-gold font-bold">{`R$ ${totalRestante.toFixed(2).replace('.', ',')}`}</span>
           </p>
-          {(saldoPontos > 0 || saldoCashback > 0) && (
+          {((site.pontosFidelidadeAtivo && saldoPontos > 0) || saldoCashback > 0) && (
             <div className="flex gap-3 mt-2">
-              {saldoPontos > 0 && (
+              {site.pontosFidelidadeAtivo && saldoPontos > 0 && (
                 <span className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1">
                   {saldoPontos} pts
                 </span>
@@ -777,7 +780,7 @@ function CloseComandaModal({
             {splitEnabled ? 'Pagamento principal (restante)' : 'Forma de pagamento'}
           </p>
           <div className="grid grid-cols-1 gap-2">
-            {COMANDA_PAYMENT_METHODS.map(pm => (
+            {paymentMethods.map(pm => (
               <button
                 key={pm.value}
                 onClick={() => setMethod(pm.value)}
@@ -845,7 +848,7 @@ function CloseComandaModal({
               onChange={e => setSecondMethod(e.target.value)}
               className="input text-sm w-full"
             >
-              {SECOND_PAYMENT_METHODS.map(m => (
+              {secondPaymentMethods.map(m => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </select>
@@ -1338,6 +1341,8 @@ function EditarComandaModal({
   onSave: (req: EditarComandaRequest) => Promise<void>
   onClose: () => void
 }) {
+  const { site } = useSiteConfig()
+  const paymentMethods = site.pontosFidelidadeAtivo ? COMANDA_PAYMENT_METHODS : COMANDA_PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
   const [pm,       setPm]       = useState(comanda.paymentMethod ?? 'Dinheiro')
   const [pm2,      setPm2]      = useState(comanda.secondPaymentMethod ?? '')
   const [pm2val,   setPm2val]   = useState(String(comanda.secondPaymentAmountInCents / 100))
@@ -1435,7 +1440,7 @@ function EditarComandaModal({
             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Forma de Pagamento</p>
             <select value={pm} onChange={e => setPm(e.target.value)}
               className="w-full bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
-              {COMANDA_PAYMENT_METHODS.map(m => (
+              {paymentMethods.map(m => (
                 <option key={m.value} value={m.value}>{m.label}</option>
               ))}
             </select>
@@ -1448,7 +1453,7 @@ function EditarComandaModal({
               <select value={pm2} onChange={e => setPm2(e.target.value)}
                 className="flex-1 bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm">
                 <option value="">Nenhum</option>
-                {COMANDA_PAYMENT_METHODS.map(m => (
+                {paymentMethods.map(m => (
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
 import PageHeader from '@/components/admin/PageHeader'
 import Link from 'next/link'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 // ── Validação de CPF (dígito verificador, Módulo 11) — espelha
 // CardGameStore/Validation/CpfValidAttribute.cs pro erro aparecer na hora,
@@ -657,6 +658,7 @@ function Empty({ text, sub }: { text: string; sub?: string }) {
 }
 
 export default function UsuariosPage() {
+  const { site } = useSiteConfig()
   const [users, setUsers]           = useState<UserSummary[]>([])
   const [crediarios, setCrediarios] = useState<Record<string, CrediariosDto>>({})
   const [search, setSearch]         = useState('')
@@ -1076,8 +1078,9 @@ export default function UsuariosPage() {
               </div>
 
               {/* Pontos */}
+              {site.pontosFidelidadeAtivo && (
               <div className="bg-surface-800 rounded-xl p-4 text-center">
-                <p className="text-xs text-gray-500 mb-1">Pontos</p>
+                <p className="text-xs text-gray-500 mb-1">{site.navPontosLabel || 'Pontos'}</p>
                 <p className="text-4xl font-black text-accent-gold">{selected.pointsBalance}</p>
                 <p className="text-xs text-gray-500 mt-0.5">pontos</p>
 
@@ -1097,8 +1100,10 @@ export default function UsuariosPage() {
                   <p className="text-xs text-gray-400 mt-2">Sem pontos cadastrados</p>
                 )}
               </div>
+              )}
 
               {/* Adicionar Pontos */}
+              {site.pontosFidelidadeAtivo && (
               <div className="space-y-3">
                 <p className="text-sm font-semibold text-white">Adicionar Pontos</p>
                 <div>
@@ -1136,6 +1141,7 @@ export default function UsuariosPage() {
                   Validade renovada para 30 dias após cada adição
                 </p>
               </div>
+              )}
 
               {/* Cashback */}
               <div className="space-y-3 border-t border-surface-500 pt-4">
@@ -1197,6 +1203,8 @@ export default function UsuariosPage() {
 }
 
 function PointsBadge({ user }: { user: UserSummary }) {
+  const { site } = useSiteConfig()
+  if (!site.pontosFidelidadeAtivo) return null
   if (user.pointsExpired)
     return (
       <span className="flex items-center gap-1 text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full shrink-0">

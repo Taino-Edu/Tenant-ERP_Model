@@ -603,21 +603,23 @@ export default function ClientePage() {
       <main className="max-w-lg mx-auto px-4 py-6 space-y-4 pb-24">
 
         {/* Pontos */}
-        {profile && (
+        {profile && (site.pontosFidelidadeAtivo || profile.balanceInCents > 0) && (
           <div className="rounded-2xl p-4 flex items-center justify-between"
             style={{ backgroundColor: C.white, border: `1px solid ${C.border}`, boxShadow: '0 2px 10px rgba(12,61,90,0.06)' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: `${C.blue}18` }}>
-                <Star className="w-5 h-5" style={{ color: C.blue }} />
+            {site.pontosFidelidadeAtivo && (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `${C.blue}18` }}>
+                  <Star className="w-5 h-5" style={{ color: C.blue }} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Seus {site.navPontosLabel || 'Pontos'}</p>
+                  <p className="text-xl font-black leading-tight" style={{ color: C.navy }}>
+                    {profile.pointsBalance} <span className="text-xs font-semibold" style={{ color: C.muted }}>pts</span>
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Seus Pontos</p>
-                <p className="text-xl font-black leading-tight" style={{ color: C.navy }}>
-                  {profile.pointsBalance} <span className="text-xs font-semibold" style={{ color: C.muted }}>pts</span>
-                </p>
-              </div>
-            </div>
+            )}
             {profile.balanceInCents > 0 && (
               <div className="text-right">
                 <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: C.muted }}>Cashback</p>
@@ -746,7 +748,7 @@ export default function ClientePage() {
                       </div>
                       <Trash2 className="w-3.5 h-3.5 opacity-60" />
                     </button>
-                  ) : profile && profile.pointsBalance > 0 && !profile.pointsExpired && (
+                  ) : site.pontosFidelidadeAtivo && profile && profile.pointsBalance > 0 && !profile.pointsExpired && (
                     <button onClick={applyPoints} disabled={applyingPts}
                       className="w-full p-3 rounded-xl flex items-center justify-between border border-dashed transition-all active:scale-95"
                       style={{ borderColor: `${C.blue}40`, color: C.blue2 }}>

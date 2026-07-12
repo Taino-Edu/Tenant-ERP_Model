@@ -44,6 +44,14 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     public async Task<VendaAvulsaDto> RegisterAsync(VendaAvulsaRequest request, Guid adminId, string adminName)
     {
+        // Programa de pontos é opcional por loja (SiteConfig.PontosFidelidadeAtivo,
+        // decisão do próprio admin do tenant) — sem linha ainda = default true (mesmo
+        // comportamento de sempre). Defesa em profundidade: rejeita aqui mesmo que um
+        // request forjado tente usar/resgatar pontos com o programa desligado.
+        var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
+        if (!pontosAtivo && (request.PaymentMethod == PaymentMethod.Pontos || request.SecondPaymentMethod == PaymentMethod.Pontos))
+            throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
+
         // Valida tudo antes de qualquer escrita: falha rápida evita decremento parcial de estoque
         var productIds = request.Items.Select(i => i.ProductId).Distinct().ToList();
         var products   = await _db.Products
@@ -367,8 +375,8 @@ public class VendaAvulsaService : IVendaAvulsaService
                 _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
             }
 
-            // Acumula pontos de fidelidade: 1 ponto por R$1 gasto
-            var pontosGanhos = finalTotal / 100;
+            // Acumula pontos de fidelidade: 1 ponto por R$1 gasto (só se o programa estiver ativo)
+            var pontosGanhos = pontosAtivo ? finalTotal / 100 : 0;
             if (pontosGanhos > 0)
             {
                 var expirado = user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow;

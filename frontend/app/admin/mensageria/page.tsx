@@ -240,7 +240,7 @@ function MensageriaForm() {
 
             {targetMode === 'segment' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {segments.map(s => {
+                {segments.filter(s => site.pontosFidelidadeAtivo || s.id !== 'top_points').map(s => {
                   const meta = SEGMENT_META[s.id]
                   const active = segment === s.id
                   return (

@@ -309,17 +309,39 @@ export default function SiteConfigPage() {
           <Field label="Produtos — título">
             <input value={cfg.produtosTitle} onChange={e => set('produtosTitle', e.target.value)} className="input w-full" />
           </Field>
-          <Field label="Pontos — etiqueta">
-            <input value={cfg.pontosEyebrow} onChange={e => set('pontosEyebrow', e.target.value)} className="input w-full" />
-          </Field>
-          <Field label="Pontos — título">
-            <input value={cfg.pontosTitle} onChange={e => set('pontosTitle', e.target.value)} className="input w-full" />
+        </div>
+
+        <div className="border-t border-surface-600 pt-4">
+          <label className="flex items-start gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={cfg.pontosFidelidadeAtivo}
+              onChange={e => set('pontosFidelidadeAtivo', e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded accent-brand-500"
+            />
+            <span>
+              <span className="text-sm font-semibold text-white block">Ativar programa de pontos</span>
+              <span className="text-[11px] text-gray-500">
+                Desligar não apaga saldo nem histórico dos clientes — só para de dar/aceitar pontos novos a partir de agora. A seção "Pontos" some da página pública enquanto estiver desligado.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className={cfg.pontosFidelidadeAtivo ? 'space-y-3' : 'space-y-3 opacity-40 pointer-events-none'}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Pontos — etiqueta">
+              <input value={cfg.pontosEyebrow} onChange={e => set('pontosEyebrow', e.target.value)} className="input w-full" disabled={!cfg.pontosFidelidadeAtivo} />
+            </Field>
+            <Field label="Pontos — título">
+              <input value={cfg.pontosTitle} onChange={e => set('pontosTitle', e.target.value)} className="input w-full" disabled={!cfg.pontosFidelidadeAtivo} />
+            </Field>
+          </div>
+          <Field label="Pontos — parágrafo">
+            <textarea value={cfg.pontosParagraph} onChange={e => set('pontosParagraph', e.target.value)}
+              rows={2} className="input w-full resize-none" disabled={!cfg.pontosFidelidadeAtivo} />
           </Field>
         </div>
-        <Field label="Pontos — parágrafo">
-          <textarea value={cfg.pontosParagraph} onChange={e => set('pontosParagraph', e.target.value)}
-            rows={2} className="input w-full resize-none" />
-        </Field>
       </div>
 
       <button onClick={save} disabled={saving} className="btn-primary">

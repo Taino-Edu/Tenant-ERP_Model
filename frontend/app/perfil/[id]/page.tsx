@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { publicProfileApi, PublicProfileDto } from '@/lib/api'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import {
   ArrowLeft, User as UserIcon, Star, ShoppingBag,
   Loader2, Calendar,
@@ -11,6 +12,7 @@ import {
 export default function PublicProfilePage() {
   const { id } = useParams<{ id: string }>()
   const router  = useRouter()
+  const { site } = useSiteConfig()
 
   const [profile, setProfile] = useState<PublicProfileDto | null>(null)
   const [loading, setLoading] = useState(true)
@@ -80,19 +82,21 @@ export default function PublicProfilePage() {
         </div>
 
         {/* Stats rápidos */}
-        <div className="grid grid-cols-2 gap-3 mt-5">
+        <div className={`grid gap-3 mt-5 ${site.pontosFidelidadeAtivo ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <div className="card text-center">
             <p className="text-xl font-black text-brand-300 flex items-center justify-center gap-1.5">
               <ShoppingBag className="w-4 h-4" /> {profile.totalCompras}
             </p>
             <p className="text-[11px] text-gray-400 mt-0.5">Compras realizadas</p>
           </div>
-          <div className="card text-center">
-            <p className="text-xl font-black text-yellow-400 flex items-center justify-center gap-1.5">
-              <Star className="w-4 h-4" /> {profile.pointsBalance}
-            </p>
-            <p className="text-[11px] text-gray-400 mt-0.5">Pontos de fidelidade</p>
-          </div>
+          {site.pontosFidelidadeAtivo && (
+            <div className="card text-center">
+              <p className="text-xl font-black text-yellow-400 flex items-center justify-center gap-1.5">
+                <Star className="w-4 h-4" /> {profile.pointsBalance}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">Pontos de fidelidade</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -73,6 +73,7 @@ public class SiteConfigController : ControllerBase
         if (req.ColorNavy            is not null) cfg.ColorNavy            = req.ColorNavy;
         if (req.ColorBackground      is not null) cfg.ColorBackground      = req.ColorBackground;
         if (req.ColorCard            is not null) cfg.ColorCard            = req.ColorCard;
+        if (req.PontosFidelidadeAtivo.HasValue)    cfg.PontosFidelidadeAtivo = req.PontosFidelidadeAtivo.Value;
 
         cfg.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
@@ -159,4 +160,5 @@ public class SaveSiteConfigRequest
     public string? ColorNavy           { get; init; }
     public string? ColorBackground     { get; init; }
     public string? ColorCard           { get; init; }
+    public bool?   PontosFidelidadeAtivo { get; init; }
 }
