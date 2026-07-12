@@ -87,20 +87,23 @@
   link, com `?from=admin` pra voltar pro lugar certo depois do reset —
   commit `1b7d41b`.
 
-## Backlog — módulo Estoque como opcional/cobrável
-- Cobrar Estoque separadamente foi cogitado no ciclo 1 de billing, mas a
-  exploração confirmou que **hoje não dá** sem quebrar a loja: venda avulsa
-  exige `Product` (FK não-nula, baixa de estoque é o próprio core do fluxo),
-  vitrine pública é 100% dependente de `Product`, e patrimônio/Curva ABC no
-  Dashboard/Financeiro são calculados direto sobre dados de `Product` (front e
-  back). Travar Estoque sem tenant pagante quebraria em cascata: vitrine, PDV de
-  venda avulsa inteiro, financeiro, relatórios.
-- Pré-requisito antes de cobrar por isso: (1) item genérico/avulso também na
-  venda avulsa (comanda já suporta, `ComandaService.cs:918-925`), (2) desacoplar
-  o cálculo de patrimônio/Curva ABC de leitura direta de `Product` (hoje em
-  `dashboard/page.tsx:169-174`, `financeiro/page.tsx` `CurvaABCSection`,
-  `AnalyticsController.cs:289-322`). É uma iniciativa de refatoramento própria,
-  não um toggle simples como foi o Fiscal.
+## Concluído (sessão 2026-07-11, billing ciclo 2 — módulo Estoque)
+- CRUD básico de produto/categoria e a venda em si (PDV, Comanda, vitrine
+  pública) continuam **sempre livres** — travar isso quebraria a loja pra quem
+  não pagasse (confirmado na exploração do ciclo 1). Só as features avançadas
+  entraram no gate: pré-venda/lista de espera (`ProductWaitListController`/
+  `ReservationController`, só nas ações admin — as de cliente continuam sempre
+  livres), patrimônio + Curva ABC (dashboard/financeiro, gate 100% frontend, sem
+  endpoint próprio pra cortar), relatórios PDF de estoque, e variantes de
+  produto (só criar/editar/remover grade — a leitura na hora da venda continua
+  sempre livre, senão quebraria o PDV pra produto com grade já configurada).
+  Commit `bd641fe`.
+- **2 bugs pré-existentes corrigidos** (achados na exploração, sem relação com
+  billing, corrigidos antes de continuar): `GET /api/products/{id}/variants`
+  exigia `AdminOnly`, bloqueando o autoatendimento do cliente ao escolher
+  variante — virou `AllowAnonymous`. A tela `/admin/comanda` não suportava
+  lançar produto com grade (`hasVariants`) — agora usa o mesmo `VariantPicker`
+  já usado na Frente de Caixa.
 
 ## Backlog — billing ciclo 2 (gateway de pagamento)
 - Integrar Inter (já usado no projeto pra Pix) e/ou Mercado Pago pra cobrança
