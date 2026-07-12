@@ -28,6 +28,14 @@ function CategoryModal({
   const [saving, setSaving] = useState(false)
   const set = (k: keyof ProductCategory, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -36,8 +44,8 @@ function CategoryModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-sm">
-        <div className="flex items-center justify-between mb-6">
+      <div className="card w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6 sticky top-0 bg-inherit">
           <h2 className="text-lg font-bold text-white">
             {form.id ? 'Editar Categoria' : 'Nova Categoria'}
           </h2>
