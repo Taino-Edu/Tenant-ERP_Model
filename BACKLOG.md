@@ -1,5 +1,27 @@
 # Backlog — Tenant-ERP
 
+## Concluído (sessão 2026-07-11/12, melhorias do portal do contador)
+- Polling de 20s na lista de solicitações pendentes em `/admin/fiscal` (só
+  enquanto a página está aberta) — antes só carregava uma vez no mount, então
+  o lojista não via um pedido novo sem F5.
+- Lembrete visual de vencimento do DAS (dia 20) pra lojas no Simples Nacional
+  — puramente informativo, não calcula valor nem guarda "pago/não pago".
+- Resumo do período (faturamento autorizado, nº de notas, valor cancelado) no
+  drill-down do contador, calculado a partir dos dados já buscados.
+- Badges de saúde na lista de clientes do contador: certificado A1 vencendo
+  (usa `FiscalConfig.CertificadoValidade`, já existia) e "sem nota há Xd"/
+  "nenhuma nota emitida ainda".
+- Mural de avisos simples (`ContadorAviso`, catálogo/schema `public`, preso a
+  um `ContadorTenantLink`) — contador e lojista trocam recados curtos.
+  Endpoints reaproveitam as mesmas guardas de isolamento de `convidar`/`aprovar`.
+  Commit `32882a2`.
+- **Gap encontrado testando**: quando uma loja tem **mais de um contador
+  Approved** ao mesmo tempo (ex: troca de escritório em andamento), o backend
+  de `POST /api/fiscal/contador/avisos` exige `linkId` no corpo pra saber pra
+  qual contador é o recado — mas o formulário do lojista não tem seletor
+  nenhum, só um campo de texto. Hoje isso só dá erro nesse cenário raro; falta
+  um dropdown de "pra qual contador" quando há mais de um vinculado.
+
 ## Concluído (sessão 2026-07-11/12, portal do contador — versão cross-tenant)
 - **Substitui por completo** a primeira versão (commit `dfa7d5f`, Contador como
   `User` dentro do schema de UMA loja) por uma versão cross-tenant de verdade:
