@@ -59,4 +59,17 @@ public class Tenant
     /// fundação do sistema (ex: estoque) não entram aqui — ver RequireModuleAttribute.</summary>
     [Column("enabled_modules")]
     public string[] EnabledModules { get; set; } = new[] { "fiscal" };
+
+    /// <summary>Cópia denormalizada de SiteConfig.SiteName do schema deste tenant — mantida em
+    /// sincronia por SiteConfigController.SaveConfig. Existe só pra o diretório público de lojas
+    /// (institucional) não precisar trocar de schema por tenant a cada carregamento; a fonte de
+    /// verdade continua sendo o SiteConfig do próprio tenant.</summary>
+    [MaxLength(100)]
+    [Column("display_name")]
+    public string? DisplayName { get; set; }
+
+    /// <summary>Cópia denormalizada de SiteConfig.LogoUrl — mesmo motivo/mesma sincronia de DisplayName.</summary>
+    [MaxLength(300)]
+    [Column("logo_url")]
+    public string? LogoUrl { get; set; }
 }

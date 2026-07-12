@@ -54,6 +54,21 @@ public class SiteConfig
     [Column("logo_url")]
     public string? LogoUrl { get; set; }
 
+    /// <summary>URL do favicon do site (upload via /api/upload/image). Vazio = usa o ícone genérico padrão.</summary>
+    [MaxLength(300)]
+    [Column("favicon_url")]
+    public string? FaviconUrl { get; set; }
+
+    /// <summary>URL do ícone do PWA (upload via /api/upload/image). Vazio = usa o ícone genérico padrão.</summary>
+    [MaxLength(300)]
+    [Column("pwa_icon_url")]
+    public string? PwaIconUrl { get; set; }
+
+    /// <summary>URL do ícone exibido no painel admin (upload via /api/upload/image). Vazio = usa LogoUrl.</summary>
+    [MaxLength(300)]
+    [Column("admin_icon_url")]
+    public string? AdminIconUrl { get; set; }
+
     // ── Textos da navbar ─────────────────────────────────────────────────────
     [MaxLength(40)]
     [Column("nav_produtos_label")]

@@ -21,11 +21,15 @@ public class SiteConfigController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ITenantContext _tenant;
+    private readonly CatalogDbContext _catalog;
+    private readonly ILogger<SiteConfigController> _logger;
 
-    public SiteConfigController(AppDbContext db, ITenantContext tenant)
+    public SiteConfigController(AppDbContext db, ITenantContext tenant, CatalogDbContext catalog, ILogger<SiteConfigController> logger)
     {
-        _db     = db;
-        _tenant = tenant;
+        _db      = db;
+        _tenant  = tenant;
+        _catalog = catalog;
+        _logger  = logger;
     }
 
     [HttpGet]
@@ -53,6 +57,9 @@ public class SiteConfigController : ControllerBase
         if (req.WhatsappNumber       is not null) cfg.WhatsappNumber       = req.WhatsappNumber;
         if (req.ContactEmail         is not null) cfg.ContactEmail         = req.ContactEmail;
         if (req.LogoUrl              is not null) cfg.LogoUrl              = req.LogoUrl;
+        if (req.FaviconUrl           is not null) cfg.FaviconUrl           = req.FaviconUrl;
+        if (req.PwaIconUrl           is not null) cfg.PwaIconUrl           = req.PwaIconUrl;
+        if (req.AdminIconUrl         is not null) cfg.AdminIconUrl         = req.AdminIconUrl;
         if (req.NavProdutosLabel     is not null) cfg.NavProdutosLabel     = req.NavProdutosLabel;
         if (req.NavPontosLabel       is not null) cfg.NavPontosLabel       = req.NavPontosLabel;
         if (req.CtaVerProdutosLabel  is not null) cfg.CtaVerProdutosLabel  = req.CtaVerProdutosLabel;
@@ -70,7 +77,34 @@ public class SiteConfigController : ControllerBase
         cfg.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
+        await SyncCatalogDirectoryAsync(cfg);
+
         return Ok(cfg);
+    }
+
+    /// <summary>
+    /// Espelha nome/logo no catálogo (Tenant.DisplayName/LogoUrl) — cópia
+    /// denormalizada só pra o diretório público de lojas (institucional) não
+    /// precisar trocar de schema por tenant a cada carregamento. Best-effort:
+    /// uma falha aqui é cosmética (o card da loja no diretório fica com dado
+    /// velho até a próxima edição), nunca deve derrubar o save principal do
+    /// SiteConfig do próprio tenant, que já aconteceu com sucesso acima.
+    /// </summary>
+    private async Task SyncCatalogDirectoryAsync(SiteConfig cfg)
+    {
+        try
+        {
+            var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == _tenant.TenantId);
+            if (tenant is null) return;
+
+            tenant.DisplayName = cfg.SiteName;
+            tenant.LogoUrl     = cfg.LogoUrl;
+            await _catalog.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falha ao sincronizar DisplayName/LogoUrl pro catálogo do tenant {TenantId}", _tenant.TenantId);
+        }
     }
 
     /// <summary>
@@ -109,6 +143,9 @@ public class SaveSiteConfigRequest
     public string? WhatsappNumber      { get; init; }
     public string? ContactEmail        { get; init; }
     public string? LogoUrl             { get; init; }
+    public string? FaviconUrl          { get; init; }
+    public string? PwaIconUrl          { get; init; }
+    public string? AdminIconUrl        { get; init; }
     public string? NavProdutosLabel    { get; init; }
     public string? NavPontosLabel      { get; init; }
     public string? CtaVerProdutosLabel { get; init; }
