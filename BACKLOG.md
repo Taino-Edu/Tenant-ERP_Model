@@ -16,6 +16,20 @@
   decremento atômico (que já era seguro) — o próximo `SaveChangesAsync` da
   mesma requisição sobrescrevia esse valor sem trava, apagando silenciosamente
   o decremento de qualquer venda concorrente do mesmo produto. Removida.
+- **Verificado, não era bug** — fechamento de comanda (`CloseComandaAsync`) já
+  é atômico: um `SaveChangesAsync` só, todas as mutações (status, crediário,
+  pontos) em cima de entidades rastreadas antes dele.
+- **Corrigido** (commit `2c61ff0`), achado ao verificar o item acima:
+  `CancelComandaAsync` restaura estoque via `ExecuteUpdateAsync` por item
+  (gravado na hora) ANTES do `SaveChangesAsync` que marca a comanda como
+  Cancelada — sem transação, se esse save falhasse depois do estoque já
+  restaurado, um retry do cancelamento restauraria o mesmo estoque de novo
+  (a guarda de "já cancelada" não pegava esse estado intermediário). Envolvido
+  numa transação explícita.
+- **Pendente de teste**: prova ao vivo do isolamento do SignalR (item acima)
+  ficou faltando por não haver cliente cadastrado nos tenants de teste — SQL
+  de seed preparado, falta só rodar (ver mensagem da sessão de 2026-07-12
+  madrugada pro comando exato).
 
 ## Backlog — achados de menor urgência (mesma análise, não corrigidos ainda)
 - Sem lock de concorrência na criação de tenant (`TenantProvisioningService`)
