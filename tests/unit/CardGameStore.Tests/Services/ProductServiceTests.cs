@@ -6,22 +6,33 @@
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
+using CardGameStore.Services.Interfaces;
 using FluentAssertions;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 namespace CardGameStore.Tests.Services;
 
 public class ProductServiceTests
 {
-    private static AppDbContext CreateDb(string name)
+    // SQLite in-memory (não o EF InMemory provider) — ProductService.AdjustStockAsync
+    // usa ExecuteUpdateAsync (bulk update), que o EF InMemory provider não implementa.
+    private static AppDbContext CreateDb(string _)
     {
+        var connection = new SqliteConnection("Filename=:memory:");
+        connection.Open();
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(name)
+            .UseSqlite(connection)
             .Options;
-        return new AppDbContext(options);
+        var db = new AppDbContext(options);
+        db.Database.EnsureCreated();
+        return db;
     }
 
-    private static ProductService CreateService(AppDbContext db) => new(db);
+    private static ProductService CreateService(AppDbContext db) => new(
+        db, new Mock<IPushService>().Object, new Mock<IEmailService>().Object, NullLogger<ProductService>.Instance);
 
     private static Product MakeProduct(string name = "Card Rare", int stock = 10, int min = 2, bool active = true) =>
         new()
@@ -121,6 +132,8 @@ public class ProductServiceTests
         var ok = await service.AdjustStockAsync(p.Id, +10);
 
         ok.Should().BeTrue();
+        // ExecuteUpdateAsync bypassa o change tracker — limpar antes de reler do banco
+        db.ChangeTracker.Clear();
         (await db.Products.FindAsync(p.Id))!.StockQuantity.Should().Be(15);
     }
 
@@ -136,6 +149,7 @@ public class ProductServiceTests
         var ok = await service.AdjustStockAsync(p.Id, -4);
 
         ok.Should().BeTrue();
+        db.ChangeTracker.Clear();
         (await db.Products.FindAsync(p.Id))!.StockQuantity.Should().Be(6);
     }
 

@@ -40,7 +40,7 @@ public class NfceEmissionServiceTests
     }
 
     private static NfceEmissionService CreateService(AppDbContext db) =>
-        new(db, new Mock<IMongoDatabase>().Object, CreateEncryptionService(), NullLogger<NfceEmissionService>.Instance);
+        new(db, CreateEncryptionService(), NullLogger<NfceEmissionService>.Instance);
 
     private static async Task<Comanda> SeedComandaFechadaAsync(AppDbContext db)
     {

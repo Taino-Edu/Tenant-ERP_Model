@@ -168,6 +168,8 @@ public class ComandaServiceTests
         resultado.Items.Should().ContainSingle();
         resultado.TotalInReais.Should().Be(10.00m); // 2 × R$ 5,00
 
+        // ExecuteUpdateAsync bypassa o change tracker — limpar antes de reler do banco
+        db.ChangeTracker.Clear();
         var estoqueAtual = (await db.Products.FindAsync(product.Id))!.StockQuantity;
         estoqueAtual.Should().Be(8); // 10 - 2
     }
@@ -402,6 +404,98 @@ public class ComandaServiceTests
             .WithMessage("*já foram aplicados*");
     }
 
+    [Fact]
+    public async Task ApplyPoints_ComProgramaDesativado_DeveLancarExcecao()
+    {
+        var db      = CreateDb(nameof(ApplyPoints_ComProgramaDesativado_DeveLancarExcecao));
+        db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = false });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
+
+        user.PointsBalance   = 100;
+        user.PointsExpiresAt = DateTime.UtcNow.AddDays(30);
+        await db.SaveChangesAsync();
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 1 });
+
+        var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*programa de pontos está desativado*");
+    }
+
+    // ── Fechar comanda — programa de pontos opcional por loja ─────────────────
+
+    [Fact]
+    public async Task CloseComanda_SemConfigDePontos_DeveGanharPontosPorDefault()
+    {
+        // Sem linha de SiteConfig nenhuma — o serviço trata como ativo (default true).
+        var db      = CreateDb(nameof(CloseComanda_SemConfigDePontos_DeveGanharPontosPorDefault));
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 4 }); // R$20
+
+        await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Pix");
+
+        var saldo = (await db.Users.FindAsync(user.Id))!.PointsBalance;
+        saldo.Should().Be(20); // R$20 → 20 pts
+    }
+
+    [Fact]
+    public async Task CloseComanda_ComPontosDesativados_NaoDeveGanharPontos()
+    {
+        var db = CreateDb(nameof(CloseComanda_ComPontosDesativados_NaoDeveGanharPontos));
+        db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = false });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 4 });
+
+        await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Pix");
+
+        var saldo = (await db.Users.FindAsync(user.Id))!.PointsBalance;
+        saldo.Should().Be(0, "programa de pontos desligado — não deve acumular");
+    }
+
+    [Fact]
+    public async Task CloseComanda_PagarComPontosDesativados_DeveLancarExcecao()
+    {
+        var db = CreateDb(nameof(CloseComanda_PagarComPontosDesativados_DeveLancarExcecao));
+        db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = false });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db);
+        user.PointsBalance = 100;
+        await db.SaveChangesAsync();
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 1 });
+
+        var act = async () => await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Pontos");
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*programa de pontos está desativado*");
+    }
+
+    [Fact]
+    public async Task CloseComanda_ComPontosAtivados_DevePermitirPagarComPontos()
+    {
+        var db = CreateDb(nameof(CloseComanda_ComPontosAtivados_DevePermitirPagarComPontos));
+        db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = true });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        var (user, product, comanda) = await SeedAsync(db); // produto R$5 (500 centavos)
+        // Nota: o resgate debita o valor em CENTAVOS do saldo de pontos (não o
+        // equivalente em "pontos" da taxa de ganho de 1pt/R$1) — comportamento
+        // real já existente no serviço, não introduzido por este toggle.
+        user.PointsBalance = 1000;
+        await db.SaveChangesAsync();
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 1 });
+
+        await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Pontos");
+
+        var saldo = (await db.Users.FindAsync(user.Id))!.PointsBalance;
+        saldo.Should().Be(500); // 1000 - 500 (débito em centavos)
+    }
+
     // ── PaymentCrediario e controle de estoque ────────────────────────────────
 
     [Fact]
@@ -462,6 +556,7 @@ public class ComandaServiceTests
         });
 
         resultado.Items.Should().ContainSingle();
+        db.ChangeTracker.Clear();
         var estoqueAtual = (await db.Products.FindAsync(product.Id))!.StockQuantity;
         estoqueAtual.Should().Be(0, "todo o estoque foi consumido atomicamente");
     }

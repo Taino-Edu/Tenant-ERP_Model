@@ -62,6 +62,14 @@ public class AuthServiceTests
         return mockHub.Object;
     }
 
+    private static CatalogDbContext CreateCatalogDb()
+    {
+        var options = new DbContextOptionsBuilder<CatalogDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        return new CatalogDbContext(options);
+    }
+
     private static AuthService CreateAuthService(AppDbContext db, ILogger<AuthService>? logger = null)
     {
         var jwtSettings = Options.Create(new JwtSettings
@@ -86,10 +94,12 @@ public class AuthServiceTests
 
         return new AuthService(
             db,
+            CreateCatalogDb(),
             jwtSettings,
             logger ?? NullLogger<AuthService>.Instance,
             comandaService,
-            new Mock<IEmailService>().Object);
+            new Mock<IEmailService>().Object,
+            tenantContext.Object);
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────

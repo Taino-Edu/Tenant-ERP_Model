@@ -1,12 +1,15 @@
 // =============================================================================
 // VendaAvulsaServiceTests.cs — Testes unitários do VendaAvulsaService
-// MongoDB é mockado com Moq; PostgreSQL usa InMemory database.
+// Vendas avulsas vivem 100% no PostgreSQL (MongoDB foi removido do sistema) —
+// SQLite in-memory é usado por suportar ExecuteUpdateAsync (bulk update), que o
+// EF InMemory provider não implementa.
+// Executar: dotnet test  (na pasta tests/unit/CardGameStore.Tests)
 // =============================================================================
 
 using CardGameStore.Data;
 using CardGameStore.DTOs;
-using CardGameStore.Models.MongoDB;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
@@ -14,7 +17,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using MongoDB.Driver;
 
 namespace CardGameStore.Tests.Services;
 
@@ -22,8 +24,6 @@ public class VendaAvulsaServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    // Usa SQLite in-memory (não o EF InMemory provider) para suportar ExecuteUpdateAsync.
-    // O EF InMemory provider não implementa bulk operations (ExecuteUpdate/Delete).
     private static AppDbContext CreateDb(string _)
     {
         var connection = new SqliteConnection("Filename=:memory:");
@@ -36,72 +36,18 @@ public class VendaAvulsaServiceTests
         return db;
     }
 
-    private static (Mock<IMongoDatabase> db, Mock<IMongoCollection<VendaAvulsa>> collection) CreateMongoBacks(
-        List<VendaAvulsa>? storedDocs = null)
-    {
-        storedDocs ??= new List<VendaAvulsa>();
-
-        var mockCollection = new Mock<IMongoCollection<VendaAvulsa>>();
-
-        // ── InsertOneAsync ────────────────────────────────────────────────────
-        // InsertOneAsync(TDocument, InsertOneOptions?, CancellationToken) is a real
-        // IMongoCollection interface method — Moq can intercept it directly.
-        mockCollection
-            .Setup(c => c.InsertOneAsync(
-                It.IsAny<VendaAvulsa>(),
-                It.IsAny<InsertOneOptions>(),
-                It.IsAny<CancellationToken>()))
-            .Callback<VendaAvulsa, InsertOneOptions?, CancellationToken>((doc, _, _) => storedDocs.Add(doc))
-            .Returns(Task.CompletedTask);
-
-        // ── FindAsync<TResult> ────────────────────────────────────────────────
-        // In MongoDB.Driver 2.28 the fluent .Find() / .SortByDescending() / .Limit()
-        // are ALL extension methods and cannot be mocked by Moq.
-        // Strategy: let the real FindFluent (created by the extension) run its chain,
-        // and mock only FindAsync<VendaAvulsa> — the actual IMongoCollection interface
-        // method that FindFluent calls internally when ToListAsync() is invoked.
-        var mockCursor = new Mock<IAsyncCursor<VendaAvulsa>>();
-        mockCursor.Setup(c => c.Current).Returns(storedDocs);
-        mockCursor.SetupSequence(c => c.MoveNextAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(true)
-            .ReturnsAsync(false);
-
-        // Session-ful overload (called by FindFluent with session = null):
-        mockCollection
-            .Setup(c => c.FindAsync<VendaAvulsa>(
-                It.IsAny<IClientSessionHandle>(),
-                It.IsAny<FilterDefinition<VendaAvulsa>>(),
-                It.IsAny<FindOptions<VendaAvulsa, VendaAvulsa>>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(mockCursor.Object);
-
-        // Session-less overload (fallback, in case the driver uses this path):
-        mockCollection
-            .Setup(c => c.FindAsync<VendaAvulsa>(
-                It.IsAny<FilterDefinition<VendaAvulsa>>(),
-                It.IsAny<FindOptions<VendaAvulsa, VendaAvulsa>>(),
-                It.IsAny<CancellationToken>()))
-            .ReturnsAsync(mockCursor.Object);
-
-        var mockMongo = new Mock<IMongoDatabase>();
-        mockMongo
-            .Setup(m => m.GetCollection<VendaAvulsa>(It.IsAny<string>(), It.IsAny<MongoCollectionSettings>()))
-            .Returns(mockCollection.Object);
-
-        return (mockMongo, mockCollection);
-    }
-
-    private static VendaAvulsaService CreateService(AppDbContext db, IMongoDatabase mongo) =>
-        new(db, mongo, NullLogger<VendaAvulsaService>.Instance, new Mock<IServiceScopeFactory>().Object);
+    private static VendaAvulsaService CreateService(AppDbContext db) =>
+        new(db, NullLogger<VendaAvulsaService>.Instance, new Mock<IServiceScopeFactory>().Object,
+            new Mock<ITenantContext>().Object);
 
     private static async Task<Product> SeedProductAsync(AppDbContext db,
-        string name = "Booster Pack", int priceInCents = 1500, int stock = 10, bool isActive = true)
+        string name = "Produto Teste", int priceInCents = 1500, int stock = 10, bool isActive = true)
     {
         var product = new Product
         {
             Id            = Guid.NewGuid(),
             Name          = name,
-            Category      = "MTG",
+            Category      = "Geral",
             PriceInCents  = priceInCents,
             StockQuantity = stock,
             MinimumStock  = 2,
@@ -110,6 +56,32 @@ public class VendaAvulsaServiceTests
         db.Products.Add(product);
         await db.SaveChangesAsync();
         return product;
+    }
+
+    private static async Task<User> SeedUserAsync(AppDbContext db,
+        string name = "Cliente Teste", int pointsBalance = 0, int balanceInCents = 0, DateTime? pointsExpiresAt = null)
+    {
+        var user = new User
+        {
+            Id              = Guid.NewGuid(),
+            Name            = name,
+            PasswordHash    = "hash",
+            Role            = UserRole.Customer,
+            PointsBalance   = pointsBalance,
+            BalanceInCents  = balanceInCents,
+            PointsExpiresAt = pointsExpiresAt,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+        return user;
+    }
+
+    /// <summary>Seta explicitamente o toggle de pontos (SiteConfig é singleton — uma
+    /// linha só). Sem chamar isso, o serviço trata "sem linha" como ativo (default true).</summary>
+    private static async Task SetPontosAtivoAsync(AppDbContext db, bool ativo)
+    {
+        db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = ativo });
+        await db.SaveChangesAsync();
     }
 
     private static readonly Guid AdminId   = Guid.NewGuid();
@@ -122,9 +94,7 @@ public class VendaAvulsaServiceTests
     {
         var db = CreateDb(nameof(Register_Sucesso_DeveDecrementarEstoqueERetornarDto));
         var product = await SeedProductAsync(db, priceInCents: 2000, stock: 5);
-        var (mockMongo, _) = CreateMongoBacks();
-
-        var service  = CreateService(db, mockMongo.Object);
+        var service  = CreateService(db);
         var request  = new VendaAvulsaRequest
         {
             PaymentMethod = PaymentMethod.Pix,
@@ -139,7 +109,6 @@ public class VendaAvulsaServiceTests
         resultado.Items[0].Quantity.Should().Be(2);
         resultado.Items[0].SubtotalInReais.Should().Be(40.00m);
 
-        // ExecuteUpdateAsync bypassa o change tracker — limpar antes de reler do banco
         db.ChangeTracker.Clear();
         var estoque = (await db.Products.FindAsync(product.Id))!.StockQuantity;
         estoque.Should().Be(3); // 5 - 2
@@ -150,9 +119,7 @@ public class VendaAvulsaServiceTests
     {
         var db = CreateDb(nameof(Register_ComClientName_DevePreservarNomeNoDto));
         var product = await SeedProductAsync(db);
-        var (mockMongo, _) = CreateMongoBacks();
-
-        var service   = CreateService(db, mockMongo.Object);
+        var service   = CreateService(db);
         var resultado = await service.RegisterAsync(new VendaAvulsaRequest
         {
             ClientName    = "  João Silva  ",
@@ -168,9 +135,7 @@ public class VendaAvulsaServiceTests
     {
         var db = CreateDb(nameof(Register_SemClientName_DeveSetarNuloNoDto));
         var product = await SeedProductAsync(db);
-        var (mockMongo, _) = CreateMongoBacks();
-
-        var service   = CreateService(db, mockMongo.Object);
+        var service   = CreateService(db);
         var resultado = await service.RegisterAsync(new VendaAvulsaRequest
         {
             ClientName    = null,
@@ -185,11 +150,9 @@ public class VendaAvulsaServiceTests
     public async Task Register_MultiplosProdutos_DeveSomarTotalCorretamente()
     {
         var db = CreateDb(nameof(Register_MultiplosProdutos_DeveSomarTotalCorretamente));
-        var p1 = await SeedProductAsync(db, "Card A", priceInCents: 1000, stock: 5);
-        var p2 = await SeedProductAsync(db, "Card B", priceInCents: 500,  stock: 5);
-        var (mockMongo, _) = CreateMongoBacks();
-
-        var service   = CreateService(db, mockMongo.Object);
+        var p1 = await SeedProductAsync(db, "Produto A", priceInCents: 1000, stock: 5);
+        var p2 = await SeedProductAsync(db, "Produto B", priceInCents: 500,  stock: 5);
+        var service   = CreateService(db);
         var resultado = await service.RegisterAsync(new VendaAvulsaRequest
         {
             PaymentMethod = PaymentMethod.CartaoDebito,
@@ -203,31 +166,33 @@ public class VendaAvulsaServiceTests
         resultado.TotalInReais.Should().Be(40.00m); // 3×10 + 2×5
         resultado.Items.Should().HaveCount(2);
 
-        // ExecuteUpdateAsync bypassa o change tracker — limpar antes de reler do banco
         db.ChangeTracker.Clear();
         (await db.Products.FindAsync(p1.Id))!.StockQuantity.Should().Be(2);
         (await db.Products.FindAsync(p2.Id))!.StockQuantity.Should().Be(3);
     }
 
     [Fact]
-    public async Task Register_DevePersistirDocumentoNoMongoDB()
+    public async Task Register_DevePersistirVendaNoPostgres()
     {
-        var db = CreateDb(nameof(Register_DevePersistirDocumentoNoMongoDB));
+        var db = CreateDb(nameof(Register_DevePersistirVendaNoPostgres));
         var product = await SeedProductAsync(db);
-        var storedDocs = new List<VendaAvulsa>();
-        var (mockMongo, _) = CreateMongoBacks(storedDocs);
+        var service = CreateService(db);
 
-        var service = CreateService(db, mockMongo.Object);
-        await service.RegisterAsync(new VendaAvulsaRequest
+        var resultado = await service.RegisterAsync(new VendaAvulsaRequest
         {
             PaymentMethod = PaymentMethod.Pix,
             Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
         }, AdminId, AdminName);
 
-        storedDocs.Should().ContainSingle();
-        storedDocs[0].SoldByAdminId.Should().Be(AdminId);
-        storedDocs[0].SoldByAdminName.Should().Be(AdminName);
-        storedDocs[0].PaymentMethod.Should().Be(PaymentMethod.Pix);
+        db.ChangeTracker.Clear();
+        // Items é serializado como JSONB (não é uma navegação de FK de verdade) —
+        // vem junto na query normal, sem precisar de Include.
+        var venda = await db.VendasAvulsas.FirstOrDefaultAsync(v => v.Id == resultado.Id);
+        venda.Should().NotBeNull();
+        venda!.SoldByAdminId.Should().Be(AdminId);
+        venda.SoldByAdminName.Should().Be(AdminName);
+        venda.PaymentMethod.Should().Be(PaymentMethod.Pix);
+        venda.Items.Should().ContainSingle();
     }
 
     // ── Validações ────────────────────────────────────────────────────────────
@@ -236,8 +201,7 @@ public class VendaAvulsaServiceTests
     public async Task Register_ProdutoNaoEncontrado_DeveLancarExcecao()
     {
         var db = CreateDb(nameof(Register_ProdutoNaoEncontrado_DeveLancarExcecao));
-        var (mockMongo, _) = CreateMongoBacks();
-        var service = CreateService(db, mockMongo.Object);
+        var service = CreateService(db);
 
         var act = async () => await service.RegisterAsync(new VendaAvulsaRequest
         {
@@ -254,8 +218,7 @@ public class VendaAvulsaServiceTests
     {
         var db = CreateDb(nameof(Register_ProdutoInativo_DeveLancarExcecao));
         var product = await SeedProductAsync(db, isActive: false);
-        var (mockMongo, _) = CreateMongoBacks();
-        var service = CreateService(db, mockMongo.Object);
+        var service = CreateService(db);
 
         var act = async () => await service.RegisterAsync(new VendaAvulsaRequest
         {
@@ -272,8 +235,7 @@ public class VendaAvulsaServiceTests
     {
         var db = CreateDb(nameof(Register_EstoqueInsuficiente_DeveLancarExcecao));
         var product = await SeedProductAsync(db, stock: 2);
-        var (mockMongo, _) = CreateMongoBacks();
-        var service = CreateService(db, mockMongo.Object);
+        var service = CreateService(db);
 
         var act = async () => await service.RegisterAsync(new VendaAvulsaRequest
         {
@@ -290,8 +252,7 @@ public class VendaAvulsaServiceTests
     {
         var db = CreateDb(nameof(Register_EstoqueInsuficiente_NaoDeveAlterarEstoque));
         var product = await SeedProductAsync(db, stock: 3);
-        var (mockMongo, _) = CreateMongoBacks();
-        var service = CreateService(db, mockMongo.Object);
+        var service = CreateService(db);
 
         try
         {
@@ -303,7 +264,6 @@ public class VendaAvulsaServiceTests
         }
         catch (InvalidOperationException) { }
 
-        // Estoque não deve ter sido alterado — fail-fast antes de qualquer escrita
         db.ChangeTracker.Clear();
         var estoque = (await db.Products.FindAsync(product.Id))!.StockQuantity;
         estoque.Should().Be(3);
@@ -314,11 +274,9 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_ComDesconto10Porcento_DeveCalcularTotalComDesconto()
     {
-        // 1 × R$20,00 com 10% desconto → R$18,00 final, R$2,00 desconto
         var db = CreateDb(nameof(Register_ComDesconto10Porcento_DeveCalcularTotalComDesconto));
         var product = await SeedProductAsync(db, priceInCents: 2000, stock: 5);
-        var (mockMongo, _) = CreateMongoBacks();
-        var service = CreateService(db, mockMongo.Object);
+        var service = CreateService(db);
 
         var result = await service.RegisterAsync(new VendaAvulsaRequest
         {
@@ -335,11 +293,9 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_SemDesconto_TotalDeveSerioBruto()
     {
-        // DiscountPercent = 0 → total bruto sem alteração
         var db = CreateDb(nameof(Register_SemDesconto_TotalDeveSerioBruto));
         var product = await SeedProductAsync(db, priceInCents: 1500, stock: 3);
-        var (mockMongo, _) = CreateMongoBacks();
-        var service = CreateService(db, mockMongo.Object);
+        var service = CreateService(db);
 
         var result = await service.RegisterAsync(new VendaAvulsaRequest
         {
@@ -352,6 +308,134 @@ public class VendaAvulsaServiceTests
         result.DiscountInReais.Should().Be(0.00m);
     }
 
+    // ── Programa de pontos — opcional por loja (SiteConfig.PontosFidelidadeAtivo) ──
+
+    [Fact]
+    public async Task Register_SemConfigDePontos_DeveGanharPontosPorDefault()
+    {
+        // Sem linha de SiteConfig nenhuma — o serviço trata como ativo (default true),
+        // mesmo comportamento de sempre pra loja que nunca mexeu na configuração.
+        var db = CreateDb(nameof(Register_SemConfigDePontos_DeveGanharPontosPorDefault));
+        var product = await SeedProductAsync(db, priceInCents: 5000, stock: 5);
+        var user    = await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            UserId        = user.Id,
+            PaymentMethod = PaymentMethod.Pix,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        db.ChangeTracker.Clear();
+        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(50); // R$50 → 50 pts
+    }
+
+    [Fact]
+    public async Task Register_ComPontosDesativados_NaoDeveGanharPontos()
+    {
+        var db = CreateDb(nameof(Register_ComPontosDesativados_NaoDeveGanharPontos));
+        await SetPontosAtivoAsync(db, ativo: false);
+        var product = await SeedProductAsync(db, priceInCents: 5000, stock: 5);
+        var user    = await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            UserId        = user.Id,
+            PaymentMethod = PaymentMethod.Pix,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        db.ChangeTracker.Clear();
+        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(0, "programa de pontos desligado — não deve acumular");
+    }
+
+    [Fact]
+    public async Task Register_ComPontosAtivados_DeveGanharPontos()
+    {
+        var db = CreateDb(nameof(Register_ComPontosAtivados_DeveGanharPontos));
+        await SetPontosAtivoAsync(db, ativo: true);
+        var product = await SeedProductAsync(db, priceInCents: 3000, stock: 5);
+        var user    = await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            UserId        = user.Id,
+            PaymentMethod = PaymentMethod.Pix,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        db.ChangeTracker.Clear();
+        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(30); // R$30 → 30 pts
+    }
+
+    [Fact]
+    public async Task Register_PagarComPontosDesativados_DeveLancarExcecao()
+    {
+        var db = CreateDb(nameof(Register_PagarComPontosDesativados_DeveLancarExcecao));
+        await SetPontosAtivoAsync(db, ativo: false);
+        var product = await SeedProductAsync(db, priceInCents: 1000, stock: 5);
+        var user    = await SeedUserAsync(db, pointsBalance: 100);
+        var service = CreateService(db);
+
+        var act = async () => await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            UserId        = user.Id,
+            PaymentMethod = PaymentMethod.Pontos,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*programa de pontos está desativado*");
+    }
+
+    [Fact]
+    public async Task Register_SegundoPagamentoComPontosDesativados_DeveLancarExcecao()
+    {
+        var db = CreateDb(nameof(Register_SegundoPagamentoComPontosDesativados_DeveLancarExcecao));
+        await SetPontosAtivoAsync(db, ativo: false);
+        var product = await SeedProductAsync(db, priceInCents: 2000, stock: 5);
+        var user    = await SeedUserAsync(db, pointsBalance: 100);
+        var service = CreateService(db);
+
+        var act = async () => await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            UserId                     = user.Id,
+            PaymentMethod              = PaymentMethod.Pix,
+            SecondPaymentMethod        = PaymentMethod.Pontos,
+            SecondPaymentAmountInCents = 500,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*programa de pontos está desativado*");
+    }
+
+    [Fact]
+    public async Task Register_PagarComPontosAtivados_DeveDebitarSaldo()
+    {
+        var db = CreateDb(nameof(Register_PagarComPontosAtivados_DeveDebitarSaldo));
+        await SetPontosAtivoAsync(db, ativo: true);
+        var product = await SeedProductAsync(db, priceInCents: 1000, stock: 5);
+        // Nota: o resgate debita o valor em CENTAVOS do saldo de pontos (não o
+        // equivalente em "pontos" da taxa de ganho de 1pt/R$1) — comportamento
+        // real já existente no serviço, não introduzido por este toggle.
+        var user    = await SeedUserAsync(db, pointsBalance: 2000);
+        var service = CreateService(db);
+
+        await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            UserId        = user.Id,
+            PaymentMethod = PaymentMethod.Pontos,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        db.ChangeTracker.Clear();
+        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(1000); // 2000 - 1000 (débito em centavos)
+    }
+
     // ── GetByDate ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -359,27 +443,27 @@ public class VendaAvulsaServiceTests
     {
         var db = CreateDb(nameof(GetByDate_DeveRetornarVendasMapeadasComTotalCorreto));
         var targetDate = DateTime.UtcNow.Date;
-        var doc = new VendaAvulsa
+        db.VendasAvulsas.Add(new VendaAvulsa
         {
             PaymentMethod   = PaymentMethod.Pix,
             ClientName      = "Comprador Dia",
             TotalInCents    = 5000,
             DiscountInCents = 500,
             DiscountPercent = 10,
-            SoldAt          = targetDate.AddHours(14), // 14h do dia alvo
+            SoldAt          = targetDate.AddHours(14), // 14h UTC do dia alvo
             SoldByAdminId   = AdminId,
             SoldByAdminName = AdminName,
             Items =
             [
                 new VendaAvulsaItem
                 {
-                    ProductId = Guid.NewGuid(), ProductName = "Booster",
-                    Quantity = 1, UnitPriceInCents = 5500, SubtotalInCents = 5500
+                    ProductId = Guid.NewGuid(), ProductName = "Produto",
+                    Quantity = 1, UnitPriceInCents = 5500, SubtotalInCents = 5500,
                 }
             ],
-        };
-        var (mockMongo, _) = CreateMongoBacks([doc]);
-        var service = CreateService(db, mockMongo.Object);
+        });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
 
         var result = (await service.GetByDateAsync(targetDate)).ToList();
 
@@ -394,22 +478,20 @@ public class VendaAvulsaServiceTests
     public async Task GetByDate_SemVendas_DeveRetornarListaVazia()
     {
         var db = CreateDb(nameof(GetByDate_SemVendas_DeveRetornarListaVazia));
-        // Cursor mock que retorna lista vazia
-        var (mockMongo, _) = CreateMongoBacks(new List<VendaAvulsa>());
-        var service = CreateService(db, mockMongo.Object);
+        var service = CreateService(db);
 
         var result = (await service.GetByDateAsync(DateTime.UtcNow.Date)).ToList();
 
-        result.Should().BeEmpty("sem vendas no MongoDB, lista deve ser vazia");
+        result.Should().BeEmpty("sem vendas no período, lista deve ser vazia");
     }
 
     // ── GetRecent ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetRecent_DeveRetornarVendasMapeadasDoMongo()
+    public async Task GetRecent_DeveRetornarVendasMapeadasDoPostgres()
     {
-        var db = CreateDb(nameof(GetRecent_DeveRetornarVendasMapeadasDoMongo));
-        var existingDoc = new VendaAvulsa
+        var db = CreateDb(nameof(GetRecent_DeveRetornarVendasMapeadasDoPostgres));
+        db.VendasAvulsas.Add(new VendaAvulsa
         {
             PaymentMethod   = PaymentMethod.Dinheiro,
             ClientName      = "Carlos",
@@ -421,13 +503,13 @@ public class VendaAvulsaServiceTests
             [
                 new VendaAvulsaItem
                 {
-                    ProductId = Guid.NewGuid(), ProductName = "Draft Set",
+                    ProductId = Guid.NewGuid(), ProductName = "Kit",
                     Quantity = 1, UnitPriceInCents = 3000, SubtotalInCents = 3000,
                 }
             ],
-        };
-        var (mockMongo, _) = CreateMongoBacks([existingDoc]);
-        var service = CreateService(db, mockMongo.Object);
+        });
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
 
         var resultado = (await service.GetRecentAsync(10)).ToList();
 
