@@ -439,8 +439,43 @@ using (var scope = app.Services.CreateScope())
         else
         {
             // Postgres — schema versionado via EF Core Migrations (Data/Migrations).
-            await db.Database.MigrateAsync();
+            // As duas chamadas abaixo só migram o schema "public" (tenant-zero,
+            // resolvido por padrão pelo ITenantContext fora de qualquer request
+            // HTTP) e o catálogo — NENHUMA migration de AppDbContext propaga
+            // sozinha pro schema de um tenant já provisionado antes (só
+            // TenantProvisioningService roda migration num schema de tenant, e só
+            // uma vez, na criação). Sem o loop abaixo, qualquer tabela/coluna nova
+            // do AppDbContext (ex: FechamentoPeriodo, os ícones novos do
+            // SiteConfig) nunca chega em tenants como loja-final/loja-teste3 —
+            // bug real, confirmado em produção nesta sessão.
             await catalog.Database.MigrateAsync();
+            await db.Database.MigrateAsync();
+
+            var tenantsParaMigrar = await catalog.Tenants
+                .Where(t => t.Status == TenantStatus.Active)
+                .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
+                .ToListAsync();
+
+            foreach (var tenant in tenantsParaMigrar)
+            {
+                try
+                {
+                    using var tenantScope = app.Services.CreateScope();
+                    var tenantContext = tenantScope.ServiceProvider.GetRequiredService<ITenantContext>();
+                    tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+
+                    var tenantDb = tenantScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    await tenantDb.Database.MigrateAsync();
+                }
+                catch (Exception ex)
+                {
+                    // Um schema quebrado/tenant com migration pendente conflitante
+                    // não pode travar o boot dos outros — loga e segue o loop.
+                    logger.LogError(ex, "Falha ao migrar schema do tenant {Slug} ({SchemaName})", tenant.Slug, tenant.SchemaName);
+                }
+            }
+
+            logger.LogInformation("Migrations aplicadas em {Count} tenant(s) ativo(s)", tenantsParaMigrar.Count);
         }
 
         logger.LogInformation("Banco pronto.");
