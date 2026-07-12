@@ -1076,6 +1076,8 @@ export const fiscalApi = {
     api.get<SolicitacaoContadorDto[]>('/api/fiscal/contador/solicitacoes'),
   aprovarSolicitacaoContador: (linkId: string) =>
     api.post<{ message: string }>(`/api/fiscal/contador/solicitacoes/${linkId}/aprovar`),
+  recusarSolicitacaoContador: (linkId: string) =>
+    api.post<{ message: string }>(`/api/fiscal/contador/solicitacoes/${linkId}/recusar`),
   listAvisosContador: () =>
     api.get<AvisoContadorDto[]>('/api/fiscal/contador/avisos'),
   postAvisoContador: (mensagem: string, linkId?: string) =>

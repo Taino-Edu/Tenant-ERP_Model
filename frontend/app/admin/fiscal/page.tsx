@@ -8,7 +8,7 @@ import clsx from 'clsx'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
   Plus, Trash2, Download, ShieldCheck, Star, RefreshCw, Ban, ScrollText, Printer,
-  Calculator, UserPlus, Check, Clock, CalendarClock, Send, MessageSquare,
+  Calculator, UserPlus, Check, Clock, CalendarClock, Send, MessageSquare, X,
 } from 'lucide-react'
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
@@ -117,12 +117,18 @@ export default function FiscalPage() {
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoContadorDto[]>([])
   const [loadingSolicitacoes, setLoadingSolicitacoes] = useState(true)
   const [aprovandoId, setAprovandoId] = useState<string | null>(null)
+  const [recusandoId, setRecusandoId] = useState<string | null>(null)
 
   // Contador — avisos (mural de recados entre lojista e contador)
   const [avisos, setAvisos] = useState<AvisoContadorDto[]>([])
   const [loadingAvisos, setLoadingAvisos] = useState(true)
   const [novoAviso, setNovoAviso] = useState('')
   const [enviandoAviso, setEnviandoAviso] = useState(false)
+  const [avisoLinkId, setAvisoLinkId] = useState('')
+
+  // Só entra na hora de escrever o aviso se houver MAIS de um contador
+  // aprovado — no caso comum (0 ou 1) o formulário fica igual a antes.
+  const contadoresAprovados = solicitacoes.filter(s => s.status === 'Approved')
 
   async function loadNotas() {
     setNotasLoading(true)
@@ -187,6 +193,19 @@ export default function FiscalPage() {
     }
   }
 
+  async function recusarSolicitacao(linkId: string) {
+    setRecusandoId(linkId)
+    try {
+      await fiscalApi.recusarSolicitacaoContador(linkId)
+      toast.success('Solicitação recusada.')
+      loadSolicitacoes()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message ?? 'Erro ao recusar solicitação')
+    } finally {
+      setRecusandoId(null)
+    }
+  }
+
   async function loadAvisos() {
     setLoadingAvisos(true)
     try {
@@ -204,9 +223,13 @@ export default function FiscalPage() {
   async function enviarAviso(e: React.FormEvent) {
     e.preventDefault()
     if (!novoAviso.trim()) return
+    if (contadoresAprovados.length > 1 && !avisoLinkId) {
+      toast.error('Selecione pra qual contador é o aviso.')
+      return
+    }
     setEnviandoAviso(true)
     try {
-      await fiscalApi.postAvisoContador(novoAviso.trim())
+      await fiscalApi.postAvisoContador(novoAviso.trim(), avisoLinkId || undefined)
       setNovoAviso('')
       loadAvisos()
     } catch (err: any) {
@@ -724,14 +747,24 @@ export default function FiscalPage() {
                     <Check className="w-3 h-3" /> Aprovado
                   </span>
                 ) : (
-                  <button
-                    onClick={() => aprovarSolicitacao(s.linkId)}
-                    disabled={aprovandoId === s.linkId}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600/10 hover:bg-brand-600/20 border border-brand-500/30 text-sm text-brand-300 shrink-0"
-                  >
-                    {aprovandoId === s.linkId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
-                    Aprovar
-                  </button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => recusarSolicitacao(s.linkId)}
+                      disabled={recusandoId === s.linkId || aprovandoId === s.linkId}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600/10 hover:bg-red-600/20 border border-red-500/30 text-sm text-red-300"
+                    >
+                      {recusandoId === s.linkId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                      Recusar
+                    </button>
+                    <button
+                      onClick={() => aprovarSolicitacao(s.linkId)}
+                      disabled={aprovandoId === s.linkId || recusandoId === s.linkId}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-600/10 hover:bg-brand-600/20 border border-brand-500/30 text-sm text-brand-300"
+                    >
+                      {aprovandoId === s.linkId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+                      Aprovar
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -758,6 +791,18 @@ export default function FiscalPage() {
             ))
           )}
         </div>
+        {contadoresAprovados.length > 1 && (
+          <select
+            className="input w-full mb-2"
+            value={avisoLinkId}
+            onChange={e => setAvisoLinkId(e.target.value)}
+          >
+            <option value="">Pra qual contador?</option>
+            {contadoresAprovados.map(c => (
+              <option key={c.linkId} value={c.linkId}>{c.name} — {c.email}</option>
+            ))}
+          </select>
+        )}
         <form onSubmit={enviarAviso} className="flex gap-2">
           <input
             className="input flex-1" placeholder="Escrever um aviso pro contador..."

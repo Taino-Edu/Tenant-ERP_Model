@@ -17,6 +17,7 @@ public class CatalogDbContext : DbContext
     public DbSet<ContadorAccount> ContadorAccounts { get; set; }
     public DbSet<ContadorTenantLink> ContadorTenantLinks { get; set; }
     public DbSet<ContadorAviso> ContadorAvisos { get; set; }
+    public DbSet<ContadorConviteEmail> ContadorConvitesEmail { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -70,6 +71,18 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(a => a.ContadorTenantLinkId)
                   .HasDatabaseName("ix_contador_avisos_link_id");
+        });
+
+        modelBuilder.Entity<ContadorConviteEmail>(entity =>
+        {
+            entity.HasOne<Tenant>()
+                  .WithMany()
+                  .HasForeignKey(c => c.TenantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(c => new { c.Email, c.TenantId })
+                  .IsUnique()
+                  .HasDatabaseName("ix_contador_convites_email_pair");
         });
     }
 }

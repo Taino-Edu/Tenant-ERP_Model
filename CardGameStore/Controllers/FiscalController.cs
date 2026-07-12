@@ -416,8 +416,26 @@ public class FiscalController : ControllerBase
 
         var email = request.Email.Trim().ToLowerInvariant();
         var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c => c.Email == email);
+
+        // Convite cego: contador ainda não tem conta. Guarda o convite — quando
+        // ele se cadastrar com esse e-mail em /contador/cadastro, o vínculo
+        // Approved é criado automaticamente (ver AuthService.RegisterContadorAsync).
         if (conta is null)
-            return NotFound(new { Message = "Nenhum contador cadastrado com este e-mail. Peça para ele se cadastrar em /contador/cadastro e convide novamente." });
+        {
+            var jaConvidado = await _catalog.ContadorConvitesEmail
+                .AnyAsync(c => c.Email == email && c.TenantId == _tenant.TenantId);
+            if (jaConvidado)
+                return Conflict(new { Message = "Este e-mail já foi convidado — aguarde o contador se cadastrar." });
+
+            _catalog.ContadorConvitesEmail.Add(new ContadorConviteEmail
+            {
+                Email    = email,
+                TenantId = _tenant.TenantId,
+            });
+            await _catalog.SaveChangesAsync();
+
+            return Ok(new { Message = "Convite registrado — quando esse e-mail se cadastrar no portal do contador (/contador/cadastro), o acesso a esta loja é liberado automaticamente." });
+        }
 
         var jaVinculado = await _catalog.ContadorTenantLinks
             .AnyAsync(l => l.ContadorAccountId == conta.Id && l.TenantId == _tenant.TenantId);
@@ -467,6 +485,23 @@ public class FiscalController : ControllerBase
         await _catalog.SaveChangesAsync();
 
         return Ok(new { Message = "Solicitação aprovada." });
+    }
+
+    // ── POST /api/fiscal/contador/solicitacoes/{linkId}/recusar ───────────────
+    // Apaga o vínculo (não guarda um status "Rejected") — assim, se o contador
+    // solicitar de novo mais tarde, o "jaExiste" de SolicitarAcesso não bloqueia
+    // pra sempre; um pedido recusado simplesmente deixa de existir.
+    [HttpPost("contador/solicitacoes/{linkId:guid}/recusar")]
+    public async Task<IActionResult> RecusarSolicitacaoContador(Guid linkId)
+    {
+        var link = await _catalog.ContadorTenantLinks
+            .FirstOrDefaultAsync(l => l.Id == linkId && l.TenantId == _tenant.TenantId);
+        if (link is null) return NotFound();
+
+        _catalog.ContadorTenantLinks.Remove(link);
+        await _catalog.SaveChangesAsync();
+
+        return Ok(new { Message = "Solicitação recusada." });
     }
 
     // ── GET /api/fiscal/contador/avisos ───────────────────────────────────────

@@ -469,18 +469,43 @@ public class AuthService : IAuthService
         };
         _catalog.ContadorAccounts.Add(conta);
 
-        _catalog.ContadorTenantLinks.Add(new ContadorTenantLink
+        // Convites cegos: algum lojista já convidou este e-mail antes de a
+        // conta existir (FiscalController.ConvidarContador). Consome todos —
+        // vínculo nasce direto Approved, sem passar por Pending, já que o
+        // lojista já autorizou explicitamente ao convidar.
+        var convitesCegos = await _catalog.ContadorConvitesEmail
+            .Where(c => c.Email == email)
+            .ToListAsync();
+
+        foreach (var convite in convitesCegos)
         {
-            ContadorAccountId = conta.Id,
-            TenantId          = tenant.Id,
-            Status            = ContadorLinkStatus.Pending,
-        });
+            _catalog.ContadorTenantLinks.Add(new ContadorTenantLink
+            {
+                ContadorAccountId = conta.Id,
+                TenantId          = convite.TenantId,
+                Status            = ContadorLinkStatus.Approved,
+            });
+        }
+        _catalog.ContadorConvitesEmail.RemoveRange(convitesCegos);
+
+        // Vínculo Pending pro slug digitado no cadastro — só se esse tenant
+        // não acabou de ganhar um vínculo Approved via convite cego acima
+        // (senão violaria o índice único de (ContadorAccountId, TenantId)).
+        if (!convitesCegos.Any(c => c.TenantId == tenant.Id))
+        {
+            _catalog.ContadorTenantLinks.Add(new ContadorTenantLink
+            {
+                ContadorAccountId = conta.Id,
+                TenantId          = tenant.Id,
+                Status            = ContadorLinkStatus.Pending,
+            });
+        }
 
         await _catalog.SaveChangesAsync();
 
         _logger.LogInformation(
-            "Novo contador cadastrado: {Name} ({Email}), solicitando acesso à loja '{Slug}'",
-            conta.Name, conta.Email, slug);
+            "Novo contador cadastrado: {Name} ({Email}), solicitando acesso à loja '{Slug}' ({ConvitesCegos} convite(s) cego(s) consumido(s))",
+            conta.Name, conta.Email, slug, convitesCegos.Count);
 
         return await GenerateContadorAuthResponseAsync(conta);
     }
