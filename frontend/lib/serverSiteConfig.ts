@@ -1,6 +1,6 @@
 // =============================================================================
-// serverSiteConfig.ts — Busca SiteConfig do backend, do lado do servidor,
-// pro tenant resolvido pelo Host da requisição atual. Usado só por
+// serverSiteConfig.ts — Busca favicon/ícone de PWA/nome do backend, do lado do
+// servidor, pro tenant resolvido pelo Host da requisição atual. Usado só por
 // generateMetadata (layout.tsx) e app/manifest.ts — a API de Metadata do
 // Next.js roda sempre no servidor, mesmo num app tão client-heavy quanto
 // este, então isso não é "portar pra SSR", é usar uma parte do framework
@@ -12,15 +12,19 @@
 // fallback pra null em qualquer falha não é só polimento, é o mecanismo de
 // segurança principal: uma falha de rede/timeout aqui NUNCA pode quebrar o
 // carregamento da página, só faz cair no ícone/manifest estático de sempre.
+//
+// Tentativa original era mandar o Host certo via `fetch(url, { headers: {
+// Host: host } })` — não funciona: Host é um "forbidden header name" do
+// próprio Fetch spec, o undici (usado pelo Next.js) ignora silenciosamente
+// qualquer tentativa de sobrescrevê-lo, sempre manda o Host derivado da URL
+// de destino. Corrigido extraindo o SLUG do host (mesma regra de
+// TenantResolutionMiddleware.ExtractSlug) e chamando um endpoint público que
+// recebe o slug como query param comum — dado já público (aparece em toda
+// URL de loja), sem precisar mexer em header nenhum.
 // =============================================================================
 
-// URL interna do container da API, na rede do Docker Compose (ver
-// deploy/docker-compose.prod.yml — container_name: cardgamestore_api,
-// ASPNETCORE_URLS: http://+:5000). O valor padrão já é o correto pra esse
-// deploy específico, então isso funciona sem precisar adicionar nada no
-// docker-compose — a env var é só uma válvula de escape se o nome do
-// container/porta mudar algum dia.
 const INTERNAL_API_URL = process.env.INTERNAL_API_URL || 'http://cardgamestore_api:5000'
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
 
 export interface TenantSiteIcons {
   faviconUrl?: string | null
@@ -29,26 +33,35 @@ export interface TenantSiteIcons {
   updatedAt?: string
 }
 
+/** Mesma regra de CardGameStore/Multitenancy/TenantResolutionMiddleware.ExtractSlug —
+ * host precisa terminar em ".{ROOT_DOMAIN}" (subdomínio de UM nível só, tenant de
+ * verdade); domínio raiz, www, IP puro ou host que não bate com o sufixo → null
+ * (não tem tenant pra resolver, ex: página institucional). */
+function extractSlug(host: string | null): string | null {
+  if (!host || !ROOT_DOMAIN) return null
+
+  const suffix = '.' + ROOT_DOMAIN
+  if (!host.toLowerCase().endsWith(suffix.toLowerCase())) return null
+
+  const slug = host.slice(0, host.length - suffix.length)
+  if (!slug || slug.includes('.') || slug.toLowerCase() === 'www') return null
+
+  return slug
+}
+
 /**
  * Busca favicon/ícone do PWA/nome do site pro tenant resolvido pelo Host
  * informado. Retorna null em QUALQUER falha (rede, timeout, status != 200,
- * JSON inesperado) — nunca lança, pra generateMetadata/manifest.ts sempre
- * poderem cair no fallback estático sem precisar de try/catch próprio.
+ * JSON inesperado, ou host sem tenant — ex: domínio raiz) — nunca lança, pra
+ * generateMetadata/manifest.ts sempre poderem cair no fallback estático sem
+ * precisar de try/catch próprio.
  */
 export async function getTenantIconsForHost(host: string | null): Promise<TenantSiteIcons | null> {
-  if (!host) return null
+  const slug = extractSlug(host)
+  if (!slug) return null
 
   try {
-    // Query param só pra diferenciar a chave de cache do fetch do Next.js por
-    // tenant — o cache dele é baseado na URL (+ alguns options), NÃO no header
-    // Host custom que a gente manda pra rotear pro tenant certo. Sem isso,
-    // como a URL de baixo é sempre a mesma pra todos os tenants, o primeiro
-    // fetch que caísse aqui ficava em cache por 5min e era servido (errado)
-    // pra qualquer outra loja que pedisse depois — bug real, achado testando
-    // ao vivo (confirmado: o backend respondia certo via curl/wget direto,
-    // só o cache do lado do Next.js estava embaralhando os tenants).
-    const res = await fetch(`${INTERNAL_API_URL}/api/site-config?_h=${encodeURIComponent(host)}`, {
-      headers: { Host: host },
+    const res = await fetch(`${INTERNAL_API_URL}/api/public/site-icons?slug=${encodeURIComponent(slug)}`, {
       signal: AbortSignal.timeout(2000),
       next: { revalidate: 300 },
     })

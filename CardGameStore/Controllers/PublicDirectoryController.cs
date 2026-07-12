@@ -9,6 +9,8 @@
 // de endpoints sensíveis.
 // =============================================================================
 
+using CardGameStore.Data;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -23,10 +25,12 @@ namespace CardGameStore.Controllers;
 public class PublicDirectoryController : ControllerBase
 {
     private readonly CatalogDbContext _catalog;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public PublicDirectoryController(CatalogDbContext catalog)
+    public PublicDirectoryController(CatalogDbContext catalog, IServiceScopeFactory scopeFactory)
     {
-        _catalog = catalog;
+        _catalog      = catalog;
+        _scopeFactory = scopeFactory;
     }
 
     // ── GET /api/public/tenants ────────────────────────────────────────────────
@@ -45,6 +49,44 @@ public class PublicDirectoryController : ControllerBase
             .ToListAsync();
 
         return Ok(tenants);
+    }
+
+    // ── GET /api/public/site-icons?slug=loja-final ────────────────────────────
+    // Usado só pelo SSR do Next.js (generateMetadata/manifest.ts) pra buscar
+    // favicon/ícone de PWA/nome do tenant sem depender do header Host — fetch()
+    // (undici, usado pelo Next.js server-side) ignora silenciosamente uma
+    // tentativa de sobrescrever o header Host via `headers`, já que é um
+    // "forbidden header name" do próprio Fetch spec. Em vez de brigar com isso,
+    // recebe o slug como query param comum (dado já público, aparece na URL de
+    // qualquer loja) e resolve o tenant no catálogo, sem tocar em Host nenhum.
+    // Só devolve os mesmos campos já públicos via GET /api/site-config
+    // (favicon/PWA icon/nome) — nada sensível, mesmo espírito de ListTenants.
+    [HttpGet("site-icons")]
+    public async Task<IActionResult> GetSiteIcons([FromQuery] string slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug)) return BadRequest();
+
+        var tenant = await _catalog.Tenants
+            .Where(t => t.Slug == slug.Trim().ToLowerInvariant() && t.Status == TenantStatus.Active)
+            .Select(t => new { t.Id, t.SchemaName, t.EnabledModules })
+            .FirstOrDefaultAsync();
+
+        if (tenant is null) return NotFound();
+
+        using var scope = _scopeFactory.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+
+        var db  = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var cfg = await db.SiteConfigs.FindAsync(SiteConfig.SingletonId);
+
+        return Ok(new
+        {
+            FaviconUrl = cfg?.FaviconUrl,
+            PwaIconUrl = cfg?.PwaIconUrl,
+            SiteName   = cfg?.SiteName,
+            UpdatedAt  = cfg?.UpdatedAt,
+        });
     }
 }
 
