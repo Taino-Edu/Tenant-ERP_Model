@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import QRCode from 'qrcode'
 import { minhasNotasApi, CupomDto } from '@/lib/api'
 
 function fmtMoeda(centavos: number) {
@@ -23,6 +24,7 @@ export default function MeuCupomNfcePage() {
   const id = params?.id as string
   const [cupom, setCupom] = useState<CupomDto | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -30,6 +32,13 @@ export default function MeuCupomNfcePage() {
       .then(r => setCupom(r.data))
       .catch(() => setError('Não foi possível carregar o cupom. Verifique se você está logado e se essa nota é sua.'))
   }, [id])
+
+  useEffect(() => {
+    if (!cupom?.qrCodeUrl) return
+    QRCode.toDataURL(cupom.qrCodeUrl, { width: 180, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null))
+  }, [cupom?.qrCodeUrl])
 
   const print = () => window.print()
 
@@ -105,13 +114,10 @@ export default function MeuCupomNfcePage() {
           </>
         )}
 
-        {cupom.qrCodeUrl && (
+        {qrDataUrl && (
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cupom.qrCodeUrl)}`}
-              alt="QR Code NFC-e" width={140} height={140} style={{ margin: '0 auto' }}
-            />
+            <img src={qrDataUrl} alt="QR Code NFC-e" width={140} height={140} style={{ margin: '0 auto' }} />
           </div>
         )}
 

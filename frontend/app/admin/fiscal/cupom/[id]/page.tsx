@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
+import QRCode from 'qrcode'
 import { fiscalApi, CupomDto } from '@/lib/api'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
@@ -25,6 +26,7 @@ export default function CupomNfcePage() {
   const id = params?.id as string
   const [cupom, setCupom] = useState<CupomDto | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
@@ -32,6 +34,13 @@ export default function CupomNfcePage() {
       .then(r => setCupom(r.data))
       .catch(() => setError('Não foi possível carregar o cupom. Verifique se você está autenticado como administrador.'))
   }, [id])
+
+  useEffect(() => {
+    if (!cupom?.qrCodeUrl) return
+    QRCode.toDataURL(cupom.qrCodeUrl, { width: 180, margin: 1 })
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null))
+  }, [cupom?.qrCodeUrl])
 
   const print = () => window.print()
 
@@ -112,13 +121,11 @@ export default function CupomNfcePage() {
           </>
         )}
 
-        {cupom.qrCodeUrl && (
+        {qrDataUrl && (
           <div style={{ textAlign: 'center', marginTop: 8 }}>
-            {/* Gera a imagem do QR a partir da URL montada no backend — serviço público gratuito */}
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(cupom.qrCodeUrl)}`}
-              alt="QR Code NFC-e" width={140} height={140} style={{ margin: '0 auto' }}
-            />
+            {/* Gerado localmente (lib qrcode) a partir da URL montada no backend — sem
+                depender de serviço externo pra exibir um cupom fiscal. */}
+            <img src={qrDataUrl} alt="QR Code NFC-e" width={140} height={140} style={{ margin: '0 auto' }} />
           </div>
         )}
 
