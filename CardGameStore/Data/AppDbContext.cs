@@ -66,6 +66,9 @@ public class AppDbContext : DbContext
     // ── Personalização da landing page ─────────────────────────────────────────
     public DbSet<SiteConfig>         SiteConfigs          { get; set; }
 
+    // ── Financeiro: fechamentos formais de período (dia/semana/mês) ───────────
+    public DbSet<FechamentoPeriodo>  FechamentosPeriodo   { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------
@@ -445,6 +448,20 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(n => n.Status)
                   .HasDatabaseName("ix_notas_destinadas_status");
+        });
+
+        // =====================================================================
+        // FECHAMENTO PERIODO
+        // =====================================================================
+        modelBuilder.Entity<FechamentoPeriodo>(entity =>
+        {
+            entity.Property(f => f.Tipo)
+                  .HasConversion<string>()
+                  .HasMaxLength(20);
+
+            entity.HasIndex(f => new { f.Tipo, f.DataInicio, f.DataFim })
+                  .IsUnique()
+                  .HasDatabaseName("ix_fechamentos_periodo_janela");
         });
     }
 }
