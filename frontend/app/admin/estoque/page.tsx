@@ -21,6 +21,8 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
   const [wlEntries, setWlEntries] = useState<WaitListEntry[]>([])
   const [wlLoading, setWlLoading] = useState(false)
   const [wlTotal,   setWlTotal]   = useState(0)
+  const { site } = useSiteConfig()
+  const hasEstoqueModule = site.enabledModules.includes('estoque')
 
   const images   = product.imageUrls?.length > 0 ? product.imageUrls : product.imageUrl ? [product.imageUrl] : []
   const minStock = product.minimumStock ?? 5
@@ -28,13 +30,13 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
   const valorImob = product.stockQuantity * (product.costPriceInCents / 100)
 
   useEffect(() => {
-    if (!product.isPreVenda) return
+    if (!product.isPreVenda || !hasEstoqueModule) return
     setWlLoading(true)
     waitListApi.adminList(product.id)
       .then(r => { setWlEntries(r.data.entries); setWlTotal(r.data.total) })
       .catch(() => {})
       .finally(() => setWlLoading(false))
-  }, [product.id, product.isPreVenda])
+  }, [product.id, product.isPreVenda, hasEstoqueModule])
 
   async function removeFromQueue(entryId: string) {
     try {
@@ -177,7 +179,7 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
           </div>
 
           {/* ── Fila de espera (pré-venda) ── */}
-          {product.isPreVenda && (
+          {product.isPreVenda && hasEstoqueModule && (
             <div className="bg-surface-700 rounded-xl border border-purple-500/30 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-surface-600">
                 <div className="flex items-center gap-2">
@@ -229,6 +231,8 @@ const SIZES  = ['PP', 'P', 'M', 'G', 'GG', 'XGG']
 const COLORS_PRESET = ['Preto', 'Branco', 'Cinza', 'Azul', 'Vermelho', 'Verde', 'Amarelo', 'Rosa', 'Roxo', 'Laranja']
 
 function VariantsPanel({ productId }: { productId: string }) {
+  const { site } = useSiteConfig()
+  const hasEstoqueModule = site.enabledModules.includes('estoque')
   const [variants, setVariants]       = useState<ProductVariant[]>([])
   const [loading, setLoading]         = useState(true)
   const [showBulk, setShowBulk]       = useState(false)
@@ -296,7 +300,13 @@ function VariantsPanel({ productId }: { productId: string }) {
 
   return (
     <div className="space-y-3">
+      {!hasEstoqueModule && (
+        <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+          Criar/editar grade de variantes exige o módulo Estoque. A venda de variantes já cadastradas continua funcionando normal.
+        </p>
+      )}
       {/* Botão criar grade */}
+      {hasEstoqueModule && (
       <button
         type="button"
         onClick={() => setShowBulk(v => !v)}
@@ -305,8 +315,9 @@ function VariantsPanel({ productId }: { productId: string }) {
         <span className="flex items-center gap-2"><Grid3X3 className="w-4 h-4" /> Criar grade de tamanhos × cores</span>
         {showBulk ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
+      )}
 
-      {showBulk && (
+      {hasEstoqueModule && showBulk && (
         <div className="rounded-xl border border-surface-500 bg-surface-700/50 p-4 space-y-4">
           <div>
             <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">Tamanhos</p>
@@ -370,7 +381,7 @@ function VariantsPanel({ productId }: { productId: string }) {
               {vars.map(v => (
                 <div key={v.id} className="flex items-center gap-2 px-3 py-2 border-b border-surface-700 last:border-0 hover:bg-surface-700/40 group">
                   <span className="text-sm text-gray-300 flex-1">{v.color ?? '—'}</span>
-                  {editId === v.id ? (
+                  {editId === v.id && hasEstoqueModule ? (
                     <>
                       <input
                         className="input w-20 text-sm py-1 text-center"
@@ -387,14 +398,18 @@ function VariantsPanel({ productId }: { productId: string }) {
                       <span className={`text-sm font-semibold tabular-nums ${v.stockQuantity === 0 ? 'text-red-400' : v.stockQuantity < 3 ? 'text-amber-400' : 'text-white'}`}>
                         {v.stockQuantity} un
                       </span>
-                      <button type="button" onClick={() => { setEditId(v.id); setEditQty(v.stockQuantity) }}
-                        className="p-1 text-gray-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button type="button" onClick={() => removeVariant(v.id)}
-                        className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {hasEstoqueModule && (
+                        <>
+                          <button type="button" onClick={() => { setEditId(v.id); setEditQty(v.stockQuantity) }}
+                            className="p-1 text-gray-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button type="button" onClick={() => removeVariant(v.id)}
+                            className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -854,20 +869,24 @@ export default function EstoquePage() {
           <button onClick={exportCsv} className="btn-secondary" title="Exportar CSV">
             <Download className="w-4 h-4" /> <span className="hidden sm:inline">CSV</span>
           </button>
-          <button
-            onClick={() => gerarRelatorioOperacional(products, categories, site.siteName).catch(() => toast.error('Erro ao gerar PDF'))}
-            className="btn-secondary"
-            title="Relatório Operacional PDF"
-          >
-            <FileText className="w-4 h-4" /> <span className="hidden sm:inline">Operacional</span>
-          </button>
-          <button
-            onClick={() => gerarRelatorioGerencial(products, categories, site.siteName).catch(() => toast.error('Erro ao gerar PDF'))}
-            className="btn-secondary"
-            title="Relatório Gerencial PDF"
-          >
-            <BarChart2 className="w-4 h-4" /> <span className="hidden sm:inline">Gerencial</span>
-          </button>
+          {site.enabledModules.includes('estoque') && (
+            <>
+              <button
+                onClick={() => gerarRelatorioOperacional(products, categories, site.siteName).catch(() => toast.error('Erro ao gerar PDF'))}
+                className="btn-secondary"
+                title="Relatório Operacional PDF"
+              >
+                <FileText className="w-4 h-4" /> <span className="hidden sm:inline">Operacional</span>
+              </button>
+              <button
+                onClick={() => gerarRelatorioGerencial(products, categories, site.siteName).catch(() => toast.error('Erro ao gerar PDF'))}
+                className="btn-secondary"
+                title="Relatório Gerencial PDF"
+              >
+                <BarChart2 className="w-4 h-4" /> <span className="hidden sm:inline">Gerencial</span>
+              </button>
+            </>
+          )}
           <button onClick={() => setModal(null)} className="btn-primary">
             <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Novo Produto</span><span className="sm:hidden">Novo</span>
           </button>

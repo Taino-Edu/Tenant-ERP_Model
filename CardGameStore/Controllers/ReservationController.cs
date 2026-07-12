@@ -1,6 +1,7 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -127,6 +128,7 @@ public class ReservationController : ControllerBase
     // GET /api/reservations — lista todas [AdminOnly]
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> GetAll(
         [FromQuery] string? status = null,
         [FromQuery] Guid?   userId = null,
@@ -152,6 +154,7 @@ public class ReservationController : ControllerBase
     // PUT /api/reservations/{id}/status — admin atualiza status
     [HttpPut("{id:guid}/status")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateReservationStatusRequest req)
     {
         var res = await _db.ProductReservations
@@ -206,6 +209,7 @@ public class ReservationController : ControllerBase
     // POST /api/reservations/{id}/homologar — admin homologa reserva → lança no PDV ou comanda
     [HttpPost("{id:guid}/homologar")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> Homologar(Guid id, [FromBody] HomologarRequest req)
     {
         var res = await _db.ProductReservations
@@ -261,6 +265,7 @@ public class ReservationController : ControllerBase
     // PUT /api/reservations/{id}/extend — admin estende prazo +48h
     [HttpPut("{id:guid}/extend")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> Extend(Guid id)
     {
         var res = await _db.ProductReservations.FindAsync(id);

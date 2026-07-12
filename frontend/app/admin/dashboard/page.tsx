@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { productApi, analyticsApi, lgpdAdminApi, waitListApi, Product, FinanceiroDto, ClienteInsightDto, LgpdRequestDto, DashChartScheme } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import Link from 'next/link'
@@ -116,6 +117,8 @@ function usePersistentPanel(key: string, defaultOpen = true): [boolean, () => vo
 export default function DashboardPage() {
   const { prefs } = usePreferences()
   const dp = prefs.dashboard
+  const { site } = useSiteConfig()
+  const hasEstoqueModule = site.enabledModules.includes('estoque')
   const [fin7d, setFin7d]         = useState<FinanceiroDto | null>(null)
   const [finHoje, setFinHoje]     = useState<FinanceiroDto | null>(null)
   const [lowStock, setLowStock]   = useState(0)
@@ -331,12 +334,12 @@ export default function DashboardPage() {
         )}
 
         {/* ── Rankings & Alertas ── */}
-        {(dp.panels.patrimonio || dp.panels.clientes || dp.panels.lgpd) && (
+        {((dp.panels.patrimonio && hasEstoqueModule) || dp.panels.clientes || dp.panels.lgpd) && (
           <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest -mb-3">Rankings & alertas</p>
         )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
-          {dp.panels.patrimonio && allProducts.length > 0 && (
+          {dp.panels.patrimonio && hasEstoqueModule && allProducts.length > 0 && (
             <div className="card">
               <div className="flex items-center justify-between">
                 <button onClick={togglePanelPatrimonio} className="flex items-center gap-2 flex-1 text-left">

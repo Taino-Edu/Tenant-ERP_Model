@@ -436,7 +436,7 @@ export default function RelatoriosPage() {
       ),
       onGenerate: handleCrediarioPDF,
     },
-  ]
+  ].filter(r => r.tag !== 'Estoque' || site.enabledModules.includes('estoque'))
 
   return (
     <div className="p-4 sm:p-6 space-y-5">

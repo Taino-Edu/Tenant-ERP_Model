@@ -9,6 +9,7 @@
 
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -146,6 +147,7 @@ public class ProductWaitListController : ControllerBase
 
     [HttpGet("/api/products/waitlist/pre-venda/pendentes")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> CountPreVendaPendentes()
     {
         var count = await _db.ProductWaitLists
@@ -159,6 +161,7 @@ public class ProductWaitListController : ControllerBase
 
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> GetList(Guid productId)
     {
         var product = await _db.Products.FindAsync(productId);
@@ -182,6 +185,7 @@ public class ProductWaitListController : ControllerBase
 
     [HttpPost("{entryId:guid}/notify")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> NotifyEntry(Guid productId, Guid entryId)
     {
         var entry = await _db.ProductWaitLists
@@ -211,6 +215,7 @@ public class ProductWaitListController : ControllerBase
 
     [HttpDelete("{entryId:guid}")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> RemoveEntry(Guid productId, Guid entryId)
     {
         var entry = await _db.ProductWaitLists.FirstOrDefaultAsync(w => w.Id == entryId && w.ProductId == productId);

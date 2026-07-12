@@ -1293,6 +1293,11 @@ export default function FinanceiroPage() {
   const [kpiModal,   setKpiModal]   = useState<string | null>(null)
   const [targetPct,  setTargetPct]  = useState(40)
   const [tableView,  setTableView]  = useState<'simples' | 'analise' | 'abc'>('analise')
+  // Defesa: se o módulo Estoque for desabilitado enquanto a aba ABC estava
+  // selecionada (ou o estado vier de um acesso anterior), volta pra Análise.
+  useEffect(() => {
+    if (tableView === 'abc' && !site.enabledModules.includes('estoque')) setTableView('analise')
+  }, [tableView, site.enabledModules])
   const [prevData,   setPrevData]   = useState<FinanceiroDto | null>(null)
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('')
   const [topOrigemFilter, setTopOrigemFilter] = useState<'Todos' | 'Comanda' | 'PDV'>('Todos')
@@ -1893,13 +1898,15 @@ export default function FinanceiroPage() {
                         onClick={() => setTableView('analise')}
                         className={`px-3 py-1.5 transition-colors border-l border-surface-600 ${tableView === 'analise' ? 'bg-brand-500/20 text-brand-300' : 'text-gray-400 hover:text-gray-200'}`}
                       >Análise</button>
-                      <button
-                        onClick={() => setTableView('abc')}
-                        className={`px-3 py-1.5 transition-colors border-l border-surface-600 flex items-center gap-1 ${tableView === 'abc' ? 'bg-emerald-500/20 text-emerald-300' : 'text-gray-400 hover:text-gray-200'}`}
-                      >
-                        <span className="text-emerald-400 font-black text-[10px]">ABC</span>
-                        Curva
-                      </button>
+                      {site.enabledModules.includes('estoque') && (
+                        <button
+                          onClick={() => setTableView('abc')}
+                          className={`px-3 py-1.5 transition-colors border-l border-surface-600 flex items-center gap-1 ${tableView === 'abc' ? 'bg-emerald-500/20 text-emerald-300' : 'text-gray-400 hover:text-gray-200'}`}
+                        >
+                          <span className="text-emerald-400 font-black text-[10px]">ABC</span>
+                          Curva
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,14 +10,16 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/products/{productId:guid}/variants")]
 [Produces("application/json")]
-[Authorize(Policy = "AdminOnly")]
 public class ProductVariantController : ControllerBase
 {
     private readonly AppDbContext _db;
     public ProductVariantController(AppDbContext db) => _db = db;
 
     // GET /api/products/{productId}/variants
+    // Público — precisa listar as opções de variante na hora da venda (PDV,
+    // autoatendimento do cliente), então não pode exigir AdminOnly nem módulo pago.
     [HttpGet]
+    [AllowAnonymous]
     public async Task<IActionResult> GetAll(Guid productId)
     {
         var product = await _db.Products.FindAsync(productId);
@@ -33,6 +36,8 @@ public class ProductVariantController : ControllerBase
 
     // POST /api/products/{productId}/variants
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> Create(Guid productId, [FromBody] VariantRequest req)
     {
         var product = await _db.Products.FindAsync(productId);
@@ -57,6 +62,8 @@ public class ProductVariantController : ControllerBase
 
     // POST /api/products/{productId}/variants/bulk — cria a grade completa
     [HttpPost("bulk")]
+    [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> BulkCreate(Guid productId, [FromBody] BulkRequest req)
     {
         var product = await _db.Products.FindAsync(productId);
@@ -96,6 +103,8 @@ public class ProductVariantController : ControllerBase
 
     // PUT /api/products/{productId}/variants/{variantId}
     [HttpPut("{variantId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> Update(Guid productId, Guid variantId, [FromBody] VariantRequest req)
     {
         var product = await _db.Products.FindAsync(productId);
@@ -116,6 +125,8 @@ public class ProductVariantController : ControllerBase
 
     // DELETE /api/products/{productId}/variants/{variantId}
     [HttpDelete("{variantId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
+    [RequireModule("estoque")]
     public async Task<IActionResult> Delete(Guid productId, Guid variantId)
     {
         var variant = await _db.ProductVariants.FirstOrDefaultAsync(v => v.Id == variantId && v.ProductId == productId);

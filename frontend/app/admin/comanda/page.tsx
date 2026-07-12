@@ -10,6 +10,8 @@ import CameraScanner from '@/components/CameraScanner'
 import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
+import VariantPicker from '@/components/admin/VariantPicker'
+import type { ProductVariant } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   Wifi, WifiOff, RefreshCw, Users, Clock, CheckCircle, XCircle, Plus, ChevronDown, ChevronUp,
@@ -63,11 +65,15 @@ function AddItemModal({
   const [barcodeLoading, setBarcodeLoading] = useState(false)
   const [mode, setMode]                 = useState<'search' | 'barcode'>('search')
   const [cameraOpen, setCameraOpen]     = useState(false)
+  const [variantPickerProduct, setVariantPickerProduct] = useState<Product | null>(null)
   const barcodeRef                      = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     productApi.listAdmin()
-      .then(r => setProducts(r.data.filter(p => p.isActive && p.stockQuantity > 0)))
+      // Produtos com grade têm o estoque de verdade nas variantes, não no
+      // produto-pai — não pode filtrar por stockQuantity aqui, senão some da
+      // lista mesmo tendo variante disponível.
+      .then(r => setProducts(r.data.filter(p => p.isActive && (p.hasVariants || p.stockQuantity > 0))))
       .catch(() => toast.error('Erro ao carregar produtos'))
       .finally(() => setLoading(false))
   }, [])
@@ -76,14 +82,21 @@ function AddItemModal({
     if (mode === 'barcode') setTimeout(() => barcodeRef.current?.focus(), 100)
   }, [mode])
 
-  async function handleAdd(product: Product) {
+  async function handleAdd(product: Product, variant?: ProductVariant) {
+    if (product.hasVariants && !variant) {
+      setVariantPickerProduct(product)
+      return
+    }
     setAdding(product.id)
     try {
+      // Mesmo padrão de venda-avulsa: o preço usado é sempre o do produto-pai
+      // (promoção ou base) — variante não tem preço próprio na UI hoje.
       const effectivePrice = product.isOnPromo && product.discountPriceInCents != null
         ? product.discountPriceInCents : product.priceInCents
       const { data } = await comandaApi.addItem(comandaId, {
         productId:        product.id,
-        itemName:         product.name,
+        variantId:        variant?.id,
+        itemName:         variant ? `${product.name} (${variant.label})` : product.name,
         unitPriceInCents: effectivePrice,
         quantity:         1,
       })
@@ -229,6 +242,7 @@ function AddItemModal({
                       key={p.id}
                       onClick={() => handleAdd(p)}
                       disabled={adding === p.id}
+                      title={p.hasVariants ? 'Escolher tamanho/cor' : undefined}
                       className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-surface-500 transition-colors text-left disabled:opacity-50"
                     >
                       <div>
@@ -240,7 +254,9 @@ function AddItemModal({
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500">{p.category} · {p.stockQuantity} un.</p>
+                        <p className="text-xs text-gray-500">
+                          {p.category} · {p.hasVariants ? 'grade (tamanho/cor)' : `${p.stockQuantity} un.`}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-3">
                         {onPromo ? (
@@ -265,6 +281,19 @@ function AddItemModal({
         )}
       </div>
     </div>
+
+    {/* Seletor de variante (tamanho/cor) */}
+    {variantPickerProduct && (
+      <VariantPicker
+        productId={variantPickerProduct.id}
+        productName={variantPickerProduct.name}
+        onConfirm={variant => {
+          handleAdd(variantPickerProduct, variant)
+          setVariantPickerProduct(null)
+        }}
+        onClose={() => setVariantPickerProduct(null)}
+      />
+    )}
     </>
   )
 }
