@@ -735,6 +735,15 @@ public class ComandaService : IComandaService
                 "Esta comanda já foi fechada (cobrada) ou cancelada — cancelamento sem cobrança só se aplica a comandas ainda abertas. " +
                 "Para estornar uma venda já fechada, use o cancelamento da nota fiscal (Admin > Fiscal).");
 
+        // Transação explícita: a restauração de estoque roda em vários
+        // ExecuteUpdateAsync (um por item), gravados no banco imediatamente,
+        // ANTES do SaveChangesAsync que marca a comanda como Cancelada. Sem
+        // transação, se esse SaveChangesAsync falhar depois do estoque já ter
+        // sido restaurado, a comanda continua parecendo aberta — e um retry
+        // do cancelamento restauraria o mesmo estoque de novo (duplicado),
+        // já que a guarda acima só bloqueia comandas já marcadas Cancelada.
+        using var transaction = await _db.Database.BeginTransactionAsync();
+
         foreach (var item in comanda.Items.Where(i => i.ProductId.HasValue))
         {
             await _db.Products
@@ -756,6 +765,7 @@ public class ComandaService : IComandaService
         comanda.Status   = ComandaStatus.Cancelada;
         comanda.ClosedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
 
         _logger.LogInformation("Comanda {Id} cancelada — estoque restaurado para {Count} produto(s).",
             comandaId, comanda.Items.Count(i => i.ProductId.HasValue));
