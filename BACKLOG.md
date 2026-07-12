@@ -1,16 +1,28 @@
 # Backlog — Tenant-ERP
 
-## Concluído (sessão 2026-07-11, portal do contador)
-- Novo papel `Contador`, login próprio, área `/contador` read-only (lista de
-  notas fiscais, exportar XML por período, dados cadastrais da empresa) — sem
-  certificado/CSC nem ação administrativa. Corrigido de quebra um bug real:
-  `UserService.AdminCreateUserAsync` hardcodeava o role (qualquer coisa que não
-  fosse `"Operator"` virava `Customer` silenciosamente) — agora reconhece
-  `Contador` também. Commit `dfa7d5f`.
-- **Gap conhecido**: a aba "operadores" de `/admin/usuarios` só lista usuários
-  com `role=Operator` — um Contador recém-criado não aparece em lugar nenhum da
-  UI depois de criado (só o botão "Novo Contador" existe, sem tela de gestão/
-  listagem/exclusão). Decidir se vale um filtro de aba ou seção própria.
+## Concluído (sessão 2026-07-11/12, portal do contador — versão cross-tenant)
+- **Substitui por completo** a primeira versão (commit `dfa7d5f`, Contador como
+  `User` dentro do schema de UMA loja) por uma versão cross-tenant de verdade:
+  `ContadorAccount` + `ContadorTenantLink` (N:N) vivem no catálogo
+  (`CatalogDbContext`, schema `public`), mesmo andar arquitetural do
+  `PlatformOwner`/`Tenant`. Um contador loga uma vez pelo domínio raiz e vê só
+  os clientes (lojas) vinculados e aprovados.
+- Dois fluxos de vínculo: lojista convida por e-mail em `/admin/fiscal`
+  (`Approved` na hora — exige que o contador já tenha se cadastrado antes) ou o
+  contador se cadastra sozinho em `/contador/cadastro` e solicita acesso por
+  slug (`Pending` até o lojista aprovar). Commit `89b54c8`.
+- Ponto de maior risco (isolamento entre tenants) revisado com cuidado extra:
+  `ContadorPortalController.AutorizarEObterTenantAsync` exige um
+  `ContadorTenantLink` `Approved` (consultado sempre contra o catálogo,
+  schema `public`, nunca afetado pela troca de tenant) antes de trocar o
+  `ITenantContext` e servir dado de qualquer loja — confirmado que não tem
+  jeito de pedir dado de um tenant sem vínculo aprovado.
+- **Gaps conhecidos** (decisão consciente do fork, revisar depois se for
+  problema real):
+  - Convite por e-mail só funciona se o contador **já** tem conta — não tem
+    "convite cego" (pré-criar vínculo antes de existir a conta); precisaria de
+    uma tabela de convite pendente separada.
+  - Só existe endpoint de **aprovar** solicitação, não de rejeitar/recusar.
 
 ## Concluído (sessão 2026-07-09/10)
 - Branding genericizado: nome/e-mail/endereço/logo da loja vêm de `SiteConfig` dinâmico
