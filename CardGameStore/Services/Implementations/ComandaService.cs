@@ -78,7 +78,7 @@ public class ComandaService : IComandaService
                 await _db.SaveChangesAsync();
                 
                 // Notifica o admin que a mesa da comanda mudou
-                await _hub.Clients.Group(ComandaHub.AdminGroup)
+                await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
                     {
                         ComandaId       = comandaExistente.Id,
@@ -115,7 +115,7 @@ public class ComandaService : IComandaService
             .Where(u => u.Id == userId)
             .Select(u => u.Name)
             .FirstOrDefaultAsync() ?? string.Empty;
-        await _hub.Clients.Group(ComandaHub.AdminGroup)
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaOpened", new { ComandaId = comanda.Id, UserId = userId, UserName = userName, TableIdentifier = comanda.TableIdentifier });
 
         return MapToDto(comanda);
@@ -187,7 +187,7 @@ public class ComandaService : IComandaService
                 comanda.TotalInCents     += addedSubtotal;
                 comanda.Status            = ComandaStatus.EmAndamento;
                 await _db.SaveChangesAsync();
-                await _hub.Clients.Group(ComandaHub.AdminGroup)
+                await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
                     {
                         ComandaId       = comanda.Id,
@@ -228,7 +228,7 @@ public class ComandaService : IComandaService
         await _db.SaveChangesAsync();
 
         // Notifica o admin sobre o item adicionado pelo cliente
-        await _hub.Clients.Group(ComandaHub.AdminGroup)
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId       = comanda.Id,
@@ -272,7 +272,7 @@ public class ComandaService : IComandaService
                 await _db.SaveChangesAsync();
                 await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
                     .SendAsync("ItemAddedByAdmin", new { ItemName = existing.ItemNameSnapshot, NewTotalInReais = comanda.TotalInReais });
-                await _hub.Clients.Group(ComandaHub.AdminGroup)
+                await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
                     {
                         ComandaId       = comanda.Id,
@@ -317,7 +317,7 @@ public class ComandaService : IComandaService
                 NewTotalInReais = comanda.TotalInReais,
             });
         // Notifica o admin (outros painéis)
-        await _hub.Clients.Group(ComandaHub.AdminGroup)
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId       = comanda.Id,
@@ -376,7 +376,7 @@ public class ComandaService : IComandaService
         // Notifica cliente e admin da remoção
         await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
-        await _hub.Clients.Group(ComandaHub.AdminGroup)
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId       = dto.Id,
@@ -446,7 +446,7 @@ public class ComandaService : IComandaService
         // Notifica cliente e admin da atualização de quantidade
         await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
-        await _hub.Clients.Group(ComandaHub.AdminGroup)
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId       = dto.Id,
@@ -709,7 +709,7 @@ public class ComandaService : IComandaService
         await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
             .SendAsync("ComandaClosed", new { ComandaId = comandaId, PaymentMethod = paymentMethod });
         // Notifica o admin
-        await _hub.Clients.Group(ComandaHub.AdminGroup)
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaClosed", new
             {
                 ComandaId     = comandaId,
@@ -764,7 +764,7 @@ public class ComandaService : IComandaService
         await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
             .SendAsync("ComandaCancelled", new { ComandaId = comandaId });
         // Notifica o admin
-        await _hub.Clients.Group(ComandaHub.AdminGroup)
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaCancelled", new { ComandaId = comandaId, UserId = comanda.UserId });
 
         return MapToDto(comanda);
@@ -900,7 +900,7 @@ public class ComandaService : IComandaService
         await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
         // Notifica o admin (dashboard)
-        await _hub.Clients.Group(ComandaHub.AdminGroup)
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
             {
                 ComandaId  = dto.Id,
@@ -977,7 +977,13 @@ public class ComandaService : IComandaService
             throw new InvalidOperationException(
                 $"Estoque insuficiente para '{product.Name}' (atualizado por outra venda simultânea).");
 
-        product.StockQuantity -= request.Quantity;
+        // Não mutar product.StockQuantity aqui: o ExecuteUpdateAsync acima já
+        // gravou o decremento real no banco de forma atômica. Se a entidade
+        // rastreada fosse alterada, o próximo SaveChangesAsync (linha ~228, ao
+        // salvar o ComandaItem) resalvaria esse valor calculado sobre o Id do
+        // produto sem nenhuma trava — apagando silenciosamente o decremento de
+        // qualquer venda concorrente que tenha mexido no mesmo produto entre
+        // essas duas escritas.
         return (product.Name, effectivePrice, product.CostPriceInCents);
     }
 
@@ -1113,7 +1119,7 @@ public class ComandaService : IComandaService
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Comanda {Id} editada pelo admin {AdminId}.", comandaId, adminId);
-        await _hub.Clients.Group(ComandaHub.AdminGroup).SendAsync("ComandaAtualizada", comandaId);
+        await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId)).SendAsync("ComandaAtualizada", comandaId);
 
         // Recarrega com User para o MapToDto
         var updated = await _db.Comandas

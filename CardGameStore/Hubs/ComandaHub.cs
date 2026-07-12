@@ -2,7 +2,7 @@
 // ComandaHub.cs — Hub SignalR para comunicação em tempo real de Comandas
 //
 // GRUPOS:
-//   AdminDashboard       → Admin (Maikon) — recebe TUDO
+//   AdminDashboard_{tenantId} → Admins da loja — recebe tudo daquele tenant
 //   User_{userId}        → Cliente sempre entra aqui (mesmo sem comanda ativa)
 //   Comanda_{comandaId}  → Grupo específico de uma comanda aberta
 //
@@ -15,6 +15,7 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -25,13 +26,19 @@ namespace CardGameStore.Hubs;
 public class ComandaHub : Hub
 {
     private readonly IComandaService _comandaService;
+    private readonly ITenantContext  _tenant;
     private readonly ILogger<ComandaHub> _logger;
 
-    public const string AdminGroup = "AdminDashboard";
+    // Antes era uma constante única ("AdminDashboard") compartilhada por TODOS
+    // os tenants — qualquer admin conectado em qualquer loja recebia as
+    // atualizações de comanda em tempo real de todas as outras lojas também
+    // (vazamento cross-tenant). Agora é escopada por tenant.
+    public static string GetAdminGroup(Guid tenantId) => $"AdminDashboard_{tenantId}";
 
-    public ComandaHub(IComandaService comandaService, ILogger<ComandaHub> logger)
+    public ComandaHub(IComandaService comandaService, ITenantContext tenant, ILogger<ComandaHub> logger)
     {
         _comandaService = comandaService;
+        _tenant         = tenant;
         _logger         = logger;
     }
 
@@ -48,7 +55,7 @@ public class ComandaHub : Hub
 
         if (role == "Admin")
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, AdminGroup);
+            await Groups.AddToGroupAsync(Context.ConnectionId, GetAdminGroup(_tenant.TenantId));
         }
         else
         {
