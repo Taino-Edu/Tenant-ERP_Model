@@ -15,7 +15,10 @@ export default function VLibrasController() {
     }
     // Quando desativado oculta todo o widget. Quando ativado, deixa o VLibras
     // controlar seu próprio layout (sobrescrever posição quebra a inicialização).
-    el.textContent = prefs.vlibras.enabled ? '' : '[vw]{display:none!important;}'
+    // No mobile, o plugin oficial não é usável (atrapalha mais do que ajuda) —
+    // fica sempre oculto ali, independente da preferência.
+    const mobileHide = '@media (max-width: 768px) { [vw] { display: none !important; } }'
+    el.textContent = (prefs.vlibras.enabled ? '' : '[vw]{display:none!important;}') + mobileHide
   }, [prefs.vlibras.enabled])
 
   return null
