@@ -97,13 +97,19 @@ function MiniBarChart({ dias, open, onToggle, scheme }: { dias: FinanceiroDto['d
 }
 
 function usePersistentPanel(key: string, defaultOpen = true): [boolean, () => void] {
-  const [open, setOpen] = useState(() => {
-    if (typeof window === 'undefined') return defaultOpen
+  // Sempre começa com defaultOpen (igual no server e no primeiro render do
+  // client) — ler localStorage direto no initializer causava mismatch de
+  // hidratação sempre que o valor salvo divergia do default. O valor real
+  // só é aplicado depois, via useEffect (client-only).
+  const [open, setOpen] = useState(defaultOpen)
+
+  useEffect(() => {
     try {
       const v = localStorage.getItem(`dash_panel_${key}`)
-      return v === null ? defaultOpen : v === 'true'
-    } catch { return defaultOpen }
-  })
+      if (v !== null) setOpen(v === 'true')
+    } catch {}
+  }, [key])
+
   const toggle = () => setOpen(v => {
     const next = !v
     try { localStorage.setItem(`dash_panel_${key}`, String(next)) } catch {}
