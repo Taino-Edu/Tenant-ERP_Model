@@ -224,6 +224,21 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit           = 10;
     });
 
+    // "comanda-hub" → conexões (negotiate + upgrade) ao ComandaHub: 30/minuto
+    // por IP. JoinComandaGroup já valida dono da comanda antes de entrar no
+    // grupo, mas não impedia spam de tentativas de conexão (DoS/botting) —
+    // isso cobre esse ponto. 30/min é generoso pra WebSocket normal (só 1-2
+    // requests por sessão) e pro fallback de long-polling (poll periódico,
+    // bem abaixo de 30/min em uso normal); só limita tentativa de conexão
+    // repetida em rajada.
+    options.AddFixedWindowLimiter("comanda-hub", opt =>
+    {
+        opt.PermitLimit          = 30;
+        opt.Window               = TimeSpan.FromMinutes(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit           = 0;
+    });
+
     options.OnRejected = async (context, token) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
@@ -542,7 +557,7 @@ app.UseAuthorization();
 app.UseOperatorPermissions();
 
 app.MapControllers();
-app.MapHub<ComandaHub>("/hubs/comanda");
+app.MapHub<ComandaHub>("/hubs/comanda").RequireRateLimiting("comanda-hub");
 
 // /health — sem autenticação, sem rate limit
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
