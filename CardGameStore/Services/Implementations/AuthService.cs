@@ -202,6 +202,7 @@ public class AuthService : IAuthService
         user.RefreshToken       = HashRefreshToken(refreshToken);
         user.RefreshTokenExpiry = DateTime.UtcNow.AddDays(_jwt.RefreshTokenExpirationDays);
         user.UpdatedAt          = DateTime.UtcNow;
+        user.LastLoginAt        = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
         return new AuthResponse(accessToken, refreshToken, expiresAt, user.Role, user.Name, user.Id, comandaId, permissions);
@@ -229,7 +230,46 @@ public class AuthService : IAuthService
     private string GenerateJwt(User user, string[]? permissions = null) =>
         GenerateJwt(user.Id, user.Name, user.Email, user.Role, permissions);
 
-    private string GenerateJwt(Guid id, string name, string? email, string role, string[]? permissions = null)
+    /// <summary>
+    /// Sessão de impersonação pro dono da plataforma acessar o admin de um tenant
+    /// com um clique. Roda no request que já bateu no subdomínio do tenant alvo —
+    /// _db já está no schema certo (via ITenantContext/TenantConnectionInterceptor),
+    /// não precisa de troca de schema manual aqui.
+    ///
+    /// `sub` do JWT = Id do PRÓPRIO dono da plataforma, NUNCA o do admin real do
+    /// tenant. Se usasse o Id do admin real, qualquer ação self-service durante a
+    /// impersonação (trocar senha, editar perfil) mexeria na conta de verdade
+    /// dele, e um logout normal (AuthService.LogoutAsync, que revoga token por
+    /// sub) derrubaria a sessão real do admin sem querer. Como o Guid do dono é
+    /// estranho a qualquer schema de tenant, endpoints que fazem
+    /// _db.Users.FindAsync(sub) simplesmente não acham nada e degradam bem
+    /// (padrão já usado em UserController — retorna NotFound).
+    /// </summary>
+    public async Task<AuthResponse> ImpersonateAsync(Guid platformOwnerId, string platformOwnerName, string? platformOwnerEmail)
+    {
+        var temAdmin = await _db.Users.AnyAsync(u => u.Role == UserRole.Admin && u.IsActive);
+        if (!temAdmin)
+            throw new InvalidOperationException("Esta loja não tem nenhum admin ativo.");
+
+        var extraClaims = new List<Claim>
+        {
+            new("imp", "1"),
+            new("imp_owner", platformOwnerName),
+        };
+
+        var accessToken = GenerateJwt(
+            platformOwnerId, platformOwnerName, platformOwnerEmail, UserRole.Admin,
+            permissions: null, extraClaims: extraClaims, expiresIn: TimeSpan.FromMinutes(20));
+
+        // Sem refresh token — sessão de impersonação não se renova sozinha depois
+        // dos 20min. Quando expira, o interceptor de 401 do frontend já manda pro
+        // /login normalmente, sem precisar de lógica nova.
+        return new AuthResponse(accessToken, string.Empty, DateTime.UtcNow.AddMinutes(20), UserRole.Admin, platformOwnerName, platformOwnerId);
+    }
+
+    private string GenerateJwt(
+        Guid id, string name, string? email, string role, string[]? permissions = null,
+        IEnumerable<Claim>? extraClaims = null, TimeSpan? expiresIn = null)
     {
         var key     = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.SecretKey));
         var creds   = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -253,11 +293,14 @@ public class AuthService : IAuthService
         if (permissions != null && permissions.Length > 0)
             claims.Add(new("permissions", System.Text.Json.JsonSerializer.Serialize(permissions)));
 
+        if (extraClaims != null)
+            claims.AddRange(extraClaims);
+
         var token = new JwtSecurityToken(
             issuer:             _jwt.Issuer,
             audience:           _jwt.Audience,
             claims:             claims,
-            expires:            DateTime.UtcNow.AddMinutes(_jwt.AccessTokenExpirationMinutes),
+            expires:            DateTime.UtcNow.Add(expiresIn ?? TimeSpan.FromMinutes(_jwt.AccessTokenExpirationMinutes)),
             signingCredentials: creds
         );
 

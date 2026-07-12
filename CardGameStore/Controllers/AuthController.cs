@@ -8,10 +8,12 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using CardGameStore.Configuration;
 using System.Text.Json;
@@ -30,6 +32,8 @@ public class AuthController : ControllerBase
     private readonly IConfiguration          _config;
     private readonly IEmailService           _emailService;
     private readonly IAuditService           _audit;
+    private readonly CatalogDbContext        _catalog;
+    private readonly ITenantContext          _tenant;
 
     public AuthController(
         IAuthService        authService,
@@ -38,7 +42,9 @@ public class AuthController : ControllerBase
         IWebHostEnvironment     env,
         IConfiguration      configuration,
         IEmailService       emailService,
-        IAuditService       audit)
+        IAuditService       audit,
+        CatalogDbContext    catalog,
+        ITenantContext      tenant)
     {
         _authService  = authService;
         _logger       = logger;
@@ -47,6 +53,8 @@ public class AuthController : ControllerBase
         _env          = env;
         _config       = configuration;
         _emailService = emailService;
+        _catalog      = catalog;
+        _tenant       = tenant;
     }
 
     // =========================================================================
@@ -89,6 +97,42 @@ public class AuthController : ControllerBase
             Path     = cookieOptions.Path,
             MaxAge   = TimeSpan.FromDays(_jwt.RefreshTokenExpirationDays)
         });
+    }
+
+    /// <summary>
+    /// Só o accessToken, sem refreshToken — usado pra sessão de impersonação, que
+    /// não pode se renovar sozinha (expira de propósito depois de ~20min; quando
+    /// isso acontece, o interceptor de 401 do frontend já manda pro /login).
+    /// </summary>
+    private void SetAccessCookieOnly(string accessToken, TimeSpan maxAge)
+    {
+        var secureCookies = _config.GetValue<bool?>("COOKIE_SECURE") ?? !_env.IsDevelopment();
+
+        Response.Cookies.Append("accessToken", accessToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure   = secureCookies,
+            SameSite = SameSiteMode.Lax,
+            Path     = "/",
+            MaxAge   = maxAge,
+        });
+    }
+
+    /// <summary>
+    /// Cookies simples (não-HttpOnly) que a UI lê pro estado de sessão —
+    /// espelha exatamente o que frontend/lib/auth.ts:saveAuth() grava depois de
+    /// um login normal via JSON. Esse fluxo de impersonação é um redirect puro
+    /// do servidor (sem round-trip de JSON pelo frontend), então precisa gravar
+    /// esses cookies aqui mesmo, senão a API autentica mas a UI parece deslogada.
+    /// </summary>
+    private void SetUiSessionCookies(string role, string userName, Guid userId, string? impersonatingOwnerName, TimeSpan maxAge)
+    {
+        var options = new CookieOptions { Path = "/", MaxAge = maxAge };
+        Response.Cookies.Append("userRole", role, options);
+        Response.Cookies.Append("userName", userName, options);
+        Response.Cookies.Append("userId",   userId.ToString(), options);
+        if (impersonatingOwnerName != null)
+            Response.Cookies.Append("impersonating", impersonatingOwnerName, options);
     }
 
     /// <summary>Remove os cookies de autenticação no logout.</summary>
@@ -390,6 +434,58 @@ public class AuthController : ControllerBase
         ClearAuthCookies();
         _logger.LogInformation("Logout realizado para usuário {UserId}", userId);
         return NoContent();
+    }
+
+    // =========================================================================
+    // IMPERSONAÇÃO — Redeem do ticket gerado por PlatformController.Impersonate
+    //
+    // Sem [Authorize]: o próprio ticket É a credencial (mesmo modelo de
+    // confiança de um magic link) — o dono da plataforma não tem sessão nenhuma
+    // no domínio da loja alvo ainda, então não daria pra exigir [Authorize] aqui.
+    // Essa requisição já bateu no subdomínio da loja — TenantResolutionMiddleware
+    // já rodou e _tenant já está resolvido pro tenant certo.
+    // =========================================================================
+    [HttpGet("impersonate")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Impersonate([FromQuery] string ticket)
+    {
+        var row = await _catalog.PlatformImpersonationTickets.FirstOrDefaultAsync(t => t.Ticket == ticket);
+
+        if (row is null || row.RedeemedAt != null || row.ExpiresAt < DateTime.UtcNow)
+        {
+            _logger.LogWarning("Tentativa de redeem de impersonação inválida (ticket inexistente/usado/expirado).");
+            return Redirect("/login?error=impersonation_failed");
+        }
+
+        // Ticket de uma loja usado no subdomínio de outra — a requisição já
+        // resolveu _tenant pelo Host de verdade, então isso pega replay/troca.
+        if (row.TenantId != _tenant.TenantId)
+        {
+            _logger.LogWarning(
+                "Ticket de impersonação da loja {TicketSlug} ({TicketTenantId}) usado no domínio de outro tenant ({RequestTenantId}) — bloqueado.",
+                row.TenantSlug, row.TenantId, _tenant.TenantId);
+            return Redirect("/login?error=impersonation_failed");
+        }
+
+        row.RedeemedAt = DateTime.UtcNow;
+        await _catalog.SaveChangesAsync();
+
+        try
+        {
+            var response = await _authService.ImpersonateAsync(row.PlatformOwnerUserId, row.PlatformOwnerName, null);
+            var maxAge   = TimeSpan.FromMinutes(20);
+
+            SetAccessCookieOnly(response.AccessToken, maxAge);
+            SetUiSessionCookies(response.Role, response.UserName, response.UserId, row.PlatformOwnerName, maxAge);
+
+            _logger.LogInformation("Impersonação resgatada — dono {OwnerId} entrou em {Slug}", row.PlatformOwnerUserId, row.TenantSlug);
+            return Redirect("/admin/comanda");
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Falha ao gerar sessão de impersonação pra {Slug}: {Msg}", row.TenantSlug, ex.Message);
+            return Redirect("/login?error=impersonation_failed");
+        }
     }
 
     // =========================================================================

@@ -18,6 +18,7 @@ public class CatalogDbContext : DbContext
     public DbSet<ContadorTenantLink> ContadorTenantLinks { get; set; }
     public DbSet<ContadorAviso> ContadorAvisos { get; set; }
     public DbSet<ContadorConviteEmail> ContadorConvitesEmail { get; set; }
+    public DbSet<PlatformImpersonationTicket> PlatformImpersonationTickets { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -83,6 +84,13 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(c => new { c.Email, c.TenantId })
                   .IsUnique()
                   .HasDatabaseName("ix_contador_convites_email_pair");
+        });
+
+        modelBuilder.Entity<PlatformImpersonationTicket>(entity =>
+        {
+            entity.HasIndex(t => t.Ticket)
+                  .IsUnique()
+                  .HasDatabaseName("ix_platform_impersonation_tickets_ticket");
         });
     }
 }

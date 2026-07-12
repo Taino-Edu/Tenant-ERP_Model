@@ -46,3 +46,30 @@ public class UpdateTenantBillingRequest
 
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
 }
+
+public class PlatformOverviewDto
+{
+    public int ActiveTenants { get; set; }
+    public int SuspendedTenants { get; set; }
+
+    /// <summary>
+    /// Receita agregada de todos os tenants ativos, em centavos, somando os
+    /// fechamentos "Dia" do mês corrente — ou seja, é "mês até ontem": o dia
+    /// de hoje só fecha essa noite (FechamentoBackgroundService), então não
+    /// entra ainda. Não usar o fechamento "Mes" aqui — esse só é gravado no
+    /// dia 1 do mês seguinte, o que faria esse número mostrar o mês passado
+    /// no meio do mês corrente.
+    /// </summary>
+    public long ReceitaMesAtualCents { get; set; }
+
+    public Dictionary<string, int> PaymentStatusCounts { get; set; } = new();
+    public Dictionary<string, int> ModuleAdoptionCounts { get; set; } = new();
+    public List<TenantActivityDto> Tenants { get; set; } = new();
+}
+
+public class TenantActivityDto
+{
+    public Guid TenantId { get; set; }
+    public long ReceitaMesAtualCents { get; set; }
+    public DateTime? LastActivityAt { get; set; }
+}

@@ -143,6 +143,10 @@ public class User
     [Column("is_active")]
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Data/hora do último login bem-sucedido (login normal, quick-login, setup de conta ou registro).</summary>
+    [Column("last_login_at")]
+    public DateTime? LastLoginAt { get; set; }
+
     // -------------------------------------------------------------------------
     // LGPD — Ciclo de vida e consentimento
     // -------------------------------------------------------------------------

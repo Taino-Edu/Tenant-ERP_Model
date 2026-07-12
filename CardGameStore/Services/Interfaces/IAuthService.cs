@@ -50,4 +50,13 @@ public interface IAuthService
     /// solicita acesso (Pending) à loja informada pelo slug, sujeito à aprovação do lojista.
     /// </summary>
     Task<AuthResponse> RegisterContadorAsync(ContadorRegisterRequest request);
+
+    /// <summary>
+    /// Gera uma sessão de impersonação pro dono da plataforma acessar o admin de
+    /// um tenant sem senha separada. O `sub` do JWT é o Id do PRÓPRIO dono, nunca
+    /// o do admin real do tenant — ver PlatformImpersonationTicket/AuthController
+    /// pra entender por quê. Roda no contexto do tenant já resolvido pelo Host da
+    /// requisição (o AppDbContext injetado aqui já está no schema certo).
+    /// </summary>
+    Task<AuthResponse> ImpersonateAsync(Guid platformOwnerId, string platformOwnerName, string? platformOwnerEmail);
 }
