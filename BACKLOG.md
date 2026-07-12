@@ -292,17 +292,20 @@
   domínio no painel, sistema verifica propagação de DNS e emite o certificado
   automaticamente antes de ativar.
 
-## Backlog — motor financeiro (previsão + análises)
-- Reformular o sistema financeiro pra virar um motor de análise de verdade, com
-  foco em ciência de dados: previsão financeira mais robusta (hoje é só projeção
-  linear simples em `dashboard/page.tsx`), fechamento de dia/semana/mês formal
-  (não só o resumo "hoje" que existe agora), comparativos período-a-período,
-  tendências, sazonalidade.
-- Escopo ainda não detalhado: quais métricas exatas, se é evolução do
-  `financeiro/page.tsx` atual (Curva ABC, DRE simplificado) ou uma seção nova
-  dedicada a analytics, e se algum modelo estatístico/preditivo entra ou fica só
-  em agregações mais ricas — confirmar com o usuário antes de planejar a
-  arquitetura.
+## Concluído (sessão 2026-07-12, motor financeiro mais robusto)
+- Fechamento formal de dia/semana/mês (`FechamentoPeriodo`, snapshot congelado
+  por tenant) — job `FechamentoBackgroundService` fecha sozinho todo dia às
+  00:10 BR (dia), toda segunda (semana) e todo dia 1 (mês); endpoint manual
+  `POST /api/analytics/fechamentos/fechar-agora` serve de backfill e de
+  "reabrir" (upsert). Commits `4d2fc83`, `73123a9`.
+- Comparação período-a-período generalizada pra todos os presets (antes só
+  existia pra "mês") — prefere o snapshot congelado quando existe, cai pro
+  cálculo ao vivo quando o período ainda não foi fechado. Commit `4a2e2f9`.
+- Previsão ponderada por dia da semana (histórico de fechamentos `Dia`),
+  substituindo a projeção linear flat que vivia duplicada e inconsistente
+  entre dashboard e financeiro — fonte única na API agora. Commit `87e0ce0`.
+- Curva ABC e o layout do DRE ficaram de fora de propósito (fora de escopo,
+  não pediam mudança).
 
 ## Backlog — migração de dados (import/export)
 - Aceitar importação de dados de outros sistemas na hora do tenant migrar pro
