@@ -837,6 +837,21 @@ export interface FinanceiroDto {
   pagamentosCrediarioPeriodo: PagamentoCrediarioPeriodoDto[]
 }
 
+export interface FechamentoPeriodoDto {
+  id: string
+  tipo: 'Dia' | 'Semana' | 'Mes'
+  dataInicio: string // yyyy-MM-dd
+  dataFim: string    // yyyy-MM-dd
+  receitaComandas: number
+  receitaAvulsa: number
+  receita: number
+  custoComandas: number
+  custoAvulsa: number
+  custo: number
+  margem: number
+  createdAt: string
+}
+
 export const analyticsApi = {
   dashboard: () => api.get('/api/analytics/dashboard'),
   clientes:  (apenasInativos = false) =>
@@ -845,6 +860,9 @@ export const analyticsApi = {
     api.get<FinanceiroDto>('/api/analytics/financeiro', {
       params: { inicio, fim, filterPaymentMethod: filterPaymentMethod || undefined },
     }),
+  // Snapshot de um período já fechado (dia/semana/mês) — 404 se ainda não foi fechado.
+  getFechamento: (tipo: 'Dia' | 'Semana' | 'Mes', inicio: string, fim: string) =>
+    api.get<FechamentoPeriodoDto>('/api/analytics/fechamentos', { params: { tipo, inicio, fim } }),
 }
 
 // ── Relatórios de vendas por categoria ───────────────────────────────────────

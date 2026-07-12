@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto, PagamentoCrediarioPeriodoDto } from '@/lib/api'
+import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto, PagamentoCrediarioPeriodoDto, FechamentoPeriodoDto } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import PageHeader from '@/components/admin/PageHeader'
@@ -601,8 +601,16 @@ function KpiChartModal({
 
 // KPI card unificado em components/admin/StatCard.tsx — mapeamento de tone:
 // green→success, red→danger, yellow→warning, brand→brand.
-function kpiTrend(change: number | null): { value: number; label: string } | undefined {
-  return change != null ? { value: change, label: 'vs mês ant.' } : undefined
+function kpiTrend(change: number | null, label: string): { value: number; label: string } | undefined {
+  return change != null ? { value: change, label } : undefined
+}
+
+// Rótulo do período de comparação, de acordo com o preset ativo — cada preset
+// compara com um período anterior diferente (mês com mês, hoje com ontem etc.)
+function prevPeriodLabel(p: Preset): string {
+  if (p === 'mes')  return 'vs mês ant.'
+  if (p === 'hoje') return 'vs ontem'
+  return 'vs período ant.'
 }
 
 // ── Formas de pagamento com filtros ───────────────────────────────────────────
@@ -1308,12 +1316,78 @@ export default function FinanceiroPage() {
   const fimRef    = useRef(fim)
   const loadIdRef = useRef(0)
 
-  const loadPrevMonth = useCallback(async (currentIni: string) => {
-    const iniDate     = new Date(currentIni + 'T12:00:00')
-    const prevFimDate = new Date(iniDate.getFullYear(), iniDate.getMonth(), 0)
-    const prevIniDate = new Date(prevFimDate.getFullYear(), prevFimDate.getMonth(), 1)
+  // Mapeia um snapshot congelado (FechamentoPeriodoDto) pro formato de
+  // FinanceiroDto que a UI de tendência já consome — só os campos que a
+  // comparação de KPI realmente lê (receita/custo/margemPercent) vêm
+  // preenchidos; crediarios (saldo atual, não é valor de período) e
+  // pagamentosPorForma (não gravados no fechamento) ficam vazios, então o
+  // badge de "Ticket médio" simplesmente não aparece pra uma comparação vinda
+  // de snapshot — degradação graciosa (pctChange já trata prev=0 como "sem
+  // comparação"), não um bug.
+  function fechamentoToFinanceiro(f: FechamentoPeriodoDto): FinanceiroDto {
+    return {
+      receita: f.receita,
+      receitaComandas: f.receitaComandas,
+      receitaAvulsa: f.receitaAvulsa,
+      custo: f.custo,
+      margem: f.margem,
+      margemPercent: f.custo > 0 ? Math.round((f.margem / f.custo) * 100 * 10) / 10 : 0,
+      crediarios: 0,
+      recebidoCrediario: 0,
+      diaDia: [],
+      topProdutos: [],
+      pagamentosPorForma: [],
+      pagamentosCrediarioPeriodo: [],
+    }
+  }
+
+  // Compara qualquer preset com o período equivalente imediatamente anterior:
+  // "mês" com o mês calendário anterior (como já era), "hoje" com ontem,
+  // "7d"/custom com uma janela do mesmo tamanho logo antes. Pra "mês" e "hoje"
+  // (que caem certinho numa janela Mes/Dia que o fechamento formal também
+  // fecha), tenta o snapshot congelado primeiro — mais rápido e é o número
+  // "oficial" se aquele período já foi fechado; sem snapshot (período ainda
+  // não fechado), cai pro cálculo ao vivo, do jeito que sempre funcionou.
+  const loadPrevPeriod = useCallback(async (p: Preset, currentIni: string, currentFim: string) => {
+    let prevIni: string, prevFim: string
+    let tipoFechamento: 'Dia' | 'Mes' | null = null
+
+    if (p === 'mes') {
+      const iniDate     = new Date(currentIni + 'T12:00:00')
+      const prevFimDate = new Date(iniDate.getFullYear(), iniDate.getMonth(), 0)
+      const prevIniDate = new Date(prevFimDate.getFullYear(), prevFimDate.getMonth(), 1)
+      prevIni = toDateInput(prevIniDate)
+      prevFim = toDateInput(prevFimDate)
+      tipoFechamento = 'Mes'
+    } else if (p === 'hoje') {
+      const ontem = new Date(currentIni + 'T12:00:00')
+      ontem.setDate(ontem.getDate() - 1)
+      prevIni = prevFim = toDateInput(ontem)
+      tipoFechamento = 'Dia'
+    } else {
+      // '7d' ou 'custom': janela imediatamente anterior, do mesmo tamanho —
+      // não cai numa janela Dia/Semana/Mes fixa, então não tem snapshot pra
+      // consultar, vai direto pro cálculo ao vivo.
+      const iniDate      = new Date(currentIni + 'T12:00:00')
+      const fimDate      = new Date(currentFim  + 'T12:00:00')
+      const lengthMs     = fimDate.getTime() - iniDate.getTime()
+      const prevFimDate  = new Date(iniDate)
+      prevFimDate.setDate(prevFimDate.getDate() - 1)
+      const prevIniDate  = new Date(prevFimDate.getTime() - lengthMs)
+      prevIni = toDateInput(prevIniDate)
+      prevFim = toDateInput(prevFimDate)
+    }
+
+    if (tipoFechamento) {
+      try {
+        const snap = await analyticsApi.getFechamento(tipoFechamento, prevIni, prevFim)
+        setPrevData(fechamentoToFinanceiro(snap.data))
+        return
+      } catch { /* ainda não fechado — cai pro cálculo ao vivo abaixo */ }
+    }
+
     try {
-      const res = await analyticsApi.financeiro(toDateInput(prevIniDate), toDateInput(prevFimDate))
+      const res = await analyticsApi.financeiro(prevIni, prevFim)
       setPrevData(res.data)
     } catch { setPrevData(null) }
   }, [])
@@ -1331,7 +1405,7 @@ export default function FinanceiroPage() {
     }
   }, [])
 
-  useEffect(() => { load(inicio, fim); loadPrevMonth(inicio) }, []) // eslint-disable-line
+  useEffect(() => { load(inicio, fim); loadPrevPeriod(preset, inicio, fim) }, []) // eslint-disable-line
 
   function applyPreset(p: Preset) {
     setPreset(p)
@@ -1340,14 +1414,14 @@ export default function FinanceiroPage() {
       setInicio(ini); setFim(f)
       iniRef.current = ini; fimRef.current = f
       load(ini, f, filterPaymentMethod)
-      if (p === 'mes') loadPrevMonth(ini)
-      else setPrevData(null)
+      loadPrevPeriod(p, ini, f)
     }
   }
 
   function applyCustom() {
     setPreset('custom')
     load(inicio, fim, filterPaymentMethod)
+    loadPrevPeriod('custom', inicio, fim)
   }
 
   const d = data
@@ -1628,13 +1702,14 @@ export default function FinanceiroPage() {
             }
             const prevTx = prevData ? prevData.pagamentosPorForma.reduce((s, f) => s + f.quantidade, 0) : 0
             const prevTicket = prevTx > 0 && prevData ? prevData.receita / prevTx : 0
+            const prevLabel = prevPeriodLabel(preset)
             return (
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <StatCard label="Receita total"      value={fmt(d.receita)}     sub={`${d.diaDia.length} dias`}                      tone="success" icon={TrendingUp}   onClick={() => setKpiModal('receita')}    trend={kpiTrend(pctChange(d.receita,    prevData?.receita    ?? 0))} />
-                <StatCard label="Custo estimado"     value={fmt(d.custo)}       sub="Clique para detalhar por produto"               tone="danger"  icon={ShoppingBag}  onClick={() => setKpiModal('custo')}      trend={kpiTrend(pctChange(d.custo,      prevData?.custo      ?? 0))} />
-                <StatCard label="Margem média"        value={`${d.margemPercent.toFixed(1)}%`} sub={`${fmt(d.margem)} sobre custo`} tone={d.margem >= 0 ? 'brand' : 'danger'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} trend={kpiTrend(pctChange(d.margemPercent, prevData?.margemPercent ?? 0))} />
-                <StatCard label="Ticket médio"       value={fmt(ticketMedio)}   sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  tone="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')}     trend={kpiTrend(pctChange(ticketMedio,  prevTicket))} />
-                <StatCard label="Crediários abertos" value={fmt(d.crediarios)}  sub={d.recebidoCrediario > 0 ? `Recebido no período: ${fmt(d.recebidoCrediario)}` : 'A receber · clique para detalhar'} tone="warning" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} trend={kpiTrend(pctChange(d.crediarios, prevData?.crediarios ?? 0))} />
+                <StatCard label="Receita total"      value={fmt(d.receita)}     sub={`${d.diaDia.length} dias`}                      tone="success" icon={TrendingUp}   onClick={() => setKpiModal('receita')}    trend={kpiTrend(pctChange(d.receita,    prevData?.receita    ?? 0), prevLabel)} />
+                <StatCard label="Custo estimado"     value={fmt(d.custo)}       sub="Clique para detalhar por produto"               tone="danger"  icon={ShoppingBag}  onClick={() => setKpiModal('custo')}      trend={kpiTrend(pctChange(d.custo,      prevData?.custo      ?? 0), prevLabel)} />
+                <StatCard label="Margem média"        value={`${d.margemPercent.toFixed(1)}%`} sub={`${fmt(d.margem)} sobre custo`} tone={d.margem >= 0 ? 'brand' : 'danger'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} trend={kpiTrend(pctChange(d.margemPercent, prevData?.margemPercent ?? 0), prevLabel)} />
+                <StatCard label="Ticket médio"       value={fmt(ticketMedio)}   sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  tone="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')}     trend={kpiTrend(pctChange(ticketMedio,  prevTicket), prevLabel)} />
+                <StatCard label="Crediários abertos" value={fmt(d.crediarios)}  sub={d.recebidoCrediario > 0 ? `Recebido no período: ${fmt(d.recebidoCrediario)}` : 'A receber · clique para detalhar'} tone="warning" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} trend={kpiTrend(pctChange(d.crediarios, prevData?.crediarios ?? 0), prevLabel)} />
               </div>
             )
           })()}
