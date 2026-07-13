@@ -312,7 +312,15 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         // — mesma condição em que dashboard/financeiro já mostravam projeção
         // antes (não faz sentido projetar um período de 7 dias ou um mês já
         // fechado no passado).
-        var agoraBr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone).Date;
+        // Kind=Utc carimbado na marra: ConvertTimeFromUtc devolve Kind=Unspecified
+        // (não é bug, é documentado), mas FechamentoPeriodo.DataInicio/DataFim são
+        // timestamptz — Npgsql rejeita parâmetro Unspecified nessas colunas
+        // ("Cannot write DateTime with Kind=Unspecified..."). DataInicio/DataFim
+        // guardam uma data-calendário opaca (sem instante real associado), então
+        // só marcar o Kind sem converter o valor é seguro e mantém consistência
+        // com FecharJanelaAsync/FechamentoBackgroundService, que fazem o mesmo.
+        var agoraBr = DateTime.SpecifyKind(
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone).Date, DateTimeKind.Utc);
         ProjecaoDto? projecao = null;
         if (dataBrIni.Date == new DateTime(dataBrFim.Year, dataBrFim.Month, 1) && dataBrFim.Date == agoraBr)
             projecao = await CalcularProjecaoMesAsync(receita, agoraBr);
@@ -413,8 +421,11 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
 
     public async Task<FechamentoPeriodo> FecharJanelaAsync(TipoFechamento tipo, DateTime dataInicioBr, DateTime dataFimBrInclusive)
     {
-        var dataIni = dataInicioBr.Date;
-        var dataFim = dataFimBrInclusive.Date;
+        // DataInicio/DataFim (abaixo) são gravados numa coluna timestamptz — Kind
+        // precisa ser Utc pro Npgsql aceitar o parâmetro, mesmo sendo só uma data-
+        // calendário opaca (ver comentário equivalente em CalcularAsync).
+        var dataIni = DateTime.SpecifyKind(dataInicioBr.Date, DateTimeKind.Utc);
+        var dataFim = DateTime.SpecifyKind(dataFimBrInclusive.Date, DateTimeKind.Utc);
         var ini = BrDateToUtcStart(dataIni);
         var end = BrDateToUtcStart(dataFim.AddDays(1));
 

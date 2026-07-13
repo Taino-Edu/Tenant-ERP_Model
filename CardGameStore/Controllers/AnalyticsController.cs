@@ -286,8 +286,13 @@ public class AnalyticsController : ControllerBase
         if (!Enum.TryParse<TipoFechamento>(tipo, ignoreCase: true, out var tipoEnum))
             return BadRequest(new { Message = "Tipo inválido — use Dia, Semana ou Mes." });
 
+        // Kind=Utc carimbado na marra — DataInicio/DataFim são timestamptz e
+        // [FromQuery] DateTime chega com Kind=Unspecified (ver mesmo comentário
+        // em FinanceiroCalculoService.CalcularAsync/FecharJanelaAsync).
+        var inicioUtc = DateTime.SpecifyKind(inicio.Date, DateTimeKind.Utc);
+        var fimUtc    = DateTime.SpecifyKind(fim.Date, DateTimeKind.Utc);
         var fechamento = await _db.FechamentosPeriodo.FirstOrDefaultAsync(f =>
-            f.Tipo == tipoEnum && f.DataInicio == inicio.Date && f.DataFim == fim.Date);
+            f.Tipo == tipoEnum && f.DataInicio == inicioUtc && f.DataFim == fimUtc);
 
         if (fechamento is null) return NotFound();
 

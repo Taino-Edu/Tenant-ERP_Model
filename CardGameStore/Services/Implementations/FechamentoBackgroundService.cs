@@ -68,7 +68,15 @@ public class FechamentoBackgroundService : BackgroundService
 
     private async Task FecharPendentesAsync()
     {
-        var agoraBr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        // Kind=Utc carimbado na marra: ConvertTimeFromUtc devolve Kind=Unspecified,
+        // mas todo DateTime derivado daqui (ontem/segundaAnterior/etc.) vira
+        // parâmetro de query contra FechamentoPeriodo.DataInicio/DataFim, que é
+        // timestamptz — Npgsql rejeita Kind=Unspecified nessa coluna. Sem isso,
+        // TODO ciclo deste job (a cada 30 min, pra cada tenant) lançava
+        // ArgumentException logo no primeiro AnyAsync check, era engolido pelo
+        // catch em FecharPendentesAsync/FecharTenantAsync e nunca fechava
+        // nenhum período automaticamente — só ficava logando erro em silêncio.
+        var agoraBr = DateTime.SpecifyKind(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone), DateTimeKind.Utc);
 
         using var catalogScope = _scopeFactory.CreateScope();
         var catalog = catalogScope.ServiceProvider.GetRequiredService<CatalogDbContext>();
