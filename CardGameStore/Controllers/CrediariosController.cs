@@ -39,9 +39,10 @@ public class CrediariosController : ControllerBase
         _logger = logger;
     }
 
-    // -------------------------------------------------------------------------
-    // POST /api/crediarios — criação manual (dívidas anteriores ao sistema)
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Cria um crediário manualmente — usado pra registrar dívidas anteriores ao
+    /// sistema (não vinculadas a uma comanda). Vencimento padrão: 30 dias após abertura.
+    /// </summary>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(CrediariosDto), 200)]
@@ -101,9 +102,10 @@ public class CrediariosController : ControllerBase
         return Ok(MapToDto(saved));
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/crediarios/por-cliente — dívidas abertas agrupadas por pessoa
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Lista todas as dívidas em aberto, agrupadas por cliente — saldo total,
+    /// se tem alguma vencida, e próximo vencimento. Ordenado por vencidos primeiro.
+    /// </summary>
     [HttpGet("por-cliente")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<List<CrediariosClienteDto>>> GetPorCliente()
@@ -148,9 +150,8 @@ public class CrediariosController : ControllerBase
         return Ok(grupos);
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/crediarios?status=Aberto
-    // -------------------------------------------------------------------------
+    /// <summary>Lista todos os crediários, opcionalmente filtrados por status.</summary>
+    /// <param name="status">Filtra por status (ex: "Aberto", "Quitado"). Sem filtro, retorna todos.</param>
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<List<CrediariosDto>>> GetAll([FromQuery] string? status)
@@ -173,9 +174,7 @@ public class CrediariosController : ControllerBase
         return Ok(crediarios.Select(c => MapToDto(c, comandas.GetValueOrDefault(c.UserId))).ToList());
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/crediarios/usuario/{userId}
-    // -------------------------------------------------------------------------
+    /// <summary>Lista todos os crediários (abertos e quitados) de um cliente específico.</summary>
     [HttpGet("usuario/{userId:guid}")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<List<CrediariosDto>>> GetByUser(Guid userId)
@@ -192,9 +191,7 @@ public class CrediariosController : ControllerBase
         return Ok(crediarios.Select(c => MapToDto(c, listaComandas)).ToList());
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/crediarios/meu — crediário aberto do cliente
-    // -------------------------------------------------------------------------
+    /// <summary>Crediário em aberto do cliente autenticado. 404 se não tiver nenhum.</summary>
     [HttpGet("meu")]
     public async Task<ActionResult<CrediariosDto>> GetMeu()
     {
@@ -212,9 +209,7 @@ public class CrediariosController : ControllerBase
         return Ok(MapToDto(crediario, comandas.GetValueOrDefault(userId)));
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/crediarios/historico — todo o histórico de crediários do cliente
-    // -------------------------------------------------------------------------
+    /// <summary>Histórico completo de crediários (abertos e quitados) do cliente autenticado.</summary>
     [HttpGet("historico")]
     public async Task<ActionResult<List<CrediariosDto>>> GetMeuHistorico()
     {
@@ -250,6 +245,11 @@ public class CrediariosController : ControllerBase
     // -------------------------------------------------------------------------
     // PUT /api/crediarios/{id}/pagar
     // -------------------------------------------------------------------------
+    /// <summary>
+    /// Quita 100% do crediário de uma vez (endpoint legado — prefira POST
+    /// {id}/pagamento pra registrar pagamentos parciais). Envia email de
+    /// confirmação ao cliente se ele tiver e-mail cadastrado.
+    /// </summary>
     [HttpPut("{id:guid}/pagar")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<CrediariosDto>> MarcarPago(Guid id, [FromBody] MarcarPagoRequest? request)
@@ -291,9 +291,10 @@ public class CrediariosController : ControllerBase
         return Ok(MapToDto(crediario));
     }
 
-    // -------------------------------------------------------------------------
-    // PATCH /api/crediarios/{id} — editar valor, observação ou vencimento
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Edita valor, observação, vencimento ou itens de um crediário em aberto.
+    /// 400 se já estiver quitado, ou se o novo valor for menor que o já pago.
+    /// </summary>
     [HttpPatch("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(CrediariosDto), 200)]
@@ -349,9 +350,11 @@ public class CrediariosController : ControllerBase
         return Ok(MapToDto(crediario));
     }
 
-    // -------------------------------------------------------------------------
-    // POST /api/crediarios/{id}/pagamento
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Registra um pagamento (parcial ou total) contra o saldo restante do
+    /// crediário — aceita split em duas formas de pagamento. 400 se o valor
+    /// exceder o saldo restante ou se já estiver quitado.
+    /// </summary>
     [HttpPost("{id:guid}/pagamento")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<CrediariosDto>> RegistrarPagamento(
@@ -436,6 +439,7 @@ public class CrediariosController : ControllerBase
     // -------------------------------------------------------------------------
     // POST /api/crediarios/{id}/pix — gera cobrança Pix pro saldo restante
     // -------------------------------------------------------------------------
+    /// <summary>Gera cobrança Pix (Banco Inter) pelo saldo restante do crediário.</summary>
     [HttpPost("{id:guid}/pix")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GerarCobrancaPix(Guid id)
@@ -498,6 +502,10 @@ public class CrediariosController : ControllerBase
     // -------------------------------------------------------------------------
     // GET /api/crediarios/{id}/pix/{txid}/status — consulta e reconcilia pagamento
     // -------------------------------------------------------------------------
+    /// <summary>
+    /// Consulta o Inter pelo status da cobrança; se concluída, reconcilia
+    /// automaticamente registrando o pagamento no crediário (e quita se zerar o saldo).
+    /// </summary>
     [HttpGet("{id:guid}/pix/{txid}/status")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> ConsultarCobrancaPix(Guid id, string txid)
@@ -561,9 +569,10 @@ public class CrediariosController : ControllerBase
         return Ok(new { pix.TxId, pix.Status, PagoEm = pix.PagoEm });
     }
 
-    // -------------------------------------------------------------------------
-    // DELETE /api/crediarios/{id}
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Remove um crediário. Bloqueado (400) se já tiver qualquer pagamento
+    /// registrado — apagar destruiria o histórico financeiro sem desfazer a receita.
+    /// </summary>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(204)]

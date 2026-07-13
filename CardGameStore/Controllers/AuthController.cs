@@ -147,7 +147,7 @@ public class AuthController : ControllerBase
     // =========================================================================
 
     /// <summary>
-    /// Login com e-mail e senha. Utilizado pelo Admin (Maikon).
+    /// Login com e-mail e senha. Usado pelo Admin/Operator da loja.
     /// Retorna um access token JWT (60 min) e um refresh token (30 dias).
     /// </summary>
     /// <response code="200">Login realizado com sucesso.</response>
@@ -286,6 +286,11 @@ public class AuthController : ControllerBase
     // ACESSO DO CLIENTE PELO SITE
     // =========================================================================
 
+    /// <summary>
+    /// Busca um cliente pelo CPF pra saber se já tem cadastro (e nesse caso, se
+    /// precisa só de senha ou de conta nova) antes do fluxo de login/cadastro
+    /// pela área do cliente. 404 se o CPF não tem nenhum registro.
+    /// </summary>
     [HttpPost("cpf-lookup")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -300,6 +305,11 @@ public class AuthController : ControllerBase
         catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
     }
 
+    /// <summary>
+    /// Ativa a conta de um cliente que já existe (criado via quick-login na mesa)
+    /// mas nunca definiu e-mail/senha — define os dois de uma vez e já retorna
+    /// login efetuado. 404 se o CPF não existe, 409 se o e-mail já está em uso.
+    /// </summary>
     [HttpPost("setup-account")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -316,6 +326,7 @@ public class AuthController : ControllerBase
         catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
     }
 
+    /// <summary>Login de cliente já cadastrado com e-mail e senha (área do cliente).</summary>
     [HttpPost("client-login")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -331,6 +342,7 @@ public class AuthController : ControllerBase
         catch (UnauthorizedAccessException) { return Unauthorized(new { Message = "E-mail ou senha inválidos." }); }
     }
 
+    /// <summary>Cadastro público de um novo cliente (nome, e-mail, senha). 409 se o e-mail já existe.</summary>
     [HttpPost("register")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -350,6 +362,11 @@ public class AuthController : ControllerBase
     // CADASTRO PÚBLICO DE CONTADOR — cria a conta cross-tenant e solicita acesso
     // (Pending) à loja pelo slug. Sem [Authorize] — acessível pelo domínio raiz.
     // =========================================================================
+    /// <summary>
+    /// Cadastro público de contador — cria a conta cross-tenant (uma única conta pra
+    /// gerenciar várias lojas) e já cria uma solicitação de acesso (Pending) pra
+    /// loja informada pelo slug, aguardando aprovação do lojista.
+    /// </summary>
     [HttpPost("contador/register")]
     [AllowAnonymous]
     [EnableRateLimiting("auth")]
@@ -445,6 +462,13 @@ public class AuthController : ControllerBase
     // Essa requisição já bateu no subdomínio da loja — TenantResolutionMiddleware
     // já rodou e _tenant já está resolvido pro tenant certo.
     // =========================================================================
+    /// <summary>
+    /// Troca um ticket de impersonação (emitido por POST /api/platform/tenants/{id}/impersonate)
+    /// por uma sessão autenticada como o dono da plataforma dentro desta loja — só
+    /// funciona no subdomínio da loja pra qual o ticket foi emitido, é de uso único e
+    /// expira em 90s se não for resgatado. Sempre redireciona (nunca retorna JSON).
+    /// </summary>
+    /// <param name="ticket">Ticket de uso único gerado pelo mint da impersonação.</param>
     [HttpGet("impersonate")]
     [AllowAnonymous]
     public async Task<IActionResult> Impersonate([FromQuery] string ticket)

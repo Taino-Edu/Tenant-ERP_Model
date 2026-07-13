@@ -27,6 +27,7 @@ public class MensageriaController : ControllerBase
     public MensageriaController(AppDbContext db, IEmailService email, IPushService push, ILogger<MensageriaController> log)
     { _db = db; _email = email; _push = push; _log = log; }
 
+    /// <summary>Lista clientes ativos disponíveis para seleção manual de destinatários.</summary>
     // ── Listar clientes disponíveis para alvo ──────────────────────────────────
 
     [HttpGet("clients")]
@@ -41,6 +42,8 @@ public class MensageriaController : ControllerBase
         return Ok(clients);
     }
 
+    /// <summary>Lista os segmentos pré-definidos de público (todos, com e-mail, crediário
+    /// aberto, lista de espera, top 20 em pontos) pra usar como alvo em vez de seleção manual.</summary>
     // ── Segmentos pré-definidos ────────────────────────────────────────────────
 
     [HttpGet("segments")]
@@ -57,6 +60,9 @@ public class MensageriaController : ControllerBase
         });
     }
 
+    /// <summary>Envia uma notificação (in-app e/ou e-mail, com push no navegador quando
+    /// in-app) para um segmento pré-definido ou uma lista manual de clientes.</summary>
+    /// <param name="req">Título, corpo, canal ("inapp"/"email"/"both") e alvo (segmento ou lista de UserIds).</param>
     // ── Enviar mensagem ────────────────────────────────────────────────────────
 
     [HttpPost("send")]

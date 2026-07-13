@@ -45,6 +45,8 @@ public class UserController : ControllerBase
     }
 
     /// <summary>Lista todos os clientes ativos. Admin pode buscar por nome/CPF/WhatsApp.</summary>
+    /// <param name="search">Busca livre por nome, CPF ou WhatsApp.</param>
+    /// <param name="role">Filtro por papel (ex: "Customer", "Operator").</param>
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(IEnumerable<UserSummaryDto>), 200)]
@@ -55,6 +57,7 @@ public class UserController : ControllerBase
     }
 
     /// <summary>Admin cria diretamente uma conta de cliente.</summary>
+    /// <param name="request">Dados do novo cliente (nome, CPF, WhatsApp, e-mail).</param>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(UserSummaryDto), 201)]
@@ -92,6 +95,7 @@ public class UserController : ControllerBase
     /// Permite ao titular corrigir seus próprios dados pessoais.
     /// LGPD — Direito de retificação (Art. 18, IV).
     /// </summary>
+    /// <param name="request">Campos a corrigir (nome, e-mail, WhatsApp etc.).</param>
     [HttpPut("me")]
     [Authorize(Policy = "CustomerOrAdmin")]
     [ProducesResponseType(typeof(UserProfileDto), 200)]
@@ -146,6 +150,7 @@ public class UserController : ControllerBase
     }
 
     /// <summary>Detalhes de um cliente específico (Admin).</summary>
+    /// <param name="id">Id do cliente.</param>
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(UserSummaryDto), 200)]
@@ -163,6 +168,8 @@ public class UserController : ControllerBase
     }
 
     /// <summary>Adiciona pontos ao saldo de um cliente (Admin).</summary>
+    /// <param name="id">Id do cliente.</param>
+    /// <param name="request">Quantidade de pontos a adicionar.</param>
     [HttpPost("{id:guid}/points")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(UserSummaryDto), 200)]
@@ -189,6 +196,8 @@ public class UserController : ControllerBase
     /// Ajusta o saldo monetário de um cliente (Admin).
     /// Positivo = crédito (recarga), negativo = débito (uso).
     /// </summary>
+    /// <param name="id">Id do cliente.</param>
+    /// <param name="request">Valor do ajuste (positivo ou negativo) em centavos.</param>
     [HttpPost("{id:guid}/balance")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(UserSummaryDto), 200)]
@@ -212,6 +221,8 @@ public class UserController : ControllerBase
     }
 
     /// <summary>Admin redefine a senha de um cliente (sem e-mail, imediato).</summary>
+    /// <param name="id">Id do cliente.</param>
+    /// <param name="request">Nova senha.</param>
     [HttpPut("{id:guid}/reset-password")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(204)]
@@ -236,9 +247,12 @@ public class UserController : ControllerBase
     }
 
     /// <summary>
-    /// Histórico completo de um cliente: comandas, vendas avulsas, crediários e campeonatos.
-    /// GET /api/user/{id}/historico
+    /// Histórico completo de um cliente: comandas, vendas avulsas e crediários,
+    /// com estatísticas agregadas (total gasto, primeira/última visita).
     /// </summary>
+    /// <param name="id">Id do cliente.</param>
+    /// <param name="page">Página das comandas retornadas (base 1, padrão 1).</param>
+    /// <param name="pageSize">Comandas por página (padrão 50, máximo 200).</param>
     [HttpGet("{id:guid}/historico")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(ClienteHistoricoDto), 200)]
@@ -368,6 +382,7 @@ public class UserController : ControllerBase
     }
 
     /// <summary>Salva as preferências do usuário logado.</summary>
+    /// <param name="request">Preferências completas (substitui as anteriores).</param>
     [HttpPut("me/preferences")]
     [ProducesResponseType(typeof(UserPreferencesDto), 200)]
     public async Task<IActionResult> UpdatePreferences([FromBody] UpdatePreferencesRequest request)
@@ -387,6 +402,8 @@ public class UserController : ControllerBase
     // =========================================================================
 
     /// <summary>Muda o perfil de acesso de um operador. Envie perfilId=null para desatribuir.</summary>
+    /// <param name="id">Id do operador. Deve ter Role == "Operator".</param>
+    /// <param name="request">Novo perfil (ou null pra remover).</param>
     [HttpPut("{id:guid}/perfil")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(UserSummaryDto), 200)]
@@ -433,6 +450,7 @@ public class UserController : ControllerBase
     /// — Customer: anonimização LGPD (preserva histórico financeiro).
     /// — Operator: exclusão permanente.
     /// </summary>
+    /// <param name="id">Id do usuário. Não pode ser o próprio admin nem outro Admin.</param>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(204)]

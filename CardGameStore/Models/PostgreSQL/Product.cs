@@ -10,7 +10,7 @@ namespace CardGameStore.Models.PostgreSQL;
 
 /// <summary>
 /// Produto do estoque físico da loja.
-/// CRUD simples gerenciado pelo Admin (Maikon).
+/// CRUD simples gerenciado pelo Admin.
 /// </summary>
 [Table("products")]
 public class Product

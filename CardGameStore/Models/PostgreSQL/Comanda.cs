@@ -1,7 +1,7 @@
 // =============================================================================
 // Comanda.cs — Entidade de Comanda (PostgreSQL)
 // Agregado central do sistema: representa o "pedido em aberto" de um cliente.
-// Qualquer alteração dispara evento SignalR para o painel do Maikon.
+// Qualquer alteração dispara evento SignalR para o painel do admin.
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;

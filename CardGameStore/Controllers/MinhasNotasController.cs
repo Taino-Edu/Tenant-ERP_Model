@@ -33,6 +33,7 @@ public class MinhasNotasController : ControllerBase
         _emissao = emissao;
     }
 
+    /// <summary>Lista as notas fiscais (comanda ou venda avulsa) do cliente logado.</summary>
     [HttpGet]
     public async Task<IActionResult> ListMinhasNotas()
     {
@@ -66,6 +67,9 @@ public class MinhasNotasController : ControllerBase
         return Ok(notas);
     }
 
+    /// <summary>Retorna o cupom formatado de uma nota — só se ela pertencer ao cliente
+    /// logado (verifica dono via a comanda/venda de origem); senão, 403.</summary>
+    /// <param name="id">Id da nota fiscal.</param>
     [HttpGet("{id:guid}/cupom")]
     public async Task<IActionResult> ObterMeuCupom(Guid id)
     {

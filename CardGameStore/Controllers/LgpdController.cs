@@ -66,6 +66,7 @@ public class LgpdController : ControllerBase
     /// Abre uma solicitação formal de exercício de direitos pelo titular.
     /// LGPD Art. 18: Acesso, Retificação, Exclusão, Portabilidade ou Oposição.
     /// </summary>
+    /// <param name="dto">Dados do solicitante (nome, e-mail, CPF) e tipo de solicitação.</param>
     [HttpPost("request")]
     [AllowAnonymous]
     [EnableRateLimiting("api")]
@@ -168,6 +169,8 @@ public class LgpdController : ControllerBase
     /// Permite ao solicitante consultar o status da sua solicitação.
     /// Requer o número de protocolo E o e-mail usado na abertura (evita enumeração).
     /// </summary>
+    /// <param name="id">Número de protocolo da solicitação.</param>
+    /// <param name="email">E-mail usado na abertura da solicitação (obrigatório).</param>
     [HttpGet("request/{id}")]
     [AllowAnonymous]
     [EnableRateLimiting("api")]
@@ -210,6 +213,7 @@ public class LgpdController : ControllerBase
     /// Registra o consentimento ou recusa de cookies pelo visitante.
     /// LGPD Art. 8°: consentimento deve ser livre, informado e inequívoco.
     /// </summary>
+    /// <param name="dto">Se o visitante aceitou ou recusou.</param>
     [HttpPost("consent")]
     [AllowAnonymous]
     [EnableRateLimiting("api")]
@@ -255,6 +259,7 @@ public class LgpdController : ControllerBase
     // =========================================================================
 
     /// <summary>Lista todas as solicitações LGPD. Somente Admin.</summary>
+    /// <param name="status">Filtro por status (ex: "Recebido", "EmAnalise", "Concluido", "Negado").</param>
     [HttpGet("requests")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(IEnumerable<LgpdRequestAdminDto>), 200)]
@@ -299,6 +304,8 @@ public class LgpdController : ControllerBase
     // =========================================================================
 
     /// <summary>Responde formalmente a uma solicitação LGPD. Somente Admin.</summary>
+    /// <param name="id">Número de protocolo da solicitação.</param>
+    /// <param name="dto">Novo status (EmAnalise/Concluido/Negado) e resposta ao titular.</param>
     [HttpPut("requests/{id}/respond")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(LgpdRequestAdminDto), 200)]
@@ -368,6 +375,8 @@ public class LgpdController : ControllerBase
     // =========================================================================
 
     /// <summary>Anexa um arquivo (PDF, imagem, documento) a uma solicitação LGPD. Máx 10 MB.</summary>
+    /// <param name="id">Número de protocolo da solicitação.</param>
+    /// <param name="file">Arquivo a anexar (PDF, JPG, PNG, DOC, DOCX ou TXT — máx 10 MB).</param>
     [HttpPost("requests/{id}/attachment")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(200)]
@@ -414,6 +423,7 @@ public class LgpdController : ControllerBase
     // =========================================================================
 
     /// <summary>Faz download do arquivo anexado a uma solicitação LGPD.</summary>
+    /// <param name="id">Número de protocolo da solicitação.</param>
     [HttpGet("requests/{id}/attachment")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(200)]
@@ -451,6 +461,7 @@ public class LgpdController : ControllerBase
     /// Gera relatório estruturado dos dados pessoais do titular para atender
     /// solicitações de Acesso (Art. 18, II) ou Portabilidade (Art. 18, V).
     /// </summary>
+    /// <param name="id">Número de protocolo da solicitação.</param>
     [HttpGet("requests/{id}/relatorio")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(200)]

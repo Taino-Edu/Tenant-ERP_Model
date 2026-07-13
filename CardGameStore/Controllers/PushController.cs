@@ -23,6 +23,10 @@ public class PushController : ControllerBase
 
     // ── Chave pública VAPID — necessária para o browser montar a subscrição ──
 
+    /// <summary>
+    /// Chave pública VAPID, necessária pro browser montar a subscrição de push —
+    /// endpoint público. Retorna 404 se o servidor não tiver push configurado.
+    /// </summary>
     [HttpGet("vapid-public-key")]
     [AllowAnonymous]
     public IActionResult GetPublicKey()
@@ -35,6 +39,11 @@ public class PushController : ControllerBase
 
     // ── Salvar/atualizar subscrição ───────────────────────────────────────────
 
+    /// <summary>
+    /// Salva ou atualiza a subscrição de push do navegador do usuário logado
+    /// (upsert por Endpoint).
+    /// </summary>
+    /// <param name="req">Dados da subscrição gerados pelo browser (Endpoint, P256dh, Auth).</param>
     [HttpPost("subscribe")]
     [Authorize]
     public async Task<IActionResult> Subscribe([FromBody] PushSubscribeRequest req)
@@ -67,6 +76,8 @@ public class PushController : ControllerBase
 
     // ── Remover subscrição ────────────────────────────────────────────────────
 
+    /// <summary>Remove a subscrição de push do usuário logado pelo Endpoint. No-op se não existir.</summary>
+    /// <param name="req">Endpoint da subscrição a remover.</param>
     [HttpDelete("subscribe")]
     [Authorize]
     public async Task<IActionResult> Unsubscribe([FromBody] PushUnsubscribeRequest req)

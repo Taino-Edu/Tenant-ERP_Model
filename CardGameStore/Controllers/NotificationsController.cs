@@ -32,6 +32,7 @@ public class NotificationsController : ControllerBase
         return claim != null && Guid.TryParse(claim.Value, out var id) ? id : null;
     }
 
+    /// <summary>Lista as notificações do usuário logado (não lidas primeiro, máx 50).</summary>
     [HttpGet]
     public async Task<IActionResult> List()
     {
@@ -52,6 +53,7 @@ public class NotificationsController : ControllerBase
         return Ok(list);
     }
 
+    /// <summary>Retorna só a contagem de notificações não lidas — usado pro badge do sino.</summary>
     [HttpGet("unread-count")]
     public async Task<IActionResult> UnreadCount()
     {
@@ -64,6 +66,8 @@ public class NotificationsController : ControllerBase
         return Ok(new { count });
     }
 
+    /// <summary>Marca uma notificação como lida — só se pertencer ao usuário logado.</summary>
+    /// <param name="id">Id da notificação.</param>
     [HttpPatch("{id:guid}/read")]
     public async Task<IActionResult> MarkRead(Guid id)
     {
@@ -78,6 +82,7 @@ public class NotificationsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Marca todas as notificações não lidas do usuário logado como lidas.</summary>
     [HttpPatch("read-all")]
     public async Task<IActionResult> MarkAllRead()
     {
@@ -91,6 +96,8 @@ public class NotificationsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Remove uma notificação — só se pertencer ao usuário logado.</summary>
+    /// <param name="id">Id da notificação.</param>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

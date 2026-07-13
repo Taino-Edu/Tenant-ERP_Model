@@ -121,7 +121,7 @@ public class CloseComandaRequest
 
     /// <summary>
     /// Se true, emite a NFC-e desta venda automaticamente. O admin decide isso explicitamente
-    /// no momento do fechamento (Maikon não quer nota emitida sem antes perguntar) — o valor
+    /// no momento do fechamento (a loja não quer nota emitida sem antes perguntar) — o valor
     /// vem pré-marcado no front conforme a forma de pagamento estar em FiscalConfig.FormasPagamentoAutoEmissao,
     /// mas é sempre sobrescrevível.
     /// </summary>

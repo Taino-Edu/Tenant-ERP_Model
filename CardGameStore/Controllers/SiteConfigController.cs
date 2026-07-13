@@ -32,6 +32,11 @@ public class SiteConfigController : ControllerBase
         _logger  = logger;
     }
 
+    /// <summary>
+    /// Configuração de personalização da loja (nome, textos, cores, ícones e
+    /// se o programa de pontos está ativo) — endpoint público, a landing page
+    /// precisa carregar sem o visitante estar logado.
+    /// </summary>
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> Get()
@@ -44,6 +49,11 @@ public class SiteConfigController : ControllerBase
         return Ok(cfg);
     }
 
+    /// <summary>
+    /// Atualiza a personalização da loja — patch parcial: só os campos não-nulos
+    /// enviados no request são alterados, o resto permanece como estava.
+    /// </summary>
+    /// <param name="req">Campos a atualizar (nome, textos, cores, ícones, toggle de pontos etc.). Campos omitidos/nulos não são alterados.</param>
     [HttpPut]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Save([FromBody] SaveSiteConfigRequest req)

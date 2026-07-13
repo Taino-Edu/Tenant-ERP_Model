@@ -44,9 +44,11 @@ public class AnalyticsController : ControllerBase
         _financeiro = financeiro;
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/analytics/dashboard
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Resumo do painel geral do admin: vendas de hoje/ontem, comandas abertas,
+    /// ticket médio, clientes ativos/inativos, curva horária de vendas do dia,
+    /// top 5 produtos e formas de pagamento — tudo dos últimos 30-60 dias.
+    /// </summary>
     [HttpGet("dashboard")]
     public async Task<ActionResult<DashboardAnalyticsDto>> GetDashboard()
     {
@@ -183,10 +185,12 @@ public class AnalyticsController : ControllerBase
         });
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/analytics/clientes
-    // Insights por cliente: gasto, ticket médio, inatividade
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Lista clientes ativos com insights individuais: gasto total, ticket médio,
+    /// número de visitas, última visita, saldo/vencimento de pontos e se está
+    /// inativo há mais de 30 dias.
+    /// </summary>
+    /// <param name="apenasInativos">Se true, retorna só clientes sem visita nos últimos 30 dias.</param>
     [HttpGet("clientes")]
     public async Task<ActionResult<List<ClienteInsightDto>>> GetClienteInsights(
         [FromQuery] bool apenasInativos = false)
@@ -241,10 +245,13 @@ public class AnalyticsController : ControllerBase
         return Ok(insights);
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/analytics/financeiro?inicio=2025-01-01&fim=2025-01-31
-    // Controle financeiro: receita, custo e margem no período filtrado
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Calcula receita, custo e margem (comandas + vendas avulsas) no período
+    /// filtrado, calendário de Brasília. Sem filtro, usa o mês corrente.
+    /// </summary>
+    /// <param name="inicio">Início do período (data local, padrão: dia 1 do mês corrente).</param>
+    /// <param name="fim">Fim do período, inclusive (data local, padrão: hoje).</param>
+    /// <param name="filterPaymentMethod">Filtra o cálculo por uma forma de pagamento específica (ex: "Pix").</param>
     [HttpGet("financeiro")]
     public async Task<ActionResult<FinanceiroDto>> GetFinanceiro(
         [FromQuery] DateTime? inicio,
@@ -262,11 +269,14 @@ public class AnalyticsController : ControllerBase
         return Ok(dto);
     }
 
-    // -------------------------------------------------------------------------
-    // GET /api/analytics/fechamentos?tipo=Mes&inicio=2026-06-01&fim=2026-06-30
-    // Consulta um snapshot de período já fechado, se existir — usado pra
-    // preferir o número congelado em vez de recalcular ao vivo.
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Consulta um snapshot de período já fechado (FechamentoPeriodo), se existir —
+    /// usado pra preferir o número congelado em vez de recalcular ao vivo. 404 se
+    /// essa janela específica nunca foi fechada.
+    /// </summary>
+    /// <param name="tipo">Granularidade da janela: "Dia", "Semana" ou "Mes".</param>
+    /// <param name="inicio">Primeiro dia da janela.</param>
+    /// <param name="fim">Último dia da janela.</param>
     [HttpGet("fechamentos")]
     public async Task<ActionResult<FechamentoPeriodoDto>> GetFechamento(
         [FromQuery] string   tipo,
@@ -284,12 +294,11 @@ public class AnalyticsController : ControllerBase
         return Ok(MapFechamento(fechamento));
     }
 
-    // -------------------------------------------------------------------------
-    // POST /api/analytics/fechamentos/fechar-agora
-    // Fecha (ou refecha) uma janela na hora — serve tanto de backfill (se o
-    // job noturno não rodou) quanto de "reabrir" (rodar de novo sobre uma
-    // janela já fechada recalcula e sobrescreve, é upsert).
-    // -------------------------------------------------------------------------
+    /// <summary>
+    /// Fecha (ou refecha) uma janela financeira na hora — serve tanto de backfill
+    /// (se o job noturno não rodou) quanto de "reabrir" (rodar de novo sobre uma
+    /// janela já fechada recalcula e sobrescreve; é upsert por Tipo/DataInicio/DataFim).
+    /// </summary>
     [HttpPost("fechamentos/fechar-agora")]
     public async Task<ActionResult<FechamentoPeriodoDto>> FecharAgora([FromBody] FecharJanelaRequest request)
     {

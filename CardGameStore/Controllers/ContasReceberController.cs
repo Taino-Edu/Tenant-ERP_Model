@@ -32,7 +32,19 @@ public class ContasReceberController : ControllerBase
         _config = config;
     }
 
-    // ── GET /api/contas-receber — lista com filtros ────────────────────────────
+    /// <summary>
+    /// Lista lançamentos financeiros (contas a pagar/receber) com filtros e
+    /// paginação. Antes de listar, marca automaticamente como "overdue" qualquer
+    /// lançamento pendente com vencimento já passado.
+    /// </summary>
+    /// <param name="type">Filtra por tipo: "income" (a receber) ou "expense" (a pagar).</param>
+    /// <param name="status">Filtra por status: "pending", "paid", "overdue" ou "cancelled".</param>
+    /// <param name="source">Filtra pela origem do lançamento (ex: "manual", "ofx", "inter", "sefaz").</param>
+    /// <param name="search">Busca por texto na descrição ou no fornecedor.</param>
+    /// <param name="from">Data inicial (vencimento ou criação).</param>
+    /// <param name="to">Data final (vencimento ou criação).</param>
+    /// <param name="page">Número da página (base 1, padrão 1).</param>
+    /// <param name="pageSize">Registros por página (padrão 50).</param>
     [HttpGet]
     public async Task<IActionResult> List(
         [FromQuery] string? type     = null,   // "income" | "expense"
@@ -70,7 +82,10 @@ public class ContasReceberController : ControllerBase
         return Ok(new { items = items.Select(ToDto), total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
     }
 
-    // ── GET /api/contas-receber/summary ───────────────────────────────────────
+    /// <summary>
+    /// Resumo financeiro: total a pagar (com atrasado e vencendo em 7 dias), total
+    /// a receber, e saldo líquido pago no mês corrente.
+    /// </summary>
     [HttpGet("summary")]
     public async Task<IActionResult> Summary()
     {
@@ -103,7 +118,7 @@ public class ContasReceberController : ControllerBase
         });
     }
 
-    // ── POST /api/contas-receber — entrada manual ──────────────────────────────
+    /// <summary>Cria um lançamento financeiro manual (a pagar ou a receber).</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTransactionRequest req)
     {
@@ -127,7 +142,10 @@ public class ContasReceberController : ControllerBase
         return Ok(ToDto(tx));
     }
 
-    // ── PUT /api/contas-receber/{id} — atualizar (marcar pago, editar) ─────────
+    /// <summary>
+    /// Atualiza um lançamento — inclui marcar como pago (seta PaidAt automaticamente)
+    /// ou reverter isso ao mudar o status pra algo diferente de "paid".
+    /// </summary>
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTransactionRequest req)
     {
@@ -155,7 +173,7 @@ public class ContasReceberController : ControllerBase
         return Ok(ToDto(tx));
     }
 
-    // ── DELETE /api/contas-receber/{id} ───────────────────────────────────────
+    /// <summary>Remove permanentemente um lançamento financeiro.</summary>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
@@ -166,7 +184,11 @@ public class ContasReceberController : ControllerBase
         return NoContent();
     }
 
-    // ── POST /api/contas-receber/import-ofx — upload arquivo OFX ─────────────
+    /// <summary>
+    /// Importa um extrato bancário OFX (máx 5 MB) — cada transação vira um
+    /// lançamento já marcado como pago. Deduplica por identificador externo (FITID),
+    /// então reimportar o mesmo extrato não duplica lançamentos.
+    /// </summary>
     [HttpPost("import-ofx")]
     [RequestSizeLimit(5 * 1024 * 1024)] // 5 MB
     public async Task<IActionResult> ImportOfx(IFormFile file)
@@ -208,7 +230,10 @@ public class ContasReceberController : ControllerBase
         return Ok(new { imported, skipped, total = parsed.Count });
     }
 
-    // ── GET /api/contas-receber/integracoes ───────────────────────────────────
+    /// <summary>
+    /// Status das integrações financeiras (Inter, Mercado Pago, SEFAZ) — se estão
+    /// ativas/conectadas e quando sincronizaram por último. Nunca retorna tokens/segredos.
+    /// </summary>
     [HttpGet("integracoes")]
     public async Task<IActionResult> GetIntegracoes()
     {
@@ -232,7 +257,11 @@ public class ContasReceberController : ControllerBase
         }));
     }
 
-    // ── PUT /api/contas-receber/integracoes/{source} — salvar config ──────────
+    /// <summary>
+    /// Salva/atualiza a configuração de uma integração ("inter", "mercadopago" ou
+    /// "sefaz") — CNPJ, chave Pix, se está ativa. ClientSecret é sempre criptografado
+    /// (AES-256-GCM) antes de persistir.
+    /// </summary>
     [HttpPut("integracoes/{source}")]
     public async Task<IActionResult> SaveIntegracao(string source, [FromBody] SaveIntegracaoRequest req)
     {
@@ -262,7 +291,11 @@ public class ContasReceberController : ControllerBase
         return Ok(new { source, saved = true });
     }
 
-    // ── POST /api/contas-receber/integracoes/{source}/token — salva tokens OAuth (uso interno)
+    /// <summary>
+    /// Salva tokens OAuth (access/refresh) de uma integração já configurada — uso
+    /// interno, chamado pelo próprio fluxo de OAuth da integração, não pelo admin
+    /// diretamente. Tokens são sempre criptografados antes de persistir.
+    /// </summary>
     [HttpPost("integracoes/{source}/token")]
     public async Task<IActionResult> SaveToken(string source, [FromBody] SaveTokenRequest req)
     {
@@ -279,7 +312,11 @@ public class ContasReceberController : ControllerBase
         return Ok(new { source, tokenSaved = true });
     }
 
-    // ── GET /api/contas-receber/sefaz-status ──────────────────────────────────
+    /// <summary>
+    /// Status da integração com a Manifestação do Destinatário da SEFAZ: se está
+    /// configurada/ativa, ambiente (produção/homologação), último NSU consultado
+    /// e contagem de notas destinadas por status do pipeline.
+    /// </summary>
     [HttpGet("sefaz-status")]
     public async Task<IActionResult> SefazStatus()
     {
@@ -309,7 +346,11 @@ public class ContasReceberController : ControllerBase
         });
     }
 
-    // ── POST /api/contas-receber/sefaz/sync — sincronização manual ────────────
+    /// <summary>
+    /// Dispara manualmente a sincronização com a SEFAZ (Distribuição DFe) — busca
+    /// NF-e novas contra o CNPJ da loja, dá ciência da operação e baixa XMLs.
+    /// Mesmo processo que roda automaticamente a cada 2h em background.
+    /// </summary>
     [HttpPost("sefaz/sync")]
     public async Task<IActionResult> SefazSync(CancellationToken ct)
     {
@@ -326,7 +367,11 @@ public class ContasReceberController : ControllerBase
         });
     }
 
-    // ── GET /api/contas-receber/notas-destinadas — NF-e recebidas ─────────────
+    /// <summary>
+    /// Lista as NF-e de fornecedores descobertas via SEFAZ (limitado às 200 mais
+    /// recentes), com o status do pipeline (aguardando ciência → XML → contas geradas).
+    /// </summary>
+    /// <param name="status">Filtra por status do pipeline (ex: "Resumo", "Ciencia", "XmlBaixado", "ContasGeradas", "Cancelada").</param>
     [HttpGet("notas-destinadas")]
     public async Task<IActionResult> NotasDestinadas([FromQuery] string? status = null)
     {
@@ -347,7 +392,8 @@ public class ContasReceberController : ControllerBase
         return Ok(notas);
     }
 
-    // ── POST /api/contas-receber/integracoes/inter/sync — sincronização manual ─
+    /// <summary>Sincroniza manualmente o extrato do Banco Inter dos últimos N dias.</summary>
+    /// <param name="days">Quantos dias pra trás buscar no extrato (padrão 7).</param>
     [HttpPost("integracoes/inter/sync")]
     public async Task<IActionResult> InterSync([FromQuery] int days = 7)
     {
@@ -359,7 +405,7 @@ public class ContasReceberController : ControllerBase
         return Ok(new { result.Imported, result.Duplicates });
     }
 
-    // ── GET /api/contas-receber/integracoes/inter/status ──────────────────────
+    /// <summary>Status da integração com o Banco Inter: credenciais, certificado mTLS instalado, última sincronização.</summary>
     [HttpGet("integracoes/inter/status")]
     public async Task<IActionResult> InterStatus()
     {
@@ -373,7 +419,10 @@ public class ContasReceberController : ControllerBase
         });
     }
 
-    // ── POST /api/contas-receber/integracoes/inter/certificado — upload mTLS ────
+    /// <summary>
+    /// Instala o certificado mTLS (.crt + .key) exigido pela API do Banco Inter —
+    /// cada arquivo até 64 KB.
+    /// </summary>
     [HttpPost("integracoes/inter/certificado")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadCertificado(IFormFile crt, IFormFile key)

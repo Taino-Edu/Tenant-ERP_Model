@@ -1,6 +1,7 @@
 // =============================================================================
 // User.cs — Entidade de Usuário (PostgreSQL)
-// Suporta dois perfis: Admin (Maikon) e Customer (clientes da loja)
+// Suporta múltiplos perfis: Admin (dono da loja), Operator (funcionário com
+// permissões granulares), Customer (clientes da loja) e Contador.
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
@@ -10,7 +11,7 @@ namespace CardGameStore.Models.PostgreSQL;
 
 /// <summary>
 /// Representa um usuário do sistema.
-/// Admin = dono da loja (Maikon), com acesso total ao painel.
+/// Admin = dono da loja, com acesso total ao painel.
 /// Customer = cliente que entra via QR Code com login simplificado.
 /// </summary>
 [Table("users")]

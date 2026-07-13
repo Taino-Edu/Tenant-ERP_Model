@@ -50,7 +50,11 @@ public class ContadorPortalController : ControllerBase
         _logger       = logger;
     }
 
-    // ── GET /api/contador-portal/clientes ─────────────────────────────────────
+    /// <summary>
+    /// Lista as lojas vinculadas a este contador (aprovadas ou pendentes). Pra
+    /// vínculos aprovados, também traz um sinal rápido de saúde fiscal: validade
+    /// do certificado A1 e data da última nota emitida.
+    /// </summary>
     [HttpGet("clientes")]
     public async Task<IActionResult> ListClientes()
     {
@@ -98,7 +102,11 @@ public class ContadorPortalController : ControllerBase
         return Ok(clientes);
     }
 
-    // ── POST /api/contador-portal/solicitar-acesso ────────────────────────────
+    /// <summary>
+    /// Solicita acesso a uma loja pelo slug — cria um vínculo Pending que só vira
+    /// utilizável depois que o lojista aprovar em /admin/fiscal. 404 se o slug não
+    /// existe, 409 se já existe solicitação (ou vínculo) pra essa loja.
+    /// </summary>
     [HttpPost("solicitar-acesso")]
     public async Task<IActionResult> SolicitarAcesso([FromBody] SolicitarAcessoRequest request)
     {
@@ -128,7 +136,16 @@ public class ContadorPortalController : ControllerBase
         return Ok(new { Message = "Solicitação enviada. Aguarde a aprovação do lojista." });
     }
 
-    // ── GET /api/contador-portal/clientes/{tenantId}/notas ────────────────────
+    /// <summary>
+    /// Lista as notas fiscais emitidas por uma loja vinculada, com paginação e
+    /// filtros. 403 se este contador não tem vínculo aprovado com essa loja.
+    /// </summary>
+    /// <param name="tenantId">Id da loja (precisa ter vínculo Approved com este contador).</param>
+    /// <param name="inicio">Filtra notas emitidas a partir desta data.</param>
+    /// <param name="fim">Filtra notas emitidas até esta data.</param>
+    /// <param name="status">Filtra por status da nota (ex: "Autorizada", "Cancelada").</param>
+    /// <param name="page">Número da página (base 1, padrão 1).</param>
+    /// <param name="pageSize">Registros por página (padrão 30).</param>
     [HttpGet("clientes/{tenantId:guid}/notas")]
     public async Task<IActionResult> ListNotas(
         Guid tenantId,
@@ -171,7 +188,10 @@ public class ContadorPortalController : ControllerBase
         return Ok(new { items = itens, total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
     }
 
-    // ── GET /api/contador-portal/clientes/{tenantId}/config ───────────────────
+    /// <summary>
+    /// Dados cadastrais fiscais da loja vinculada (CNPJ, razão social, endereço,
+    /// regime tributário) — nunca inclui certificado ou CSC. 403 se não vinculado.
+    /// </summary>
     [HttpGet("clientes/{tenantId:guid}/config")]
     public async Task<IActionResult> GetConfig(Guid tenantId)
     {
@@ -201,7 +221,10 @@ public class ContadorPortalController : ControllerBase
         });
     }
 
-    // ── GET /api/contador-portal/clientes/{tenantId}/exportar-xmls ────────────
+    /// <summary>Baixa um ZIP com os XMLs das notas fiscais emitidas no período.</summary>
+    /// <param name="tenantId">Id da loja (precisa ter vínculo Approved com este contador).</param>
+    /// <param name="inicio">Início do período.</param>
+    /// <param name="fim">Fim do período — precisa ser depois de <paramref name="inicio"/>.</param>
     [HttpGet("clientes/{tenantId:guid}/exportar-xmls")]
     public async Task<IActionResult> ExportarXmls(Guid tenantId, [FromQuery] DateTime inicio, [FromQuery] DateTime fim)
     {
@@ -222,7 +245,7 @@ public class ContadorPortalController : ControllerBase
         return File(zipBytes, "application/zip", fileName);
     }
 
-    // ── GET /api/contador-portal/clientes/{tenantId}/avisos ───────────────────
+    /// <summary>Lista o mural de avisos trocados entre este contador e a loja vinculada.</summary>
     [HttpGet("clientes/{tenantId:guid}/avisos")]
     public async Task<IActionResult> ListAvisos(Guid tenantId)
     {
@@ -243,7 +266,7 @@ public class ContadorPortalController : ControllerBase
         return Ok(avisos);
     }
 
-    // ── POST /api/contador-portal/clientes/{tenantId}/avisos ──────────────────
+    /// <summary>Envia um aviso no mural compartilhado com a loja vinculada.</summary>
     [HttpPost("clientes/{tenantId:guid}/avisos")]
     public async Task<IActionResult> PostAviso(Guid tenantId, [FromBody] AvisoContadorRequest request)
     {

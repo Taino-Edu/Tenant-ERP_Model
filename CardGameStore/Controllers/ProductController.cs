@@ -28,6 +28,7 @@ public class ProductController : ControllerBase
     }
 
     /// <summary>Lista todos os produtos ativos. Acessível por todos.</summary>
+    /// <param name="category">Filtro opcional por categoria.</param>
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<Product>), 200)]
@@ -60,6 +61,7 @@ public class ProductController : ControllerBase
     }
 
     /// <summary>Busca produto por ID.</summary>
+    /// <param name="id">Id do produto.</param>
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(Product), 200)]
@@ -71,6 +73,7 @@ public class ProductController : ControllerBase
     }
 
     /// <summary>Busca produto por código de barras. Acessível por todos autenticados.</summary>
+    /// <param name="code">Código de barras do produto.</param>
     [HttpGet("barcode/{code}")]
     [Authorize]
     [ProducesResponseType(typeof(Product), 200)]
@@ -90,6 +93,7 @@ public class ProductController : ControllerBase
     }
 
     /// <summary>Cria um novo produto. Apenas Admin.</summary>
+    /// <param name="product">Dados do produto a criar.</param>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(Product), 201)]
@@ -100,6 +104,8 @@ public class ProductController : ControllerBase
     }
 
     /// <summary>Atualiza um produto. Apenas Admin.</summary>
+    /// <param name="id">Id do produto.</param>
+    /// <param name="product">Novos dados do produto.</param>
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(Product), 200)]
@@ -110,6 +116,7 @@ public class ProductController : ControllerBase
     }
 
     /// <summary>Desativa um produto (soft delete). Apenas Admin.</summary>
+    /// <param name="id">Id do produto.</param>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Deactivate(Guid id)
@@ -122,6 +129,8 @@ public class ProductController : ControllerBase
     /// Ajusta o estoque. Positivo = entrada, negativo = saída.
     /// Exemplo: { "delta": -1 } para vender 1 unidade.
     /// </summary>
+    /// <param name="id">Id do produto.</param>
+    /// <param name="req">Delta a aplicar no estoque (positivo ou negativo).</param>
     [HttpPatch("{id:guid}/stock")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> AdjustStock(Guid id, [FromBody] StockAdjustRequest req)

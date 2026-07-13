@@ -33,7 +33,7 @@ public class ReservationController : ControllerBase
         return id;
     }
 
-    // GET /api/reservations/mine — reservas do usuário logado
+    /// <summary>Lista as reservas do cliente logado, mais recentes primeiro.</summary>
     [HttpGet("mine")]
     [Authorize]
     public async Task<IActionResult> GetMine()
@@ -49,7 +49,12 @@ public class ReservationController : ControllerBase
         return Ok(list.Select(r => ToDto(r)));
     }
 
-    // POST /api/reservations — cria reserva (somente via site)
+    /// <summary>
+    /// Cria uma reserva de produto (via site) — bloqueia estoque na hora, descontando
+    /// reservas ativas já existentes; a venda só entra no financeiro quando o admin
+    /// homologar. Expira em 48h.
+    /// </summary>
+    /// <param name="req">Produto/variante, quantidade e observações opcionais.</param>
     [HttpPost]
     [Authorize]
     public async Task<IActionResult> Create([FromBody] CreateReservationRequest req)
@@ -106,7 +111,8 @@ public class ReservationController : ControllerBase
         return Ok(ToDto(reservation));
     }
 
-    // DELETE /api/reservations/{id} — cancela reserva própria
+    /// <summary>Cancela uma reserva ativa — o próprio dono ou um Admin.</summary>
+    /// <param name="id">Id da reserva.</param>
     [HttpDelete("{id:guid}")]
     [Authorize]
     public async Task<IActionResult> Cancel(Guid id)
@@ -125,7 +131,10 @@ public class ReservationController : ControllerBase
         return NoContent();
     }
 
-    // GET /api/reservations — lista todas [AdminOnly]
+    /// <summary>Lista todas as reservas da loja, paginado (30 por página), com filtros (Admin).</summary>
+    /// <param name="status">Filtro por status ("active", "fulfilled", "cancelled").</param>
+    /// <param name="userId">Filtro por cliente.</param>
+    /// <param name="page">Página (30 itens cada, base 1).</param>
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
     [RequireModule("estoque")]
@@ -151,7 +160,14 @@ public class ReservationController : ControllerBase
         return Ok(new { items = items.Select(ToDto), total, totalPages = (int)Math.Ceiling(total / 30.0) });
     }
 
-    // PUT /api/reservations/{id}/status — admin atualiza status
+    /// <summary>
+    /// Muda o status de uma reserva ativa diretamente (Admin). Ao marcar
+    /// "fulfilled" decrementa o estoque do produto/variante na hora; ao marcar
+    /// "cancelled" registra CancelledAt. Prefira <see cref="Homologar"/> pra
+    /// homologações que também lançam a venda no PDV/comanda.
+    /// </summary>
+    /// <param name="id">Id da reserva. Deve estar ativa.</param>
+    /// <param name="req">Novo status.</param>
     [HttpPut("{id:guid}/status")]
     [Authorize(Policy = "AdminOnly")]
     [RequireModule("estoque")]
@@ -191,7 +207,9 @@ public class ReservationController : ControllerBase
         return Ok(ToDto(res));
     }
 
-    // GET /api/reservations/product/{productId} — quantidade reservada (público)
+    /// <summary>Quantidade atualmente reservada (ativa e não-expirada) de um produto/variante — endpoint público.</summary>
+    /// <param name="productId">Id do produto.</param>
+    /// <param name="variantId">Id da variante, se o produto tiver grade.</param>
     [HttpGet("product/{productId:guid}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetProductReservedQty(Guid productId, [FromQuery] Guid? variantId = null)
@@ -206,7 +224,14 @@ public class ReservationController : ControllerBase
         return Ok(new { productId, variantId, reservedQuantity = reserved });
     }
 
-    // POST /api/reservations/{id}/homologar — admin homologa reserva → lança no PDV ou comanda
+    /// <summary>
+    /// Homologa uma reserva ativa: lança a venda de verdade no PDV (modo "pdv") ou
+    /// como item numa comanda aberta (modo "comanda", exige ComandaId), e marca a
+    /// reserva como "fulfilled". É o caminho normal pra confirmar uma reserva —
+    /// diferente de <see cref="UpdateStatus"/>, que só muda o status sem lançar nada.
+    /// </summary>
+    /// <param name="id">Id da reserva. Deve estar ativa.</param>
+    /// <param name="req">Modo de homologação ("pdv" ou "comanda") e dados específicos do modo.</param>
     [HttpPost("{id:guid}/homologar")]
     [Authorize(Policy = "AdminOnly")]
     [RequireModule("estoque")]
@@ -262,7 +287,8 @@ public class ReservationController : ControllerBase
         return Ok(new { message = "Reserva homologada com sucesso.", reservationId = id, mode = req.Mode });
     }
 
-    // PUT /api/reservations/{id}/extend — admin estende prazo +48h
+    /// <summary>Estende o prazo de expiração de uma reserva ativa em mais 48h (Admin).</summary>
+    /// <param name="id">Id da reserva. Deve estar ativa.</param>
     [HttpPut("{id:guid}/extend")]
     [Authorize(Policy = "AdminOnly")]
     [RequireModule("estoque")]

@@ -45,6 +45,8 @@ public class FiscalController : ControllerBase
         _tenant      = tenant;
     }
 
+    /// <summary>Retorna a configuração fiscal da loja (CNPJ, endereço, regime tributário,
+    /// certificado, CSC). Nunca inclui a senha do certificado nem o CSC token.</summary>
     // ── GET /api/fiscal/config ────────────────────────────────────────────────
     [HttpGet("config")]
     public async Task<IActionResult> GetConfig()
@@ -53,6 +55,9 @@ public class FiscalController : ControllerBase
         return Ok(ToDto(cfg));
     }
 
+    /// <summary>Atualiza a configuração fiscal (update parcial — só os campos enviados
+    /// são alterados). Cria a linha de configuração se ainda não existir.</summary>
+    /// <param name="req">Campos a atualizar; qualquer campo null/omitido mantém o valor atual.</param>
     // ── PUT /api/fiscal/config ────────────────────────────────────────────────
     [HttpPut("config")]
     public async Task<IActionResult> SaveConfig([FromBody] SaveFiscalConfigRequest req)
@@ -100,6 +105,11 @@ public class FiscalController : ControllerBase
         return Ok(ToDto(cfg));
     }
 
+    /// <summary>Valida e salva o certificado digital A1 (.pfx) usado para assinar NFC-e.
+    /// O arquivo e a senha são criptografados antes de persistir; um certificado inválido
+    /// (senha errada, expirado, corrompido) é rejeitado sem alterar a configuração atual.</summary>
+    /// <param name="file">Arquivo .pfx do certificado (máx 2 MB).</param>
+    /// <param name="senha">Senha do certificado.</param>
     // ── POST /api/fiscal/certificado — upload do .pfx + senha ────────────────
     [HttpPost("certificado")]
     [RequestSizeLimit(2 * 1024 * 1024)] // 2 MB — certificados .pfx são pequenos
@@ -143,6 +153,7 @@ public class FiscalController : ControllerBase
         });
     }
 
+    /// <summary>Lista as naturezas de operação (CFOP/CSOSN) cadastradas, com a padrão primeiro.</summary>
     // ── GET /api/fiscal/naturezas-operacao ────────────────────────────────────
     [HttpGet("naturezas-operacao")]
     public async Task<IActionResult> ListNaturezas()
@@ -173,6 +184,9 @@ public class FiscalController : ControllerBase
         return null;
     }
 
+    /// <summary>Cria uma natureza de operação (CFOP/CSOSN). Marcar como padrão desmarca
+    /// atomicamente a natureza padrão anterior (só pode haver uma).</summary>
+    /// <param name="req">CFOP, CSOSN (só os suportados pelo motor de emissão) e se é a padrão.</param>
     // ── POST /api/fiscal/naturezas-operacao ───────────────────────────────────
     [HttpPost("naturezas-operacao")]
     public async Task<IActionResult> CreateNatureza([FromBody] SaveNaturezaRequest req)
@@ -225,6 +239,10 @@ public class FiscalController : ControllerBase
         return Ok(natureza);
     }
 
+    /// <summary>Atualiza uma natureza de operação existente. Mesma regra de "padrão único"
+    /// da criação — marcar esta como padrão desmarca qualquer outra atomicamente.</summary>
+    /// <param name="id">Id da natureza de operação.</param>
+    /// <param name="req">Novos valores de CFOP, CSOSN e se é a padrão.</param>
     // ── PUT /api/fiscal/naturezas-operacao/{id} ───────────────────────────────
     [HttpPut("naturezas-operacao/{id:guid}")]
     public async Task<IActionResult> UpdateNatureza(Guid id, [FromBody] SaveNaturezaRequest req)
@@ -270,6 +288,8 @@ public class FiscalController : ControllerBase
         return Ok(natureza);
     }
 
+    /// <summary>Remove uma natureza de operação.</summary>
+    /// <param name="id">Id da natureza de operação.</param>
     // ── DELETE /api/fiscal/naturezas-operacao/{id} ────────────────────────────
     [HttpDelete("naturezas-operacao/{id:guid}")]
     public async Task<IActionResult> DeleteNatureza(Guid id)
@@ -282,6 +302,12 @@ public class FiscalController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Lista notas fiscais emitidas com paginação e filtro por status. Também
+    /// retorna quantas notas estão paradas esperando o retry automático (pendentes ou em
+    /// contingência) e há quanto tempo a mais antiga está parada, como sinal de alerta.</summary>
+    /// <param name="status">Filtro por status (ex: "Autorizada", "PendenteEmissao", "Rejeitada").</param>
+    /// <param name="page">Número da página (base 1, padrão 1).</param>
+    /// <param name="pageSize">Registros por página (padrão 30).</param>
     // ── GET /api/fiscal/notas?status=&page=&pageSize= ─────────────────────────
     [HttpGet("notas")]
     public async Task<IActionResult> ListNotas(
@@ -333,6 +359,10 @@ public class FiscalController : ControllerBase
         });
     }
 
+    /// <summary>Emissão manual tardia de NFC-e para uma comanda já fechada — usada quando o
+    /// admin optou por NÃO emitir no fechamento (checkbox desmarcado) e decide emitir depois
+    /// pelo histórico. Rejeita se já existe nota para esta comanda.</summary>
+    /// <param name="id">Id da comanda.</param>
     // ── POST /api/fiscal/emitir/comanda/{id} ──────────────────────────────────
     // Emissão manual tardia — usada quando o admin optou por NÃO emitir no fechamento
     // (checkbox desmarcado) e decidiu emitir depois pelo histórico.
@@ -347,6 +377,9 @@ public class FiscalController : ControllerBase
         return Ok(new { nota.Id, Status = nota.Status.ToString(), nota.MotivoRejeicao });
     }
 
+    /// <summary>Emissão manual tardia de NFC-e para uma venda avulsa já registrada.
+    /// Rejeita se já existe nota para esta venda.</summary>
+    /// <param name="id">Id da venda avulsa.</param>
     // ── POST /api/fiscal/emitir/venda-avulsa/{id} ─────────────────────────────
     [HttpPost("emitir/venda-avulsa/{id:guid}")]
     public async Task<IActionResult> EmitirNotaVendaAvulsa(Guid id)
@@ -359,6 +392,10 @@ public class FiscalController : ControllerBase
         return Ok(new { nota.Id, Status = nota.Status.ToString(), nota.MotivoRejeicao });
     }
 
+    /// <summary>Tenta transmitir de novo uma nota pendente/rejeitada/em contingência.
+    /// Notas já autorizadas voltam sem tentar de novo; acima do limite de tentativas
+    /// também não tenta.</summary>
+    /// <param name="id">Id da nota fiscal.</param>
     // ── POST /api/fiscal/notas/{id}/reprocessar ───────────────────────────────
     [HttpPost("notas/{id:guid}/reprocessar")]
     public async Task<IActionResult> ReprocessarNota(Guid id)
@@ -367,6 +404,10 @@ public class FiscalController : ControllerBase
         return Ok(new { nota.Id, Status = nota.Status.ToString(), nota.MotivoRejeicao });
     }
 
+    /// <summary>Cancela uma NFC-e autorizada, dentro da janela legal de 30 minutos após a
+    /// emissão. Exige justificativa com no mínimo 15 caracteres (exigência da SEFAZ).</summary>
+    /// <param name="id">Id da nota fiscal.</param>
+    /// <param name="req">Justificativa do cancelamento (mín. 15 caracteres).</param>
     // ── POST /api/fiscal/notas/{id}/cancelar ──────────────────────────────────
     [HttpPost("notas/{id:guid}/cancelar")]
     public async Task<IActionResult> CancelarNota(Guid id, [FromBody] CancelarNotaRequest req)
@@ -382,6 +423,9 @@ public class FiscalController : ControllerBase
         }
     }
 
+    /// <summary>Retorna os dados formatados do cupom NFC-e (itens, total, chave de acesso,
+    /// QR Code) pra exibir/imprimir no admin.</summary>
+    /// <param name="id">Id da nota fiscal.</param>
     // ── GET /api/fiscal/notas/{id}/cupom ──────────────────────────────────────
     [HttpGet("notas/{id:guid}/cupom")]
     public async Task<IActionResult> ObterCupom(Guid id)
@@ -390,6 +434,10 @@ public class FiscalController : ControllerBase
         return cupom is null ? NotFound() : Ok(cupom);
     }
 
+    /// <summary>Gera um .zip com os XMLs de todas as NFC-e emitidas no período, pra
+    /// entregar ao contador.</summary>
+    /// <param name="inicio">Data inicial do período (inclusive).</param>
+    /// <param name="fim">Data final do período — deve ser depois de <paramref name="inicio"/>.</param>
     // ── GET /api/fiscal/exportar-xmls?inicio=&fim= ────────────────────────────
     [HttpGet("exportar-xmls")]
     public async Task<IActionResult> ExportarXmls([FromQuery] DateTime inicio, [FromQuery] DateTime fim)
@@ -403,6 +451,11 @@ public class FiscalController : ControllerBase
         return File(zipBytes, "application/zip", fileName);
     }
 
+    /// <summary>Convida um contador por e-mail. Se ele já tem conta cadastrada, vincula
+    /// direto com status Approved (quem convida é o próprio lojista). Se ainda não tem
+    /// conta, registra um convite "cego" — o vínculo Approved é criado automaticamente
+    /// quando esse e-mail se cadastrar em /contador/cadastro.</summary>
+    /// <param name="request">E-mail do contador a convidar.</param>
     // ── POST /api/fiscal/contador/convidar ────────────────────────────────────
     // Vincula um contador JÁ CADASTRADO (via /contador/cadastro) a esta loja,
     // com o vínculo nascendo Approved direto — quem convida é o próprio lojista.
@@ -453,6 +506,8 @@ public class FiscalController : ControllerBase
         return Ok(new { Message = $"Contador {conta.Name} vinculado com sucesso." });
     }
 
+    /// <summary>Lista os vínculos de contador desta loja (aprovados e pendentes de
+    /// aprovação), com nome/e-mail do contador.</summary>
     // ── GET /api/fiscal/contador/solicitacoes ─────────────────────────────────
     [HttpGet("contador/solicitacoes")]
     public async Task<IActionResult> ListSolicitacoesContador()
@@ -473,6 +528,8 @@ public class FiscalController : ControllerBase
         return Ok(solicitacoes);
     }
 
+    /// <summary>Aprova uma solicitação de acesso de contador a esta loja.</summary>
+    /// <param name="linkId">Id do vínculo contador↔loja.</param>
     // ── POST /api/fiscal/contador/solicitacoes/{linkId}/aprovar ───────────────
     [HttpPost("contador/solicitacoes/{linkId:guid}/aprovar")]
     public async Task<IActionResult> AprovarSolicitacaoContador(Guid linkId)
@@ -487,6 +544,10 @@ public class FiscalController : ControllerBase
         return Ok(new { Message = "Solicitação aprovada." });
     }
 
+    /// <summary>Recusa uma solicitação de acesso de contador — apaga o vínculo por completo
+    /// (não guarda status "Rejected"), assim uma nova solicitação futura do mesmo contador
+    /// não fica bloqueada por um pedido antigo recusado.</summary>
+    /// <param name="linkId">Id do vínculo contador↔loja.</param>
     // ── POST /api/fiscal/contador/solicitacoes/{linkId}/recusar ───────────────
     // Apaga o vínculo (não guarda um status "Rejected") — assim, se o contador
     // solicitar de novo mais tarde, o "jaExiste" de SolicitarAcesso não bloqueia
@@ -504,6 +565,9 @@ public class FiscalController : ControllerBase
         return Ok(new { Message = "Solicitação recusada." });
     }
 
+    /// <summary>Lista o mural de avisos trocados com o(s) contador(es) vinculado(s) —
+    /// traz avisos de TODOS os vínculos aprovados desta loja (pode haver mais de um
+    /// contador vinculado, ex: troca de escritório em andamento).</summary>
     // ── GET /api/fiscal/contador/avisos ───────────────────────────────────────
     // Traz os avisos de TODOS os vínculos aprovados desta loja (pode haver mais
     // de um contador vinculado, ex: troca de escritório em andamento).
@@ -524,6 +588,10 @@ public class FiscalController : ControllerBase
         return Ok(avisos);
     }
 
+    /// <summary>Posta um aviso do lojista pro contador no mural compartilhado. Se houver
+    /// mais de um contador vinculado, exige informar qual (LinkId) — o lojista só pode
+    /// escrever em vínculos da própria loja.</summary>
+    /// <param name="request">Mensagem e, se houver múltiplos contadores vinculados, o LinkId de destino.</param>
     // ── POST /api/fiscal/contador/avisos ──────────────────────────────────────
     [HttpPost("contador/avisos")]
     public async Task<IActionResult> PostAvisoContador([FromBody] AvisoContadorRequest request)

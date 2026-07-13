@@ -192,7 +192,7 @@ public class VendaAvulsaService : IVendaAvulsaService
         await _db.SaveChangesAsync();
 
         // Emite a NFC-e referente a esta venda avulsa — só quando o admin escolheu
-        // explicitamente emitir no fechamento (Maikon não quer nota emitida sem antes
+        // explicitamente emitir no fechamento (a loja não quer nota emitida sem antes
         // perguntar). Aguarda o resultado (em vez de fire-and-forget) pra devolver o status
         // pro caixa na hora e permitir abrir o cupom automaticamente quando autorizar — a
         // chamada nunca lança exceção (garantia do NfceEmissionService). Se não marcou,

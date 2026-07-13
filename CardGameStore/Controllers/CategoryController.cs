@@ -26,11 +26,13 @@ public class CategoryController : ControllerBase
     private readonly ICategoryService _service;
     public CategoryController(ICategoryService service) { _service = service; }
 
+    /// <summary>Lista todas as categorias de produto da loja (ativas e inativas). Público.</summary>
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> GetAll() =>
         Ok(await _service.GetAllAsync());
 
+    /// <summary>Cria uma nova categoria de produto.</summary>
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create([FromBody] CategoryRequest req)
@@ -48,6 +50,7 @@ public class CategoryController : ControllerBase
         return Ok(await _service.CreateAsync(category));
     }
 
+    /// <summary>Atualiza nome, emoji, ordem de exibição ou status ativo/inativo de uma categoria.</summary>
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(Guid id, [FromBody] CategoryRequest req)
@@ -64,6 +67,7 @@ public class CategoryController : ControllerBase
         return Ok(await _service.UpdateAsync(category));
     }
 
+    /// <summary>Remove uma categoria. Produtos vinculados não são apagados — ficam sem categoria.</summary>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(Guid id)

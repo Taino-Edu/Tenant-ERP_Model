@@ -52,6 +52,8 @@ public class PlatformController : ControllerBase
         EnabledModules = t.EnabledModules,
     };
 
+    /// <summary>Lista todos os tenants cadastrados na plataforma, mais recente primeiro.
+    /// Somente o dono da plataforma.</summary>
     [HttpGet("tenants")]
     public async Task<IActionResult> ListTenants()
     {
@@ -62,6 +64,9 @@ public class PlatformController : ControllerBase
         return Ok(tenants.Select(ToDto));
     }
 
+    /// <summary>Provisiona uma loja nova: cria o schema PostgreSQL dedicado, aplica as
+    /// migrations e cria o admin inicial. Somente o dono da plataforma.</summary>
+    /// <param name="request">Slug da loja e credenciais do admin inicial.</param>
     [HttpPost("tenants")]
     public async Task<IActionResult> CreateTenant([FromBody] CreateTenantRequest request)
     {
@@ -83,6 +88,10 @@ public class PlatformController : ControllerBase
         }
     }
 
+    /// <summary>Suspende ou reativa uma loja. Uma loja suspensa tem a API bloqueada
+    /// (401/403 nas rotas do tenant), mas os dados permanecem intactos.</summary>
+    /// <param name="id">Id do tenant.</param>
+    /// <param name="request">Novo status ("Active" ou "Suspended").</param>
     [HttpPatch("tenants/{id:guid}/status")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateTenantStatusRequest request)
     {
@@ -100,6 +109,10 @@ public class PlatformController : ControllerBase
         return Ok(ToDto(tenant));
     }
 
+    /// <summary>Atualiza plano, status de pagamento e módulos pagos habilitados
+    /// (ex: Fiscal, Estoque) de uma loja.</summary>
+    /// <param name="id">Id do tenant.</param>
+    /// <param name="request">Nome do plano, status de pagamento e lista de módulos habilitados.</param>
     [HttpPatch("tenants/{id:guid}/billing")]
     public async Task<IActionResult> UpdateBilling(Guid id, [FromBody] UpdateTenantBillingRequest request)
     {
@@ -119,6 +132,13 @@ public class PlatformController : ControllerBase
         return Ok(ToDto(tenant));
     }
 
+    /// <summary>
+    /// Visão agregada de todas as lojas: receita do mês (tenants ativos), contagens de
+    /// pagamento/módulo, e um sinal barato de "essa loja tá ativa?" por tenant (último
+    /// login + última venda) — não é telemetria de verdade, só reaproveita dado que já
+    /// é gravado em cada venda/login. Uma falha ao agregar um tenant específico não
+    /// derruba a chamada inteira (log e segue pros outros).
+    /// </summary>
     // ── GET /api/platform/overview ─────────────────────────────────────────────
     // Visão agregada: receita do mês (todos os tenants ativos), contagens de
     // pagamento/módulo, e um sinal barato de "essa loja tá ativa?" por tenant
@@ -178,6 +198,14 @@ public class PlatformController : ControllerBase
         return Ok(dto);
     }
 
+    /// <summary>
+    /// Gera um ticket de uso único (expira em 90s) pro dono da plataforma acessar o
+    /// admin de uma loja sem digitar subdomínio nem logar de novo — o ticket é trocado
+    /// por uma sessão de verdade em <c>GET /api/auth/impersonate</c> (AuthController), que
+    /// já roda no domínio certo da loja (o token só nasce como cookie no redeem). Rejeita
+    /// lojas suspensas.
+    /// </summary>
+    /// <param name="id">Id do tenant a acessar.</param>
     // ── POST /api/platform/tenants/{id}/impersonate ────────────────────────────
     // Gera um ticket de uso único (90s pra clicar) pro dono da plataforma entrar
     // direto no admin daquela loja — ver GET /api/auth/impersonate (AuthController)

@@ -38,6 +38,8 @@ public class PerfisController : ControllerBase
     // GET /api/perfis/permissoes — Lista todas as permissões disponíveis
     // =========================================================================
 
+    /// <summary>Lista todas as permissões disponíveis pra montar um perfil de operador,
+    /// com rótulo amigável de cada uma.</summary>
     [HttpGet("permissoes")]
     public IActionResult ListPermissoes()
     {
@@ -68,6 +70,7 @@ public class PerfisController : ControllerBase
     // GET /api/perfis
     // =========================================================================
 
+    /// <summary>Lista todos os perfis de operador cadastrados, com contagem de usuários por perfil.</summary>
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
@@ -84,6 +87,8 @@ public class PerfisController : ControllerBase
     // GET /api/perfis/{id}
     // =========================================================================
 
+    /// <summary>Detalha um perfil de operador específico.</summary>
+    /// <param name="id">Id do perfil.</param>
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -96,6 +101,9 @@ public class PerfisController : ControllerBase
     // POST /api/perfis
     // =========================================================================
 
+    /// <summary>Cria um perfil de operador com um conjunto de permissões (permissões
+    /// inválidas/desconhecidas são filtradas silenciosamente).</summary>
+    /// <param name="request">Nome do perfil e lista de chaves de permissão.</param>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CriarPerfilRequest request)
     {
@@ -128,6 +136,10 @@ public class PerfisController : ControllerBase
     // PUT /api/perfis/{id}
     // =========================================================================
 
+    /// <summary>Atualiza nome e/ou permissões de um perfil (update parcial — só os
+    /// campos enviados são alterados).</summary>
+    /// <param name="id">Id do perfil.</param>
+    /// <param name="request">Novo nome e/ou lista de permissões; null mantém o valor atual.</param>
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] AtualizarPerfilRequest request)
     {
@@ -157,6 +169,9 @@ public class PerfisController : ControllerBase
     // DELETE /api/perfis/{id}
     // =========================================================================
 
+    /// <summary>Exclui um perfil — rejeitado se ainda houver operadores usando ele
+    /// (é preciso reatribuí-los antes).</summary>
+    /// <param name="id">Id do perfil.</param>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

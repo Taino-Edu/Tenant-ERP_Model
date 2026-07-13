@@ -15,6 +15,10 @@ public class ProductVariantController : ControllerBase
     private readonly AppDbContext _db;
     public ProductVariantController(AppDbContext db) => _db = db;
 
+    /// <summary>Lista as variantes (tamanho/cor) de um produto. Endpoint público — precisa
+    /// listar as opções na hora da venda (PDV, autoatendimento do cliente), então não
+    /// exige AdminOnly nem módulo pago.</summary>
+    /// <param name="productId">Id do produto pai.</param>
     // GET /api/products/{productId}/variants
     // Público — precisa listar as opções de variante na hora da venda (PDV,
     // autoatendimento do cliente), então não pode exigir AdminOnly nem módulo pago.
@@ -34,6 +38,10 @@ public class ProductVariantController : ControllerBase
         return Ok(variants);
     }
 
+    /// <summary>Cria uma variante (tamanho/cor) de um produto e marca o produto como
+    /// "tem variantes". Requer módulo Estoque.</summary>
+    /// <param name="productId">Id do produto pai.</param>
+    /// <param name="req">Tamanho, cor, estoque, preço (opcional, sobrepõe o do produto) e SKU.</param>
     // POST /api/products/{productId}/variants
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
@@ -60,6 +68,10 @@ public class ProductVariantController : ControllerBase
         return Ok(ToDto(variant, product.PriceInCents));
     }
 
+    /// <summary>Cria a grade completa de variantes (produto cartesiano de tamanhos ×
+    /// cores) de uma vez, pulando combinações que já existem. Requer módulo Estoque.</summary>
+    /// <param name="productId">Id do produto pai.</param>
+    /// <param name="req">Lista de tamanhos, lista de cores e estoque inicial de cada combinação.</param>
     // POST /api/products/{productId}/variants/bulk — cria a grade completa
     [HttpPost("bulk")]
     [Authorize(Policy = "AdminOnly")]
@@ -101,6 +113,10 @@ public class ProductVariantController : ControllerBase
         return Ok(created.Select(v => ToDto(v, product.PriceInCents)));
     }
 
+    /// <summary>Atualiza uma variante existente. Requer módulo Estoque.</summary>
+    /// <param name="productId">Id do produto pai.</param>
+    /// <param name="variantId">Id da variante.</param>
+    /// <param name="req">Novos tamanho, cor, estoque, preço e SKU.</param>
     // PUT /api/products/{productId}/variants/{variantId}
     [HttpPut("{variantId:guid}")]
     [Authorize(Policy = "AdminOnly")]
@@ -123,6 +139,10 @@ public class ProductVariantController : ControllerBase
         return Ok(ToDto(variant, product.PriceInCents));
     }
 
+    /// <summary>Remove uma variante. Se não sobrar nenhuma, desliga a flag "tem variantes"
+    /// do produto pai. Requer módulo Estoque.</summary>
+    /// <param name="productId">Id do produto pai.</param>
+    /// <param name="variantId">Id da variante.</param>
     // DELETE /api/products/{productId}/variants/{variantId}
     [HttpDelete("{variantId:guid}")]
     [Authorize(Policy = "AdminOnly")]

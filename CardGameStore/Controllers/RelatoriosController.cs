@@ -40,6 +40,12 @@ public class RelatoriosController : ControllerBase
     // -------------------------------------------------------------------------
     // GET /api/relatorios/vendas?mes=5&ano=2026
     // -------------------------------------------------------------------------
+    /// <summary>
+    /// Relatório de vendas do mês, agrupado por categoria → produto — combina
+    /// itens de comandas fechadas e vendas avulsas do período.
+    /// </summary>
+    /// <param name="mes">Mês (1-12). Omitido ou fora da faixa = mês atual (fuso de Brasília).</param>
+    /// <param name="ano">Ano. Omitido = ano atual.</param>
     [HttpGet("vendas")]
     public async Task<ActionResult<RelatorioVendasDto>> Vendas(
         [FromQuery] int mes = 0,
@@ -149,6 +155,12 @@ public class RelatoriosController : ControllerBase
     // -------------------------------------------------------------------------
     // GET /api/relatorios/crediario?mes=5&ano=2026
     // -------------------------------------------------------------------------
+    /// <summary>
+    /// Relatório de crediário: situação atual de todos os devedores em aberto
+    /// (com dias de atraso) e os pagamentos recebidos no mês filtrado.
+    /// </summary>
+    /// <param name="mes">Mês (1-12) pra filtrar os pagamentos recebidos. Omitido ou fora da faixa = mês atual.</param>
+    /// <param name="ano">Ano dos pagamentos recebidos. Omitido = ano atual.</param>
     [HttpGet("crediario")]
     public async Task<ActionResult<RelatorioCrediarioDto>> Crediario(
         [FromQuery] int mes = 0,

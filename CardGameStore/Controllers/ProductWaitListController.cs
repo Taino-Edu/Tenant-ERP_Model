@@ -39,6 +39,8 @@ public class ProductWaitListController : ControllerBase
 
     // ── Posição do cliente logado ──────────────────────────────────────────────
 
+    /// <summary>Posição do cliente logado na lista de espera de um produto, se estiver nela.</summary>
+    /// <param name="productId">Id do produto.</param>
     [HttpGet("my")]
     [Authorize]
     public async Task<IActionResult> MyPosition(Guid productId)
@@ -56,6 +58,12 @@ public class ProductWaitListController : ControllerBase
 
     // ── Entrar na lista ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Entra na lista de espera de um produto em pré-venda (só permitido se
+    /// o produto realmente estiver em pré-venda ou sem estoque). Recusa se o
+    /// cliente já estiver na lista.
+    /// </summary>
+    /// <param name="productId">Id do produto.</param>
     [HttpPost]
     [Authorize]
     public async Task<IActionResult> Join(Guid productId)
@@ -93,6 +101,8 @@ public class ProductWaitListController : ControllerBase
 
     // ── Sair da lista ──────────────────────────────────────────────────────────
 
+    /// <summary>Sai da lista de espera de um produto — reordena as posições dos que ficaram depois.</summary>
+    /// <param name="productId">Id do produto.</param>
     [HttpDelete]
     [Authorize]
     public async Task<IActionResult> Leave(Guid productId)
@@ -118,6 +128,7 @@ public class ProductWaitListController : ControllerBase
 
     // ── Cliente: todas as filas de espera em que estou (perfil) ────────────────
 
+    /// <summary>Todas as filas de espera em que o cliente logado está, com posição e produto.</summary>
     [HttpGet("/api/products/waitlist/mine")]
     [Authorize]
     public async Task<IActionResult> GetMine()
@@ -145,6 +156,7 @@ public class ProductWaitListController : ControllerBase
 
     // ── Admin: contagem agregada de pendentes em pré-venda (dashboard) ─────────
 
+    /// <summary>Contagem agregada de entradas de pré-venda ainda não notificadas (card do dashboard).</summary>
     [HttpGet("/api/products/waitlist/pre-venda/pendentes")]
     [Authorize(Policy = "AdminOnly")]
     [RequireModule("estoque")]
@@ -159,6 +171,8 @@ public class ProductWaitListController : ControllerBase
 
     // ── Admin: ver lista completa ──────────────────────────────────────────────
 
+    /// <summary>Lista completa da fila de espera de um produto, em ordem de posição (Admin).</summary>
+    /// <param name="productId">Id do produto.</param>
     [HttpGet]
     [Authorize(Policy = "AdminOnly")]
     [RequireModule("estoque")]
@@ -183,6 +197,12 @@ public class ProductWaitListController : ControllerBase
 
     // ── Admin: notificar próximo da fila ──────────────────────────────────────
 
+    /// <summary>
+    /// Notifica um cliente na fila (e-mail, se tiver) de que o produto voltou a
+    /// ter estoque, e marca a entrada como notificada (Admin).
+    /// </summary>
+    /// <param name="productId">Id do produto.</param>
+    /// <param name="entryId">Id da entrada na fila a notificar.</param>
     [HttpPost("{entryId:guid}/notify")]
     [Authorize(Policy = "AdminOnly")]
     [RequireModule("estoque")]
@@ -213,6 +233,9 @@ public class ProductWaitListController : ControllerBase
 
     // ── Admin: remover entrada ─────────────────────────────────────────────────
 
+    /// <summary>Remove uma entrada da fila de espera e reordena as posições subsequentes (Admin).</summary>
+    /// <param name="productId">Id do produto.</param>
+    /// <param name="entryId">Id da entrada a remover.</param>
     [HttpDelete("{entryId:guid}")]
     [Authorize(Policy = "AdminOnly")]
     [RequireModule("estoque")]

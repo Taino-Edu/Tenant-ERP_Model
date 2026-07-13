@@ -26,6 +26,11 @@ public class PublicProfileController : ControllerBase
 
     // ── GET /api/profile/{userId} ─────────────────────────────────────────────
 
+    /// <summary>
+    /// Perfil público de um usuário — endpoint público, sem autenticação. Retorna
+    /// nome, avatar, data de cadastro, total de comandas fechadas e saldo de pontos.
+    /// </summary>
+    /// <param name="userId">Id do usuário. Retorna 404 se não existir, estiver inativo ou tiver sido excluído (LGPD).</param>
     [HttpGet("{userId:guid}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetPublicProfile(Guid userId)

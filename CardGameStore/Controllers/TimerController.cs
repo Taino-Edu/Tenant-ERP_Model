@@ -14,10 +14,13 @@ public class TimerController : ControllerBase
     private readonly AppDbContext _db;
     public TimerController(AppDbContext db) => _db = db;
 
+    /// <summary>Lista todos os timers da loja, ordenados por criação.</summary>
     [HttpGet]
     public async Task<IActionResult> List() =>
         Ok(await _db.Timers.OrderBy(t => t.CreatedAt).Select(t => ToDto(t)).ToListAsync());
 
+    /// <summary>Cria um novo timer (nasce parado, estado <c>Stopped</c>).</summary>
+    /// <param name="req">Nome, duração em segundos, som e segundos de aviso antes do fim.</param>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] TimerCreateRequest req)
     {
@@ -33,6 +36,14 @@ public class TimerController : ControllerBase
         return StatusCode(201, ToDto(t));
     }
 
+    /// <summary>
+    /// Aplica uma ação de controle ao timer: <c>start</c> (retoma de onde parou,
+    /// via FromRemaining, se informado), <c>pause</c>, <c>reset</c>, <c>finish</c>,
+    /// <c>rename</c> ou <c>config</c> (ajusta duração/som/aviso). A ação determina
+    /// quais campos do request são usados.
+    /// </summary>
+    /// <param name="id">Id do timer.</param>
+    /// <param name="req">Ação a executar e os campos relevantes pra ela.</param>
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] TimerUpdateRequest req)
     {
@@ -85,6 +96,8 @@ public class TimerController : ControllerBase
         return Ok(ToDto(t));
     }
 
+    /// <summary>Remove um timer.</summary>
+    /// <param name="id">Id do timer. 404 se não existir.</param>
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

@@ -1,6 +1,6 @@
 // =============================================================================
 // FiscalConfig.cs — Configuração fiscal da loja para emissão de NFC-e
-// Singleton lógico: uma única linha representa a empresa emitente (Maikon).
+// Singleton lógico: uma única linha representa a empresa emitente (a loja).
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
@@ -153,7 +153,7 @@ public class FiscalConfig
 
     /// <summary>
     /// Formas de pagamento (CSV: "Pix,Dinheiro,...") que emitem NFC-e automaticamente ao
-    /// fechar a venda, sem perguntar. Vazio por padrão — o Maikon não quer que o sistema
+    /// fechar a venda, sem perguntar. Vazio por padrão — a loja não quer que o sistema
     /// emita nota sem antes perguntar; o admin decide explicitamente a cada fechamento
     /// via checkbox, que só vem pré-marcado para as formas listadas aqui.
     /// </summary>

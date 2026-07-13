@@ -34,6 +34,11 @@ public class PublicDirectoryController : ControllerBase
     }
 
     // ── GET /api/public/tenants ────────────────────────────────────────────────
+    /// <summary>
+    /// Lista as lojas ativas da plataforma (slug, nome de exibição, logo) — endpoint
+    /// público, pro site institucional listar/linkar as lojas. Só projeta campos
+    /// já públicos de propósito (nunca SchemaName/PaymentStatus/EnabledModules).
+    /// </summary>
     [HttpGet("tenants")]
     public async Task<IActionResult> ListTenants()
     {
@@ -61,6 +66,13 @@ public class PublicDirectoryController : ControllerBase
     // qualquer loja) e resolve o tenant no catálogo, sem tocar em Host nenhum.
     // Só devolve os mesmos campos já públicos via GET /api/site-config
     // (favicon/PWA icon/nome) — nada sensível, mesmo espírito de ListTenants.
+    /// <summary>
+    /// Favicon/ícone de PWA/nome do tenant, resolvidos pelo slug (não pelo header
+    /// Host) — usado pelo SSR do Next.js, que não consegue sobrescrever o header
+    /// Host no fetch(). Endpoint público: mesmos campos já expostos em
+    /// GET /api/site-config, nada sensível.
+    /// </summary>
+    /// <param name="slug">Slug da loja (mesmo valor usado no subdomínio). 404 se não existir ou estiver inativa.</param>
     [HttpGet("site-icons")]
     public async Task<IActionResult> GetSiteIcons([FromQuery] string slug)
     {

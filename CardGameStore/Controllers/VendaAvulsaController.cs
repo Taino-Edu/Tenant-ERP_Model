@@ -33,6 +33,7 @@ public class VendaAvulsaController : ControllerBase
     /// Registra uma venda avulsa no balcão.
     /// Decrementa estoque e persiste o evento, tudo no PostgreSQL.
     /// </summary>
+    /// <param name="request">Itens, forma de pagamento e cliente (opcional) da venda.</param>
     [HttpPost]
     [ProducesResponseType(typeof(VendaAvulsaDto), 201)]
     [ProducesResponseType(400)]
@@ -61,6 +62,7 @@ public class VendaAvulsaController : ControllerBase
     }
 
     /// <summary>Retorna as vendas avulsas mais recentes para exibição no dashboard.</summary>
+    /// <param name="limit">Quantidade máxima de vendas a retornar (1-200, padrão 50; fora da faixa cai pra 50).</param>
     [HttpGet("recent")]
     [ProducesResponseType(typeof(IEnumerable<VendaAvulsaDto>), 200)]
     public async Task<IActionResult> GetRecent([FromQuery] int limit = 50)
@@ -73,6 +75,7 @@ public class VendaAvulsaController : ControllerBase
     }
 
     /// <summary>Retorna todas as vendas avulsas de uma data específica (YYYY-MM-DD, fuso de Brasília). Padrão: hoje.</summary>
+    /// <param name="date">Data no formato YYYY-MM-DD. Omitido ou inválido = hoje (fuso de Brasília).</param>
     [HttpGet("by-date")]
     [ProducesResponseType(typeof(IEnumerable<VendaAvulsaDto>), 200)]
     public async Task<IActionResult> GetByDate([FromQuery] string? date = null)
@@ -87,11 +90,9 @@ public class VendaAvulsaController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Preenche o custo (UnitCostInCents) em itens de vendas avulsas antigas que ficaram com custo = 0.
-    /// Usa o custo atual de cada produto no PostgreSQL como referência.
-    /// </summary>
     /// <summary>Corrige a forma de pagamento de uma venda avulsa já registrada (Admin only).</summary>
+    /// <param name="id">Id da venda avulsa.</param>
+    /// <param name="request">Nova forma de pagamento (e segundo pagamento, se houver).</param>
     [HttpPatch("{id:guid}/pagamento")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(VendaAvulsaDto), 200)]
@@ -108,6 +109,11 @@ public class VendaAvulsaController : ControllerBase
         catch (ArgumentException ex)      { return BadRequest(new { Message = ex.Message }); }
     }
 
+    /// <summary>
+    /// Preenche o custo (UnitCostInCents) em itens de vendas avulsas antigas que
+    /// ficaram com custo = 0. Usa o custo atual de cada produto no PostgreSQL
+    /// como referência — operação de manutenção pontual, não roda automaticamente.
+    /// </summary>
     [HttpPost("backfill-costs")]
     [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> BackfillCosts()

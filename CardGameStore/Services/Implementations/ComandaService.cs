@@ -694,7 +694,7 @@ public class ComandaService : IComandaService
         await _db.SaveChangesAsync();
 
         // Emite a NFC-e referente a esta comanda — só quando o admin escolheu explicitamente
-        // emitir no fechamento (Maikon não quer nota emitida sem antes perguntar). Aguarda o
+        // emitir no fechamento (a loja não quer nota emitida sem antes perguntar). Aguarda o
         // resultado (em vez de fire-and-forget) pra poder devolver o status pro caixa na hora
         // e permitir abrir o cupom automaticamente quando autorizar — a chamada nunca lança
         // exceção (garantia do NfceEmissionService), então não tem risco de travar o fechamento.
