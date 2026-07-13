@@ -759,10 +759,17 @@ export interface TenantCustomerDto {
 
 // ── Audit log cross-tenant (fase 1 de logs) ─────────────────────────────────────
 
+export type AuditSeverity = 'Info' | 'Warning' | 'Critical'
+
 export interface AuditLogDto {
   id: string; actorUserId: string | null; actorUserName: string | null
   action: string; entityType: string; entityId: string | null; details: string | null
+  targetUserId: string | null; channel: string | null; severity: AuditSeverity; traceId: string | null
   createdAt: string
+}
+
+export interface AuditLogPagedResponse {
+  items: AuditLogDto[]; totalCount: number; page: number; pageSize: number; totalPages: number
 }
 
 export interface PlatformAuditLogDto extends AuditLogDto {
@@ -893,8 +900,8 @@ export const lgpdAdminApi = {
     api.put<LgpdRequestDto>(`/api/lgpd/requests/${id}/respond`, data),
 
   /** Lista audit logs paginados. */
-  listAudit: (page = 1, pageSize = 50) =>
-    api.get('/api/audit', { params: { page, pageSize } }),
+  listAudit: (page = 1, pageSize = 50, entityType?: string) =>
+    api.get<AuditLogPagedResponse>('/api/audit', { params: { page, pageSize, entityType } }),
 }
 
 // ── Analytics ─────────────────────────────────────────────────────────────────

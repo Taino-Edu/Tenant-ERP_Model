@@ -8,8 +8,11 @@ import {
 } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy } from 'lucide-react'
+import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye } from 'lucide-react'
 import clsx from 'clsx'
+import { summarizeAuditDetails } from '@/lib/auditFormat'
+import SeverityBadge from '@/components/admin/SeverityBadge'
+import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
 
 function fmtDateTime(iso: string | null) {
   if (!iso) return '—'
@@ -111,6 +114,7 @@ function ClientesTab({ tenantId }: { tenantId: string }) {
 
 function LogsTab({ tenantId }: { tenantId: string }) {
   const [result, setResult] = useState<PagedResult<AuditLogDto> | null>(null)
+  const [viewingLog, setViewingLog] = useState<AuditLogDto | null>(null)
 
   useEffect(() => {
     platformApi.getTenantAuditLogs(tenantId)
@@ -122,26 +126,42 @@ function LogsTab({ tenantId }: { tenantId: string }) {
   if (result.items.length === 0) return <p className="text-gray-400 text-center py-10">Nenhum registro de auditoria ainda.</p>
 
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-gray-500 border-b border-surface-600">
-          <th className="py-2 font-medium">Quando</th>
-          <th className="py-2 font-medium">Ator</th>
-          <th className="py-2 font-medium">Ação</th>
-          <th className="py-2 font-medium">Entidade</th>
-        </tr>
-      </thead>
-      <tbody>
-        {result.items.map(a => (
-          <tr key={a.id} className="border-b border-surface-700 last:border-0">
-            <td className="py-2.5 text-gray-400">{fmtDateTime(a.createdAt)}</td>
-            <td className="py-2.5 text-white">{a.actorUserName ?? 'Sistema'}</td>
-            <td className="py-2.5 text-gray-400">{a.action}</td>
-            <td className="py-2.5 text-gray-400">{a.entityType}{a.entityId ? ` #${a.entityId.slice(0, 8)}` : ''}</td>
+    <>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-gray-500 border-b border-surface-600">
+            <th className="py-2 font-medium">Quando</th>
+            <th className="py-2 font-medium">Ator</th>
+            <th className="py-2 font-medium">Ação</th>
+            <th className="py-2 font-medium">Entidade</th>
+            <th className="py-2 font-medium">Resumo</th>
+            <th className="py-2 font-medium">Severidade</th>
+            <th className="w-8"></th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {result.items.map(a => (
+            <tr
+              key={a.id}
+              onClick={() => setViewingLog(a)}
+              className="border-b border-surface-700 last:border-0 hover:bg-surface-700/40 transition-colors cursor-pointer"
+            >
+              <td className="py-2.5 text-gray-400 whitespace-nowrap">{fmtDateTime(a.createdAt)}</td>
+              <td className="py-2.5 text-white">{a.actorUserName ?? 'Sistema'}</td>
+              <td className="py-2.5 text-gray-400">{a.action}</td>
+              <td className="py-2.5 text-gray-400">{a.entityType}{a.entityId ? ` #${a.entityId.slice(0, 8)}` : ''}</td>
+              <td className="py-2.5 text-gray-400 max-w-[220px] truncate">{summarizeAuditDetails(a.details)}</td>
+              <td className="py-2.5"><SeverityBadge severity={a.severity} /></td>
+              <td className="py-2.5 text-gray-500"><Eye className="w-3.5 h-3.5" /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {viewingLog && (
+        <AuditLogDetailModal log={viewingLog} onClose={() => setViewingLog(null)} />
+      )}
+    </>
   )
 }
 

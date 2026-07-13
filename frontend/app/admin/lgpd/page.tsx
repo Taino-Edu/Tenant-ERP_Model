@@ -5,9 +5,12 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { api } from '@/lib/api'
-import { Shield, FileText, Clock, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, Download, FileDown } from 'lucide-react'
+import { api, AuditLogDto, AuditLogPagedResponse } from '@/lib/api'
+import { Shield, FileText, Clock, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, Download, FileDown, Eye } from 'lucide-react'
 import Link from 'next/link'
+import { summarizeAuditDetails } from '@/lib/auditFormat'
+import SeverityBadge from '@/components/admin/SeverityBadge'
+import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -27,25 +30,6 @@ interface LgpdRequest {
   isUrgent: boolean
   temAnexo: boolean
   anexoNome: string | null
-}
-
-interface AuditLog {
-  id: string
-  actorUserId: string | null
-  actorUserName: string | null
-  action: string
-  entityType: string
-  entityId: string | null
-  details: string | null
-  createdAt: string
-}
-
-interface AuditPagedResponse {
-  items: AuditLog[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -315,11 +299,12 @@ export default function LgpdAdminPage() {
   }, [tab, loadRequests])
 
   // ── Audit Log ───────────────────────────────────────────────────────────
-  const [auditData,       setAuditData]       = useState<AuditPagedResponse | null>(null)
+  const [auditData,       setAuditData]       = useState<AuditLogPagedResponse | null>(null)
   const [auditLoading,    setAuditLoading]    = useState(false)
   const [auditError,      setAuditError]      = useState<string | null>(null)
   const [auditPage,       setAuditPage]       = useState(1)
   const [auditActionFilter, setAuditActionFilter] = useState('')
+  const [viewingLog,      setViewingLog]      = useState<AuditLogDto | null>(null)
 
   const loadAudit = useCallback(async (page = 1, actionFilter = auditActionFilter) => {
     setAuditLoading(true)
@@ -327,7 +312,7 @@ export default function LgpdAdminPage() {
     try {
       const params: Record<string, string | number> = { page, pageSize: 50 }
       if (actionFilter) params.entityType = actionFilter === 'Auth' ? 'Auth' : actionFilter
-      const res = await api.get<AuditPagedResponse>('/api/audit', { params })
+      const res = await api.get<AuditLogPagedResponse>('/api/audit', { params })
       setAuditData(res.data)
       setAuditPage(page)
     } catch {
@@ -545,14 +530,20 @@ export default function LgpdAdminPage() {
                         <th className="text-left px-4 py-3 font-medium">Ator</th>
                         <th className="text-left px-4 py-3 font-medium">Ação</th>
                         <th className="text-left px-4 py-3 font-medium">Entidade</th>
-                        <th className="text-left px-4 py-3 font-medium">Detalhes</th>
+                        <th className="text-left px-4 py-3 font-medium">Resumo</th>
+                        <th className="text-left px-4 py-3 font-medium">Severidade</th>
+                        <th className="w-8"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {auditData.items.map(log => {
                         const isFail = log.action === 'LoginFalhou'
                         return (
-                          <tr key={log.id} className={`border-b border-surface-500/50 hover:bg-surface-700/50 transition-colors ${isFail ? 'bg-red-500/5' : ''}`}>
+                          <tr
+                            key={log.id}
+                            onClick={() => setViewingLog(log)}
+                            className={`border-b border-surface-500/50 hover:bg-surface-700/50 transition-colors cursor-pointer ${isFail ? 'bg-red-500/5' : ''}`}
+                          >
                             <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
                               {fmtDateTime(log.createdAt)}
                             </td>
@@ -573,10 +564,14 @@ export default function LgpdAdminPage() {
                                 <p className="text-gray-500 text-xs font-mono">{log.entityId.substring(0, 12)}…</p>
                               )}
                             </td>
-                            <td className="px-4 py-3 text-xs text-gray-400 max-w-[200px] truncate" title={log.details ?? ''}>
-                              {log.details
-                                ? (() => { try { const d = JSON.parse(log.details); return d.email ?? log.details } catch { return log.details } })()
-                                : '—'}
+                            <td className="px-4 py-3 text-xs text-gray-400 max-w-[220px] truncate">
+                              {summarizeAuditDetails(log.details)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <SeverityBadge severity={log.severity} />
+                            </td>
+                            <td className="px-4 py-3 text-gray-500">
+                              <Eye className="w-3.5 h-3.5" />
                             </td>
                           </tr>
                         )
@@ -621,6 +616,11 @@ export default function LgpdAdminPage() {
             loadRequests()
           }}
         />
+      )}
+
+      {/* Modal de detalhe do audit log */}
+      {viewingLog && (
+        <AuditLogDetailModal log={viewingLog} onClose={() => setViewingLog(null)} />
       )}
     </div>
   )
