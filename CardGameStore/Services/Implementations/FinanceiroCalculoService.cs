@@ -51,8 +51,11 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
                 c.SecondPaymentMethod == filterPaymentMethod);
 
         // ── Receita de comandas ───────────────────────────────────────────────
+        // Sum() traduzido pro SQL precisa ser (long), não (decimal) — SQLite (dev
+        // local sem Postgres) não sabe agregar decimal no banco, só Postgres sabe.
+        // Divide por 100m depois, em memória, sem perder precisão.
         var receitaComandas = await comandasBaseQ
-            .SumAsync(c => (decimal)c.TotalInCents) / 100m;
+            .SumAsync(c => (long)c.TotalInCents) / 100m;
 
         // ── Vendas avulsas ──────────────────────────────────────────
         var todasVendas = (await _vendas.GetRecentAsync(2000, ini)).ToList();
@@ -106,9 +109,10 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
 
         // ── Crediários em aberto ──────────────────────────────────────────────
+        // Mesmo motivo do Sum de receita acima: (long), não (decimal), pra traduzir no SQLite.
         var crediarios = await _db.Crediarios
             .Where(c => c.Status == CrediariosStatus.Aberto)
-            .SumAsync(c => (decimal)(c.ValorEmCentavos - c.ValorPagoEmCentavos)) / 100m;
+            .SumAsync(c => (long)(c.ValorEmCentavos - c.ValorPagoEmCentavos)) / 100m;
 
         // ── Breakdown dia a dia ───────────────────────────────────────────────
         // Uma passada só por cada lista, acumulando num dicionário por dia BR

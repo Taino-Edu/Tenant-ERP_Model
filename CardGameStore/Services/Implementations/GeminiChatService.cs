@@ -145,9 +145,11 @@ public class GeminiChatService : IAiChatService
         var ha30Dias   = hoje.AddDays(-30);
 
         // ── Vendas hoje ───────────────────────────────────────────────────────
+        // (long), não (decimal) — SQLite (dev local sem Postgres) não sabe agregar
+        // decimal no banco, só Postgres sabe traduzir esse Sum().
         var vendasHojeComanda = await _db.Comandas
             .Where(c => c.ClosedAt >= hoje && c.Status == ComandaStatus.Fechada)
-            .SumAsync(c => (decimal)c.TotalInCents);
+            .SumAsync(c => (long)c.TotalInCents);
 
         var todasVendas   = (await _vendas.GetRecentAsync(200)).ToList();
         var vendasHojeAvulsa = todasVendas

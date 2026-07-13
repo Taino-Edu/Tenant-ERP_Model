@@ -538,6 +538,40 @@ using (var scope = app.Services.CreateScope())
 // 16. MIDDLEWARE PIPELINE
 // ---------------------------------------------------------------------------
 
+// Captura qualquer exceção não tratada de todo o pipeline abaixo — primeiro
+// middleware de propósito, envolve literalmente tudo. Sem isso, uma exceção
+// que escapasse de um controller virava um 500 vazio (produção) ou a página
+// de erro em HTML do próprio .NET (dev) — nenhum dos dois dá pro frontend
+// mostrar mensagem nenhuma pro usuário/QA, só um toast genérico de "erro
+// desconhecido" sem pista nenhuma do que aconteceu de verdade.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Exceção não tratada em {Method} {Path} (trace {TraceId})",
+            context.Request.Method, context.Request.Path, context.TraceIdentifier);
+
+        if (context.Response.HasStarted)
+            throw; // resposta já começou a ser escrita — não dá pra reescrever status/body
+
+        context.Response.Clear();
+        context.Response.StatusCode  = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+
+        var isDev = context.RequestServices.GetRequiredService<IHostEnvironment>().IsDevelopment();
+        var message = isDev
+            ? $"{ex.GetType().Name}: {ex.Message}"
+            : "Erro interno. Tente novamente em instantes.";
+
+        await context.Response.WriteAsJsonAsync(new { message, traceId = context.TraceIdentifier });
+    }
+});
+
 // ForwardedHeaders — lê X-Forwarded-For/Proto do proxy reverso (nginx/Cloudflare)
 // de forma controlada pelo runtime, eliminando leitura manual do header nos serviços
 var forwardedOptions = new ForwardedHeadersOptions
