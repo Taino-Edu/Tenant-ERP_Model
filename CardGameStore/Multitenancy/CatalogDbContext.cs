@@ -111,11 +111,11 @@ public class CatalogDbContext : DbContext
         {
             entity.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
 
-            entity.HasOne<Tenant>()
-                  .WithMany()
-                  .HasForeignKey(t => t.TenantId)
-                  .OnDelete(DeleteBehavior.Cascade);
-
+            // Sem FK pra Tenant, de propósito: o tenant-zero (admin do domínio raiz,
+            // pré-multitenancy) tem TenantId = Guid.Empty e nunca teve linha no
+            // catálogo — uma FK aqui quebraria "abrir chamado" pra ele com
+            // violação de chave estrangeira. Mesmo padrão de
+            // PlatformImpersonationTicket.TenantId (também sem FK).
             entity.HasIndex(t => t.TenantId)
                   .HasDatabaseName("ix_support_tickets_tenant_id");
 

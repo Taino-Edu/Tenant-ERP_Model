@@ -732,8 +732,8 @@ export const platformApi = {
     api.get<SupportTicketDto[]>('/api/platform/support-tickets', { params }),
   getSupportTicket: (id: string) =>
     api.get<SupportTicketDetailDto>(`/api/platform/support-tickets/${id}`),
-  replySupportTicket: (id: string, body: string) =>
-    api.post<void>(`/api/platform/support-tickets/${id}/messages`, { body }),
+  replySupportTicket: (id: string, body: string, imageUrl?: string) =>
+    api.post<void>(`/api/platform/support-tickets/${id}/messages`, { body, imageUrl }),
   updateSupportTicketStatus: (id: string, status: SupportTicketStatus) =>
     api.patch<{ id: string; status: SupportTicketStatus }>(`/api/platform/support-tickets/${id}/status`, { status }),
 }
@@ -798,7 +798,8 @@ export type SupportTicketStatus = 'Aberto' | 'EmAndamento' | 'Resolvido' | 'Fech
 export type SupportTicketAuthorRole = 'Tenant' | 'Platform'
 
 export interface SupportTicketMessageDto {
-  id: string; authorRole: SupportTicketAuthorRole; authorName: string; body: string; createdAt: string
+  id: string; authorRole: SupportTicketAuthorRole; authorName: string; body: string
+  imageUrl: string | null; createdAt: string
 }
 
 export interface SupportTicketDto {
@@ -815,12 +816,12 @@ export interface SupportTicketDetailDto extends SupportTicketDto {
 export const supportApi = {
   listTickets: () =>
     api.get<SupportTicketDto[]>('/api/support/tickets'),
-  createTicket: (subject: string, body: string) =>
-    api.post<SupportTicketDto>('/api/support/tickets', { subject, body }),
+  createTicket: (subject: string, body: string, imageUrl?: string) =>
+    api.post<SupportTicketDto>('/api/support/tickets', { subject, body, imageUrl }),
   getTicket: (id: string) =>
     api.get<SupportTicketDetailDto>(`/api/support/tickets/${id}`),
-  addMessage: (id: string, body: string) =>
-    api.post<void>(`/api/support/tickets/${id}/messages`, { body }),
+  addMessage: (id: string, body: string, imageUrl?: string) =>
+    api.post<void>(`/api/support/tickets/${id}/messages`, { body, imageUrl }),
 }
 
 // ── Upload de imagem ──────────────────────────────────────────────────────────

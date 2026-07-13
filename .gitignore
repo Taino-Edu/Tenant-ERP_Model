@@ -13,6 +13,9 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+# Exceção: pasta de rota do Next.js (App Router), não diretório de log de app
+!frontend/app/**/logs/
+!frontend/app/**/logs/**
 
 # Visual Studio cache/options
 .vs/

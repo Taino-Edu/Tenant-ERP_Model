@@ -555,6 +555,7 @@ public class PlatformController : ControllerBase
         AuthorRole = m.AuthorRole.ToString(),
         AuthorName = m.AuthorName,
         Body       = m.Body,
+        ImageUrl   = m.ImageUrl,
         CreatedAt  = m.CreatedAt,
     };
 
@@ -614,6 +615,9 @@ public class PlatformController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
+        if (string.IsNullOrWhiteSpace(request.Body) && string.IsNullOrWhiteSpace(request.ImageUrl))
+            return BadRequest(new { Message = "Escreva uma mensagem ou anexe uma imagem." });
+
         var ticket = await _catalog.SupportTickets.FirstOrDefaultAsync(t => t.Id == id);
         if (ticket is null) return NotFound();
 
@@ -628,6 +632,7 @@ public class PlatformController : ControllerBase
             AuthorUserId = ownerId,
             AuthorName   = ownerName,
             Body         = request.Body.Trim(),
+            ImageUrl     = request.ImageUrl,
         });
 
         if (ticket.Status == SupportTicketStatus.Aberto)

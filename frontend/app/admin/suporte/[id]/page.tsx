@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supportApi, SupportTicketDetailDto, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
+import AttachImageButton from '@/components/support/AttachImageButton'
 import toast from 'react-hot-toast'
 import { ArrowLeft, LifeBuoy, Loader2, Send } from 'lucide-react'
 import clsx from 'clsx'
@@ -18,6 +19,7 @@ export default function AdminSupportTicketPage() {
 
   const [ticket, setTicket] = useState<SupportTicketDetailDto | null>(null)
   const [reply, setReply] = useState('')
+  const [replyImage, setReplyImage] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
   const fetchTicket = useCallback(() => {
@@ -30,11 +32,12 @@ export default function AdminSupportTicketPage() {
 
   async function handleReply(e: React.FormEvent) {
     e.preventDefault()
-    if (!reply.trim()) return
+    if (!reply.trim() && !replyImage) return
     setSending(true)
     try {
-      await supportApi.addMessage(ticketId, reply.trim())
+      await supportApi.addMessage(ticketId, reply.trim(), replyImage ?? undefined)
       setReply('')
+      setReplyImage(null)
       fetchTicket()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao enviar mensagem.'))
@@ -57,12 +60,18 @@ export default function AdminSupportTicketPage() {
         {ticket.messages.map(m => (
           <div key={m.id} className={clsx('max-w-lg rounded-xl px-4 py-3', m.authorRole === 'Tenant' ? 'ml-auto bg-brand-600/15 border border-brand-500/30' : 'bg-surface-700/60 border border-surface-600')}>
             <p className="text-xs text-gray-400 mb-1">{m.authorRole === 'Platform' ? 'Plataforma' : m.authorName} · {fmtDateTime(m.createdAt)}</p>
-            <p className="text-sm text-white whitespace-pre-wrap">{m.body}</p>
+            {m.body && <p className="text-sm text-white whitespace-pre-wrap">{m.body}</p>}
+            {m.imageUrl && (
+              <a href={m.imageUrl} target="_blank" rel="noopener noreferrer">
+                <img src={m.imageUrl} alt="Anexo" className={clsx('rounded-lg max-h-64 border border-surface-600', m.body && 'mt-2')} />
+              </a>
+            )}
           </div>
         ))}
       </div>
 
       <form onSubmit={handleReply} className="card flex items-end gap-3">
+        <AttachImageButton value={replyImage} onChange={setReplyImage} />
         <textarea
           className="input flex-1 resize-none"
           rows={2}
@@ -70,7 +79,7 @@ export default function AdminSupportTicketPage() {
           value={reply}
           onChange={e => setReply(e.target.value)}
         />
-        <button type="submit" disabled={sending || !reply.trim()} className="btn-primary py-2.5">
+        <button type="submit" disabled={sending || (!reply.trim() && !replyImage)} className="btn-primary py-2.5">
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </button>
       </form>

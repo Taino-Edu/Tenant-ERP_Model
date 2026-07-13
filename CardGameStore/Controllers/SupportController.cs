@@ -58,6 +58,7 @@ public class SupportController : ControllerBase
         AuthorRole = m.AuthorRole.ToString(),
         AuthorName = m.AuthorName,
         Body       = m.Body,
+        ImageUrl   = m.ImageUrl,
         CreatedAt  = m.CreatedAt,
     };
 
@@ -75,6 +76,9 @@ public class SupportController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
+        if (string.IsNullOrWhiteSpace(request.Body) && string.IsNullOrWhiteSpace(request.ImageUrl))
+            return BadRequest(new { Message = "Escreva uma mensagem ou anexe uma imagem." });
+
         var (userId, userName) = GetCurrentUser();
 
         var ticket = new SupportTicket
@@ -90,6 +94,7 @@ public class SupportController : ControllerBase
             AuthorUserId = userId,
             AuthorName   = userName,
             Body         = request.Body.Trim(),
+            ImageUrl     = request.ImageUrl,
         });
 
         _catalog.SupportTickets.Add(ticket);
@@ -144,6 +149,9 @@ public class SupportController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
+        if (string.IsNullOrWhiteSpace(request.Body) && string.IsNullOrWhiteSpace(request.ImageUrl))
+            return BadRequest(new { Message = "Escreva uma mensagem ou anexe uma imagem." });
+
         var ticket = await _catalog.SupportTickets
             .FirstOrDefaultAsync(t => t.Id == id && t.TenantId == _tenantContext.TenantId);
         if (ticket is null) return NotFound();
@@ -157,6 +165,7 @@ public class SupportController : ControllerBase
             AuthorUserId = userId,
             AuthorName   = userName,
             Body         = request.Body.Trim(),
+            ImageUrl     = request.ImageUrl,
         });
         ticket.UpdatedAt = DateTime.UtcNow;
 

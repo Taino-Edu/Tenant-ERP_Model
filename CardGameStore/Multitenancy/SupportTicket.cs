@@ -84,6 +84,11 @@ public class SupportTicketMessage
     [Column("body")]
     public string Body { get; set; } = string.Empty;
 
+    /// <summary>URL da imagem anexada (upload feito antes via /api/upload/image) — opcional.</summary>
+    [MaxLength(500)]
+    [Column("image_url")]
+    public string? ImageUrl { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { supportApi, SupportTicketDto, SupportTicketStatus, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
+import ImageUpload from '@/components/admin/ImageUpload'
 import toast from 'react-hot-toast'
 import { LifeBuoy, Loader2, Plus, X } from 'lucide-react'
 import clsx from 'clsx'
@@ -19,15 +20,16 @@ function fmtDateTime(iso: string) {
 }
 
 function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [subject, setSubject] = useState('')
-  const [body, setBody]       = useState('')
-  const [loading, setLoading] = useState(false)
+  const [subject, setSubject]   = useState('')
+  const [body, setBody]         = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [loading, setLoading]   = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     try {
-      await supportApi.createTicket(subject.trim(), body.trim())
+      await supportApi.createTicket(subject.trim(), body.trim(), imageUrl || undefined)
       toast.success('Chamado aberto.')
       onCreated()
       onClose()
@@ -56,6 +58,7 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
             <label className="label">Mensagem *</label>
             <textarea className="input resize-none" rows={4} value={body} onChange={e => setBody(e.target.value)} required />
           </div>
+          <ImageUpload currentUrl={imageUrl} onUpload={setImageUrl} label="Imagem (opcional)" hint="print da tela, erro, etc." />
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
             <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">

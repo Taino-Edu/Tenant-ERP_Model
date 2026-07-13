@@ -13,14 +13,21 @@ public class CreateSupportTicketRequest
     [Required, MaxLength(150)]
     public string Subject { get; set; } = string.Empty;
 
-    [Required]
+    // Sem [Required]: uma imagem sozinha (sem texto) é uma mensagem válida —
+    // ver checagem "pelo menos um dos dois" no controller.
     public string Body { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? ImageUrl { get; set; }
 }
 
 public class CreateSupportMessageRequest
 {
-    [Required]
+    // Sem [Required]: idem CreateSupportTicketRequest.
     public string Body { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? ImageUrl { get; set; }
 }
 
 public class UpdateSupportTicketStatusRequest
@@ -35,6 +42,7 @@ public class SupportTicketMessageDto
     public string AuthorRole { get; set; } = string.Empty;
     public string AuthorName { get; set; } = string.Empty;
     public string Body { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 

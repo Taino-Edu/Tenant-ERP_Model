@@ -3,9 +3,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { leadsApi, platformApi, LeadDto, LeadStatus, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
+import StatusPillSelect from '@/components/admin/StatusPillSelect'
 import toast from 'react-hot-toast'
-import { UserPlus, Loader2 } from 'lucide-react'
-import clsx from 'clsx'
+import { UserPlus, Loader2, MessageCircle } from 'lucide-react'
 
 const STATUS_OPTIONS: LeadStatus[] = ['Novo', 'Contatado', 'Convertido', 'Perdido']
 
@@ -18,6 +18,14 @@ const STATUS_STYLES: Record<LeadStatus, string> = {
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+/** Monta o link do WhatsApp a partir do telefone salvo — assume Brasil (55)
+ * quando o número não já vem com código de país (10/11 dígitos = DDD+número). */
+function whatsAppLink(telefone: string): string {
+  const digits = telefone.replace(/\D/g, '')
+  const withCountry = digits.length <= 11 ? `55${digits}` : digits
+  return `https://wa.me/${withCountry}`
 }
 
 function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void }) {
@@ -54,25 +62,26 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
     <tr className="border-b border-surface-700 last:border-0 align-top">
       <td className="py-3">
         <p className="text-white font-medium">{lead.nome}</p>
-        <p className="text-xs text-gray-400">{lead.telefone}{lead.email ? ` · ${lead.email}` : ''}</p>
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-0.5">
+          <a
+            href={whatsAppLink(lead.telefone)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir conversa no WhatsApp"
+            className="flex items-center gap-1 text-accent-green hover:underline"
+          >
+            <MessageCircle className="w-3.5 h-3.5" /> {lead.telefone}
+          </a>
+          {lead.email && <span>· {lead.email}</span>}
+        </div>
         {lead.mensagem && <p className="text-xs text-gray-500 mt-1 max-w-xs">{lead.mensagem}</p>}
       </td>
       <td className="py-3">
-        <select
-          className="input text-xs py-1"
-          value={lead.status}
-          disabled={saving}
-          onChange={e => updateStatus(e.target.value as LeadStatus)}
-        >
-          {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <span className={clsx('ml-2 text-xs font-medium px-2 py-0.5 rounded-full border', STATUS_STYLES[lead.status])}>
-          {lead.status}
-        </span>
+        <StatusPillSelect value={lead.status} options={STATUS_OPTIONS} styles={STATUS_STYLES} disabled={saving} onChange={updateStatus} />
       </td>
       <td className="py-3">
-        <input
-          className="input text-xs py-1 w-48"
+        <textarea
+          className="input text-xs py-1.5 w-64 resize-y min-h-[3.5rem]"
           placeholder="Anotações"
           value={notas}
           onChange={e => setNotas(e.target.value)}
