@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
+import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
@@ -137,8 +137,8 @@ export default function FiscalPage() {
       setNotas(data.items)
       setPendentesCount(data.pendentesCount)
       setPendenteMaisAntiga(data.pendenteMaisAntiga)
-    } catch {
-      toast.error('Erro ao carregar notas emitidas')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar notas emitidas'))
     } finally {
       setNotasLoading(false)
     }
@@ -151,8 +151,8 @@ export default function FiscalPage() {
     try {
       const { data } = await fiscalApi.listSolicitacoesContador()
       setSolicitacoes(data)
-    } catch {
-      toast.error('Erro ao carregar solicitações de contador')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar solicitações de contador'))
     } finally {
       setLoadingSolicitacoes(false)
     }
@@ -173,8 +173,8 @@ export default function FiscalPage() {
       toast.success(data.message)
       setConvidarEmail('')
       loadSolicitacoes()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao convidar contador')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao convidar contador'))
     } finally {
       setConvidando(false)
     }
@@ -186,8 +186,8 @@ export default function FiscalPage() {
       await fiscalApi.aprovarSolicitacaoContador(linkId)
       toast.success('Solicitação aprovada!')
       loadSolicitacoes()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao aprovar solicitação')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao aprovar solicitação'))
     } finally {
       setAprovandoId(null)
     }
@@ -199,8 +199,8 @@ export default function FiscalPage() {
       await fiscalApi.recusarSolicitacaoContador(linkId)
       toast.success('Solicitação recusada.')
       loadSolicitacoes()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao recusar solicitação')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao recusar solicitação'))
     } finally {
       setRecusandoId(null)
     }
@@ -211,8 +211,8 @@ export default function FiscalPage() {
     try {
       const { data } = await fiscalApi.listAvisosContador()
       setAvisos(data)
-    } catch {
-      toast.error('Erro ao carregar avisos do contador')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar avisos do contador'))
     } finally {
       setLoadingAvisos(false)
     }
@@ -232,8 +232,8 @@ export default function FiscalPage() {
       await fiscalApi.postAvisoContador(novoAviso.trim(), avisoLinkId || undefined)
       setNovoAviso('')
       loadAvisos()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao enviar aviso')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao enviar aviso'))
     } finally {
       setEnviandoAviso(false)
     }
@@ -246,8 +246,8 @@ export default function FiscalPage() {
       toast[data.status === 'Autorizada' ? 'success' : 'error'](
         data.status === 'Autorizada' ? 'Nota autorizada!' : `Ainda não autorizou: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
       loadNotas()
-    } catch {
-      toast.error('Erro ao reprocessar')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao reprocessar'))
     } finally {
       setReprocessingId(null)
     }
@@ -266,8 +266,8 @@ export default function FiscalPage() {
       setCancelModalId(null)
       setCancelJustificativa('')
       loadNotas()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao cancelar')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao cancelar'))
     } finally {
       setCancelling(false)
     }
@@ -299,8 +299,8 @@ export default function FiscalPage() {
       setCscId(cfg.cscId ?? '')
       setAutoEmit(cfg.formasPagamentoAutoEmissao ?? [])
       setNaturezas(nats)
-    } catch {
-      toast.error('Erro ao carregar dados fiscais')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar dados fiscais'))
     } finally {
       setLoading(false)
     }
@@ -321,8 +321,8 @@ export default function FiscalPage() {
       })
       setConfig(data)
       toast.success('Configuração fiscal salva!')
-    } catch {
-      toast.error('Erro ao salvar configuração fiscal')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar configuração fiscal'))
     } finally {
       setSaving(false)
     }
@@ -344,8 +344,8 @@ export default function FiscalPage() {
       setCertFile(null)
       setCertSenha('')
       load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao validar certificado')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao validar certificado'))
     } finally {
       setUploadingCert(false)
     }
@@ -367,8 +367,8 @@ export default function FiscalPage() {
       setNovaDescricao(''); setNovoCfop(''); setNovoCsosn(''); setNovoPercentualCredito(''); setNovoPadrao(false)
       toast.success('Natureza de operação criada!')
       load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao criar natureza de operação')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao criar natureza de operação'))
     } finally {
       setSavingNatureza(false)
     }
@@ -379,8 +379,8 @@ export default function FiscalPage() {
     try {
       await fiscalApi.removeNatureza(id)
       setNaturezas(prev => prev.filter(n => n.id !== id))
-    } catch {
-      toast.error('Erro ao remover')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao remover'))
     }
   }
 
@@ -398,8 +398,8 @@ export default function FiscalPage() {
       a.download = `xmls-fiscais-${inicio}-a-${fim}.zip`
       a.click()
       URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Erro ao gerar ZIP de XMLs')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao gerar ZIP de XMLs'))
     } finally {
       setExporting(false)
     }

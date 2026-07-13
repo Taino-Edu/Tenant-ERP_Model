@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorConfigDto, AvisoContadorDto } from '@/lib/api'
+import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorConfigDto, AvisoContadorDto, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Calculator, Download, Loader2, FileText, Building2, ChevronLeft, Clock, Plus, AlertTriangle, Send, MessageSquare } from 'lucide-react'
 import clsx from 'clsx'
@@ -37,7 +37,7 @@ export default function ContadorPage() {
     setLoadingClientes(true)
     contadorApi.listClientes()
       .then(r => setClientes(r.data))
-      .catch(() => toast.error('Erro ao carregar lista de clientes'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar lista de clientes')))
       .finally(() => setLoadingClientes(false))
   }, [])
 
@@ -52,8 +52,8 @@ export default function ContadorPage() {
       toast.success(data.message)
       setNovoSlug('')
       fetchClientes()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao solicitar acesso')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao solicitar acesso'))
     } finally {
       setSolicitando(false)
     }
@@ -185,7 +185,7 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
     setLoading(true)
     contadorApi.listNotas(cliente.tenantId, { inicio, fim, pageSize: 100 })
       .then(r => setNotas(r.data.items))
-      .catch(() => toast.error('Erro ao carregar notas fiscais'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar notas fiscais')))
       .finally(() => setLoading(false))
   }, [cliente.tenantId, inicio, fim])
 
@@ -199,7 +199,7 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
     setLoadingAvisos(true)
     contadorApi.listAvisos(cliente.tenantId)
       .then(r => setAvisos(r.data))
-      .catch(() => toast.error('Erro ao carregar avisos'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar avisos')))
       .finally(() => setLoadingAvisos(false))
   }, [cliente.tenantId])
 
@@ -213,8 +213,8 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
       await contadorApi.postAviso(cliente.tenantId, novoAviso.trim())
       setNovoAviso('')
       loadAvisos()
-    } catch {
-      toast.error('Erro ao enviar aviso')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao enviar aviso'))
     } finally {
       setEnviandoAviso(false)
     }
@@ -236,8 +236,8 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
       a.download = `xmls-fiscais-${cliente.slug}-${inicio}-a-${fim}.zip`
       a.click()
       URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Erro ao gerar ZIP de XMLs')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao gerar ZIP de XMLs'))
     } finally {
       setExporting(false)
     }

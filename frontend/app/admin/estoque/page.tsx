@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { productApi, variantApi, categoryApi, waitListApi, fiscalApi, Product, ProductCategory, ProductVariant, WaitListEntry, NaturezaOperacaoDto } from '@/lib/api'
+import { productApi, variantApi, categoryApi, waitListApi, fiscalApi, Product, ProductCategory, ProductVariant, WaitListEntry, NaturezaOperacaoDto, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check, ScanBarcode, Camera, Download, FileText, BarChart2, Layers, DollarSign, TrendingDown, CircleOff, Grid3X3, ChevronDown, ChevronUp, Users, Bell, Tag, GripVertical } from 'lucide-react'
 import ImageUpload from '@/components/admin/ImageUpload'
@@ -49,7 +49,7 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
         return updated
       })
       toast.success('Removido da fila')
-    } catch { toast.error('Erro ao remover') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao remover')) }
   }
 
   const status =
@@ -248,7 +248,7 @@ function VariantsPanel({ productId }: { productId: string }) {
 
   const load = async () => {
     try { const { data } = await variantApi.list(productId); setVariants(data) }
-    catch { toast.error('Erro ao carregar variantes') }
+    catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar variantes')) }
     finally { setLoading(false) }
   }
 
@@ -272,7 +272,7 @@ function VariantsPanel({ productId }: { productId: string }) {
       toast.success('Grade criada!')
       setSelSizes([]); setSelColors([]); setShowBulk(false)
       load()
-    } catch { toast.error('Erro ao criar grade') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao criar grade')) }
     finally { setCreating(false) }
   }
 
@@ -282,13 +282,13 @@ function VariantsPanel({ productId }: { productId: string }) {
       toast.success('Estoque atualizado')
       setEditId(null)
       load()
-    } catch { toast.error('Erro ao salvar') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao salvar')) }
   }
 
   async function removeVariant(variantId: string) {
     if (!confirm('Remover variante?')) return
     try { await variantApi.remove(productId, variantId); toast.success('Removida'); load() }
-    catch { toast.error('Erro ao remover') }
+    catch (err) { toast.error(getErrorMessage(err, 'Erro ao remover')) }
   }
 
   if (loading) return <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
@@ -911,7 +911,7 @@ function EstoqueContent() {
       setProducts(prodRes.data)
       setCategories(catRes.data)
       setNaturezas(natRes.data)
-    } catch { toast.error('Erro ao carregar produtos') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar produtos')) }
     finally { setLoading(false) }
   }
   useEffect(() => { fetch() }, [])
@@ -943,13 +943,13 @@ function EstoqueContent() {
       else         await productApi.create(form)
       toast.success(form.id ? 'Produto atualizado!' : 'Produto criado!')
       setModal(undefined); fetch()
-    } catch { toast.error('Erro ao salvar produto') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao salvar produto')) }
   }
 
   async function handleDeactivate(id: string, name: string) {
     if (!confirm(`Desativar "${name}"?`)) return
     try { await productApi.deactivate(id); toast.success('Produto desativado'); fetch() }
-    catch { toast.error('Erro ao desativar') }
+    catch (err) { toast.error(getErrorMessage(err, 'Erro ao desativar')) }
   }
 
   function exportCsv() {
@@ -976,7 +976,7 @@ function EstoqueContent() {
 
   async function handleStock(id: string, delta: number) {
     try { await productApi.adjustStock(id, delta); fetch() }
-    catch { toast.error('Estoque insuficiente') }
+    catch (err) { toast.error(getErrorMessage(err, 'Estoque insuficiente')) }
   }
 
   function changeTab(tab: 'produtos' | 'categorias') {
@@ -991,7 +991,7 @@ function EstoqueContent() {
       toast.success(form.id ? 'Categoria atualizada!' : 'Categoria criada!')
       setCategoriaModal(undefined)
       fetch()
-    } catch { toast.error('Erro ao salvar. Verifique se o nome já existe.') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao salvar. Verifique se o nome já existe.')) }
   }
 
   async function handleDeleteCategoria(id: string, name: string) {
@@ -1000,7 +1000,7 @@ function EstoqueContent() {
       await categoryApi.delete(id)
       toast.success('Categoria removida.')
       fetch()
-    } catch { toast.error('Erro ao remover categoria.') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao remover categoria.')) }
   }
 
   return (
@@ -1281,7 +1281,7 @@ function EstoqueContent() {
                           const next = !p.showOnMarketplace
                           await productApi.update(p.id, { ...p, showOnMarketplace: next, isFeatured: next ? p.isFeatured : false })
                           fetch()
-                        } catch { toast.error('Erro ao atualizar') }
+                        } catch (err) { toast.error(getErrorMessage(err, 'Erro ao atualizar')) }
                       }}
                       title={p.showOnMarketplace ? 'No marketplace — clique para remover' : 'Fora do marketplace — clique para adicionar'}
                       className={`text-base transition-opacity ${p.showOnMarketplace ? 'opacity-100' : 'opacity-25'}`}
@@ -1345,7 +1345,7 @@ function EstoqueContent() {
                         const next = !p.showOnMarketplace
                         await productApi.update(p.id, { ...p, showOnMarketplace: next, isFeatured: next ? p.isFeatured : false })
                         fetch()
-                      } catch { toast.error('Erro ao atualizar') }
+                      } catch (err) { toast.error(getErrorMessage(err, 'Erro ao atualizar')) }
                     }}
                     title={p.showOnMarketplace ? 'No marketplace' : 'Fora do marketplace'}
                     className={`text-base px-1 transition-opacity ${p.showOnMarketplace ? 'opacity-100' : 'opacity-25'}`}

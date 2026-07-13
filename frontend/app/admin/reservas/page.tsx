@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { api, productApi, waitListApi, Product, WaitListEntry } from '@/lib/api'
+import { api, productApi, waitListApi, Product, WaitListEntry, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
@@ -142,7 +142,7 @@ export default function ReservasPage() {
         for (const r of results) next[r.id] = { entries: r.entries, total: r.total }
         return next
       })
-    } catch { toast.error('Erro ao carregar produtos pré-venda') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar produtos pré-venda')) }
     finally { setWlLoading(false) }
   }, [])
 
@@ -174,7 +174,7 @@ export default function ReservasPage() {
         return { ...prev, [productId]: { entries: updated, total: updated.length } }
       })
       toast.success('Removido da fila')
-    } catch { toast.error('Erro ao remover') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao remover')) }
   }
 
   function openWlModal(entry: WaitListEntry, product: Product) {
@@ -195,7 +195,7 @@ export default function ReservasPage() {
         await api.post(`/api/comanda/${wlComanda}/items`, { productId: product.id, quantity: 1 })
         toast.success(`Adicionado à comanda!`)
         setWlModal(null)
-      } catch (e: any) { toast.error(e?.response?.data?.message ?? 'Erro ao adicionar à comanda') }
+      } catch (err) { toast.error(getErrorMessage(err, 'Erro ao adicionar à comanda')) }
       finally { setWlSubmit(false) }
     } else {
       // PDV: passa via sessionStorage e navega
@@ -221,7 +221,7 @@ export default function ReservasPage() {
       setTotalPages(data.totalPages)
       setTotalCount(data.total)
       setActiveCount(activeData.total)
-    } catch { toast.error('Erro ao carregar reservas') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar reservas')) }
     finally  { setLoading(false) }
   }, [statusFilter, page])
 
@@ -262,8 +262,8 @@ export default function ReservasPage() {
       toast.success('Reserva homologada!')
       setHomModal(null)
       load()
-    } catch (e: any) {
-      toast.error(e?.response?.data?.message ?? 'Erro ao homologar')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao homologar'))
     } finally { setSubmitting(false) }
   }
 
@@ -273,7 +273,7 @@ export default function ReservasPage() {
       await api.delete(`/api/reservations/${r.id}`)
       toast.success('Reserva cancelada')
       load()
-    } catch { toast.error('Erro ao cancelar') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao cancelar')) }
   }
 
   async function handleExtend(r: Reservation) {
@@ -281,7 +281,7 @@ export default function ReservasPage() {
       await api.put(`/api/reservations/${r.id}/extend`)
       toast.success('+48h adicionadas')
       load()
-    } catch { toast.error('Erro ao estender') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao estender')) }
   }
 
   function refreshAll() {

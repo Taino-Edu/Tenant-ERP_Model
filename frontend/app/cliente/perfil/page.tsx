@@ -5,6 +5,7 @@ import Link from 'next/link'
 import {
   userApi, UserProfile, crediarioApi, CrediariosDto, comandaApi, ComandaDto,
   waitListApi, MyWaitListEntry, reservationApi, MyReservation, minhasNotasApi, MinhaNotaDto,
+  getErrorMessage,
 } from '@/lib/api'
 import { getUserName, clearAuth } from '@/lib/auth'
 import { authApi } from '@/lib/api'
@@ -56,7 +57,7 @@ export default function PerfilPage() {
       await waitListApi.leave(entry.productId)
       setWaitlist(prev => prev.filter(e => e.id !== entry.id))
       toast.success('Você saiu da lista de espera.')
-    } catch { toast.error('Erro ao sair da fila.') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao sair da fila.')) }
   }
 
   async function handleCancelReservation(res: MyReservation) {
@@ -65,7 +66,7 @@ export default function PerfilPage() {
       await reservationApi.cancel(res.id)
       setReservations(prev => prev.filter(r => r.id !== res.id))
       toast.success('Reserva cancelada.')
-    } catch { toast.error('Erro ao cancelar reserva.') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao cancelar reserva.')) }
   }
 
   function reservaTempoRestante(expiresAt: string) {
@@ -109,8 +110,8 @@ export default function PerfilPage() {
       const { data } = await authApi.uploadProfileImage(file)
       setProfile(prev => prev ? { ...prev, profileImageUrl: data.url } : prev)
       toast.success('Avatar atualizado!')
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Erro ao enviar imagem.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao enviar imagem.'))
     } finally {
       setIsUploading(false)
       e.target.value = ''

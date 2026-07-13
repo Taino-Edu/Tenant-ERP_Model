@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   relatorioApi, RelatorioVendasDto, RelatorioCategoria,
   RelatorioCrediarioDto, DevedorDto, PagamentoMesDto,
-  analyticsApi, productApi, categoryApi, userApi, comandaApi,
+  analyticsApi, productApi, categoryApi, userApi, comandaApi, getErrorMessage,
 } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
@@ -79,7 +79,7 @@ function AbaVendas({ mes, ano }: { mes: number; ano: number }) {
   const fetch = useCallback(async () => {
     setLoading(true)
     try { const { data: d } = await relatorioApi.vendas(mes, ano); setData(d) }
-    catch { toast.error('Erro ao carregar relatório de vendas') }
+    catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar relatório de vendas')) }
     finally { setLoading(false) }
   }, [mes, ano])
 
@@ -170,7 +170,7 @@ function AbaCrediario({ mes, ano }: { mes: number; ano: number }) {
   const fetch = useCallback(async () => {
     setLoading(true)
     try { const { data: d } = await relatorioApi.crediario(mes, ano); setData(d) }
-    catch { toast.error('Erro ao carregar relatório de crediário') }
+    catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar relatório de crediário')) }
     finally { setLoading(false) }
   }, [mes, ano])
 

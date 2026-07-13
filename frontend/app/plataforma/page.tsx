@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus, PlatformOverviewDto } from '@/lib/api'
+import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus, PlatformOverviewDto, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import toast from 'react-hot-toast'
@@ -68,9 +68,8 @@ function CreateTenantModal({ onClose, onCreated }: { onClose: () => void; onCrea
       toast.success(`Tenant "${slug}" criado com sucesso!`)
       onCreated()
       onClose()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Erro ao criar tenant.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao criar tenant.'))
     } finally {
       setLoading(false)
     }
@@ -140,8 +139,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
       })
       toast.success('Billing atualizado.')
       onChanged()
-    } catch {
-      toast.error('Erro ao atualizar billing do tenant.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar billing do tenant.'))
     } finally {
       setSavingBilling(false)
     }
@@ -154,8 +153,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
       await platformApi.updateTenantStatus(tenant.id, next)
       toast.success(next === 'Active' ? 'Tenant reativado.' : 'Tenant suspenso.')
       onChanged()
-    } catch {
-      toast.error('Erro ao atualizar status do tenant.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar status do tenant.'))
     } finally {
       setUpdatingStatus(false)
     }
@@ -176,11 +175,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
       const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN
       const url = `${window.location.protocol}//${tenant.slug}.${rootDomain}/api/auth/impersonate?ticket=${encodeURIComponent(data.ticket)}`
       window.open(url, '_blank', 'noopener')
-    } catch (err: any) {
-      const msg = err?.response?.status === 409
-        ? 'Loja suspensa — reative antes de acessar.'
-        : 'Erro ao gerar acesso de simulação.'
-      toast.error(msg)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao gerar acesso de simulação.'))
     } finally {
       setImpersonating(false)
     }
@@ -285,7 +281,7 @@ export default function PlataformaPage() {
     setLoading(true)
     platformApi.listTenants()
       .then(r => setTenants(r.data))
-      .catch(() => toast.error('Erro ao carregar tenants'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar tenants')))
       .finally(() => setLoading(false))
   }, [])
 

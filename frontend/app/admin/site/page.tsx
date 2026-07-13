@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { siteConfigApi, uploadApi, SiteConfigDto } from '@/lib/api'
+import { siteConfigApi, uploadApi, SiteConfigDto, getErrorMessage } from '@/lib/api'
 import { DEFAULT_SITE_CONFIG } from '@/contexts/SiteConfigContext'
 import { mixHex } from '@/lib/colors'
 import toast, { Toaster } from 'react-hot-toast'
@@ -136,7 +136,7 @@ export default function SiteConfigPage() {
   useEffect(() => {
     siteConfigApi.get()
       .then(r => setCfg(r.data))
-      .catch(() => toast.error('Erro ao carregar personalização do site'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar personalização do site')))
       .finally(() => setLoading(false))
   }, [])
 
@@ -150,8 +150,8 @@ export default function SiteConfigPage() {
       const { data } = await uploadApi.image(file)
       set(field, data.url)
       toast.success('Enviado! Clique em Salvar pra aplicar.')
-    } catch {
-      toast.error('Erro ao enviar imagem')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao enviar imagem'))
     } finally {
       setUploadingIcon(null)
     }
@@ -163,8 +163,8 @@ export default function SiteConfigPage() {
       const { data } = await siteConfigApi.save(cfg)
       setCfg(data)
       toast.success('Personalização do site salva!')
-    } catch {
-      toast.error('Erro ao salvar')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar'))
     } finally {
       setSaving(false)
     }

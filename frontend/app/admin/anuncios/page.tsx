@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { announcementApi, AnnouncementDto } from '@/lib/api'
+import { announcementApi, AnnouncementDto, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, Eye, EyeOff, Megaphone, Edit2, Loader2, ImageIcon, Images } from 'lucide-react'
 import clsx from 'clsx'
@@ -119,8 +119,8 @@ export default function AnunciosPage() {
     try {
       const { data } = await announcementApi.all()
       setItems(data)
-    } catch {
-      toast.error('Erro ao carregar anúncios')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar anúncios'))
     } finally {
       setLoading(false)
     }
@@ -141,8 +141,8 @@ export default function AnunciosPage() {
       } as Parameters<typeof announcementApi.create>[0])
       toast.success('Banner adicionado ao carrossel!')
       load()
-    } catch {
-      toast.error('Erro ao adicionar banner.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao adicionar banner.'))
     } finally {
       setAddingBanner(false)
     }

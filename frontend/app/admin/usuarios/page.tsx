@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSummary, PerfilDto, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS } from '@/lib/api'
+import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSummary, PerfilDto, ClienteInsightDto, ClienteHistoricoDto, PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
 import PageHeader from '@/components/admin/PageHeader'
@@ -56,8 +56,8 @@ function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSucce
       toast.success(`Cliente ${data.name} criado com sucesso!`)
       onSuccess(data)
       onClose()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao criar cliente')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao criar cliente'))
     } finally {
       setLoading(false)
     }
@@ -136,8 +136,8 @@ function NovoOperadorModal({ onClose, onSuccess }: { onClose: () => void; onSucc
       toast.success(`Operador ${nome} criado!`)
       onSuccess()
       onClose()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao criar operador')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao criar operador'))
     } finally {
       setLoading(false)
     }
@@ -220,8 +220,8 @@ function EditarOperadorModal({
       toast.success('Perfil atualizado!')
       onSaved(data)
       onClose()
-    } catch {
-      setError('Erro ao atualizar perfil. Tente novamente.')
+    } catch (err) {
+      setError(getErrorMessage(err, 'Erro ao atualizar perfil. Tente novamente.'))
     } finally {
       setSaving(false)
     }
@@ -235,8 +235,8 @@ function EditarOperadorModal({
       toast.success(`Operador ${op.name} excluído.`)
       onDeleted()
       onClose()
-    } catch (err: any) {
-      setError(err?.response?.data?.message ?? 'Erro ao excluir operador.')
+    } catch (err) {
+      setError(getErrorMessage(err, 'Erro ao excluir operador.'))
     } finally {
       setDeleting(false)
     }
@@ -344,8 +344,8 @@ function RedefinirSenhaModal({ user, onClose }: { user: UserSummary; onClose: ()
       await userApi.adminResetPassword(user.id, senha)
       toast.success(`Senha de ${user.name} redefinida!`)
       onClose()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao redefinir senha')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao redefinir senha'))
     } finally {
       setLoading(false)
     }
@@ -399,7 +399,7 @@ function HistoricoDrawer({ user, onClose, onAnonimized }: { user: UserSummary; o
     setLoading(true)
     userApi.historico(user.id)
       .then(r => setData(r.data))
-      .catch(() => toast.error('Erro ao carregar histórico'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar histórico')))
       .finally(() => setLoading(false))
   }, [user.id])
 
@@ -418,8 +418,8 @@ function HistoricoDrawer({ user, onClose, onAnonimized }: { user: UserSummary; o
       toast.success('Dados do cliente anonimizados (LGPD)')
       onAnonimized()
       onClose()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao anonimizar')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao anonimizar'))
       setConfirmAnon(false)
     } finally {
       setAnonimizing(false)
@@ -693,8 +693,8 @@ export default function UsuariosPage() {
       const map: Record<string, CrediariosDto> = {}
       for (const c of credRes.data) map[c.userId] = c
       setCrediarios(map)
-    } catch {
-      toast.error('Erro ao carregar usuários')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar usuários'))
     } finally {
       setLoading(false)
     }
@@ -729,8 +729,8 @@ export default function UsuariosPage() {
       setSelected(data)
       setPoints('')
       setReason('')
-    } catch {
-      toast.error('Erro ao adicionar pontos')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao adicionar pontos'))
     } finally {
       setAdding(false)
     }
@@ -749,9 +749,8 @@ export default function UsuariosPage() {
       setSelected(data)
       setBalanceAmount('')
       setBalanceReason('')
-    } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Erro ao ajustar saldo')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao ajustar saldo'))
     } finally {
       setAdjustingBalance(false)
     }

@@ -20,6 +20,19 @@ export const api = axios.create({
   withCredentials: true,
 })
 
+/**
+ * Extrai a mensagem de erro real de uma falha de requisição — o backend sempre
+ * devolve `{ message }` (erro de negócio tratado pelo controller, ou o
+ * middleware global de exceção não tratada, que também inclui `traceId`).
+ * Cai no `fallback` só quando não tem body nenhum pra ler (rede caiu, CORS,
+ * timeout) — nesses casos não existe mensagem real pra mostrar de qualquer jeito.
+ */
+export function getErrorMessage(err: unknown, fallback: string): string {
+  const data = (err as { response?: { data?: { message?: string; traceId?: string } } })?.response?.data
+  if (!data?.message) return fallback
+  return data.traceId ? `${data.message} (ref: ${data.traceId})` : data.message
+}
+
 // Mutex de refresh: evita múltiplas requisições simultâneas disparando vários refreshes
 // quando o token expira com várias chamadas em paralelo na mesma página.
 let refreshPromise: Promise<void> | null = null

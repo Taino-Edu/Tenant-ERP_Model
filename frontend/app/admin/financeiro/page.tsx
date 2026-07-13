@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto, PagamentoCrediarioPeriodoDto, FechamentoPeriodoDto } from '@/lib/api'
+import { analyticsApi, vendaAvulsaApi, FinanceiroDto, FormaPagamentoTotalDto, PagamentoCrediarioPeriodoDto, FechamentoPeriodoDto, getErrorMessage } from '@/lib/api'
 import { gerarRelatorioPDF } from '@/lib/relatorio'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import PageHeader from '@/components/admin/PageHeader'
@@ -1414,8 +1414,8 @@ export default function FinanceiroPage() {
     try {
       const res = await analyticsApi.financeiro(ini, f, pmFilter || undefined)
       if (id === loadIdRef.current) setData(res.data)
-    } catch {
-      if (id === loadIdRef.current) toast.error('Erro ao carregar dados financeiros')
+    } catch (err) {
+      if (id === loadIdRef.current) toast.error(getErrorMessage(err, 'Erro ao carregar dados financeiros'))
     } finally {
       if (id === loadIdRef.current) setLoading(false)
     }
@@ -1604,8 +1604,8 @@ export default function FinanceiroPage() {
                   const r = await vendaAvulsaApi.backfillCosts()
                   toast.success(r.data.mensagem)
                   load(inicio, fim)
-                } catch {
-                  toast.error('Erro ao corrigir custos históricos')
+                } catch (err) {
+                  toast.error(getErrorMessage(err, 'Erro ao corrigir custos históricos'))
                 } finally {
                   setBackfilling(false)
                 }

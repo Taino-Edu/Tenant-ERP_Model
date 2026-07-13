@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { timerApi, TimerDto } from '@/lib/api'
+import { timerApi, TimerDto, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Plus, Trash2, Play, Pause, RotateCcw, Volume2, PlayCircle, Settings } from 'lucide-react'
 
@@ -144,7 +144,7 @@ function TimerCard({
       const r = await timerApi.update(timer.id, { action, fromRemaining, ...extra })
       onUpdate(r.data as TimerDto)
       warnFiredRef.current = false; endFiredRef.current = false
-    } catch { toast.error('Erro ao atualizar timer') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao atualizar timer')) }
   }
 
   async function saveName() {
@@ -285,7 +285,7 @@ export default function TimerPage() {
     try {
       const r = await timerApi.list()
       setTimers(r.data)
-    } catch { toast.error('Erro ao carregar timers') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar timers')) }
     finally { setLoading(false) }
   }, [])
 
@@ -313,7 +313,7 @@ export default function TimerPage() {
       setTimers(prev => [...prev, r.data as TimerDto])
       setShowNew(false)
       setNewName('Rodada 1')
-    } catch { toast.error('Erro ao criar timer') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao criar timer')) }
   }
 
   async function deleteTimer(id: string) {
@@ -321,7 +321,7 @@ export default function TimerPage() {
       await timerApi.remove(id)
       setTimers(prev => prev.filter(t => t.id !== id))
       toast.success('Timer removido')
-    } catch { toast.error('Erro ao remover timer') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao remover timer')) }
   }
 
   return (

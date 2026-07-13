@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   crediarioApi, userApi, CrediariosDto, CrediariosClienteDto, PagamentoCrediarioDto,
-  FORMAS_PAGAMENTO_CREDIARIO, UserSummary,
+  FORMAS_PAGAMENTO_CREDIARIO, UserSummary, getErrorMessage,
 } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
@@ -120,9 +120,8 @@ function NovaDividaModal({ onClose, onSuccess }: { onClose: () => void; onSucces
       toast.success(`Crediário de R$ ${valorNum.toFixed(2).replace('.', ',')} criado para ${selected.name}!`)
       onSuccess()
       onClose()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Erro ao criar crediário')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao criar crediário'))
     } finally { setLoading(false) }
   }
 
@@ -368,9 +367,8 @@ function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProp
       toast.success('Crediário atualizado!')
       onSuccess()
       onClose()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Erro ao editar crediário')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao editar crediário'))
     } finally { setLoading(false) }
   }
 
@@ -586,9 +584,8 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
       toast.success(quita ? 'Crediário quitado!' : `Pagamento de ${fmt(totalPago)} registrado!`)
       onSuccess()
       onClose()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao registrar pagamento')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao registrar pagamento'))
     } finally {
       setLoading(false)
     }
@@ -1091,9 +1088,8 @@ export default function CrediarioPage() {
       await crediarioApi.deletar(crediario.id)
       toast.success('Crediário excluído!')
       fetchCrediarios()
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Erro ao excluir crediário')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao excluir crediário'))
     }
   }
 
@@ -1109,8 +1105,8 @@ export default function CrediarioPage() {
         setCrediarios(data)
         setClienteGroups([])
       }
-    } catch {
-      toast.error('Erro ao carregar crediários')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar crediários'))
     } finally {
       setLoading(false)
     }

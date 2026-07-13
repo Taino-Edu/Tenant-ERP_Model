@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { productApi, vendaAvulsaApi, userApi, fiscalApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, ProductVariant, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest } from '@/lib/api'
+import { productApi, vendaAvulsaApi, userApi, fiscalApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, ProductVariant, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest, getErrorMessage } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import { usePreferences } from '@/hooks/usePreferences'
 import toast from 'react-hot-toast'
@@ -217,9 +217,8 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
       } else {
         toast.error(`Nota registrada, aguardando: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
       }
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao emitir nota fiscal.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao emitir nota fiscal.'))
     } finally {
       setEmitindoNota(false)
     }
@@ -241,9 +240,8 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
       toast.success('Venda atualizada!')
       onUpdate(data)
       setEditingPay(false)
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao atualizar.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar.'))
     } finally {
       setSaving(false)
     }
@@ -642,9 +640,8 @@ function VendaWizard({
       onComplete(data)
       toast.success('Venda registrada!')
       handleNotaFiscalResult(data.notaFiscalId, data.notaFiscalStatus, data.notaFiscalMotivoRejeicao)
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Erro ao registrar venda.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao registrar venda.'))
     } finally { setSubmitting(false) }
   }, [cart, clientName, payment, discountMode, discountPct, discountCents, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid, emitirNota, site.enabledModules])
 
@@ -1320,12 +1317,12 @@ export default function VendaAvulsaPage() {
   useEffect(() => {
     productApi.listAdmin()
       .then(r => setProducts(r.data.filter(p => p.isActive && p.stockQuantity > 0)))
-      .catch(() => toast.error('Erro ao carregar produtos'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar produtos')))
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
-    vendaAvulsaApi.byDate(todayStr).then(r => setTodayH(r.data)).catch(() => toast.error('Erro ao carregar vendas de hoje'))
+    vendaAvulsaApi.byDate(todayStr).then(r => setTodayH(r.data)).catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar vendas de hoje')))
   }, [todayStr])
 
   useEffect(() => {
@@ -1333,12 +1330,12 @@ export default function VendaAvulsaPage() {
     setHistLoad(true)
     vendaAvulsaApi.byDate(histDate)
       .then(r => setHistory(r.data))
-      .catch(() => toast.error('Erro ao carregar histórico'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar histórico')))
       .finally(() => setHistLoad(false))
   }, [tab, histDate])
 
   function refreshToday() {
-    vendaAvulsaApi.byDate(todayStr).then(r => setTodayH(r.data)).catch(() => toast.error('Erro ao atualizar vendas de hoje'))
+    vendaAvulsaApi.byDate(todayStr).then(r => setTodayH(r.data)).catch(err => toast.error(getErrorMessage(err, 'Erro ao atualizar vendas de hoje')))
   }
 
   // ── Analytics ────────────────────────────────────────────────────────────

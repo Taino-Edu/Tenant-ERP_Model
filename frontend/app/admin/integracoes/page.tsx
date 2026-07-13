@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { api } from '@/lib/api'
+import { api, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
@@ -78,7 +78,7 @@ export default function IntegracoesPage() {
       ])
       setIntegracoes(ints)
       setSefazOk(sefaz.configured)
-    } catch { toast.error('Erro ao carregar integrações') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar integrações')) }
     finally  { setLoading(false) }
   }
 
@@ -110,8 +110,8 @@ export default function IntegracoesPage() {
       })
       toast.success('Certificado instalado!')
       setConfigModal(m => m ? { ...m, certOk: true, certUploading: false } : m)
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao instalar certificado')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao instalar certificado'))
       setConfigModal(m => m ? { ...m, certUploading: false } : m)
     }
   }
@@ -131,7 +131,7 @@ export default function IntegracoesPage() {
       toast.success('Configuração salva!')
       setConfigModal(null)
       load()
-    } catch { toast.error('Erro ao salvar') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao salvar')) }
     finally { setSaving(false) }
   }
 
@@ -141,8 +141,8 @@ export default function IntegracoesPage() {
       const { data } = await api.post('/api/contas-receber/integracoes/inter/sync')
       toast.success(`${data.imported} transação(ões) importada(s)${data.duplicates ? `, ${data.duplicates} já existiam` : ''}.`)
       load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao sincronizar — confira Client ID/Secret e certificado.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao sincronizar — confira Client ID/Secret e certificado.'))
     } finally {
       setSyncingInter(false)
     }
@@ -158,8 +158,8 @@ export default function IntegracoesPage() {
       )
       if (data.mensagem) toast(data.mensagem, { duration: 8000 })
       load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao sincronizar com a SEFAZ.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao sincronizar com a SEFAZ.'))
     } finally {
       setSyncingSefaz(false)
     }
@@ -176,8 +176,8 @@ export default function IntegracoesPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       toast.success(`${data.imported} transações importadas (${data.skipped} duplicadas ignoradas)`)
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao importar OFX')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao importar OFX'))
     } finally {
       setOfxLoading(false)
       e.target.value = ''

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { mensageriaApi, MensageriaClient, MensageriaSegment } from '@/lib/api'
+import { mensageriaApi, MensageriaClient, MensageriaSegment, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
 import {
   Send, Users, User, Mail, Bell, BellRing,
@@ -108,7 +108,7 @@ function MensageriaForm() {
       setResult(r.data)
       setTitle(''); setBody(''); setLink(''); setImageUrl(''); setSelected(new Set())
       toast.success('Mensagem enviada!')
-    } catch { toast.error('Erro ao enviar mensagem.') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao enviar mensagem.')) }
     finally  { setLoading(false) }
   }
 

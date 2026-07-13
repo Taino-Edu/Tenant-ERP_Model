@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api } from '@/lib/api'
+import { api, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
@@ -140,7 +140,7 @@ function TransactionModal({ initial, onClose, onSaved }: {
         ? await api.put(`/api/contas-receber/${initial.id}`, payload)
         : await api.post('/api/contas-receber', payload)
       onSaved(data)
-    } catch { toast.error('Erro ao salvar') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao salvar')) }
     finally { setSaving(false) }
   }
 
@@ -241,7 +241,7 @@ function NotasRecebidasTab() {
       ])
       setStatus(st)
       setNotas(ns)
-    } catch { toast.error('Erro ao carregar notas recebidas') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar notas recebidas')) }
     finally  { setLoading(false) }
   }, [])
 
@@ -257,8 +257,8 @@ function NotasRecebidasTab() {
       )
       if (data.mensagem) toast(data.mensagem, { duration: 8000 })
       load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao sincronizar com a SEFAZ.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao sincronizar com a SEFAZ.'))
     } finally { setSyncing(false) }
   }
 
@@ -388,7 +388,7 @@ export default function ContasReceberPage() {
       setItems(data.items)
       setTotalPages(data.totalPages)
       setTotalCount(data.total)
-    } catch { toast.error('Erro ao carregar lançamentos') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar lançamentos')) }
     finally  { setLoading(false) }
   }, [typeFilter, statusFilter, page])
 
@@ -400,7 +400,7 @@ export default function ContasReceberPage() {
       setItems(prev => prev.map(i => i.id === t.id ? data : i))
       loadSummary()
       toast.success('Marcado como pago')
-    } catch { toast.error('Erro') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao marcar como pago')) }
   }
 
   async function handleDelete(t: Transaction) {
@@ -411,7 +411,7 @@ export default function ContasReceberPage() {
       setTotalCount(c => c - 1)
       loadSummary()
       toast.success('Excluído')
-    } catch { toast.error('Erro ao excluir') }
+    } catch (err) { toast.error(getErrorMessage(err, 'Erro ao excluir')) }
   }
 
   function handleSaved(t: Transaction) {
@@ -439,8 +439,8 @@ export default function ContasReceberPage() {
       })
       toast.success(`${data.imported} transações importadas (${data.skipped} duplicadas ignoradas)`)
       load(); loadSummary()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao importar OFX')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao importar OFX'))
     } finally {
       setOfxLoading(false)
       e.target.value = ''

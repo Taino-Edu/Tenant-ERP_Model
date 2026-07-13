@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
-import { comandaApi, crediarioApi, userApi, productApi, fiscalApi, ComandaDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, EditarComandaRequest, EditarItemRequest, CrediariosDto } from '@/lib/api'
+import { comandaApi, crediarioApi, userApi, productApi, fiscalApi, ComandaDto, UserSummary, Product, COMANDA_PAYMENT_METHODS, EditarComandaRequest, EditarItemRequest, CrediariosDto, getErrorMessage } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
 import { startHub, stopHub, ComandaUpdatedEvent } from '@/lib/signalr'
 import { playGoalSound } from '@/lib/sounds'
@@ -201,7 +201,7 @@ function AddItemModal({
       // produto-pai — não pode filtrar por stockQuantity aqui, senão some da
       // lista mesmo tendo variante disponível.
       .then(r => setProducts(r.data.filter(p => p.isActive && (p.hasVariants || p.stockQuantity > 0))))
-      .catch(() => toast.error('Erro ao carregar produtos'))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar produtos')))
       .finally(() => setLoading(false))
   }, [])
 
@@ -246,8 +246,8 @@ function AddItemModal({
       const { data } = await productApi.getByBarcode(code)
       await handleAdd(data)
       setBarcodeInput('')
-    } catch {
-      toast.error('Produto não encontrado para este código de barras.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Produto não encontrado para este código de barras.'))
     } finally {
       setBarcodeLoading(false)
       barcodeRef.current?.focus()
@@ -261,8 +261,8 @@ function AddItemModal({
       const { data } = await productApi.getByBarcode(code)
       await handleAdd(data)
       setBarcodeInput('')
-    } catch {
-      toast.error('Produto não encontrado para este código de barras.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Produto não encontrado para este código de barras.'))
     } finally {
       setBarcodeLoading(false)
     }
@@ -1086,8 +1086,8 @@ function ComandaCard({
       const { data } = await comandaApi.removeItem(comanda.id, itemId)
       onUpdate(data, 'remove')
       toast.success('Item removido.')
-    } catch {
-      toast.error('Erro ao remover item.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao remover item.'))
     } finally {
       setRemovingItem(null)
     }
@@ -1099,9 +1099,8 @@ function ComandaCard({
       const { data } = await comandaApi.removePoints(comanda.id)
       onUpdate(data, 'remove')
       toast.success('Pontos removidos e devolvidos ao cliente!')
-    } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Erro ao remover pontos.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao remover pontos.'))
     } finally {
       setRemovingPts(false)
     }
@@ -1113,8 +1112,8 @@ function ComandaCard({
     try {
       const { data } = await comandaApi.updateItem(comanda.id, itemId, newQty)
       onUpdate(data)
-    } catch {
-      toast.error('Erro ao atualizar quantidade.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar quantidade.'))
     } finally {
       setUpdatingItem(null)
     }
@@ -1630,8 +1629,8 @@ export default function ComandaPage() {
         knownIdsRef.current.add(c.id)
       })
       setComandas(data)
-    } catch {
-      toast.error('Erro ao carregar comandas')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar comandas'))
     } finally {
       setLoading(false)
     }
@@ -1642,8 +1641,8 @@ export default function ComandaPage() {
     try {
       const { data: res } = await comandaApi.history(data)
       setHistory(res)
-    } catch {
-      toast.error('Erro ao carregar histórico')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar histórico'))
     } finally {
       setHistLoad(false)
     }

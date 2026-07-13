@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { perfisApi, PerfilDto } from '@/lib/api'
+import { perfisApi, PerfilDto, getErrorMessage } from '@/lib/api'
 import { UserCog, Plus, Trash2, Edit2, Check, X, Loader2, Shield, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -202,8 +202,8 @@ export default function PerfisPage() {
     try {
       const res = await perfisApi.list()
       setPerfis(res.data)
-    } catch {
-      toast.error('Erro ao carregar perfis')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar perfis'))
     } finally {
       setLoading(false)
     }
@@ -217,8 +217,8 @@ export default function PerfisPage() {
       toast.success(`Perfil "${nome}" criado!`)
       setCreating(false)
       load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao criar perfil')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao criar perfil'))
     }
   }
 
@@ -229,8 +229,8 @@ export default function PerfisPage() {
       toast.success('Perfil atualizado!')
       setEditing(null)
       load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao atualizar')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar'))
     }
   }
 
@@ -239,8 +239,8 @@ export default function PerfisPage() {
       await perfisApi.delete(id)
       toast.success('Perfil excluído')
       load()
-    } catch (err: any) {
-      toast.error(err?.response?.data?.message ?? 'Erro ao excluir')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao excluir'))
     }
   }
 
