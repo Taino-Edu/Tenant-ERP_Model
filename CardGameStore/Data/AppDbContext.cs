@@ -347,6 +347,8 @@ public class AppDbContext : DbContext
         // =====================================================================
         modelBuilder.Entity<AuditLog>(entity =>
         {
+            entity.Property(a => a.Severity).HasConversion<string>().HasMaxLength(20);
+
             // Busca por entidade afetada
             entity.HasIndex(a => new { a.EntityType, a.EntityId })
                   .HasDatabaseName("ix_audit_logs_entity");
@@ -358,6 +360,10 @@ public class AppDbContext : DbContext
             // Ordenação por data (query mais frequente)
             entity.HasIndex(a => a.CreatedAt)
                   .HasDatabaseName("ix_audit_logs_created_at");
+
+            // Agrupar todos os logs (manuais + diff automático) da mesma requisição
+            entity.HasIndex(a => a.TraceId)
+                  .HasDatabaseName("ix_audit_logs_trace_id");
         });
 
         // =====================================================================

@@ -93,6 +93,13 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
             sp.GetRequiredService<ITenantContext>(),
             sp.GetRequiredService<ILogger<TenantConnectionInterceptor>>()));
     }
+
+    // Diff automático de auditoria (Product/VendaAvulsa/User) — independe do
+    // provider, roda em dev (SQLite) e produção (Postgres) igual.
+    options.AddInterceptors(new AuditSaveChangesInterceptor(
+        sp.GetRequiredService<IHttpContextAccessor>(),
+        sp.GetRequiredService<ILogger<AuditSaveChangesInterceptor>>(),
+        sp.GetRequiredService<IConfiguration>()));
 });
 
 // Catálogo de tenants — em Postgres é o mesmo banco físico do AppDbContext

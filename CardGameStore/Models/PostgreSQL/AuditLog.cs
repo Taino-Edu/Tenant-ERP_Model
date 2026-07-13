@@ -8,6 +8,15 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace CardGameStore.Models.PostgreSQL;
 
+/// <summary>Gravidade do evento — permite priorizar triagem (ex: filtrar só
+/// "Critical" numa investigação de fraude) sem precisar ler o Details JSON.</summary>
+public enum AuditSeverity
+{
+    Info,
+    Warning,
+    Critical,
+}
+
 /// <summary>
 /// Registra todas as ações relevantes sobre dados pessoais realizadas no sistema.
 /// Permite auditorias, rastreabilidade e comprovação de conformidade com a LGPD.
@@ -57,9 +66,37 @@ public class AuditLog
     [Column("entity_id")]
     public string? EntityId { get; set; }
 
-    /// <summary>JSON com informações adicionais de contexto.</summary>
+    /// <summary>JSON com informações adicionais de contexto — inclui o que o
+    /// chamador passou mais o bloco "context" (user-agent parseado, geo do
+    /// Cloudflare) que o AuditService acrescenta automaticamente.</summary>
     [Column("details")]
     public string? Details { get; set; }
+
+    /// <summary>Usuário em nome de quem a ação foi feita — preenchido só em
+    /// fluxos de impersonation (ex: admin/plataforma operando como outro
+    /// usuário). Nulo no caso comum de ActorUserId agir por si mesmo.</summary>
+    [MaxLength(100)]
+    [Column("target_user_id")]
+    public string? TargetUserId { get; set; }
+
+    /// <summary>Origem da ação: "Web", "PDV", "API", "Cron"/"System" (job em
+    /// background, sem HttpContext). Ver AuditService.InferChannel.</summary>
+    [MaxLength(50)]
+    [Column("channel")]
+    public string? Channel { get; set; }
+
+    [Column("severity")]
+    public AuditSeverity Severity { get; set; } = AuditSeverity.Info;
+
+    // -------------------------------------------------------------------------
+    // Rastreamento
+    // -------------------------------------------------------------------------
+
+    /// <summary>HttpContext.TraceIdentifier da requisição — agrupa todos os
+    /// logs (manuais + diff automático) gerados pela mesma requisição HTTP.</summary>
+    [MaxLength(100)]
+    [Column("trace_id")]
+    public string? TraceId { get; set; }
 
     // -------------------------------------------------------------------------
     // Identificação da origem

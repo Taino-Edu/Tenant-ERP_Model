@@ -112,5 +112,9 @@ public class PlatformAuditLogDto
     public string   EntityType    { get; set; } = string.Empty;
     public string?  EntityId      { get; set; }
     public string?  Details       { get; set; }
+    public string?  TargetUserId  { get; set; }
+    public string?  Channel       { get; set; }
+    public string   Severity      { get; set; } = string.Empty;
+    public string?  TraceId       { get; set; }
     public DateTime CreatedAt     { get; set; }
 }

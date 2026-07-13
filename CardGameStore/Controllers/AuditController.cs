@@ -60,22 +60,30 @@ public class AuditController : ControllerBase
         var totalCount = await query.CountAsync();
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-        var items = await query
+        // Materializa antes de mapear pro DTO — Severity é enum convertido pra
+        // string via HasConversion (ver AppDbContext), e ToString() em cima
+        // dele não é seguro de traduzir pra SQL dentro do .Select() do EF.
+        var entities = await query
             .OrderByDescending(a => a.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(a => new AuditLogDto
-            {
-                Id            = a.Id,
-                ActorUserId   = a.ActorUserId,
-                ActorUserName = a.ActorUserName,
-                Action        = a.Action,
-                EntityType    = a.EntityType,
-                EntityId      = a.EntityId,
-                Details       = a.Details,
-                CreatedAt     = a.CreatedAt,
-            })
             .ToListAsync();
+
+        var items = entities.Select(a => new AuditLogDto
+        {
+            Id            = a.Id,
+            ActorUserId   = a.ActorUserId,
+            ActorUserName = a.ActorUserName,
+            Action        = a.Action,
+            EntityType    = a.EntityType,
+            EntityId      = a.EntityId,
+            Details       = a.Details,
+            TargetUserId  = a.TargetUserId,
+            Channel       = a.Channel,
+            Severity      = a.Severity.ToString(),
+            TraceId       = a.TraceId,
+            CreatedAt     = a.CreatedAt,
+        });
 
         return Ok(new AuditLogPagedResponse
         {

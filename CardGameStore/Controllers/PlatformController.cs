@@ -344,22 +344,29 @@ public class PlatformController : ControllerBase
 
                 var total = await query.CountAsync();
 
-                var items = await query
+                // Materializa antes de mapear — Severity é enum convertido pra
+                // string (HasConversion), inseguro traduzir ToString() pra SQL.
+                var entities = await query
                     .OrderByDescending(a => a.CreatedAt)
                     .Skip((page - 1) * pageSize)
                     .Take(pageSize)
-                    .Select(a => new AuditLogDto
-                    {
-                        Id            = a.Id,
-                        ActorUserId   = a.ActorUserId,
-                        ActorUserName = a.ActorUserName,
-                        Action        = a.Action,
-                        EntityType    = a.EntityType,
-                        EntityId      = a.EntityId,
-                        Details       = a.Details,
-                        CreatedAt     = a.CreatedAt,
-                    })
                     .ToListAsync();
+
+                var items = entities.Select(a => new AuditLogDto
+                {
+                    Id            = a.Id,
+                    ActorUserId   = a.ActorUserId,
+                    ActorUserName = a.ActorUserName,
+                    Action        = a.Action,
+                    EntityType    = a.EntityType,
+                    EntityId      = a.EntityId,
+                    Details       = a.Details,
+                    TargetUserId  = a.TargetUserId,
+                    Channel       = a.Channel,
+                    Severity      = a.Severity.ToString(),
+                    TraceId       = a.TraceId,
+                    CreatedAt     = a.CreatedAt,
+                }).ToList();
 
                 return new PagedResult<AuditLogDto> { Items = items, TotalCount = total, Page = page, PageSize = pageSize };
             });
@@ -387,23 +394,29 @@ public class PlatformController : ControllerBase
         {
             try
             {
-                var recent = await RunInTenantScopeAsync(tenant, db => db.AuditLogs
+                // Materializa antes de mapear — mesmo motivo do endpoint por-tenant.
+                var entities = await RunInTenantScopeAsync(tenant, db => db.AuditLogs
                     .AsNoTracking()
                     .OrderByDescending(a => a.CreatedAt)
                     .Take(20)
-                    .Select(a => new PlatformAuditLogDto
-                    {
-                        Id            = a.Id,
-                        TenantSlug    = tenant.Slug,
-                        ActorUserId   = a.ActorUserId,
-                        ActorUserName = a.ActorUserName,
-                        Action        = a.Action,
-                        EntityType    = a.EntityType,
-                        EntityId      = a.EntityId,
-                        Details       = a.Details,
-                        CreatedAt     = a.CreatedAt,
-                    })
                     .ToListAsync());
+
+                var recent = entities.Select(a => new PlatformAuditLogDto
+                {
+                    Id            = a.Id,
+                    TenantSlug    = tenant.Slug,
+                    ActorUserId   = a.ActorUserId,
+                    ActorUserName = a.ActorUserName,
+                    Action        = a.Action,
+                    EntityType    = a.EntityType,
+                    EntityId      = a.EntityId,
+                    Details       = a.Details,
+                    TargetUserId  = a.TargetUserId,
+                    Channel       = a.Channel,
+                    Severity      = a.Severity.ToString(),
+                    TraceId       = a.TraceId,
+                    CreatedAt     = a.CreatedAt,
+                });
 
                 feed.AddRange(recent);
             }
