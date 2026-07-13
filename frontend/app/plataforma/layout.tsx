@@ -1,12 +1,23 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
+import Link from 'next/link'
 import { isPlatformOwner, clearAuth } from '@/lib/auth'
 import { Toaster } from 'react-hot-toast'
-import { LogOut, ShieldCheck } from 'lucide-react'
+import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History } from 'lucide-react'
+import clsx from 'clsx'
+
+const NAV_ITEMS = [
+  { href: '/plataforma',         label: 'Visão Geral', icon: LayoutDashboard },
+  { href: '/plataforma/tenants', label: 'Tenants',      icon: Building2 },
+  { href: '/plataforma/leads',   label: 'Leads',        icon: UserPlus },
+  { href: '/plataforma/suporte', label: 'Suporte',      icon: LifeBuoy },
+  { href: '/plataforma/logs',    label: 'Logs',         icon: History },
+]
 
 export default function PlataformaLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
@@ -44,6 +55,25 @@ export default function PlataformaLayout({ children }: { children: React.ReactNo
             <LogOut className="w-4 h-4" /> Sair
           </button>
         </div>
+        <nav className="max-w-5xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
+          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            const active = href === '/plataforma' ? pathname === href : pathname.startsWith(href)
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={clsx(
+                  'flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors',
+                  active
+                    ? 'border-brand-400 text-white'
+                    : 'border-transparent text-gray-400 hover:text-white hover:border-surface-400',
+                )}
+              >
+                <Icon className="w-4 h-4" /> {label}
+              </Link>
+            )
+          })}
+        </nav>
       </header>
       <main className="max-w-5xl mx-auto px-6 py-8">
         {children}

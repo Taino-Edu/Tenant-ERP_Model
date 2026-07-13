@@ -73,3 +73,44 @@ public class TenantActivityDto
     public long ReceitaMesAtualCents { get; set; }
     public DateTime? LastActivityAt { get; set; }
 }
+
+/// <summary>Funcionário/admin de um tenant, visto pelo dono da plataforma —
+/// nunca inclui hash de senha nem tokens.</summary>
+public class TenantStaffDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public string Role { get; set; } = string.Empty;
+    public string? PerfilNome { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>Cliente de um tenant, visto pelo dono da plataforma.</summary>
+public class TenantCustomerDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public string? WhatsApp { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>Registro de auditoria agregado no feed cross-tenant — mesmos campos
+/// de <see cref="AuditLogDto"/> mais o slug do tenant de origem.</summary>
+public class PlatformAuditLogDto
+{
+    public string   Id            { get; set; } = string.Empty;
+    public string   TenantSlug    { get; set; } = string.Empty;
+    public string?  ActorUserId   { get; set; }
+    public string?  ActorUserName { get; set; }
+    public string   Action        { get; set; } = string.Empty;
+    public string   EntityType    { get; set; } = string.Empty;
+    public string?  EntityId      { get; set; }
+    public string?  Details       { get; set; }
+    public DateTime CreatedAt     { get; set; }
+}

@@ -19,6 +19,9 @@ public class CatalogDbContext : DbContext
     public DbSet<ContadorAviso> ContadorAvisos { get; set; }
     public DbSet<ContadorConviteEmail> ContadorConvitesEmail { get; set; }
     public DbSet<PlatformImpersonationTicket> PlatformImpersonationTickets { get; set; }
+    public DbSet<Lead> Leads { get; set; }
+    public DbSet<SupportTicket> SupportTickets { get; set; }
+    public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -91,6 +94,46 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(t => t.Ticket)
                   .IsUnique()
                   .HasDatabaseName("ix_platform_impersonation_tickets_ticket");
+        });
+
+        modelBuilder.Entity<Lead>(entity =>
+        {
+            entity.Property(l => l.Status).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasIndex(l => l.Status)
+                  .HasDatabaseName("ix_leads_status");
+
+            entity.HasIndex(l => l.CreatedAt)
+                  .HasDatabaseName("ix_leads_created_at");
+        });
+
+        modelBuilder.Entity<SupportTicket>(entity =>
+        {
+            entity.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasOne<Tenant>()
+                  .WithMany()
+                  .HasForeignKey(t => t.TenantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(t => t.TenantId)
+                  .HasDatabaseName("ix_support_tickets_tenant_id");
+
+            entity.HasIndex(t => t.Status)
+                  .HasDatabaseName("ix_support_tickets_status");
+        });
+
+        modelBuilder.Entity<SupportTicketMessage>(entity =>
+        {
+            entity.Property(m => m.AuthorRole).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasOne<SupportTicket>()
+                  .WithMany(t => t.Messages)
+                  .HasForeignKey(m => m.TicketId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(m => m.TicketId)
+                  .HasDatabaseName("ix_support_ticket_messages_ticket_id");
         });
     }
 }

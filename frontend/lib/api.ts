@@ -716,6 +716,111 @@ export const platformApi = {
     api.get<PlatformOverviewDto>('/api/platform/overview'),
   impersonate: (id: string) =>
     api.post<{ ticket: string }>(`/api/platform/tenants/${id}/impersonate`, {}),
+  listLeads: (status?: LeadStatus) =>
+    api.get<LeadDto[]>('/api/platform/leads', { params: status ? { status } : undefined }),
+  updateLead: (id: string, req: UpdateLeadRequest) =>
+    api.patch<LeadDto>(`/api/platform/leads/${id}`, req),
+  getTenantStaff: (id: string) =>
+    api.get<TenantStaffDto[]>(`/api/platform/tenants/${id}/staff`),
+  getTenantCustomers: (id: string, page = 1, pageSize = 50) =>
+    api.get<PagedResult<TenantCustomerDto>>(`/api/platform/tenants/${id}/customers`, { params: { page, pageSize } }),
+  getTenantAuditLogs: (id: string, page = 1, pageSize = 50) =>
+    api.get<PagedResult<AuditLogDto>>(`/api/platform/tenants/${id}/audit-logs`, { params: { page, pageSize } }),
+  getAggregatedAuditLogs: () =>
+    api.get<PlatformAuditLogDto[]>('/api/platform/audit-logs'),
+  listSupportTickets: (params?: { status?: SupportTicketStatus; tenantId?: string }) =>
+    api.get<SupportTicketDto[]>('/api/platform/support-tickets', { params }),
+  getSupportTicket: (id: string) =>
+    api.get<SupportTicketDetailDto>(`/api/platform/support-tickets/${id}`),
+  replySupportTicket: (id: string, body: string) =>
+    api.post<void>(`/api/platform/support-tickets/${id}/messages`, { body }),
+  updateSupportTicketStatus: (id: string, status: SupportTicketStatus) =>
+    api.patch<{ id: string; status: SupportTicketStatus }>(`/api/platform/support-tickets/${id}/status`, { status }),
+}
+
+// ── Paginação genérica ──────────────────────────────────────────────────────────
+
+export interface PagedResult<T> {
+  items: T[]; totalCount: number; page: number; pageSize: number; totalPages: number
+  hasNext: boolean; hasPrev: boolean
+}
+
+// ── Funcionários & clientes de um tenant (visão do dono da plataforma) ─────────
+
+export interface TenantStaffDto {
+  id: string; name: string; email: string | null; role: string; perfilNome: string | null
+  isActive: boolean; lastLoginAt: string | null; createdAt: string
+}
+
+export interface TenantCustomerDto {
+  id: string; name: string; email: string | null; whatsApp: string | null
+  isActive: boolean; lastLoginAt: string | null; createdAt: string
+}
+
+// ── Audit log cross-tenant (fase 1 de logs) ─────────────────────────────────────
+
+export interface AuditLogDto {
+  id: string; actorUserId: string | null; actorUserName: string | null
+  action: string; entityType: string; entityId: string | null; details: string | null
+  createdAt: string
+}
+
+export interface PlatformAuditLogDto extends AuditLogDto {
+  tenantSlug: string
+}
+
+// ── Leads (captação pública, CTA da landing) ──────────────────────────────────
+
+export type LeadStatus = 'Novo' | 'Contatado' | 'Convertido' | 'Perdido'
+
+export interface LeadDto {
+  id: string; nome: string; telefone: string; email: string | null; mensagem: string | null
+  origem: string; status: LeadStatus; notas: string | null
+  createdAt: string; updatedAt: string; convertedTenantId: string | null
+}
+
+export interface CreateLeadRequest {
+  nome: string; telefone: string; email?: string; mensagem?: string
+}
+
+export interface UpdateLeadRequest {
+  status: LeadStatus; notas?: string | null; convertedTenantId?: string | null
+}
+
+export const leadsApi = {
+  create: (req: CreateLeadRequest) =>
+    api.post<{ message: string }>('/api/leads', req),
+}
+
+// ── Suporte (chamados entre lojista e plataforma) ──────────────────────────────
+
+export type SupportTicketStatus = 'Aberto' | 'EmAndamento' | 'Resolvido' | 'Fechado'
+export type SupportTicketAuthorRole = 'Tenant' | 'Platform'
+
+export interface SupportTicketMessageDto {
+  id: string; authorRole: SupportTicketAuthorRole; authorName: string; body: string; createdAt: string
+}
+
+export interface SupportTicketDto {
+  id: string; tenantId: string; tenantSlug: string | null
+  subject: string; status: SupportTicketStatus; createdByUserName: string
+  createdAt: string; updatedAt: string; messageCount: number
+}
+
+export interface SupportTicketDetailDto extends SupportTicketDto {
+  messages: SupportTicketMessageDto[]
+}
+
+/** Lado do lojista — chamados da própria loja. */
+export const supportApi = {
+  listTickets: () =>
+    api.get<SupportTicketDto[]>('/api/support/tickets'),
+  createTicket: (subject: string, body: string) =>
+    api.post<SupportTicketDto>('/api/support/tickets', { subject, body }),
+  getTicket: (id: string) =>
+    api.get<SupportTicketDetailDto>(`/api/support/tickets/${id}`),
+  addMessage: (id: string, body: string) =>
+    api.post<void>(`/api/support/tickets/${id}/messages`, { body }),
 }
 
 // ── Upload de imagem ──────────────────────────────────────────────────────────

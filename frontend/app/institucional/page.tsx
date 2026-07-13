@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
   Store, ShieldCheck, Layers, Smartphone, Receipt, TrendingUp,
-  ArrowRight, CheckCircle2, Sun, Moon, Menu, X,
+  ArrowRight, CheckCircle2, Sun, Moon, Menu, X, Loader2,
 } from 'lucide-react'
-import { publicDirectoryApi, PublicTenantDto } from '@/lib/api'
+import { publicDirectoryApi, PublicTenantDto, leadsApi, getErrorMessage } from '@/lib/api'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
 
@@ -55,6 +55,36 @@ export default function InstitucionalPage() {
   const [isDark,   setIsDark]   = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [tenants,  setTenants]  = useState<PublicTenantDto[]>([])
+
+  // Formulário de lead (CTA "Falar com a gente") — antes disso o link ia
+  // direto pra /cadastro, que é a tela de cliente final de uma loja, não de
+  // captação de quem quer contratar a plataforma.
+  const [leadNome,       setLeadNome]       = useState('')
+  const [leadTelefone,   setLeadTelefone]   = useState('')
+  const [leadEmail,      setLeadEmail]      = useState('')
+  const [leadMensagem,   setLeadMensagem]   = useState('')
+  const [leadSubmitting, setLeadSubmitting] = useState(false)
+  const [leadSubmitted,  setLeadSubmitted]  = useState(false)
+  const [leadError,      setLeadError]      = useState<string | null>(null)
+
+  async function handleLeadSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLeadSubmitting(true)
+    setLeadError(null)
+    try {
+      await leadsApi.create({
+        nome: leadNome.trim(),
+        telefone: leadTelefone.trim(),
+        email: leadEmail.trim() || undefined,
+        mensagem: leadMensagem.trim() || undefined,
+      })
+      setLeadSubmitted(true)
+    } catch (err) {
+      setLeadError(getErrorMessage(err, 'Não deu pra enviar seu contato agora. Tenta de novo em instantes.'))
+    } finally {
+      setLeadSubmitting(false)
+    }
+  }
 
   useEffect(() => {
     setIsDark(localStorage.getItem('institucional-theme') === 'dark')
@@ -302,22 +332,52 @@ export default function InstitucionalPage() {
 
       {/* ── CTA final ────────────────────────────────────────────────────── */}
       <section id="contato" className="scroll-mt-20 bg-[#0C3D5A] py-20">
-        <div className="mx-auto max-w-3xl px-6 text-center">
+        <div className="mx-auto max-w-lg px-6 text-center">
           <h2 className="text-3xl font-extrabold text-white sm:text-4xl">
             Quer sua loja rodando com a sua cara?
           </h2>
           <p className="mt-4 text-white/75">
-            Fala com a gente e a gente monta seu espaço na plataforma — subdomínio, identidade
-            visual e módulo fiscal configurados pra você vender no mesmo dia.
+            Deixa seu contato que a gente fala com você e monta seu espaço na plataforma —
+            subdomínio, identidade visual e módulo fiscal configurados pra vender no mesmo dia.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link
-              href="/cadastro"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-6 py-3 font-semibold text-[#0C3D5A] transition hover:bg-brand-400"
-            >
-              Falar com a gente <ArrowRight size={18} />
-            </Link>
-          </div>
+
+          {leadSubmitted ? (
+            <div className="mt-8 flex flex-col items-center gap-3 rounded-xl border border-brand-400/30 bg-white/5 p-8">
+              <CheckCircle2 className="text-brand-400" size={32} />
+              <p className="font-semibold text-white">Recebemos seu contato!</p>
+              <p className="text-sm text-white/70">Vamos falar com você em breve.</p>
+            </div>
+          ) : (
+            <form onSubmit={handleLeadSubmit} className="mt-8 space-y-3 text-left">
+              <input
+                type="text" required placeholder="Seu nome" value={leadNome}
+                onChange={e => setLeadNome(e.target.value)} maxLength={150}
+                className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/50 outline-none focus:border-brand-400"
+              />
+              <input
+                type="text" required placeholder="WhatsApp" value={leadTelefone}
+                onChange={e => setLeadTelefone(e.target.value)} maxLength={30}
+                className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/50 outline-none focus:border-brand-400"
+              />
+              <input
+                type="email" placeholder="E-mail (opcional)" value={leadEmail}
+                onChange={e => setLeadEmail(e.target.value)} maxLength={255}
+                className="w-full rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/50 outline-none focus:border-brand-400"
+              />
+              <textarea
+                placeholder="Conta um pouco da sua loja (opcional)" value={leadMensagem}
+                onChange={e => setLeadMensagem(e.target.value)} maxLength={1000} rows={3}
+                className="w-full resize-none rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-white placeholder-white/50 outline-none focus:border-brand-400"
+              />
+              {leadError && <p className="text-sm text-red-300">{leadError}</p>}
+              <button
+                type="submit" disabled={leadSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-6 py-3 font-semibold text-[#0C3D5A] transition hover:bg-brand-400 disabled:opacity-60"
+              >
+                {leadSubmitting ? <><Loader2 className="animate-spin" size={18} /> Enviando...</> : <>Falar com a gente <ArrowRight size={18} /></>}
+              </button>
+            </form>
+          )}
         </div>
       </section>
 
