@@ -28,13 +28,19 @@ const config: Config = {
           800: '#186288',
           900: '#1A5170',
         },
+        // Ligado a --surface-XXX (globals.css), mesmo padrão do brand acima —
+        // resolve nativamente qualquer variante de opacidade (bg-surface-700/50,
+        // hover:bg-surface-500/30, from-surface-900 etc.) em vez de precisar de
+        // um !important por classe-e-opacidade específica pro tema claro (era
+        // assim antes, e por isso variantes com opacidade "escapavam" do
+        // override e apareciam com a cor crua do tema escuro vazando no claro).
         surface: {
-          900: '#121215', // Fundo da página (app bg)
-          800: '#1A1A1F', // Sidebar / cards
-          700: '#1E1E24', // Cards internos / hover
-          600: '#1E1E24', // Input bg
-          500: '#2D2D36', // Borders
-          400: '#3a3a47', // Muted bg
+          900: 'rgb(var(--surface-900) / <alpha-value>)', // Fundo da página (app bg)
+          800: 'rgb(var(--surface-800) / <alpha-value>)', // Sidebar / cards
+          700: 'rgb(var(--surface-700) / <alpha-value>)', // Cards internos / hover
+          600: 'rgb(var(--surface-600) / <alpha-value>)', // Input bg
+          500: 'rgb(var(--surface-500) / <alpha-value>)', // Borders
+          400: 'rgb(var(--surface-400) / <alpha-value>)', // Muted bg
         },
         accent: {
           gold:   '#FFE45E',
