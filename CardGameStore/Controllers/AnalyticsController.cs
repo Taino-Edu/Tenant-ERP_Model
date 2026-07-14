@@ -2,6 +2,7 @@
 // AnalyticsController.cs — Endpoints de analytics para o dashboard admin
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -17,22 +18,6 @@ namespace CardGameStore.Controllers;
 [Authorize(Policy = "AdminOnly")]
 public class AnalyticsController : ControllerBase
 {
-    // Fuso horário de Brasília — funciona em Linux (IANA) e Windows (ID legado).
-    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
-    private static TimeZoneInfo GetBrazilZone()
-    {
-        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
-        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
-    }
-
-    /// <summary>
-    /// Converte uma data local de Brasília no início UTC daquele dia.
-    /// Ex.: 29/05 BR (UTC-3) → 29/05 03:00:00 UTC
-    /// </summary>
-    private static DateTime BrDateToUtcStart(DateTime brDate) =>
-        TimeZoneInfo.ConvertTimeToUtc(
-            DateTime.SpecifyKind(brDate.Date, DateTimeKind.Unspecified), BrazilZone);
-
     private readonly AppDbContext              _db;
     private readonly IVendaAvulsaService       _vendas;
     private readonly IFinanceiroCalculoService _financeiro;
@@ -52,12 +37,12 @@ public class AnalyticsController : ControllerBase
     [HttpGet("dashboard")]
     public async Task<ActionResult<DashboardAnalyticsDto>> GetDashboard()
     {
-        var agoraBr     = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
-        var hojeInicio  = BrDateToUtcStart(agoraBr.Date);
+        var agoraBr     = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone);
+        var hojeInicio  = BrazilTime.DateToUtcStart(agoraBr.Date);
         var ontemInicio = hojeInicio.AddDays(-1);
         var ha30Dias    = hojeInicio.AddDays(-30);
         var ha60Dias    = hojeInicio.AddDays(-60);
-        var inicioMes   = BrDateToUtcStart(new DateTime(agoraBr.Year, agoraBr.Month, 1));
+        var inicioMes   = BrazilTime.DateToUtcStart(new DateTime(agoraBr.Year, agoraBr.Month, 1));
 
         // ── Comandas fechadas ─────────────────────────────────────────────────
         var comandasHoje = await _db.Comandas
@@ -155,12 +140,12 @@ public class AnalyticsController : ControllerBase
             .ToList();
 
         // ── Formas de pagamento (vendas avulsas + comandas hoje) ─────────────────
-        var pix      = vendasHoje.Count(v => v.PaymentMethod == "Pix")
-                     + comandasHoje.Count(c => c.PaymentMethod == "Pix");
-        var cartao   = vendasHoje.Count(v => v.PaymentMethod is "CartaoCredito" or "CartaoDebito")
-                     + comandasHoje.Count(c => c.PaymentMethod is "CartaoCredito" or "CartaoDebito");
-        var dinheiro = vendasHoje.Count(v => v.PaymentMethod == "Dinheiro")
-                     + comandasHoje.Count(c => c.PaymentMethod == "Dinheiro");
+        var pix      = vendasHoje.Count(v => v.PaymentMethod == PaymentMethod.Pix)
+                     + comandasHoje.Count(c => c.PaymentMethod == PaymentMethod.Pix);
+        var cartao   = vendasHoje.Count(v => v.PaymentMethod is PaymentMethod.CartaoCredito or PaymentMethod.CartaoDebito)
+                     + comandasHoje.Count(c => c.PaymentMethod is PaymentMethod.CartaoCredito or PaymentMethod.CartaoDebito);
+        var dinheiro = vendasHoje.Count(v => v.PaymentMethod == PaymentMethod.Dinheiro)
+                     + comandasHoje.Count(c => c.PaymentMethod == PaymentMethod.Dinheiro);
 
         var comandasAbertas = await _db.Comandas.CountAsync(c => c.Status == ComandaStatus.Aberta);
 
@@ -258,12 +243,12 @@ public class AnalyticsController : ControllerBase
         [FromQuery] DateTime? fim,
         [FromQuery] string?   filterPaymentMethod = null)
     {
-        var agoraBr   = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        var agoraBr   = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone);
         var dataBrIni = inicio.HasValue ? inicio.Value.Date : new DateTime(agoraBr.Year, agoraBr.Month, 1);
         var dataBrFim = fim.HasValue    ? fim.Value.Date    : agoraBr.Date;
 
-        var ini = BrDateToUtcStart(dataBrIni);
-        var end = BrDateToUtcStart(dataBrFim.AddDays(1));
+        var ini = BrazilTime.DateToUtcStart(dataBrIni);
+        var end = BrazilTime.DateToUtcStart(dataBrFim.AddDays(1));
 
         var dto = await _financeiro.CalcularAsync(ini, end, dataBrIni, dataBrFim, filterPaymentMethod);
         return Ok(dto);
@@ -291,7 +276,7 @@ public class AnalyticsController : ControllerBase
         // em FinanceiroCalculoService.CalcularAsync/FecharJanelaAsync).
         var inicioUtc = DateTime.SpecifyKind(inicio.Date, DateTimeKind.Utc);
         var fimUtc    = DateTime.SpecifyKind(fim.Date, DateTimeKind.Utc);
-        var fechamento = await _db.FechamentosPeriodo.FirstOrDefaultAsync(f =>
+        var fechamento = await _db.FechamentosPeriodo.AsNoTracking().FirstOrDefaultAsync(f =>
             f.Tipo == tipoEnum && f.DataInicio == inicioUtc && f.DataFim == fimUtc);
 
         if (fechamento is null) return NotFound();

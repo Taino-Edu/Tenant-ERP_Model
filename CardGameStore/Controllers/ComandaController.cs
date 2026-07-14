@@ -178,7 +178,7 @@ public class ComandaController : ControllerBase
         try
         {
             var adminId    = GetUserId();
-            var method     = request?.PaymentMethod ?? "Dinheiro";
+            var method     = request?.PaymentMethod ?? PaymentMethod.Dinheiro;
             var obs        = request?.Observacao;
             var method2    = request?.SecondPaymentMethod;
             var amount2    = request?.SecondPaymentAmountInCents ?? 0;
@@ -401,7 +401,7 @@ public class ComandaController : ControllerBase
 
             try
             {
-                comandaFechada = await _service.CloseComandaAsync(pix.ComandaId!.Value, fechadoPor, "Pix");
+                comandaFechada = await _service.CloseComandaAsync(pix.ComandaId!.Value, fechadoPor, PaymentMethod.Pix);
             }
             catch (InvalidOperationException)
             {

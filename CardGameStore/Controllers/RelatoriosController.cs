@@ -8,6 +8,7 @@
 //   Agrupa por categoria → produto, soma quantidades e totais.
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -23,13 +24,6 @@ namespace CardGameStore.Controllers;
 [Authorize(Policy = "AdminOnly")]
 public class RelatoriosController : ControllerBase
 {
-    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
-    private static TimeZoneInfo GetBrazilZone()
-    {
-        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
-        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
-    }
-
     private readonly AppDbContext _db;
 
     public RelatoriosController(AppDbContext db)
@@ -51,20 +45,22 @@ public class RelatoriosController : ControllerBase
         [FromQuery] int mes = 0,
         [FromQuery] int ano = 0)
     {
-        var agoraBr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        var agoraBr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone);
         if (mes <= 0 || mes > 12) mes = agoraBr.Month;
         if (ano <= 0)             ano = agoraBr.Year;
 
         var inicioLocal = new DateTime(ano, mes, 1);
-        var inicio = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(inicioLocal, DateTimeKind.Unspecified), BrazilZone);
-        var fim    = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(inicioLocal.AddMonths(1), DateTimeKind.Unspecified), BrazilZone);
+        var inicio = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(inicioLocal, DateTimeKind.Unspecified), BrazilTime.Zone);
+        var fim    = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(inicioLocal.AddMonths(1), DateTimeKind.Unspecified), BrazilTime.Zone);
 
         // Emojis das categorias cadastradas
         var categorias = await _db.ProductCategories
+            .AsNoTracking()
             .ToDictionaryAsync(c => c.Name, c => c.Emoji ?? "📦");
 
         // ── 1. Itens de Comandas Fechadas no mês ─────────────────────────────
         var comandaItems = await _db.ComandaItems
+            .AsNoTracking()
             .Include(i => i.Product)
             .Include(i => i.Comanda)
             .Where(i =>
@@ -166,16 +162,17 @@ public class RelatoriosController : ControllerBase
         [FromQuery] int mes = 0,
         [FromQuery] int ano = 0)
     {
-        var agoraBr2 = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
+        var agoraBr2 = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone);
         if (mes <= 0 || mes > 12) mes = agoraBr2.Month;
         if (ano <= 0)             ano = agoraBr2.Year;
 
         var mesInicioLocal = new DateTime(ano, mes, 1);
-        var iniciomes = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(mesInicioLocal, DateTimeKind.Unspecified), BrazilZone);
-        var fimMes    = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(mesInicioLocal.AddMonths(1), DateTimeKind.Unspecified), BrazilZone);
+        var iniciomes = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(mesInicioLocal, DateTimeKind.Unspecified), BrazilTime.Zone);
+        var fimMes    = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(mesInicioLocal.AddMonths(1), DateTimeKind.Unspecified), BrazilTime.Zone);
 
         // ── 1. Todos os crediários abertos (situação atual) ───────────────────
         var abertos = await _db.Crediarios
+            .AsNoTracking()
             .Include(c => c.User)
             .Where(c => c.Status == CrediariosStatus.Aberto)
             .ToListAsync();
@@ -204,6 +201,7 @@ public class RelatoriosController : ControllerBase
 
         // ── 2. Pagamentos registrados no mês ──────────────────────────────────
         var pagamentosMes = await _db.PagamentosCrediario
+            .AsNoTracking()
             .Include(p => p.Crediario).ThenInclude(c => c.User)
             .Where(p => p.CreatedAt >= iniciomes && p.CreatedAt < fimMes)
             .OrderByDescending(p => p.CreatedAt)

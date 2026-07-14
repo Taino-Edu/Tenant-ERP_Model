@@ -257,7 +257,7 @@ public class ReservationController : ControllerBase
             {
                 ClientName    = res.User?.Name,
                 UserId        = res.UserId,
-                PaymentMethod = req.PaymentMethod ?? "Dinheiro",
+                PaymentMethod = req.PaymentMethod ?? PaymentMethod.Dinheiro,
                 Items         = [new VendaAvulsaItemRequest { ProductId = res.ProductId, Quantity = res.Quantity }],
             };
             try { await _vendaService.RegisterAsync(vendaReq, adminId, adminName); }

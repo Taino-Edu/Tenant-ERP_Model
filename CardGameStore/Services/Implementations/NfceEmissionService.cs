@@ -35,6 +35,7 @@
 // =============================================================================
 
 using System.Security.Cryptography.X509Certificates;
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
@@ -76,7 +77,7 @@ public class NfceEmissionService : INfceEmissionService
 
     // Todo horário enviado à SEFAZ usa esse fuso explicitamente — nunca o fuso
     // do servidor (containers em nuvem tipicamente rodam em UTC por padrão).
-    private static readonly TimeZoneInfo FusoBrasil = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+    private static readonly TimeZoneInfo FusoBrasil = BrazilTime.Zone;
 
     private static DateTimeOffset AgoraBrasil() =>
         TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, FusoBrasil);
@@ -330,7 +331,7 @@ public class NfceEmissionService : INfceEmissionService
         )).ToList();
 
         return new DadosEmissao(
-            itens, comanda.PaymentMethod ?? "Dinheiro", comanda.User?.Cpf,
+            itens, comanda.PaymentMethod ?? PaymentMethod.Dinheiro, comanda.User?.Cpf,
             comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents);
     }
 
@@ -754,11 +755,11 @@ public class NfceEmissionService : INfceEmissionService
     /// </summary>
     private static FormaPagamento MapFormaPagamento(string formaPagamento) => formaPagamento switch
     {
-        "Dinheiro"      => FormaPagamento.fpDinheiro,
-        "Pix"           => FormaPagamento.fpPagamentoInstantaneoPIXDinamico,
-        "CartaoCredito" => FormaPagamento.fpCartaoCredito,
-        "CartaoDebito"  => FormaPagamento.fpCartaoDebito,
-        _               => FormaPagamento.fpOutro,
+        PaymentMethod.Dinheiro      => FormaPagamento.fpDinheiro,
+        PaymentMethod.Pix           => FormaPagamento.fpPagamentoInstantaneoPIXDinamico,
+        PaymentMethod.CartaoCredito => FormaPagamento.fpCartaoCredito,
+        PaymentMethod.CartaoDebito  => FormaPagamento.fpCartaoDebito,
+        _                           => FormaPagamento.fpOutro,
     };
 }
 

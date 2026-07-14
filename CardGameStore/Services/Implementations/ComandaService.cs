@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
@@ -12,32 +13,6 @@ namespace CardGameStore.Services.Implementations;
 
 public class ComandaService : IComandaService
 {
-    // Fuso horário de Brasília (UTC-3 fixo; BR não usa horário de verão desde 2019).
-    // Funciona em Linux (IANA) e Windows (ID legado).
-    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
-    private static TimeZoneInfo GetBrazilZone()
-    {
-        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
-        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
-    }
-
-    /// <summary>
-    /// Retorna o intervalo UTC correspondente a um dia no fuso de Brasília.
-    /// Ex.: dia 29/05 BR → [29/05 03:00 UTC, 30/05 03:00 UTC)
-    /// </summary>
-    private static (DateTime InicioUtc, DateTime FimUtc) DiaBrasil(DateTime? dia = null)
-    {
-        var agora    = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
-        var dataBr   = dia.HasValue ? dia.Value.Date : agora.Date;
-        var inicioUtc = TimeZoneInfo.ConvertTimeToUtc(
-            DateTime.SpecifyKind(dataBr, DateTimeKind.Unspecified), BrazilZone);
-        return (inicioUtc, inicioUtc.AddDays(1));
-    }
-
-    // Constantes para evitar magic strings sensíveis a typo/case
-    private const string PaymentCrediario = "Crediario";
-    private const string PaymentPontos    = "Pontos";
-    private const string PaymentCashback  = "Cashback";
 
     private readonly AppDbContext            _db;
     private readonly IEmailService           _email;
@@ -461,7 +436,7 @@ public class ComandaService : IComandaService
         return dto;
     }
 
-    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = "Dinheiro", string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0, bool emitirNotaFiscal = false)
+    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = PaymentMethod.Dinheiro, string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0, bool emitirNotaFiscal = false)
     {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -474,7 +449,7 @@ public class ComandaService : IComandaService
         // profundidade: rejeita aqui mesmo que um request forjado tente usar pontos com o
         // programa desligado.
         var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
-        if (!pontosAtivo && (paymentMethod == PaymentPontos || secondPaymentMethod == PaymentPontos))
+        if (!pontosAtivo && (paymentMethod == PaymentMethod.Pontos || secondPaymentMethod == PaymentMethod.Pontos))
             throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
 
         if (discountInCents > 0 && discountInCents > comanda.TotalInCents - comanda.PointsApplied)
@@ -498,7 +473,7 @@ public class ComandaService : IComandaService
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado para processar segundo pagamento.");
 
-            if (secondPaymentMethod == PaymentCashback)
+            if (secondPaymentMethod == PaymentMethod.Cashback)
             {
                 if (comanda.User.BalanceInCents < secondPaymentAmountInCents)
                     throw new InvalidOperationException(
@@ -507,7 +482,7 @@ public class ComandaService : IComandaService
                 comanda.User.UpdatedAt       = DateTime.UtcNow;
                 _logger.LogInformation("Split: R$ {Val:N2} de cashback aplicado na comanda {Id}.", secondPaymentAmountInCents / 100m, comandaId);
             }
-            else if (secondPaymentMethod == PaymentPontos)
+            else if (secondPaymentMethod == PaymentMethod.Pontos)
             {
                 if (comanda.User.PointsExpiresAt.HasValue && comanda.User.PointsExpiresAt.Value < DateTime.UtcNow)
                     throw new InvalidOperationException("Os pontos do cliente estão expirados.");
@@ -525,7 +500,7 @@ public class ComandaService : IComandaService
         }
 
         // ── Crediário ─────────────────────────────────────────────────────────────
-        if (paymentMethod == PaymentCrediario)
+        if (paymentMethod == PaymentMethod.Crediario)
         {
             if (crediarioExistenteId.HasValue)
             {
@@ -626,7 +601,7 @@ public class ComandaService : IComandaService
         }
 
         // ── Pontos como pagamento principal ───────────────────────────────────
-        if (paymentMethod == PaymentPontos)
+        if (paymentMethod == PaymentMethod.Pontos)
         {
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado.");
@@ -643,7 +618,7 @@ public class ComandaService : IComandaService
         }
 
         // ── Cashback como pagamento principal ─────────────────────────────────
-        if (paymentMethod == PaymentCashback)
+        if (paymentMethod == PaymentMethod.Cashback)
         {
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado.");
@@ -668,13 +643,13 @@ public class ComandaService : IComandaService
         // ── Pontos de fidelidade ──────────────────────────────────────────────
         // Não acumula quando qualquer parte do pagamento usa cashback, pontos ou crediário,
         // nem quando o programa de pontos está desligado nesta loja.
-        if (pontosAtivo && comanda.User != null && paymentMethod != PaymentCrediario
-                                 && paymentMethod != PaymentPontos
-                                 && paymentMethod != PaymentCashback
-                                 && secondPaymentMethod != PaymentCashback)
+        if (pontosAtivo && comanda.User != null && paymentMethod != PaymentMethod.Crediario
+                                 && paymentMethod != PaymentMethod.Pontos
+                                 && paymentMethod != PaymentMethod.Cashback
+                                 && secondPaymentMethod != PaymentMethod.Cashback)
         {
             // Base para acúmulo: exclui parcela paga em pontos no segundo método
-            var baseParaPontos = (hasSecond && secondPaymentMethod == PaymentPontos)
+            var baseParaPontos = (hasSecond && secondPaymentMethod == PaymentMethod.Pontos)
                 ? primaryAmt
                 : netTotal;
 
@@ -831,7 +806,7 @@ public class ComandaService : IComandaService
         // Usa intervalo UTC calculado a partir do fuso de Brasília.
         // Sem isso, uma comanda fechada às 22h30 BR (= 01h30 UTC do dia seguinte)
         // aparecia incorretamente como "hoje" no dashboard.
-        var (inicioUtc, fimUtc) = DiaBrasil(data);
+        var (inicioUtc, fimUtc) = BrazilTime.Dia(data);
 
         var comandas = await _db.Comandas
             .Include(c => c.Items)

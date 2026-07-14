@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -10,23 +11,6 @@ namespace CardGameStore.Services.Implementations;
 
 public class VendaAvulsaService : IVendaAvulsaService
 {
-    // Fuso horário de Brasília — funciona em Linux (IANA) e Windows (ID legado).
-    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
-    private static TimeZoneInfo GetBrazilZone()
-    {
-        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
-        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
-    }
-
-    private static (DateTime InicioUtc, DateTime FimUtc) DiaBrasil(DateTime? dia = null)
-    {
-        var agora    = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone);
-        var dataBr   = dia.HasValue ? dia.Value.Date : agora.Date;
-        var inicioUtc = TimeZoneInfo.ConvertTimeToUtc(
-            DateTime.SpecifyKind(dataBr, DateTimeKind.Unspecified), BrazilZone);
-        return (inicioUtc, inicioUtc.AddDays(1));
-    }
-
     private readonly AppDbContext                    _db;
     private readonly ILogger<VendaAvulsaService>    _logger;
     private readonly IServiceScopeFactory           _scopeFactory;
@@ -425,7 +409,7 @@ public class VendaAvulsaService : IVendaAvulsaService
     {
         // Converte data BR → intervalo UTC para evitar o bug de timezone:
         // uma venda às 22h BR (= 01h UTC do dia seguinte) aparecia como "hoje".
-        var (inicio, fim) = DiaBrasil(date);
+        var (inicio, fim) = BrazilTime.Dia(date);
 
         var vendas = await _db.VendasAvulsas.AsNoTracking()
             .Where(v => v.SoldAt >= inicio && v.SoldAt < fim)

@@ -4,6 +4,7 @@
 // reutilizado também pelo fechamento formal de período (FechamentoBackgroundService).
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -14,14 +15,6 @@ namespace CardGameStore.Services.Implementations;
 
 public class FinanceiroCalculoService : IFinanceiroCalculoService
 {
-    // Fuso horário de Brasília — funciona em Linux (IANA) e Windows (ID legado).
-    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
-    private static TimeZoneInfo GetBrazilZone()
-    {
-        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
-        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
-    }
-
     private readonly AppDbContext        _db;
     private readonly IVendaAvulsaService _vendas;
 
@@ -120,7 +113,7 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         // — O(dias×linhas) virou O(linhas+dias)). Mesma regra de bucket do
         // código original: um item pertence ao dia D se, convertido pro fuso de
         // Brasília, cai naquele dia — equivalente a checar
-        // BrDateToUtcStart(D) <= x < BrDateToUtcStart(D+1).
+        // BrazilTime.DateToUtcStart(D) <= x < BrazilTime.DateToUtcStart(D+1).
         var comandasDoPeriodo = await comandasBaseQ
             .Select(c => new { c.ClosedAt, c.TotalInCents })
             .ToListAsync();
@@ -136,13 +129,13 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         foreach (var c in comandasDoPeriodo)
         {
             if (c.ClosedAt is null) continue;
-            var diaBr = TimeZoneInfo.ConvertTimeFromUtc(c.ClosedAt.Value, BrazilZone).Date;
+            var diaBr = TimeZoneInfo.ConvertTimeFromUtc(c.ClosedAt.Value, BrazilTime.Zone).Date;
             Acc(receitaPorDia, diaBr, c.TotalInCents / 100m);
         }
 
         foreach (var v in avulsasList)
         {
-            var diaBr = TimeZoneInfo.ConvertTimeFromUtc(v.SoldAt, BrazilZone).Date;
+            var diaBr = TimeZoneInfo.ConvertTimeFromUtc(v.SoldAt, BrazilTime.Zone).Date;
             Acc(receitaPorDia, diaBr, v.TotalInCents / 100m);
 
             foreach (var i in v.Items)
@@ -152,7 +145,7 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         foreach (var i in itens)
         {
             if (i.ComandaClosedAt is null) continue;
-            var diaBr = TimeZoneInfo.ConvertTimeFromUtc(i.ComandaClosedAt.Value, BrazilZone).Date;
+            var diaBr = TimeZoneInfo.ConvertTimeFromUtc(i.ComandaClosedAt.Value, BrazilTime.Zone).Date;
             Acc(custoPorDia, diaBr, (decimal)i.CostPriceSnapshotInCents * i.Quantity / 100m);
         }
 
@@ -290,6 +283,7 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
 
         // ── Pagamentos de crediário recebidos no período ──────────────────────
         var pgtoCrediarioPeriodo = await _db.PagamentosCrediario
+            .AsNoTracking()
             .Include(p => p.Crediario).ThenInclude(c => c.User)
             .Where(p => p.CreatedAt >= ini && p.CreatedAt < end)
             .OrderByDescending(p => p.CreatedAt)
@@ -320,7 +314,7 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         // só marcar o Kind sem converter o valor é seguro e mantém consistência
         // com FecharJanelaAsync/FechamentoBackgroundService, que fazem o mesmo.
         var agoraBr = DateTime.SpecifyKind(
-            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone).Date, DateTimeKind.Utc);
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone).Date, DateTimeKind.Utc);
         ProjecaoDto? projecao = null;
         if (dataBrIni.Date == new DateTime(dataBrFim.Year, dataBrFim.Month, 1) && dataBrFim.Date == agoraBr)
             projecao = await CalcularProjecaoMesAsync(receita, agoraBr);
@@ -414,11 +408,6 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         };
     }
 
-    /// <summary>Converte uma data local de Brasília no início UTC daquele dia.</summary>
-    private static DateTime BrDateToUtcStart(DateTime brDate) =>
-        TimeZoneInfo.ConvertTimeToUtc(
-            DateTime.SpecifyKind(brDate.Date, DateTimeKind.Unspecified), BrazilZone);
-
     public async Task<FechamentoPeriodo> FecharJanelaAsync(TipoFechamento tipo, DateTime dataInicioBr, DateTime dataFimBrInclusive)
     {
         // DataInicio/DataFim (abaixo) são gravados numa coluna timestamptz — Kind
@@ -426,8 +415,8 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         // calendário opaca (ver comentário equivalente em CalcularAsync).
         var dataIni = DateTime.SpecifyKind(dataInicioBr.Date, DateTimeKind.Utc);
         var dataFim = DateTime.SpecifyKind(dataFimBrInclusive.Date, DateTimeKind.Utc);
-        var ini = BrDateToUtcStart(dataIni);
-        var end = BrDateToUtcStart(dataFim.AddDays(1));
+        var ini = BrazilTime.DateToUtcStart(dataIni);
+        var end = BrazilTime.DateToUtcStart(dataFim.AddDays(1));
 
         var dto = await CalcularAsync(ini, end, dataIni, dataFim);
         var (custoComandasCents, custoAvulsaCents) = await CalcularCustoSeparadoCentsAsync(ini, end);

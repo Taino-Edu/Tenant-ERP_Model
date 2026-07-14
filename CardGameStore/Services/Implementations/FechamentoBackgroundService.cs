@@ -19,6 +19,7 @@
 // fechada antes de chamar, pra não gerar ruído de log toda hora.
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
@@ -29,14 +30,6 @@ namespace CardGameStore.Services.Implementations;
 
 public class FechamentoBackgroundService : BackgroundService
 {
-    // Fuso horário de Brasília — funciona em Linux (IANA) e Windows (ID legado).
-    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
-    private static TimeZoneInfo GetBrazilZone()
-    {
-        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
-        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
-    }
-
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<FechamentoBackgroundService> _logger;
 
@@ -76,7 +69,7 @@ public class FechamentoBackgroundService : BackgroundService
         // ArgumentException logo no primeiro AnyAsync check, era engolido pelo
         // catch em FecharPendentesAsync/FecharTenantAsync e nunca fechava
         // nenhum período automaticamente — só ficava logando erro em silêncio.
-        var agoraBr = DateTime.SpecifyKind(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone), DateTimeKind.Utc);
+        var agoraBr = DateTime.SpecifyKind(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone), DateTimeKind.Utc);
 
         using var catalogScope = _scopeFactory.CreateScope();
         var catalog = catalogScope.ServiceProvider.GetRequiredService<CatalogDbContext>();

@@ -3,6 +3,7 @@
 // envia por email ao contador o ZIP com os XMLs do mês anterior.
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
@@ -12,14 +13,6 @@ namespace CardGameStore.Services.Implementations;
 
 public class FiscalXmlExportBackgroundService : BackgroundService
 {
-    // Fuso horário de Brasília — funciona em Linux (IANA) e Windows (ID legado).
-    private static readonly TimeZoneInfo BrazilZone = GetBrazilZone();
-    private static TimeZoneInfo GetBrazilZone()
-    {
-        try { return TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"); }
-        catch { return TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time"); }
-    }
-
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<FiscalXmlExportBackgroundService> _logger;
 
@@ -50,7 +43,7 @@ public class FiscalXmlExportBackgroundService : BackgroundService
 
     private async Task CheckAsync()
     {
-        var hojeBrasil = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilZone).Date;
+        var hojeBrasil = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone).Date;
         if (hojeBrasil.Day != 1) return;
 
         using var scope  = _scopeFactory.CreateScope();
@@ -66,7 +59,7 @@ public class FiscalXmlExportBackgroundService : BackgroundService
             && cfg.UltimoEnvioMensalXmls.Value.Month == hojeBrasil.Month;
         if (jaEnviouEsseMes) return;
 
-        var (inicio, fim, mesAnterior) = CalcularJanelaMesAnterior(hojeBrasil, BrazilZone);
+        var (inicio, fim, mesAnterior) = CalcularJanelaMesAnterior(hojeBrasil, BrazilTime.Zone);
 
         var zipBytes = await export.GerarZipAsync(inicio, fim);
         var mesRef   = mesAnterior.ToString("MM/yyyy");
