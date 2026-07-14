@@ -116,14 +116,21 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
+          # Sanitiza os secrets: remove espaços/quebras de linha de copy-paste
+          # e tolera "root@IP" colado no DEPLOY_HOST por engano.
+          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')"
+          HOST="${HOST##*@}"
+          USUARIO="$(printf '%s' "$DEPLOY_USER" | tr -d '[:space:]')"
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
-            "$DEPLOY_USER@$DEPLOY_HOST" 'bash /opt/tenant-erp/deploy/update.sh'
+            "$USUARIO@$HOST" 'bash /opt/tenant-erp/deploy/update.sh'
 
       - name: Smoke test pós-deploy
         if: steps.check.outputs.configured == 'true'
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
+          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')"
+          HOST="${HOST##*@}"
           sleep 20
-          curl -fsS -o /dev/null "http://$DEPLOY_HOST/" \
+          curl -fsS -o /dev/null "http://$HOST/" \
             && echo "Site respondendo 200 após o deploy."
