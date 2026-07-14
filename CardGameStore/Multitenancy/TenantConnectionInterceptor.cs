@@ -56,7 +56,11 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
 
         using var checkCmd = connection.CreateCommand();
         checkCmd.CommandText = "SELECT current_schema();";
-        var current = (string?)checkCmd.ExecuteScalar();
+        // "as string" (não cast direto): se o schema não existir, current_schema()
+        // retorna NULL SQL (DBNull) — o cast direto estourava InvalidCastException
+        // antes da mensagem de diagnóstico do LogAndVerify (bug pego pelos
+        // TenantIsolationTests).
+        var current = checkCmd.ExecuteScalar() as string;
 
         LogAndVerify(schema, current);
     }
@@ -83,7 +87,8 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         // entre tenants sem passar por este interceptor).
         await using var checkCmd = connection.CreateCommand();
         checkCmd.CommandText = "SELECT current_schema();";
-        var current = (string?)await checkCmd.ExecuteScalarAsync(ct);
+        // "as string" em vez de cast direto — ver comentário na versão síncrona.
+        var current = await checkCmd.ExecuteScalarAsync(ct) as string;
 
         LogAndVerify(schema, current);
     }

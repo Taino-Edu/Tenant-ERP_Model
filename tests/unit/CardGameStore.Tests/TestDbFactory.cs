@@ -42,6 +42,24 @@ public static class TestDbFactory
             ? env
             : DefaultConnString;
 
+    /// <summary>Connection string do Postgres de teste — exposta pra testes que
+    /// precisam montar o próprio DbContext (ex: TenantIsolationTests, que usa o
+    /// TenantConnectionInterceptor real de produção em vez do TestSchemaInterceptor).</summary>
+    public static string ConnectionString => PgConnString;
+
+    /// <summary>Dropa e recria um schema vazio no banco de teste — mesmo preparo
+    /// que Create() faz, exposto pra testes que gerenciam o próprio contexto.</summary>
+    public static void ResetSchema(string schema)
+    {
+        using var setup = new NpgsqlConnection(PgConnString);
+        setup.Open();
+        using var cmd = setup.CreateCommand();
+        cmd.CommandText =
+            $"DROP SCHEMA IF EXISTS \"{schema}\" CASCADE; " +
+            $"CREATE SCHEMA \"{schema}\";";
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Cria um AppDbContext isolado pra um teste — schema próprio,
     /// dropado e recriado vazio, dentro do mesmo banco Postgres de teste.
     /// <paramref name="testName"/> vira o nome do schema (mesma string que os
