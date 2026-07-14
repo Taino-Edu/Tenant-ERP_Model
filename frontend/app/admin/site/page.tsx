@@ -245,7 +245,12 @@ export default function SiteConfigPage() {
       {/* Ícones */}
       <div className="card p-5 space-y-4">
         <h3 className="font-bold text-white mb-1">Ícones</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <IconUploadField
+            label="Logo da loja" desc="Aparece com destaque na página inicial"
+            value={cfg.logoUrl} uploading={uploadingIcon === 'logoUrl'}
+            onUpload={f => uploadIcon('logoUrl', f)}
+          />
           <IconUploadField
             label="Favicon do site" desc="Aparece na aba do navegador"
             value={cfg.faviconUrl} uploading={uploadingIcon === 'faviconUrl'}
