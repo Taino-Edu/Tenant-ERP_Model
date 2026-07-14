@@ -64,6 +64,23 @@
   devolve o estado gravado. Coberto por 3 testes novos em
   `CrediariosControllerTests` contra Postgres real — suíte completa 195/195.
 
+- **Criado — testes de isolamento multi-tenant** (`TenantIsolationTests`, 7
+  testes): exercitam o `TenantConnectionInterceptor` REAL de produção contra
+  Postgres — dado do tenant A invisível pro B, troca de tenant no mesmo escopo,
+  allowlist de nome de schema, e a rede de segurança do `current_schema()`.
+  O teste da rede de segurança **achou bug real**: com schema inexistente,
+  `current_schema()` retorna NULL SQL e o cast direto `(string?)` estourava
+  `InvalidCastException` antes da mensagem de diagnóstico — corrigido com
+  `as string` (isolamento nunca esteve em risco, só o erro era obscuro).
+- **Feito — primeira fatia da decomposição do financeiro**: `financeiro/page.tsx`
+  caiu de 2198 → 913 linhas. Extraídos pra `components/admin/financeiro/`:
+  `CurvaABCSection` (449 l), `FinanceiroCharts` (BarChart/DayPieChart/
+  MargemDonut/DateQuickFilter, 361 l), `FormasPagamentoSection` (197 l),
+  `KpiChartModal` (138 l), `DayDetailModal` (133 l) e `financeiro-shared`
+  (fmt/FORMA_LABELS/Preset/getRange). Zero mudança de comportamento — bundle
+  idêntico (22 kB), typecheck e build verdes. Faltam as próximas fatias:
+  comanda (104 KB), venda-avulsa (87 KB), estoque (71 KB), usuarios (61 KB).
+
 ## Backlog — pendências das avaliações externas de 14/07
 Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi feito:
 - **Decompor os 5 maiores arquivos do frontend** — financeiro (113 KB),
