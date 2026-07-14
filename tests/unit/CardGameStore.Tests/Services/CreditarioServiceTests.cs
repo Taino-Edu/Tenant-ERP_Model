@@ -19,13 +19,7 @@ public class CreditarioServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static AppDbContext CreateDb(string name)
-    {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(name)
-            .Options;
-        return new AppDbContext(options);
-    }
+    private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
     private static CreditarioService CreateService(AppDbContext db) =>
         new(db, NullLogger<CreditarioService>.Instance);

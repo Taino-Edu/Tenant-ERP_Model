@@ -17,19 +17,9 @@ namespace CardGameStore.Tests.Services;
 
 public class ProductServiceTests
 {
-    // SQLite in-memory (não o EF InMemory provider) — ProductService.AdjustStockAsync
-    // usa ExecuteUpdateAsync (bulk update), que o EF InMemory provider não implementa.
-    private static AppDbContext CreateDb(string _)
-    {
-        var connection = new SqliteConnection("Filename=:memory:");
-        connection.Open();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(connection)
-            .Options;
-        var db = new AppDbContext(options);
-        db.Database.EnsureCreated();
-        return db;
-    }
+    // TestDbFactory: SQLite por padrão (ExecuteUpdateAsync de AdjustStockAsync
+    // não roda no EF InMemory), Postgres real se TEST_POSTGRES_CONNECTION setada.
+    private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
     private static ProductService CreateService(AppDbContext db) => new(
         db, new Mock<IPushService>().Object, new Mock<IEmailService>().Object, NullLogger<ProductService>.Instance);

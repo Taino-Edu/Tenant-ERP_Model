@@ -29,17 +29,7 @@ public class ComandaServiceTests
     // SQLite in-memory is used instead of EF InMemory to avoid value-converter
     // bugs (HasConversion<string> on enums breaks InMemoryTable.Update in 8.x).
     // Each test gets its own open SqliteConnection so the DB lives for the test duration.
-    private static AppDbContext CreateDb(string _)
-    {
-        var connection = new SqliteConnection("Filename=:memory:");
-        connection.Open();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(connection)
-            .Options;
-        var db = new AppDbContext(options);
-        db.Database.EnsureCreated();
-        return db;
-    }
+    private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
     /// <summary>Cria mock de IHubContext com Clients.Group configurado para evitar NullReferenceException.</summary>
     private static IHubContext<ComandaHub> CreateHubMock()

@@ -24,17 +24,7 @@ public class VendaAvulsaServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static AppDbContext CreateDb(string _)
-    {
-        var connection = new SqliteConnection("Filename=:memory:");
-        connection.Open();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(connection)
-            .Options;
-        var db = new AppDbContext(options);
-        db.Database.EnsureCreated();
-        return db;
-    }
+    private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
     private static VendaAvulsaService CreateService(AppDbContext db) =>
         new(db, NullLogger<VendaAvulsaService>.Instance, new Mock<IServiceScopeFactory>().Object,

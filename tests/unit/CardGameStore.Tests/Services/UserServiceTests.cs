@@ -15,13 +15,7 @@ namespace CardGameStore.Tests.Services;
 
 public class UserServiceTests
 {
-    private static AppDbContext CreateDb(string name)
-    {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(name)
-            .Options;
-        return new AppDbContext(options);
-    }
+    private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
     private static UserService CreateService(AppDbContext db) =>
         new(db, NullLogger<UserService>.Instance);

@@ -21,15 +21,7 @@ namespace CardGameStore.Tests.Services;
 
 public class NfceEmissionServiceTests
 {
-    private static AppDbContext CreateDb()
-    {
-        var connection = new SqliteConnection("Filename=:memory:");
-        connection.Open();
-        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
-        var db = new AppDbContext(options);
-        db.Database.EnsureCreated();
-        return db;
-    }
+    private static AppDbContext CreateDb() => TestDbFactory.Create(nameof(NfceEmissionServiceTests));
 
     private static EncryptionService CreateEncryptionService()
     {

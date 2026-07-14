@@ -26,13 +26,7 @@ public class AuditServiceTests
     /// <summary>Salt padrão usado nos testes — deve bater com o IConfiguration mockado.</summary>
     private const string TestSalt = "test-salt";
 
-    private static AppDbContext CreateDb(string name)
-    {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(name)
-            .Options;
-        return new AppDbContext(options);
-    }
+    private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
     /// <summary>
     /// Cria AuditService com IConfiguration mockado contendo o salt de teste.

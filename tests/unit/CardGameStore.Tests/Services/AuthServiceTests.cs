@@ -25,26 +25,11 @@ namespace CardGameStore.Tests.Services;
 
 public class AuthServiceTests
 {
-    private static AppDbContext CreateInMemoryDb(string dbName)
-    {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName: dbName)
-            .Options;
-        return new AppDbContext(options);
-    }
+    private static AppDbContext CreateInMemoryDb(string dbName) => TestDbFactory.Create(dbName);
 
-    // SQLite in-memory para testes que usam o AuthService real (que usa ComandaService)
-    private static AppDbContext CreateSqliteDb()
-    {
-        var connection = new SqliteConnection("Filename=:memory:");
-        connection.Open();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(connection)
-            .Options;
-        var db = new AppDbContext(options);
-        db.Database.EnsureCreated();
-        return db;
-    }
+    // SQLite (ou Postgres real, ver TestDbFactory) pros testes que usam o
+    // AuthService real (que usa ComandaService).
+    private static AppDbContext CreateSqliteDb() => TestDbFactory.Create(nameof(AuthServiceTests) + "_sqlite");
 
     /// <summary>Cria um mock de IHubContext com Clients.Group configurado para evitar NullReferenceException.</summary>
     private static IHubContext<ComandaHub> CreateHubMock()
@@ -162,7 +147,7 @@ public class AuthServiceTests
     {
         // Arrange
         var db  = CreateInMemoryDb(nameof(QuickLogin_CPFNovo_DeveCriarUsuario));
-        var cpf = "123.456.789-00";
+        var cpf = "12345678900";
 
         // Act — simula lógica: busca por CPF, cria se não existe
         var existente = await db.Users.FirstOrDefaultAsync(u => u.Cpf == cpf);
@@ -192,7 +177,7 @@ public class AuthServiceTests
     {
         // Arrange
         var db  = CreateInMemoryDb(nameof(QuickLogin_CPFExistente_DeveRetornarMesmoUsuario));
-        var cpf = "987.654.321-00";
+        var cpf = "98765432100";
 
         var existente = new User
         {
