@@ -18,6 +18,7 @@ using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CardGameStore.Controllers;
 
@@ -232,7 +233,7 @@ public class CrediariosController : ControllerBase
         var all = await _db.Comandas
             .Include(c => c.Items)
             .Where(c => userIds.Contains(c.UserId)
-                     && c.PaymentMethod == "Crediario"
+                     && c.PaymentMethod == PaymentMethod.Crediario
                      && c.Status == ComandaStatus.Fechada
                      && c.ClosedAt != null)
             .ToListAsync();
@@ -373,6 +374,16 @@ public class CrediariosController : ControllerBase
         if (crediario == null)
             return NotFound(new { Message = "Crediário não encontrado." });
 
+        // Idempotência: reenvio da mesma requisição (retry de rede/duplo clique)
+        // devolve o estado atual sem debitar de novo. Checado ANTES da validação
+        // de "já quitado" — um retry do pagamento que quitou deve receber 200,
+        // não 400.
+        if (request.IdempotencyKey is Guid idemKey &&
+            await _db.PagamentosCrediario.AnyAsync(p => p.CrediarioId == id && p.IdempotencyKey == idemKey))
+        {
+            return Ok(MapToDto(crediario));
+        }
+
         if (crediario.Status == CrediariosStatus.Pago)
             return BadRequest(new { Message = "Crediário já está quitado." });
 
@@ -383,7 +394,8 @@ public class CrediariosController : ControllerBase
                 Message = $"Pagamento de R$ {request.ValorEmCentavos / 100m:N2} excede o saldo restante de R$ {saldoAtual / 100m:N2}."
             });
 
-        // Registra o pagamento parcial (método principal)
+        // Registra o pagamento parcial (método principal). A chave de idempotência
+        // vai só nesta linha (no split, a segunda entrada é da mesma requisição).
         var pagamento = new PagamentoCrediario
         {
             CrediarioId     = id,
@@ -391,6 +403,7 @@ public class CrediariosController : ControllerBase
             FormaPagamento  = request.FormaPagamento,
             Observacao      = request.Observacao,
             AdminId         = adminId,
+            IdempotencyKey  = request.IdempotencyKey,
         };
         _db.PagamentosCrediario.Add(pagamento);
         crediario.ValorPagoEmCentavos += request.ValorEmCentavos;
@@ -432,7 +445,26 @@ public class CrediariosController : ControllerBase
                 id, request.ValorEmCentavos / 100m, adminId, crediario.SaldoRestanteEmReais);
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (
+            request.IdempotencyKey != null &&
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg &&
+            pg.ConstraintName == "ix_pagamentos_crediario_idempotency_key")
+        {
+            // Corrida entre dois retries simultâneos com a mesma chave: o outro
+            // gravou primeiro. Descarta o estado local e devolve o que já existe.
+            _db.ChangeTracker.Clear();
+            var atual = await _db.Crediarios
+                .Include(c => c.User)
+                .Include(c => c.Pagamentos)
+                .Include(c => c.Comanda).ThenInclude(cmd => cmd!.Items)
+                .FirstAsync(c => c.Id == id);
+            return Ok(MapToDto(atual));
+        }
+
         return Ok(MapToDto(crediario));
     }
 
@@ -542,7 +574,7 @@ public class CrediariosController : ControllerBase
                 {
                     CrediarioId     = crediario.Id,
                     ValorEmCentavos = valorPagar,
-                    FormaPagamento  = "Pix",
+                    FormaPagamento  = PaymentMethod.Pix,
                     Observacao      = $"Cobrança Pix automática (txid {txid})",
                     AdminId         = adminId,
                 });

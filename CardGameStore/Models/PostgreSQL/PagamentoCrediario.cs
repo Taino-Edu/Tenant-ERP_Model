@@ -34,11 +34,19 @@ public class PagamentoCrediario
     /// <summary>Forma de pagamento usada nesta parcela.</summary>
     [MaxLength(50)]
     [Column("forma_pagamento")]
-    public string FormaPagamento { get; set; } = "Dinheiro";
+    public string FormaPagamento { get; set; } = PaymentMethod.Dinheiro;
 
     [MaxLength(500)]
     [Column("observacao")]
     public string? Observacao { get; set; }
+
+    /// <summary>
+    /// Chave de idempotência gerada pelo cliente (GUID). Única quando presente —
+    /// retry/duplo clique com a mesma chave não registra o pagamento duas vezes.
+    /// Null em pagamentos antigos e em fluxos internos (ex: cobrança Pix automática).
+    /// </summary>
+    [Column("idempotency_key")]
+    public Guid? IdempotencyKey { get; set; }
 
     // ── Auditoria ─────────────────────────────────────────────────────────────
 

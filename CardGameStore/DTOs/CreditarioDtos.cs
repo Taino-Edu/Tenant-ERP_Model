@@ -3,6 +3,7 @@
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
+using CardGameStore.Models.PostgreSQL;
 
 namespace CardGameStore.DTOs;
 
@@ -142,7 +143,7 @@ public class RegistrarPagamentoRequest
 
     /// <summary>Forma de pagamento usada (Dinheiro, Pix, CartaoCredito, CartaoDebito, Pontos, Cashback).</summary>
     [MaxLength(50)]
-    public string FormaPagamento { get; set; } = "Dinheiro";
+    public string FormaPagamento { get; set; } = PaymentMethod.Dinheiro;
 
     /// <summary>Segundo método de pagamento (split). Null = não tem split.</summary>
     [MaxLength(50)]
@@ -155,4 +156,10 @@ public class RegistrarPagamentoRequest
     /// <summary>Observação opcional.</summary>
     [MaxLength(500)]
     public string? Observacao { get; set; }
+
+    /// <summary>
+    /// Chave de idempotência (GUID gerado pelo frontend por tentativa de pagamento).
+    /// Reenvio com a mesma chave devolve o estado atual sem debitar de novo.
+    /// </summary>
+    public Guid? IdempotencyKey { get; set; }
 }

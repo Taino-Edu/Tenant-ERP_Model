@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   crediarioApi, userApi, CrediariosDto, CrediariosClienteDto, PagamentoCrediarioDto,
   FORMAS_PAGAMENTO_CREDIARIO, UserSummary, getErrorMessage,
@@ -558,6 +558,13 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
   const [obs,     setObs]     = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Uma chave por "tentativa de pagamento" (vida do modal): retry após falha de
+  // rede reusa a chave e o backend não debita duas vezes; reabrir o modal gera
+  // outra chave (novo pagamento de verdade).
+  const idemKeyRef = useRef<string | undefined>(
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : undefined,
+  )
+
   const valorNum  = parseFloat(valor.replace(',',  '.')) || 0
   const valor2Num = parseFloat(valor2.replace(',', '.')) || 0
   const totalPago = split ? valorNum + valor2Num : valorNum
@@ -580,6 +587,7 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
         secondFormaPagamento:  split ? forma2 : undefined,
         secondValorEmCentavos: split ? Math.round(valor2Num * 100) : undefined,
         observacao:            obs || undefined,
+        idempotencyKey:        idemKeyRef.current,
       })
       toast.success(quita ? 'Crediário quitado!' : `Pagamento de ${fmt(totalPago)} registrado!`)
       onSuccess()

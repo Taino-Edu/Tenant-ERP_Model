@@ -272,6 +272,13 @@ public class AppDbContext : DbContext
             entity.HasIndex(p => p.CrediarioId)
                   .HasDatabaseName("ix_pagamentos_crediario_crediario");
 
+            // Idempotência: única quando presente — segunda inserção com a mesma
+            // chave estoura 23505 e o controller devolve o estado já gravado.
+            entity.HasIndex(p => p.IdempotencyKey)
+                  .IsUnique()
+                  .HasFilter("idempotency_key IS NOT NULL")
+                  .HasDatabaseName("ix_pagamentos_crediario_idempotency_key");
+
             entity.HasIndex(p => p.CreatedAt)
                   .HasDatabaseName("ix_pagamentos_crediario_created_at");
         });
