@@ -1,5 +1,113 @@
 # Backlog — Tenant-ERP
 
+## Concluído (sessão 2026-07-14, avaliações externas + vulnerabilidades npm)
+- Duas avaliações externas (`avaliacao_completa_softnerd.md` /
+  `avaliacao_completa_2esysten.md`, ambas de 14/07, fora do repo) foram
+  verificadas item a item contra o código atual antes de agir. Vários achados
+  já estavam **desatualizados**: `JSON.parse` sem try-catch (os 7 call sites já
+  estão protegidos), MongoDB no docker-compose de produção (já removido),
+  migrations frágeis (já squashadas na `InitialSquash` de 10/07).
+- **Corrigido — vulnerabilidades npm** (9 → 2): `npm audit fix` resolveu axios
+  (8 CVEs: ReDoS, vazamento de Proxy-Authorization, prototype pollution),
+  form-data (CRLF injection), js-cookie (hijack de protótipo) e ws (DoS por
+  exaustão de memória, via SignalR) dentro dos ranges já declarados.
+- **Corrigido — next 14.2.5 → 14.2.35**: ~25 CVEs acumulados (cache poisoning,
+  SSRF via middleware, bypass de autorização, XSS com nonce de CSP). Patch na
+  mesma branch 14.2.x; `next build` e `next dev` smoke-testados, e o
+  `scripts/patch-next.js` do postinstall continua aplicando.
+- **Corrigido — jspdf 2.x → 4.2.1 + jspdf-autotable 3.x → 5.0.8**: elimina o
+  dompurify vulnerável (14 CVEs de XSS/bypass de sanitização). Migração via
+  `applyPlugin(jsPDF)` no helper `getJsPDF()` dos 3 geradores de relatório
+  (`lib/relatorio*.ts`) — API `doc.autoTable`/`lastAutoTable.finalY` preservada,
+  smoke test de runtime validou PDF válido com os padrões usados.
+- **Restam 2 vulns npm** (next high + postcss moderate) que só saem com upgrade
+  major pro Next 16 — fora do escopo, ver backlog abaixo.
+- **Corrigido — COOKIE_SECURE**: warning em todo boot de produção (não só no
+  seed) enquanto `COOKIE_SECURE=false`, + comentários inequívocos no
+  `deploy/setup.sh` e `deploy/.env.example` sobre o follow-up obrigatório ao
+  configurar domínio+Cloudflare.
+- **Corrigido — senha padrão removida do STATUS.md** (ficava em texto puro
+  rastreado pelo git; agora aponta pra `ADMIN_SEED_PASSWORD`).
+- **Corrigido — hash de IP LGPD**: `SHA256(salt + ip)` (vulnerável a
+  length-extension) → `HMACSHA256(key: salt, msg: ip)` nos 3 pontos
+  (`AuditService`, `AuditSaveChangesInterceptor`, `LgpdController`). Hashes
+  antigos no banco ficam órfãos de correlação — aceitável, são pseudônimos.
+- **Corrigido — magic strings de pagamento**: constantes `PaymentMethod` (já
+  existiam em `VendaAvulsa.cs`) agora usadas em ComandaService/Controller,
+  CrediariosController, AnalyticsController, NfceEmissionService,
+  ReservationController e DTOs — antes cada um tinha literais `"Pix"` etc.
+- **Corrigido — `.AsNoTracking()`** nas queries de leitura de Analytics,
+  FinanceiroCalculoService, Relatórios e background services de
+  fechamento/export fiscal.
+- **Corrigido — `BrazilTime` centralizado** (`Common/BrazilTime.cs`): as cópias
+  de `DiaBrasil()`/conversões de fuso duplicadas em controllers/services agora
+  delegam pra um único helper.
+- **Criado — CI/CD no GitHub Actions** (`.github/workflows/ci.yml`): job de
+  backend com Postgres 16 real (mesma porta/credenciais do `TestDbFactory`,
+  connection string default da suíte já funciona) + job de frontend com
+  `npm ci` + `next build`. Era P0 nas duas avaliações. Push na main com CI
+  verde dispara deploy automático via SSH (`update.sh` no VPS) + smoke test.
+  **Pendente de ativação**: cadastrar 3 secrets no GitHub (Settings → Secrets
+  and variables → Actions): `DEPLOY_HOST` (IP do VPS), `DEPLOY_USER` (ex:
+  root) e `DEPLOY_SSH_KEY`. Gerar a chave dedicada NO VPS:
+  `ssh-keygen -t ed25519 -f ~/.ssh/gh_deploy -N "" && cat ~/.ssh/gh_deploy.pub
+  >> ~/.ssh/authorized_keys && cat ~/.ssh/gh_deploy` — o conteúdo privado
+  impresso vai no secret. Sem os secrets o job de deploy pula com aviso, o CI
+  continua normal.
+- **Corrigido — idempotência no pagamento de crediário**: duplo clique/retry
+  em `POST /api/crediarios/{id}/pagamento` podia debitar duas vezes. Agora o
+  frontend manda `IdempotencyKey` (GUID por tentativa — vida do modal de
+  pagamento), gravada em `PagamentoCrediario` com índice único filtrado
+  (migration `AddPagamentoIdempotencyKey`). Replay devolve 200 com o estado
+  atual (checado antes da validação de "já quitado", pra retry de quitação não
+  virar 400); corrida entre retries simultâneos cai no índice único (23505) e
+  devolve o estado gravado. Coberto por 3 testes novos em
+  `CrediariosControllerTests` contra Postgres real — suíte completa 195/195.
+
+## Backlog — pendências das avaliações externas de 14/07
+Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi feito:
+- **Decompor os 5 maiores arquivos do frontend** — financeiro (113 KB),
+  comanda (104 KB), venda-avulsa (87 KB), estoque (71 KB), usuarios (61 KB) +
+  landing `app/page.tsx` (48 KB). Esforço estimado: 3-5 dias. Sobrepõe com o
+  "retrabalho de UI/UX" já registrado abaixo.
+- **Bug de hidratação React (#425/#418/#423)** — pré-existente, sistêmico no
+  admin; suspeita: script inline de FOUC. Parcialmente atacado no commit
+  `2364296`, mas as avaliações ainda o listam — reverificar se persiste.
+- **Upgrade Next 16** — elimina as 2 vulns npm restantes; major com breaking
+  changes (App Router). Fazer com calma, não junto de outras mudanças.
+- **Testes de integração** — `WebApplicationFactory` + Postgres real;
+  prioridade pro multi-tenancy (2 tenants, verificar isolamento), que é o
+  coração do sistema e não tem teste automatizado.
+- **SSL Cloudflare "Flexible" → "Full (Strict)"** — hoje Cloudflare→VPS trafega
+  HTTP puro. Requer cert no nginx do VPS (origin certificate da Cloudflare é o
+  caminho barato). Ação de infra, não de código.
+- **Monitoring básico** — UptimeRobot (ou similar) no `/health`; hoje se a API
+  cair ninguém fica sabendo.
+- **Zero-downtime deploy** — claim da avaliação estava exagerado: `update.sh`
+  já faz `build` antes do `up -d`, então o downtime é só a recriação dos
+  containers (segundos). Blue-green de verdade só vale quando houver tráfego
+  que justifique.
+- **`.pptx` fora do repo** (5 arquivos, >1 MB) e, se o repo for publicado um
+  dia, `git filter-repo`/BFG pra limpar senha/IP do histórico.
+- **Coverage (Coverlet) + testes Playwright** — Playwright está configurado
+  mas sem nenhum teste escrito; mínimo: login, abrir comanda, fechar comanda.
+
+## Backlog — configuração fiscal por tenant (motores de cálculo de tributos)
+Proposta nova da `avaliacao_completa_2esysten.md` (a única seção que difere da
+outra avaliação). Hoje a emissão de NFC-e já existe (Zeus/DFe.NET no
+`NfceEmissionService`), mas o **cálculo de tributos** é fixo (Simples Nacional,
+PIS/COFINS CST 99) e igual pra todo tenant:
+- Campo `FiscalMode` (`Online` | `Offline` | `Hybrid`) no `FiscalConfig` do
+  tenant, com escolha de motor de cálculo por loja.
+- Candidatos avaliados na análise: MotorTributarioNet (cálculo completo,
+  multi-UF), Fiscal.Net, API pública do IBPT (alíquotas por NCM — precisa de
+  cache), Focus NFe (emissão em escala, pago), ACBrNCM (lookup offline).
+- Chaves de API por tenant (`IbptApiKey` etc.) criptografadas — o mecanismo
+  AES-256-GCM com `ENCRYPTION_KEY` já existe e é usado pra certificado/Inter.
+- Frontend expõe só as opções permitidas ao admin da loja.
+- Escopo a decidir antes de implementar: quais motores entram no MVP e se
+  isso vira módulo de billing (como Fiscal/Estoque já são).
+
 ## Concluído (sessão 2026-07-12, achados da análise técnica externa)
 - Documento externo (`analise_tecnica.md`, feito pelo usuário com Gemini/outra
   ferramenta) apontou vários riscos — verificados um a um contra o código
