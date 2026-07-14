@@ -4,8 +4,9 @@
 
 Branding genericizado e dois bugs de login corrigidos (IPv4 no `setup.sh`, cookie
 `Secure` no `AuthController`). VPS de teste (`179.197.67.64`) rodando com login
-funcional (`admin@tenant-erp.local` / `SenhaForte@123` — trocar assim que possível,
-é senha padrão visível no código-fonte público).
+funcional (`admin@tenant-erp.local` / senha padrão definida em `ADMIN_SEED_PASSWORD` —
+ver `Program.cs`; trocar via variável de ambiente assim que possível, não deixar o
+valor default em produção).
 
 DNS configurado pra multi-tenant:
 - `2esysten.com.br` → Cloudflare (conta do usuário), registros A + wildcard

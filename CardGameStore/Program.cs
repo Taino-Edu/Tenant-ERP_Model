@@ -424,6 +424,20 @@ builder.Services.AddControllers();
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------
+// 14.5 CHECAGEM DE SEGURANÇA — avisa em todo boot (não só no seed) se cookies
+// não estão seguros em produção. COOKIE_SECURE=false é o padrão gerado pelo
+// setup.sh pro primeiro deploy sem domínio/HTTPS (teste por IP puro) — mas é
+// fácil esquecer de trocar pra true depois que domínio + Cloudflare entram no ar.
+// ---------------------------------------------------------------------------
+if (!app.Environment.IsDevelopment() && app.Configuration.GetValue<bool?>("COOKIE_SECURE") == false)
+{
+    app.Logger.LogWarning(
+        "ATENÇÃO: COOKIE_SECURE=false em produção — cookies JWT trafegam sem o flag " +
+        "Secure. Só é esperado no primeiro deploy sem domínio/HTTPS (teste por IP puro). " +
+        "Assim que configurar domínio + Cloudflare, troque COOKIE_SECURE pra true no .env.");
+}
+
+// ---------------------------------------------------------------------------
 // 15. BANCO DE DADOS — EnsureCreated em dev sem Postgres (SQLite), Migrations em Postgres
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())

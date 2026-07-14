@@ -108,8 +108,10 @@ if [ ! -f "$APP_DIR/.env" ]; then
 # Edite este arquivo e preencha GEMINI_API_KEY e SMTP_PASSWORD
 
 # --- Acesso (sem domínio ainda — teste por IP direto, sem HTTPS) ---
-# Quando configurar domínio + Cloudflare: trocar pra https://seu-dominio.com
-# e mudar COOKIE_SECURE pra true.
+# ATENÇÃO: quando configurar domínio + Cloudflare, você PRECISA trocar as
+# duas linhas abaixo: APP_URL pra https://seu-dominio.com e COOKIE_SECURE
+# pra true. Esquecer isso deixa os cookies JWT trafegando sem o flag Secure
+# em produção. A API loga um warning todo boot enquanto isso não for feito.
 APP_URL=http://${PUBLIC_IP}
 COOKIE_SECURE=false
 

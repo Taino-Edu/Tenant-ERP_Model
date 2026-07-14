@@ -163,13 +163,13 @@ public class AuditService : IAuditService
     }
 
     /// <summary>
-    /// Gera um hash SHA-256 do endereço IP.
+    /// Gera um HMAC-SHA-256 do endereço IP usando o salt como chave.
     /// Isso torna o valor pseudoanônimo — não é possível recuperar o IP original.
-    /// Salt impede dicionário sobre espaço IPv4 (~4B endereços são trivialmente enumeráveis sem salt).
+    /// HMAC (em vez de SHA256(salt + ip)) evita ataques de length-extension sobre a concatenação.
     /// </summary>
     private string HashIp(string ip)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(_ipSalt + ip));
+        var bytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(_ipSalt), Encoding.UTF8.GetBytes(ip));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }

@@ -178,7 +178,7 @@ public class AuditSaveChangesInterceptor : SaveChangesInterceptor
 
     private string HashIp(string ip)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(_ipSalt + ip));
+        var bytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(_ipSalt), Encoding.UTF8.GetBytes(ip));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }

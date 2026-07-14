@@ -557,10 +557,10 @@ public class LgpdController : ControllerBase
 
     // ── Interno ───────────────────────────────────────────────────────────────
 
-    /// <summary>SHA-256 com salt — impede ataque de dicionário sobre espaço IPv4.</summary>
+    /// <summary>HMAC-SHA-256 com salt como chave — evita length-extension sobre a concatenação salt+ip.</summary>
     private string HashIp(string ip)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(_ipSalt + ip));
+        var bytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(_ipSalt), Encoding.UTF8.GetBytes(ip));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 }

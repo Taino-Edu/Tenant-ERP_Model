@@ -44,10 +44,10 @@ public class AuditServiceTests
         return new AuditService(db, accessor, NullLogger<AuditService>.Instance, configMock.Object);
     }
 
-    /// <summary>Reproduz o algoritmo de hash do AuditService (SHA-256 com salt).</summary>
+    /// <summary>Reproduz o algoritmo de hash do AuditService (HMAC-SHA-256 com salt como chave).</summary>
     private static string ComputeHash(string ip, string salt = TestSalt)
     {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(salt + ip));
+        var bytes = HMACSHA256.HashData(Encoding.UTF8.GetBytes(salt), Encoding.UTF8.GetBytes(ip));
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
@@ -269,7 +269,7 @@ public class AuditServiceTests
         await service.LogAsync("Acao", "Tipo", null, null, explicitContextMock.Object);
 
         // Assert — hash deve corresponder ao IP do contexto explícito (9.9.9.9)
-        // O AuditService aplica SHA-256(salt + ip), então o hash esperado deve incluir o salt.
+        // O AuditService aplica HMAC-SHA-256 com o salt como chave.
         var hashEsperado = ComputeHash("9.9.9.9");
 
         var log = await db.AuditLogs.FirstOrDefaultAsync();
