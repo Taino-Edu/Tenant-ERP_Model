@@ -1,30 +1,28 @@
 // =============================================================================
-// TestDbFactory.cs — Fábrica única de AppDbContext pros testes.
+// TestDbFactory.cs — Fábrica única de AppDbContext pros testes, sempre contra
+// Postgres real (schema isolado por teste, dentro do mesmo banco).
 //
-// Por padrão usa SQLite in-memory (zero setup, rápido) — mas SQLite é bem mais
-// tolerante que o Postgres real em pontos específicos (ex: aceita DateTime com
-// Kind=Unspecified em coluna timestamp, o Npgsql rejeita). Isso já deixou
-// passar um bug real de produção (financeiro/fechamento automático quebrados
-// silenciosamente) que a suíte inteira, 100% em SQLite, nunca teria pego.
+// SQLite foi removido de propósito: ele é tolerante demais em pontos onde o
+// Postgres não é (ex: aceitava DateTime com Kind=Unspecified em coluna
+// timestamptz, que o Npgsql rejeita), e isso já deixou passar um bug real de
+// produção (financeiro/fechamento automático quebrados silenciosamente) que a
+// suíte inteira, 100% em SQLite, nunca teria pego.
 //
-// Setar a variável de ambiente TEST_POSTGRES_CONNECTION faz TODOS os testes
-// rodarem contra Postgres de verdade (schema isolado por teste, dentro do
-// mesmo banco — dropado e recriado a cada execução, mesmo padrão de search_path
-// que TenantConnectionInterceptor usa em produção). Sem a variável, comportamento
-// idêntico a antes (SQLite), pra continuar rápido/zero-setup no dia a dia.
-//
-// Rodar contra Postgres de verdade:
+// Setup (uma vez só, container fica de pé indefinidamente):
 //   podman run -d --name tenant-erp-test-db -e POSTGRES_USER=tenant_test \
 //     -e POSTGRES_PASSWORD=tenant_test_pw -e POSTGRES_DB=tenant_erp_test \
 //     -p 5433:5432 docker.io/library/postgres:16-alpine
-//   TEST_POSTGRES_CONNECTION="Host=127.0.0.1;Port=5433;Database=tenant_erp_test;Username=tenant_test;Password=tenant_test_pw" \
-//     dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
+//
+// Rodar os testes (com o container acima já no ar):
+//   dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
+//
+// TEST_POSTGRES_CONNECTION sobrescreve a connection string default acima,
+// caso o Postgres de teste esteja em outro host/porta/credenciais.
 // =============================================================================
 
 using System.Data.Common;
 using System.Text.RegularExpressions;
 using CardGameStore.Data;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -36,22 +34,20 @@ namespace CardGameStore.Tests;
 
 public static class TestDbFactory
 {
-    private static readonly string? PgConnString =
-        Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION");
+    private const string DefaultConnString =
+        "Host=127.0.0.1;Port=5433;Database=tenant_erp_test;Username=tenant_test;Password=tenant_test_pw";
 
-    public static bool UsingPostgres => !string.IsNullOrWhiteSpace(PgConnString);
+    private static readonly string PgConnString =
+        Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION") is { Length: > 0 } env
+            ? env
+            : DefaultConnString;
 
-    /// <summary>Cria um AppDbContext isolado pra um teste — schema próprio no
-    /// Postgres real (se TEST_POSTGRES_CONNECTION estiver setada) ou banco
-    /// SQLite in-memory novo (caso contrário). <paramref name="testName"/> vira
-    /// o nome do schema/identificador — mesma string que os testes já passam
-    /// via nameof(MetodoDoTeste), só reaproveitada pra isolar em vez de só documentar.</summary>
+    /// <summary>Cria um AppDbContext isolado pra um teste — schema próprio,
+    /// dropado e recriado vazio, dentro do mesmo banco Postgres de teste.
+    /// <paramref name="testName"/> vira o nome do schema (mesma string que os
+    /// testes já passam via nameof(MetodoDoTeste), reaproveitada pra isolar em
+    /// vez de só documentar).</summary>
     public static AppDbContext Create(string testName = "")
-    {
-        return UsingPostgres ? CreatePostgres(testName) : CreateSqlite();
-    }
-
-    private static AppDbContext CreatePostgres(string testName)
     {
         var schema = "test_" + Sanitize(string.IsNullOrWhiteSpace(testName) ? Guid.NewGuid().ToString("N") : testName);
         // Trunca — identificador de schema no Postgres tem limite de 63 bytes.
@@ -98,18 +94,6 @@ public static class TestDbFactory
         // gera e roda o script de criação incondicionalmente — certo aqui porque
         // o schema acima acabou de ser dropado+recriado vazio.
         db.GetInfrastructure().GetRequiredService<IRelationalDatabaseCreator>().CreateTables();
-        return db;
-    }
-
-    private static AppDbContext CreateSqlite()
-    {
-        var connection = new SqliteConnection("Filename=:memory:");
-        connection.Open();
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(connection)
-            .Options;
-        var db = new AppDbContext(options);
-        db.Database.EnsureCreated();
         return db;
     }
 

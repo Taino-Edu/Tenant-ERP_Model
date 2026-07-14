@@ -8,7 +8,6 @@ using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -17,8 +16,8 @@ namespace CardGameStore.Tests.Services;
 
 public class ProductServiceTests
 {
-    // TestDbFactory: SQLite por padrão (ExecuteUpdateAsync de AdjustStockAsync
-    // não roda no EF InMemory), Postgres real se TEST_POSTGRES_CONNECTION setada.
+    // TestDbFactory: Postgres real (ExecuteUpdateAsync de AdjustStockAsync não
+    // roda no EF InMemory).
     private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
     private static ProductService CreateService(AppDbContext db) => new(

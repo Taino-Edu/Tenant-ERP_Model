@@ -13,7 +13,6 @@ using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -27,9 +26,9 @@ public class AuthServiceTests
 {
     private static AppDbContext CreateInMemoryDb(string dbName) => TestDbFactory.Create(dbName);
 
-    // SQLite (ou Postgres real, ver TestDbFactory) pros testes que usam o
+    // Segundo schema isolado (ver TestDbFactory) pros testes que usam o
     // AuthService real (que usa ComandaService).
-    private static AppDbContext CreateSqliteDb() => TestDbFactory.Create(nameof(AuthServiceTests) + "_sqlite");
+    private static AppDbContext CreateAuthServiceDb() => TestDbFactory.Create(nameof(AuthServiceTests) + "_authsvc");
 
     /// <summary>Cria um mock de IHubContext com Clients.Group configurado para evitar NullReferenceException.</summary>
     private static IHubContext<ComandaHub> CreateHubMock()
@@ -233,7 +232,7 @@ public class AuthServiceTests
     public async Task QuickLogin_NaoLogaCPF()
     {
         // Arrange
-        var db = CreateSqliteDb();
+        var db = CreateAuthServiceDb();
 
         // Logger que captura as mensagens registradas
         var logMessages = new List<string>();
@@ -271,7 +270,7 @@ public class AuthServiceTests
     public async Task QuickLogin_CriaNovoCLienteComConsentAt_QuandoConsentimentoFornecido()
     {
         // Arrange — valida que o campo ConsentAt pode ser preenchido no fluxo
-        var db      = CreateSqliteDb();
+        var db      = CreateAuthServiceDb();
         var service = CreateAuthService(db);
         var cpf     = "01234567890";
 
@@ -293,7 +292,7 @@ public class AuthServiceTests
     public async Task QuickLogin_NaoCriaDuplicata_QuandoCPFExistente()
     {
         // Arrange
-        var db      = CreateSqliteDb();
+        var db      = CreateAuthServiceDb();
         var service = CreateAuthService(db);
         var cpf     = "11111111111";
 
@@ -313,7 +312,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Login_UsuarioInativo_DeveLancarUnauthorized()
     {
-        var db = CreateSqliteDb();
+        var db = CreateAuthServiceDb();
         db.Users.Add(new User
         {
             Id           = Guid.NewGuid(),
@@ -335,7 +334,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Login_SenhaErrada_DeveLancarUnauthorized()
     {
-        var db = CreateSqliteDb();
+        var db = CreateAuthServiceDb();
         db.Users.Add(new User
         {
             Id           = Guid.NewGuid(),
@@ -358,7 +357,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RefreshToken_TokenExpirado_DeveLancarUnauthorized()
     {
-        var db = CreateSqliteDb();
+        var db = CreateAuthServiceDb();
         db.Users.Add(new User
         {
             Id                 = Guid.NewGuid(),
@@ -382,7 +381,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RefreshToken_TokenInvalido_DeveLancarUnauthorized()
     {
-        var db      = CreateSqliteDb();
+        var db      = CreateAuthServiceDb();
         var service = CreateAuthService(db);
 
         var act = async () => await service.RefreshTokenAsync(new RefreshTokenRequest("token-que-nao-existe-xyz"));
@@ -395,7 +394,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ForgotPassword_EmailExistente_DeveGerarTokenDeReset()
     {
-        var db = CreateSqliteDb();
+        var db = CreateAuthServiceDb();
         var user = new User
         {
             Id           = Guid.NewGuid(),
@@ -421,7 +420,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ForgotPassword_EmailInexistente_NaoDeveLancarExcecao()
     {
-        var db      = CreateSqliteDb();
+        var db      = CreateAuthServiceDb();
         var service = CreateAuthService(db);
 
         // Resposta silenciosa — não revelar se e-mail existe (proteção contra user enumeration)
@@ -437,7 +436,7 @@ public class AuthServiceTests
     public async Task ResetPassword_TokenValido_DeveAlterarSenha()
     {
         const string resetToken = "token-valido-abc123";
-        var db = CreateSqliteDb();
+        var db = CreateAuthServiceDb();
         var user = new User
         {
             Id                       = Guid.NewGuid(),
@@ -465,7 +464,7 @@ public class AuthServiceTests
     public async Task ResetPassword_TokenExpirado_DeveLancarUnauthorized()
     {
         const string resetToken = "token-expirado-reset";
-        var db = CreateSqliteDb();
+        var db = CreateAuthServiceDb();
         db.Users.Add(new User
         {
             Id                       = Guid.NewGuid(),
@@ -492,7 +491,7 @@ public class AuthServiceTests
     {
         // Segurança: troca de senha deve forçar novo login (invalida refresh tokens ativos)
         const string resetToken = "token-valido-session-test";
-        var db = CreateSqliteDb();
+        var db = CreateAuthServiceDb();
         var user = new User
         {
             Id                       = Guid.NewGuid(),

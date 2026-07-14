@@ -1,7 +1,7 @@
 // =============================================================================
 // VendaAvulsaServiceTests.cs — Testes unitários do VendaAvulsaService
 // Vendas avulsas vivem 100% no PostgreSQL (MongoDB foi removido do sistema) —
-// SQLite in-memory é usado por suportar ExecuteUpdateAsync (bulk update), que o
+// Postgres real é usado por suportar ExecuteUpdateAsync (bulk update), que o
 // EF InMemory provider não implementa.
 // Executar: dotnet test  (na pasta tests/unit/CardGameStore.Tests)
 // =============================================================================
@@ -12,7 +12,6 @@ using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using FluentAssertions;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;

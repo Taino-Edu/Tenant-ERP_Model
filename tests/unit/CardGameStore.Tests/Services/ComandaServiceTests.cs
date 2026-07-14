@@ -13,7 +13,6 @@ using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,9 +25,8 @@ public class ComandaServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    // SQLite in-memory is used instead of EF InMemory to avoid value-converter
-    // bugs (HasConversion<string> on enums breaks InMemoryTable.Update in 8.x).
-    // Each test gets its own open SqliteConnection so the DB lives for the test duration.
+    // Postgres real é usado em vez de EF InMemory pra evitar bugs de value-converter
+    // (HasConversion<string> em enums quebra InMemoryTable.Update no EF 8.x).
     private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
     /// <summary>Cria mock de IHubContext com Clients.Group configurado para evitar NullReferenceException.</summary>

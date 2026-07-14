@@ -1,8 +1,8 @@
 // =============================================================================
 // FinanceiroCalculoServiceTests.cs — Testes unitários do FinanceiroCalculoService
-// SQLite in-memory (não EF InMemory) — os Sum() traduzidos pro SQL precisam
+// Postgres real (não EF InMemory) — os Sum() traduzidos pro SQL precisam
 // rodar contra um provider relacional de verdade pra pegar o mesmo tipo de
-// bug que só aparece em runtime (ex: Sum(decimal) não suportado pelo SQLite).
+// bug que só aparece em runtime.
 // Executar: dotnet test  (na pasta tests/unit/CardGameStore.Tests)
 // =============================================================================
 
@@ -11,7 +11,6 @@ using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using FluentAssertions;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
