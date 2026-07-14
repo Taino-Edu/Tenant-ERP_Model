@@ -116,11 +116,17 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          # Sanitiza os secrets: remove espaços/quebras de linha de copy-paste
-          # e tolera "root@IP" colado no DEPLOY_HOST por engano.
-          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')"
+          # Sanitiza os secrets: remove espaços/quebras de linha, aspas e crases
+          # de copy-paste, e tolera "root@IP" colado no DEPLOY_HOST por engano.
+          HOST="$(printf '%s' "$DEPLOY_HOST" | sed -e "s/[[:space:]\"'\`]//g")"
           HOST="${HOST##*@}"
-          USUARIO="$(printf '%s' "$DEPLOY_USER" | tr -d '[:space:]')"
+          USUARIO="$(printf '%s' "$DEPLOY_USER" | sed -e "s/[[:space:]\"'\`]//g")"
+          # Diagnóstico seguro: valida o formato sem imprimir o valor no log.
+          if [[ ! "$HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "::error::DEPLOY_HOST ainda contém caracteres inválidos após sanitização (tamanho=${#HOST}). Regrave o secret contendo SÓ o IP, ex: 203.0.113.10"
+            exit 1
+          fi
+          echo "HOST sanitizado ok (tamanho=${#HOST}); conectando..."
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
             "$USUARIO@$HOST" 'bash /opt/tenant-erp/deploy/update.sh'
 
@@ -129,7 +135,7 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')"
+          HOST="$(printf '%s' "$DEPLOY_HOST" | sed -e "s/[[:space:]\"'\`]//g")"
           HOST="${HOST##*@}"
           sleep 20
           curl -fsS -o /dev/null "http://$HOST/" \
