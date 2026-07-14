@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { siteConfigApi, uploadApi, SiteConfigDto, getErrorMessage } from '@/lib/api'
 import { DEFAULT_SITE_CONFIG } from '@/contexts/SiteConfigContext'
-import { mixHex } from '@/lib/colors'
+import { mixHex, getContrastText } from '@/lib/colors'
 import toast, { Toaster } from 'react-hot-toast'
 import { Palette, Save, Loader2, ExternalLink, Upload, Image as ImageIcon } from 'lucide-react'
 
@@ -88,7 +88,7 @@ function LivePreview({ cfg }: { cfg: SiteConfigDto }) {
 
       {/* Navbar */}
       <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: cfg.colorNavy }}>
-        <span className="font-black text-sm text-white">{cfg.siteName || 'Nome do site'}</span>
+        <span className="font-black text-sm" style={{ color: getContrastText(cfg.colorNavy) }}>{cfg.siteName || 'Nome do site'}</span>
         <span className="text-[10px] font-black px-2.5 py-1 rounded-lg" style={{ backgroundColor: cfg.colorAccent, color: cfg.colorNavy }}>
           {cfg.ctaVerEventosLabel || 'Ver Eventos'}
         </span>
@@ -100,7 +100,7 @@ function LivePreview({ cfg }: { cfg: SiteConfigDto }) {
           <span style={{ color: cfg.colorAccent }}>{firstWord || 'Nome'}</span>
           {restWord && <span style={{ color: cfg.colorPrimary }}> {restWord}</span>}
         </p>
-        <p className="text-[10px] leading-snug mb-3" style={{ color: '#4D8FAC' }}>
+        <p className="text-[10px] leading-snug mb-3" style={{ color: getContrastText(cfg.colorBackground, '#4D8FAC', 'rgba(255,255,255,0.85)') }}>
           {cfg.heroSubtitle || 'Frase de apresentação...'}
         </p>
         <div className="flex gap-1.5 mb-3">
@@ -119,7 +119,7 @@ function LivePreview({ cfg }: { cfg: SiteConfigDto }) {
             <p className="text-[9px] font-black uppercase tracking-widest mb-1" style={{ color: cfg.colorPrimary }}>
               {cfg.produtosEyebrow || 'Vitrine'}
             </p>
-            <p className="text-xs font-black" style={{ color: cfg.colorNavy }}>{cfg.produtosTitle || 'Em Destaque'}</p>
+            <p className="text-xs font-black" style={{ color: getContrastText(cfg.colorCard, '#0C3D5A', '#FFFFFF') }}>{cfg.produtosTitle || 'Em Destaque'}</p>
           </div>
         </div>
       </div>

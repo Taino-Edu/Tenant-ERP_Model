@@ -46,3 +46,21 @@ export function brandCssVars(primaryHex: string): Record<'--brand-400' | '--bran
     '--brand-600': hexToRgbTriplet(ramp[600]),
   }
 }
+
+/** Determina se uma cor hexadecimal é escura ou clara (YIQ). */
+export function isDark(hex: string): boolean {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
+  if (!m) return false
+  const n = parseInt(m[1], 16)
+  const r = (n >> 16) & 255
+  const g = (n >> 8) & 255
+  const b = n & 255
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000
+  return yiq < 128
+}
+
+/** Retorna a melhor cor de texto (branca ou escura) para contrastar com o fundo. */
+export function getContrastText(bgHex: string, darkTextColor = '#0C3D5A', lightTextColor = '#FFFFFF'): string {
+  return isDark(bgHex) ? lightTextColor : darkTextColor
+}
+

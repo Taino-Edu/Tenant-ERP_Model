@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { getRole } from '@/lib/auth'
 import { productApi, announcementApi, Product, AnnouncementDto } from '@/lib/api'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
-import { mixHex } from '@/lib/colors'
+import { mixHex, getContrastText, isDark as checkIsDark } from '@/lib/colors'
 import Link from 'next/link'
 import {
   ShoppingBag, Star,
@@ -25,7 +25,7 @@ function formatWhatsapp(raw: string): string {
     : `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`
 }
 
-type Theme = { bg: string; card: string; cardAlt: string; border: string; blue: string; yellow: string; text: string; navy: string }
+type Theme = { bg: string; card: string; cardAlt: string; border: string; blue: string; yellow: string; text: string; navy: string; cardText: string; cardNavy: string }
 
 export default function LandingPage() {
   const router = useRouter()
@@ -59,11 +59,16 @@ export default function LandingPage() {
     border: 'rgba(255,255,255,0.07)', blue: site.colorPrimary,
     yellow: site.colorAccent, text: 'rgba(255,255,255,0.60)',
     navy: '#FFFFFF',
+    cardText: 'rgba(255,255,255,0.60)',
+    cardNavy: '#FFFFFF',
   } : {
     bg: site.colorBackground, card: site.colorCard, cardAlt: mixHex(site.colorCard, site.colorPrimary, 0.06),
     border: 'rgba(12,61,90,0.10)', blue: site.colorPrimary,
-    yellow: site.colorAccent, text: '#4D8FAC',
-    navy: '#0C3D5A',
+    yellow: site.colorAccent, 
+    text: getContrastText(site.colorBackground, '#4D8FAC', 'rgba(255,255,255,0.85)'),
+    navy: getContrastText(site.colorBackground, '#0C3D5A', '#FFFFFF'),
+    cardText: getContrastText(site.colorCard, '#4D8FAC', 'rgba(255,255,255,0.85)'),
+    cardNavy: getContrastText(site.colorCard, '#0C3D5A', '#FFFFFF'),
   }
 
   function toggleDark() {
@@ -142,28 +147,28 @@ export default function LandingPage() {
         onMouseEnter={() => setNavHover(true)} />
 
       <nav className="fixed inset-x-0 top-0 z-50 h-16 flex items-center relative transition-transform duration-300"
-        style={{ backgroundColor: '#0F3460', backdropFilter: 'blur(16px)', transform: (navVisible || navHover) ? 'translateY(0)' : 'translateY(-100%)' }}
+        style={{ backgroundColor: site.colorNavy, backdropFilter: 'blur(16px)', transform: (navVisible || navHover) ? 'translateY(0)' : 'translateY(-100%)' }}
         onMouseEnter={() => setNavHover(true)}
         onMouseLeave={() => setNavHover(false)}>
 
         {/* Marca centralizada absolutamente */}
         <div className="absolute left-1/2 -translate-x-1/2 pointer-events-none">
-          <span className="font-black text-2xl leading-none" style={{ color: '#ffffff' }}>{site.siteName}</span>
+          <span className="font-black text-2xl leading-none" style={{ color: getContrastText(site.colorNavy) }}>{site.siteName}</span>
         </div>
 
         <div className="w-full max-w-6xl mx-auto px-5 flex items-center justify-between">
 
           {/* Links desktop — esquerda */}
           <div className="hidden md:flex items-center gap-7 text-sm font-medium">
-            <Link href="/produtos" style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navProdutosLabel}</Link>
+            <Link href="/produtos" style={{ color: getContrastText(site.colorNavy) }} className="hover:opacity-80 transition-opacity">{site.navProdutosLabel}</Link>
             {site.pontosFidelidadeAtivo && (
-              <a href="#pontos"   style={{ color: '#ffffff' }} className="hover:opacity-80 transition-opacity">{site.navPontosLabel}</a>
+              <a href="#pontos"   style={{ color: getContrastText(site.colorNavy) }} className="hover:opacity-80 transition-opacity">{site.navPontosLabel}</a>
             )}
             <button
               onClick={() => (document.querySelector('[vw-access-button]') as HTMLElement | null)?.click()}
               title="Acessibilidade em Libras"
               className="text-sm font-medium hover:opacity-80 transition-opacity"
-              style={{ color: '#ffffff' }}>
+              style={{ color: getContrastText(site.colorNavy) }}>
               Libras
             </button>
           </div>
@@ -175,12 +180,12 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <button onClick={toggleDark} title={isDark ? 'Modo claro' : 'Modo escuro'}
               className="p-2 rounded-xl transition-colors hover:bg-white/10"
-              style={{ color: '#ffffff' }}>
+              style={{ color: getContrastText(site.colorNavy) }}>
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
             <Link href="/entrar"
               className="hidden md:block text-sm px-4 py-2 rounded-xl border transition-colors hover:bg-white/10"
-              style={{ color: '#ffffff', borderColor: 'rgba(255,255,255,0.40)' }}>
+              style={{ color: getContrastText(site.colorNavy), borderColor: getContrastText(site.colorNavy, 'rgba(0,0,0,0.40)', 'rgba(255,255,255,0.40)') }}>
               Minha Conta
             </Link>
             <Link href="/produtos"
@@ -188,7 +193,7 @@ export default function LandingPage() {
               style={{ backgroundColor: C.yellow, color: site.colorNavy }}>
               {site.ctaVerProdutosLabel}
             </Link>
-            <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: '#ffffff' }}>
+            <button onClick={() => setMobileMenu(v => !v)} className="md:hidden p-2" style={{ color: getContrastText(site.colorNavy) }}>
               <div className="space-y-1.5">
                 <span className={`block w-5 h-0.5 bg-current transition-transform ${mobileMenu ? 'rotate-45 translate-y-2' : ''}`} />
                 <span className={`block w-5 h-0.5 bg-current transition-opacity ${mobileMenu ? 'opacity-0' : ''}`} />
@@ -279,7 +284,7 @@ export default function LandingPage() {
                 <span style={{ color: C.yellow }}>{heroFirstWord}</span>
                 {heroRest && <>{' '}<span style={{ color: C.blue }}>{heroRest}</span></>}
               </h1>
-              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: '#ffffff' }}>
+              <p className="text-base md:text-lg max-w-md mb-8 leading-relaxed" style={{ color: heroBanners.length > 0 ? '#ffffff' : C.navy }}>
                 {site.heroSubtitle}
               </p>
 
@@ -711,10 +716,10 @@ function ProductCard({ product: p, onClick, C }: { product: Product; onClick: ()
         )}
       </div>
       <div className="p-3">
-        <p className="text-[10px] uppercase tracking-wide mb-1 font-medium" style={{ color: C.text }}>
+        <p className="text-[10px] uppercase tracking-wide mb-1 font-medium" style={{ color: C.cardText }}>
           {p.category}
         </p>
-        <p className="text-xs font-bold leading-snug line-clamp-2 mb-2" style={{ color: C.navy }}>{p.name}</p>
+        <p className="text-xs font-bold leading-snug line-clamp-2 mb-2" style={{ color: C.cardNavy }}>{p.name}</p>
         <div className="flex items-center justify-between">
           {p.isOnPromo && p.discountPriceInReais != null ? (
             <div className="flex flex-col">
@@ -730,9 +735,9 @@ function ProductCard({ product: p, onClick, C }: { product: Product; onClick: ()
               R$ {p.priceInReais.toFixed(2).replace('.', ',')}
             </span>
           )}
-          <span className="text-[10px] font-medium" style={{ color: C.text }}>
-            {p.stockQuantity} un.
-          </span>
+            <span className="text-[10px] font-medium" style={{ color: C.cardText }}>
+              {p.stockQuantity} un.
+            </span>
         </div>
       </div>
     </button>
