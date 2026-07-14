@@ -7,7 +7,8 @@ import { FinanceiroDto } from './api'
 
 async function getJsPDF() {
   const { default: jsPDF } = await import('jspdf')
-  await import('jspdf-autotable')
+  const { applyPlugin } = await import('jspdf-autotable')
+  applyPlugin(jsPDF)
   return jsPDF
 }
 
