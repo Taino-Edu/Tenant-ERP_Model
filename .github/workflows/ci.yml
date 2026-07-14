@@ -1,0 +1,129 @@
+# =============================================================================
+# CI/CD — build + testes do backend contra Postgres real, build do frontend,
+# e deploy automático no VPS quando tudo passa na main.
+#
+# O job de backend sobe um Postgres 16 idêntico ao container local de teste
+# (ver tests/unit/CardGameStore.Tests/TestDbFactory.cs) — mesma porta 5433,
+# mesmas credenciais, então a connection string default da suíte já funciona
+# sem configuração extra.
+#
+# O job de deploy exige 3 secrets no repositório (Settings → Secrets and
+# variables → Actions): DEPLOY_HOST, DEPLOY_USER e DEPLOY_SSH_KEY (chave
+# privada dedicada — gerar no VPS com ssh-keygen, ver runbook no BACKLOG).
+# Sem os secrets, o job registra um aviso e pula — o CI continua funcionando.
+# =============================================================================
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (build + testes vs Postgres)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tenant_test
+          POSTGRES_PASSWORD: tenant_test_pw
+          POSTGRES_DB: tenant_erp_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore softNerd.sln
+
+      - name: Build
+        run: dotnet build softNerd.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test softNerd.sln --no-build --configuration Release --logger "console;verbosity=normal"
+        env:
+          TEST_POSTGRES_CONNECTION: Host=127.0.0.1;Port=5433;Database=tenant_erp_test;Username=tenant_test;Password=tenant_test_pw
+
+  frontend:
+    name: Frontend (build Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    name: Deploy no VPS (main)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      # secrets não são acessíveis no `if` de job — a checagem gracioso fica
+      # num step, pro workflow não quebrar em forks/enquanto os secrets não
+      # estiverem configurados.
+      - name: Verifica secrets de deploy
+        id: check
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Secrets de deploy ausentes — CD pulado (CI passou normalmente)."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configura chave SSH
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Roda update.sh no VPS
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new \
+            "$DEPLOY_USER@$DEPLOY_HOST" 'bash /opt/tenant-erp/deploy/update.sh'
+
+      - name: Smoke test pós-deploy
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          sleep 20
+          curl -fsS -o /dev/null "http://$DEPLOY_HOST/" \
+            && echo "Site respondendo 200 após o deploy."
