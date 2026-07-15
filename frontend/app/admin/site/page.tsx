@@ -131,7 +131,7 @@ export default function SiteConfigPage() {
   const [cfg, setCfg]         = useState<SiteConfigDto>(DEFAULT_SITE_CONFIG)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
-  const [uploadingIcon, setUploadingIcon] = useState<'faviconUrl' | 'pwaIconUrl' | 'adminIconUrl' | null>(null)
+  const [uploadingIcon, setUploadingIcon] = useState<'logoUrl' | 'faviconUrl' | 'pwaIconUrl' | 'adminIconUrl' | null>(null)
 
   useEffect(() => {
     siteConfigApi.get()
@@ -144,7 +144,7 @@ export default function SiteConfigPage() {
     setCfg(prev => ({ ...prev, [key]: value }))
   }
 
-  async function uploadIcon(field: 'faviconUrl' | 'pwaIconUrl' | 'adminIconUrl', file: File) {
+  async function uploadIcon(field: 'logoUrl' | 'faviconUrl' | 'pwaIconUrl' | 'adminIconUrl', file: File) {
     setUploadingIcon(field)
     try {
       const { data } = await uploadApi.image(file)
