@@ -29,17 +29,56 @@ public class EmailService : IEmailService
 {
     private readonly IConfiguration         _config;
     private readonly AppDbContext           _db;
+    private readonly EncryptionService      _enc;
     private readonly ILogger<EmailService>  _logger;
 
-    public EmailService(IConfiguration config, AppDbContext db, ILogger<EmailService> logger)
+    public EmailService(IConfiguration config, AppDbContext db, EncryptionService enc, ILogger<EmailService> logger)
     {
         _config = config;
         _db     = db;
+        _enc    = enc;
         _logger = logger;
     }
 
     private async Task<SiteConfig> GetSiteConfigAsync() =>
         await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
+
+    private record SmtpSettings(string Host, int Port, string Username, string Password, string From, string FromName);
+
+    /// <summary>Resolve as credenciais SMTP a usar: as do próprio tenant, se ele
+    /// configurou e ativou (Admin &gt; E-mail), senão a conta global da plataforma
+    /// (mesmo comportamento de sempre). Retorna null se nenhuma das duas estiver
+    /// configurada — mesmo sinal de "não enviar" que o código já tratava antes.</summary>
+    private async Task<SmtpSettings?> ResolveSmtpSettingsAsync()
+    {
+        var tenantCfg = await _db.EmailConfigs.FindAsync(EmailConfig.SingletonId);
+        if (tenantCfg is { IsActive: true, SmtpHost.Length: > 0, SmtpPasswordEncrypted.Length: > 0, SmtpUsername.Length: > 0 })
+        {
+            var siteCfg = await GetSiteConfigAsync();
+            return new SmtpSettings(
+                tenantCfg.SmtpHost!,
+                tenantCfg.SmtpPort ?? 587,
+                tenantCfg.SmtpUsername!,
+                _enc.Decrypt(tenantCfg.SmtpPasswordEncrypted!),
+                tenantCfg.SmtpUsername!,
+                tenantCfg.FromName ?? siteCfg.SiteName);
+        }
+
+        var cfg      = await GetSiteConfigAsync();
+        var host     = _config["SmtpSettings:Host"];
+        var portStr  = _config["SmtpSettings:Port"];
+        var user     = _config["SmtpSettings:Username"];
+        var password = _config["SmtpSettings:Password"];
+
+        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
+            return null;
+
+        var from     = _config["SmtpSettings:FromEmail"] ?? user!;
+        var fromName = _config["SmtpSettings:FromName"] ?? cfg.SiteName;
+        var port     = int.TryParse(portStr, out var p) ? p : 587;
+
+        return new SmtpSettings(host, port, user!, password, from, fromName);
+    }
 
     private string GetAppUrl() =>
         (_config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://tenant-erp.local").TrimEnd('/');
@@ -186,20 +225,14 @@ public class EmailService : IEmailService
               </p>
             """;
 
-        var host     = _config["SmtpSettings:Host"];
-        var portStr  = _config["SmtpSettings:Port"];
-        var user     = _config["SmtpSettings:Username"];
-        var password = _config["SmtpSettings:Password"];
-        var from     = _config["SmtpSettings:FromEmail"] ?? user;
-        var fromName = _config["SmtpSettings:FromName"] ?? cfg.SiteName;
-
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
+        var smtp = await ResolveSmtpSettingsAsync();
+        if (smtp is null)
         {
             _logger.LogWarning("EmailService: SmtpSettings não configurado. Anúncio '{Titulo}' não foi enviado.", titulo);
             return 0;
         }
 
-        var unsubscribeMailto = $"mailto:{from}?subject={Uri.EscapeDataString("Cancelar inscrição - " + titulo)}";
+        var unsubscribeMailto = $"mailto:{smtp.From}?subject={Uri.EscapeDataString("Cancelar inscrição - " + titulo)}";
 
         var body = $"""
             <div style="font-family:sans-serif;max-width:520px">
@@ -229,10 +262,9 @@ public class EmailService : IEmailService
             Não quer mais receber estes avisos? Responda este email pedindo para ser descadastrado.
             """;
 
-        var port = int.TryParse(portStr, out var p) ? p : 587;
-        using var client = new SmtpClient(host, port)
+        using var client = new SmtpClient(smtp.Host, smtp.Port)
         {
-            Credentials    = new NetworkCredential(user, password),
+            Credentials    = new NetworkCredential(smtp.Username, smtp.Password),
             EnableSsl      = true,
             DeliveryMethod = SmtpDeliveryMethod.Network,
         };
@@ -246,7 +278,7 @@ public class EmailService : IEmailService
             {
                 using var msg = new MailMessage
                 {
-                    From       = new MailAddress(from!, fromName),
+                    From       = new MailAddress(smtp.From, smtp.FromName),
                     Subject    = $"{cfg.SiteName} — {titulo}",
                     Body       = textBody,
                     IsBodyHtml = false,
@@ -427,15 +459,8 @@ public class EmailService : IEmailService
     private async Task SendWithAttachmentAsync(
         string toEmail, string toName, string subject, string htmlBody, byte[] attachmentBytes, string attachmentName)
     {
-        var cfg      = await GetSiteConfigAsync();
-        var host     = _config["SmtpSettings:Host"];
-        var portStr  = _config["SmtpSettings:Port"];
-        var user     = _config["SmtpSettings:Username"];
-        var password = _config["SmtpSettings:Password"];
-        var from     = _config["SmtpSettings:FromEmail"] ?? user;
-        var fromName = _config["SmtpSettings:FromName"] ?? cfg.SiteName;
-
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
+        var smtp = await ResolveSmtpSettingsAsync();
+        if (smtp is null)
         {
             _logger.LogWarning(
                 "EmailService: SmtpSettings não configurado. Email com anexo para {To} ('{Subject}') não foi enviado.",
@@ -445,17 +470,16 @@ public class EmailService : IEmailService
 
         try
         {
-            var port = int.TryParse(portStr, out var p) ? p : 587;
-            using var client = new SmtpClient(host, port)
+            using var client = new SmtpClient(smtp.Host, smtp.Port)
             {
-                Credentials    = new NetworkCredential(user, password),
+                Credentials    = new NetworkCredential(smtp.Username, smtp.Password),
                 EnableSsl      = true,
                 DeliveryMethod = SmtpDeliveryMethod.Network,
             };
 
             using var msg = new MailMessage
             {
-                From       = new MailAddress(from!, fromName),
+                From       = new MailAddress(smtp.From, smtp.FromName),
                 Subject    = subject,
                 Body       = htmlBody,
                 IsBodyHtml = true,
@@ -476,15 +500,8 @@ public class EmailService : IEmailService
 
     private async Task SendAsync(string toEmail, string toName, string subject, string htmlBody)
     {
-        var cfg      = await GetSiteConfigAsync();
-        var host     = _config["SmtpSettings:Host"];
-        var portStr  = _config["SmtpSettings:Port"];
-        var user     = _config["SmtpSettings:Username"];
-        var password = _config["SmtpSettings:Password"];
-        var from     = _config["SmtpSettings:FromEmail"] ?? user;
-        var fromName = _config["SmtpSettings:FromName"] ?? cfg.SiteName;
-
-        if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(password))
+        var smtp = await ResolveSmtpSettingsAsync();
+        if (smtp is null)
         {
             _logger.LogWarning(
                 "EmailService: SmtpSettings não configurado. Email para {To} ('{Subject}') não foi enviado.",
@@ -494,17 +511,16 @@ public class EmailService : IEmailService
 
         try
         {
-            var port   = int.TryParse(portStr, out var p) ? p : 587;
-            using var client = new SmtpClient(host, port)
+            using var client = new SmtpClient(smtp.Host, smtp.Port)
             {
-                Credentials       = new NetworkCredential(user, password),
+                Credentials       = new NetworkCredential(smtp.Username, smtp.Password),
                 EnableSsl         = true,
                 DeliveryMethod    = SmtpDeliveryMethod.Network,
             };
 
             using var msg = new MailMessage
             {
-                From       = new MailAddress(from!, fromName),
+                From       = new MailAddress(smtp.From, smtp.FromName),
                 Subject    = subject,
                 Body       = htmlBody,
                 IsBodyHtml = true,

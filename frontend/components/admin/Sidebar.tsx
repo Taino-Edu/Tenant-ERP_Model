@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Package, QrCode,
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
-  Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy,
+  Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy, Mail,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -37,6 +37,7 @@ const sections = [
       { href: '/admin/integracoes', label: 'Integrações',      icon: Plug,    perm: null },
       { href: '/admin/fiscal',      label: 'Fiscal',           icon: Receipt, perm: null },
       { href: '/admin/site',        label: 'Personalizar Site', icon: Palette, perm: null },
+      { href: '/admin/email',      label: 'E-mail',           icon: Mail,    perm: null },
       { href: '/admin/suporte',     label: 'Suporte',          icon: LifeBuoy, perm: null },
     ],
   },

@@ -74,6 +74,23 @@ public class TenantActivityDto
     public DateTime? LastActivityAt { get; set; }
 }
 
+/// <summary>Analytics de uso detalhado de um tenant específico — quais telas
+/// do admin foram acessadas e por quanto tempo, num período. Contraponto ao
+/// sinal barato de LastActivityAt do overview.</summary>
+public class TenantUsageDto
+{
+    public double TotalHoras { get; set; }
+    public int UsuariosAtivos { get; set; }
+    public List<TenantUsagePathDto> TopPaths { get; set; } = new();
+}
+
+public class TenantUsagePathDto
+{
+    public string Path { get; set; } = string.Empty;
+    public double Horas { get; set; }
+    public int Visitas { get; set; }
+}
+
 /// <summary>Funcionário/admin de um tenant, visto pelo dono da plataforma —
 /// nunca inclui hash de senha nem tokens.</summary>
 public class TenantStaffDto

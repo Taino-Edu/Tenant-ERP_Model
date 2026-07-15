@@ -4,11 +4,11 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   platformApi, TenantSummary, TenantStaffDto, TenantCustomerDto, AuditLogDto,
-  SupportTicketDto, PagedResult, getErrorMessage,
+  SupportTicketDto, PagedResult, TenantUsageDto, getErrorMessage,
 } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye } from 'lucide-react'
+import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2 } from 'lucide-react'
 import clsx from 'clsx'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
@@ -19,14 +19,41 @@ function fmtDateTime(iso: string | null) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-type Tab = 'staff' | 'clientes' | 'logs' | 'suporte'
+type Tab = 'staff' | 'clientes' | 'logs' | 'suporte' | 'uso'
 
 const TABS: { key: Tab; label: string; icon: typeof Users }[] = [
   { key: 'staff',    label: 'Funcionários & Admins', icon: UserCog },
   { key: 'clientes', label: 'Clientes',               icon: Users },
   { key: 'logs',     label: 'Logs',                   icon: History },
   { key: 'suporte',  label: 'Suporte',                icon: LifeBuoy },
+  { key: 'uso',      label: 'Uso',                     icon: BarChart2 },
 ]
+
+const PATH_LABELS: Record<string, string> = {
+  '/admin/comanda':        'Comanda',
+  '/admin/dashboard':      'Painel Geral',
+  '/admin/venda-avulsa':   'Frente de Caixa',
+  '/admin/qrcodes':        'Gatilhos QR Code',
+  '/admin/estoque':        'Estoque',
+  '/admin/usuarios':       'Clientes',
+  '/admin/crediario':      'Crediário',
+  '/admin/reservas':       'Pré-vendas',
+  '/admin/financeiro':     'Financeiro',
+  '/admin/contas-receber': 'Contas a Pagar/Receber',
+  '/admin/relatorios':     'Relatórios',
+  '/admin/anuncios':       'Anúncios',
+  '/admin/mensageria':     'Mensageria',
+  '/admin/fiscal':         'Fiscal',
+  '/admin/lgpd':           'LGPD & Auditoria',
+  '/admin/perfis':         'Perfis de Acesso',
+  '/admin/site':           'Personalizar Site',
+  '/admin/email':          'E-mail',
+  '/admin/suporte':        'Suporte',
+}
+
+function pathLabel(path: string) {
+  return PATH_LABELS[path] ?? path
+}
 
 function StaffTab({ tenantId }: { tenantId: string }) {
   const [staff, setStaff] = useState<TenantStaffDto[] | null>(null)
@@ -192,6 +219,73 @@ function SuporteTab({ tenantId }: { tenantId: string }) {
   )
 }
 
+function UsoTab({ tenantId }: { tenantId: string }) {
+  const [usage, setUsage] = useState<TenantUsageDto | null>(null)
+  const [dias, setDias] = useState(7)
+
+  useEffect(() => {
+    const de = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString()
+    platformApi.getTenantUsage(tenantId, de)
+      .then(r => setUsage(r.data))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar uso')))
+  }, [tenantId, dias])
+
+  if (usage === null) return <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-end gap-2 text-sm">
+        {[7, 30].map(d => (
+          <button
+            key={d}
+            onClick={() => { setUsage(null); setDias(d) }}
+            className={clsx(
+              'px-2.5 py-1 rounded-lg border text-xs font-medium',
+              dias === d ? 'border-brand-400 text-white bg-brand-500/10' : 'border-surface-600 text-gray-400',
+            )}
+          >
+            Últimos {d} dias
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card p-4">
+          <p className="text-xs text-gray-400">Horas de uso no período</p>
+          <p className="text-2xl font-black text-white mt-1">{usage.totalHoras.toFixed(1)}h</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs text-gray-400">Usuários ativos</p>
+          <p className="text-2xl font-black text-white mt-1">{usage.usuariosAtivos}</p>
+        </div>
+      </div>
+
+      {usage.topPaths.length === 0 ? (
+        <p className="text-gray-400 text-center py-10">Nenhum uso registrado neste período.</p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-500 border-b border-surface-600">
+              <th className="py-2 font-medium">Tela</th>
+              <th className="py-2 font-medium">Tempo</th>
+              <th className="py-2 font-medium">Visitas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usage.topPaths.map(p => (
+              <tr key={p.path} className="border-b border-surface-700 last:border-0">
+                <td className="py-2.5 text-white">{pathLabel(p.path)}</td>
+                <td className="py-2.5 text-gray-400">{p.horas.toFixed(1)}h</td>
+                <td className="py-2.5 text-gray-400">{p.visitas}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 export default function TenantDetailPage() {
   const params = useParams<{ id: string }>()
   const tenantId = params.id
@@ -242,6 +336,7 @@ export default function TenantDetailPage() {
         {tab === 'clientes' && <ClientesTab tenantId={tenantId} />}
         {tab === 'logs'     && <LogsTab tenantId={tenantId} />}
         {tab === 'suporte'  && <SuporteTab tenantId={tenantId} />}
+        {tab === 'uso'      && <UsoTab tenantId={tenantId} />}
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260714022905_AddEmailConfigAndPageViewEvents")]
+    partial class AddEmailConfigAndPageViewEvents
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1232,10 +1235,6 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("forma_pagamento");
 
-                    b.Property<Guid?>("IdempotencyKey")
-                        .HasColumnType("uuid")
-                        .HasColumnName("idempotency_key");
-
                     b.Property<string>("Observacao")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -1252,11 +1251,6 @@ namespace CardGameStore.Data.Migrations
 
                     b.HasIndex("CrediarioId")
                         .HasDatabaseName("ix_pagamentos_crediario_crediario");
-
-                    b.HasIndex("IdempotencyKey")
-                        .IsUnique()
-                        .HasDatabaseName("ix_pagamentos_crediario_idempotency_key")
-                        .HasFilter("idempotency_key IS NOT NULL");
 
                     b.ToTable("pagamentos_crediario");
                 });

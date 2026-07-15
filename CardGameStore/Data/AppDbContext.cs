@@ -66,6 +66,12 @@ public class AppDbContext : DbContext
     // ── Personalização da landing page ─────────────────────────────────────────
     public DbSet<SiteConfig>         SiteConfigs          { get; set; }
 
+    // ── SMTP próprio do tenant (opcional) ──────────────────────────────────────
+    public DbSet<EmailConfig>        EmailConfigs         { get; set; }
+
+    // ── Analytics de uso: telas acessadas pelo admin do tenant ────────────────
+    public DbSet<PageViewEvent>      PageViewEvents       { get; set; }
+
     // ── Financeiro: fechamentos formais de período (dia/semana/mês) ───────────
     public DbSet<FechamentoPeriodo>  FechamentosPeriodo   { get; set; }
 
@@ -371,6 +377,20 @@ public class AppDbContext : DbContext
             // Agrupar todos os logs (manuais + diff automático) da mesma requisição
             entity.HasIndex(a => a.TraceId)
                   .HasDatabaseName("ix_audit_logs_trace_id");
+        });
+
+        // =====================================================================
+        // PAGE VIEW EVENT (analytics de uso)
+        // =====================================================================
+        modelBuilder.Entity<PageViewEvent>(entity =>
+        {
+            // Agregação por período (query mais frequente: "últimos N dias")
+            entity.HasIndex(e => e.OccurredAt)
+                  .HasDatabaseName("ix_page_view_events_occurred_at");
+
+            // Contagem de usuários distintos / atividade por usuário
+            entity.HasIndex(e => e.UserId)
+                  .HasDatabaseName("ix_page_view_events_user_id");
         });
 
         // =====================================================================

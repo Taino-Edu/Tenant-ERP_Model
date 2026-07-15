@@ -703,6 +703,14 @@ export interface PlatformOverviewDto {
   tenants: TenantActivity[]
 }
 
+export interface TenantUsagePathDto {
+  path: string; horas: number; visitas: number
+}
+
+export interface TenantUsageDto {
+  totalHoras: number; usuariosAtivos: number; topPaths: TenantUsagePathDto[]
+}
+
 export const platformApi = {
   listTenants: () =>
     api.get<TenantSummary[]>('/api/platform/tenants'),
@@ -726,6 +734,8 @@ export const platformApi = {
     api.get<PagedResult<TenantCustomerDto>>(`/api/platform/tenants/${id}/customers`, { params: { page, pageSize } }),
   getTenantAuditLogs: (id: string, page = 1, pageSize = 50) =>
     api.get<PagedResult<AuditLogDto>>(`/api/platform/tenants/${id}/audit-logs`, { params: { page, pageSize } }),
+  getTenantUsage: (id: string, de?: string, ate?: string) =>
+    api.get<TenantUsageDto>(`/api/platform/tenants/${id}/usage`, { params: { de, ate } }),
   getAggregatedAuditLogs: () =>
     api.get<PlatformAuditLogDto[]>('/api/platform/audit-logs'),
   listSupportTickets: (params?: { status?: SupportTicketStatus; tenantId?: string }) =>
@@ -1321,6 +1331,31 @@ export interface SiteConfigDto {
 export const siteConfigApi = {
   get:  () => api.get<SiteConfigDto>('/api/site-config'),
   save: (body: Partial<SiteConfigDto>) => api.put<SiteConfigDto>('/api/site-config', body),
+}
+
+// ── SMTP próprio do tenant (opcional, cai pro global se não configurado) ──────
+
+export interface EmailConfigDto {
+  smtpHost?: string | null
+  smtpPort?: number | null
+  smtpUsername?: string | null
+  fromName?: string | null
+  isActive: boolean
+  hasPassword: boolean
+}
+
+export interface SaveEmailConfigRequest {
+  smtpHost?: string
+  smtpPort?: number
+  smtpUsername?: string
+  smtpPassword?: string
+  fromName?: string
+  isActive?: boolean
+}
+
+export const emailConfigApi = {
+  get:  () => api.get<EmailConfigDto>('/api/email-config'),
+  save: (body: SaveEmailConfigRequest) => api.put<EmailConfigDto>('/api/email-config', body),
 }
 
 // ── Diretório público de lojas (site institucional) ──────────────────────────

@@ -4,6 +4,7 @@ import AiChatWidget from '@/components/admin/AiChatWidget'
 import KeyboardShortcutsOverlay from '@/components/admin/KeyboardShortcutsOverlay'
 import TimerAlarmOverlay from '@/components/admin/TimerAlarmOverlay'
 import TenantColorInjector, { BRAND_CACHE_KEY } from '@/components/admin/TenantColorInjector'
+import UsageTracker from '@/components/admin/UsageTracker'
 import { Toaster } from 'react-hot-toast'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -53,6 +54,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="admin-shell flex min-h-screen bg-surface-900">
       <script dangerouslySetInnerHTML={{ __html: BRAND_FOUC_SCRIPT }} />
       <TenantColorInjector />
+      <UsageTracker />
       <Sidebar />
       <main className="flex-1 overflow-auto pt-14 md:pt-0 admin-main">
         {impersonatingOwner && (

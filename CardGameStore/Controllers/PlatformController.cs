@@ -380,6 +380,60 @@ public class PlatformController : ControllerBase
         }
     }
 
+    /// <summary>Analytics de uso detalhado de um tenant: horas totais, usuários
+    /// ativos e telas mais acessadas, num período. Contraponto ao sinal barato
+    /// de LastActivityAt do overview (ver comentário no topo de GetOverview).</summary>
+    /// <param name="id">Id do tenant.</param>
+    /// <param name="de">Início do período (padrão: 7 dias atrás).</param>
+    /// <param name="ate">Fim do período (padrão: agora).</param>
+    [HttpGet("tenants/{id:guid}/usage")]
+    public async Task<IActionResult> GetTenantUsage(Guid id, [FromQuery] DateTime? de = null, [FromQuery] DateTime? ate = null)
+    {
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        var inicio = de ?? DateTime.UtcNow.AddDays(-7);
+        var fim    = ate ?? DateTime.UtcNow;
+
+        try
+        {
+            var dto = await RunInTenantScopeAsync(tenant, async db =>
+            {
+                var eventos = await db.PageViewEvents
+                    .Where(e => e.OccurredAt >= inicio && e.OccurredAt <= fim)
+                    .ToListAsync();
+
+                var totalMs = eventos.Sum(e => (long)(e.DurationMs ?? 0));
+
+                var topPaths = eventos
+                    .GroupBy(e => e.Path)
+                    .Select(g => new TenantUsagePathDto
+                    {
+                        Path    = g.Key,
+                        Horas   = Math.Round(g.Sum(e => e.DurationMs ?? 0) / 3_600_000.0, 2),
+                        Visitas = g.Count(),
+                    })
+                    .OrderByDescending(p => p.Horas)
+                    .Take(10)
+                    .ToList();
+
+                return new TenantUsageDto
+                {
+                    TotalHoras     = Math.Round(totalMs / 3_600_000.0, 2),
+                    UsuariosAtivos = eventos.Select(e => e.UserId).Where(u => u.HasValue).Distinct().Count(),
+                    TopPaths       = topPaths,
+                };
+            });
+
+            return Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao agregar uso do tenant {Slug}", tenant.Slug);
+            return StatusCode(500, new { Message = "Falha ao carregar o uso desta loja." });
+        }
+    }
+
     /// <summary>Feed agregado dos 100 registros de auditoria mais recentes entre
     /// todos os tenants ativos (20 mais recentes de cada, mesclados e cortados).
     /// Custo aceitável no volume atual de tenants — se crescer muito isso vira
