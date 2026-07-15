@@ -8,6 +8,7 @@ using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -30,6 +31,7 @@ public class AuthService : IAuthService
     private readonly IComandaService       _comandaService;
     private readonly IEmailService         _email;
     private readonly ITenantContext        _tenant;
+    private readonly IServiceScopeFactory  _scopeFactory;
 
     public AuthService(
         AppDbContext db,
@@ -38,7 +40,8 @@ public class AuthService : IAuthService
         ILogger<AuthService> logger,
         IComandaService comandaService,
         IEmailService email,
-        ITenantContext tenant)
+        ITenantContext tenant,
+        IServiceScopeFactory scopeFactory)
     {
         _db             = db;
         _catalog        = catalog;
@@ -47,6 +50,7 @@ public class AuthService : IAuthService
         _comandaService = comandaService;
         _email          = email;
         _tenant         = tenant;
+        _scopeFactory   = scopeFactory;
     }
 
     // =========================================================================
@@ -60,16 +64,68 @@ public class AuthService : IAuthService
         // PasswordHash pode ser null para clientes de quick-login.
         // Verificar null antes de chamar BCrypt.Verify evita NullReferenceException.
         if (user != null && user.PasswordHash != null && BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        {
+            // Essa checagem só pega o caso em que o PRÓPRIO _db (já no schema
+            // desta requisição) enxergou a linha — ou seja, quando a pessoa já
+            // está no domínio raiz por acaso mas de algum jeito bateu um User
+            // de Role=PlatformOwner (não deveria acontecer na prática, é
+            // defesa em profundidade). O caso real (tentando logar como dono
+            // no subdomínio de uma loja) é pego abaixo, porque a linha do dono
+            // fica invisível pra esse _db — ver comentário mais adiante.
+            if (user.Role == UserRole.PlatformOwner && _tenant.TenantId != TenantConstants.TenantZeroId)
+                throw new WrongDomainLoginException("Essa conta é do Dono da Plataforma — acesse pelo domínio principal.");
+
             return await GenerateAuthResponseAsync(user);
+        }
+
+        // PlatformOwner é um User do schema "public" — se a requisição caiu no
+        // subdomínio de uma loja, a busca acima nem ACHA essa linha (schema
+        // errado), então o `if` de cima nunca dispara. Sem essa checagem
+        // cruzada, o login "funcionava" perfeitamente do ponto de vista de
+        // quem tentou (token emitido de verdade) e só quebrava um passo
+        // depois: o JWT carrega o tenant do domínio ERRADO onde a pessoa
+        // logou, e TenantClaimGuardMiddleware rejeitava a primeira chamada
+        // autenticada seguinte com um erro obscuro. Só roda quando a busca
+        // normal já falhou E não estamos no domínio raiz — 1 query extra por
+        // tentativa de senha errada num subdomínio, não um loop caro.
+        if (_tenant.TenantId != TenantConstants.TenantZeroId
+            && await IsValidPlatformOwnerPasswordAsync(request.Email, request.Password))
+        {
+            throw new WrongDomainLoginException("Essa conta é do Dono da Plataforma — acesse pelo domínio principal.");
+        }
 
         // Contador não é um User de tenant nenhum — vive só no catálogo (schema
         // "public"), então cai aqui como segunda tentativa antes de recusar o login.
         var email = request.Email.Trim().ToLowerInvariant();
         var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c => c.Email == email);
         if (conta != null && BCrypt.Net.BCrypt.Verify(request.Password, conta.PasswordHash))
+        {
+            // Mesmo raciocínio do PlatformOwner acima: Contador é uma conta
+            // cross-tenant, só faz sentido pelo domínio raiz.
+            if (_tenant.TenantId != TenantConstants.TenantZeroId)
+                throw new WrongDomainLoginException("Essa conta é de Contador — acesse pelo domínio principal.");
+
             return await GenerateContadorAuthResponseAsync(conta);
+        }
 
         throw new UnauthorizedAccessException("E-mail ou senha inválidos.");
+    }
+
+    /// <summary>Confirma a senha contra o User de Role=PlatformOwner no schema
+    /// "public", num escopo de DI isolado (mesmo padrão de
+    /// PlatformController.RunInTenantScopeAsync) — usado só quando a busca normal
+    /// de LoginAsync já falhou e não estamos no domínio raiz, pra distinguir
+    /// "senha errada de verdade" de "senha certa, domínio errado".</summary>
+    private async Task<bool> IsValidPlatformOwnerPasswordAsync(string email, string password)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var tc = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tc.Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, Array.Empty<string>());
+
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var owner = await db.Users.FirstOrDefaultAsync(u => u.Email == email && u.IsActive && u.Role == UserRole.PlatformOwner);
+
+        return owner != null && owner.PasswordHash != null && BCrypt.Net.BCrypt.Verify(password, owner.PasswordHash);
     }
 
     // =========================================================================
@@ -265,6 +321,23 @@ public class AuthService : IAuthService
         // dos 20min. Quando expira, o interceptor de 401 do frontend já manda pro
         // /login normalmente, sem precisar de lógica nova.
         return new AuthResponse(accessToken, string.Empty, DateTime.UtcNow.AddMinutes(20), UserRole.Admin, platformOwnerName, platformOwnerId);
+    }
+
+    public async Task<AuthResponse> CompleteLoginRedirectAsync(string targetKind, Guid accountId)
+    {
+        if (targetKind == LoginRedirectTargetKind.Contador)
+        {
+            var conta = await _catalog.ContadorAccounts.FindAsync(accountId)
+                ?? throw new InvalidOperationException("Conta de contador não encontrada.");
+            return await GenerateContadorAuthResponseAsync(conta);
+        }
+
+        // Tenant (Admin/Operator) e PlatformOwner são ambos User — _db já está no
+        // schema certo, porque esta própria requisição (o redeem) já resolveu o
+        // tenant pelo Host antes de chegar aqui.
+        var user = await _db.Users.FindAsync(accountId)
+            ?? throw new InvalidOperationException("Usuário não encontrado.");
+        return await GenerateAuthResponseAsync(user);
     }
 
     private string GenerateJwt(
@@ -561,4 +634,13 @@ public class AuthService : IAuthService
         var visible = local.Length > 1 ? local[0] + new string('*', Math.Min(local.Length - 1, 3)) : "*";
         return visible + email[at..];
     }
+}
+
+/// <summary>Senha certa, mas conta cross-tenant (PlatformOwner/Contador) logando
+/// fora do domínio raiz. Distinto de UnauthorizedAccessException pra o
+/// controller devolver uma mensagem específica em vez do "e-mail ou senha
+/// incorretos" genérico — a senha estava certa, só o domínio que não.</summary>
+public class WrongDomainLoginException : Exception
+{
+    public WrongDomainLoginException(string message) : base(message) { }
 }

@@ -231,6 +231,19 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit           = 10;
     });
 
+    // "locate-account" → bem mais apertado que "auth": cada chamada testa a
+    // senha contra TODO tenant ativo (um schema por vez), bem mais caro que um
+    // login normal (uma query só). 5/hora por IP é suficiente pro uso real
+    // (clicar "procurar em outro lugar" depois de um login falhado de verdade),
+    // sem abrir uma forma barata de forçar senha contra todas as lojas de uma vez.
+    options.AddFixedWindowLimiter("locate-account", opt =>
+    {
+        opt.PermitLimit          = 5;
+        opt.Window               = TimeSpan.FromHours(1);
+        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        opt.QueueLimit           = 0;
+    });
+
     // "comanda-hub" → conexões (negotiate + upgrade) ao ComandaHub: 30/minuto
     // por IP. JoinComandaGroup já valida dono da comanda antes de entrar no
     // grupo, mas não impedia spam de tentativas de conexão (DoS/botting) —
@@ -310,6 +323,7 @@ builder.Services.AddHealthChecks()
 // 11. SERVIÇOS DE APLICAÇÃO
 // ---------------------------------------------------------------------------
 builder.Services.AddScoped<IAuthService,         AuthService>();
+builder.Services.AddScoped<IAccountLocatorService, AccountLocatorService>();
 builder.Services.AddScoped<IComandaService,      ComandaService>();
 builder.Services.AddScoped<IProductService,      ProductService>();
 builder.Services.AddScoped<ICategoryService,     CategoryService>();

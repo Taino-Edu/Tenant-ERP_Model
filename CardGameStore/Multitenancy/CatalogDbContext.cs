@@ -19,6 +19,7 @@ public class CatalogDbContext : DbContext
     public DbSet<ContadorAviso> ContadorAvisos { get; set; }
     public DbSet<ContadorConviteEmail> ContadorConvitesEmail { get; set; }
     public DbSet<PlatformImpersonationTicket> PlatformImpersonationTickets { get; set; }
+    public DbSet<LoginRedirectTicket> LoginRedirectTickets { get; set; }
     public DbSet<Lead> Leads { get; set; }
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
@@ -99,6 +100,13 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(t => t.Ticket)
                   .IsUnique()
                   .HasDatabaseName("ix_platform_impersonation_tickets_ticket");
+        });
+
+        modelBuilder.Entity<LoginRedirectTicket>(entity =>
+        {
+            entity.HasIndex(t => t.Ticket)
+                  .IsUnique()
+                  .HasDatabaseName("ix_login_redirect_tickets_ticket");
         });
 
         modelBuilder.Entity<Lead>(entity =>

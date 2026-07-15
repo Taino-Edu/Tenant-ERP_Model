@@ -9,6 +9,7 @@
 
 using CardGameStore.DTOs;
 using CardGameStore.Multitenancy;
+using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +27,7 @@ namespace CardGameStore.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService            _authService;
+    private readonly IAccountLocatorService  _locator;
     private readonly ILogger<AuthController> _logger;
     private readonly JwtSettings             _jwt;
     private readonly IWebHostEnvironment     _env;
@@ -37,6 +39,7 @@ public class AuthController : ControllerBase
 
     public AuthController(
         IAuthService        authService,
+        IAccountLocatorService locator,
         ILogger<AuthController> logger,
         IOptions<JwtSettings>   jwt,
         IWebHostEnvironment     env,
@@ -47,6 +50,7 @@ public class AuthController : ControllerBase
         ITenantContext      tenant)
     {
         _authService  = authService;
+        _locator      = locator;
         _logger       = logger;
         _jwt          = jwt.Value;
         _audit        = audit;
@@ -172,6 +176,14 @@ public class AuthController : ControllerBase
             SetAuthCookies(response.AccessToken, response.RefreshToken);
             return Ok(new SafeAuthResponse(response.ExpiresAt, response.Role, response.UserName, response.UserId, Permissions: response.Permissions));
         }
+        catch (WrongDomainLoginException ex)
+        {
+            _logger.LogWarning("Login com senha certa mas domínio errado para {Email}: {Msg}", request.Email, ex.Message);
+            await _audit.LogAsync("LoginFalhouDominioErrado", "Auth", null,
+                details: JsonSerializer.Serialize(new { email = request.Email, motivo = ex.Message }),
+                httpContext: HttpContext);
+            return Unauthorized(new { Message = ex.Message, ErrorCode = "wrong_domain" });
+        }
         catch (UnauthorizedAccessException ex)
         {
             _logger.LogWarning("Tentativa de login inválida para {Email}: {Msg}", request.Email, ex.Message);
@@ -184,6 +196,97 @@ public class AuthController : ControllerBase
         {
             _logger.LogError(ex, "Erro inesperado no login para {Email}", request.Email);
             return StatusCode(500, new { Message = "Erro interno. Tente novamente." });
+        }
+    }
+
+    // =========================================================================
+    // "NÃO ACHEI MINHA CONTA AQUI" — busca cross-tenant sob ação explícita
+    //
+    // Só chamado quando o usuário clica um botão depois de um login falhar —
+    // nunca automaticamente a cada tentativa (o loop por tenant é bem mais
+    // caro que um login normal). Rate limit bem mais apertado ("locate-account").
+    // =========================================================================
+
+    /// <summary>Procura o e-mail/senha em toda loja ativa + Contador + Dono da
+    /// Plataforma. Pra cada acerto de senha, devolve um ticket de uso único que o
+    /// frontend troca por uma sessão de verdade no domínio certo
+    /// (GET /api/auth/redeem-login).</summary>
+    [HttpPost("locate-account")]
+    [AllowAnonymous]
+    [EnableRateLimiting("locate-account")]
+    public async Task<IActionResult> LocateAccount([FromBody] LocateAccountRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var matches = await _locator.LocateAsync(request.Email, request.Password);
+
+        if (matches.Count == 0)
+        {
+            _logger.LogWarning("locate-account: nenhum acerto encontrado pra {Email}", request.Email);
+            return Unauthorized(new { Message = "E-mail ou senha incorretos." });
+        }
+
+        return Ok(matches);
+    }
+
+    /// <summary>Troca um ticket gerado por locate-account por uma sessão de verdade
+    /// (com refresh token normal — diferente da impersonação, aqui é a própria conta
+    /// logando). Uso único, expira em 90s, sempre redireciona.</summary>
+    /// <param name="ticket">Ticket de uso único gerado por locate-account.</param>
+    [HttpGet("redeem-login")]
+    [AllowAnonymous]
+    public async Task<IActionResult> RedeemLogin([FromQuery] string ticket)
+    {
+        var row = await _catalog.LoginRedirectTickets.FirstOrDefaultAsync(t => t.Ticket == ticket);
+
+        if (row is null || row.RedeemedAt != null || row.ExpiresAt < DateTime.UtcNow)
+        {
+            _logger.LogWarning("Tentativa de redeem de login-redirect inválida (ticket inexistente/usado/expirado).");
+            return Redirect("/login?error=redirect_failed");
+        }
+
+        // Mesma proteção de replay/troca de domínio do redeem de impersonação:
+        // ticket de loja precisa bater com o tenant resolvido nesta própria
+        // requisição; ticket de PlatformOwner/Contador só vale no domínio raiz.
+        var domainMismatch = row.TargetKind == LoginRedirectTargetKind.Tenant
+            ? row.TenantId != _tenant.TenantId
+            : _tenant.TenantId != TenantConstants.TenantZeroId;
+
+        if (domainMismatch)
+        {
+            _logger.LogWarning(
+                "Ticket de login-redirect ({Kind}, loja {Slug}) usado no domínio errado — bloqueado.",
+                row.TargetKind, row.TenantSlug);
+            return Redirect("/login?error=redirect_failed");
+        }
+
+        row.RedeemedAt = DateTime.UtcNow;
+        await _catalog.SaveChangesAsync();
+
+        try
+        {
+            var response = await _authService.CompleteLoginRedirectAsync(row.TargetKind, row.AccountId);
+
+            SetAuthCookies(response.AccessToken, response.RefreshToken);
+            SetUiSessionCookies(response.Role, response.UserName, response.UserId, null,
+                TimeSpan.FromDays(_jwt.RefreshTokenExpirationDays));
+
+            var landing = response.Role switch
+            {
+                "Customer"      => "/cliente",
+                "PlatformOwner" => "/plataforma",
+                "Contador"      => "/contador",
+                _               => "/admin/comanda",
+            };
+
+            _logger.LogInformation("Login-redirect resgatado — conta {AccountId} ({Kind})", row.AccountId, row.TargetKind);
+            return Redirect(landing);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao completar login-redirect pra conta {AccountId}", row.AccountId);
+            return Redirect("/login?error=redirect_failed");
         }
     }
 

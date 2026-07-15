@@ -7,7 +7,7 @@
 // comuns para uso na UI (sem impacto na segurança se expostos via JS).
 // =============================================================================
 import Cookies from 'js-cookie'
-import { AuthResponse } from './api'
+import { AuthResponse, LocateAccountMatch } from './api'
 
 export function saveAuth(auth: AuthResponse) {
   Cookies.set('userRole',  auth.role,     { expires: 30 })
@@ -25,6 +25,18 @@ export function saveAuth(auth: AuthResponse) {
 
 export function clearAuth() {
   ;['userRole', 'userName', 'userId', 'userPermissions', 'impersonating'].forEach(k => Cookies.remove(k))
+}
+
+/// Monta a URL de GET /api/auth/redeem-login pro domínio certo — mesmo padrão
+/// já usado pro botão de impersonação (protocolo atual + NEXT_PUBLIC_ROOT_DOMAIN
+/// + slug, quando for loja; só o domínio raiz, sem subdomínio, pra
+/// PlatformOwner/Contador).
+export function buildLoginRedirectUrl(match: LocateAccountMatch): string {
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN
+  const host = match.targetKind === 'Tenant' && match.tenantSlug
+    ? `${match.tenantSlug}.${rootDomain}`
+    : rootDomain
+  return `${window.location.protocol}//${host}/api/auth/redeem-login?ticket=${encodeURIComponent(match.ticket)}`
 }
 
 export function getRole():        string    { return Cookies.get('userRole') || '' }

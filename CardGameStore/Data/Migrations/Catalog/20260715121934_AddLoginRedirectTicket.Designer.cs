@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations.Catalog
 {
     [DbContext(typeof(CatalogDbContext))]
-    partial class CatalogDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715121934_AddLoginRedirectTicket")]
+    partial class AddLoginRedirectTicket
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -469,11 +472,6 @@ namespace CardGameStore.Data.Migrations.Catalog
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<string>("CustomDomain")
-                        .HasMaxLength(253)
-                        .HasColumnType("character varying(253)")
-                        .HasColumnName("custom_domain");
-
                     b.Property<string>("DisplayName")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
@@ -518,11 +516,6 @@ namespace CardGameStore.Data.Migrations.Catalog
                         .HasColumnName("status");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CustomDomain")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tenants_custom_domain")
-                        .HasFilter("custom_domain IS NOT NULL");
 
                     b.HasIndex("SchemaName")
                         .IsUnique()

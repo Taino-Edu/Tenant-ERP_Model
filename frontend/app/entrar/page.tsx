@@ -1,10 +1,10 @@
 'use client'
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { authApi } from '@/lib/api'
-import { saveAuth } from '@/lib/auth'
+import { authApi, LocateAccountMatch } from '@/lib/api'
+import { saveAuth, buildLoginRedirectUrl } from '@/lib/auth'
 import toast, { Toaster } from 'react-hot-toast'
-import { Mail, KeyRound, Loader2, Gamepad2, ArrowLeft, UserPlus } from 'lucide-react'
+import { Mail, KeyRound, Loader2, Gamepad2, ArrowLeft, UserPlus, SearchCheck, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function EntrarPage() {
@@ -23,9 +23,14 @@ function EntrarForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
 
+  const [loginFailed, setLoginFailed] = useState(false)
+  const [locating, setLocating]       = useState(false)
+  const [matches, setMatches]         = useState<LocateAccountMatch[] | null>(null)
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    setMatches(null)
     try {
       const { data } = await authApi.clientLogin(email, password)
       saveAuth(data)
@@ -33,8 +38,29 @@ function EntrarForm() {
       router.push(returnTo)
     } catch {
       toast.error('E-mail ou senha inválidos.')
+      setLoginFailed(true)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleLocateAccount() {
+    setLocating(true)
+    try {
+      const { data } = await authApi.locateAccount(email, password)
+      if (data.length === 1) {
+        toast.success(`Encontramos sua conta em ${data[0].label} — entrando...`)
+        window.location.href = buildLoginRedirectUrl(data[0])
+      } else {
+        setMatches(data)
+      }
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      toast.error(status === 429
+        ? 'Muitas tentativas. Aguarde um pouco e tente de novo.'
+        : 'Não encontramos essa conta em nenhum lugar.')
+    } finally {
+      setLocating(false)
     }
   }
 
@@ -103,6 +129,36 @@ function EntrarForm() {
               Ative sua conta pelo CPF
             </Link>
           </div>
+
+          {loginFailed && matches === null && (
+            <button
+              type="button"
+              onClick={handleLocateAccount}
+              disabled={locating}
+              className="w-full flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-white
+                         border border-surface-600 rounded-xl py-2.5 transition-colors disabled:opacity-50"
+            >
+              {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <SearchCheck className="w-4 h-4" />}
+              {locating ? 'Procurando...' : 'Não é essa conta? Procurar em outra loja'}
+            </button>
+          )}
+
+          {matches !== null && matches.length > 0 && (
+            <div className="border border-surface-600 rounded-xl p-3 space-y-2">
+              <p className="text-xs text-gray-400">Encontramos essa conta em mais de um lugar:</p>
+              {matches.map(m => (
+                <a
+                  key={m.ticket}
+                  href={buildLoginRedirectUrl(m)}
+                  className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-800 hover:bg-surface-700
+                             text-sm text-white transition-colors"
+                >
+                  <Building2 className="w-4 h-4 text-brand-400 shrink-0" />
+                  {m.label}
+                </a>
+              ))}
+            </div>
+          )}
         </form>
 
         <div className="mt-4 text-center">

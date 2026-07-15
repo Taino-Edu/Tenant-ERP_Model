@@ -63,6 +63,20 @@ public record RefreshTokenRequest(
     [Required] string RefreshToken
 );
 
+/// <summary>"Não achei minha conta aqui, procurar em outro lugar" — mesmo e-mail/senha
+/// já digitados no login que falhou, procurados em toda loja + Contador + Dono da
+/// Plataforma.</summary>
+public record LocateAccountRequest(
+    [Required, EmailAddress] string Email,
+    [Required, MinLength(8)] string Password
+);
+
+/// <summary>Um acerto de senha encontrado em outro lugar. TenantSlug só vem
+/// preenchido quando TargetKind == "Tenant" — o frontend monta a URL final
+/// (protocolo + NEXT_PUBLIC_ROOT_DOMAIN + slug) do mesmo jeito que já monta a
+/// URL de impersonação, e navega pra lá com o ticket.</summary>
+public record LocateAccountMatchDto(string Label, string TargetKind, string? TenantSlug, string Ticket);
+
 /// <summary>Busca cliente por CPF — primeiro acesso pelo site.</summary>
 public record CpfLookupRequest(
     [Required, ValidCpf] string Cpf
