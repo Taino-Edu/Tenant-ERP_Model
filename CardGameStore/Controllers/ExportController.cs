@@ -102,14 +102,16 @@ public class ExportController : ControllerBase
             .OrderBy(c => c.DataVencimento)
             .ToListAsync();
 
+        // ClienteCPF/ClienteEmail entram pra esse CSV poder voltar via /api/import/crediario
+        // sem ambiguidade — nome sozinho duplica entre clientes diferentes.
         var headers = new[]
         {
-            "ClienteNome", "ClienteWhatsApp", "ValorTotal", "ValorPago", "SaldoRestante",
+            "ClienteNome", "ClienteCPF", "ClienteEmail", "ClienteWhatsApp", "ValorTotal", "ValorPago", "SaldoRestante",
             "DataAbertura", "DataVencimento", "Vencido", "Observacao",
         };
         var linhas = crediarios.Select(c => new object?[]
         {
-            c.User.Name, c.User.WhatsApp,
+            c.User.Name, c.User.Cpf, c.User.Email, c.User.WhatsApp,
             c.ValorEmCentavos / 100m, c.ValorPagoEmCentavos / 100m, c.SaldoRestanteEmCentavos / 100m,
             c.DataAbertura, c.DataVencimento, c.DataVencimento < DateTime.UtcNow, c.Observacao,
         });
