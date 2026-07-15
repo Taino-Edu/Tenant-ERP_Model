@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import {
   Info, Tag, Calendar, CheckCircle, Wrench, Zap,
-  BookOpen, ChevronDown, ChevronUp, FileDown,
+  BookOpen, ChevronDown, ChevronUp, FileDown, Rocket,
   LayoutDashboard, ShoppingBag, ShoppingCart, Package,
   Users, CreditCard, Trophy, BarChart2, Layers, Megaphone, Settings, Keyboard,
 } from 'lucide-react'
@@ -401,6 +401,12 @@ export default function SobrePage() {
         <div className="ml-auto flex items-center gap-3">
           <Tag className="w-4 h-4 text-brand-400" />
           <span className="text-sm font-mono font-semibold text-brand-400">{version}</span>
+          <Link
+            href="/admin/primeiros-passos"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-accent-green/10 border border-accent-green/20 text-accent-green hover:bg-accent-green/20 transition-colors"
+          >
+            <Rocket className="w-3.5 h-3.5" /> Primeiros Passos
+          </Link>
           <Link
             href="/admin/manual"
             target="_blank"

@@ -1,9 +1,10 @@
 'use client'
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
-const VERSION = 'v1.21.0'
-const DATA = '08/07/2026'
+const VERSION = 'v1.22.0'
+const DATA = '15/07/2026'
 
 const SECOES = [
   {
@@ -399,6 +400,79 @@ const SECOES = [
       'O menu lateral do admin (Painel Geral, Estoque, etc.) ainda não é personalizável por aqui — só a página pública.',
     ],
   },
+  {
+    num: '18b',
+    titulo: 'Módulos Pagos por Loja',
+    cor: '#14B8A6',
+    itens: [
+      { t: 'O que são', d: 'Fiscal, Estoque, Fidelidade e Portal do Contador são módulos habilitados por loja — dá pra contratar só o que faz sentido pro seu negócio. Sem o módulo, o item some do menu e a tela/endpoint correspondente fica bloqueado.' },
+      { t: 'Como saber o que está ativo', d: 'Se um item do menu (ex: Fiscal) não aparece, o módulo não está habilitado pra essa loja. Fale com o suporte pra contratar.' },
+      { t: 'Fidelidade tem dois níveis', d: 'Além do módulo estar contratado, o programa de pontos também tem um interruptor próprio em Configurações — dá pra desligar temporariamente sem perder o histórico de pontos já dado, mesmo com o módulo ativo.' },
+    ],
+    dicas: [
+      'Só o dono da plataforma pode habilitar/desabilitar módulos de uma loja — não é uma configuração que o admin da loja mexe sozinho.',
+    ],
+  },
+  {
+    num: '18c',
+    titulo: 'Migração de Dados (Importar / Exportar)',
+    cor: '#8B5CF6',
+    itens: [
+      { t: 'Onde fica', d: 'LGPD & Auditoria → seção "Portabilidade de dados", logo no topo da página.' },
+      { t: 'Exportar', d: 'Três botões (Produtos, Clientes, Crediário em aberto) baixam um CSV com os dados de agora. Útil pra backup, conferência em planilha, ou levar seus dados embora se um dia quiser sair da plataforma.' },
+      { t: 'Importar', d: 'Suba um CSV com as mesmas colunas do export. Linhas válidas são cadastradas; linhas com problema (nome duplicado, CPF inválido, cliente não encontrado) ficam listadas com o motivo — corrige só essas e reenvia.' },
+      { t: 'Crediário exige cliente já cadastrado', d: 'Pra evitar dívida em nome de cliente errado ou inventado, a importação de crediário só funciona se o CPF ou e-mail da linha já bater com um cliente existente no sistema. Se ainda não migrou os clientes, importe eles primeiro.' },
+    ],
+    dicas: [
+      'Edite o CSV exportado direto no Excel/Google Sheets e suba de volta — é o jeito mais rápido de cadastrar produtos em lote.',
+      'O separador de coluna é ponto-e-vírgula ( ; ), não vírgula — abre certinho em planilha configurada em português.',
+    ],
+  },
+  {
+    num: '18d',
+    titulo: 'Portal do Contador',
+    cor: '#0EA5E9',
+    itens: [
+      { t: 'O que é', d: 'Acesso próprio (fora do admin da loja) pra contador acompanhar dados fiscais de uma ou mais lojas que atende — cross-tenant, sem precisar de login separado por loja.' },
+      { t: 'Como o contador entra', d: 'Cadastro próprio em /contador/cadastro. Depois, solicita vínculo com uma loja pelo slug (endereço) dela — o vínculo só libera dados depois que alguém da loja aprova.' },
+      { t: 'Convite às cegas', d: 'A loja também pode convidar um contador pelo e-mail antes dele ter conta — quando ele se cadastra, o vínculo já nasce aprovado automaticamente.' },
+      { t: 'O que o contador vê', d: 'Notas fiscais emitidas, dados cadastrais da loja (sem certificado nem senha), exportação de XMLs por período, e um mural de avisos trocado com a loja.' },
+      { t: 'Aprovar/recusar contador', d: 'Painel do admin mostra solicitações pendentes de contador — aprova ou recusa por lá.' },
+    ],
+    dicas: [
+      'O portal do contador só funciona se o módulo "Portal do Contador" estiver contratado pela loja.',
+      'Um mesmo contador pode estar vinculado a várias lojas diferentes — o seletor de "qual cliente" aparece se houver mais de uma.',
+    ],
+  },
+  {
+    num: '18e',
+    titulo: 'Domínio Próprio (para o dono da plataforma)',
+    cor: '#EC4899',
+    itens: [
+      { t: 'O que é', d: 'Além do endereço padrão (slug.dominio.com), uma loja pode usar um domínio totalmente próprio (ex: minhaloja.com.br).' },
+      { t: 'Quem configura', d: 'Só o dono da plataforma, na tela de detalhe da loja em /plataforma/tenants — campo "Domínio próprio".' },
+      { t: 'Passo a passo pro lojista', d: 'O lojista precisa ter o domínio numa conta Cloudflare própria dele (grátis), apontando pro servidor da plataforma em modo "Flexible". A plataforma não emite certificado automaticamente — quem cuida disso é a Cloudflare do próprio domínio.' },
+    ],
+    dicas: [
+      'Sem o domínio configurado corretamente na Cloudflare do lojista antes de cadastrar aqui, o site fica inacessível por esse endereço — o subdomínio padrão continua funcionando normalmente enquanto isso.',
+    ],
+  },
+  {
+    num: '18f',
+    titulo: 'Painel da Plataforma (dono do SaaS)',
+    cor: '#10B981',
+    itens: [
+      { t: 'Onde fica', d: 'Acesso separado do admin de loja — login do dono da plataforma entra direto em /plataforma.' },
+      { t: 'Visão geral', d: 'Receita agregada do mês, quantidade de lojas ativas/suspensas, adoção de cada módulo pago, e sinal de atividade recente por loja.' },
+      { t: 'Gestão de lojas', d: 'Criar loja nova (já escolhendo os módulos), suspender/reativar, editar plano e status de pagamento, habilitar/desabilitar módulo, configurar domínio próprio.' },
+      { t: 'Acessar o admin de qualquer loja', d: 'Botão de "entrar como" abre o painel daquela loja já autenticado, sem digitar subdomínio nem senha — a sessão expira sozinha em ~20 minutos e nunca mexe na conta real do admin de lá.' },
+      { t: 'Leads e Suporte', d: 'Funis de leads (interessados em contratar) e central de tickets de suporte cross-tenant, tudo num só lugar.' },
+      { t: 'Logs cross-tenant', d: 'Audit log agregado de todas as lojas, filtrável por loja de origem.' },
+    ],
+    dicas: [
+      'Esse painel é só pro dono da plataforma — o admin de uma loja individual não tem acesso, nem vê que ele existe.',
+    ],
+  },
 ]
 
 export default function ManualPdfPage() {
@@ -440,6 +514,25 @@ export default function ManualPdfPage() {
           margin-bottom: 32px;
         }
         .print-btn:hover { background: #00d494; }
+
+        .btn-row { display: flex; gap: 10px; margin-bottom: 32px; }
+        .btn-row .print-btn { margin-bottom: 0; }
+        .quick-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #fff;
+          color: #0C3D5A;
+          font-weight: 700;
+          font-size: 13px;
+          border: 1.5px solid #e5e7eb;
+          border-radius: 10px;
+          padding: 10px 20px;
+          cursor: pointer;
+          text-decoration: none;
+        }
+        .quick-btn:hover { border-color: #00F0A8; }
+        @media print { .quick-btn { display: none !important; } }
 
         /* Capa */
         .capa {
@@ -552,10 +645,15 @@ export default function ManualPdfPage() {
       `}</style>
 
       <div className="page">
-        {/* Botão imprimir */}
-        <button className="print-btn" onClick={() => window.print()}>
-          🖨️ Imprimir / Salvar como PDF
-        </button>
+        {/* Botões */}
+        <div className="btn-row">
+          <button className="print-btn" onClick={() => window.print()}>
+            🖨️ Imprimir / Salvar como PDF
+          </button>
+          <Link href="/admin/primeiros-passos" className="quick-btn">
+            🚀 Prefere um resumo rápido? Primeiros Passos
+          </Link>
+        </div>
 
         {/* Capa */}
         <div className="capa">

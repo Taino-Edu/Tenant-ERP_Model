@@ -10,7 +10,7 @@ import {
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
   Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy, Mail,
-  ChevronsLeft, ChevronsRight,
+  ChevronsLeft, ChevronsRight, Rocket,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -76,6 +76,7 @@ const sections = [
     label: 'Compliance',
     items: [
       { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield, perm: 'lgpd' },
+      { href: '/admin/primeiros-passos', label: 'Primeiros Passos', icon: Rocket, perm: null },
       { href: '/admin/sobre',     label: 'Sobre o Sistema',  icon: Info,     perm: null },
     ],
   },
