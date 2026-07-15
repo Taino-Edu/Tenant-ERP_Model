@@ -470,11 +470,17 @@ PIS/COFINS CST 99) e igual pra todo tenant:
 - Curva ABC e o layout do DRE ficaram de fora de propósito (fora de escopo,
   não pediam mudança).
 
-## Backlog — migração de dados (import), parte que falta
-- **Feito** (sessão 2026-07-15): exportação self-service — produtos, clientes
-  e crediário em aberto, CSV, `/admin/lgpd`. Ver "Concluído" no topo do arquivo.
-- **Falta**: importação — aceitar dados de outros sistemas na hora do tenant
-  migrar pro Tenant-ERP. Escopo maior que o export porque cada sistema de
-  origem tem formato diferente; decidir se é CSV padronizado genérico (lojista
-  adapta a planilha dele) ou adaptadores pra 1-2 concorrentes conhecidos, e se
-  é self-service ou processo assistido por nós no onboarding.
+## Concluído (sessão 2026-07-15, migração de dados completa: export + import)
+- Export e import self-service dos 3 tipos de dado (produtos, clientes,
+  crediário em aberto) em `/admin/lgpd`, CSV com o mesmo formato de ida e
+  volta (`CsvWriter`/`CsvReader`, separador `;`, RFC 4180).
+- Import é self-service com relatório de erro por linha (não é
+  tudo-ou-nada): linhas válidas entram, inválidas ficam listadas com motivo
+  pra corrigir e reenviar só essas.
+- Rede de segurança no import de crediário — o item mais arriscado, porque é
+  literalmente criar dívida em nome de alguém a partir de uma planilha: só
+  aceita linha onde o cliente já existe (resolvido por CPF ou e-mail),
+  nunca cria conta nova só pra pendurar dívida nela. Log de auditoria da
+  importação de crediário sai com severidade Warning.
+- Escopo que ficou de fora de propósito: adaptadores pra formato de sistemas
+  concorrentes específicos (só o CSV genérico por enquanto).
