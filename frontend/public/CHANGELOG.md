@@ -1,5 +1,27 @@
 # Changelog — Tenant-ERP
 
+## [v2.7.0] — 2026-07-15
+
+### Adicionado
+- **Exportar e importar dados**: em LGPD & Auditoria, baixe seus produtos, clientes e crediário em aberto em CSV a qualquer momento — e suba de volta um CSV editado pra cadastrar em lote. Linhas com erro aparecem listadas com o motivo, sem travar o restante do arquivo
+- **Menu lateral recolhível**: no computador, clique na seta na borda do menu pra recolher pro modo só-ícone e ganhar espaço de tela. A preferência fica salva
+- **Domínio próprio por loja**: lojas agora podem apontar um domínio próprio (além do endereço padrão), configurável pelo dono da plataforma
+- Módulos "Fidelidade" e "Portal do Contador" — antes liberados por padrão — agora aparecem como opção explícita já na criação de uma loja nova, junto com Fiscal e Estoque
+
+### Corrigido
+- **Pagamento de crediário**: clique duplo ou reenvio por falha de rede não debita mais o cliente duas vezes
+- Alguns cadastros podiam travar a tela em branco se um dado salvo no navegador estivesse corrompido — agora mostra erro em vez de travar
+
+---
+
+## [v2.6.0] — 2026-07-15
+
+### Corrigido
+- **Login no domínio errado**: dono da plataforma ou contador que tentasse logar no subdomínio de uma loja específica recebia "e-mail ou senha incorretos" mesmo com a senha certa — agora a mensagem avisa claramente que é o domínio errado
+- **Login unificado**: um único botão "não encontrei minha conta aqui" na tela de entrada localiza automaticamente em qual loja ou perfil aquele e-mail/senha pertence e redireciona pra lá, sem precisar adivinhar o subdomínio certo
+
+---
+
 ## [v2.5.1] — 2026-07-12
 
 ### Corrigido
