@@ -83,18 +83,24 @@
 
 ## Backlog — pendências das avaliações externas de 14/07
 Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi feito:
-- **Decompor os 5 maiores arquivos do frontend** — financeiro (113 KB),
+- **Decompor os 5 maiores arquivos do frontend** — `financeiro/page.tsx` já
+  feito (113 KB / 2198 linhas → 913 linhas, 6 componentes extraídos pra
+  `components/admin/financeiro/`, sem mudança de comportamento). Faltam:
   comanda (104 KB), venda-avulsa (87 KB), estoque (71 KB), usuarios (61 KB) +
-  landing `app/page.tsx` (48 KB). Esforço estimado: 3-5 dias. Sobrepõe com o
-  "retrabalho de UI/UX" já registrado abaixo.
+  landing `app/page.tsx` (48 KB). Sobrepõe com o "retrabalho de UI/UX" abaixo.
 - **Bug de hidratação React (#425/#418/#423)** — pré-existente, sistêmico no
   admin; suspeita: script inline de FOUC. Parcialmente atacado no commit
   `2364296`, mas as avaliações ainda o listam — reverificar se persiste.
 - **Upgrade Next 16** — elimina as 2 vulns npm restantes; major com breaking
   changes (App Router). Fazer com calma, não junto de outras mudanças.
-- **Testes de integração** — `WebApplicationFactory` + Postgres real;
-  prioridade pro multi-tenancy (2 tenants, verificar isolamento), que é o
-  coração do sistema e não tem teste automatizado.
+- **Testes de integração** — feito pro multi-tenancy: `TenantIsolationTests`
+  usa o `TenantConnectionInterceptor` real (não mock) contra Postgres real,
+  cobrindo isolamento entre schemas, troca de tenant no mesmo escopo,
+  rejeição de nome de schema inválido e a rede de segurança do
+  `current_schema()` — achou e corrigiu de quebra um bug real (`InvalidCastException`
+  em vez de erro claro quando o schema não existe, por causa de cast direto pra
+  `DBNull`). Falta ainda: `WebApplicationFactory` end-to-end pra outros fluxos
+  (não só multi-tenancy).
 - **SSL Cloudflare "Flexible" → "Full (Strict)"** — hoje Cloudflare→VPS trafega
   HTTP puro. Requer cert no nginx do VPS (origin certificate da Cloudflare é o
   caminho barato). Ação de infra, não de código.
