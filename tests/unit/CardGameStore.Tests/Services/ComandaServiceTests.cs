@@ -48,7 +48,7 @@ public class ComandaServiceTests
     private static ComandaService CreateService(AppDbContext db)
     {
         var tenantContext = new Mock<ITenantContext>();
-        tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal" });
+        tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal", "pontos" });
 
         return new(db,
             new Mock<IEmailService>().Object,
@@ -335,6 +335,33 @@ public class ComandaServiceTests
         resultado.PointsApplied.Should().Be(60);
         var saldoAtual = (await db.Users.FindAsync(user.Id))!.PointsBalance;
         saldoAtual.Should().Be(40);
+    }
+
+    [Fact]
+    public async Task ApplyPoints_SemModuloHabilitado_DeveLancarExcecao()
+    {
+        // Módulo "pontos" fora do EnabledModules do tenant — precisa barrar antes
+        // de sequer olhar o toggle SiteConfig.PontosFidelidadeAtivo da loja.
+        var db = CreateDb(nameof(ApplyPoints_SemModuloHabilitado_DeveLancarExcecao));
+
+        var tenantContext = new Mock<ITenantContext>();
+        tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal" }); // sem "pontos"
+        var service = new ComandaService(db,
+            new Mock<IEmailService>().Object,
+            NullLogger<ComandaService>.Instance,
+            new Mock<IServiceScopeFactory>().Object,
+            CreateHubMock(),
+            tenantContext.Object);
+
+        var (user, product, comanda) = await SeedAsync(db);
+        user.PointsBalance = 100;
+        await db.SaveChangesAsync();
+        await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 1 });
+
+        var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*módulo de fidelidade não está habilitado*");
     }
 
     [Fact]

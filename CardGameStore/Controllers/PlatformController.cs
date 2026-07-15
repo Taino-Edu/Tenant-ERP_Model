@@ -74,7 +74,7 @@ public class PlatformController : ControllerBase
 
         try
         {
-            var tenant = await _provisioning.ProvisionAsync(request.Slug, request.AdminEmail, request.AdminPassword);
+            var tenant = await _provisioning.ProvisionAsync(request.Slug, request.AdminEmail, request.AdminPassword, request.EnabledModules);
             return CreatedAtAction(nameof(ListTenants), ToDto(tenant));
         }
         catch (InvalidOperationException ex)

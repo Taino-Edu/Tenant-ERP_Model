@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus, PlatformOverviewDto, getErrorMessage } from '@/lib/api'
+import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus, PlatformOverviewDto, getErrorMessage, TENANT_MODULES } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import toast from 'react-hot-toast'
@@ -146,13 +146,14 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
       </td>
       <td className="py-3">
         <div className="flex flex-wrap gap-1.5">
-          {(['fiscal', 'estoque'] as const).map(module => (
+          {TENANT_MODULES.map(({ value: module, label }) => (
             <button
               key={module}
               type="button"
               onClick={() => toggleModule(module)}
               disabled={savingBilling}
-              className={clsx('flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg border transition-colors capitalize',
+              title={TENANT_MODULES.find(m => m.value === module)?.description}
+              className={clsx('flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-lg border transition-colors',
                 tenant.enabledModules.includes(module)
                   ? 'bg-brand-600/10 border-brand-500/40 text-brand-300'
                   : 'border-surface-500 text-gray-500 hover:border-surface-400 hover:text-gray-300')}
@@ -161,7 +162,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
                 tenant.enabledModules.includes(module) ? 'bg-brand-500 border-brand-500' : 'border-surface-400')}>
                 {tenant.enabledModules.includes(module) && <Check className="w-2.5 h-2.5 text-white" />}
               </span>
-              {module}
+              {label}
             </button>
           ))}
         </div>

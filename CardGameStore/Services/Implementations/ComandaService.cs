@@ -444,12 +444,17 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
-        // Programa de pontos é opcional por loja (SiteConfig.PontosFidelidadeAtivo,
-        // decisão do próprio admin do tenant) — sem linha ainda = default true. Defesa em
-        // profundidade: rejeita aqui mesmo que um request forjado tente usar pontos com o
-        // programa desligado.
+        // Pontos exige dois "sim": o módulo pago habilitado pra este tenant
+        // (EnabledModules, decisão da plataforma) E o toggle operacional da loja
+        // (SiteConfig.PontosFidelidadeAtivo, decisão do próprio admin do tenant —
+        // sem linha ainda = default true). Defesa em profundidade: rejeita aqui
+        // mesmo que um request forjado tente usar pontos sem um dos dois.
+        var usaPontosNestaVenda = paymentMethod == PaymentMethod.Pontos || secondPaymentMethod == PaymentMethod.Pontos;
+        if (usaPontosNestaVenda && !_tenant.EnabledModules.Contains("pontos"))
+            throw new InvalidOperationException("O módulo de fidelidade não está habilitado para esta loja.");
+
         var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
-        if (!pontosAtivo && (paymentMethod == PaymentMethod.Pontos || secondPaymentMethod == PaymentMethod.Pontos))
+        if (!pontosAtivo && usaPontosNestaVenda)
             throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
 
         if (discountInCents > 0 && discountInCents > comanda.TotalInCents - comanda.PointsApplied)
@@ -837,6 +842,9 @@ public class ComandaService : IComandaService
 
         if (comanda.PointsApplied > 0)
             throw new InvalidOperationException("Pontos já foram aplicados nesta comanda.");
+
+        if (!_tenant.EnabledModules.Contains("pontos"))
+            throw new InvalidOperationException("O módulo de fidelidade não está habilitado para esta loja.");
 
         var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
         if (!pontosAtivo)

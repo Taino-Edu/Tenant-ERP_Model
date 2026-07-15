@@ -16,6 +16,11 @@ public class CreateTenantRequest
 
     [Required, MinLength(6)]
     public string AdminPassword { get; set; } = string.Empty;
+
+    /// <summary>Módulos pagos já habilitados na criação (ex: ["fiscal","estoque"]). Vazio/null
+    /// cai no default do model (["fiscal"]) — ver TenantProvisioningService.KnownModules pra
+    /// lista de nomes aceitos.</summary>
+    public string[]? EnabledModules { get; set; }
 }
 
 public class TenantSummaryDto

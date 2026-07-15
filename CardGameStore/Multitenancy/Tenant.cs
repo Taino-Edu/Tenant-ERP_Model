@@ -55,8 +55,9 @@ public class Tenant
     [Column("payment_status")]
     public TenantPaymentStatus PaymentStatus { get; set; } = TenantPaymentStatus.Pago;
 
-    /// <summary>Módulos pagos habilitados pra este tenant (ex: "fiscal"). Módulos que são
-    /// fundação do sistema (ex: estoque) não entram aqui — ver RequireModuleAttribute.</summary>
+    /// <summary>Módulos pagos habilitados pra este tenant — hoje "fiscal", "estoque",
+    /// "pontos" (fidelidade) e "contador" (portal cross-tenant). Ver RequireModuleAttribute
+    /// e, pro portal do contador, o gate manual em ContadorPortalController.AutorizarEObterTenantAsync.</summary>
     [Column("enabled_modules")]
     public string[] EnabledModules { get; set; } = new[] { "fiscal" };
 

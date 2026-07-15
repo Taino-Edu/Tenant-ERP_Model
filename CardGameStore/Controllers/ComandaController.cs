@@ -16,6 +16,7 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -225,6 +226,7 @@ public class ComandaController : ControllerBase
 
     /// <summary>Cliente aplica seus pontos para abater o total da comanda.</summary>
     [HttpPost("{id:guid}/apply-points")]
+    [RequireModule("pontos")]
     [ProducesResponseType(typeof(ComandaDto), 200)]
     [ProducesResponseType(400)]
     public async Task<IActionResult> ApplyPoints(Guid id, [FromBody] ApplyPointsRequest request)

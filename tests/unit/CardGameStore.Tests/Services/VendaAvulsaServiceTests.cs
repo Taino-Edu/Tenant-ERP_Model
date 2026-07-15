@@ -25,9 +25,14 @@ public class VendaAvulsaServiceTests
 
     private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
-    private static VendaAvulsaService CreateService(AppDbContext db) =>
-        new(db, NullLogger<VendaAvulsaService>.Instance, new Mock<IServiceScopeFactory>().Object,
-            new Mock<ITenantContext>().Object);
+    private static VendaAvulsaService CreateService(AppDbContext db)
+    {
+        var tenantContext = new Mock<ITenantContext>();
+        tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal", "estoque", "pontos" });
+
+        return new(db, NullLogger<VendaAvulsaService>.Instance, new Mock<IServiceScopeFactory>().Object,
+            tenantContext.Object);
+    }
 
     private static async Task<Product> SeedProductAsync(AppDbContext db,
         string name = "Produto Teste", int priceInCents = 1500, int stock = 10, bool isActive = true)
@@ -400,6 +405,33 @@ public class VendaAvulsaServiceTests
 
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*programa de pontos está desativado*");
+    }
+
+    [Fact]
+    public async Task Register_PagarComPontosSemModuloHabilitado_DeveLancarExcecao()
+    {
+        // Toggle da loja ligado (SetPontosAtivoAsync), mas o módulo pago da
+        // plataforma NÃO habilitado pra este tenant — o gate mais "de fora"
+        // (EnabledModules) precisa barrar antes mesmo de chegar no toggle.
+        var db = CreateDb(nameof(Register_PagarComPontosSemModuloHabilitado_DeveLancarExcecao));
+        await SetPontosAtivoAsync(db, ativo: true);
+        var product = await SeedProductAsync(db, priceInCents: 1000, stock: 5);
+        var user    = await SeedUserAsync(db, pointsBalance: 100);
+
+        var tenantContext = new Mock<ITenantContext>();
+        tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal" }); // sem "pontos"
+        var service = new VendaAvulsaService(db, NullLogger<VendaAvulsaService>.Instance,
+            new Mock<IServiceScopeFactory>().Object, tenantContext.Object);
+
+        var act = async () => await service.RegisterAsync(new VendaAvulsaRequest
+        {
+            UserId        = user.Id,
+            PaymentMethod = PaymentMethod.Pontos,
+            Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
+        }, AdminId, AdminName);
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*módulo de fidelidade não está habilitado*");
     }
 
     [Fact]
