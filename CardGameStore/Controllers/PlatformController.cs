@@ -8,6 +8,7 @@
 
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -27,17 +28,25 @@ public class PlatformController : ControllerBase
     private readonly ITenantProvisioningService _provisioning;
     private readonly ILogger<PlatformController> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly string? _rootDomain;
+
+    // Formato básico de domínio (labels alfanuméricos/hífen, pelo menos um ponto) — não
+    // valida se o domínio existe/resolve de verdade, só barra lixo óbvio antes de gravar.
+    private static readonly Regex DomainPattern = new(
+        @"^(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$", RegexOptions.Compiled);
 
     public PlatformController(
         CatalogDbContext catalog,
         ITenantProvisioningService provisioning,
         ILogger<PlatformController> logger,
-        IServiceScopeFactory scopeFactory)
+        IServiceScopeFactory scopeFactory,
+        IConfiguration configuration)
     {
         _catalog      = catalog;
         _provisioning = provisioning;
         _logger       = logger;
         _scopeFactory = scopeFactory;
+        _rootDomain   = configuration["Multitenancy:RootDomain"];
     }
 
     private static TenantSummaryDto ToDto(Tenant t) => new()
@@ -50,6 +59,7 @@ public class PlatformController : ControllerBase
         PlanName       = t.PlanName,
         PaymentStatus  = t.PaymentStatus.ToString(),
         EnabledModules = t.EnabledModules,
+        CustomDomain   = t.CustomDomain,
     };
 
     /// <summary>Lista todos os tenants cadastrados na plataforma, mais recente primeiro.
@@ -127,6 +137,52 @@ public class PlatformController : ControllerBase
         tenant.PlanName       = request.PlanName;
         tenant.PaymentStatus  = paymentStatus;
         tenant.EnabledModules = request.EnabledModules;
+        await _catalog.SaveChangesAsync();
+
+        return Ok(ToDto(tenant));
+    }
+
+    /// <summary>
+    /// Define ou limpa o domínio próprio (BYO domain) de uma loja. Só cadastra o
+    /// roteamento — não emite certificado TLS nenhum: o lojista precisa apontar o
+    /// domínio dele pra nossa VPS atrás da própria conta Cloudflare (modo
+    /// Flexible), do mesmo jeito que o domínio raiz da plataforma já funciona.
+    /// </summary>
+    /// <param name="id">Id do tenant.</param>
+    /// <param name="request">Domínio a cadastrar, ou null/vazio pra remover.</param>
+    [HttpPatch("tenants/{id:guid}/domain")]
+    public async Task<IActionResult> UpdateCustomDomain(Guid id, [FromBody] UpdateTenantDomainRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        var raw = request.CustomDomain?.Trim();
+        if (string.IsNullOrEmpty(raw))
+        {
+            tenant.CustomDomain = null;
+            await _catalog.SaveChangesAsync();
+            return Ok(ToDto(tenant));
+        }
+
+        // Tolera o lojista colando a URL inteira ("https://minhaloja.com.br/") em
+        // vez de só o host — extrai só o que importa pro roteamento.
+        var host = (Uri.TryCreate(raw.Contains("://") ? raw : $"https://{raw}", UriKind.Absolute, out var uri)
+            ? uri.Host : raw).Trim('/').ToLowerInvariant();
+
+        if (!DomainPattern.IsMatch(host))
+            return BadRequest(new { Message = $"Domínio inválido: '{host}'." });
+
+        if (!string.IsNullOrWhiteSpace(_rootDomain) &&
+            (host.Equals(_rootDomain, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + _rootDomain, StringComparison.OrdinalIgnoreCase)))
+            return BadRequest(new { Message = $"'{host}' é (ou é subdomínio d)o domínio da própria plataforma — use o slug normal, não domínio próprio." });
+
+        var emUsoPorOutroTenant = await _catalog.Tenants.AnyAsync(t => t.Id != id && t.CustomDomain == host);
+        if (emUsoPorOutroTenant)
+            return BadRequest(new { Message = $"O domínio '{host}' já está em uso por outra loja." });
+
+        tenant.CustomDomain = host;
         await _catalog.SaveChangesAsync();
 
         return Ok(ToDto(tenant));

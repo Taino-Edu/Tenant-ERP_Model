@@ -33,6 +33,15 @@ public class TenantSummaryDto
     public string PlanName { get; set; } = string.Empty;
     public string PaymentStatus { get; set; } = string.Empty;
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
+    public string? CustomDomain { get; set; }
+}
+
+/// <summary>Body de PATCH /api/platform/tenants/{id}/domain. CustomDomain null ou
+/// vazio limpa o domínio próprio (volta a valer só o subdomínio do slug).</summary>
+public class UpdateTenantDomainRequest
+{
+    [MaxLength(253)]
+    public string? CustomDomain { get; set; }
 }
 
 public class UpdateTenantStatusRequest

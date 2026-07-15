@@ -681,6 +681,7 @@ export interface TenantSummary {
   id: string; slug: string; schemaName: string
   status: TenantStatus; createdAt: string
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
+  customDomain: string | null
 }
 
 export interface CreateTenantRequest {
@@ -729,6 +730,8 @@ export const platformApi = {
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/status`, { status }),
   updateTenantBilling: (id: string, req: UpdateTenantBillingRequest) =>
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/billing`, req),
+  updateTenantDomain: (id: string, customDomain: string | null) =>
+    api.patch<TenantSummary>(`/api/platform/tenants/${id}/domain`, { customDomain }),
   getOverview: () =>
     api.get<PlatformOverviewDto>('/api/platform/overview'),
   impersonate: (id: string) =>
