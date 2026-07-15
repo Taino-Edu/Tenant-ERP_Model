@@ -28,12 +28,17 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     public async Task<VendaAvulsaDto> RegisterAsync(VendaAvulsaRequest request, Guid adminId, string adminName)
     {
-        // Programa de pontos é opcional por loja (SiteConfig.PontosFidelidadeAtivo,
-        // decisão do próprio admin do tenant) — sem linha ainda = default true (mesmo
-        // comportamento de sempre). Defesa em profundidade: rejeita aqui mesmo que um
-        // request forjado tente usar/resgatar pontos com o programa desligado.
+        // Pontos exige dois "sim": o módulo pago habilitado pra este tenant
+        // (EnabledModules, decisão da plataforma) E o toggle operacional da loja
+        // (SiteConfig.PontosFidelidadeAtivo, decisão do próprio admin do tenant —
+        // sem linha ainda = default true). Defesa em profundidade: rejeita aqui
+        // mesmo que um request forjado tente usar/resgatar pontos sem um dos dois.
+        var usaPontosNestaVenda = request.PaymentMethod == PaymentMethod.Pontos || request.SecondPaymentMethod == PaymentMethod.Pontos;
+        if (usaPontosNestaVenda && !_tenantContext.EnabledModules.Contains("pontos"))
+            throw new InvalidOperationException("O módulo de fidelidade não está habilitado para esta loja.");
+
         var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
-        if (!pontosAtivo && (request.PaymentMethod == PaymentMethod.Pontos || request.SecondPaymentMethod == PaymentMethod.Pontos))
+        if (!pontosAtivo && usaPontosNestaVenda)
             throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
 
         // Valida tudo antes de qualquer escrita: falha rápida evita decremento parcial de estoque

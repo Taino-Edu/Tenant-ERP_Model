@@ -689,11 +689,21 @@ export interface TenantSummary {
   id: string; slug: string; schemaName: string
   status: TenantStatus; createdAt: string
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
+  customDomain: string | null
 }
 
 export interface CreateTenantRequest {
-  slug: string; adminEmail: string; adminPassword: string
+  slug: string; adminEmail: string; adminPassword: string; enabledModules?: string[]
 }
+
+/** Catálogo de módulos pagos — mesma lista que o backend aceita
+ * (TenantProvisioningService.KnownModules / RequireModuleAttribute). */
+export const TENANT_MODULES = [
+  { value: 'fiscal',   label: 'Fiscal',              description: 'Emissão de NFC-e' },
+  { value: 'estoque',  label: 'Estoque',              description: 'Variantes, reservas e lista de espera' },
+  { value: 'pontos',   label: 'Fidelidade (Pontos)',  description: 'Programa de pontos/cashback dos clientes' },
+  { value: 'contador', label: 'Portal do Contador',   description: 'Acesso cross-tenant do contador da loja' },
+] as const
 
 export interface UpdateTenantBillingRequest {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
@@ -728,6 +738,8 @@ export const platformApi = {
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/status`, { status }),
   updateTenantBilling: (id: string, req: UpdateTenantBillingRequest) =>
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/billing`, req),
+  updateTenantDomain: (id: string, customDomain: string | null) =>
+    api.patch<TenantSummary>(`/api/platform/tenants/${id}/domain`, { customDomain }),
   getOverview: () =>
     api.get<PlatformOverviewDto>('/api/platform/overview'),
   impersonate: (id: string) =>

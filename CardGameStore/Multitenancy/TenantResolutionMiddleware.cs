@@ -32,39 +32,61 @@ public class TenantResolutionMiddleware
 
     public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext, CatalogDbContext catalog)
     {
-        var slug = ExtractSlug(context.Request.Host.Host, _rootDomain);
+        var host = context.Request.Host.Host;
+        var slug = ExtractSlug(host, _rootDomain);
+
+        TenantLookup? tenant = null;
 
         if (slug is not null)
         {
-            var cacheKey = $"tenant-slug:{slug}";
-            var tenant = await _cache.GetOrCreateAsync(cacheKey, async entry =>
+            tenant = await _cache.GetOrCreateAsync($"tenant-slug:{slug}", async entry =>
             {
                 entry.AbsoluteExpirationRelativeToNow = CacheTtl;
                 return await catalog.Tenants
                     .Where(t => t.Slug == slug)
-                    .Select(t => new { t.Id, t.SchemaName, t.Status, t.EnabledModules })
+                    .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.EnabledModules))
                     .FirstOrDefaultAsync();
             });
-
-            if (tenant is not null)
-            {
-                if (tenant.Status != TenantStatus.Active)
-                {
-                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    await context.Response.WriteAsJsonAsync(new { Message = "Esta loja está temporariamente suspensa." });
-                    return;
-                }
-
-                tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
-                await _next(context);
-                return;
-            }
         }
 
-        // Sem slug reconhecido (ou tenant não encontrado/inativo) — tenant-zero.
+        // Sem subdomínio reconhecido (host não é um slug de <RootDomain>) — tenta
+        // domínio próprio do lojista (BYO domain). Sem automação de TLS: o
+        // lojista aponta o domínio dele pra cá atrás da própria Cloudflare
+        // (modo Flexible), do mesmo jeito que o domínio raiz da plataforma já
+        // funciona — ver comentário em Tenant.CustomDomain.
+        if (tenant is null && slug is null)
+        {
+            var hostLower = host.ToLowerInvariant();
+            tenant = await _cache.GetOrCreateAsync($"tenant-domain:{hostLower}", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = CacheTtl;
+                return await catalog.Tenants
+                    .Where(t => t.CustomDomain == hostLower)
+                    .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.EnabledModules))
+                    .FirstOrDefaultAsync();
+            });
+        }
+
+        if (tenant is not null)
+        {
+            if (tenant.Status != TenantStatus.Active)
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { Message = "Esta loja está temporariamente suspensa." });
+                return;
+            }
+
+            tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+            await _next(context);
+            return;
+        }
+
+        // Nada reconhecido (slug e domínio próprio) — tenant-zero.
         tenantContext.Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
         await _next(context);
     }
+
+    private sealed record TenantLookup(Guid Id, string SchemaName, TenantStatus Status, string[] EnabledModules);
 
     /// <summary>
     /// Extrai o primeiro label do host quando ele é exatamente um subdomínio de

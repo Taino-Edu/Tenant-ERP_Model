@@ -39,6 +39,11 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(t => t.SchemaName)
                   .IsUnique()
                   .HasDatabaseName("ix_tenants_schema_name");
+
+            entity.HasIndex(t => t.CustomDomain)
+                  .IsUnique()
+                  .HasFilter("custom_domain IS NOT NULL")
+                  .HasDatabaseName("ix_tenants_custom_domain");
         });
 
         modelBuilder.Entity<ContadorAccount>(entity =>

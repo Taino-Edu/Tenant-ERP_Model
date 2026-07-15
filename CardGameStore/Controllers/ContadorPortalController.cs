@@ -312,7 +312,7 @@ public class ContadorPortalController : ControllerBase
         if (!aprovado) return null;
 
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId && t.Status == TenantStatus.Active);
-        if (tenant is null || !tenant.EnabledModules.Contains("fiscal")) return null;
+        if (tenant is null || !tenant.EnabledModules.Contains("contador")) return null;
 
         return tenant;
     }

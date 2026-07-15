@@ -16,6 +16,11 @@ public class CreateTenantRequest
 
     [Required, MinLength(6)]
     public string AdminPassword { get; set; } = string.Empty;
+
+    /// <summary>Módulos pagos já habilitados na criação (ex: ["fiscal","estoque"]). Vazio/null
+    /// cai no default do model (["fiscal"]) — ver TenantProvisioningService.KnownModules pra
+    /// lista de nomes aceitos.</summary>
+    public string[]? EnabledModules { get; set; }
 }
 
 public class TenantSummaryDto
@@ -28,6 +33,15 @@ public class TenantSummaryDto
     public string PlanName { get; set; } = string.Empty;
     public string PaymentStatus { get; set; } = string.Empty;
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
+    public string? CustomDomain { get; set; }
+}
+
+/// <summary>Body de PATCH /api/platform/tenants/{id}/domain. CustomDomain null ou
+/// vazio limpa o domínio próprio (volta a valer só o subdomínio do slug).</summary>
+public class UpdateTenantDomainRequest
+{
+    [MaxLength(253)]
+    public string? CustomDomain { get; set; }
 }
 
 public class UpdateTenantStatusRequest

@@ -17,6 +17,7 @@ using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -172,6 +173,7 @@ public class UserController : ControllerBase
     /// <param name="request">Quantidade de pontos a adicionar.</param>
     [HttpPost("{id:guid}/points")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireModule("pontos")]
     [ProducesResponseType(typeof(UserSummaryDto), 200)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]

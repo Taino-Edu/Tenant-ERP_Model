@@ -8,7 +8,7 @@ import {
 } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2, Globe, Check, X } from 'lucide-react'
 import clsx from 'clsx'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
@@ -286,6 +286,72 @@ function UsoTab({ tenantId }: { tenantId: string }) {
   )
 }
 
+function CustomDomainCard({ tenant, onSaved }: { tenant: TenantSummary; onSaved: (t: TenantSummary) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue]     = useState(tenant.customDomain ?? '')
+  const [saving, setSaving]   = useState(false)
+
+  async function salvar(novoValor: string | null) {
+    setSaving(true)
+    try {
+      const { data } = await platformApi.updateTenantDomain(tenant.id, novoValor)
+      onSaved(data)
+      setEditing(false)
+      toast.success(novoValor ? 'Domínio próprio salvo!' : 'Domínio próprio removido.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar domínio'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-2 mb-1">
+        <Globe className="w-4 h-4 text-brand-400" />
+        <h2 className="text-sm font-bold text-white">Domínio próprio (BYO domain)</h2>
+      </div>
+
+      {!editing ? (
+        <div className="flex items-center justify-between gap-3 mt-2">
+          <p className="text-sm text-gray-300">
+            {tenant.customDomain
+              ? <>Ativo em <span className="font-mono text-white">{tenant.customDomain}</span> (além de <span className="font-mono">{tenant.slug}.2esysten.com.br</span>)</>
+              : <>Nenhum — só <span className="font-mono">{tenant.slug}.2esysten.com.br</span> funciona hoje.</>}
+          </p>
+          <button onClick={() => setEditing(true)} className="btn-secondary shrink-0 text-xs px-3 py-1.5">
+            {tenant.customDomain ? 'Editar' : 'Configurar'}
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2 space-y-3">
+          <input
+            className="input" placeholder="minhaloja.com.br" value={value}
+            onChange={e => setValue(e.target.value)}
+          />
+          <p className="text-xs text-gray-400">
+            Não emitimos certificado TLS automaticamente. O lojista precisa colocar o domínio dele
+            atrás da própria conta Cloudflare (grátis), modo <span className="font-medium">Flexible</span>,
+            apontando (A/CNAME) pra <span className="font-mono">179.197.67.64</span> — mesmo esquema que
+            <span className="font-mono"> 2esysten.com.br</span> já usa.
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setEditing(false)} className="btn-secondary text-xs px-3 py-1.5">Cancelar</button>
+            {tenant.customDomain && (
+              <button onClick={() => salvar(null)} disabled={saving} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400 hover:bg-red-500/10">
+                <X className="w-3.5 h-3.5" /> Remover
+              </button>
+            )}
+            <button onClick={() => salvar(value.trim())} disabled={saving || !value.trim()} className="btn-primary text-xs px-3 py-1.5 ml-auto">
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Salvar
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TenantDetailPage() {
   const params = useParams<{ id: string }>()
   const tenantId = params.id
@@ -315,6 +381,8 @@ export default function TenantDetailPage() {
         title={tenant.slug}
         description={`${tenant.planName} · ${tenant.paymentStatus} · ${tenant.status === 'Active' ? 'Ativo' : 'Suspenso'}`}
       />
+
+      <CustomDomainCard tenant={tenant} onSaved={setTenant} />
 
       <div className="card">
         <div className="flex items-center gap-1 border-b border-surface-600 mb-4 overflow-x-auto">

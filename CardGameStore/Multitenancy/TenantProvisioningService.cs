@@ -16,6 +16,12 @@ public class TenantProvisioningService : ITenantProvisioningService
     private static readonly Regex SlugPattern = new(@"^[a-z0-9-]{1,20}$", RegexOptions.Compiled);
     private static readonly string[] ReservedSlugs = ["public", "www", "api", "admin"];
 
+    /// <summary>Catálogo de módulos pagos reconhecidos — mesma lista que o frontend usa
+    /// pra montar os checkboxes de criação/edição de tenant (ver lib/api.ts TENANT_MODULES).
+    /// Módulo desconhecido na criação é rejeitado em vez de gravado silenciosamente (typo
+    /// no request viraria um módulo fantasma, sem RequireModule nenhum lendo aquele nome).</summary>
+    public static readonly string[] KnownModules = ["fiscal", "estoque", "pontos", "contador"];
+
     // Provisionamento (criar schema + rodar migrations + admin inicial) não
     // tinha nenhuma trava de concorrência: dois cadastros de tenant no mesmo
     // instante podiam interferir um no outro. Ação rara/admin-only, então um
@@ -39,12 +45,12 @@ public class TenantProvisioningService : ITenantProvisioningService
         _logger       = logger;
     }
 
-    public async Task<Tenant> ProvisionAsync(string slug, string adminEmail, string adminPassword)
+    public async Task<Tenant> ProvisionAsync(string slug, string adminEmail, string adminPassword, string[]? enabledModules = null)
     {
         await _provisionLock.WaitAsync();
         try
         {
-            return await ProvisionLockedAsync(slug, adminEmail, adminPassword);
+            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules);
         }
         finally
         {
@@ -52,7 +58,7 @@ public class TenantProvisioningService : ITenantProvisioningService
         }
     }
 
-    private async Task<Tenant> ProvisionLockedAsync(string slug, string adminEmail, string adminPassword)
+    private async Task<Tenant> ProvisionLockedAsync(string slug, string adminEmail, string adminPassword, string[]? enabledModules)
     {
         slug = slug.Trim().ToLowerInvariant();
 
@@ -66,6 +72,16 @@ public class TenantProvisioningService : ITenantProvisioningService
         if (slugInUse)
             throw new InvalidOperationException($"Já existe um tenant com o slug '{slug}'.");
 
+        string[]? modulosValidos = null;
+        if (enabledModules is { Length: > 0 })
+        {
+            var desconhecidos = enabledModules.Where(m => !KnownModules.Contains(m, StringComparer.OrdinalIgnoreCase)).ToArray();
+            if (desconhecidos.Length > 0)
+                throw new InvalidOperationException($"Módulo(s) desconhecido(s): {string.Join(", ", desconhecidos)}.");
+
+            modulosValidos = enabledModules.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
         var schemaName = "tenant_" + slug.Replace('-', '_');
 
         var tenant = new Tenant
@@ -74,6 +90,10 @@ public class TenantProvisioningService : ITenantProvisioningService
             SchemaName = schemaName,
             Status     = TenantStatus.Active,
         };
+        // Só sobrescreve o default (["fiscal"]) se o chamador passou módulos —
+        // preserva o comportamento de antes desse parâmetro existir.
+        if (modulosValidos is not null)
+            tenant.EnabledModules = modulosValidos;
 
         _catalog.Tenants.Add(tenant);
         await _catalog.SaveChangesAsync();

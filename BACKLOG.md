@@ -1,5 +1,25 @@
 # Backlog — Tenant-ERP
 
+## Concluído (sessão 2026-07-15, módulos/export/BYO domain)
+- **Seletor de módulos na criação de tenant** — `CreateTenantModal` perguntava
+  nada antes (dava pra escolher só depois, editando); agora pergunta já na
+  criação. Lista cresceu de 2 pra 4 opções.
+- **Fidelidade/Pontos e Portal do Contador viram módulos pagos de verdade** —
+  antes Pontos só tinha o toggle operacional da loja (`SiteConfig.PontosFidelidadeAtivo`,
+  sem gate de billing por trás) e o Contador vivia de carona no gate de
+  "fiscal". Agora os dois têm `RequireModule` próprio; Pontos exige os dois
+  "sim" (módulo da plataforma + toggle da loja).
+- **Exportação self-service de dados** (`/api/export/*`, UI em `/admin/lgpd`) —
+  produtos, clientes e crediário em aberto em CSV. Só exportação por
+  enquanto — reduz o medo de lock-in sem depender da gente pra tirar os dados.
+- **Domínio próprio por tenant (BYO domain)** — campo `CustomDomain` +
+  `TenantResolutionMiddleware` resolve por ele quando não é subdomínio do
+  slug. Sem automação de TLS: o lojista põe o domínio dele atrás da própria
+  Cloudflare (modo Flexible) — nginx já aceita qualquer Host, zero mudança de
+  infra. UI em `/plataforma/tenants/{id}`.
+- 34 testes novos nesta sessão (módulos, CSV, resolução de domínio, endpoint
+  de cadastro) — suíte completa 238/238.
+
 ## Concluído (sessão 2026-07-14, avaliações externas + vulnerabilidades npm)
 - Duas avaliações externas (`avaliacao_completa_softnerd.md` /
   `avaliacao_completa_2esysten.md`, ambas de 14/07, fora do repo) foram
@@ -83,18 +103,24 @@
 
 ## Backlog — pendências das avaliações externas de 14/07
 Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi feito:
-- **Decompor os 5 maiores arquivos do frontend** — financeiro (113 KB),
+- **Decompor os 5 maiores arquivos do frontend** — `financeiro/page.tsx` já
+  feito (113 KB / 2198 linhas → 913 linhas, 6 componentes extraídos pra
+  `components/admin/financeiro/`, sem mudança de comportamento). Faltam:
   comanda (104 KB), venda-avulsa (87 KB), estoque (71 KB), usuarios (61 KB) +
-  landing `app/page.tsx` (48 KB). Esforço estimado: 3-5 dias. Sobrepõe com o
-  "retrabalho de UI/UX" já registrado abaixo.
+  landing `app/page.tsx` (48 KB). Sobrepõe com o "retrabalho de UI/UX" abaixo.
 - **Bug de hidratação React (#425/#418/#423)** — pré-existente, sistêmico no
   admin; suspeita: script inline de FOUC. Parcialmente atacado no commit
   `2364296`, mas as avaliações ainda o listam — reverificar se persiste.
 - **Upgrade Next 16** — elimina as 2 vulns npm restantes; major com breaking
   changes (App Router). Fazer com calma, não junto de outras mudanças.
-- **Testes de integração** — `WebApplicationFactory` + Postgres real;
-  prioridade pro multi-tenancy (2 tenants, verificar isolamento), que é o
-  coração do sistema e não tem teste automatizado.
+- **Testes de integração** — feito pro multi-tenancy: `TenantIsolationTests`
+  usa o `TenantConnectionInterceptor` real (não mock) contra Postgres real,
+  cobrindo isolamento entre schemas, troca de tenant no mesmo escopo,
+  rejeição de nome de schema inválido e a rede de segurança do
+  `current_schema()` — achou e corrigiu de quebra um bug real (`InvalidCastException`
+  em vez de erro claro quando o schema não existe, por causa de cast direto pra
+  `DBNull`). Falta ainda: `WebApplicationFactory` end-to-end pra outros fluxos
+  (não só multi-tenancy).
 - **SSL Cloudflare "Flexible" → "Full (Strict)"** — hoje Cloudflare→VPS trafega
   HTTP puro. Requer cert no nginx do VPS (origin certificate da Cloudflare é o
   caminho barato). Ação de infra, não de código.
@@ -418,21 +444,15 @@ PIS/COFINS CST 99) e igual pra todo tenant:
 - Escopo a decidir: botão "gerar dados de exemplo" no onboarding do tenant, um
   script/seed de dev, ou os dois.
 
-## Backlog — domínio próprio por tenant (BYO domain)
-- Hoje só funciona subdomínio de `2esysten.com.br` (`loja.2esysten.com.br`) —
-  `TenantResolutionMiddleware` só extrai slug de um subdomínio do `RootDomain`
-  configurado, e o certificado SSL (Cloudflare Universal SSL) só cobre
-  `2esysten.com.br`/`*.2esysten.com.br`. Um domínio de terceiro apontando pra nossa
-  VPS hoje cairia em tenant-zero (sem match) e sem certificado válido.
-- Pra suportar domínio próprio do lojista: campo `CustomDomain` no `Tenant`
-  (nullable, único), `TenantResolutionMiddleware` passa a checar também por esse
-  campo além do slug, e — o pedaço difícil — automação de certificado TLS por
-  domínio novo (Let's Encrypt automático via HTTP-01/DNS-01 a cada domínio
-  cadastrado, ou produto tipo Cloudflare for SaaS). Esforço bem maior que o resto
-  do painel de tenants; não fazer de forma apressada.
-- Fluxo esperado: lojista aponta o domínio dele (CNAME/A) pra nossa VPS, cadastra o
-  domínio no painel, sistema verifica propagação de DNS e emite o certificado
-  automaticamente antes de ativar.
+## Backlog — domínio próprio por tenant (BYO domain), parte que falta
+- **Feito** (sessão 2026-07-15): campo `CustomDomain` + roteamento no
+  `TenantResolutionMiddleware`. Ver "Concluído" no topo do arquivo.
+- **Falta**: automação de certificado TLS por domínio (Let's Encrypt via
+  HTTP-01/DNS-01 a cada domínio cadastrado, ou produto tipo Cloudflare for
+  SaaS) — hoje o lojista precisa ter a própria conta Cloudflare na frente do
+  domínio dele (documentado na UI). Esforço bem maior, não fazer apressado;
+  só vale a pena se aparecer lojista real pedindo domínio próprio sem já ter
+  Cloudflare configurado.
 
 ## Concluído (sessão 2026-07-12, motor financeiro mais robusto)
 - Fechamento formal de dia/semana/mês (`FechamentoPeriodo`, snapshot congelado
@@ -449,11 +469,11 @@ PIS/COFINS CST 99) e igual pra todo tenant:
 - Curva ABC e o layout do DRE ficaram de fora de propósito (fora de escopo,
   não pediam mudança).
 
-## Backlog — migração de dados (import/export)
-- Aceitar importação de dados de outros sistemas na hora do tenant migrar pro
-  Tenant-ERP (produtos, clientes, saldo de crediário pelo menos).
-- Permitir exportação/geração de migração pro tenant que quiser sair da plataforma
-  — reduz o medo de lock-in na hora de fechar venda com lojista novo.
-- Escopo a decidir: formato de import/export (CSV/Excel padronizado vs. adaptado por
-  sistema de origem conhecido), se é self-service no painel ou processo assistido
-  por nós no onboarding/offboarding.
+## Backlog — migração de dados (import), parte que falta
+- **Feito** (sessão 2026-07-15): exportação self-service — produtos, clientes
+  e crediário em aberto, CSV, `/admin/lgpd`. Ver "Concluído" no topo do arquivo.
+- **Falta**: importação — aceitar dados de outros sistemas na hora do tenant
+  migrar pro Tenant-ERP. Escopo maior que o export porque cada sistema de
+  origem tem formato diferente; decidir se é CSV padronizado genérico (lojista
+  adapta a planilha dele) ou adaptadores pra 1-2 concorrentes conhecidos, e se
+  é self-service ou processo assistido por nós no onboarding.

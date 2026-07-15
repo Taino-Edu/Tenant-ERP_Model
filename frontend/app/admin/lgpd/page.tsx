@@ -5,12 +5,70 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { api, AuditLogDto, AuditLogPagedResponse } from '@/lib/api'
-import { Shield, FileText, Clock, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, Download, FileDown, Eye } from 'lucide-react'
+import { api, AuditLogDto, AuditLogPagedResponse, getErrorMessage } from '@/lib/api'
+import { Shield, FileText, Clock, CheckCircle, XCircle, AlertTriangle, ChevronLeft, ChevronRight, Paperclip, Download, FileDown, Eye, Loader2, Package, Users, Wallet } from 'lucide-react'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
+
+const EXPORTS = [
+  { key: 'produtos',  label: 'Produtos',           desc: 'Catálogo completo (ativos e inativos)', icon: Package },
+  { key: 'clientes',  label: 'Clientes',            desc: 'Nome, contato, saldo de pontos/cashback', icon: Users },
+  { key: 'crediario', label: 'Crediário em aberto', desc: 'Saldo devedor por cliente',              icon: Wallet },
+] as const
+
+function ExportarDadosSection() {
+  const [baixando, setBaixando] = useState<string | null>(null)
+
+  async function baixar(key: string) {
+    setBaixando(key)
+    try {
+      const { data } = await api.get(`/api/export/${key}`, { responseType: 'blob' })
+      const url = URL.createObjectURL(data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${key}-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao exportar dados'))
+    } finally {
+      setBaixando(null)
+    }
+  }
+
+  return (
+    <div className="bg-surface-800 rounded-2xl border border-surface-500 p-4 mb-6">
+      <div className="flex items-center gap-2 mb-1">
+        <FileDown className="w-4 h-4 text-brand-400" />
+        <h2 className="text-sm font-bold text-white">Portabilidade de dados</h2>
+      </div>
+      <p className="text-xs text-gray-400 mb-3">
+        Baixe seus dados em CSV a qualquer momento — sem depender de pedir pra gente. Reduz o risco de ficar preso à plataforma.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {EXPORTS.map(({ key, label, desc, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => baixar(key)}
+            disabled={baixando !== null}
+            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors text-left disabled:opacity-50"
+          >
+            {baixando === key
+              ? <Loader2 className="w-4 h-4 text-brand-400 animate-spin shrink-0" />
+              : <Icon className="w-4 h-4 text-brand-400 shrink-0" />}
+            <span className="min-w-0">
+              <span className="block text-sm text-white">{label}</span>
+              <span className="block text-xs text-gray-500 truncate">{desc}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -338,6 +396,8 @@ export default function LgpdAdminPage() {
           <p className="text-xs text-gray-400">Gestão de solicitações e trilha de auditoria</p>
         </div>
       </div>
+
+      <ExportarDadosSection />
 
       {/* Abas */}
       <div className="flex gap-1 bg-surface-700 rounded-xl p-1 w-fit mb-6">

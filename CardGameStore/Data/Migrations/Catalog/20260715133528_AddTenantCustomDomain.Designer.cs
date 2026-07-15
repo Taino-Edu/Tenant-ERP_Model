@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations.Catalog
 {
     [DbContext(typeof(CatalogDbContext))]
-    partial class CatalogDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715133528_AddTenantCustomDomain")]
+    partial class AddTenantCustomDomain
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -248,59 +251,6 @@ namespace CardGameStore.Data.Migrations.Catalog
                         .HasDatabaseName("ix_leads_status");
 
                     b.ToTable("leads");
-                });
-
-            modelBuilder.Entity("CardGameStore.Multitenancy.LoginRedirectTicket", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("AccountId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("account_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
-
-                    b.Property<DateTime?>("RedeemedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("redeemed_at");
-
-                    b.Property<string>("TargetKind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("target_kind");
-
-                    b.Property<Guid?>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.Property<string>("TenantSlug")
-                        .HasMaxLength(63)
-                        .HasColumnType("character varying(63)")
-                        .HasColumnName("tenant_slug");
-
-                    b.Property<string>("Ticket")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("ticket");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Ticket")
-                        .IsUnique()
-                        .HasDatabaseName("ix_login_redirect_tickets_ticket");
-
-                    b.ToTable("login_redirect_tickets");
                 });
 
             modelBuilder.Entity("CardGameStore.Multitenancy.PlatformImpersonationTicket", b =>
