@@ -103,11 +103,12 @@
 
 ## Backlog — pendências das avaliações externas de 14/07
 Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi feito:
-- **Decompor os 5 maiores arquivos do frontend** — `financeiro/page.tsx` já
-  feito (113 KB / 2198 linhas → 913 linhas, 6 componentes extraídos pra
-  `components/admin/financeiro/`, sem mudança de comportamento). Faltam:
-  comanda (104 KB), venda-avulsa (87 KB), estoque (71 KB), usuarios (61 KB) +
-  landing `app/page.tsx` (48 KB). Sobrepõe com o "retrabalho de UI/UX" abaixo.
+- **Decompor os 5 maiores arquivos do frontend** — `financeiro/page.tsx`
+  (113 KB / 2198 → 913 linhas, 6 componentes) e `comanda/page.tsx`
+  (2258 → 699 linhas, 8 componentes + shared.ts em
+  `components/admin/comanda/`) já feitos, sem mudança de comportamento.
+  Faltam: venda-avulsa (87 KB), estoque (71 KB), usuarios (61 KB) + landing
+  `app/page.tsx` (48 KB). Sobrepõe com o "retrabalho de UI/UX" abaixo.
 - **Bug de hidratação React (#425/#418/#423)** — pré-existente, sistêmico no
   admin; suspeita: script inline de FOUC. Parcialmente atacado no commit
   `2364296`, mas as avaliações ainda o listam — reverificar se persiste.
