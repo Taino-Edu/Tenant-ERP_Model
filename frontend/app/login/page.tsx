@@ -1,11 +1,11 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { authApi } from '@/lib/api'
-import { saveAuth } from '@/lib/auth'
+import { authApi, LocateAccountMatch } from '@/lib/api'
+import { saveAuth, buildLoginRedirectUrl } from '@/lib/auth'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast, { Toaster } from 'react-hot-toast'
-import { KeyRound, Mail, Loader2, Eye, EyeOff } from 'lucide-react'
+import { KeyRound, Mail, Loader2, Eye, EyeOff, SearchCheck, Building2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function LoginPage() {
@@ -16,9 +16,16 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [showPass, setShowPass] = useState(false)
 
+  // "Não achei minha conta aqui, procurar em outro lugar" — só aparece depois
+  // de um login falhar de verdade (senha errada), nunca antes.
+  const [loginFailed, setLoginFailed] = useState(false)
+  const [locating, setLocating]       = useState(false)
+  const [matches, setMatches]         = useState<LocateAccountMatch[] | null>(null)
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    setMatches(null)
     try {
       const { data } = await authApi.login(email, password)
       saveAuth(data)
@@ -30,14 +37,41 @@ export default function LoginPage() {
           : '/admin/comanda'
       )
     } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status
-      if (status === 429) {
+      const response = (err as { response?: { status?: number; data?: { errorCode?: string; message?: string } } })?.response
+      if (response?.status === 429) {
         toast.error('Muitas tentativas. Aguarde 1 minuto e tente novamente.')
+      } else if (response?.data?.errorCode === 'wrong_domain') {
+        // Senha certa, domínio errado (conta de Dono da Plataforma/Contador
+        // tentando logar no subdomínio de uma loja) — mensagem específica em
+        // vez do genérico "e-mail ou senha inválidos", já que a senha estava
+        // certa e a pessoa só precisa ir pro domínio principal.
+        toast.error(response.data.message ?? 'Essa conta precisa ser acessada por outro domínio.', { duration: 6000 })
       } else {
         toast.error('E-mail ou senha inválidos.')
+        setLoginFailed(true)
       }
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleLocateAccount() {
+    setLocating(true)
+    try {
+      const { data } = await authApi.locateAccount(email, password)
+      if (data.length === 1) {
+        toast.success(`Encontramos sua conta em ${data[0].label} — entrando...`)
+        window.location.href = buildLoginRedirectUrl(data[0])
+      } else {
+        setMatches(data)
+      }
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      toast.error(status === 429
+        ? 'Muitas tentativas. Aguarde um pouco e tente de novo.'
+        : 'Não encontramos essa conta em nenhum lugar.')
+    } finally {
+      setLocating(false)
     }
   }
 
@@ -105,6 +139,36 @@ export default function LoginPage() {
               Esqueci minha senha
             </Link>
           </div>
+
+          {loginFailed && matches === null && (
+            <button
+              type="button"
+              onClick={handleLocateAccount}
+              disabled={locating}
+              className="w-full flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-white
+                         border border-surface-600 rounded-xl py-2.5 transition-colors disabled:opacity-50"
+            >
+              {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <SearchCheck className="w-4 h-4" />}
+              {locating ? 'Procurando...' : 'Não é essa conta? Procurar em outro lugar'}
+            </button>
+          )}
+
+          {matches !== null && matches.length > 0 && (
+            <div className="border border-surface-600 rounded-xl p-3 space-y-2">
+              <p className="text-xs text-gray-400">Encontramos essa conta em mais de um lugar:</p>
+              {matches.map(m => (
+                <a
+                  key={m.ticket}
+                  href={buildLoginRedirectUrl(m)}
+                  className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-800 hover:bg-surface-700
+                             text-sm text-white transition-colors"
+                >
+                  <Building2 className="w-4 h-4 text-brand-400 shrink-0" />
+                  {m.label}
+                </a>
+              ))}
+            </div>
+          )}
         </form>
 
         <div className="text-center mt-6 space-y-1">

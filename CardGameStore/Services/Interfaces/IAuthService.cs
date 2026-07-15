@@ -59,4 +59,11 @@ public interface IAuthService
     /// requisição (o AppDbContext injetado aqui já está no schema certo).
     /// </summary>
     Task<AuthResponse> ImpersonateAsync(Guid platformOwnerId, string platformOwnerName, string? platformOwnerEmail);
+
+    /// <summary>Completa um login de verdade (sessão normal, com refresh token) depois
+    /// que AccountLocatorService já confirmou a senha e o redeem do LoginRedirectTicket
+    /// já pousou no domínio certo — _db/_catalog aqui já estão no schema certo (tenant
+    /// resolvido pelo Host desta própria requisição). Diferente de ImpersonateAsync:
+    /// aqui é a própria conta logando, não alguém disfarçado de outra pessoa.</summary>
+    Task<AuthResponse> CompleteLoginRedirectAsync(string targetKind, Guid accountId);
 }

@@ -83,7 +83,8 @@ public class AuthServiceTests
             logger ?? NullLogger<AuthService>.Instance,
             comandaService,
             new Mock<IEmailService>().Object,
-            tenantContext.Object);
+            tenantContext.Object,
+            new Mock<IServiceScopeFactory>().Object);
     }
 
     // ── Login ─────────────────────────────────────────────────────────────────

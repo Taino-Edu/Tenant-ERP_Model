@@ -89,6 +89,12 @@ export interface AuthResponse {
   permissions?: string[]
 }
 
+/// Um acerto de senha encontrado em outra loja/Contador/Dono da Plataforma —
+/// ver POST /api/auth/locate-account. tenantSlug só vem quando targetKind é "Tenant".
+export interface LocateAccountMatch {
+  label: string; targetKind: 'Tenant' | 'PlatformOwner' | 'Contador'; tenantSlug: string | null; ticket: string
+}
+
 export interface ComandaDto {
   id: string; userName: string; userId: string
   tableIdentifier: string | null; status: string
@@ -261,6 +267,8 @@ export const authApi = {
     api.post('/api/auth/reset-password', { token, newPassword }),
   registerContador: (name: string, email: string, password: string, tenantSlug: string) =>
     api.post<AuthResponse>('/api/auth/contador/register', { name, email, password, tenantSlug }),
+  locateAccount: (email: string, password: string) =>
+    api.post<LocateAccountMatch[]>('/api/auth/locate-account', { email, password }),
   uploadProfileImage: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
