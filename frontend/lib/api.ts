@@ -806,6 +806,14 @@ export interface PlatformAuditLogDto extends AuditLogDto {
   tenantSlug: string
 }
 
+export interface ImportRowErrorDto {
+  linha: number; motivo: string
+}
+
+export interface ImportResultDto {
+  totalLinhas: number; importados: number; erros: ImportRowErrorDto[]
+}
+
 // ── Leads (captação pública, CTA da landing) ──────────────────────────────────
 
 export type LeadStatus = 'Novo' | 'Contatado' | 'Convertido' | 'Perdido'
