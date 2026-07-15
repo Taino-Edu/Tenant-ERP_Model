@@ -13,13 +13,27 @@ export default function VLibrasController() {
       el.id = 'vlibras-ctrl'
       document.head.appendChild(el)
     }
-    // Quando desativado oculta todo o widget. Quando ativado, deixa o VLibras
-    // controlar seu próprio layout (sobrescrever posição quebra a inicialização).
-    // No mobile, o plugin oficial não é usável (atrapalha mais do que ajuda) —
-    // fica sempre oculto ali, independente da preferência.
+    // Oculta no mobile (janelas menores que 768px) porque o plugin
+    // oficial não é usável e atrapalha a tela inteira.
     const mobileHide = '@media (max-width: 768px) { [vw] { display: none !important; } }'
-    el.textContent = (prefs.vlibras.enabled ? '' : '[vw]{display:none!important;}') + mobileHide
-  }, [prefs.vlibras.enabled])
+    
+    let css = ''
+    if (!prefs.vlibras.enabled) {
+      css = '[vw] { display: none !important; }'
+    } else {
+      // Força a posição baseada na configuração (o padrão oficial do plugin é centro-direita)
+      if (prefs.vlibras.corner === 'bottom-left') {
+        css = '[vw] { left: 0 !important; right: auto !important; } [vw] .vw-plugin-wrapper { left: 0 !important; right: auto !important; }'
+      } else if (prefs.vlibras.corner === 'top-right') {
+        css = '[vw] { top: 10vh !important; bottom: auto !important; }'
+      } else if (prefs.vlibras.corner === 'top-left') {
+        css = '[vw] { left: 0 !important; right: auto !important; top: 10vh !important; bottom: auto !important; } [vw] .vw-plugin-wrapper { left: 0 !important; right: auto !important; }'
+      }
+      // 'bottom-right' não precisa de CSS extra pois é a âncora nativa dele.
+    }
+    
+    el.textContent = css + ' ' + mobileHide
+  }, [prefs.vlibras.enabled, prefs.vlibras.corner])
 
   return null
 }
