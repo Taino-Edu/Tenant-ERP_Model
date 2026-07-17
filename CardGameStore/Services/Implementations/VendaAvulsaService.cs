@@ -77,8 +77,17 @@ public class VendaAvulsaService : IVendaAvulsaService
         }
 
         // ── 2. Decrementar estoque no PostgreSQL (única transação relacional) ────
-        var vendaItems = new List<VendaAvulsaItem>();
-        var total      = 0;
+        var strategy = _db.Database.CreateExecutionStrategy();
+        VendaAvulsa venda = null!;
+        NotaFiscalEmitida? nota = null;
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            _db.ChangeTracker.Clear();
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+
+            var vendaItems = new List<VendaAvulsaItem>();
+            var total      = 0;
 
         foreach (var reqItem in request.Items)
         {
@@ -160,7 +169,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             clientNameResolved = usr?.Name;
         }
 
-        var venda = new VendaAvulsa
+        venda = new VendaAvulsa
         {
             Items                      = vendaItems,
             TotalInCents               = finalTotal,
@@ -179,29 +188,6 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         _db.VendasAvulsas.Add(venda);
         await _db.SaveChangesAsync();
-
-        // Emite a NFC-e referente a esta venda avulsa — só quando o admin escolheu
-        // explicitamente emitir no fechamento (a loja não quer nota emitida sem antes
-        // perguntar). Aguarda o resultado (em vez de fire-and-forget) pra devolver o status
-        // pro caixa na hora e permitir abrir o cupom automaticamente quando autorizar — a
-        // chamada nunca lança exceção (garantia do NfceEmissionService). Se não marcou,
-        // nenhuma NotaFiscalEmitida é criada; a emissão pode ser feita depois manualmente
-        // pelo histórico.
-        // Defesa em profundidade: se a loja não contratou o módulo fiscal, ignora a
-        // flag silenciosamente mesmo que um request forjado tente forçar EmitirNotaFiscal=true.
-        NotaFiscalEmitida? nota = null;
-        if (request.EmitirNotaFiscal && _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
-        {
-            using var scope = _scopeFactory.CreateScope();
-            // O novo escopo tem seu próprio ITenantContext (default = tenant-zero) —
-            // sem propagar o tenant resolvido pela requisição, o AppDbContext deste
-            // escopo conecta no schema errado (nunca acha a venda que acabou de
-            // gravar, ou grava a nota no schema de outro tenant).
-            scope.ServiceProvider.GetRequiredService<ITenantContext>()
-                .Set(_tenantContext.TenantId, _tenantContext.SchemaName, _tenantContext.EnabledModules);
-            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
-            nota = await emissao.EmitirParaVendaAvulsaAsync(venda.Id);
-        }
 
         var paymentSummary = secondPm != null
             ? $"{request.PaymentMethod} + {secondPm} (R$ {secondAmt / 100m:N2})"
@@ -387,6 +373,18 @@ public class VendaAvulsaService : IVendaAvulsaService
                     "Usuário {UserId} ganhou {Pontos} pontos em venda avulsa {VendaId}.",
                     userId, pontosGanhos, venda.Id);
             }
+        }
+
+        await transaction.CommitAsync();
+        });
+
+        if (request.EmitirNotaFiscal && _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+        {
+            using var scope = _scopeFactory.CreateScope();
+            scope.ServiceProvider.GetRequiredService<ITenantContext>()
+                .Set(_tenantContext.TenantId, _tenantContext.SchemaName, _tenantContext.EnabledModules);
+            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+            nota = await emissao.EmitirParaVendaAvulsaAsync(venda.Id);
         }
 
         var dto = MapToDto(venda);

@@ -219,6 +219,10 @@ public class UserService : IUserService
 
         var role = request.Role == UserRole.Operator ? UserRole.Operator : UserRole.Customer;
 
+        var adminUser = await _db.Users.FindAsync(adminId);
+        if (adminUser?.Role == UserRole.Operator && role == UserRole.Operator)
+            throw new UnauthorizedAccessException("Operadores não podem criar outros operadores.");
+
         if (role == UserRole.Operator)
         {
             if (string.IsNullOrWhiteSpace(request.Email))
@@ -256,6 +260,10 @@ public class UserService : IUserService
     {
         var user = await _db.Users.FindAsync(userId)
             ?? throw new InvalidOperationException("Usuário não encontrado.");
+
+        var adminUser = await _db.Users.FindAsync(adminId);
+        if (adminUser?.Role == UserRole.Operator && user.Role == UserRole.Admin)
+            throw new UnauthorizedAccessException("Operadores não podem redefinir a senha de administradores.");
 
         user.PasswordHash           = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, workFactor: 12);
         user.RefreshToken           = null;

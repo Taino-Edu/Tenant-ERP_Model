@@ -444,6 +444,9 @@ public class ComandaService : IComandaService
             .FirstOrDefaultAsync(c => c.Id == comandaId)
             ?? throw new InvalidOperationException($"Comanda {comandaId} não encontrada.");
 
+        if (comanda.Status == ComandaStatus.Fechada || comanda.Status == ComandaStatus.Cancelada)
+            throw new InvalidOperationException("Comanda já está fechada ou cancelada.");
+
         // Pontos exige dois "sim": o módulo pago habilitado pra este tenant
         // (EnabledModules, decisão da plataforma) E o toggle operacional da loja
         // (SiteConfig.PontosFidelidadeAtivo, decisão do próprio admin do tenant —
