@@ -615,11 +615,6 @@ export interface ClienteHistoricoCrediario {
   dataAbertura: string; dataVencimento: string; dataPagamento: string | null
   observacao: string | null
 }
-export interface ClienteHistoricoCampeonato {
-  championshipId: string; championshipName: string; game: string
-  status: string; startDate: string; playerNumber: number
-  deckName: string | null; placement: number | null; registeredAt: string
-}
 export interface ClienteHistoricoDto {
   userId: string; userName: string
   totalVisitas: number; totalGasto: number
@@ -627,7 +622,6 @@ export interface ClienteHistoricoDto {
   comandas: ClienteHistoricoComanda[]
   vendasAvulsas: ClienteHistoricoVendaAvulsa[]
   crediarios: ClienteHistoricoCrediario[]
-  campeonatos: ClienteHistoricoCampeonato[]
 }
 
 export const userApi = {

@@ -91,9 +91,9 @@ const SECOES = [
       { t: 'Cadastrar cliente', d: 'Clique em "Novo Cliente". Nome é obrigatório; CPF, WhatsApp e e-mail são opcionais, mas ajudam na identificação.' },
       { t: 'Pontos de Fidelidade', d: 'A cada R$1 gasto, o cliente ganha 1 ponto. Os pontos expiram em 30 dias após a última compra e podem ser usados como desconto.' },
       { t: 'Pontos não acumulam com cashback', d: 'Se qualquer parte do pagamento usar cashback, o cliente não acumula pontos naquela venda.' },
-      { t: 'Adicionar pontos manualmente', d: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Campeonato de Pokémon").' },
+      { t: 'Adicionar pontos manualmente', d: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Bônus de aniversário").' },
       { t: 'Cashback (Saldo)', d: 'Diferente de pontos — é saldo em reais que o cliente pode usar como pagamento. Crédite ou débite manualmente pelo painel.' },
-      { t: 'Histórico completo', d: 'Clique em "Ver Histórico" no painel do cliente para ver todas as comandas, vendas no caixa, crediários e campeonatos em um único lugar.' },
+      { t: 'Histórico completo', d: 'Clique em "Ver Histórico" no painel do cliente para ver todas as comandas, vendas no caixa e crediários em um único lugar.' },
     ],
     dicas: [
       'Pontos e cashback são coisas diferentes: pontos têm validade de 30 dias; cashback é saldo em reais sem validade.',
@@ -120,24 +120,6 @@ const SECOES = [
   },
   {
     num: '07',
-    titulo: 'Campeonatos',
-    cor: '#FBBF24',
-    itens: [
-      { t: 'Criar campeonato', d: 'Vá em Campeonatos → Novo. Informe nome, jogo (Pokémon, Magic, etc.), data, taxa de inscrição e número máximo de participantes.' },
-      { t: 'Status do campeonato', d: '"Planejado" → "Inscrições Abertas" → "Em Andamento" → "Finalizado". Mude o status conforme o evento avança.' },
-      { t: 'Inscrever participantes', d: 'No painel do campeonato, adicione participantes manualmente ou deixe que eles se inscrevam pela landing page pública.' },
-      { t: 'Pré-inscrições da landing page', d: 'Clientes sem conta podem se pré-inscrever pelo link público. Você aprova ou rejeita as pré-inscrições no painel.' },
-      { t: 'Pix na inscrição (opcional)', d: 'O jogador pode pagar a taxa de inscrição na hora via Pix — botão "Pagar inscrição via Pix" em Meus Campeonatos, com QR Code/copia-e-cola e confirmação automática. A vaga já vale mesmo sem pagar, então pagamento no balcão continua funcionando normalmente.' },
-      { t: 'Acompanhar pagamentos', d: 'Na lista de participantes, veja quem já pagou (Pix ou balcão) e marque manualmente o pagamento de quem pagar no balcão.' },
-      { t: 'Definir colocações', d: 'Após o campeonato, clique no participante e informe o lugar (1º, 2º, 3º...). O sistema monta o pódio automaticamente.' },
-    ],
-    dicas: [
-      'A taxa de inscrição paga no balcão é registrada manualmente — só o Pix confirma sozinho.',
-      'Use "Cancelado" para campeonatos que não aconteceram para manter o histórico limpo.',
-    ],
-  },
-  {
-    num: '07b',
     titulo: 'Grade de Produtos (Tamanhos & Cores)',
     cor: '#34D399',
     itens: [
@@ -154,7 +136,7 @@ const SECOES = [
     ],
   },
   {
-    num: '07c',
+    num: '07b',
     titulo: 'Reservas de Produtos (Site)',
     cor: '#60A5FA',
     itens: [
@@ -171,7 +153,7 @@ const SECOES = [
     ],
   },
   {
-    num: '07d',
+    num: '07c',
     titulo: 'Mercado de Cartas (Vitrine)',
     cor: '#F472B6',
     itens: [
@@ -188,7 +170,7 @@ const SECOES = [
     ],
   },
   {
-    num: '07e',
+    num: '07d',
     titulo: 'Fila de Espera (Pré-venda)',
     cor: '#38BDF8',
     itens: [
@@ -221,7 +203,7 @@ const SECOES = [
     itens: [
       { t: 'O que são perfis', d: 'Perfis permitem criar usuários operadores com acesso restrito. Você define quais módulos cada perfil pode acessar.' },
       { t: 'Criar um perfil', d: 'Vá em Administração → Perfis de Acesso → Novo Perfil. Dê um nome (ex: "Caixa") e marque as permissões desejadas.' },
-      { t: 'Permissões disponíveis', d: 'Dashboard, PDV, Comandas, Estoque, Categorias, Clientes, Crediário, Campeonatos, Financeiro, Relatórios, Anúncios, Cartas TCG, QR Codes e LGPD.' },
+      { t: 'Permissões disponíveis', d: 'Dashboard, PDV, Comandas, Estoque, Categorias, Clientes, Crediário, Financeiro, Relatórios, Anúncios, QR Codes e LGPD.' },
       { t: 'Atribuir perfil a operador', d: 'Em Clientes → aba Operadores, crie ou edite um operador e selecione o perfil. O operador verá apenas os módulos do perfil ao fazer login.' },
       { t: 'Alterar permissões', d: 'Edite o perfil a qualquer momento. As mudanças valem na próxima vez que o operador fizer login.' },
       { t: 'Excluir perfil', d: 'Só é possível excluir um perfil se nenhum operador estiver usando. Reatribua os operadores antes.' },
@@ -248,7 +230,7 @@ const SECOES = [
     titulo: 'Atalhos de Teclado',
     cor: '#F472B6',
     itens: [
-      { t: 'Navegar pelo teclado', d: 'Quando nenhum campo de texto está focado, pressione uma tecla para ir direto à página: D → Dashboard, P → PDV (Frente de Caixa), E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios, A → Campeonatos.' },
+      { t: 'Navegar pelo teclado', d: 'Quando nenhum campo de texto está focado, pressione uma tecla para ir direto à página: D → Comandas, G → Dashboard, P → PDV (Frente de Caixa), E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios.' },
       { t: 'Ver todos os atalhos', d: 'Pressione ? (shift + /) em qualquer tela para abrir o painel de atalhos com a lista completa. Pressione ? novamente ou Esc para fechar.' },
       { t: 'Fechar com Esc', d: 'A tecla Esc fecha modais, painéis flutuantes e o painel de atalhos. Funciona em qualquer contexto.' },
       { t: 'Badges no menu lateral', d: 'Ao passar o mouse sobre um item do menu no desktop, aparece a tecla de atalho correspondente em destaque ao lado do nome.' },

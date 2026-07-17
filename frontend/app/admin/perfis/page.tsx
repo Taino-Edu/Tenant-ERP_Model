@@ -12,11 +12,9 @@ const PERMISSOES_LABELS: Record<string, string> = {
   categorias:  'Categorias',
   usuarios:    'Clientes & Usuários',
   crediario:   'Crediário',
-  campeonatos: 'Campeonatos',
   financeiro:  'Relatório Financeiro',
   relatorios:  'Relatórios Gerais',
   anuncios:    'Anúncios',
-  cartas:      'Cartas TCG',
   qrcodes:     'QR Codes',
   lgpd:        'LGPD & Auditoria',
 }

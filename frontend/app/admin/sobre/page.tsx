@@ -5,7 +5,7 @@ import {
   Info, Tag, Calendar, CheckCircle, Wrench, Zap,
   BookOpen, ChevronDown, ChevronUp, FileDown, Rocket,
   LayoutDashboard, ShoppingBag, ShoppingCart, Package,
-  Users, CreditCard, Trophy, BarChart2, Layers, Megaphone, Settings, Keyboard,
+  Users, CreditCard, BarChart2, Layers, Megaphone, Settings, Keyboard,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
@@ -131,7 +131,7 @@ const MANUAL: ManualSection[] = [
       { title: 'Comandas em destaque', desc: 'Ao abrir o dashboard, as comandas ativas aparecem imediatamente — sem precisar rolar a página. Os 4 KPIs no topo (comandas ativas, receita do dia, valor em aberto, estoque baixo) ficam sempre visíveis.' },
       { title: 'Tab Ativas', desc: 'Lista em tempo real de todas as comandas abertas. Use a busca para filtrar por cliente.' },
       { title: 'Tab Histórico', desc: 'Comandas fechadas e canceladas do dia. Inclui filtro por nome do cliente e por intervalo de horário (de HH:mm até HH:mm), além do breakdown por forma de pagamento calculado sobre os registros filtrados.' },
-      { title: 'Tab Análises', desc: 'Todos os painéis financeiros: detalhe do dia, gráfico de receita 7 dias, previsão do mês, patrimônio em estoque, top clientes, LGPD e pré-inscrições de campeonatos. Cada painel é colapsável individualmente.' },
+      { title: 'Tab Análises', desc: 'Todos os painéis financeiros: detalhe do dia, gráfico de receita 7 dias, previsão do mês, patrimônio em estoque, top clientes e LGPD. Cada painel é colapsável individualmente.' },
       { title: 'Atualização automática', desc: 'Intervalo configurável nas Preferências (15s, 30s, 1min ou manual). Também conecta via SignalR para receber eventos em tempo real.' },
     ],
     tips: [
@@ -198,9 +198,9 @@ const MANUAL: ManualSection[] = [
     steps: [
       { title: 'Cadastrar cliente', desc: 'Clique em "Novo Cliente". Nome é obrigatório; CPF, WhatsApp e e-mail são opcionais mas ajudam na identificação.' },
       { title: 'Pontos de Fidelidade', desc: 'A cada R$1 gasto, o cliente ganha 1 ponto. Os pontos expiram em 30 dias após a última compra. Use para dar desconto em comandas e vendas avulsas.' },
-      { title: 'Adicionar pontos manualmente', desc: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Campeonato de Pokémon").' },
+      { title: 'Adicionar pontos manualmente', desc: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Bônus de aniversário").' },
       { title: 'Cashback (Saldo)', desc: 'Diferente de pontos — é saldo em reais que o cliente pode usar como pagamento. Crédite ou débite manualmente pelo painel.' },
-      { title: 'Histórico completo', desc: 'Clique em "Ver Histórico" no painel do cliente para ver todas as comandas, vendas no caixa, crediários e campeonatos do cliente em um único lugar.' },
+      { title: 'Histórico completo', desc: 'Clique em "Ver Histórico" no painel do cliente para ver todas as comandas, vendas no caixa e crediários do cliente em um único lugar.' },
       { title: 'Clientes inativos', desc: 'A aba "Inativos" mostra clientes que não aparecem há mais de 30 dias — útil para campanhas de reativação.' },
     ],
     tips: [
@@ -226,23 +226,6 @@ const MANUAL: ManualSection[] = [
     tips: [
       'O vencimento é renovado automaticamente sempre que o cliente faz um novo pagamento parcial.',
       'Crediários criados via venda avulsa e via comanda aparecem juntos no mesmo painel.',
-    ],
-  },
-  {
-    icon: <Trophy className="w-4 h-4" />,
-    title: 'Campeonatos',
-    color: 'text-yellow-400',
-    steps: [
-      { title: 'Criar campeonato', desc: 'Vá em Campeonatos → Novo. Informe nome, jogo (Pokémon, Magic, etc.), data, taxa de inscrição e número máximo de participantes.' },
-      { title: 'Status do campeonato', desc: '"Planejado" → "Inscrições Abertas" → "Em Andamento" → "Finalizado". Mude o status conforme o evento avança.' },
-      { title: 'Inscrever participantes', desc: 'No painel do campeonato, adicione participantes manualmente ou deixe que eles se inscrevam pela landing page pública.' },
-      { title: 'Pré-inscrições da landing page', desc: 'Clientes sem conta podem se pré-inscrever pelo link público do campeonato. Você aprova ou rejeita as pré-inscrições no painel.' },
-      { title: 'Definir colocações', desc: 'Após o campeonato, clique no participante e informe o lugar (1º, 2º, 3º...). O sistema monta o pódio automaticamente.' },
-      { title: 'Pódio público', desc: 'O resultado final aparece na página pública do campeonato para todos verem.' },
-    ],
-    tips: [
-      'A taxa de inscrição é registrada manualmente — o sistema não cobra automaticamente.',
-      'Use "Cancelado" para campeonatos que não aconteceram para manter o histórico limpo.',
     ],
   },
   {
@@ -302,7 +285,7 @@ const MANUAL: ManualSection[] = [
     title: 'Atalhos de Teclado',
     color: 'text-pink-400',
     steps: [
-      { title: 'Navegar pelo teclado', desc: 'Pressione uma tecla para ir direto à página (sem clicar no menu): D → Dashboard, P → PDV, E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios, A → Campeonatos. Só funciona quando nenhum campo de texto está focado.' },
+      { title: 'Navegar pelo teclado', desc: 'Pressione uma tecla para ir direto à página (sem clicar no menu): D → Comandas, G → Dashboard, P → PDV, E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios. Só funciona quando nenhum campo de texto está focado.' },
       { title: 'Ver todos os atalhos', desc: 'Pressione ? (Shift + /) em qualquer tela para abrir o painel de ajuda com a lista completa de atalhos. Pressione ? novamente ou Esc para fechar.' },
       { title: 'Fechar com Esc', desc: 'A tecla Esc fecha modais, painéis flutuantes e o painel de atalhos em qualquer contexto.' },
       { title: 'Badges no menu lateral', desc: 'No desktop, ao passar o mouse sobre um item do menu, a tecla de atalho correspondente aparece discretamente ao lado do nome.' },
