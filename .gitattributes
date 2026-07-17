@@ -1,0 +1,3 @@
+# Scripts de shell SEMPRE em LF — CRLF quebra o interpretador no Linux da VPS
+# (bash: bad interpreter). Independe do core.autocrlf de cada máquina.
+*.sh text eol=lf

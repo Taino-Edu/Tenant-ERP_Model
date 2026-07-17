@@ -31,7 +31,7 @@ step() { echo -e "\n${YELLOW}${BOLD}[$1/$TOTAL] $2${NC}"; }
 ok()   { echo -e "  ${GREEN}✅ $1${NC}"; }
 warn() { echo -e "  ${RED}⚠️  $1${NC}"; }
 
-TOTAL=7
+TOTAL=8
 banner
 
 # =============================================================================
@@ -182,6 +182,29 @@ for i in {1..30}; do
     echo -n "."
     sleep 3
 done
+
+# =============================================================================
+# 8. Agendar backup diário (cron) + backup inicial
+# =============================================================================
+step 8 "Agendando backup diário do banco..."
+CRON_LINE="0 3 * * * cd $APP_DIR && bash deploy/backup.sh >> /var/log/tenant-erp-backup.log 2>&1"
+if crontab -l 2>/dev/null | grep -Fq "deploy/backup.sh"; then
+    ok "Cron de backup já estava configurado"
+else
+    # Preserva o crontab existente e adiciona a linha do backup
+    (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
+    ok "Backup diário agendado (03:00) → /var/log/tenant-erp-backup.log"
+fi
+
+# Backup inicial: garante que existe pelo menos um ponto de restauração já no
+# fim da instalação, sem esperar o primeiro disparo do cron às 03:00.
+if bash "$APP_DIR/deploy/backup.sh" >/dev/null 2>&1; then
+    ok "Backup inicial criado em $APP_DIR/backups"
+else
+    warn "Backup inicial falhou — rode manualmente e verifique: bash $APP_DIR/deploy/backup.sh"
+fi
+warn "Backup fica na PRÓPRIA VPS. Para proteção real contra perda do disco,"
+warn "configure BACKUP_REMOTE_CMD (cópia off-site) — ver deploy/backup.sh."
 
 APP_URL_LINE=$(grep '^APP_URL=' "$APP_DIR/.env" | cut -d= -f2-)
 echo ""

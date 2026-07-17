@@ -13,6 +13,12 @@
 # VARIÁVEIS DE AMBIENTE (lidas do .env ou exportadas antes de chamar):
 #   BACKUP_DIR          Diretório de destino (default: /opt/tenant-erp/backups)
 #   BACKUP_RETAIN_DAYS  Dias de retenção (default: 7)
+#   BACKUP_REMOTE_CMD   (opcional) comando de cópia off-site. O caminho do dump é
+#                       passado como último argumento. Ex.:
+#                         BACKUP_REMOTE_CMD="rclone copy"        → rclone copy <arquivo> ...
+#                       ⚠️  Backup só na própria VPS não protege contra perda do
+#                       disco/instância. Configure isto (ou uma cópia off-site
+#                       equivalente) assim que houver dado de loja que doa perder.
 #   POSTGRES_DB / POSTGRES_USER — lidos do .env
 # =============================================================================
 
@@ -48,8 +54,41 @@ docker exec cardgamestore_postgres \
   pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" \
   | gzip > "$PG_FILE"
 
+# ── Verificação de integridade ─────────────────────────────────────────────────
+# set -o pipefail já aborta se o pg_dump falhar no meio, mas um arquivo gzip
+# truncado (disco cheio no meio da escrita) ou um dump vazio passariam batido
+# sem estas duas checagens — e um backup corrompido só é descoberto na hora do
+# desastre, quando já é tarde. Falhar aqui é MUITO melhor que "achar" que tem backup.
+if ! gzip -t "$PG_FILE" 2>/dev/null; then
+  echo "[$(date '+%H:%M:%S')] ❌ ERRO: $PG_FILE está corrompido (gzip -t falhou) — removendo." >&2
+  rm -f "$PG_FILE"
+  exit 1
+fi
+
+# Um dump válido tem o header do pg_dump + DDL — bem mais que alguns bytes.
+# Threshold conservador (1 KB comprimido) só para pegar dump vazio/degenerado.
+PG_BYTES=$(stat -c%s "$PG_FILE" 2>/dev/null || stat -f%z "$PG_FILE")
+if [ "${PG_BYTES:-0}" -lt 1024 ]; then
+  echo "[$(date '+%H:%M:%S')] ❌ ERRO: $PG_FILE tem só ${PG_BYTES} bytes — dump provavelmente vazio. Removendo." >&2
+  rm -f "$PG_FILE"
+  exit 1
+fi
+
 PG_SIZE=$(du -sh "$PG_FILE" | cut -f1)
-echo "[$(date '+%H:%M:%S')] PostgreSQL OK ($PG_SIZE)"
+echo "[$(date '+%H:%M:%S')] PostgreSQL OK ($PG_SIZE, integridade verificada)"
+
+# ── Cópia off-site (opcional) ──────────────────────────────────────────────────
+# Sem isto, o backup vive no MESMO disco do banco — uma falha de VPS/disco leva
+# banco e backup juntos. Só roda se BACKUP_REMOTE_CMD estiver definido.
+if [ -n "${BACKUP_REMOTE_CMD:-}" ]; then
+  echo "[$(date '+%H:%M:%S')] Enviando off-site: $BACKUP_REMOTE_CMD ... $PG_FILE"
+  # shellcheck disable=SC2086
+  if $BACKUP_REMOTE_CMD "$PG_FILE"; then
+    echo "[$(date '+%H:%M:%S')] Cópia off-site OK"
+  else
+    echo "[$(date '+%H:%M:%S')] ⚠️  Cópia off-site FALHOU — backup local existe, mas sem redundância off-site." >&2
+  fi
+fi
 
 # ── Limpeza de backups antigos ─────────────────────────────────────────────────
 REMOVED=$(find "$BACKUP_DIR" -name "*.sql.gz" \

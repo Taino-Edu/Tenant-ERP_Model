@@ -4,32 +4,97 @@
 #
 # USO:
 #   bash /opt/tenant-erp/deploy/update.sh
+#
+# FLUXO SEGURO:
+#   1. Backup do banco ANTES de qualquer mudança (ponto de restauração).
+#   2. Taga as imagens atuais como :rollback.
+#   3. git pull + build + up -d (migrations rodam no boot da API).
+#   4. Health check em /health. Se a API não subir, reverte pras imagens
+#      :rollback automaticamente e aborta — o site volta pro estado anterior.
+#
+# ⚠️  LIMITE: o rollback reverte o CÓDIGO (imagens), não o SCHEMA. As migrations
+#     rodam no boot e não são desfeitas aqui. Se uma migration destrutiva
+#     corromper dados, a recuperação é restaurar o dump do passo 1:
+#       gunzip -c /opt/tenant-erp/backups/postgres_<TS>.sql.gz \
+#         | docker exec -i cardgamestore_postgres psql -U <user> <db>
 # =============================================================================
 
-set -e
+set -euo pipefail
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 APP_DIR="/opt/tenant-erp"
+COMPOSE_DIR="$APP_DIR/deploy"
+COMPOSE="docker compose -f docker-compose.prod.yml"
+IMAGES=(cardgamestore_api cardgamestore_frontend)
 
 echo -e "${YELLOW}🔄 Atualizando Tenant-ERP...${NC}"
 
-# Puxa última versão do GitHub
+# ── 1. Backup pré-deploy (ponto de restauração) ─────────────────────────────
+echo -e "${YELLOW}💾 Backup do banco antes de atualizar...${NC}"
+if ! bash "$APP_DIR/deploy/backup.sh"; then
+    echo -e "${RED}❌ Backup pré-deploy falhou — abortando a atualização por segurança.${NC}"
+    echo -e "${RED}   (Não faz sentido migrar o schema sem um ponto de restauração.)${NC}"
+    exit 1
+fi
+
+# ── 2. Taga as imagens atuais como :rollback ────────────────────────────────
+cd "$COMPOSE_DIR"
+for img in "${IMAGES[@]}"; do
+    if docker image inspect "$img:latest" &>/dev/null; then
+        docker tag "$img:latest" "$img:rollback"
+    fi
+done
+
+# ── 3. Pull + build + up ────────────────────────────────────────────────────
 cd "$APP_DIR"
 git pull origin main
-
-# Copia .env para pasta deploy
 cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
 
-# Rebuild e redeploy — CACHEBUST força o Docker a recompilar o Next.js
-cd "$APP_DIR/deploy"
-docker compose -f docker-compose.prod.yml build --build-arg CACHEBUST="$(date +%s)"
-docker compose -f docker-compose.prod.yml up -d
+cd "$COMPOSE_DIR"
+# CACHEBUST força o Docker a recompilar o Next.js
+$COMPOSE build --build-arg CACHEBUST="$(date +%s)"
+$COMPOSE up -d
 
-# Limpa imagens antigas
+# ── 4. Health check + auto-rollback ─────────────────────────────────────────
+echo -n "  Aguardando API responder /health"
+healthy=false
+for _ in {1..30}; do
+    if $COMPOSE exec -T api curl -sf http://localhost:5000/health &>/dev/null; then
+        healthy=true
+        break
+    fi
+    echo -n "."
+    sleep 3
+done
+echo ""
+
+if [ "$healthy" != true ]; then
+    echo -e "${RED}❌ A API não respondeu /health após o deploy. Revertendo pras imagens anteriores...${NC}"
+    reverted=false
+    for img in "${IMAGES[@]}"; do
+        if docker image inspect "$img:rollback" &>/dev/null; then
+            docker tag "$img:rollback" "$img:latest"
+            reverted=true
+        fi
+    done
+    if [ "$reverted" = true ]; then
+        $COMPOSE up -d
+        echo -e "${YELLOW}↩️  Rollback de código aplicado (imagens :rollback restauradas).${NC}"
+        echo -e "${YELLOW}   Se o problema foi de schema/migration, restaure o dump do backup (ver cabeçalho deste script).${NC}"
+    else
+        echo -e "${RED}   Sem imagem :rollback disponível (primeira atualização?). Contêineres novos mantidos — investigue os logs:${NC}"
+        echo -e "${RED}   cd $COMPOSE_DIR && $COMPOSE logs --tail=100 api${NC}"
+    fi
+    exit 1
+fi
+
+# ── Sucesso: limpa imagens dangling (preserva :rollback) ────────────────────
+echo -e "${GREEN}✅ API saudável.${NC}"
 docker image prune -f
 
 echo -e "${GREEN}✅ Atualização concluída!${NC}"
-docker compose -f docker-compose.prod.yml ps
+$COMPOSE ps
