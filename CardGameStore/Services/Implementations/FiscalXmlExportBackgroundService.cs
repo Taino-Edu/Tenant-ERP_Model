@@ -6,6 +6,7 @@
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,7 +31,15 @@ public class FiscalXmlExportBackgroundService : BackgroundService
         {
             try
             {
-                await CheckAsync();
+                // Filtro de data no nível do job (não por tenant): só no dia 1 há
+                // trabalho a fazer — evita abrir scope de catálogo à toa nos outros dias.
+                var hojeBrasil = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone).Date;
+                if (hojeBrasil.Day == 1)
+                    await _scopeFactory.ForEachActiveTenantAsync(_logger, CheckAsync, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -41,17 +50,15 @@ public class FiscalXmlExportBackgroundService : BackgroundService
         }
     }
 
-    private async Task CheckAsync()
+    private async Task CheckAsync(IServiceProvider sp, CancellationToken ct)
     {
         var hojeBrasil = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone).Date;
-        if (hojeBrasil.Day != 1) return;
 
-        using var scope  = _scopeFactory.CreateScope();
-        var db     = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var email  = scope.ServiceProvider.GetRequiredService<IEmailService>();
-        var export = scope.ServiceProvider.GetRequiredService<FiscalXmlExportService>();
+        var db     = sp.GetRequiredService<AppDbContext>();
+        var email  = sp.GetRequiredService<IEmailService>();
+        var export = sp.GetRequiredService<FiscalXmlExportService>();
 
-        var cfg = await db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
+        var cfg = await db.FiscalConfigs.FindAsync(new object?[] { FiscalConfig.SingletonId }, ct);
         if (cfg is null || string.IsNullOrWhiteSpace(cfg.EmailContador)) return;
 
         var jaEnviouEsseMes = cfg.UltimoEnvioMensalXmls.HasValue

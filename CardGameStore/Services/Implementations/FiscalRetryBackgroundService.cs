@@ -5,6 +5,7 @@
 
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +30,11 @@ public class FiscalRetryBackgroundService : BackgroundService
         {
             try
             {
-                await ReprocessarPendentesAsync();
+                await _scopeFactory.ForEachActiveTenantAsync(_logger, ReprocessarPendentesAsync, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -40,18 +45,17 @@ public class FiscalRetryBackgroundService : BackgroundService
         }
     }
 
-    private async Task ReprocessarPendentesAsync()
+    private async Task ReprocessarPendentesAsync(IServiceProvider sp, CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db      = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+        var db      = sp.GetRequiredService<AppDbContext>();
+        var emissao = sp.GetRequiredService<INfceEmissionService>();
 
         var pendentesIds = await db.NotasFiscaisEmitidas
             .Where(n => n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia)
             .OrderBy(n => n.CreatedAt)
             .Take(50) // não tenta reprocessar milhares de uma vez
             .Select(n => n.Id)
-            .ToListAsync();
+            .ToListAsync(ct);
 
         if (pendentesIds.Count == 0) return;
 

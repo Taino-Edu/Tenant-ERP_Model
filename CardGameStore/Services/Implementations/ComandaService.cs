@@ -686,6 +686,14 @@ public class ComandaService : IComandaService
         if (emitirNotaFiscal && _tenant.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
         {
             using var scope = _scopeFactory.CreateScope();
+            // O novo escopo tem seu próprio ITenantContext (default = tenant-zero) —
+            // sem propagar o tenant resolvido pela requisição, o AppDbContext deste
+            // escopo conecta no schema errado: a NotaFiscalEmitida seria gravada no
+            // schema "public" e a comanda nunca seria encontrada lá (nota presa em
+            // PendenteEmissao para sempre no schema de outro tenant). Mesmo padrão
+            // já aplicado em VendaAvulsaService.EmitirNotaFiscal.
+            scope.ServiceProvider.GetRequiredService<ITenantContext>()
+                .Set(_tenant.TenantId, _tenant.SchemaName, _tenant.EnabledModules);
             var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
             nota = await emissao.EmitirParaComandaAsync(comandaId);
         }

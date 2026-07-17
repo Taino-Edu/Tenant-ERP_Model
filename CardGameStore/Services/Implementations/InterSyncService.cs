@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
@@ -10,7 +11,7 @@ namespace CardGameStore.Services.Implementations;
 
 public class InterSyncService
 {
-    private readonly IServiceScopeFactory     _scopeFactory;
+    private readonly AppDbContext             _db;
     private readonly EncryptionService        _enc;
     private readonly IConfiguration           _config;
     private readonly ILogger<InterSyncService> _logger;
@@ -22,12 +23,12 @@ public class InterSyncService
     };
 
     public InterSyncService(
-        IServiceScopeFactory scopeFactory,
+        AppDbContext db,
         EncryptionService enc,
         IConfiguration config,
         ILogger<InterSyncService> logger)
     {
-        _scopeFactory = scopeFactory;
+        _db           = db;
         _enc          = enc;
         _config       = config;
         _logger       = logger;
@@ -48,8 +49,7 @@ public class InterSyncService
     // ── Sincroniza extrato dos últimos N dias ─────────────────────────────────
     public async Task<InterSyncResult> SyncAsync(int days = 7)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = _db;
 
         var cfg = await db.IntegrationConfigs
             .FirstOrDefaultAsync(c => c.Source == "inter");
@@ -362,14 +362,20 @@ public class InterSyncBackgroundService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var svc         = scope.ServiceProvider.GetRequiredService<InterSyncService>();
-                var result      = await svc.SyncAsync(days: 7);
+                await _scopeFactory.ForEachActiveTenantAsync(_logger, async (sp, _) =>
+                {
+                    var svc    = sp.GetRequiredService<InterSyncService>();
+                    var result = await svc.SyncAsync(days: 7);
 
-                if (!result.Skipped)
-                    _logger.LogInformation(
-                        "Inter sync: {imported} importadas, {dup} duplicatas, erro={error}",
-                        result.Imported, result.Duplicates, result.Error ?? "-");
+                    if (!result.Skipped)
+                        _logger.LogInformation(
+                            "Inter sync: {imported} importadas, {dup} duplicatas, erro={error}",
+                            result.Imported, result.Duplicates, result.Error ?? "-");
+                }, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {

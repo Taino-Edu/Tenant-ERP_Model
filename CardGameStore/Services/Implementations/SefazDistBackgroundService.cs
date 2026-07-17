@@ -9,6 +9,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Services.Implementations;
@@ -32,7 +33,11 @@ public class SefazDistBackgroundService : BackgroundService
         {
             try
             {
-                await SincronizarAsync(ct);
+                await _scopeFactory.ForEachActiveTenantAsync(_logger, SincronizarAsync, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -43,11 +48,10 @@ public class SefazDistBackgroundService : BackgroundService
         }
     }
 
-    private async Task SincronizarAsync(CancellationToken ct)
+    private static async Task SincronizarAsync(IServiceProvider sp, CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db    = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var sefaz = scope.ServiceProvider.GetRequiredService<SefazNfeService>();
+        var db    = sp.GetRequiredService<AppDbContext>();
+        var sefaz = sp.GetRequiredService<SefazNfeService>();
 
         var ativa = await db.IntegrationConfigs
             .AnyAsync(c => c.Source == "sefaz" && c.IsActive, ct);
