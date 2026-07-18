@@ -544,7 +544,17 @@ using (var scope = app.Services.CreateScope())
         // Seed: cria o admin se não existir
         if (!db.Users.Any(u => u.Email == "admin@tenant-erp.local"))
         {
-            var adminPassword = Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD") ?? "SenhaForte@123";
+            var adminPasswordEnv = Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD");
+            // M26: em Production, falhar o boot em vez de criar a conta admin com senha
+            // conhecida publicamente (estava no código-fonte) — um warning de log não impede
+            // ninguém de abrir esse mesmo código e logar com "SenhaForte@123" no primeiro boot
+            // que alguém esquecer de configurar a env var.
+            if (string.IsNullOrWhiteSpace(adminPasswordEnv) && !app.Environment.IsDevelopment())
+                throw new InvalidOperationException(
+                    "ADMIN_SEED_PASSWORD não configurada — boot abortado em Production/Staging pra não criar " +
+                    "a conta admin com a senha padrão conhecida no código-fonte. Configure a variável de ambiente.");
+
+            var adminPassword = adminPasswordEnv ?? "SenhaForte@123";
             if (adminPassword == "SenhaForte@123")
                 logger.LogWarning("ATENÇÃO: admin criado com senha padrão. Defina ADMIN_SEED_PASSWORD no ambiente de produção!");
 
@@ -570,7 +580,15 @@ using (var scope = app.Services.CreateScope())
         var platformOwnerEmail = Environment.GetEnvironmentVariable("PLATFORM_OWNER_EMAIL");
         if (!string.IsNullOrWhiteSpace(platformOwnerEmail) && !db.Users.Any(u => u.Email == platformOwnerEmail))
         {
-            var ownerPassword = Environment.GetEnvironmentVariable("PLATFORM_OWNER_SEED_PASSWORD") ?? "SenhaForte@123";
+            var ownerPasswordEnv = Environment.GetEnvironmentVariable("PLATFORM_OWNER_SEED_PASSWORD");
+            // M26: mesmo fail-fast do admin acima — dono da plataforma tem acesso a TODOS os
+            // tenants, senha conhecida aqui é ainda mais crítica.
+            if (string.IsNullOrWhiteSpace(ownerPasswordEnv) && !app.Environment.IsDevelopment())
+                throw new InvalidOperationException(
+                    "PLATFORM_OWNER_SEED_PASSWORD não configurada — boot abortado em Production/Staging pra não " +
+                    "criar o dono da plataforma (acesso a todos os tenants) com senha padrão conhecida.");
+
+            var ownerPassword = ownerPasswordEnv ?? "SenhaForte@123";
             if (ownerPassword == "SenhaForte@123")
                 logger.LogWarning("ATENÇÃO: dono da plataforma criado com senha padrão. Defina PLATFORM_OWNER_SEED_PASSWORD no ambiente de produção!");
 

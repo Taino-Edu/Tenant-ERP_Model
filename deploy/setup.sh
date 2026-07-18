@@ -97,6 +97,12 @@ if [ ! -f "$APP_DIR/.env" ]; then
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
     IP_SALT=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -base64 32)
+    # M26: API agora falha o boot em Production se ADMIN_SEED_PASSWORD/
+    # PLATFORM_OWNER_SEED_PASSWORD não estiverem definidas (em vez de criar as contas
+    # com a senha padrão "SenhaForte@123" conhecida no código-fonte) — gera senhas
+    # fortes aqui, igual aos outros segredos.
+    ADMIN_SEED_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 18)
+    PLATFORM_OWNER_SEED_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 18)
     # -4 força IPv4 — em VPS com IPv6 configurado, ifconfig.me sem essa flag pode
     # devolver o endereço IPv6, que fica inacessível pro navegador (bug real já visto
     # em produção: NEXT_PUBLIC_API_URL/JwtSettings:Issuer gravados com IPv6 e o login
@@ -123,6 +129,13 @@ POSTGRES_PASSWORD=${POSTGRES_PASS}
 # --- JWT (não altere após primeiro deploy) ---
 JWT_SECRET=${JWT_SECRET}
 
+# --- Senha inicial das contas seed (gerada automaticamente) ---
+# admin@tenant-erp.local usa ADMIN_SEED_PASSWORD; troque a senha pelo painel depois
+# do primeiro login. PLATFORM_OWNER_SEED_PASSWORD só é usada se você configurar
+# PLATFORM_OWNER_EMAIL abaixo (dono da plataforma, acesso a todos os tenants).
+ADMIN_SEED_PASSWORD=${ADMIN_SEED_PASS}
+PLATFORM_OWNER_SEED_PASSWORD=${PLATFORM_OWNER_SEED_PASS}
+
 # --- E-mail via Resend (resend.com — plano gratuito) ---
 SMTP_HOST=smtp.resend.com
 SMTP_PORT=587
@@ -146,6 +159,9 @@ EOF
     warn "Edite o .env antes de continuar:"
     warn "  nano $APP_DIR/.env"
     warn "Preencha: SMTP_PASSWORD e GEMINI_API_KEY"
+    echo ""
+    echo -e "${BOLD}  Login inicial: admin@tenant-erp.local / ${ADMIN_SEED_PASS}${NC}"
+    echo -e "${BOLD}  (troque a senha pelo painel assim que logar — ela também está salva em $APP_DIR/.env)${NC}"
     echo ""
     echo -e "${BOLD}  Pressione ENTER após editar o .env para continuar...${NC}"
     read -r
