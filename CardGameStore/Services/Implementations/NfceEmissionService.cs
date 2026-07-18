@@ -758,6 +758,20 @@ public class NfceEmissionService : INfceEmissionService
         {
             nota.Status         = NotaFiscalStatus.Rejeitada;
             nota.MotivoRejeicao = protInfo?.xMotivo ?? retorno.RetornoStr ?? "SEFAZ não retornou motivo.";
+
+            // F5: rejeição de uma nota que estava em contingência (retransmissão alcançou a
+            // SEFAZ, mas foi rejeitada por motivo de negócio) inutiliza o número atual — sem
+            // limpar os campos de contingência, o PRÓXIMO reprocessamento veria jaEmContingencia
+            // ainda true e tentaria reusar esse MESMO número já inutilizado, num loop que só
+            // erra. Limpa aqui pra o próximo TransmitirAsync reservar um número novo do zero
+            // (nota.Numero/Serie continuam documentando qual número foi inutilizado, só os
+            // campos de reconstrução de chave de contingência são limpos).
+            if (jaEmContingencia)
+            {
+                nota.CnfContingencia           = null;
+                nota.DhContingencia            = null;
+                nota.JustificativaContingencia = null;
+            }
         }
 
         await _db.SaveChangesAsync();

@@ -733,7 +733,13 @@ public class ComandaService : IComandaService
         if (comanda.Status == ComandaStatus.Fechada || comanda.Status == ComandaStatus.Cancelada)
             throw new InvalidOperationException(
                 "Esta comanda já foi fechada (cobrada) ou cancelada — cancelamento sem cobrança só se aplica a comandas ainda abertas. " +
-                "Para estornar uma venda já fechada, use o cancelamento da nota fiscal (Admin > Fiscal).");
+                // F7: mensagem antiga dizia pra "usar o cancelamento da nota fiscal" como se isso
+                // estornasse a venda — não estorna. Cancelar a NFC-e só anula o documento fiscal
+                // perante a SEFAZ; estoque, crediário e pontos/cashback desta comanda continuam
+                // debitados no ERP e precisam ser ajustados manualmente (Admin > Estoque/Crediário/
+                // Cliente) até existir um fluxo de estorno automático (ver AUDITORIA-ESCALONAMENTO.md, F7).
+                "Para anular o documento fiscal de uma venda já fechada use o cancelamento da nota (Admin > Fiscal) — " +
+                "mas isso NÃO reverte estoque, crediário nem pontos/cashback: ajuste esses efeitos manualmente à parte.");
 
         // Transação explícita: a restauração de estoque roda em vários
         // ExecuteUpdateAsync (um por item), gravados no banco imediatamente,
