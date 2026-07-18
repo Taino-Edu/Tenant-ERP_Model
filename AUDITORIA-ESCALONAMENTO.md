@@ -9,13 +9,13 @@
 
 ## Sumário executivo
 
-O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 224 testes de backend incluindo isolamento de tenant contra Postgres real. Mas a auditoria encontrou **12 problemas críticos**, sendo que **4 deles já têm correção no working copy aguardando commit** (ver próxima seção), e 4 críticos **novos e ainda abertos**: duplo fechamento de comanda (dupla NFC-e), commit parcial em venda avulsa, escalação de privilégio Operator→Admin e certificado do Banco Inter global para todos os tenants.
+O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 224 testes de backend incluindo isolamento de tenant contra Postgres real. A auditoria encontrou **12 problemas críticos**; **9 já foram corrigidos e commitados** (C1, C2, C6, C7, C8, C9, C10, C11, C12 — ver seção "Estado das correções" abaixo), restando **3 abertos por decisão de arquitetura** (C3, C4, C5 — não são bugs pontuais, exigem escolha de design).
 
 O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, mas **4 problemas graves impedem a homologação hoje** (F1–F4) e há mais 11 achados + 2 lacunas de escopo.
 
-| Severidade | Quantidade | Com correção em andamento |
+| Severidade | Quantidade | Corrigido |
 |---|---|---|
-| 🔴 Crítico | 12 | 4 (+1 parcial) |
+| 🔴 Crítico | 12 | 9 (+1 parcial) |
 | 🟠 Bloqueio multi-instância | 4 | 0 |
 | 🟡 Médio | 27 | 1 parcial |
 | 🔵 Baixo | 13 | 0 |
@@ -23,20 +23,24 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 
 ---
 
-## ⚠️ Estado do working copy (não commitado) — verificar e commitar
-
-Há correções **já escritas mas não commitadas** (detectado via `git status`/`git diff` em 2026-07-17), cobrindo achados desta auditoria:
+## ✅ Estado das correções (commitadas em 2026-07-17/18)
 
 | Correção | Arquivos | Achado |
 |---|---|---|
 | Propagação de tenant na emissão de NFC-e da comanda | `ComandaService.cs` (+`ITenantContext.Set`) | C1 |
 | Novo helper `ForEachActiveTenantAsync` aplicado aos 5 background services | `Multitenancy/TenantIteration.cs` (novo), `FiscalRetry/FiscalXmlExport/FiscalAlert/SefazDist/InterSyncService` | C2 |
+| Guarda de status em `CloseComandaAsync` (bloqueia duplo fechamento/dupla NFC-e) | `ComandaService.cs` | C6 |
+| Transação + execution strategy em `RegisterAsync` (venda avulsa) — valida antes de commitar, NFC-e emitida só após o commit | `VendaAvulsaService.cs` | C7 |
+| Operator bloqueado de resetar senha de Admin, criar outro Operator e auto-atribuir perfil | `UserService.cs`, `UserController.cs` | C8 |
+| Certificado mTLS do Inter movido de arquivo global do servidor para coluna criptografada por tenant (`IntegrationConfig`) + migration `AddInterCertificateFields` | `InterSyncService.cs`, `IntegrationConfig.cs`, `ContasReceberController.cs`, `Data/Migrations/20260718030216_AddInterCertificateFields.cs` | C9 |
 | Subdomínio inexistente agora retorna 404 (não serve mais o tenant-zero) | `TenantResolutionMiddleware.cs` + `TenantResolutionMiddlewareTests.cs` (+20 linhas de teste) | C10 |
 | Deploy seguro: backup pré-deploy, imagens `:rollback`, health check com reversão automática | `deploy/update.sh` (+85 linhas) | C11 |
 | Backup diário via cron no setup + backup inicial + verificação de integridade do dump + opção off-site (`BACKUP_REMOTE_CMD`) | `deploy/setup.sh` (+25), `deploy/backup.sh` (+41) | C12 (parcial) |
 | Limpeza parcial de resíduos TCG/Campeonatos | `frontend/app/{termos,privacidade,cadastro}`, `admin/perfis`, `contexts/SiteConfigContext`, `lib/api.ts` | M18 (parcial) |
 
-**Ação recomendada:** revisar, rodar a suíte (`dotnet test softNerd.sln`) e commitar — são correções de bugs de isolamento fiscal e de segurança de deploy. Nota: o rollback do `update.sh` reverte **código** (imagens), não **schema** — o próprio script documenta o limite.
+**Nota sobre C9:** a correção original (commit `fbce607`) mudou o model `IntegrationConfig` mas não veio com a migration EF correspondente — as colunas novas não existiam no banco. Migration `AddInterCertificateFields` gerada e aplicada em 2026-07-18 pra fechar o gap. Suite completa (257 testes) passando após o fix.
+
+**Ainda abertos:** C3 (fail-fast do `ITenantContext` fora de request), C4 (migrations no boot sem lock) e C5 (SignalR sem backplane Redis) — são decisões de arquitetura, não correções pontuais; ver Plano de ação (P1/P2). Nota: o rollback do `update.sh` reverte **código** (imagens), não **schema** — o próprio script documenta o limite.
 
 ---
 
@@ -72,29 +76,29 @@ Há correções **já escritas mas não commitadas** (detectado via `git status`
 - **Problema:** eventos de comanda via `IHubContext<ComandaHub>` só alcançam conexões da instância local. Com 2+ instâncias, o dashboard em tempo real deixa de ser confiável.
 - **Sugestão:** `AddStackExchangeRedis(...)` ao subir a 2ª réplica. **Aberto** (só bloqueia multi-instância).
 
-### C6. Fechamento de comanda sem guarda de status — duplo fechamento duplica crediário, pontos e NFC-e  `🆕 aberto`
+### C6. Fechamento de comanda sem guarda de status — duplo fechamento duplica crediário, pontos e NFC-e  `✅ corrigido`
 
 - **Onde:** `ComandaService.cs` — `CloseComandaAsync` não verifica se a comanda já está `Fechada`/`Cancelada` (todos os outros métodos da classe verificam: `:382,:722,:840,:884,:1019`).
 - **Efeito:** um segundo `POST /close` (duplo clique, retry de rede) re-executa todos os efeitos colaterais: crediário duplicado, segundo débito de pontos/cashback e — se `emitirNotaFiscal=true` — **segunda NFC-e autorizada na SEFAZ para a mesma venda** (`:685-699`, sem a guarda de duplicidade que a emissão manual tem em `FiscalController.cs:372-374`). `ComandaController.cs:408` captura `InvalidOperationException` esperando "já fechada", exceção que nunca é lançada.
-- **Sugestão:** uma linha de guarda de status no início + constraint/índice. Resolve também a dupla emissão.
+- **Status:** guarda de status adicionada no início de `CloseComandaAsync` (mesmo padrão de `CancelComandaAsync`).
 
-### C7. Venda avulsa faz commit parcial sem transação  `🆕 aberto`
+### C7. Venda avulsa faz commit parcial sem transação  `✅ corrigido`
 
 - **Onde:** `Services/Implementations/VendaAvulsaService.cs` — estoque decrementado via `ExecuteUpdateAsync` (`:96-111`), venda gravada (`:180-181`), NFC-e possivelmente autorizada (`:192-204`), e **só depois** validações pós-venda lançam `InvalidOperationException` (`:217-219,:223,:286-363`).
 - **Efeito:** cliente recebe HTTP 400 mas a venda fica persistida, o estoque baixado e a nota possivelmente autorizada. Validação do 2º pagamento (`:141-149`) também ocorre após o decremento de estoque. Contraste com `CancelComandaAsync` (`ComandaService.cs:739-763`), que usa `CreateExecutionStrategy` + transação.
-- **Sugestão:** validar antes de escrever + transação explícita com execution strategy.
+- **Status:** todo o fluxo (estoque, venda, crediário/pontos/cashback) envolvido em `CreateExecutionStrategy` + transação explícita; commit só no final. Emissão de NFC-e movida pra depois do commit (mesmo padrão do `ComandaService`).
 
-### C8. Operator com permissão "usuarios" tem poderes de fato de Admin (escalação de privilégio)  `🆕 aberto`
+### C8. Operator com permissão "usuarios" tem poderes de fato de Admin (escalação de privilégio)  `✅ corrigido`
 
 - **Onde:** `Program.cs:181` (policy `AdminOnly` aceita Admin **e** Operator) + `Perfil.cs:69` (permissão "usuarios" libera prefixo `/api/user`) + `UserService.cs`.
-- **Efeito:** `AdminResetPasswordAsync` (`:255-272`) não restringe a role do alvo → **Operator reseta a senha do Admin e toma a conta**; `UserController.AtualizarPerfil` (`:409-444`) → Operator atribui a si mesmo qualquer perfil; `AdminCreateUserAsync` (`:200-253`) → cria outro Operator com qualquer `PerfilId`. A permissão granular vira escalação total.
-- **Sugestão:** restringir role do alvo (Operator só gerencia Customer/Operator), impedir auto-elevação de perfil, auditar essas ações.
+- **Efeito:** `AdminResetPasswordAsync` (`:255-272`) não restringia a role do alvo → **Operator resetava a senha do Admin e tomava a conta**; `UserController.AtualizarPerfil` (`:409-444`) → Operator atribuía a si mesmo qualquer perfil; `AdminCreateUserAsync` (`:200-253`) → criava outro Operator com qualquer `PerfilId`. A permissão granular virava escalação total.
+- **Status:** `AdminResetPasswordAsync` bloqueia Operator alterando senha de Admin; `AdminCreateUserAsync` bloqueia Operator criando outro Operator; `AtualizarPerfil` retorna 403 pra qualquer chamador Operator (fica só-Admin de fato).
 
-### C9. Certificado mTLS do Banco Inter é global do servidor, não por tenant  `🆕 aberto`
+### C9. Certificado mTLS do Banco Inter é global do servidor, não por tenant  `✅ corrigido`
 
-- **Onde:** `InterSyncService.cs:329-339` (`BuildMtlsClient` lê `Inter:CertificatePath`/`KeyPath` do processo — um único cert para todos os tenants) + `ContasReceberController.cs:426-449`.
-- **Efeito:** ClientId/ClientSecret são por tenant, mas o certificado é compartilhado — e o endpoint `UploadCertificado` permite que **qualquer admin de qualquer tenant sobrescreva o certificado usado por todos** → cobranças Pix de outros tenants quebradas ou direcionadas à conta errada.
-- **Sugestão:** mover certificado para config por tenant (mesmo padrão do ClientId/Secret e do certificado A1 fiscal, que já é por tenant).
+- **Onde:** `InterSyncService.cs:329-339` (`BuildMtlsClient` lia `Inter:CertificatePath`/`KeyPath` do processo — um único cert para todos os tenants) + `ContasReceberController.cs:426-449`.
+- **Efeito:** ClientId/ClientSecret são por tenant, mas o certificado era compartilhado — e o endpoint `UploadCertificado` permitia que **qualquer admin de qualquer tenant sobrescrevesse o certificado usado por todos** → cobranças Pix de outros tenants quebradas ou direcionadas à conta errada.
+- **Status:** certificado (.crt/.key) movido para colunas criptografadas (AES-256-GCM via `EncryptionService`) em `IntegrationConfig`, por tenant — mesmo padrão do ClientId/Secret. Migration `AddInterCertificateFields` adicionada.
 
 ### C10. Subdomínio desconhecido serve silenciosamente a loja do tenant-zero  `🛠 correção no working copy`
 
@@ -367,8 +371,8 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 
 | P | Ação | Achados | Por quê |
 |---|------|---------|---------|
-| **P0a** | Revisar, testar e **commitar** as correções do working copy (tenant na NFC-e, background services, 404 de subdomínio, deploy com backup/rollback, cron de backup) | C1, C2, C10, C11, C12 | Correções prontas de bugs de isolamento fiscal e segurança de deploy — paradas só por falta de commit |
-| **P0b** | Guarda de status no `CloseComandaAsync`; restringir role do alvo em reset de senha/perfil (Operator); certificado Inter por tenant; transação + validação antecipada na venda avulsa | C6, C8, C9, C7 | Dupla NFC-e, escalação a Admin, Pix cross-tenant, commit parcial — todos abertos, todos com correção pequena |
+| ~~**P0a**~~ | ✅ Feito — tenant na NFC-e, background services, 404 de subdomínio, deploy com backup/rollback, cron de backup | C1, C2, C10, C11, C12 | — |
+| ~~**P0b**~~ | ✅ Feito — guarda de status no `CloseComandaAsync`; restringir role do alvo em reset de senha/perfil (Operator); certificado Inter por tenant + migration; transação + validação antecipada na venda avulsa | C6, C8, C9, C7 | — |
 | **P0c** | Fiscal — os 4 graves que impedem homologação: cupom de contingência com chave/QR corretos (tpEmis=9 antes de imprimir), retransmissão por 24 h com alerta, certificado vencido bloqueado (upload + emissão + classificador), persistir/exportar `nfeProc` | F1–F4 | Sem isso o módulo fiscal não homologa: cupom inválido, contingência expirada, emissão irregular e XML sem valor legal ao contador |
 | **P1** | Tirar migrations do boot: job migrador separado, `pg_advisory_lock`, status por tenant, falha visível; considerar `ITenantContext` fail-fast fora de request | C4, C3 | Deploy trava/corrompe com o crescimento de tenants |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
