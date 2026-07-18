@@ -51,9 +51,11 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
             .SumAsync(c => (long)c.TotalInCents) / 100m;
 
         // ── Vendas avulsas ──────────────────────────────────────────
-        var todasVendas = (await _vendas.GetRecentAsync(2000, ini)).ToList();
-        var avulsasPeriodo = todasVendas
-            .Where(v => v.SoldAt >= ini && v.SoldAt < end);
+        // M8: GetInPeriodAsync (sem limite) em vez de GetRecentAsync(2000, ini) — o limite
+        // fixo, ordenado por mais recente, podia ser todo consumido por vendas FORA do
+        // período (se houve muitas depois), zerando a receita/custo do período no
+        // fechamento financeiro sem nenhum aviso.
+        var avulsasPeriodo = (await _vendas.GetInPeriodAsync(ini, end)).AsEnumerable();
 
         if (hasPmFilter)
             avulsasPeriodo = avulsasPeriodo.Where(v =>
@@ -483,9 +485,9 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
                      && i.ProductId != null)
             .SumAsync(i => (long)i.CostPriceSnapshotInCents * i.Quantity);
 
-        var vendas = await _vendas.GetRecentAsync(2000, ini);
+        // M8: mesma correção do CalcularAsync — sem limite artificial.
+        var vendas = await _vendas.GetInPeriodAsync(ini, end);
         var custoAvulsaCents = vendas
-            .Where(v => v.SoldAt >= ini && v.SoldAt < end)
             .SelectMany(v => v.Items)
             .Sum(i => (long)i.UnitCostInCents * i.Quantity);
 

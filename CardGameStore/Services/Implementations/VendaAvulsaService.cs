@@ -408,6 +408,20 @@ public class VendaAvulsaService : IVendaAvulsaService
         return vendas.Select(MapToDto);
     }
 
+    public async Task<IEnumerable<VendaAvulsaDto>> GetInPeriodAsync(DateTime inicioUtc, DateTime fimUtc)
+    {
+        // M8: filtro pelo período INTEIRO na query SQL — sem Take(), sem depender de
+        // "os N mais recentes desde o início do mês" cobrirem o período (que falhava
+        // silenciosamente: com >2000 vendas depois do período, o Take(2000) ordenado
+        // por SoldAt DESC era todo consumido por vendas FORA do período, retornando
+        // zero vendas do período pro fechamento financeiro).
+        var vendas = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= inicioUtc && v.SoldAt < fimUtc)
+            .ToListAsync();
+
+        return vendas.Select(MapToDto);
+    }
+
     public async Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime? date = null)
     {
         // Converte data BR → intervalo UTC para evitar o bug de timezone:
