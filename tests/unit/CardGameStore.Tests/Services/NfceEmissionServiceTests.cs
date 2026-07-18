@@ -264,8 +264,9 @@ public class NfceEmissionServiceTests
         using var db = CreateDb();
         var nota = new NotaFiscalEmitida
         {
-            Status = NotaFiscalStatus.Autorizada,
-            EmitidoEm = DateTime.UtcNow.AddHours(-2), // muito depois dos 30 min de janela
+            Status       = NotaFiscalStatus.Autorizada,
+            EmitidoEm    = DateTime.UtcNow, // recente — mas EmitidoEm não conta pra janela (F14)
+            AutorizadoEm = DateTime.UtcNow.AddHours(-2), // muito depois dos 30 min de janela
         };
         db.NotasFiscaisEmitidas.Add(nota);
         await db.SaveChangesAsync();
@@ -274,6 +275,51 @@ public class NfceEmissionServiceTests
         Func<Task> act = () => service.CancelarAsync(nota.Id, "Motivo com mais de quinze caracteres");
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*janela legal*");
+    }
+
+    [Fact]
+    public async Task CancelarAsync_SemAutorizadoEm_LancaExcecaoMesmoComEmitidoEmRecente()
+    {
+        // F14: a janela conta a partir de AutorizadoEm, não de EmitidoEm — uma nota antiga
+        // (de antes da migration, ou nunca corretamente autorizada) sem AutorizadoEm não pode
+        // ser tratada como "dentro da janela" só porque EmitidoEm é recente.
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status    = NotaFiscalStatus.Autorizada,
+            EmitidoEm = DateTime.UtcNow,
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        Func<Task> act = () => service.CancelarAsync(nota.Id, "Motivo com mais de quinze caracteres");
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*janela legal*");
+    }
+
+    [Fact]
+    public async Task CancelarAsync_DentroDaJanelaPorAutorizadoEm_PassaDaValidacaoDeJanela()
+    {
+        // F14: EmitidoEm antigo (contingência com venda de horas atrás) não deve mais barrar o
+        // cancelamento se a autorização de verdade (AutorizadoEm) foi recente — o teste prova
+        // isso indiretamente: sem FiscalConfig, se passasse da checagem de janela cairia na
+        // checagem de configuração fiscal (exceção diferente), não na de janela.
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status       = NotaFiscalStatus.Autorizada,
+            EmitidoEm    = DateTime.UtcNow.AddHours(-6), // venda em contingência, horas atrás
+            AutorizadoEm = DateTime.UtcNow.AddMinutes(-5), // autorizada de verdade agora há pouco
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        Func<Task> act = () => service.CancelarAsync(nota.Id, "Motivo com mais de quinze caracteres");
+
+        await act.Should().ThrowAsync<FiscalNaoConfiguradoException>(
+            "passou da checagem de janela (é isso que o teste prova) e caiu na falta de FiscalConfig");
     }
 
     [Fact]

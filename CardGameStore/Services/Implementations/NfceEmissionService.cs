@@ -61,6 +61,8 @@ using NFe.Classes.Servicos.Tipos;
 using NFe.Servicos;
 using NFe.Servicos.Retorno;
 using NFe.Utils;
+using NFe.Utils.Consulta;
+using Npgsql;
 using NFe.Utils.InformacoesSuplementares;
 using NFe.Utils.NFe;
 using NfeDocumento = NFe.Classes.NFe;
@@ -190,7 +192,12 @@ public class NfceEmissionService : INfceEmissionService
         if (nota.Status != NotaFiscalStatus.Autorizada)
             throw new InvalidOperationException("Só é possível cancelar uma nota Autorizada.");
 
-        if (nota.EmitidoEm is null || DateTime.UtcNow - nota.EmitidoEm.Value > JanelaCancelamento)
+        // F14: a janela conta a partir da AUTORIZAÇÃO de verdade (AutorizadoEm), não de
+        // EmitidoEm — que em contingência preserva o momento da venda, não da autorização
+        // pela SEFAZ. Sem essa distinção, uma nota retransmitida horas depois (dentro do
+        // prazo legal de 24h de F2) nasceria autorizada já fora da janela de cancelamento,
+        // incancelável desde o primeiro segundo.
+        if (nota.AutorizadoEm is null || DateTime.UtcNow - nota.AutorizadoEm.Value > JanelaCancelamento)
             throw new InvalidOperationException(
                 $"Fora da janela legal de cancelamento ({JanelaCancelamento.TotalMinutes:0} minutos após a autorização).");
 
@@ -213,6 +220,10 @@ public class NfceEmissionService : INfceEmissionService
         nota.Status                    = NotaFiscalStatus.Cancelada;
         nota.CanceladoEm                = DateTime.UtcNow;
         nota.JustificativaCancelamento  = justificativa.Trim();
+        // F9: protocolo e XML do evento eram descartados (só cStat era lido) — sem eles não
+        // há prova documental do cancelamento pra guarda de 5 anos / ZIP do contador.
+        nota.ProtocoloCancelamento      = infEvento.nProt;
+        nota.XmlEventoCancelamento      = retorno.ProcEventosNFe?.FirstOrDefault()?.ObterXmlString();
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("NFC-e {NotaId} (chave {Chave}) cancelada com sucesso.", nota.Id, nota.ChaveAcesso);
@@ -259,7 +270,25 @@ public class NfceEmissionService : INfceEmissionService
             Status        = NotaFiscalStatus.PendenteEmissao,
         };
         _db.NotasFiscaisEmitidas.Add(nota);
-        await _db.SaveChangesAsync();
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg &&
+            (pg.ConstraintName == "ix_notas_fiscais_comanda_unica" || pg.ConstraintName == "ix_notas_fiscais_venda_avulsa_unica"))
+        {
+            // F8: corrida entre duas chamadas concorrentes pra emitir NFC-e da mesma origem —
+            // o guard de aplicação em FiscalController (checa-então-insere) não é atômico;
+            // esse índice único no banco é a rede de segurança de verdade. Descarta a linha
+            // que perdeu a corrida e devolve a nota que já existe pra essa origem, em vez de
+            // derrubar o caller com exceção (quebraria a garantia de "nunca lança" do serviço).
+            _db.ChangeTracker.Clear();
+            return origem == NotaFiscalOrigem.Comanda
+                ? await _db.NotasFiscaisEmitidas.FirstAsync(n => n.ComandaId == comandaId)
+                : await _db.NotasFiscaisEmitidas.FirstAsync(n => n.VendaAvulsaId == vendaAvulsaId);
+        }
 
         await ExecutarComTratamentoDeErroAsync(nota, async () =>
         {
@@ -507,6 +536,18 @@ public class NfceEmissionService : INfceEmissionService
         // cliente no cupom) — número, cNf e tpEmis não podem mudar entre tentativas.
         var jaEmContingencia = nota.CnfContingencia.HasValue;
         var numero = jaEmContingencia ? nota.Numero!.Value : await ReservarProximoNumeroNfceAsync(cfg.Id);
+
+        // F6: persiste o número reservado JÁ AQUI, antes de assinar/transmitir — se o
+        // processo cair em qualquer ponto daqui pra frente, o número fica registrado na nota
+        // em vez de sumir num buraco de numeração sem rastro (a reserva em si já avançou
+        // proximo_numero_nfce atomicamente; só a gravação na nota que ficava pra depois).
+        if (!jaEmContingencia)
+        {
+            nota.Serie  = cfg.SerieNfce;
+            nota.Numero = numero;
+            await _db.SaveChangesAsync();
+        }
+
         // dhEmi é o momento REAL da venda (quando a nota foi criada como PendenteEmissao),
         // não o momento desta transmissão — que pode ser minutos/horas depois num retry.
         var dhEmi  = ParaBrasil(nota.CreatedAt);
@@ -667,10 +708,9 @@ public class NfceEmissionService : INfceEmissionService
 
         var protInfo = retorno.Retorno?.protNFe?.infProt;
 
-        // Número já foi consumido e persistido atomicamente em ReservarProximoNumeroNfceAsync,
-        // autorizada ou não — a numeração da NFC-e não pode ser reaproveitada sem inutilização.
-        nota.Serie  = cfg.SerieNfce;
-        nota.Numero = numero;
+        // Número já foi consumido, persistido atomicamente em ReservarProximoNumeroNfceAsync
+        // e gravado na nota logo após a reserva (F6, acima) — autorizada ou não, a numeração
+        // da NFC-e não pode ser reaproveitada sem inutilização.
 
         if (protInfo is not null && protInfo.cStat == 100)
         {
@@ -680,6 +720,9 @@ public class NfceEmissionService : INfceEmissionService
             // Se veio de contingência, EmitidoEm já é o momento real da venda — não pisa nele
             // com o momento da confirmação tardia da SEFAZ.
             nota.EmitidoEm    ??= DateTime.UtcNow;
+            // F14: AutorizadoEm é sempre o momento desta confirmação — mesmo em retransmissão
+            // de contingência horas depois. É a partir daqui que a janela de cancelamento conta.
+            nota.AutorizadoEm   = DateTime.UtcNow;
             // retorno.EnvioStr é o envelope <enviNFe> enviado (sem protNFe) — não é o documento
             // fiscal hábil. O nfeProc (NFe assinada + protNFe da SEFAZ) é o que a guarda de 5
             // anos e os sistemas contábeis exigem; a lib devolve o protocolo em retorno.Retorno.protNFe.
@@ -692,6 +735,12 @@ public class NfceEmissionService : INfceEmissionService
             nota.XmlAutorizado  = nfeProcAutorizado.ObterXmlString();
             nota.UrlQrCode      = qrCodeUrl;
             nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
+            // F13: se esta nota foi Rejeitada antes (número anterior inutilizado
+            // automaticamente) e agora autoriza com um número NOVO, os campos de
+            // inutilização do número antigo não fazem mais sentido aqui — sem isso a nota
+            // fica com estado contraditório ("Autorizada" mas mostrando "inutilizado em X").
+            nota.InutilizadoEm         = null;
+            nota.ProtocoloInutilizacao = null;
         }
         else
         {
