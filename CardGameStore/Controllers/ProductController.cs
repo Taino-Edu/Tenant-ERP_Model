@@ -8,6 +8,7 @@
 // PATCH  /api/product/{id}/stock → ajusta estoque (Admin)
 // =============================================================================
 
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -31,23 +32,27 @@ public class ProductController : ControllerBase
     /// <param name="category">Filtro opcional por categoria.</param>
     [HttpGet]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(IEnumerable<Product>), 200)]
+    [ProducesResponseType(typeof(IEnumerable<ProductPublicDto>), 200)]
     public async Task<IActionResult> GetAll([FromQuery] string? category)
     {
         var products = category != null
             ? await _service.GetByCategoryAsync(category)
             : await _service.GetAllActiveAsync();
-        return Ok(products);
+        // M12: entidade completa vazava CostPriceInCents/MinimumStock (custo/margem interna)
+        // pra qualquer visitante anônimo — endpoint público só devolve o DTO sem esses campos.
+        return Ok(products.Select(ProductPublicDto.FromEntity));
     }
 
     /// <summary>Lista todos os produtos ativos para comanda do cliente (sem filtro de marketplace).</summary>
     [HttpGet("store")]
     [Authorize]
-    [ProducesResponseType(typeof(IEnumerable<Product>), 200)]
+    [ProducesResponseType(typeof(IEnumerable<ProductPublicDto>), 200)]
     public async Task<IActionResult> GetAllStore()
     {
         var products = await _service.GetAllForAdminAsync();
-        return Ok(products);
+        // M12: usado pela comanda do CLIENTE (app/cliente) — mesmo motivo do GetAll acima,
+        // Customer não pode ver custo/margem. Admin/Operator usam GetAllAdmin (entidade completa).
+        return Ok(products.Select(ProductPublicDto.FromEntity));
     }
 
     /// <summary>Lista TODOS os produtos ativos (incluindo ocultos do site). Só Admin/Operator.</summary>
@@ -64,18 +69,22 @@ public class ProductController : ControllerBase
     /// <param name="id">Id do produto.</param>
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(Product), 200)]
+    [ProducesResponseType(typeof(ProductPublicDto), 200)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetById(Guid id)
     {
+        // M12: anônimo — mesmo motivo do GetAll, sem custo/margem interna.
         var product = await _service.GetByIdAsync(id);
-        return product == null ? NotFound() : Ok(product);
+        return product == null ? NotFound() : Ok(ProductPublicDto.FromEntity(product));
     }
 
-    /// <summary>Busca produto por código de barras. Acessível por todos autenticados.</summary>
+    /// <summary>Busca produto por código de barras — usado pelo admin (Estoque/venda) pra editar
+    /// custo/preço via scanner. M12: era [Authorize] genérico (Customer incluído) mas devolve a
+    /// entidade completa com custo — restrito a Admin/Operator em vez de esconder o campo, já que
+    /// a tela de Estoque legitimamente precisa dele aqui.</summary>
     /// <param name="code">Código de barras do produto.</param>
     [HttpGet("barcode/{code}")]
-    [Authorize]
+    [Authorize(Roles = "Admin,Operator")]
     [ProducesResponseType(typeof(Product), 200)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetByBarcode(string code)
