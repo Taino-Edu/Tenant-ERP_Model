@@ -18,8 +18,14 @@ public class PushController : ControllerBase
 {
     private readonly AppDbContext  _db;
     private readonly IConfiguration _config;
+    private readonly ILogger<PushController> _logger;
 
-    public PushController(AppDbContext db, IConfiguration config) { _db = db; _config = config; }
+    public PushController(AppDbContext db, IConfiguration config, ILogger<PushController> logger)
+    {
+        _db     = db;
+        _config = config;
+        _logger = logger;
+    }
 
     // ── Chave pública VAPID — necessária para o browser montar a subscrição ──
 
@@ -55,6 +61,16 @@ public class PushController : ControllerBase
 
         if (existing is not null)
         {
+            // M17: Endpoint é único por browser/dispositivo — reassociar de propósito é o
+            // caso legítimo de dispositivo compartilhado (ex: tablet do caixa, outro
+            // funcionário loga depois). Mas como qualquer autenticado pode reivindicar
+            // QUALQUER Endpoint já cadastrado (sem exigir posse anterior), loga toda troca
+            // de dono pra dar rastro caso vire abuso — sem bloquear o fluxo legítimo.
+            if (existing.UserId != userId)
+                _logger.LogWarning(
+                    "Push subscription (Endpoint {Endpoint}) reassociada do usuário {De} pro usuário {Para}.",
+                    existing.Endpoint, existing.UserId, userId);
+
             existing.P256dh = req.P256dh;
             existing.Auth   = req.Auth;
             existing.UserId = userId;

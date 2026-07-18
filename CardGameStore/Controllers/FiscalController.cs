@@ -81,7 +81,9 @@ public class FiscalController : ControllerBase
         if (req.Uf                  is not null) cfg.Uf                  = req.Uf.ToUpperInvariant();
         if (req.Cep                 is not null) cfg.Cep                 = req.Cep.Replace("-", "");
         if (req.CscId               is not null) cfg.CscId               = req.CscId;
-        if (req.CscToken            is not null) cfg.CscToken            = req.CscToken;
+        // M14: criptografado com o mesmo EncryptionService do certificado — em claro, um
+        // vazamento do banco permitiria gerar QR Codes válidos em nome da loja.
+        if (req.CscToken            is not null) cfg.CscTokenEncrypted   = _enc.Encrypt(req.CscToken);
 
         if (req.RegimeTributario is not null)
         {
@@ -706,7 +708,7 @@ public class FiscalController : ControllerBase
             cfg.Municipio,
             cfg.Uf,
             cfg.Cep,
-            CscConfigurado = !string.IsNullOrWhiteSpace(cfg.CscId) && !string.IsNullOrWhiteSpace(cfg.CscToken),
+            CscConfigurado = !string.IsNullOrWhiteSpace(cfg.CscId) && !string.IsNullOrWhiteSpace(cfg.CscTokenEncrypted),
             cfg.CscId, // não sensível isoladamente; o token nunca é retornado
             RegimeTributario = cfg.RegimeTributario.ToString(),
             Ambiente         = cfg.Ambiente.ToString(),

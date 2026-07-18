@@ -467,7 +467,7 @@ public class NfceEmissionService : INfceEmissionService
         if (string.IsNullOrWhiteSpace(cfg.Cnpj) || cfg.Cnpj.Length != 14)
             throw new FiscalNaoConfiguradoException("CNPJ ausente ou inválido em Admin > Fiscal — precisa ter 14 dígitos.");
 
-        if (string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscToken))
+        if (string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscTokenEncrypted))
             throw new FiscalNaoConfiguradoException(
                 "CSC (Código de Segurança do Contribuinte) não configurado em Admin > Fiscal — sem ele a NFC-e " +
                 "transmite sem QR Code (obrigatório) e é rejeitada pela SEFAZ.");
@@ -538,6 +538,9 @@ public class NfceEmissionService : INfceEmissionService
     {
         var (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
+
+        // M14: decriptado uma vez aqui — cfg.CscTokenEncrypted nunca é usado direto no QR Code.
+        var cscToken = string.IsNullOrWhiteSpace(cfg.CscTokenEncrypted) ? null : _enc.Decrypt(cfg.CscTokenEncrypted);
 
         // Monta os itens (e valida CSOSN) ANTES de reservar o número — uma Natureza de
         // Operação mal configurada não pode queimar um número de NFC-e sem transmitir nada.
@@ -648,9 +651,9 @@ public class NfceEmissionService : INfceEmissionService
         // QR Code: usa a própria lib (sabe a URL certa de cada estado e o hash do CSC) em vez
         // de reimplementar isso na mão — evita erro de domínio/fórmula por estado.
         nfe.infNFeSupl = new infNFeSupl();
-        var qrCodeUrl = string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscToken)
+        var qrCodeUrl = string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cscToken)
             ? null
-            : ExtinfNFeSupl.ObterUrlQrCode(nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao2, cfg.CscId, cfg.CscToken, cfgCertificado);
+            : ExtinfNFeSupl.ObterUrlQrCode(nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao2, cfg.CscId, cscToken, cfgCertificado);
         if (qrCodeUrl is not null)
             nfe.infNFeSupl.qrCode = qrCodeUrl;
 
@@ -686,9 +689,9 @@ public class NfceEmissionService : INfceEmissionService
                 // não vale mais pra este XML.
                 nfe.Assina(cfgServico, certificado);
                 nfe.infNFeSupl = new infNFeSupl();
-                var qrCodeContingencia = string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscToken)
+                var qrCodeContingencia = string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cscToken)
                     ? null
-                    : ExtinfNFeSupl.ObterUrlQrCode(nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao2, cfg.CscId, cfg.CscToken, cfgCertificado);
+                    : ExtinfNFeSupl.ObterUrlQrCode(nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao2, cfg.CscId, cscToken, cfgCertificado);
                 if (qrCodeContingencia is not null)
                     nfe.infNFeSupl.qrCode = qrCodeContingencia;
 

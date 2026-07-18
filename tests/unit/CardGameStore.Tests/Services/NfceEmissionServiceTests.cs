@@ -125,7 +125,7 @@ public class NfceEmissionServiceTests
             CodigoMunicipioIbge        = "3550308",
             Uf                         = "SP",
             CscId                      = "000001", // F12: pré-voo exige CSC antes do certificado
-            CscToken                   = Guid.NewGuid().ToString(),
+            CscTokenEncrypted          = enc.Encrypt(Guid.NewGuid().ToString()),
             CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
             CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
         });
