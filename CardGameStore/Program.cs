@@ -456,6 +456,15 @@ if (!app.Environment.IsDevelopment() && app.Configuration.GetValue<bool?>("COOKI
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
+    // C3: marca explicitamente o tenant-zero ANTES de resolver o AppDbContext — o
+    // TenantConnectionInterceptor agora falha rápido se uma conexão abrir sem Set()
+    // ter sido chamado neste escopo (ver ValidateSchemaName). As migrations deste
+    // bloco (catálogo + schema "public") são a única operação legítima fora de
+    // request HTTP que opera no tenant-zero por padrão, então marca de propósito
+    // em vez de deixar cair no default silenciosamente.
+    scope.ServiceProvider.GetRequiredService<ITenantContext>()
+        .Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
+
     var db      = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var catalog = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
     var logger  = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();

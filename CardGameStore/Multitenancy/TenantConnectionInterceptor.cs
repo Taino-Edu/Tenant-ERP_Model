@@ -95,6 +95,19 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
 
     private string ValidateSchemaName()
     {
+        // C3: todo caminho legítimo do código (TenantResolutionMiddleware, background
+        // services via ForEachActiveTenantAsync, scopes manuais em controllers/services,
+        // boot do Program.cs) chama ITenantContext.Set(...) explicitamente antes de tocar
+        // no AppDbContext — inclusive pra tenant-zero. Um scope que abre conexão sem nunca
+        // ter chamado Set() é sempre bug (esqueceram de propagar o tenant), nunca uso
+        // intencional do default — cai silenciosamente no schema "public" sem avisar
+        // ninguém, causa raiz de bugs reais já encontrados (C1/C2 na auditoria). Falha
+        // rápido em vez de gravar dado no tenant errado.
+        if (!_tenantContext.IsExplicitlySet)
+            throw new InvalidOperationException(
+                "ITenantContext.Set(...) nunca foi chamado neste escopo antes de abrir uma conexão — " +
+                "provável bug de propagação de tenant (CreateScope() sem Set() antes de resolver o AppDbContext).");
+
         var schema = _tenantContext.SchemaName;
 
         // O nome do schema só vem do catálogo de tenants ou da constante de
