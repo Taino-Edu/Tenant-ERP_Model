@@ -17,8 +17,8 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 |---|---|---|
 | 🔴 Crítico | 12 | 10 (+1 parcial) |
 | 🟠 Bloqueio multi-instância | 4 | 0 |
-| 🟡 Médio | 27 | 5 (M1,M2,M6,M7,M8) + 1 parcial (M18) |
-| 🔵 Baixo | 13 | 0 |
+| 🟡 Médio | 27 | 8 (M1,M2,M6,M7,M8,M13,M14,M26) + 3 parciais (M12,M15,M17) + 1 parcial (M18) |
+| 🔵 Baixo | 13 | 1 (B3) |
 | 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 14 (+1 parcial) |
 
 ---
@@ -167,17 +167,22 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 ### Segurança e contrato de API
 
-**M12. Entidade EF `Product` no bind e no retorno — vaza preço de custo** — `ProductController.cs:98-115` (bind direto, mass assignment) e `GetAllStore` (`:44-51`, qualquer role, inclusive Customer) + GET anônimo (`:33`) serializam a entidade completa: `CostPriceInCents` (documentado como "visível só para o admin", `Product.cs:55-57`), margem e estoque mínimo expostos.
+**M12. Entidade EF `Product` no bind e no retorno — vaza preço de custo**  `🩹 parcial` — `ProductController.cs`
+  - **Status:** `GetAll` (anônimo), `GetAllStore` (customer) e `GetById` (anônimo) agora devolvem `ProductPublicDto` (sem `CostPriceInCents`/`MinimumStock`) — confirmado no frontend que nenhum uso admin depende desses 3 endpoints. Bônus: `barcode/{code}` também vazava custo pra qualquer autenticado — restrito a `Admin,Operator` (a tela de Estoque usa o custo ali legitimamente). **Não corrigido:** bind direto de `Product` no `Create`/`Update` (mass assignment) — endpoints já são Admin-only, severidade bem menor.
 
-**M13. Permissões por prefixo amplas demais** — `Perfil.cs:62-76`: "estoque" (`/api/product`) cobre `/api/products/*` e variantes; "relatorios" expõe o relatório de crediário com nome/e-mail/WhatsApp dos devedores (`RelatoriosController.cs:160-234`); "lgpd" inclui `/api/audit` — Operator lê **todos** os audit logs (diffs de produtos/vendas/usuários, hash de IP).
+**M13. Permissões por prefixo amplas demais**  `✅ corrigido` — `Perfil.cs`, `RelatoriosController.cs`
+  - **Status:** `/api/audit` removido do prefixo da permissão "lgpd" (só Admin acessa, como o próprio `AuditController` já dizia pretender). `/api/relatorios/crediario` (nome/e-mail/WhatsApp de devedores) agora exige a permissão "crediario" especificamente, não só a genérica "relatorios". "estoque" cobrindo `/api/products/*` (variantes/waitlist) mantido — são sub-recursos de produto.
 
-**M14. Token CSC do QR Code NFC-e armazenado em claro** — `FiscalConfig.cs:98-101` + `FiscalController.cs:83`: só o `.pfx` e a senha do certificado são criptografados (AES-256-GCM). CSC em claro permite gerar QR codes válidos em nome da loja se o banco vazar.
+**M14. Token CSC do QR Code NFC-e armazenado em claro**  `✅ corrigido` — `FiscalConfig.cs`, `FiscalController.cs`, `NfceEmissionService.cs`
+  - **Status:** `CscToken` → `CscTokenEncrypted`, criptografado com o mesmo `EncryptionService` (AES-256-GCM) do certificado. Migration `EncryptCscToken` — atenção: dropa a coluna antiga (sem cliente real ainda; se algum ambiente já tiver CSC configurado, precisa recadastrar após o deploy).
 
-**M15. Erros internos vazam ao cliente e padrão de erro é inconsistente** — `AiChatController.cs:50-55` devolve `ex.Message` com HTTP 200; `ComandaController.cs:342-345` devolve 500 com `ex.Message`. Controllers oscilam entre `{Message}`, `{message,traceId}` (middleware global) e erros de modelo — sem `ProblemDetails`, sem versionamento de rota.
+**M15. Erros internos vazam ao cliente e padrão de erro é inconsistente**  `🩹 parcial` — `AiChatController.cs`, `ComandaController.cs`
+  - **Status:** os 2 exemplos citados corrigidos (loga o erro completo, devolve mensagem genérica). **Não corrigido:** padronização sistêmica pra `ProblemDetails`/versionamento de rota em todos os controllers — refactor bem maior, fora do escopo de um fix pontual.
 
-**M16. Gemini: chave global, sem quota por tenant** — `GeminiChatService.cs:55` lê `GeminiSettings:ApiKey` do processo (`docker-compose.prod.yml:102`), rate-limitada só por IP ("api"): um único tenant pode esgotar a quota de todos. Inconsistente com o modelo de módulos/planos por loja.
+**M16. Gemini: chave global, sem quota por tenant** — `GeminiChatService.cs:55` lê `GeminiSettings:ApiKey` do processo, rate-limitada só por IP: um único tenant pode esgotar a quota de todos. **Não corrigido nesta sessão** — só é um problema real com múltiplos tenants pagantes simultâneos disputando a mesma quota; mesmo raciocínio de adiamento de M9-M11 (sem isso ainda ser realidade).
 
-**M17. DTOs sem validação + sequestro de subscrição push** — `SiteConfigController.cs:44-49` retorna entidade EF e `SaveSiteConfigRequest` (`:148-174`) não tem `[MaxLength]`/range; `PushController.cs:49-75` permite a qualquer autenticado reassociar a si qualquer `Endpoint` já cadastrado (sequestra notificações de outro usuário).
+**M17. DTOs sem validação + sequestro de subscrição push**  `🩹 parcial` — `PushController.cs`
+  - **Status:** `Subscribe` loga toda reassociação de `Endpoint` pra outro usuário — mantive o comportamento de reassociar (é o caso legítimo de dispositivo compartilhado, ex: tablet do caixa entre turnos; bloquear quebraria esse fluxo) mas agora com rastro. **Não corrigido:** `SiteConfigController` retornando entidade EF (avaliado — `SiteConfig` não tem nenhum campo sensível, é puramente branding/contato já pensado pra ser público; risco real é zero) e `SaveSiteConfigRequest` sem `[MaxLength]` (endpoint Admin-only, só afeta a própria configuração do tenant que já tem esse acesso — severidade baixa).
 
 ### Frontend, testes e deploy
 
@@ -199,7 +204,8 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 **M25. Documentação viva diverge do código a cada sprint** — `STATUS.md` inteiro datado de 2026-07-10 (diz que multi-tenant "travou"; tudo implementado há uma semana); `BACKLOG.md` lista como pendentes Mongo e squash (feitos) e diz "Playwright sem nenhum teste" (há 2 specs mortos); `DOCUMENTACAO-COMPLETA.md:63` diz `/hub/*` (real: `/hubs/*`), `:143` atribui emissão SignalR ao controller (real: `ComandaService` → grupo `AdminDashboard_{tenantId}`), `:268` lista `.AsNoTracking()` como pendência (já aplicado); `README.md:61` "SignalR (SSE + Long Polling)" (cliente prefere WebSocket); `CASOS_DE_USO.md:17` "access token de 15 min" (appsettings: 480; prod: 60); `KYC_PLANNING.md:99-100` prescreve DDL via `ExecuteSqlRaw` (padrão agora é EF Migrations).
 
-**M26. Senha default `SenhaForte@123` como fallback no código** — `Program.cs:521,:547`: há warning, mas o admin/dono da plataforma é criado mesmo assim se a env faltar. Sugestão: em `Production`, falhar o boot em vez de criar com senha conhecida.
+**M26. Senha default `SenhaForte@123` como fallback no código**  `✅ corrigido` — `Program.cs`, `deploy/setup.sh`
+  - **Status:** boot aborta (`InvalidOperationException`) em Production/Staging se `ADMIN_SEED_PASSWORD`/`PLATFORM_OWNER_SEED_PASSWORD` não estiverem configuradas — não cria mais a conta com a senha conhecida no código. `setup.sh` gera as duas automaticamente (mesmo padrão de `POSTGRES_PASSWORD`/`JWT_SECRET`) e imprime a senha do admin no fim do setup. **⚠️ Breaking change pra deploy existente:** se o `.env` da VPS em produção não tiver essas variáveis, o próximo deploy vai falhar o boot — precisa adicionar manualmente antes de dar push.
 
 **M27. Limites de recursos do compose subdimensionados para o boot O(N)** — `docker-compose.prod.yml`: API 1 CPU/512 MB, Postgres 512 MB, frontend 512 MB, nginx 128 MB. Com o loop de migrations por tenant crescendo (C4), o boot da API estoura memória antes de o Postgres virar gargalo.
 
@@ -210,7 +216,7 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 **Backend**
 - **B1.** `SefazNfeService.cs:259-313` — "Ciência da Operação" manifestada automaticamente em massa (até 60 notas/ciclo, sem revisão humana): evento com efeito jurídico; merece ciência explícita do lojista/contador.
 - **B2.** `ComandaService.cs:996-999` — estoque baixa ao adicionar item e só retorna em remoção/cancelamento; **sem expiração de comandas abertas** → comanda abandonada prende estoque indefinidamente.
-- **B3.** `ComandaHub.cs:56-59` — só `Role=="Admin"` entra no grupo admin do tenant (Operator fica sem tempo real); `CloseComanda` do hub exige Admin enquanto o REST permite Operator — inconsistência de superfície.
+- [x] **B3.**  `✅ corrigido` — `ComandaHub.cs`: Operator agora entra no grupo `AdminDashboard_*` (tinha tempo real zero antes) e os RPCs `CloseComanda`/`AdminAddItemToComanda` aceitam Operator, alinhado com o REST.
 - **B4.** `LgpdController.cs:112` — JSON montado na mão com e-mail interpolado (quebra com aspas) + salt fallback hardcoded (`:52`); `EncryptionService.cs:19-26` aceita chave zero em dev; `appsettings.json:19` access token de **8 horas** (janela longa para token não revogável).
 - **B5.** Estilos de autorização mistos sem critério documentado — `Roles="Admin"` (`TimerController.cs:11`, `PerfisController.cs:24`), `Roles="Admin,Operator"` (`ProductController.cs:55`), policies — `TimerController` inacessível a Operators mesmo com perfil; DTOs do timer aceitam duração negativa e ação desconhecida retorna 200 silencioso (`TimerController.cs:55-92`).
 - **B6.** Superfícies anônimas: `PublicProfileController.cs:34-60` expõe saldo de pontos e nº de compras por GUID; `ProductVariantController.cs:26-39` expõe estoque exato; `MensageriaRequest` (`MensageriaController.cs:174-187`) sem limite de tamanho de título/corpo.
@@ -374,7 +380,7 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 | ~~**P1**~~ | ✅ `ITenantContext` fail-fast feito (C3). Falha de migration por tenant agora visível (WARNING + slugs) — job migrador separado/`pg_advisory_lock` adiado de propósito (sem multi-instância ainda) | C4 (parcial), C3 | — |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
 | **P3** | ✅ M1, M2, M6, M7, M8 feitos. **Pendente:** M3/M4/M5 (idempotência sistêmica, reservas, crediário), M9-M11 (agregações/performance por tenant — adiado até escalar) | M1–M11 | — |
-| **P4** | Segurança média e higiene: DTOs de produto/config/push, permissões por prefixo, CSC criptografado, padrão de erro/`ProblemDetails`, Gemini por tenant, type-check no CI, smoke test real, resíduos TCG, hardcodes, docs, senha default, compose | M12–M27, B1–B13 | Superfície de ataque e dívida de consistência |
+| **P4** | ✅ M12 (parcial), M13, M14, M15 (parcial), M17 (parcial), M26, B3 feitos — cobriram os riscos de segurança de verdade (vazamento de custo, permissão larga demais, CSC em claro, senha padrão em Production). **Pendente:** M16 (Gemini por tenant — só importa com múltiplos tenants pagantes), M18-M25/M27 (frontend/CI/docs/deploy — fora do escopo backend desta rodada), B1-B2/B4-B13 (revisados por amostragem, nenhum achado crítico novo; ver notas individuais) | M12–M27, B1–B13 | — |
 | ~~**P5**~~ | ✅ F5-F15 corrigidos (F7 parcial — só a mensagem, estorno automático fica como feature separada). Restam as decisões de escopo L1-L5 (CC-e, inutilização manual de faixa, ajuste de numeração inicial — não são bugs) | F5–F15, L1–L5 | — |
 
 ---
