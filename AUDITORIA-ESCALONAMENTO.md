@@ -11,7 +11,7 @@
 
 O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 224 testes de backend incluindo isolamento de tenant contra Postgres real. A auditoria encontrou **12 problemas críticos**; **9 já foram corrigidos e commitados** (C1, C2, C6, C7, C8, C9, C10, C11, C12 — ver seção "Estado das correções" abaixo), restando **3 abertos por decisão de arquitetura** (C3, C4, C5 — não são bugs pontuais, exigem escolha de design).
 
-O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, e os **4 problemas graves que impediam a homologação (F1–F4) já foram corrigidos** — falta só verificação manual em homologação real (chave/QR de contingência e nfeProc autorizado não são testáveis sem SEFAZ de verdade). Restam 11 achados fiscais menores + 2 lacunas de escopo.
+O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, e **14 dos 15 achados (F1–F15) já foram corrigidos** — só F7 ficou parcial (mensagem enganosa corrigida, mas o fluxo de estorno automático em si é feature nova, não bug pontual, e fica documentado como gap real). F1, F4, F5 não são testáveis neste ambiente (exigem SEFAZ de homologação real) — verificar manualmente antes de produção. Restam as 2 lacunas de escopo (L1-L5, decisões a tomar com o contador, não bugs).
 
 | Severidade | Quantidade | Corrigido |
 |---|---|---|
@@ -19,7 +19,7 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 | 🟠 Bloqueio multi-instância | 4 | 0 |
 | 🟡 Médio | 27 | 1 parcial |
 | 🔵 Baixo | 13 | 0 |
-| 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 4 (todos os 🔴) |
+| 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 14 (+1 parcial) |
 
 ---
 
@@ -271,42 +271,38 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
   - **Problema:** `retorno.EnvioStr` era o envelope `<enviNFe>` **sem `protNFe`** (confirmado no fonte da Zeus). O `nfeProc` (obrigatório para guarda de 5 anos e aceito em sistemas contábeis) nunca era montado — a lib devolve o protocolo em `retorno.Retorno.protNFe`. Exportação errada nas 3 vias (manual, e-mail, portal).
   - **Status:** ao autorizar, monta `NFe.Classes.nfeProc { NFe = nfe, protNFe = retorno.Retorno.protNFe }` e persiste `ObterXmlString()` desse objeto em `XmlAutorizado` — documento fiscal hábil de verdade, não mais o envelope de envio. O comentário do model (`NotaFiscalEmitida.cs:78`) já estava descrevendo o comportamento correto (agora bate com o código). **Não testável neste ambiente** (exige autorização real da SEFAZ) — verificar manualmente em homologação.
 
-- [ ] **F5 (🟡 Média) — Rejeição pós-contingência entra em loop: inutiliza o número e o retry reutiliza o número já inutilizado** — `NfceEmissionService.cs:124,:463,:626-637`
-  - **Correção:** rejeitada ex-contingência não deve reutilizar número inutilizado — reservar número novo (e inutilizar o anterior se ainda não foi) ou marcar como não reprocessável e exigir ação manual.
+- [x] **F5 (🟡 Média) — Rejeição pós-contingência entra em loop: inutiliza o número e o retry reutiliza o número já inutilizado**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Status:** ao rejeitar (e inutilizar) uma nota que estava em contingência, os campos `CnfContingencia`/`DhContingencia`/`JustificativaContingencia` são limpos — o próximo reprocessamento reserva número novo do zero em vez de reusar o já inutilizado. **Não testável neste ambiente** (exige SEFAZ real respondendo rejeição em contingência) — verificar em homologação.
 
-- [ ] **F6 (🟡 Média) — Buracos de numeração silenciosos quando a exceção ocorre entre a reserva e a resposta da SEFAZ** — `NfceEmissionService.cs:463,:279-286,:571-572,:600-601`
-  - **Correção:** persistir o número na nota imediatamente após a reserva (antes de transmitir); rotina para detectar saltos e inutilizar (ver inutilização manual de faixa, lacuna L2).
+- [x] **F6 (🟡 Média) — Buracos de numeração silenciosos quando a exceção ocorre entre a reserva e a resposta da SEFAZ**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Status:** número/série persistidos na nota imediatamente após a reserva, antes de assinar/transmitir. Rotina de detecção de saltos + inutilização em lote continua como lacuna de escopo (ver L2).
 
-- [ ] **F7 (🟡 Média) — Cancelar a NFC-e não estorna nada — e a UX manda o usuário usá-lo como estorno** — `NfceEmissionService.CancelarAsync (:151-189)` + `ComandaService.cs:730-733`
-  - **Problema:** estoque, crediário, pontos/cashback e financeiro não são revertidos; venda avulsa nem tem método de cancelamento/estorno. Venda cancelada no Fisco continua receita e estoque baixado no ERP.
-  - **Correção:** ao confirmar o cancelamento na SEFAZ, estornar os efeitos no ERP (ou criar fluxo de estorno explícito); implementar cancelamento/estorno de venda avulsa.
+- [x] **F7 (🟡 Média) — Cancelar a NFC-e não estorna nada — e a UX manda o usuário usá-lo como estorno**  `🩹 parcial` — `ComandaService.cs`
+  - **Status:** mensagem corrigida — não sugere mais que cancelar a NFC-e estorna a venda (deixa explícito que estoque/crediário/pontos continuam intocados e exigem ajuste manual). **Não implementado:** o fluxo de estorno automático em si (reverter estoque/crediário/pontos/cashback, e cancelamento de venda avulsa) — é uma feature nova, não um bug pontual, que toca lógica financeira real e merece design + testes dedicados antes de mexer. Documentado como gap real.
 
-- [ ] **F8 (🟡 Média) — TOCTOU na emissão manual tardia: dupla NFC-e para a mesma origem** — `FiscalController.cs:372-374,:387-389` + `AppDbContext.cs:176-185` (índices **não únicos** em `ComandaId`, nenhum em `VendaAvulsaId`)
-  - **Correção:** índice único parcial por origem (`ComandaId`/`VendaAvulsaId`, excluindo canceladas/rejeitadas); violação → 409. (Distinto de C6, que é a dupla emissão pelo duplo fechamento.)
+- [x] **F8 (🟡 Média) — TOCTOU na emissão manual tardia: dupla NFC-e para a mesma origem**  `✅ corrigido` — `AppDbContext.cs`, `NfceEmissionService.cs`
+  - **Status:** índice único parcial em `comanda_id`/`venda_avulsa_id` (`ix_notas_fiscais_comanda_unica`, `ix_notas_fiscais_venda_avulsa_unica`). `EmitirAsync` trata a violação de unicidade (corrida real) devolvendo a nota já existente em vez de lançar exceção — mantém a garantia de "nunca lança" do serviço.
 
-- [ ] **F9 (🟡 Média) — Protocolo e procEventoNFe do cancelamento são descartados** — `NfceEmissionService.cs:175-185` (lê só cStat); o model nem tem campo
-  - **Correção:** adicionar `ProtocoloCancelamento` + `XmlEventoCancelamento`, persistir e incluir no ZIP do contador (guarda documental exige a prova do cancelamento).
+- [x] **F9 (🟡 Média) — Protocolo e procEventoNFe do cancelamento são descartados**  `✅ corrigido` — `NotaFiscalEmitida.cs`, `NfceEmissionService.cs`
+  - **Status:** novos campos `ProtocoloCancelamento` e `XmlEventoCancelamento` (procEventoNFe da lib, via `ObterXmlString()`) persistidos no cancelamento — prova documental completa, não só o `cStat`.
 
-- [ ] **F10 (🟡 Média) — Regime tributário configurável mas quebrado fora do Simples — sem aviso** — `NfceEmissionService.cs:703,:720-742,:744-749` + `FiscalController.cs:85-87,:174-185`
-  - **Problema:** config permite Lucro Presumido/Real e `MapCrt` emite `RegimeNormal`, mas os itens sempre levam classes `ICMSSN*` (CSOSN de Simples) → XML inconsistente CRT×CSOSN → 100% de rejeição.
-  - **Correção:** bloquear a escolha de LP/LR na config com aviso "somente Simples Nacional" (ou montar ICMS CST por regime).
+- [x] **F10 (🟡 Média) — Regime tributário configurável mas quebrado fora do Simples — sem aviso**  `✅ corrigido` — `FiscalController.cs`
+  - **Status:** `PUT /api/fiscal/config` rejeita (400) a escolha de Lucro Presumido/Real com mensagem explícita — a montagem de itens só sabe gerar CSOSN (Simples Nacional); permitir os outros regimes gerava XML CRT×CSOSN inconsistente (100% rejeição).
 
-- [ ] **F11 (🟡 Média) — Exportação manual de XMLs com janela de fuso errada** — `FiscalController.cs:448` + `ContadorPortalController.cs:242`
-  - **Problema:** `inicio.ToUniversalTime()` sobre `DateTime` Unspecified de query string interpreta como horário local do servidor (container em UTC): notas entre 21h–24h de Brasília na virada de mês caem no ZIP do mês errado. O job automático já documenta e corrige esse bug (`FiscalXmlExportBackgroundService.cs:85-96`) — só no caminho automático.
-  - **Correção:** aplicar a mesma interpretação de fuso do job nos dois endpoints manuais.
+- [x] **F11 (🟡 Média) — Exportação manual de XMLs com janela de fuso errada**  `✅ corrigido` — `BrazilTime.cs`, `FiscalController.cs`, `ContadorPortalController.cs`
+  - **Status:** novo `BrazilTime.ToUtcFromLocal` (mesma lógica do job automático) substitui `.ToUniversalTime()` nos dois endpoints manuais de exportação e no filtro de datas do portal do contador.
 
-- [ ] **F12 (🟡 Média) — Pré-voo de configuração não cobre CNPJ/IE/CSC — sem CSC, transmite sem QR e queima número** — `NfceEmissionService.cs:395-401,:552-556` + `FiscalConfig.cs:42-44`
-  - **Problema:** `AbrirConfiguracaoSefazAsync` só exige certificado e endereço; `Cnpj` default `""` → chave inválida; sem CSC, `qrCodeUrl` sai null e a transmissão segue **sem `infNFeSupl.qrCode`** → rejeição da NFC-e (QR obrigatório) + número inutilizado à toa.
-  - **Correção:** validar CNPJ, IE, CSC id+token, série e numeração **antes de reservar número** → `FiscalNaoConfiguradoException`.
+- [x] **F12 (🟡 Média) — Pré-voo de configuração não cobre CNPJ/IE/CSC — sem CSC, transmite sem QR e queima número**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Status:** `AbrirConfiguracaoSefazAsync` agora valida CNPJ (14 dígitos) e CSC id+token antes de reservar número, além de certificado/endereço já existentes. Testado (`EmitirParaComandaAsync_SemCsc_...`).
 
-- [ ] **F13 (🔵 Baixa) — Nota autorizada após rejeição+inutilização fica com estado contraditório** — `NfceEmissionService.cs:603-613` + `FiscalController.cs:339`
-  - **Correção:** ao autorizar com número novo, limpar `InutilizadoEm`/`ProtocoloInutilizacao` do número antigo.
+- [x] **F13 (🔵 Baixa) — Nota autorizada após rejeição+inutilização fica com estado contraditório**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Status:** ao autorizar com número novo, `InutilizadoEm`/`ProtocoloInutilizacao` do número antigo são limpos.
 
-- [ ] **F14 (🔵 Baixa) — Janela de cancelamento fixa em 30 min; contingência autorizada tardiamente nasce incancelável** — `NfceEmissionService.cs:73,:162-164,:608-610`
-  - **Correção:** janela configurável por UF; em contingência, medir a janela a partir da autorização (protocolo), não de `EmitidoEm` preservado da venda.
+- [x] **F14 (🔵 Baixa) — Janela de cancelamento fixa em 30 min; contingência autorizada tardiamente nasce incancelável**  `✅ corrigido` — `NotaFiscalEmitida.cs`, `NfceEmissionService.cs`
+  - **Status:** novo campo `AutorizadoEm` (distinto de `EmitidoEm`, que preserva o momento da venda em contingência) é setado no momento real da confirmação pela SEFAZ; a janela de cancelamento passa a contar a partir dele. Testado (`CancelarAsync_SemAutorizadoEm_...`, `CancelarAsync_DentroDaJanelaPorAutorizadoEm_...`). Janela configurável por UF continua como melhoria futura, não crítica.
 
-- [ ] **F15 (🔵 Baixa) — Background services fiscais e endpoints de DF-e não respeitam o módulo "fiscal"** — `Multitenancy/TenantIteration.cs:42-45` + `ContasReceberController.cs:12-15`
-  - **Correção:** `ForEachActiveTenantAsync` deve filtrar por `EnabledModules` nos jobs fiscais (e-mail de certificado/XML dispara para tenant sem o módulo se houver config residual); adicionar `[RequireModule("fiscal")]` no `ContasReceberController`.
+- [x] **F15 (🔵 Baixa) — Background services fiscais e endpoints de DF-e não respeitam o módulo "fiscal"**  `✅ corrigido` — `FiscalAlert/FiscalRetry/FiscalXmlExport/SefazDistBackgroundService.cs`, `ContasReceberController.cs`
+  - **Status:** os 4 jobs fiscais agora pulam tenants sem `EnabledModules.Contains("fiscal")`; `[RequireModule("fiscal")]` adicionado aos 3 endpoints de DF-e (Inter fica de fora, não é fiscal).
 
 ### Lacunas de escopo (decisões a tomar/documentar, não bugs)
 
@@ -378,7 +374,7 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
 | **P3** | Integridade e performance: transações nos caminhos quentes, concorrência em saldos, idempotência sistêmica, agregações em SQL, `AccountLocator` e painéis de plataforma | M1–M11 | Corrida e custo por request em tenant grande |
 | **P4** | Segurança média e higiene: DTOs de produto/config/push, permissões por prefixo, CSC criptografado, padrão de erro/`ProblemDetails`, Gemini por tenant, type-check no CI, smoke test real, resíduos TCG, hardcodes, docs, senha default, compose | M12–M27, B1–B13 | Superfície de ataque e dívida de consistência |
-| **P5** | Fiscal — demais correções e decisões: loop de rejeição pós-contingência, buracos de numeração, estorno no cancelamento, índice único por origem, protocolo do cancelamento, CRT fora do Simples, fuso na exportação manual, pré-voo de config; decidir CC-e, inutilização manual de faixa e ajuste de numeração inicial | F5–F15, L1–L5 | Robustez fiscal pós-homologação |
+| ~~**P5**~~ | ✅ F5-F15 corrigidos (F7 parcial — só a mensagem, estorno automático fica como feature separada). Restam as decisões de escopo L1-L5 (CC-e, inutilização manual de faixa, ajuste de numeração inicial — não são bugs) | F5–F15, L1–L5 | — |
 
 ---
 
