@@ -72,6 +72,12 @@ public static class Permissao
         [Relatorios]  = ["/api/relatorios"],
         [Anuncios]    = ["/api/announcements"],
         [QrCodes]     = ["/api/qrcode"],
-        [Lgpd]        = ["/api/lgpd", "/api/audit"],
+        // M13: "/api/audit" removido daqui — AuditController é deliberadamente "Somente Admin"
+        // (diffs de produtos/vendas/usuários, hash de IP: dado operacional sensível, não
+        // relacionado a LGPD). Com o prefixo antigo, qualquer Operator com a permissão "lgpd"
+        // (pensada só pra atender solicitações de titular de dados) lia todos os audit logs —
+        // contradizia o próprio comentário do controller. Nenhuma outra permissão cobre
+        // "/api/audit" de propósito: só Admin acessa.
+        [Lgpd]        = ["/api/lgpd"],
     };
 }
