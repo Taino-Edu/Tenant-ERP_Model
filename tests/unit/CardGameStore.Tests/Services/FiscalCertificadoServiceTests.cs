@@ -56,4 +56,20 @@ public class FiscalCertificadoServiceTests
 
         act.Should().Throw<CertificadoInvalidoException>();
     }
+
+    [Fact]
+    public void Validar_ComCertificadoVencido_LancaCertificadoInvalidoException()
+    {
+        // F3: upload não pode aceitar certificado já vencido — senão a emissão só descobre
+        // isso na hora de assinar, e o handshake mTLS falho seria mal-classificado como SEFAZ
+        // fora do ar (contingência offline indevida).
+        var notBefore = DateTimeOffset.UtcNow.AddDays(-60);
+        var notAfter  = DateTimeOffset.UtcNow.AddDays(-1);
+        var pfxBytes  = CreateSelfSignedPfx(Senha, notBefore, notAfter);
+
+        var service = new FiscalCertificadoService();
+        Action act = () => service.Validar(pfxBytes, Senha);
+
+        act.Should().Throw<CertificadoInvalidoException>().WithMessage("*vencido*");
+    }
 }

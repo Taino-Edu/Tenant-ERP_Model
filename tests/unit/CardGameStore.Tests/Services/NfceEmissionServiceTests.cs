@@ -6,6 +6,8 @@
 // como PendenteEmissao quando a emissão não pode ser concluída.
 // =============================================================================
 
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
@@ -93,6 +95,48 @@ public class NfceEmissionServiceTests
         nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
     }
 
+    private const string SenhaCertificadoTeste = "senha-teste-123";
+
+    private static byte[] CreateSelfSignedPfx(string senha, DateTimeOffset notBefore, DateTimeOffset notAfter)
+    {
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest("CN=Fiscal Teste", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var cert = req.CreateSelfSigned(notBefore, notAfter);
+        return cert.Export(X509ContentType.Pfx, senha);
+    }
+
+    [Fact]
+    public async Task EmitirParaComandaAsync_ComCertificadoVencido_RegistraPendenteEmissaoSemLancarExcecao()
+    {
+        // F3: certificado vencido tem que bloquear ANTES de qualquer tentativa de rede — senão
+        // o handshake mTLS falho seria mal-classificado como "SEFAZ fora do ar" e cairia em
+        // contingência offline (tpEmis=9) indevidamente.
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        var enc     = CreateEncryptionService();
+
+        var pfxBytes = CreateSelfSignedPfx(SenhaCertificadoTeste, DateTimeOffset.UtcNow.AddDays(-400), DateTimeOffset.UtcNow.AddDays(-1));
+
+        db.FiscalConfigs.Add(new FiscalConfig
+        {
+            Cnpj                      = "12345678000100",
+            RazaoSocial                = "Loja Teste LTDA",
+            Logradouro                 = "Rua Teste",
+            CodigoMunicipioIbge        = "3550308",
+            Uf                         = "SP",
+            CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
+            CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var nota = await service.EmitirParaComandaAsync(comanda.Id);
+
+        nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
+        nota.MotivoRejeicao.Should().Contain("vencido");
+        nota.ChaveAcesso.Should().BeNull(); // nunca chegou a tentar transmitir
+    }
+
     [Fact]
     public async Task EmitirParaComandaAsync_ComandaInexistente_NuncaLancaExcecao()
     {
@@ -143,6 +187,47 @@ public class NfceEmissionServiceTests
         var resultado = await service.ReprocessarAsync(nota.Id);
 
         resultado.TentativasReprocessamento.Should().Be(10); // não incrementou — nem tentou
+    }
+
+    [Fact]
+    public async Task ReprocessarAsync_ContingenciaDentroDoPrazoLegal_IgnoraLimiteDeTentativasComum()
+    {
+        // F2: contingência (AutorizadaContingencia) NUNCA deve ser bloqueada pelo contador de
+        // tentativas comum (10, pensado pra PendenteEmissao/Rejeitada) — só pelo prazo legal de
+        // 24h. Nota com 10+ tentativas mas dentro do prazo ainda deve tentar de novo.
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status                     = NotaFiscalStatus.AutorizadaContingencia,
+            TentativasReprocessamento  = 10,
+            DhContingencia             = DateTime.UtcNow.AddHours(-1), // bem dentro das 24h
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var resultado = await service.ReprocessarAsync(nota.Id);
+
+        resultado.TentativasReprocessamento.Should().Be(11); // tentou de novo apesar do contador alto
+    }
+
+    [Fact]
+    public async Task ReprocessarAsync_ContingenciaAposPrazoLegalDe24h_NaoTentaDeNovo()
+    {
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status         = NotaFiscalStatus.AutorizadaContingencia,
+            DhContingencia = DateTime.UtcNow.AddHours(-25), // passou das 24h
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var resultado = await service.ReprocessarAsync(nota.Id);
+
+        resultado.TentativasReprocessamento.Should().Be(0); // não incrementou — nem tentou
+        resultado.Status.Should().Be(NotaFiscalStatus.AutorizadaContingencia); // continua como estava, exige ação manual
     }
 
     [Fact]

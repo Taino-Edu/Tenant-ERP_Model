@@ -27,7 +27,12 @@ public class FiscalCertificadoService
             // X509Certificate2.NotBefore/NotAfter vêm com Kind=Local (conversão do .NET a
             // partir do UTC original do certificado) — Npgsql rejeita gravar DateTime não-UTC
             // em timestamptz. ToUniversalTime() converte preservando o instante real.
-            return new CertificadoInfo(cert.Subject, cert.NotBefore.ToUniversalTime(), cert.NotAfter.ToUniversalTime());
+            var notAfterUtc = cert.NotAfter.ToUniversalTime();
+            if (notAfterUtc < DateTime.UtcNow)
+                throw new CertificadoInvalidoException(
+                    $"Certificado vencido em {notAfterUtc:dd/MM/yyyy} — não pode ser usado pra assinar NFC-e. Renove com a AC antes de reenviar.");
+
+            return new CertificadoInfo(cert.Subject, cert.NotBefore.ToUniversalTime(), notAfterUtc);
         }
         catch (CryptographicException ex)
         {

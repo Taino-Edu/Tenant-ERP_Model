@@ -72,8 +72,20 @@ public class NfceEmissionService : INfceEmissionService
     // Janela legal pra cancelar uma NFC-e após autorizada (padrão nacional: 30 minutos).
     private static readonly TimeSpan JanelaCancelamento = TimeSpan.FromMinutes(30);
 
-    // Trava contra loop de reprocessamento em nota permanentemente quebrada.
+    // Trava contra loop de reprocessamento em nota permanentemente quebrada — só se aplica a
+    // PendenteEmissao/Rejeitada. Contingência (AutorizadaContingencia) usa prazo por TEMPO
+    // (ver PrazoLegalContingencia): a 10 tentativas em ciclos de 15 min (FiscalRetryBackgroundService)
+    // desistiria em ~2,5h, bem antes do prazo legal de 24h da NT 2015.002.
     private const int MaxTentativasReprocessamento = 10;
+
+    // Prazo legal (NT 2015.002) pra uma NFC-e emitida em contingência offline ser retransmitida
+    // e autorizada de verdade pela SEFAZ — passado isso, a venda fica permanentemente sem
+    // documento fiscal válido e exige ação manual/regularização com o contador.
+    private static readonly TimeSpan PrazoLegalContingencia = TimeSpan.FromHours(24);
+
+    // Log de alerta quando a contingência está perto do prazo legal, pra dar chance de ação
+    // manual antes de virar problema irreversível.
+    private static readonly TimeSpan AlertaContingencia = TimeSpan.FromHours(20);
 
     // Todo horário enviado à SEFAZ usa esse fuso explicitamente — nunca o fuso
     // do servidor (containers em nuvem tipicamente rodam em UTC por padrão).
@@ -124,7 +136,26 @@ public class NfceEmissionService : INfceEmissionService
         if (nota.Status is not (NotaFiscalStatus.PendenteEmissao or NotaFiscalStatus.Rejeitada or NotaFiscalStatus.AutorizadaContingencia))
             return nota; // Autorizada/Cancelada não têm o que reprocessar — devolve como está.
 
-        if (nota.TentativasReprocessamento >= MaxTentativasReprocessamento)
+        if (nota.Status == NotaFiscalStatus.AutorizadaContingencia)
+        {
+            // Prazo por TEMPO, não por contagem — 10 tentativas em ciclos de 15 min
+            // esgotariam em ~2,5h, bem antes do prazo legal de 24h. Também vale pro botão de
+            // retry manual: contingência nunca é bloqueada pelo contador de tentativas comum.
+            if (nota.DhContingencia.HasValue && DateTime.UtcNow - nota.DhContingencia.Value > PrazoLegalContingencia)
+            {
+                _logger.LogError(
+                    "NFC-e {NotaId} em contingência desde {DhContingencia:o} ultrapassou o prazo legal de 24h sem " +
+                    "retransmitir — a venda ficou sem documento fiscal válido. Requer ação manual (regularização " +
+                    "com o contador).", nota.Id, nota.DhContingencia);
+                return nota;
+            }
+
+            if (nota.DhContingencia.HasValue && DateTime.UtcNow - nota.DhContingencia.Value > AlertaContingencia)
+                _logger.LogWarning(
+                    "NFC-e {NotaId} em contingência desde {DhContingencia:o} está se aproximando do prazo legal " +
+                    "de 24h sem retransmitir com sucesso.", nota.Id, nota.DhContingencia);
+        }
+        else if (nota.TentativasReprocessamento >= MaxTentativasReprocessamento)
         {
             _logger.LogWarning(
                 "NFC-e {NotaId} atingiu o limite de {Max} tentativas de reprocessamento — não vai tentar de novo.",
@@ -403,6 +434,21 @@ public class NfceEmissionService : INfceEmissionService
         var pfxBytes    = Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted!));
         var senha       = _enc.Decrypt(cfg.CertificadoSenhaEncrypted!);
         var certificado = Pkcs12Loader.Abrir(pfxBytes, senha);
+
+        // Bloqueia ANTES de qualquer tentativa de rede: um certificado vencido (upload validou
+        // na hora, mas venceu depois — o upload não bloqueia mais isso, mas notas antigas
+        // continuam valendo) faz o handshake mTLS falhar com HttpRequestException, que
+        // EhFalhaDeConectividade classificaria como "SEFAZ fora do ar" e cairia em contingência
+        // offline (tpEmis=9) indevidamente — cupom que nunca vai autorizar. Falhar aqui, antes
+        // do handshake, garante que erro de certificado nunca vira contingência.
+        var certificadoNotAfter = certificado.NotAfter;
+        if (certificadoNotAfter.ToUniversalTime() < DateTime.UtcNow)
+        {
+            certificado.Dispose();
+            throw new FiscalNaoConfiguradoException(
+                $"Certificado digital vencido em {certificadoNotAfter:dd/MM/yyyy} — atualize em Admin > Fiscal antes de emitir.");
+        }
+
         var cfgCertificado = new ConfiguracaoCertificado { ArrayBytesArquivo = pfxBytes, Senha = senha };
 
         var estado   = Enum.Parse<Estado>(cfg.Uf);
@@ -565,23 +611,49 @@ public class NfceEmissionService : INfceEmissionService
         {
             if (!jaEmContingencia)
             {
-                // 1ª vez inalcançável nesta nota: entra em contingência offline agora — o
-                // cliente já sai com o cupom (chave/QR válidos), a retransmissão de verdade
-                // acontece sozinha no próximo ciclo do FiscalRetryBackgroundService.
+                // 1ª vez inalcançável nesta nota: entra em contingência offline agora. A chave
+                // e o QR assinados acima (fora deste catch) foram calculados com tpEmis=Normal
+                // — não servem pro cupom: tpEmis é o 35º dígito da chave de 44 posições, então
+                // mudar pra contingência (tpEmis=9) troca a chave inteira. Reconstrói ide
+                // (tpEmis/cDV/dhCont/xJust), reassina e regenera o QR ANTES de persistir, pra
+                // bater exatamente com o que a retransmissão automática vai gerar depois (que já
+                // usa tpEmis=9 desde o topo desta função, via jaEmContingencia).
+                var dhContingencia            = DateTime.UtcNow;
+                var justificativaContingencia = "Sem comunicação com o webservice da SEFAZ no momento da venda.";
+
+                var chaveContingencia = ChaveFiscal.ObterChave(
+                    estado, dhEmi, cfg.Cnpj, ModeloDocumento.NFCe, cfg.SerieNfce, numero, (int)TipoEmissao.teOffLine, cNf);
+
+                nfe.infNFe.ide.tpEmis = TipoEmissao.teOffLine;
+                nfe.infNFe.ide.cDV    = chaveContingencia.DigitoVerificador;
+                nfe.infNFe.ide.dhCont = ParaBrasil(dhContingencia);
+                nfe.infNFe.ide.xJust  = justificativaContingencia;
+
+                // tpEmis/cDV/dhCont/xJust mudaram o conteúdo assinado — a assinatura de cima
+                // não vale mais pra este XML.
+                nfe.Assina(cfgServico, certificado);
+                nfe.infNFeSupl = new infNFeSupl();
+                var qrCodeContingencia = string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscToken)
+                    ? null
+                    : ExtinfNFeSupl.ObterUrlQrCode(nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao2, cfg.CscId, cfg.CscToken, cfgCertificado);
+                if (qrCodeContingencia is not null)
+                    nfe.infNFeSupl.qrCode = qrCodeContingencia;
+
                 nota.Serie                     = cfg.SerieNfce;
                 nota.Numero                    = numero;
                 nota.CnfContingencia           = cNf;
-                nota.DhContingencia            = DateTime.UtcNow;
-                nota.JustificativaContingencia = "Sem comunicação com o webservice da SEFAZ no momento da venda.";
+                nota.DhContingencia            = dhContingencia;
+                nota.JustificativaContingencia = justificativaContingencia;
                 nota.Status                    = NotaFiscalStatus.AutorizadaContingencia;
-                nota.ChaveAcesso                = chave.Chave;
+                nota.ChaveAcesso                = chaveContingencia.Chave;
                 nota.EmitidoEm                  = DateTime.UtcNow;
-                nota.UrlQrCode                  = qrCodeUrl;
+                nota.UrlQrCode                  = qrCodeContingencia;
                 await _db.SaveChangesAsync();
 
                 _logger.LogWarning(ex,
                     "NFC-e {NotaId} emitida em CONTINGÊNCIA offline — SEFAZ inalcançável no momento da venda. " +
-                    "Retransmissão automática tentará no próximo ciclo.", nota.Id);
+                    "Chave/QR reconstruídos com tpEmis=9 antes da persistência. Retransmissão automática tentará " +
+                    "no próximo ciclo.", nota.Id);
             }
             else
             {
@@ -608,7 +680,16 @@ public class NfceEmissionService : INfceEmissionService
             // Se veio de contingência, EmitidoEm já é o momento real da venda — não pisa nele
             // com o momento da confirmação tardia da SEFAZ.
             nota.EmitidoEm    ??= DateTime.UtcNow;
-            nota.XmlAutorizado  = retorno.EnvioStr;
+            // retorno.EnvioStr é o envelope <enviNFe> enviado (sem protNFe) — não é o documento
+            // fiscal hábil. O nfeProc (NFe assinada + protNFe da SEFAZ) é o que a guarda de 5
+            // anos e os sistemas contábeis exigem; a lib devolve o protocolo em retorno.Retorno.protNFe.
+            var nfeProcAutorizado = new NFe.Classes.nfeProc
+            {
+                versao  = "4.00",
+                NFe     = nfe,
+                protNFe = retorno.Retorno!.protNFe,
+            };
+            nota.XmlAutorizado  = nfeProcAutorizado.ObterXmlString();
             nota.UrlQrCode      = qrCodeUrl;
             nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
         }

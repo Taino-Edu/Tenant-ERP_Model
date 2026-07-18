@@ -11,7 +11,7 @@
 
 O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 224 testes de backend incluindo isolamento de tenant contra Postgres real. A auditoria encontrou **12 problemas críticos**; **9 já foram corrigidos e commitados** (C1, C2, C6, C7, C8, C9, C10, C11, C12 — ver seção "Estado das correções" abaixo), restando **3 abertos por decisão de arquitetura** (C3, C4, C5 — não são bugs pontuais, exigem escolha de design).
 
-O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, mas **4 problemas graves impedem a homologação hoje** (F1–F4) e há mais 11 achados + 2 lacunas de escopo.
+O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, e os **4 problemas graves que impediam a homologação (F1–F4) já foram corrigidos** — falta só verificação manual em homologação real (chave/QR de contingência e nfeProc autorizado não são testáveis sem SEFAZ de verdade). Restam 11 achados fiscais menores + 2 lacunas de escopo.
 
 | Severidade | Quantidade | Corrigido |
 |---|---|---|
@@ -19,7 +19,7 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 | 🟠 Bloqueio multi-instância | 4 | 0 |
 | 🟡 Médio | 27 | 1 parcial |
 | 🔵 Baixo | 13 | 0 |
-| 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 0 |
+| 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 4 (todos os 🔴) |
 
 ---
 
@@ -227,7 +227,7 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 ## 🧾 Módulo Fiscal (NFC-e/SEFAZ) — auditoria dedicada
 
-> **Veredito:** o núcleo é funcional de verdade, não fachada — monta o XML NFC-e 4.00 completo, assina com o A1 do tenant, transmite síncrono via Zeus, persiste status/protocolo, e tem retry, contingência offline, cancelamento por evento, inutilização automática, exportação ao contador (3 vias) e pipeline completo de DF-e/manifestação. **Mas 4 problemas graves (F1–F4) impedem a homologação hoje.**
+> **Veredito:** o núcleo é funcional de verdade, não fachada — monta o XML NFC-e 4.00 completo, assina com o A1 do tenant, transmite síncrono via Zeus, persiste status/protocolo, e tem retry, contingência offline, cancelamento por evento, inutilização automática, exportação ao contador (3 vias) e pipeline completo de DF-e/manifestação. **Os 4 problemas graves (F1–F4) que impediam a homologação já foram corrigidos** (ver checklist abaixo) — falta verificação manual em homologação real antes de ir pra produção.
 > Formato checklist para correção item a item.
 
 ### Fluxo suportado hoje, etapa por etapa
@@ -255,21 +255,21 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 
 ### Achados fiscais — checklist de correção
 
-- [ ] **F1 (🔴 Alta) — Contingência offline: o cupom impresso tem chave e QR que nunca existirão na SEFAZ** — `NfceEmissionService.cs:462-469,:571-580,:606`
-  - **Problema:** na 1ª tentativa o XML é montado como emissão normal (tpEmis=1) e essa chave/QR são persistidos como artefatos do cupom. Na retransmissão vira tpEmis=9 → **chave de 44 dígitos diferente** (tpEmis é o 35º dígito), com `dhCont/xJust` e QR de fórmula offline. O comentário `:459-461` ("a MESMA chave") está errado. Banco ≠ papel entregue ao cliente, que não consegue consultar a compra.
-  - **Correção:** ao entrar em contingência, reconstruir o XML com tpEmis=9 + `dhCont`/`xJust`, **reassinar e regenerar o QR offline antes de imprimir/persistir**; gravar a chave offline já na 1ª gravação. Teste de regressão: "chave do cupom == chave retransmitida".
+- [x] **F1 (🔴 Alta) — Contingência offline: o cupom impresso tem chave e QR que nunca existirão na SEFAZ**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Problema:** na 1ª tentativa o XML era montado como emissão normal (tpEmis=1) e essa chave/QR eram persistidos como artefatos do cupom. Na retransmissão virava tpEmis=9 → **chave de 44 dígitos diferente** (tpEmis é o 35º dígito), com `dhCont/xJust` e QR de fórmula offline. Banco ≠ papel entregue ao cliente, que não conseguiria consultar a compra.
+  - **Status:** ao entrar em contingência (1ª falha de conectividade), o `ide` é reconstruído com tpEmis=9 + `dhCont`/`xJust`, o XML é reassinado e o QR regenerado ANTES de persistir — a chave gravada já bate com o que a retransmissão automática (que usa tpEmis=9 desde o topo da função) vai gerar depois. **Não testável neste ambiente** (exige handshake real com a SEFAZ de homologação) — verificar manualmente em homologação antes de ir pra produção.
 
-- [ ] **F2 (🔴 Alta) — Retransmissão de contingência desiste após ~2,5 h; prazo legal é 24 h** — `NfceEmissionService.cs:76,:124-136` + `FiscalRetryBackgroundService.cs:44`
-  - **Problema:** `MaxTentativasReprocessamento=10` vale também para `AutorizadaContingencia`; cada ciclo de 15 min consome 1 tentativa. Esgotado, a nota nunca mais é retransmitida — **nem pelo botão manual** (mesmo guarda). Sem alerta proativo. Estourada a NT 2015.002 (24 h), a venda fica permanentemente sem documento fiscal válido.
-  - **Correção:** política própria para contingência (tentar por 24 h com backoff); retry manual independente do contador; alerta (dashboard/e-mail) ao se aproximar do prazo.
+- [x] **F2 (🔴 Alta) — Retransmissão de contingência desiste após ~2,5 h; prazo legal é 24 h**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Problema:** `MaxTentativasReprocessamento=10` valia também para `AutorizadaContingencia`; cada ciclo de 15 min consumia 1 tentativa. Esgotado, a nota nunca mais era retransmitida — nem pelo botão manual (mesma guarda). Sem alerta proativo. Estourada a NT 2015.002 (24h), a venda ficava permanentemente sem documento fiscal válido.
+  - **Status:** contingência agora usa prazo por TEMPO (`PrazoLegalContingencia` = 24h), independente do contador de tentativas comum — retry manual e automático tentam até o prazo legal. Log de alerta (`AlertaContingencia` = 20h) quando está perto do limite. Testado (`ReprocessarAsync_ContingenciaDentroDoPrazoLegal_IgnoraLimiteDeTentativasComum`, `ReprocessarAsync_ContingenciaAposPrazoLegalDe24h_NaoTentaDeNovo`). **Nota:** alerta é só log estruturado por enquanto — e-mail/dashboard pro contador fica como follow-up (não implementado aqui).
 
-- [ ] **F3 (🔴 Alta) — Certificado vencido ⇒ "contingência offline" indevida (tpEmis=9 com SEFAZ operante)** — `FiscalCertificadoService.cs:18-37` + `NfceEmissionService.cs:94-100,:564-585`
-  - **Problema:** upload não checa `NotAfter`; na emissão, a falha de handshake mTLS vira `HttpRequestException` → `EhFalhaDeConectividade` retorna true → cai no branch de contingência: cupons tpEmis=9 (só legais com a **SEFAZ** fora) que jamais autorizarão. Nada bloqueia emissão com certificado vencido.
-  - **Correção:** rejeitar certificado expirado no upload (como a doc do endpoint já promete); bloquear emissão com certificado vencido; no classificador, distinguir falha de TLS/certificado local de indisponibilidade da SEFAZ — erro de certificado nunca pode cair em tpEmis=9.
+- [x] **F3 (🔴 Alta) — Certificado vencido ⇒ "contingência offline" indevida (tpEmis=9 com SEFAZ operante)**  `✅ corrigido` — `FiscalCertificadoService.cs`, `NfceEmissionService.cs`
+  - **Problema:** upload não checava `NotAfter`; na emissão, a falha de handshake mTLS virava `HttpRequestException` → `EhFalhaDeConectividade` retornava true → caía no branch de contingência: cupons tpEmis=9 (só legais com a SEFAZ fora) que jamais autorizariam. Nada bloqueava emissão com certificado vencido.
+  - **Status:** upload (`FiscalCertificadoService.Validar`) rejeita certificado com `NotAfter` no passado. Emissão (`AbrirConfiguracaoSefazAsync`) bloqueia ANTES de qualquer tentativa de rede se o certificado armazenado venceu depois do upload — erro de certificado nunca mais chega a ser tentado via rede, então nunca pode ser mal-classificado como contingência. Testado (`Validar_ComCertificadoVencido_...`, `EmitirParaComandaAsync_ComCertificadoVencido_...`).
 
-- [ ] **F4 (🔴 Alta) — `XmlAutorizado` é o XML de envio (enviNFe), não o nfeProc — o ZIP do contador não contém o documento fiscal hábil** — `NfceEmissionService.cs:611` + `FiscalXmlExportService.cs:36-45`
-  - **Problema:** `retorno.EnvioStr` é o envelope `<enviNFe>` **sem `protNFe`** (confirmado no fonte da Zeus). O comentário do model ("com protNFe anexado", `NotaFiscalEmitida.cs:78-79`) está errado. O `nfeProc` (obrigatório para guarda de 5 anos e aceito em sistemas contábeis) nunca é montado — a lib devolve o protocolo em `retorno.Retorno.protNFe`. Exportação errada nas 3 vias (manual, e-mail, portal).
-  - **Correção:** montar e persistir o `nfeProc` (NFe assinada + protNFe); exportar esse arquivo; corrigir o comentário do model.
+- [x] **F4 (🔴 Alta) — `XmlAutorizado` é o XML de envio (enviNFe), não o nfeProc — o ZIP do contador não contém o documento fiscal hábil**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Problema:** `retorno.EnvioStr` era o envelope `<enviNFe>` **sem `protNFe`** (confirmado no fonte da Zeus). O `nfeProc` (obrigatório para guarda de 5 anos e aceito em sistemas contábeis) nunca era montado — a lib devolve o protocolo em `retorno.Retorno.protNFe`. Exportação errada nas 3 vias (manual, e-mail, portal).
+  - **Status:** ao autorizar, monta `NFe.Classes.nfeProc { NFe = nfe, protNFe = retorno.Retorno.protNFe }` e persiste `ObterXmlString()` desse objeto em `XmlAutorizado` — documento fiscal hábil de verdade, não mais o envelope de envio. O comentário do model (`NotaFiscalEmitida.cs:78`) já estava descrevendo o comportamento correto (agora bate com o código). **Não testável neste ambiente** (exige autorização real da SEFAZ) — verificar manualmente em homologação.
 
 - [ ] **F5 (🟡 Média) — Rejeição pós-contingência entra em loop: inutiliza o número e o retry reutiliza o número já inutilizado** — `NfceEmissionService.cs:124,:463,:626-637`
   - **Correção:** rejeitada ex-contingência não deve reutilizar número inutilizado — reservar número novo (e inutilizar o anterior se ainda não foi) ou marcar como não reprocessável e exigir ação manual.
@@ -373,7 +373,7 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 |---|------|---------|---------|
 | ~~**P0a**~~ | ✅ Feito — tenant na NFC-e, background services, 404 de subdomínio, deploy com backup/rollback, cron de backup | C1, C2, C10, C11, C12 | — |
 | ~~**P0b**~~ | ✅ Feito — guarda de status no `CloseComandaAsync`; restringir role do alvo em reset de senha/perfil (Operator); certificado Inter por tenant + migration; transação + validação antecipada na venda avulsa | C6, C8, C9, C7 | — |
-| **P0c** | Fiscal — os 4 graves que impedem homologação: cupom de contingência com chave/QR corretos (tpEmis=9 antes de imprimir), retransmissão por 24 h com alerta, certificado vencido bloqueado (upload + emissão + classificador), persistir/exportar `nfeProc` | F1–F4 | Sem isso o módulo fiscal não homologa: cupom inválido, contingência expirada, emissão irregular e XML sem valor legal ao contador |
+| ~~**P0c**~~ | ✅ Feito — cupom de contingência com chave/QR corretos (tpEmis=9 antes de imprimir), retransmissão por 24h, certificado vencido bloqueado (upload + emissão), nfeProc persistido/exportado. **Pendente:** verificação manual em homologação real (F1/F4 não são testáveis sem SEFAZ de verdade) | F1–F4 | — |
 | **P1** | Tirar migrations do boot: job migrador separado, `pg_advisory_lock`, status por tenant, falha visível; considerar `ITenantContext` fail-fast fora de request | C4, C3 | Deploy trava/corrompe com o crescimento de tenants |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
 | **P3** | Integridade e performance: transações nos caminhos quentes, concorrência em saldos, idempotência sistêmica, agregações em SQL, `AccountLocator` e painéis de plataforma | M1–M11 | Corrida e custo por request em tenant grande |
