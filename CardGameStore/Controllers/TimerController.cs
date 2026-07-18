@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using Microsoft.AspNetCore.Authorization;
@@ -89,6 +90,11 @@ public class TimerController : ControllerBase
                 if (req.SoundPreset   != null)    t.SoundPreset     = req.SoundPreset;
                 if (req.WarnAtSeconds .HasValue)  t.WarnAtSeconds   = req.WarnAtSeconds.Value;
                 break;
+
+            default:
+                // B5: ação desconhecida caía aqui sem fazer nada e ainda assim devolvia 200 —
+                // parecia sucesso pro cliente sem executar nenhuma ação de verdade.
+                return BadRequest(new { Message = $"Ação \"{req.Action}\" desconhecida." });
         }
 
         t.UpdatedAt = DateTime.UtcNow;
@@ -134,16 +140,18 @@ public class TimerController : ControllerBase
     };
 }
 
+// B5: sem [Range], duração/aviso negativos passavam direto (timer nasce "pronto" ou
+// contando ao contrário) — validação mínima que faz sentido pra um timer de verdade.
 public record TimerCreateRequest(
-    string Name,
-    int    DurationSeconds,
+    [Required] string Name,
+    [Range(1, int.MaxValue)] int DurationSeconds,
     string SoundPreset   = "bell",
-    int    WarnAtSeconds = 60);
+    [Range(0, int.MaxValue)] int WarnAtSeconds = 60);
 
 public record TimerUpdateRequest(
-    string  Action,
+    [Required] string  Action,
     string? Name            = null,
-    int?    DurationSeconds = null,
+    [Range(1, int.MaxValue)] int? DurationSeconds = null,
     string? SoundPreset     = null,
-    int?    WarnAtSeconds   = null,
+    [Range(0, int.MaxValue)] int? WarnAtSeconds   = null,
     int?    FromRemaining   = null);
