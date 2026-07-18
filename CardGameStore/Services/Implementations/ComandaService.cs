@@ -1134,6 +1134,13 @@ public class ComandaService : IComandaService
 
     public async Task<ComandaDto> EditarComandaFechadaAsync(Guid comandaId, Guid adminId, EditarComandaRequest request)
     {
+        // M6: reescrever preço/itens de uma venda JÁ FECHADA (retroativo, alimenta o
+        // financeiro) é mais sensível que a gestão normal de comanda — a policy "AdminOnly"
+        // do controller aceita Operator também (mesma raiz do C8), então reforça aqui.
+        var caller = await _db.Users.FindAsync(adminId);
+        if (caller?.Role == UserRole.Operator)
+            throw new UnauthorizedAccessException("Operadores não podem editar comandas já fechadas — só Admin.");
+
         var comanda = await _db.Comandas
             .Include(c => c.Items)
             .Include(c => c.User)
@@ -1216,6 +1223,16 @@ public class ComandaService : IComandaService
                                         .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
                             }
                         }
+                        // M6: preço aqui vem do request (correção retroativa deliberada do admin,
+                        // ao contrário de ResolveItemAsync que nunca confia em preço do cliente) —
+                        // loga explicitamente qualquer mudança de preço, já que isso alimenta o
+                        // financeiro e o AuditSaveChangesInterceptor genérico não deixa tão visível.
+                        if (existing.UnitPriceInCents != req.UnitPriceInCents)
+                            _logger.LogWarning(
+                                "Comanda {ComandaId} (Fechada): admin {AdminId} alterou o preço do item {ItemId} " +
+                                "de R$ {De:N2} pra R$ {Para:N2} — retroativo, afeta relatórios financeiros já fechados.",
+                                comandaId, adminId, existing.Id, existing.UnitPriceInCents / 100m, req.UnitPriceInCents / 100m);
+
                         existing.Quantity         = req.Quantity;
                         existing.UnitPriceInCents = req.UnitPriceInCents;
                         existing.SubtotalInCents  = req.Quantity * req.UnitPriceInCents;
