@@ -451,6 +451,19 @@ if (!app.Environment.IsDevelopment() && app.Configuration.GetValue<bool?>("COOKI
         "Assim que configurar domínio + Cloudflare, troque COOKIE_SECURE pra true no .env.");
 }
 
+// B4: Security:IpHashSalt cai num fallback fixo ("tenant-erp-ip-salt-dev", só pra
+// dev) se IP_HASH_SALT não estiver no .env — setup.sh já gera um valor aleatório em
+// todo deploy novo, então isso só dispara se alguém apagou a variável depois. Aviso
+// (não fail-fast, mesma lição do M26) porque não sei se algum ambiente já em produção
+// depende do fallback antigo.
+if (!app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(app.Configuration["Security:IpHashSalt"]))
+{
+    app.Logger.LogWarning(
+        "ATENÇÃO: Security:IpHashSalt não configurado em produção — caindo no salt fixo de " +
+        "desenvolvimento, conhecido no código-fonte. Configure IP_HASH_SALT no .env (setup.sh já " +
+        "gera um valor aleatório em deploys novos).");
+}
+
 // ---------------------------------------------------------------------------
 // 15. BANCO DE DADOS — EnsureCreated em dev sem Postgres (SQLite), Migrations em Postgres
 // ---------------------------------------------------------------------------
