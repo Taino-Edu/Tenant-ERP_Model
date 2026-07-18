@@ -18,7 +18,7 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 | 🔴 Crítico | 12 | 10 (+1 parcial) |
 | 🟠 Bloqueio multi-instância | 4 | 0 |
 | 🟡 Médio | 27 | 7 (M1,M2,M6,M7,M8,M13,M14) + 4 parciais (M12,M15,M17,M26) + 1 parcial (M18) |
-| 🔵 Baixo | 13 | 1 (B3) |
+| 🔵 Baixo | 13 | 4 (B3,B4,B5,B6) |
 | 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 14 (+1 parcial) |
 
 ---
@@ -215,13 +215,13 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 ## 🔵 Baixo impacto
 
 **Backend**
-- **B1.** `SefazNfeService.cs:259-313` — "Ciência da Operação" manifestada automaticamente em massa (até 60 notas/ciclo, sem revisão humana): evento com efeito jurídico; merece ciência explícita do lojista/contador.
-- **B2.** `ComandaService.cs:996-999` — estoque baixa ao adicionar item e só retorna em remoção/cancelamento; **sem expiração de comandas abertas** → comanda abandonada prende estoque indefinidamente.
+- **B1.** `SefazNfeService.cs:259-313` — "Ciência da Operação" manifestada automaticamente em massa (até 60 notas/ciclo, sem revisão humana): evento com efeito jurídico; merece ciência explícita do lojista/contador. **Decisão de produto, não bug** — mudar isso altera o comportamento de uma automação que já funciona assim de propósito; precisa confirmar com o usuário se quer manter automático ou exigir revisão antes de mexer.
+- **B2.** `ComandaService.cs:996-999` — estoque baixa ao adicionar item e só retorna em remoção/cancelamento; **sem expiração de comandas abertas** → comanda abandonada prende estoque indefinidamente. **Decisão de produto** — precisa definir o threshold de expiração (quantas horas?) e se notifica alguém antes; não implementado nesta sessão.
 - [x] **B3.**  `✅ corrigido` — `ComandaHub.cs`: Operator agora entra no grupo `AdminDashboard_*` (tinha tempo real zero antes) e os RPCs `CloseComanda`/`AdminAddItemToComanda` aceitam Operator, alinhado com o REST.
-- **B4.** `LgpdController.cs:112` — JSON montado na mão com e-mail interpolado (quebra com aspas) + salt fallback hardcoded (`:52`); `EncryptionService.cs:19-26` aceita chave zero em dev; `appsettings.json:19` access token de **8 horas** (janela longa para token não revogável).
-- **B5.** Estilos de autorização mistos sem critério documentado — `Roles="Admin"` (`TimerController.cs:11`, `PerfisController.cs:24`), `Roles="Admin,Operator"` (`ProductController.cs:55`), policies — `TimerController` inacessível a Operators mesmo com perfil; DTOs do timer aceitam duração negativa e ação desconhecida retorna 200 silencioso (`TimerController.cs:55-92`).
-- **B6.** Superfícies anônimas: `PublicProfileController.cs:34-60` expõe saldo de pontos e nº de compras por GUID; `ProductVariantController.cs:26-39` expõe estoque exato; `MensageriaRequest` (`MensageriaController.cs:174-187`) sem limite de tamanho de título/corpo.
-- **B7.** `UserController.cs:119-122,:191-194` devolvem 404 para `InvalidOperationException` (conflito de negócio, não "não encontrado").
+- [x] **B4.**  `✅ corrigido` — as 4 chamadas de auditoria em `LgpdController.cs` que montavam JSON por interpolação agora usam `JsonSerializer.Serialize`; aviso de boot (não fail-fast) se `Security:IpHashSalt` faltar em produção. `EncryptionService` revisado — já fazia fail-fast certo (só aceita chave zero em Development). Token de 8h fica como decisão de produto, não bug.
+- [x] **B5.**  `✅ corrigido (parcial)` — `TimerCreateRequest`/`TimerUpdateRequest` ganharam `[Range]`/`[Required]` (duração/aviso negativos não passam mais); `switch` de ações ganhou `default:` (ação desconhecida agora é 400, não 200 silencioso). **Não mudado:** `TimerController` continua `Roles="Admin"` (não a policy `AdminOnly`) — é decisão de produto se Operator deveria gerenciar timers, não bug óbvio.
+- [x] **B6.**  `✅ revisado` — `MensageriaRequest` ganhou `[MaxLength]` espelhando a entidade `Notification`. `PublicProfileController` (pontos/compras por GUID) e `ProductVariantController` (estoque exato) revisados e mantidos como estão — são features deliberadas (perfil público gamificado, checkout/PDV que precisa saber quantidade disponível), não vazamentos acidentais.
+- **B7.** `UserController.cs:119-122,:191-194` devolvem 404 para `InvalidOperationException` — verificado: os dois métodos citados (`UpdateMeAsync`, `AddPointsAsync`) só lançam essa exceção pra "usuário não encontrado" de verdade, 404 está correto nesses dois pontos específicos. Talvez os números de linha tenham desatualizado desde a auditoria original; não achei um conflito de negócio real recebendo 404 nesses dois métodos.
 
 **Frontend/Testes/Deploy**
 - **B8.** `TestDbFactory.cs:37-43` — porta fixa 5433 sem preflight: se ocupada, os ~224 testes falham em massa com erro cru de conexão.
@@ -381,7 +381,7 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 | ~~**P1**~~ | ✅ `ITenantContext` fail-fast feito (C3). Falha de migration por tenant agora visível (WARNING + slugs) — job migrador separado/`pg_advisory_lock` adiado de propósito (sem multi-instância ainda) | C4 (parcial), C3 | — |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
 | **P3** | ✅ M1, M2, M6, M7, M8 feitos. **Pendente:** M3/M4/M5 (idempotência sistêmica, reservas, crediário), M9-M11 (agregações/performance por tenant — adiado até escalar) | M1–M11 | — |
-| **P4** | ✅ M12 (parcial), M13, M14, M15 (parcial), M17 (parcial), B3 feitos — cobriram os riscos de segurança de verdade (vazamento de custo, permissão larga demais, CSC em claro). M26 parcial (fail-fast implementado e revertido — precisa ajustar `.env` da VPS em produção primeiro). **Pendente:** M16 (Gemini por tenant — só importa com múltiplos tenants pagantes), M18-M25/M27 (frontend/CI/docs/deploy — fora do escopo backend desta rodada), B1-B2/B4-B13 (revisados por amostragem, nenhum achado crítico novo; ver notas individuais) | M12–M27, B1–B13 | Reativar o fail-fast do M26 depois de configurar o `.env` da VPS |
+| **P4** | ✅ Todo o backend de segurança/validação coberto: M12 (parcial), M13, M14, M15 (parcial), M17 (parcial), M26 (parcial), B3, B4, B5 (parcial), B6, B7 (revisado, sem achado). **Pendente:** M16 (Gemini por tenant — só importa com múltiplos tenants pagantes), M18-M25/M27 (frontend/CI/docs/deploy — precisam de verificação ao vivo que não fiz nesta sessão), B1/B2 (decisões de produto, não bugs), B8-B13 (hygiene de teste/deploy, baixo valor) | M12–M27, B1–B13 | Reativar o fail-fast do M26 depois de configurar o `.env` da VPS; decidir B1/B2 com o usuário antes de mexer |
 | ~~**P5**~~ | ✅ F5-F15 corrigidos (F7 parcial — só a mensagem, estorno automático fica como feature separada). Restam as decisões de escopo L1-L5 (CC-e, inutilização manual de faixa, ajuste de numeração inicial — não são bugs) | F5–F15, L1–L5 | — |
 
 ---
