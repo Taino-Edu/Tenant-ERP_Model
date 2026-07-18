@@ -500,6 +500,14 @@ using (var scope = app.Services.CreateScope())
                 .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
                 .ToListAsync();
 
+            // C4 (parcial — VPS único por enquanto, sem lock/processo migrador separado):
+            // antes o catch abaixo só logava por tenant e o resumo final dizia sempre
+            // "aplicadas em N tenant(s)", sem distinguir sucesso de falha — um tenant
+            // ficava sem migrar silenciosamente até o próximo restart, sem nada gritando
+            // sobre isso. Agora rastreia falhas e o resumo final é WARNING (não INFO) se
+            // qualquer uma ocorreu, com a lista de slugs — visível no boot, não só grep de log.
+            var tenantsComFalha = new List<string>();
+
             foreach (var tenant in tenantsParaMigrar)
             {
                 try
@@ -515,11 +523,20 @@ using (var scope = app.Services.CreateScope())
                 {
                     // Um schema quebrado/tenant com migration pendente conflitante
                     // não pode travar o boot dos outros — loga e segue o loop.
+                    tenantsComFalha.Add(tenant.Slug);
                     logger.LogError(ex, "Falha ao migrar schema do tenant {Slug} ({SchemaName})", tenant.Slug, tenant.SchemaName);
                 }
             }
 
-            logger.LogInformation("Migrations aplicadas em {Count} tenant(s) ativo(s)", tenantsParaMigrar.Count);
+            if (tenantsComFalha.Count > 0)
+                logger.LogWarning(
+                    "Migrations: {Ok}/{Total} tenant(s) OK — FALHOU em {Falha}: {Slugs}. Esses tenants " +
+                    "continuam rodando no schema desatualizado até o próximo restart bem-sucedido — " +
+                    "investigar antes que um endpoint novo quebre pra eles.",
+                    tenantsParaMigrar.Count - tenantsComFalha.Count, tenantsParaMigrar.Count,
+                    tenantsComFalha.Count, string.Join(", ", tenantsComFalha));
+            else
+                logger.LogInformation("Migrations aplicadas em {Count} tenant(s) ativo(s)", tenantsParaMigrar.Count);
         }
 
         logger.LogInformation("Banco pronto.");

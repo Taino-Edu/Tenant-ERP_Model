@@ -58,17 +58,17 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 - **Problema:** `CreateScope()` sem `ITenantContext.Set(...)` → retry de NF-e, envio mensal de XML ao contador, alerta de vencimento do certificado A1, manifestação do destinatário (DDA) e sync do Banco Inter **nunca rodavam para tenants reais** — só para o tenant-zero. O cabeçalho de `FechamentoBackgroundService.cs:5-14` documentava o problema.
 - **Status:** corrigido no working copy via novo `Multitenancy/TenantIteration.cs` (`ForEachActiveTenantAsync`), mesmo padrão do `FechamentoBackgroundService`. **Falta commit.**
 
-### C3. `ITenantContext` defaulta para tenant-zero em vez de falhar
+### C3. `ITenantContext` defaulta para tenant-zero em vez de falhar  `✅ corrigido`
 
-- **Onde:** `CardGameStore/Multitenancy/ITenantContext.cs:35-47`
+- **Onde:** `CardGameStore/Multitenancy/ITenantContext.cs`, `TenantConnectionInterceptor.cs`
 - **Problema:** qualquer caminho que crie escopo manual e esqueça o `Set(...)` opera no tenant-zero **silenciosamente** — causa-raiz de C1 e C2, e fonte de regressões futuras a cada novo service.
-- **Sugestão:** modo fail-fast fora de request HTTP (ou marcador explícito de "tenant-zero intencional"), pelo menos em `Production`. **Aberto** (decisão de design; as correções C1/C2 mitigam os casos atuais).
+- **Status:** auditado todo `CreateScope()` do projeto — **todos** já chamavam `Set(...)` explicitamente (inclusive pra tenant-zero, ex: `AuthService.cs`, `TenantResolutionMiddleware.cs`). Adicionado `ITenantContext.IsExplicitlySet` (true após qualquer `Set()`); `TenantConnectionInterceptor` agora falha rápido (`InvalidOperationException`) se uma conexão abrir sem isso — em qualquer ambiente, não só Production, já que nenhum caminho legítimo depende do default. Boot do `Program.cs` (migrations do schema `public`) ajustado pra marcar isso explicitamente. Testado (`EscopoQueNuncaChamouSet_FalhaRapidoAoAbrirConexao`).
 
-### C4. Migrations por tenant rodam no boot de cada instância, em loop serial, sem lock
+### C4. Migrations por tenant rodam no boot de cada instância, em loop serial, sem lock  `🩹 mitigado parcialmente`
 
-- **Onde:** `CardGameStore/Program.cs:489-513`
-- **Problemas:** (1) startup O(N) — 200 tenants = 200 `MigrateAsync` sequenciais bloqueando o `app.Run()` e o `/health`; (2) com 2+ instâncias (rolling deploy), corrida de DDL em `__EFMigrationsHistory`; (3) `catch` em `:505-510` **engole falhas** — tenant fica sem migrar silenciosamente até o próximo restart.
-- **Sugestão:** separar "processo migrador" de "processo web" (job único no deploy), com `pg_advisory_lock` e status de migration por tenant no catálogo. **Aberto.**
+- **Onde:** `CardGameStore/Program.cs`
+- **Problemas:** (1) startup O(N) — 200 tenants = 200 `MigrateAsync` sequenciais bloqueando o `app.Run()` e o `/health`; (2) com 2+ instâncias (rolling deploy), corrida de DDL em `__EFMigrationsHistory`; (3) o `catch` do loop **engolia falhas** — tenant ficava sem migrar silenciosamente até o próximo restart, sem nada visível no boot.
+- **Status:** (3) corrigido — o loop agora rastreia falhas e loga um resumo `WARNING` (não `INFO`) com a lista de slugs que falharam, em vez de um "aplicadas em N tenants" genérico que não distinguia sucesso de falha. **(1) e (2) deliberadamente adiados**: exigem separar processo migrador do processo web + `pg_advisory_lock` — só valem a pena quando sair de VPS único/1 réplica (decisão do usuário: sem multi-instância no horizonte próximo). Reavaliar junto com H1-H4/C5 (P2) quando o primeiro cliente justificar escalar horizontalmente.
 
 ### C5. SignalR sem backplane — eventos não cruzam instâncias
 
@@ -374,7 +374,7 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 | ~~**P0a**~~ | ✅ Feito — tenant na NFC-e, background services, 404 de subdomínio, deploy com backup/rollback, cron de backup | C1, C2, C10, C11, C12 | — |
 | ~~**P0b**~~ | ✅ Feito — guarda de status no `CloseComandaAsync`; restringir role do alvo em reset de senha/perfil (Operator); certificado Inter por tenant + migration; transação + validação antecipada na venda avulsa | C6, C8, C9, C7 | — |
 | ~~**P0c**~~ | ✅ Feito — cupom de contingência com chave/QR corretos (tpEmis=9 antes de imprimir), retransmissão por 24h, certificado vencido bloqueado (upload + emissão), nfeProc persistido/exportado. **Pendente:** verificação manual em homologação real (F1/F4 não são testáveis sem SEFAZ de verdade) | F1–F4 | — |
-| **P1** | Tirar migrations do boot: job migrador separado, `pg_advisory_lock`, status por tenant, falha visível; considerar `ITenantContext` fail-fast fora de request | C4, C3 | Deploy trava/corrompe com o crescimento de tenants |
+| ~~**P1**~~ | ✅ `ITenantContext` fail-fast feito (C3). Falha de migration por tenant agora visível (WARNING + slugs) — job migrador separado/`pg_advisory_lock` adiado de propósito (sem multi-instância ainda) | C4 (parcial), C3 | — |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
 | **P3** | Integridade e performance: transações nos caminhos quentes, concorrência em saldos, idempotência sistêmica, agregações em SQL, `AccountLocator` e painéis de plataforma | M1–M11 | Corrida e custo por request em tenant grande |
 | **P4** | Segurança média e higiene: DTOs de produto/config/push, permissões por prefixo, CSC criptografado, padrão de erro/`ProblemDetails`, Gemini por tenant, type-check no CI, smoke test real, resíduos TCG, hardcodes, docs, senha default, compose | M12–M27, B1–B13 | Superfície de ataque e dívida de consistência |
