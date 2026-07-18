@@ -17,7 +17,7 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 |---|---|---|
 | 🔴 Crítico | 12 | 10 (+1 parcial) |
 | 🟠 Bloqueio multi-instância | 4 | 0 |
-| 🟡 Médio | 27 | 4 (M1,M2,M6,M7) + 1 parcial (M18) |
+| 🟡 Médio | 27 | 5 (M1,M2,M6,M7,M8) + 1 parcial (M18) |
 | 🔵 Baixo | 13 | 0 |
 | 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 14 (+1 parcial) |
 
@@ -156,7 +156,8 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 ### Performance e custo por request
 
-**M8. Fechamento financeiro oficial trunca em 2.000 vendas, silenciosamente** — `FinanceiroCalculoService.cs:54,:486` via `GetRecentAsync` (`VendaAvulsaService.cs:405-408`): mês com >2.000 vendas avulsas exclui as mais antigas de receita **e custo**, e o resultado errado é gravado como snapshot "congelado" em `FechamentoPeriodo`. Sem log/flag de truncamento. Idem `AnalyticsController.cs:58` (Take 5.000 com o jsonb inteiro). **Não corrigido nesta sessão** — ao contrário de M9-M11, isto é um bug de CORREÇÃO (número errado gravado como definitivo), não só performance, e não depende de ter muitos tenants — uma única loja de bom volume já pode passar de 2.000 vendas/mês. Priorizar antes de M9-M11.
+**M8. Fechamento financeiro oficial trunca em 2.000 vendas, silenciosamente**  `✅ corrigido` — `FinanceiroCalculoService.cs`, `VendaAvulsaService.cs`, `AnalyticsController.cs`
+  - **Status:** novo `IVendaAvulsaService.GetInPeriodAsync(inicio, fim)` filtra o período inteiro direto na query SQL (sem `Take()`), substituindo as 3 chamadas que precisavam do período completo (cálculo de receita, cálculo de custo do fechamento oficial, dashboard). `GetRecentAsync` continua existindo só pros usos legítimos de amostra recente (listagem simples, contexto de IA). Testado (`CalcularAsync_VendasAvulsasForaDoPeriodo_...`).
 
 **M9. Agregações de relatórios materializam tabelas em memória** — `RelatoriosController.cs:62-76`: todos os `ComandaItems` do mês (2 `Include`) + todas as `VendasAvulsas` do mês agregados em `Dictionary` — deveria ser `GROUP BY` no SQL. **Não corrigido nesta sessão** — só dói com volume alto por loja; adiado junto com M10/M11.
 
@@ -372,7 +373,7 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 | ~~**P0c**~~ | ✅ Feito — cupom de contingência com chave/QR corretos (tpEmis=9 antes de imprimir), retransmissão por 24h, certificado vencido bloqueado (upload + emissão), nfeProc persistido/exportado. **Pendente:** verificação manual em homologação real (F1/F4 não são testáveis sem SEFAZ de verdade) | F1–F4 | — |
 | ~~**P1**~~ | ✅ `ITenantContext` fail-fast feito (C3). Falha de migration por tenant agora visível (WARNING + slugs) — job migrador separado/`pg_advisory_lock` adiado de propósito (sem multi-instância ainda) | C4 (parcial), C3 | — |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
-| **P3** | ✅ M1 (transações), M2 (concorrência de saldo), M6 (edição de comanda fechada), M7 (tenant no e-mail) feitos. **Pendente:** M8 (truncamento silencioso no fechamento financeiro — priorizar, é bug de correção não só performance), M3/M4/M5 (idempotência sistêmica, reservas, crediário), M9-M11 (agregações/performance por tenant — adiado com M10/M11 até escalar) | M1–M11 | M8 é o próximo mais importante — número financeiro errado gravado como definitivo |
+| **P3** | ✅ M1, M2, M6, M7, M8 feitos. **Pendente:** M3/M4/M5 (idempotência sistêmica, reservas, crediário), M9-M11 (agregações/performance por tenant — adiado até escalar) | M1–M11 | — |
 | **P4** | Segurança média e higiene: DTOs de produto/config/push, permissões por prefixo, CSC criptografado, padrão de erro/`ProblemDetails`, Gemini por tenant, type-check no CI, smoke test real, resíduos TCG, hardcodes, docs, senha default, compose | M12–M27, B1–B13 | Superfície de ataque e dívida de consistência |
 | ~~**P5**~~ | ✅ F5-F15 corrigidos (F7 parcial — só a mensagem, estorno automático fica como feature separada). Restam as decisões de escopo L1-L5 (CC-e, inutilização manual de faixa, ajuste de numeração inicial — não são bugs) | F5–F15, L1–L5 | — |
 
