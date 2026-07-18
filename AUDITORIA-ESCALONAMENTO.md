@@ -17,7 +17,7 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 |---|---|---|
 | 🔴 Crítico | 12 | 10 (+1 parcial) |
 | 🟠 Bloqueio multi-instância | 4 | 0 |
-| 🟡 Médio | 27 | 8 (M1,M2,M6,M7,M8,M13,M14,M26) + 3 parciais (M12,M15,M17) + 1 parcial (M18) |
+| 🟡 Médio | 27 | 7 (M1,M2,M6,M7,M8,M13,M14) + 4 parciais (M12,M15,M17,M26) + 1 parcial (M18) |
 | 🔵 Baixo | 13 | 1 (B3) |
 | 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 14 (+1 parcial) |
 
@@ -204,8 +204,9 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 **M25. Documentação viva diverge do código a cada sprint** — `STATUS.md` inteiro datado de 2026-07-10 (diz que multi-tenant "travou"; tudo implementado há uma semana); `BACKLOG.md` lista como pendentes Mongo e squash (feitos) e diz "Playwright sem nenhum teste" (há 2 specs mortos); `DOCUMENTACAO-COMPLETA.md:63` diz `/hub/*` (real: `/hubs/*`), `:143` atribui emissão SignalR ao controller (real: `ComandaService` → grupo `AdminDashboard_{tenantId}`), `:268` lista `.AsNoTracking()` como pendência (já aplicado); `README.md:61` "SignalR (SSE + Long Polling)" (cliente prefere WebSocket); `CASOS_DE_USO.md:17` "access token de 15 min" (appsettings: 480; prod: 60); `KYC_PLANNING.md:99-100` prescreve DDL via `ExecuteSqlRaw` (padrão agora é EF Migrations).
 
-**M26. Senha default `SenhaForte@123` como fallback no código**  `✅ corrigido` — `Program.cs`, `deploy/setup.sh`
-  - **Status:** boot aborta (`InvalidOperationException`) em Production/Staging se `ADMIN_SEED_PASSWORD`/`PLATFORM_OWNER_SEED_PASSWORD` não estiverem configuradas — não cria mais a conta com a senha conhecida no código. `setup.sh` gera as duas automaticamente (mesmo padrão de `POSTGRES_PASSWORD`/`JWT_SECRET`) e imprime a senha do admin no fim do setup. **⚠️ Breaking change pra deploy existente:** se o `.env` da VPS em produção não tiver essas variáveis, o próximo deploy vai falhar o boot — precisa adicionar manualmente antes de dar push.
+**M26. Senha default `SenhaForte@123` como fallback no código**  `🩹 parcial (fail-fast revertido)` — `Program.cs`, `deploy/setup.sh`
+  - **Status:** `deploy/setup.sh` já gera `ADMIN_SEED_PASSWORD`/`PLATFORM_OWNER_SEED_PASSWORD` automaticamente pra deploys **novos** (mesmo padrão de `POSTGRES_PASSWORD`/`JWT_SECRET`) — isso fica. O fail-fast no boot (abortar em Production sem essas env vars) foi implementado e depois **revertido**: a VPS já em produção não tem essas variáveis no `.env` ainda, e o fail-fast quebraria o próximo deploy via CI/CD antes de alguém ajustar isso manualmente. Continua warning-only por enquanto.
+  - **Pendente:** adicionar `ADMIN_SEED_PASSWORD` (e `PLATFORM_OWNER_SEED_PASSWORD` se usar dono de plataforma) no `.env` da VPS em produção — depois disso, reativar o fail-fast é seguro.
 
 **M27. Limites de recursos do compose subdimensionados para o boot O(N)** — `docker-compose.prod.yml`: API 1 CPU/512 MB, Postgres 512 MB, frontend 512 MB, nginx 128 MB. Com o loop de migrations por tenant crescendo (C4), o boot da API estoura memória antes de o Postgres virar gargalo.
 
@@ -380,7 +381,7 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 | ~~**P1**~~ | ✅ `ITenantContext` fail-fast feito (C3). Falha de migration por tenant agora visível (WARNING + slugs) — job migrador separado/`pg_advisory_lock` adiado de propósito (sem multi-instância ainda) | C4 (parcial), C3 | — |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
 | **P3** | ✅ M1, M2, M6, M7, M8 feitos. **Pendente:** M3/M4/M5 (idempotência sistêmica, reservas, crediário), M9-M11 (agregações/performance por tenant — adiado até escalar) | M1–M11 | — |
-| **P4** | ✅ M12 (parcial), M13, M14, M15 (parcial), M17 (parcial), M26, B3 feitos — cobriram os riscos de segurança de verdade (vazamento de custo, permissão larga demais, CSC em claro, senha padrão em Production). **Pendente:** M16 (Gemini por tenant — só importa com múltiplos tenants pagantes), M18-M25/M27 (frontend/CI/docs/deploy — fora do escopo backend desta rodada), B1-B2/B4-B13 (revisados por amostragem, nenhum achado crítico novo; ver notas individuais) | M12–M27, B1–B13 | — |
+| **P4** | ✅ M12 (parcial), M13, M14, M15 (parcial), M17 (parcial), B3 feitos — cobriram os riscos de segurança de verdade (vazamento de custo, permissão larga demais, CSC em claro). M26 parcial (fail-fast implementado e revertido — precisa ajustar `.env` da VPS em produção primeiro). **Pendente:** M16 (Gemini por tenant — só importa com múltiplos tenants pagantes), M18-M25/M27 (frontend/CI/docs/deploy — fora do escopo backend desta rodada), B1-B2/B4-B13 (revisados por amostragem, nenhum achado crítico novo; ver notas individuais) | M12–M27, B1–B13 | Reativar o fail-fast do M26 depois de configurar o `.env` da VPS |
 | ~~**P5**~~ | ✅ F5-F15 corrigidos (F7 parcial — só a mensagem, estorno automático fica como feature separada). Restam as decisões de escopo L1-L5 (CC-e, inutilização manual de faixa, ajuste de numeração inicial — não são bugs) | F5–F15, L1–L5 | — |
 
 ---
