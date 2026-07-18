@@ -154,14 +154,26 @@ public class ComandaService : IComandaService
                 i.VariantId == request.VariantId);   // null == null para produtos sem grade
             if (existing != null)
             {
-                // Desconta estoque via ResolveItemAsync (já trata variantes)
-                var (_, resolvedPrice, _) = await ResolveItemAsync(request);
-                var addedSubtotal         = existing.UnitPriceInCents * request.Quantity;
-                existing.Quantity        += request.Quantity;
-                existing.SubtotalInCents += addedSubtotal;
-                comanda.TotalInCents     += addedSubtotal;
-                comanda.Status            = ComandaStatus.EmAndamento;
-                await _db.SaveChangesAsync();
+                // M1: ResolveItemAsync decrementa estoque via ExecuteUpdateAsync (grava na
+                // hora, fora do change tracker) — sem transação, uma falha entre esse
+                // decremento e o SaveChangesAsync do item deixaria o estoque baixado sem o
+                // item refletido na comanda. Mesmo padrão de CancelComandaAsync/VendaAvulsaService.
+                var strategyExisting = _db.Database.CreateExecutionStrategy();
+                await strategyExisting.ExecuteAsync(async () =>
+                {
+                    using var transaction = await _db.Database.BeginTransactionAsync();
+
+                    // Desconta estoque via ResolveItemAsync (já trata variantes)
+                    var (_, resolvedPrice, _) = await ResolveItemAsync(request);
+                    var addedSubtotal         = existing.UnitPriceInCents * request.Quantity;
+                    existing.Quantity        += request.Quantity;
+                    existing.SubtotalInCents += addedSubtotal;
+                    comanda.TotalInCents     += addedSubtotal;
+                    comanda.Status            = ComandaStatus.EmAndamento;
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
+
                 await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
                     {
@@ -178,29 +190,37 @@ public class ComandaService : IComandaService
             }
         }
 
-        var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
-
-        var item = new ComandaItem
+        ComandaItem item = null!;
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            ComandaId                = comanda.Id,
-            ProductId                = request.ProductId,
-            VariantId                = request.VariantId,
-            ItemNameSnapshot         = itemName,
-            UnitPriceInCents         = priceInCents,
-            CostPriceSnapshotInCents = costInCents,
-            Quantity                 = request.Quantity,
-            SubtotalInCents          = priceInCents * request.Quantity,
-            AddedByUserId            = userId,
-        };
+            using var transaction = await _db.Database.BeginTransactionAsync();
 
-        // _db.Add ensures EntityState.Added; navigation fixup populates comanda.Items.
-        // Using comanda.Items.Add alone causes EF to infer Modified (not Added) for
-        // entities with a pre-set client-generated GUID key.
-        _db.Add(item);
-        comanda.Status        = ComandaStatus.EmAndamento;
-        comanda.TotalInCents += item.SubtotalInCents;
+            var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
 
-        await _db.SaveChangesAsync();
+            item = new ComandaItem
+            {
+                ComandaId                = comanda.Id,
+                ProductId                = request.ProductId,
+                VariantId                = request.VariantId,
+                ItemNameSnapshot         = itemName,
+                UnitPriceInCents         = priceInCents,
+                CostPriceSnapshotInCents = costInCents,
+                Quantity                 = request.Quantity,
+                SubtotalInCents          = priceInCents * request.Quantity,
+                AddedByUserId            = userId,
+            };
+
+            // _db.Add ensures EntityState.Added; navigation fixup populates comanda.Items.
+            // Using comanda.Items.Add alone causes EF to infer Modified (not Added) for
+            // entities with a pre-set client-generated GUID key.
+            _db.Add(item);
+            comanda.Status        = ComandaStatus.EmAndamento;
+            comanda.TotalInCents += item.SubtotalInCents;
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
 
         // Notifica o admin sobre o item adicionado pelo cliente
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
@@ -238,13 +258,22 @@ public class ComandaService : IComandaService
                 i.VariantId == request.VariantId);
             if (existing != null)
             {
-                var (_, _, _) = await ResolveItemAsync(request); // desconta estoque
-                var addedSubtotal        = existing.UnitPriceInCents * request.Quantity;
-                existing.Quantity       += request.Quantity;
-                existing.SubtotalInCents += addedSubtotal;
-                comanda.TotalInCents    += addedSubtotal;
-                comanda.Status           = ComandaStatus.EmAndamento;
-                await _db.SaveChangesAsync();
+                // M1: mesma transação que AddItemAsync — ver comentário lá.
+                var strategyExisting = _db.Database.CreateExecutionStrategy();
+                await strategyExisting.ExecuteAsync(async () =>
+                {
+                    using var transaction = await _db.Database.BeginTransactionAsync();
+
+                    var (_, _, _) = await ResolveItemAsync(request); // desconta estoque
+                    var addedSubtotal        = existing.UnitPriceInCents * request.Quantity;
+                    existing.Quantity       += request.Quantity;
+                    existing.SubtotalInCents += addedSubtotal;
+                    comanda.TotalInCents    += addedSubtotal;
+                    comanda.Status           = ComandaStatus.EmAndamento;
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+                });
+
                 await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
                     .SendAsync("ItemAddedByAdmin", new { ItemName = existing.ItemNameSnapshot, NewTotalInReais = comanda.TotalInReais });
                 await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
@@ -263,26 +292,34 @@ public class ComandaService : IComandaService
             }
         }
 
-        var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
-
-        var item = new ComandaItem
+        ComandaItem item = null!;
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            ComandaId                = comanda.Id,
-            ProductId                = request.ProductId,
-            VariantId                = request.VariantId,
-            ItemNameSnapshot         = itemName,
-            UnitPriceInCents         = priceInCents,
-            CostPriceSnapshotInCents = costInCents,
-            Quantity                 = request.Quantity,
-            SubtotalInCents          = priceInCents * request.Quantity,
-            AddedByUserId            = adminId,
-        };
+            using var transaction = await _db.Database.BeginTransactionAsync();
 
-        _db.Add(item);
-        comanda.Status        = ComandaStatus.EmAndamento;
-        comanda.TotalInCents += item.SubtotalInCents;
+            var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
 
-        await _db.SaveChangesAsync();
+            item = new ComandaItem
+            {
+                ComandaId                = comanda.Id,
+                ProductId                = request.ProductId,
+                VariantId                = request.VariantId,
+                ItemNameSnapshot         = itemName,
+                UnitPriceInCents         = priceInCents,
+                CostPriceSnapshotInCents = costInCents,
+                Quantity                 = request.Quantity,
+                SubtotalInCents          = priceInCents * request.Quantity,
+                AddedByUserId            = adminId,
+            };
+
+            _db.Add(item);
+            comanda.Status        = ComandaStatus.EmAndamento;
+            comanda.TotalInCents += item.SubtotalInCents;
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
 
         // Notifica o cliente na comanda que o admin adicionou um item
         await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
@@ -324,28 +361,38 @@ public class ComandaService : IComandaService
 
         comanda.TotalInCents = Math.Max(0, comanda.TotalInCents - item.SubtotalInCents);
 
-        if (item.ProductId.HasValue)
+        // M1: devolução de estoque via ExecuteUpdateAsync + remoção do item precisam ser
+        // atômicas — sem transação, uma falha no meio devolveria estoque sem remover o item
+        // (ou vice-versa). Mesmo padrão de CancelComandaAsync.
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            await _db.Products
-                .Where(p => p.Id == item.ProductId.Value)
-                .ExecuteUpdateAsync(s => s.SetProperty(
-                    p => p.StockQuantity, p => p.StockQuantity + item.Quantity));
-        }
+            using var transaction = await _db.Database.BeginTransactionAsync();
 
-        // Ajusta pontos aplicados se o total ficou menor que o desconto
-        if (comanda.PointsApplied > comanda.TotalInCents)
-        {
-            var excess = comanda.PointsApplied - comanda.TotalInCents;
-            comanda.PointsApplied = comanda.TotalInCents;
-            comanda.User!.PointsBalance += excess;
-        }
+            if (item.ProductId.HasValue)
+            {
+                await _db.Products
+                    .Where(p => p.Id == item.ProductId.Value)
+                    .ExecuteUpdateAsync(s => s.SetProperty(
+                        p => p.StockQuantity, p => p.StockQuantity + item.Quantity));
+            }
 
-        _db.ComandaItems.Remove(item);
+            // Ajusta pontos aplicados se o total ficou menor que o desconto
+            if (comanda.PointsApplied > comanda.TotalInCents)
+            {
+                var excess = comanda.PointsApplied - comanda.TotalInCents;
+                comanda.PointsApplied = comanda.TotalInCents;
+                comanda.User!.PointsBalance += excess;
+            }
 
-        if (comanda.Items.Count(i => i.Id != itemId) == 0)
-            comanda.Status = ComandaStatus.Aberta;
+            _db.ComandaItems.Remove(item);
 
-        await _db.SaveChangesAsync();
+            if (comanda.Items.Count(i => i.Id != itemId) == 0)
+                comanda.Status = ComandaStatus.Aberta;
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
 
         var dto = MapToDto(comanda);
         // Notifica cliente e admin da remoção
@@ -389,33 +436,42 @@ public class ComandaService : IComandaService
         var oldSubtotal = item.SubtotalInCents;
         var diff        = item.UnitPriceInCents * newQuantity - oldSubtotal;
 
-        // Ajusta estoque físico
-        if (item.ProductId.HasValue)
+        // M1: ajuste de estoque (ExecuteUpdateAsync) + atualização do item precisam ser
+        // atômicos — mesmo padrão dos demais métodos desta classe.
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            var delta = item.Quantity - newQuantity; // positivo = devolve, negativo = retira
-            await _db.Products
-                .Where(p => p.Id == item.ProductId.Value)
-                .ExecuteUpdateAsync(s => s.SetProperty(
-                    p => p.StockQuantity, p => p.StockQuantity + delta));
-        }
+            using var transaction = await _db.Database.BeginTransactionAsync();
 
-        item.Quantity       = newQuantity;
-        item.SubtotalInCents = item.UnitPriceInCents * newQuantity;
-        comanda.TotalInCents = Math.Max(0, comanda.TotalInCents + diff);
+            // Ajusta estoque físico
+            if (item.ProductId.HasValue)
+            {
+                var delta = item.Quantity - newQuantity; // positivo = devolve, negativo = retira
+                await _db.Products
+                    .Where(p => p.Id == item.ProductId.Value)
+                    .ExecuteUpdateAsync(s => s.SetProperty(
+                        p => p.StockQuantity, p => p.StockQuantity + delta));
+            }
 
-        // Ajusta pontos se o total ficou menor que o desconto aplicado
-        if (comanda.PointsApplied > comanda.TotalInCents)
-        {
-            var excess = comanda.PointsApplied - comanda.TotalInCents;
-            comanda.PointsApplied  = comanda.TotalInCents;
-            comanda.User!.PointsBalance += excess;
-        }
+            item.Quantity       = newQuantity;
+            item.SubtotalInCents = item.UnitPriceInCents * newQuantity;
+            comanda.TotalInCents = Math.Max(0, comanda.TotalInCents + diff);
 
-        _logger.LogInformation(
-            "Item {ItemId} da comanda {ComandaId} atualizado para qty={Qty} pelo admin {AdminId}",
-            itemId, comandaId, newQuantity, adminId);
+            // Ajusta pontos se o total ficou menor que o desconto aplicado
+            if (comanda.PointsApplied > comanda.TotalInCents)
+            {
+                var excess = comanda.PointsApplied - comanda.TotalInCents;
+                comanda.PointsApplied  = comanda.TotalInCents;
+                comanda.User!.PointsBalance += excess;
+            }
 
-        await _db.SaveChangesAsync();
+            _logger.LogInformation(
+                "Item {ItemId} da comanda {ComandaId} atualizado para qty={Qty} pelo admin {AdminId}",
+                itemId, comandaId, newQuantity, adminId);
+
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        });
 
         var dto = MapToDto(comanda);
         // Notifica cliente e admin da atualização de quantidade
@@ -483,22 +539,14 @@ public class ComandaService : IComandaService
 
             if (secondPaymentMethod == PaymentMethod.Cashback)
             {
-                if (comanda.User.BalanceInCents < secondPaymentAmountInCents)
-                    throw new InvalidOperationException(
-                        $"Saldo de cashback insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, solicitado R$ {secondPaymentAmountInCents / 100m:N2}.");
-                comanda.User.BalanceInCents -= secondPaymentAmountInCents;
-                comanda.User.UpdatedAt       = DateTime.UtcNow;
+                await DebitarCashbackAsync(comanda.User, secondPaymentAmountInCents);
                 _logger.LogInformation("Split: R$ {Val:N2} de cashback aplicado na comanda {Id}.", secondPaymentAmountInCents / 100m, comandaId);
             }
             else if (secondPaymentMethod == PaymentMethod.Pontos)
             {
                 if (comanda.User.PointsExpiresAt.HasValue && comanda.User.PointsExpiresAt.Value < DateTime.UtcNow)
                     throw new InvalidOperationException("Os pontos do cliente estão expirados.");
-                if (comanda.User.PointsBalance < secondPaymentAmountInCents)
-                    throw new InvalidOperationException(
-                        $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, solicitado {secondPaymentAmountInCents} pts.");
-                comanda.User.PointsBalance -= secondPaymentAmountInCents;
-                comanda.User.UpdatedAt      = DateTime.UtcNow;
+                await DebitarPontosAsync(comanda.User, secondPaymentAmountInCents);
                 _logger.LogInformation("Split: {Pts} pontos aplicados na comanda {Id}.", secondPaymentAmountInCents, comandaId);
             }
             // Métodos físicos (Dinheiro/Pix/Cartão) como segundo: apenas registra, sem ação
@@ -598,11 +646,32 @@ public class ComandaService : IComandaService
                     var userName   = comanda.User.Name;
                     var valorReais = crediario.ValorEmReais;
                     var venc       = vencimento;
+                    // M7: captura o tenant ANTES do Task.Run — o scope novo não herda o
+                    // ITenantContext da requisição. Sem propagar, EmailService lia
+                    // EmailConfigs/SiteConfigs do schema "public" (SMTP e branding errados);
+                    // com o fail-fast do TenantConnectionInterceptor (C3) isso agora quebraria
+                    // (silenciosamente, dentro de um Task.Run não observado) em vez de vazar dado.
+                    var tenantId        = _tenant.TenantId;
+                    var tenantSchema    = _tenant.SchemaName;
+                    var tenantModules   = _tenant.EnabledModules;
                     _ = Task.Run(async () =>
                     {
-                        using var scope  = _scopeFactory.CreateScope();
-                        var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
-                        await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
+                        try
+                        {
+                            using var scope  = _scopeFactory.CreateScope();
+                            scope.ServiceProvider.GetRequiredService<ITenantContext>()
+                                .Set(tenantId, tenantSchema, tenantModules);
+                            var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                            await emailService.SendCrediarioAbertoAsync(emailAddr, userName, valorReais, venc);
+                        }
+                        catch (Exception ex)
+                        {
+                            // M7: exceção aqui antes desaparecia (Task.Run fire-and-forget, ninguém
+                            // observa) — loga em vez de falhar silenciosamente sem nenhum rastro.
+                            _logger.LogError(ex,
+                                "Falha ao enviar e-mail de crediário aberto pra {Email} (tenant {TenantId}).",
+                                emailAddr, tenantId);
+                        }
                     });
                 }
             }
@@ -614,12 +683,7 @@ public class ComandaService : IComandaService
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado.");
 
-            if (comanda.User.PointsBalance < primaryAmt)
-                throw new InvalidOperationException(
-                    $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, faltam {primaryAmt} pts.");
-
-            comanda.User.PointsBalance -= primaryAmt;
-            comanda.User.UpdatedAt      = DateTime.UtcNow;
+            await DebitarPontosAsync(comanda.User, primaryAmt);
             _logger.LogInformation(
                 "Comanda {Id} quitada com {Pts} pontos do usuário {UserId}. Saldo restante: {Saldo}",
                 comandaId, primaryAmt, comanda.UserId, comanda.User.PointsBalance);
@@ -631,12 +695,7 @@ public class ComandaService : IComandaService
             if (comanda.User == null)
                 throw new InvalidOperationException("Usuário não encontrado.");
 
-            if (comanda.User.BalanceInCents < primaryAmt)
-                throw new InvalidOperationException(
-                    $"Saldo insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, falta R$ {primaryAmt / 100m:N2}.");
-
-            comanda.User.BalanceInCents -= primaryAmt;
-            comanda.User.UpdatedAt       = DateTime.UtcNow;
+            await DebitarCashbackAsync(comanda.User, primaryAmt);
             _logger.LogInformation(
                 "Comanda {Id} quitada com R$ {Valor:N2} de cashback do usuário {UserId}. Saldo restante: R$ {Saldo:N2}",
                 comandaId, primaryAmt / 100m, comanda.UserId, comanda.User.BalanceInCents / 100m);
@@ -949,6 +1008,54 @@ public class ComandaService : IComandaService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Debita pontos do usuário de forma atômica (M2) — <c>ExecuteUpdateAsync</c> com o saldo
+    /// no predicado, mesmo padrão já usado em <c>VendaAvulsaService</c>. O check-then-mutate
+    /// antigo (via change tracker) deixava passar dois débitos concorrentes do mesmo cliente
+    /// em comandas diferentes (cada um via sua própria checagem em memória, sem lock).
+    /// Sincroniza CurrentValue e OriginalValue da entidade rastreada pro valor novo — assim
+    /// <c>user.PointsBalance</c> já reflete o saldo certo pro DTO de resposta, e como current ==
+    /// original o change tracker não considera a propriedade modificada (não tenta reescrevê-la
+    /// no SaveChangesAsync do fim do método, o que sobrescreveria um débito concorrente
+    /// acontecido depois deste ExecuteUpdateAsync). Setar só <c>IsModified = false</c> NÃO
+    /// funciona pra isso — o setter do EF Core reverte CurrentValue pro OriginalValue antigo
+    /// como efeito colateral, desfazendo o próprio ajuste que a gente acabou de fazer.
+    /// </summary>
+    private async Task DebitarPontosAsync(User user, int quantidade)
+    {
+        var linhas = await _db.Users
+            .Where(u => u.Id == user.Id && u.PointsBalance >= quantidade)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.PointsBalance, u => u.PointsBalance - quantidade)
+                .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+        if (linhas == 0)
+            throw new InvalidOperationException(
+                $"Saldo de pontos insuficiente. Cliente tem {user.PointsBalance} pts, solicitado {quantidade} pts.");
+
+        var novoSaldo = user.PointsBalance - quantidade;
+        var entry     = _db.Entry(user).Property(u => u.PointsBalance);
+        entry.CurrentValue  = novoSaldo;
+        entry.OriginalValue = novoSaldo;
+    }
+
+    /// <summary>Mesmo padrão de <see cref="DebitarPontosAsync"/>, pro saldo de cashback (M2).</summary>
+    private async Task DebitarCashbackAsync(User user, int centavos)
+    {
+        var linhas = await _db.Users
+            .Where(u => u.Id == user.Id && u.BalanceInCents >= centavos)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(u => u.BalanceInCents, u => u.BalanceInCents - centavos)
+                .SetProperty(u => u.UpdatedAt, DateTime.UtcNow));
+        if (linhas == 0)
+            throw new InvalidOperationException(
+                $"Saldo insuficiente. Cliente tem R$ {user.BalanceInCents / 100m:N2}, solicitado R$ {centavos / 100m:N2}.");
+
+        var novoSaldo = user.BalanceInCents - centavos;
+        var entry     = _db.Entry(user).Property(u => u.BalanceInCents);
+        entry.CurrentValue  = novoSaldo;
+        entry.OriginalValue = novoSaldo;
+    }
 
     /// <summary>
     /// Resolve nome e preço do item. Se vier ProductId, busca do banco e ignora
