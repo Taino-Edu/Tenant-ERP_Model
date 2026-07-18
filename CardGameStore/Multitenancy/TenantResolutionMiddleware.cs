@@ -6,9 +6,13 @@
 // todas as locations, então o Host original chega intacto até aqui.
 //
 // Sem RootDomain configurado (Multitenancy:RootDomain), ou host que não é um
-// subdomínio dele, ou slug que não bate com nenhum tenant ativo: cai no
-// tenant-zero (schema "public") — mantém o acesso atual funcionando (IP puro,
-// domínio raiz) enquanto o DNS wildcard não existe e o catálogo está vazio.
+// subdomínio dele (IP puro, domínio raiz, domínio de terceiro sem CustomDomain):
+// cai no tenant-zero (schema "public") — mantém o acesso atual funcionando
+// enquanto o DNS wildcard não existe e o catálogo está vazio.
+//
+// Já um subdomínio BEM-FORMADO do RootDomain que não existe no catálogo
+// (loja-inexistente.RootDomain) retorna 404 — não pode servir a loja do
+// tenant-zero, ver InvokeAsync.
 // =============================================================================
 
 using Microsoft.EntityFrameworkCore;
@@ -47,6 +51,21 @@ public class TenantResolutionMiddleware
                     .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.EnabledModules))
                     .FirstOrDefaultAsync();
             });
+
+            // Slug bem-formado (subdomínio de nível único do RootDomain) que NÃO
+            // bate com nenhum tenant: é uma loja desconhecida (typo de subdomínio,
+            // loja removida), não um acesso legítimo por IP/domínio-raiz. Sem este
+            // 404, qualquer *.RootDomain inexistente serviria a vitrine e a tela de
+            // login do tenant-zero (schema "public"), com cookies válidos pro host
+            // — o visitante poderia logar/comprar na "loja" errada sem perceber.
+            // O caminho de CustomDomain abaixo só existe quando slug is null, então
+            // não há o que preservar aqui.
+            if (tenant is null)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                await context.Response.WriteAsJsonAsync(new { Message = "Loja não encontrada." });
+                return;
+            }
         }
 
         // Sem subdomínio reconhecido (host não é um slug de <RootDomain>) — tenta

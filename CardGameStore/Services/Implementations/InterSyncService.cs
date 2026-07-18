@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Headers;
 using System.Security.Cryptography.X509Certificates;
@@ -10,7 +11,7 @@ namespace CardGameStore.Services.Implementations;
 
 public class InterSyncService
 {
-    private readonly IServiceScopeFactory     _scopeFactory;
+    private readonly AppDbContext             _db;
     private readonly EncryptionService        _enc;
     private readonly IConfiguration           _config;
     private readonly ILogger<InterSyncService> _logger;
@@ -22,12 +23,12 @@ public class InterSyncService
     };
 
     public InterSyncService(
-        IServiceScopeFactory scopeFactory,
+        AppDbContext db,
         EncryptionService enc,
         IConfiguration config,
         ILogger<InterSyncService> logger)
     {
-        _scopeFactory = scopeFactory;
+        _db           = db;
         _enc          = enc;
         _config       = config;
         _logger       = logger;
@@ -36,20 +37,13 @@ public class InterSyncService
     public bool IsConfigured(IntegrationConfig cfg) =>
         !string.IsNullOrWhiteSpace(cfg.ClientId) &&
         !string.IsNullOrWhiteSpace(cfg.ClientSecret) &&
-        CertificateExists();
-
-    public bool CertificateExists()
-    {
-        var crt = _config["Inter:CertificatePath"];
-        var key = _config["Inter:KeyPath"];
-        return File.Exists(crt) && File.Exists(key);
-    }
+        !string.IsNullOrWhiteSpace(cfg.CertificateCrtEncrypted) &&
+        !string.IsNullOrWhiteSpace(cfg.CertificateKeyEncrypted);
 
     // ── Sincroniza extrato dos últimos N dias ─────────────────────────────────
     public async Task<InterSyncResult> SyncAsync(int days = 7)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var db = _db;
 
         var cfg = await db.IntegrationConfigs
             .FirstOrDefaultAsync(c => c.Source == "inter");
@@ -60,12 +54,12 @@ public class InterSyncService
         try
         {
             var clientSecret = _enc.Decrypt(cfg.ClientSecret!);
-            var token        = await GetTokenAsync(cfg.ClientId!, clientSecret, "extrato.read");
+            var token        = await GetTokenAsync(cfg, clientSecret, "extrato.read");
 
-            var fim    = DateOnly.FromDateTime(DateTime.Now);
+            var fim    = DateOnly.FromDateTime(DateTime.UtcNow);
             var inicio = fim.AddDays(-days);
 
-            var transactions = await FetchExtratoCompletoAsync(token, inicio, fim);
+            var transactions = await FetchExtratoCompletoAsync(cfg, token, inicio, fim);
 
             int imported = 0, skipped = 0;
             foreach (var t in transactions)
@@ -116,13 +110,13 @@ public class InterSyncService
     }
 
     // ── OAuth2 Client Credentials com mTLS ───────────────────────────────────
-    private async Task<string> GetTokenAsync(string clientId, string clientSecret, string scope)
+    private async Task<string> GetTokenAsync(IntegrationConfig cfg, string clientSecret, string scope)
     {
-        using var http = BuildMtlsClient();
+        using var http = BuildMtlsClient(cfg);
 
         var body = new FormUrlEncodedContent(new Dictionary<string, string>
         {
-            ["client_id"]     = clientId,
+            ["client_id"]     = cfg.ClientId!,
             ["client_secret"] = clientSecret,
             ["grant_type"]    = "client_credentials",
             ["scope"]         = scope,
@@ -154,7 +148,7 @@ public class InterSyncService
         try
         {
             var clientSecret = _enc.Decrypt(cfg.ClientSecret!);
-            var token        = await GetTokenAsync(cfg.ClientId!, clientSecret, "cob.write cob.read");
+            var token        = await GetTokenAsync(cfg, clientSecret, "cob.write cob.read");
 
             var txid = Guid.NewGuid().ToString("N"); // 32 chars alfanuméricos — dentro do range 26-35 exigido
 
@@ -171,7 +165,7 @@ public class InterSyncService
                 solicitacaoPagador = descricao,
             };
 
-            using var http = BuildMtlsClient();
+            using var http = BuildMtlsClient(cfg);
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var resp = await http.PutAsJsonAsync(
@@ -225,9 +219,9 @@ public class InterSyncService
         try
         {
             var clientSecret = _enc.Decrypt(cfg.ClientSecret!);
-            var token        = await GetTokenAsync(cfg.ClientId!, clientSecret, "cob.read");
+            var token        = await GetTokenAsync(cfg, clientSecret, "cob.read");
 
-            using var http = BuildMtlsClient();
+            using var http = BuildMtlsClient(cfg);
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var resp = await http.GetAsync($"https://cdpj.partners.bancointer.com.br/pix/v2/cob/{txid}");
@@ -295,9 +289,9 @@ public class InterSyncService
     // ── Extrato ───────────────────────────────────────────────────────────────
     // Usa o /extrato/completo (não o /extrato simples) porque só ele devolve o
     // idTransacao — sem ele não há deduplicação confiável entre syncs. É paginado.
-    private async Task<List<InterLancamento>> FetchExtratoCompletoAsync(string token, DateOnly inicio, DateOnly fim)
+    private async Task<List<InterLancamento>> FetchExtratoCompletoAsync(IntegrationConfig cfg, string token, DateOnly inicio, DateOnly fim)
     {
-        using var http = BuildMtlsClient();
+        using var http = BuildMtlsClient(cfg);
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var todas = new List<InterLancamento>();
@@ -326,12 +320,12 @@ public class InterSyncService
             : null;
 
     // ── HttpClient com certificado mTLS do Inter ──────────────────────────────
-    private HttpClient BuildMtlsClient()
+    private HttpClient BuildMtlsClient(IntegrationConfig cfg)
     {
-        var certPath = _config["Inter:CertificatePath"]!;
-        var keyPath  = _config["Inter:KeyPath"]!;
+        var certPem = _enc.Decrypt(cfg.CertificateCrtEncrypted!);
+        var keyPem  = _enc.Decrypt(cfg.CertificateKeyEncrypted!);
 
-        var cert    = X509Certificate2.CreateFromPemFile(certPath, keyPath);
+        var cert    = X509Certificate2.CreateFromPem(certPem, keyPem);
         var handler = new HttpClientHandler();
         handler.ClientCertificates.Add(cert);
 
@@ -362,14 +356,20 @@ public class InterSyncBackgroundService : BackgroundService
         {
             try
             {
-                using var scope = _scopeFactory.CreateScope();
-                var svc         = scope.ServiceProvider.GetRequiredService<InterSyncService>();
-                var result      = await svc.SyncAsync(days: 7);
+                await _scopeFactory.ForEachActiveTenantAsync(_logger, async (sp, _) =>
+                {
+                    var svc    = sp.GetRequiredService<InterSyncService>();
+                    var result = await svc.SyncAsync(days: 7);
 
-                if (!result.Skipped)
-                    _logger.LogInformation(
-                        "Inter sync: {imported} importadas, {dup} duplicatas, erro={error}",
-                        result.Imported, result.Duplicates, result.Error ?? "-");
+                    if (!result.Skipped)
+                        _logger.LogInformation(
+                            "Inter sync: {imported} importadas, {dup} duplicatas, erro={error}",
+                            result.Imported, result.Duplicates, result.Error ?? "-");
+                }, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {

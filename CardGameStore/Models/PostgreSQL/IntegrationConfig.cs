@@ -58,4 +58,12 @@ public class IntegrationConfig
 
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Certificado mTLS do Inter (.crt/.pem) criptografado com EncryptionService.</summary>
+    [Column("certificate_crt_encrypted")]
+    public string? CertificateCrtEncrypted { get; set; }
+
+    /// <summary>Chave privada do Inter (.key) criptografada com EncryptionService.</summary>
+    [Column("certificate_key_encrypted")]
+    public string? CertificateKeyEncrypted { get; set; }
 }

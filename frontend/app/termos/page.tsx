@@ -21,12 +21,11 @@ const sections = [
   { id: 's2', num: '02', title: 'Cadastro e Conta' },
   { id: 's3', num: '03', title: 'Crediário' },
   { id: 's4', num: '04', title: 'Comandas' },
-  { id: 's5', num: '05', title: 'Campeonatos' },
-  { id: 's6', num: '06', title: 'Propriedade Intelectual' },
-  { id: 's7', num: '07', title: 'Limitação de Responsabilidade' },
-  { id: 's8', num: '08', title: 'Direitos do Consumidor' },
-  { id: 's9', num: '09', title: 'Foro e Legislação' },
-  { id: 's10', num: '10', title: 'Contato' },
+  { id: 's6', num: '05', title: 'Propriedade Intelectual' },
+  { id: 's7', num: '06', title: 'Limitação de Responsabilidade' },
+  { id: 's8', num: '07', title: 'Direitos do Consumidor' },
+  { id: 's9', num: '08', title: 'Foro e Legislação' },
+  { id: 's10', num: '09', title: 'Contato' },
 ]
 
 export default function TermosPage() {
@@ -115,8 +114,6 @@ export default function TermosPage() {
                   'Abertura e gestão de comandas na loja',
                   'Programa de pontos e cashback',
                   'Crediário para clientes cadastrados',
-                  'Inscrição e acompanhamento de campeonatos',
-                  'Busca de cartas TCG (Pokémon, Magic, Yu-Gi-Oh!)',
                 ].map(item => (
                   <li key={item} className="flex gap-2 text-sm rounded-lg px-3 py-2 border" style={{ borderColor: 'var(--border-color)', color: 'var(--text-muted)', backgroundColor: 'var(--bg-primary)' }}>
                     <span className="text-[#42B6EE] shrink-0">▸</span> {item}
@@ -175,25 +172,7 @@ export default function TermosPage() {
               </div>
             </Section>
 
-            <Section id="s5" num="05" title="Campeonatos">
-              <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                A participação sujeita-se às regras específicas de cada evento, divulgadas com antecedência.
-              </p>
-              <ul className="space-y-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
-                {[
-                  'A taxa de inscrição pode ser cobrada antecipadamente e não é reembolsável, salvo cancelamento do evento pela organização',
-                  'O participante deve apresentar deck válido conforme o regulamento do jogo',
-                  'Comportamento antidesportivo pode resultar em desclassificação',
-                  'A Minha Loja reserva-se o direito de alterar datas e regras com aviso prévio',
-                ].map(item => (
-                  <li key={item} className="flex gap-2">
-                    <span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span> {item}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-
-            <Section id="s6" num="06" title="Propriedade Intelectual">
+            <Section id="s6" num="05" title="Propriedade Intelectual">
               <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
                 <p>
                   Os nomes, logotipos e conteúdos de jogos de cartas (Pokémon, Magic: The Gathering, Yu-Gi-Oh!
@@ -208,7 +187,7 @@ export default function TermosPage() {
               </div>
             </Section>
 
-            <Section id="s7" num="07" title="Limitação de Responsabilidade">
+            <Section id="s7" num="06" title="Limitação de Responsabilidade">
               <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
                 A Minha Loja não se responsabiliza por:
               </p>
@@ -225,7 +204,7 @@ export default function TermosPage() {
               </ul>
             </Section>
 
-            <Section id="s8" num="08" title="Direitos do Consumidor (CDC)">
+            <Section id="s8" num="07" title="Direitos do Consumidor (CDC)">
               <div className="text-sm space-y-2" style={{ color: 'var(--text-muted)' }}>
                 <p>
                   Estes Termos não afastam nem limitam os direitos previstos no{' '}
@@ -246,7 +225,7 @@ export default function TermosPage() {
               </div>
             </Section>
 
-            <Section id="s9" num="09" title="Foro e Legislação Aplicável">
+            <Section id="s9" num="08" title="Foro e Legislação Aplicável">
               <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
                 Estes Termos são regidos pelas leis da República Federativa do Brasil. Para dirimir
                 quaisquer controvérsias, fica eleito o foro da{' '}
@@ -255,7 +234,7 @@ export default function TermosPage() {
               </p>
             </Section>
 
-            <Section id="s10" num="10" title="Contato">
+            <Section id="s10" num="09" title="Contato">
               <div className="text-sm space-y-1" style={{ color: 'var(--text-muted)' }}>
                 <p>
                   <strong style={{ color: 'var(--text-primary)' }}>E-mail:</strong>{' '}

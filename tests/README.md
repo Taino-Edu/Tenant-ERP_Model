@@ -13,7 +13,6 @@ tests/
 │   ├── 01-auth.http              # Login, quick-login, refresh, logout (HttpOnly cookies)
 │   ├── 02-products.http          # CRUD de produtos + ajuste de estoque
 │   ├── 03-comanda.http           # Comanda: abrir, adicionar, remover, pontos, fechar
-│   ├── 04-championship.http      # Campeonatos: criar, registrar, alterar status
 │   ├── 05-users-points.http      # Usuários: listar, perfil, adicionar pontos
 │   ├── 06-venda-avulsa.http      # Venda avulsa no balcão
 │   ├── 07-lgpd.http              # LGPD: exercício de direitos, protocolo, resposta admin
@@ -28,7 +27,6 @@ tests/
             ├── AuthServiceTests.cs         # Login, quick-login, BCrypt
             ├── ProductServiceTests.cs      # CRUD de produtos
             ├── UserServiceTests.cs         # Perfil de usuário, LGPD UpdateMe/Anonimizar
-            ├── ChampionshipServiceTests.cs # Campeonatos
             ├── AnnouncementServiceTests.cs # Anúncios
             ├── VendaAvulsaServiceTests.cs  # Venda avulsa
             ├── LgpdServiceTests.cs         # UpdateMeAsync, AnonimizarAsync (LGPD)
@@ -70,7 +68,6 @@ O backend emite os tokens como cookies **HttpOnly** (invisíveis ao JavaScript):
 02-products.http  → #4 (criar produto) → copiar productId
 05-users-points.http → #1 (listar)     → copiar userId
 03-comanda.http   → #4, #8, #10        → fluxo completo de comanda
-04-championship.http → #2              → copiar championshipId
 06-venda-avulsa.http → #1, #2          → venda no balcão
 07-lgpd.http      → #1 (solicitação)   → copiar lgpdProtocol
 08-audit.http     → #1 (listar logs)
@@ -138,7 +135,6 @@ reportgenerator \
 | Autenticação       | ✅ 01-auth  | ✅    |
 | Produtos/Estoque   | ✅ 02       | ✅    |
 | Comanda            | ✅ 03       | ✅    |
-| Campeonatos        | ✅ 04       | ✅    |
 | Usuários/Pontos    | ✅ 05       | ✅    |
 | Venda Avulsa       | ✅ 06       | ✅    |
 | LGPD — Direitos    | ✅ 07       | ✅    |

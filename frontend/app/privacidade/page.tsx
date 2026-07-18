@@ -101,7 +101,7 @@ export default function PrivacidadePage() {
             <Section id="s1" num="01" title="Quem Somos">
               <p>
                 A <strong>Minha Loja</strong> é uma loja de card games em <strong>Sua Cidade — UF</strong>.
-                Operamos um sistema digital de comandas, campeonatos, crediário e programa de pontos para nossos clientes.
+                Operamos um sistema digital de comandas, crediário e programa de pontos para nossos clientes.
               </p>
               <InfoBox>
                 <p className="font-semibold mb-0.5">Controlador dos dados</p>
@@ -120,7 +120,6 @@ export default function PrivacidadePage() {
                   ['WhatsApp', 'contato e login rápido via QR Code'],
                   ['E-mail', 'confirmações, notificações e recuperação de senha'],
                   ['Histórico de comandas e compras', 'gestão do crediário e pontos'],
-                  ['Participação em campeonatos', 'nome do deck, colocação'],
                   ['Saldo de pontos e cashback', 'programa de fidelidade'],
                   ['Endereço IP (hash SHA-256)', 'segurança e prevenção de abusos — nunca armazenamos o IP em texto puro'],
                 ].map(([key, val]) => (
@@ -138,8 +137,7 @@ export default function PrivacidadePage() {
                   'Identificar e autenticar usuários no sistema',
                   'Gerenciar comandas, pedidos e pagamentos (inclusive crediário)',
                   'Administrar o programa de pontos e cashback',
-                  'Processar inscrições e resultados de campeonatos',
-                  'Enviar comunicações transacionais (crediário, campeonatos, redefinição de senha)',
+                  'Enviar comunicações transacionais (crediário, redefinição de senha)',
                   'Cumprir obrigações legais e fiscais',
                   'Prevenir fraudes e garantir a segurança do sistema',
                 ].map(item => (
@@ -155,7 +153,7 @@ export default function PrivacidadePage() {
               <div className="grid sm:grid-cols-2 gap-3">
                 {[
                   ['Consentimento (Art. 7º, I)', 'Registro inicial via QR Code e envio de comunicações'],
-                  ['Execução de contrato (Art. 7º, V)', 'Gestão de comandas, crediário e campeonatos'],
+                  ['Execução de contrato (Art. 7º, V)', 'Gestão de comandas e crediário'],
                   ['Legítimo interesse (Art. 7º, IX)', 'Segurança do sistema e prevenção de fraudes'],
                   ['Obrigação legal (Art. 7º, II)', 'Fins fiscais e contábeis'],
                 ].map(([base, desc]) => (
@@ -172,7 +170,6 @@ export default function PrivacidadePage() {
                 Não vendemos nem alugamos seus dados. Compartilhamos apenas com:
               </p>
               <ul className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                <li className="flex gap-2"><span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span><span><strong style={{ color: 'var(--text-primary)' }}>APIs de cartas TCG</strong> (Pokémon, Magic, Yu-Gi-Oh!) — apenas para buscar informações de cartas. Nenhum dado pessoal é enviado.</span></li>
                 <li className="flex gap-2"><span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span><span><strong style={{ color: 'var(--text-primary)' }}>Provedor de e-mail (SMTP)</strong> — notificações transacionais (redefinição de senha, confirmação de crediário).</span></li>
                 <li className="flex gap-2"><span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span><span><strong style={{ color: 'var(--text-primary)' }}>Autoridades públicas</strong> — quando exigido por lei ou ordem judicial.</span></li>
               </ul>

@@ -412,6 +412,11 @@ public class UserController : ControllerBase
     [ProducesResponseType(404)]
     public async Task<IActionResult> AtualizarPerfil(Guid id, [FromBody] AtualizarPerfilOperadorRequest request)
     {
+        var adminId = GetUserId();
+        var adminUser = await _db.Users.FindAsync(adminId);
+        if (adminUser?.Role == "Operator")
+            return Forbid();
+
         var user = await _db.Users.Include(u => u.Perfil).FirstOrDefaultAsync(u => u.Id == id);
         if (user == null)
             return NotFound(new { Message = "Usuário não encontrado." });

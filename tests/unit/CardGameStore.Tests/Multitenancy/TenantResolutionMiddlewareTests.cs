@@ -137,4 +137,24 @@ public class TenantResolutionMiddlewareTests
         tenantContext.TenantId.Should().Be(TenantConstants.TenantZeroId);
         tenantContext.SchemaName.Should().Be(TenantConstants.TenantZeroSchema);
     }
+
+    [Fact]
+    public async Task InvokeAsync_SubdominioInexistente_Retorna404_NaoServeTenantZero()
+    {
+        // Subdomínio BEM-FORMADO do RootDomain, mas sem tenant no catálogo (typo,
+        // loja removida): tem de dar 404, não pode servir a vitrine/login do
+        // tenant-zero (schema "public") — ver comentário em InvokeAsync.
+        var catalog = CreateCatalogDb();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("loja-que-nao-existe.2esysten.com.br", services);
+        ctx.Response.Body = new MemoryStream();
+
+        var nextChamado = false;
+        var middleware = CreateMiddleware(_ => { nextChamado = true; return Task.CompletedTask; }, rootDomain: "2esysten.com.br");
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        ctx.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        nextChamado.Should().BeFalse("a requisição não pode seguir o pipeline servindo o tenant-zero");
+        tenantContext.TenantId.Should().Be(TenantConstants.TenantZeroId, "o contexto não deve ter sido alterado para nenhum tenant real");
+    }
 }

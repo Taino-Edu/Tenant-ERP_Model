@@ -57,15 +57,17 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
       .then(({ data }: { data: SiteConfigDto }) => setSite(data))
       .catch((err: unknown) => {
         // TenantResolutionMiddleware já bloqueia TODA chamada de API com 403
-        // pra tenant suspenso — em vez de deixar a página carregar vazia (sem
-        // produtos/config), redireciona pra uma tela clara. Não mexe no
-        // painel /admin (o lojista já sabe do status por /plataforma, e
-        // mandar ele pra uma tela de cliente seria confuso).
+        // pra tenant suspenso e com 404 pra subdomínio inexistente — em vez de
+        // deixar a página carregar com o DEFAULT_SITE_CONFIG (uma "Minha Loja"
+        // genérica e vazia, que confunde o visitante), redireciona pra uma tela
+        // clara. Não mexe no painel /admin (o lojista já sabe do status por
+        // /plataforma, e mandar ele pra uma tela de cliente seria confuso).
         const status = (err as { response?: { status?: number } })?.response?.status
-        if (typeof window !== 'undefined' && status === 403) {
+        if (typeof window !== 'undefined' && (status === 403 || status === 404)) {
+          const destino = status === 404 ? '/loja-nao-encontrada' : '/loja-suspensa'
           const path = window.location.pathname
-          if (!path.startsWith('/admin') && path !== '/loja-suspensa') {
-            window.location.href = '/loja-suspensa'
+          if (!path.startsWith('/admin') && path !== destino) {
+            window.location.href = destino
           }
         }
       })

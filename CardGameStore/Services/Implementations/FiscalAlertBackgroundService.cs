@@ -5,6 +5,7 @@
 
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,7 +31,11 @@ public class FiscalAlertBackgroundService : BackgroundService
         {
             try
             {
-                await CheckAsync();
+                await _scopeFactory.ForEachActiveTenantAsync(_logger, CheckAsync, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {
@@ -41,13 +46,12 @@ public class FiscalAlertBackgroundService : BackgroundService
         }
     }
 
-    private async Task CheckAsync()
+    private async Task CheckAsync(IServiceProvider sp, CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db    = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var email = scope.ServiceProvider.GetRequiredService<IEmailService>();
+        var db    = sp.GetRequiredService<AppDbContext>();
+        var email = sp.GetRequiredService<IEmailService>();
 
-        var cfg = await db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
+        var cfg = await db.FiscalConfigs.FindAsync(new object?[] { FiscalConfig.SingletonId }, ct);
         if (cfg?.CertificadoValidade is null) return;
 
         var diasRestantes = (int)Math.Floor((cfg.CertificadoValidade.Value.Date - DateTime.UtcNow.Date).TotalDays);
@@ -57,7 +61,7 @@ public class FiscalAlertBackgroundService : BackgroundService
         var admins = await db.Users
             .Where(u => u.Role == UserRole.Admin && u.IsActive)
             .Select(u => new { u.Id, u.Name, u.Email })
-            .ToListAsync();
+            .ToListAsync(ct);
 
         foreach (var admin in admins)
         {
