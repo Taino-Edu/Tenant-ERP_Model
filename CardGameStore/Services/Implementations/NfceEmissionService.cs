@@ -460,6 +460,18 @@ public class NfceEmissionService : INfceEmissionService
             string.IsNullOrWhiteSpace(cfg.CodigoMunicipioIbge) || string.IsNullOrWhiteSpace(cfg.Uf))
             throw new FiscalNaoConfiguradoException("Dados da empresa (razão social/endereço) incompletos em Admin > Fiscal.");
 
+        // F12: pré-voo cobria só certificado/endereço — CNPJ default "" gera chave de acesso
+        // inválida, e sem CSC a transmissão segue sem infNFeSupl.qrCode (QR obrigatório em
+        // NFC-e) → rejeição certa da SEFAZ, além de queimar um número à toa. Falha ANTES de
+        // reservar número (AbrirConfiguracaoSefazAsync roda antes de ReservarProximoNumeroNfceAsync).
+        if (string.IsNullOrWhiteSpace(cfg.Cnpj) || cfg.Cnpj.Length != 14)
+            throw new FiscalNaoConfiguradoException("CNPJ ausente ou inválido em Admin > Fiscal — precisa ter 14 dígitos.");
+
+        if (string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscToken))
+            throw new FiscalNaoConfiguradoException(
+                "CSC (Código de Segurança do Contribuinte) não configurado em Admin > Fiscal — sem ele a NFC-e " +
+                "transmite sem QR Code (obrigatório) e é rejeitada pela SEFAZ.");
+
         var pfxBytes    = Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted!));
         var senha       = _enc.Decrypt(cfg.CertificadoSenhaEncrypted!);
         var certificado = Pkcs12Loader.Abrir(pfxBytes, senha);

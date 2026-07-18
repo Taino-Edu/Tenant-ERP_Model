@@ -3,6 +3,7 @@
 // operação e exportação de XMLs de NFC-e pro contador.
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -82,9 +83,25 @@ public class FiscalController : ControllerBase
         if (req.CscId               is not null) cfg.CscId               = req.CscId;
         if (req.CscToken            is not null) cfg.CscToken            = req.CscToken;
 
-        if (req.RegimeTributario is not null &&
-            Enum.TryParse<RegimeTributario>(req.RegimeTributario, out var regime))
+        if (req.RegimeTributario is not null)
+        {
+            if (!Enum.TryParse<RegimeTributario>(req.RegimeTributario, out var regime))
+                return BadRequest(new { Message = $"Regime tributário \"{req.RegimeTributario}\" inválido." });
+
+            // F10: a montagem de itens (NfceEmissionService.MontarIcmsSimplesNacional) só sabe
+            // gerar classes ICMSSN* (CSOSN do Simples Nacional) — Lucro Presumido/Real exigiria
+            // CST de ICMS normal (regime não-cumulativo), que este sistema não calcula. Permitir
+            // a escolha aqui geraria CRT×CSOSN inconsistente no XML: 100% de rejeição da SEFAZ.
+            if (regime != RegimeTributario.SimplesNacional)
+                return BadRequest(new
+                {
+                    Message = "Este sistema só emite NFC-e pra empresas no Simples Nacional — a montagem " +
+                               "de impostos usa CSOSN, incompatível com Lucro Presumido/Real (exigiria CST " +
+                               "de ICMS normal, não implementado). Consulte o contador antes de mudar de regime.",
+                });
+
             cfg.RegimeTributario = regime;
+        }
 
         if (req.Ambiente is not null &&
             Enum.TryParse<AmbienteFiscal>(req.Ambiente, out var ambiente))
@@ -445,7 +462,11 @@ public class FiscalController : ControllerBase
         if (fim <= inicio)
             return BadRequest(new { Message = "O período final deve ser depois do inicial." });
 
-        var zipBytes = await _export.GerarZipAsync(inicio.ToUniversalTime(), fim.ToUniversalTime());
+        // F11: inicio/fim chegam do query string com Kind=Unspecified — .ToUniversalTime()
+        // assumiria o fuso do SERVIDOR (UTC em container), não o de Brasília, deslocando a
+        // janela em 3h (notas entre 21h-24h de Brasília caindo no ZIP do dia/mês errado). O job
+        // automático (FiscalXmlExportBackgroundService) já fazia essa conversão certa.
+        var zipBytes = await _export.GerarZipAsync(BrazilTime.ToUtcFromLocal(inicio), BrazilTime.ToUtcFromLocal(fim));
         var fileName = $"xmls-fiscais-{inicio:yyyy-MM-dd}-a-{fim:yyyy-MM-dd}.zip";
 
         return File(zipBytes, "application/zip", fileName);

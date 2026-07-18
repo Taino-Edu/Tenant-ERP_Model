@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -318,6 +319,7 @@ public class ContasReceberController : ControllerBase
     /// e contagem de notas destinadas por status do pipeline.
     /// </summary>
     [HttpGet("sefaz-status")]
+    [RequireModule("fiscal")] // F15: DF-e é parte do módulo fiscal — sem isso, tenant sem o módulo ainda vê/aciona
     public async Task<IActionResult> SefazStatus()
     {
         var fiscal     = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
@@ -352,6 +354,7 @@ public class ContasReceberController : ControllerBase
     /// Mesmo processo que roda automaticamente a cada 2h em background.
     /// </summary>
     [HttpPost("sefaz/sync")]
+    [RequireModule("fiscal")]
     public async Task<IActionResult> SefazSync(CancellationToken ct)
     {
         var result = await _sefaz.SincronizarAsync(ct);
@@ -373,6 +376,7 @@ public class ContasReceberController : ControllerBase
     /// </summary>
     /// <param name="status">Filtra por status do pipeline (ex: "Resumo", "Ciencia", "XmlBaixado", "ContasGeradas", "Cancelada").</param>
     [HttpGet("notas-destinadas")]
+    [RequireModule("fiscal")]
     public async Task<IActionResult> NotasDestinadas([FromQuery] string? status = null)
     {
         var q = _db.NotasDestinadas.AsQueryable();

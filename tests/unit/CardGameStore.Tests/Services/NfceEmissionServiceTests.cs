@@ -124,6 +124,8 @@ public class NfceEmissionServiceTests
             Logradouro                 = "Rua Teste",
             CodigoMunicipioIbge        = "3550308",
             Uf                         = "SP",
+            CscId                      = "000001", // F12: pré-voo exige CSC antes do certificado
+            CscToken                   = Guid.NewGuid().ToString(),
             CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
             CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
         });
@@ -135,6 +137,37 @@ public class NfceEmissionServiceTests
         nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
         nota.MotivoRejeicao.Should().Contain("vencido");
         nota.ChaveAcesso.Should().BeNull(); // nunca chegou a tentar transmitir
+    }
+
+    [Fact]
+    public async Task EmitirParaComandaAsync_SemCsc_RegistraPendenteEmissaoSemLancarExcecao()
+    {
+        // F12: sem CSC a transmissão sai sem QR Code (obrigatório em NFC-e) — bloqueia no
+        // pré-voo, antes de reservar número, em vez de queimar numeração à toa.
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        var enc     = CreateEncryptionService();
+        var pfxBytes = CreateSelfSignedPfx(SenhaCertificadoTeste, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        db.FiscalConfigs.Add(new FiscalConfig
+        {
+            Cnpj                      = "12345678000100",
+            RazaoSocial                = "Loja Teste LTDA",
+            Logradouro                 = "Rua Teste",
+            CodigoMunicipioIbge        = "3550308",
+            Uf                         = "SP",
+            CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
+            CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
+            // CscId/CscToken deliberadamente ausentes
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var nota = await service.EmitirParaComandaAsync(comanda.Id);
+
+        nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
+        nota.MotivoRejeicao.Should().Contain("CSC");
+        nota.Numero.Should().BeNull(); // nunca chegou a reservar número
     }
 
     [Fact]

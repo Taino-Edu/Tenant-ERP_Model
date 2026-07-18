@@ -21,6 +21,7 @@
 // GET  /api/contador-portal/clientes/{tenantId}/exportar-xmls → ZIP de XMLs no período
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -161,9 +162,11 @@ public class ContadorPortalController : ControllerBase
 
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        // F11: inicio/fim vêm do query string com Kind=Unspecified — .ToUniversalTime()
+        // assumiria o fuso do SERVIDOR (UTC em container), não o de Brasília.
         var q = db.NotasFiscaisEmitidas.AsQueryable();
-        if (inicio.HasValue) q = q.Where(n => n.CreatedAt >= inicio.Value.ToUniversalTime());
-        if (fim.HasValue)    q = q.Where(n => n.CreatedAt <= fim.Value.ToUniversalTime());
+        if (inicio.HasValue) q = q.Where(n => n.CreatedAt >= BrazilTime.ToUtcFromLocal(inicio.Value));
+        if (fim.HasValue)    q = q.Where(n => n.CreatedAt <= BrazilTime.ToUtcFromLocal(fim.Value));
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<NotaFiscalStatus>(status, out var statusEnum))
             q = q.Where(n => n.Status == statusEnum);
 
@@ -239,7 +242,8 @@ public class ContadorPortalController : ControllerBase
         tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
 
         var export = scope.ServiceProvider.GetRequiredService<FiscalXmlExportService>();
-        var zipBytes = await export.GerarZipAsync(inicio.ToUniversalTime(), fim.ToUniversalTime());
+        // F11: mesma correção de fuso do endpoint em FiscalController — ver comentário lá.
+        var zipBytes = await export.GerarZipAsync(BrazilTime.ToUtcFromLocal(inicio), BrazilTime.ToUtcFromLocal(fim));
         var fileName = $"xmls-fiscais-{inicio:yyyy-MM-dd}-a-{fim:yyyy-MM-dd}.zip";
 
         return File(zipBytes, "application/zip", fileName);

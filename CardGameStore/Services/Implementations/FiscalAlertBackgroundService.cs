@@ -48,6 +48,12 @@ public class FiscalAlertBackgroundService : BackgroundService
 
     private async Task CheckAsync(IServiceProvider sp, CancellationToken ct)
     {
+        // F15: sem isso, um tenant que teve o módulo fiscal desativado (mas ainda tem
+        // FiscalConfig residual no schema) continua recebendo alerta de vencimento de
+        // certificado — job fiscal tem que respeitar o módulo como qualquer endpoint.
+        if (!sp.GetRequiredService<ITenantContext>().EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+            return;
+
         var db    = sp.GetRequiredService<AppDbContext>();
         var email = sp.GetRequiredService<IEmailService>();
 
