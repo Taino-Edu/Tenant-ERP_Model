@@ -9,15 +9,15 @@
 
 ## Sumário executivo
 
-O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 224 testes de backend incluindo isolamento de tenant contra Postgres real. A auditoria encontrou **12 problemas críticos**; **9 já foram corrigidos e commitados** (C1, C2, C6, C7, C8, C9, C10, C11, C12 — ver seção "Estado das correções" abaixo), restando **3 abertos por decisão de arquitetura** (C3, C4, C5 — não são bugs pontuais, exigem escolha de design).
+O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 265 testes de backend incluindo isolamento de tenant contra Postgres real. A auditoria encontrou **12 problemas críticos**; **10 já foram corrigidos** (C1, C2, C3, C6, C7, C8, C9, C10, C11, C12 — ver seção "Estado das correções" abaixo), C4 parcial (visibilidade de falha corrigida; job migrador separado adiado — sem multi-instância no horizonte), restando **C5 aberto por decisão de arquitetura** (Redis/SignalR — só importa ao escalar horizontalmente).
 
 O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, e **14 dos 15 achados (F1–F15) já foram corrigidos** — só F7 ficou parcial (mensagem enganosa corrigida, mas o fluxo de estorno automático em si é feature nova, não bug pontual, e fica documentado como gap real). F1, F4, F5 não são testáveis neste ambiente (exigem SEFAZ de homologação real) — verificar manualmente antes de produção. Restam as 2 lacunas de escopo (L1-L5, decisões a tomar com o contador, não bugs).
 
 | Severidade | Quantidade | Corrigido |
 |---|---|---|
-| 🔴 Crítico | 12 | 9 (+1 parcial) |
+| 🔴 Crítico | 12 | 10 (+1 parcial) |
 | 🟠 Bloqueio multi-instância | 4 | 0 |
-| 🟡 Médio | 27 | 1 parcial |
+| 🟡 Médio | 27 | 4 (M1,M2,M6,M7) + 1 parcial (M18) |
 | 🔵 Baixo | 13 | 0 |
 | 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 14 (+1 parcial) |
 
@@ -140,29 +140,29 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 ### Integridade de dados e transações
 
-**M1. Caminhos quentes de comanda sem transação** — `ComandaService.cs:181-203` (`AddItemAsync`), `:311-348` (`RemoveItemAsync`), `:369-418` (`UpdateItemAsync`): `ExecuteUpdateAsync` + `SaveChangesAsync` sem `BeginTransaction`; falha no meio debita estoque sem o item existir. O padrão correto existe em `CancelComandaAsync:739-763` e não foi aplicado.
+**M1. Caminhos quentes de comanda sem transação**  `✅ corrigido` — `ComandaService.cs`: `AddItemAsync`, `AdminAddItemAsync`, `RemoveItemAsync` e `UpdateItemAsync` agora envolvem estoque (`ExecuteUpdateAsync`) + `SaveChangesAsync` na mesma transação (`CreateExecutionStrategy` + `BeginTransactionAsync`), mesmo padrão de `CancelComandaAsync`.
 
-**M2. Saldos de pontos/cashback sem concorrência atômica** — `ComandaService.cs:481-499,:609-640,:829-874` faz check-then-mutate via change tracker (dois débitos simultâneos passam); `VendaAvulsaService.cs:281-330` faz o contrário certo (`ExecuteUpdateAsync` atômico com predicado de saldo). Zero `RowVersion`/`xmin` no projeto.
+**M2. Saldos de pontos/cashback sem concorrência atômica**  `✅ corrigido` — `ComandaService.cs`: débito de pontos/cashback em `CloseComandaAsync` (principal e split) trocado de check-then-mutate por `ExecuteUpdateAsync` atômico com o saldo no predicado, mesmo padrão de `VendaAvulsaService`. Sincronização do valor em memória via `PropertyEntry.CurrentValue`/`OriginalValue` (não `IsModified=false`, que reverte o valor — bug pego pelo próprio teste existente). Zero `RowVersion`/`xmin` continua como melhoria futura, não crítica dado o fix acima.
 
-**M3. Idempotência existe apenas no pagamento de crediário** — bem implementada (`CrediariosController.cs:381-466`, índice único `idempotency_key`, `AppDbContext.cs:283-286`). Venda avulsa, fechamento de comanda e criação de cobrança Pix não têm chave nem constraint — retries de rede geram duplicidades reais (ver C6/C7).
+**M3. Idempotência existe apenas no pagamento de crediário** — bem implementada (`CrediariosController.cs:381-466`, índice único `idempotency_key`, `AppDbContext.cs:283-286`). Venda avulsa, fechamento de comanda e criação de cobrança Pix não têm chave nem constraint — retries de rede geram duplicidades reais. **Parcialmente mitigado**: C6 (guarda de status) e C7 (transação) já bloqueiam os cenários mais graves de dupla-cobrança por duplo clique/retry nesses dois fluxos — a idempotência explícita (chave gerada pelo front, enviada no request) fica como melhoria adicional, não implementada nesta sessão: exige coordenação com o frontend (gerar e persistir a chave do lado do cliente), não é só backend.
 
-**M4. Reservas com corridas** — `ReservationController.cs`: `Homologar` (`:235-288`) sem transação e sem checagem atômica de status (duas homologações concorrentes debitam estoque duas vezes); `Create` (`:85-93`) com checagem de estoque TOCTOU.
+**M4. Reservas com corridas** — `ReservationController.cs`: `Homologar` (`:235-288`) sem transação e sem checagem atômica de status (duas homologações concorrentes debitam estoque duas vezes); `Create` (`:85-93`) com checagem de estoque TOCTOU. **Não corrigido nesta sessão** — módulo de reservas tem menor volume de uso que comanda/venda avulsa; mesmo padrão de fix de M1 se aplicaria (transação + `ExecuteUpdateAsync` com predicado de status/estoque).
 
-**M5. Crediário: split não validado e reconciliação Pix com corrida** — `CrediariosController.cs`: `RegistrarPagamento` (`:390-424`) não valida o split contra o saldo; reconciliação Pix tem corrida em `pix.PagoEm is null` (`:560`) — dupla baixa Pix+manual depende só do índice de idempotency do request HTTP.
+**M5. Crediário: split não validado e reconciliação Pix com corrida** — `CrediariosController.cs`: `RegistrarPagamento` (`:390-424`) não valida o split contra o saldo; reconciliação Pix tem corrida em `pix.PagoEm is null` (`:560`). **Não corrigido nesta sessão.**
 
-**M6. Edição de comanda fechada aceita preço do request** — `ComandaService.cs:1095-1097,:1117-1120` (`EditarComandaFechadaAsync`): contradiz a regra de `ResolveItemAsync` (preço sempre do cadastro) e alimenta o financeiro — admin/Operator pode reescrever retroativamente valores de vendas fechadas sem trilha explícita.
+**M6. Edição de comanda fechada aceita preço do request**  `✅ corrigido` — `ComandaService.cs`: `EditarComandaFechadaAsync` agora bloqueia Operator (só Admin — a policy `AdminOnly` do controller aceitava os dois, mesma raiz do C8) e loga explicitamente qualquer mudança de preço de item (antes/depois), já que isso segue sendo uma correção retroativa deliberada (preço do request é intencional aqui, ao contrário de `ResolveItemAsync`) mas agora com trilha visível e restrita a quem devia poder fazer isso.
 
-**M7. E-mail fire-and-forget de crediário perde o tenant** — `ComandaService.cs:598-603`: `Task.Run` com scope novo sem `Set(...)` → `EmailService` lê `EmailConfigs`/`SiteConfigs` do schema `public` (SMTP próprio do tenant e branding ignorados); exceções não observadas.
+**M7. E-mail fire-and-forget de crediário perde o tenant**  `✅ corrigido` — `ComandaService.cs`: `Task.Run` agora propaga o tenant (`ITenantContext.Set`) pro scope novo antes de resolver `IEmailService`, e a exceção é logada em vez de desaparecer. Achado importante: com o fail-fast do C3, esse bug teria virado uma exceção silenciosa dentro de uma task não observada — corrigir isso era necessário pra não regredir com o C3.
 
 ### Performance e custo por request
 
-**M8. Fechamento financeiro oficial trunca em 2.000 vendas, silenciosamente** — `FinanceiroCalculoService.cs:54,:486` via `GetRecentAsync` (`VendaAvulsaService.cs:405-408`): mês com >2.000 vendas avulsas exclui as mais antigas de receita **e custo**, e o resultado errado é gravado como snapshot "congelado" em `FechamentoPeriodo`. Sem log/flag de truncamento. Idem `AnalyticsController.cs:58` (Take 5.000 com o jsonb inteiro).
+**M8. Fechamento financeiro oficial trunca em 2.000 vendas, silenciosamente** — `FinanceiroCalculoService.cs:54,:486` via `GetRecentAsync` (`VendaAvulsaService.cs:405-408`): mês com >2.000 vendas avulsas exclui as mais antigas de receita **e custo**, e o resultado errado é gravado como snapshot "congelado" em `FechamentoPeriodo`. Sem log/flag de truncamento. Idem `AnalyticsController.cs:58` (Take 5.000 com o jsonb inteiro). **Não corrigido nesta sessão** — ao contrário de M9-M11, isto é um bug de CORREÇÃO (número errado gravado como definitivo), não só performance, e não depende de ter muitos tenants — uma única loja de bom volume já pode passar de 2.000 vendas/mês. Priorizar antes de M9-M11.
 
-**M9. Agregações de relatórios materializam tabelas em memória** — `RelatoriosController.cs:62-76`: todos os `ComandaItems` do mês (2 `Include`) + todas as `VendasAvulsas` do mês agregados em `Dictionary` — deveria ser `GROUP BY` no SQL.
+**M9. Agregações de relatórios materializam tabelas em memória** — `RelatoriosController.cs:62-76`: todos os `ComandaItems` do mês (2 `Include`) + todas as `VendasAvulsas` do mês agregados em `Dictionary` — deveria ser `GROUP BY` no SQL. **Não corrigido nesta sessão** — só dói com volume alto por loja; adiado junto com M10/M11.
 
-**M10. `AccountLocatorService` é O(tenants) por chamada** — `AccountLocatorService.cs:60-86`: scope + query + `BCrypt.Verify` (~100 ms) por tenant ativo, sequencial. Com 200 lojas: ~20 s e 200 conexões por chamada legítima.
+**M10. `AccountLocatorService` é O(tenants) por chamada** — `AccountLocatorService.cs:60-86`: scope + query + `BCrypt.Verify` (~100 ms) por tenant ativo, sequencial. Com 200 lojas: ~20 s e 200 conexões por chamada legítima. **Não corrigido nesta sessão** — só dói com muitos tenants ativos; mesma lógica de adiamento do C4/C5/H1-H4 (sem multi-instância/escala no horizonte próximo, confirmado com o usuário).
 
-**M11. Painéis de plataforma agregam tenant-por-tenant por request** — `PlatformController.cs:497-540` (audit-logs), `:206-253` (overview), `ContadorPortalController.cs:69-100`: scope + query por tenant por request HTTP. O comentário em `:493-496` já reconhece que precisa virar job agregador.
+**M11. Painéis de plataforma agregam tenant-por-tenant por request** — `PlatformController.cs:497-540` (audit-logs), `:206-253` (overview), `ContadorPortalController.cs:69-100`: scope + query por tenant por request HTTP. O comentário em `:493-496` já reconhece que precisa virar job agregador. **Não corrigido nesta sessão** — mesmo raciocínio de M10.
 
 ### Segurança e contrato de API
 
@@ -372,7 +372,7 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 | ~~**P0c**~~ | ✅ Feito — cupom de contingência com chave/QR corretos (tpEmis=9 antes de imprimir), retransmissão por 24h, certificado vencido bloqueado (upload + emissão), nfeProc persistido/exportado. **Pendente:** verificação manual em homologação real (F1/F4 não são testáveis sem SEFAZ de verdade) | F1–F4 | — |
 | ~~**P1**~~ | ✅ `ITenantContext` fail-fast feito (C3). Falha de migration por tenant agora visível (WARNING + slugs) — job migrador separado/`pg_advisory_lock` adiado de propósito (sem multi-instância ainda) | C4 (parcial), C3 | — |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
-| **P3** | Integridade e performance: transações nos caminhos quentes, concorrência em saldos, idempotência sistêmica, agregações em SQL, `AccountLocator` e painéis de plataforma | M1–M11 | Corrida e custo por request em tenant grande |
+| **P3** | ✅ M1 (transações), M2 (concorrência de saldo), M6 (edição de comanda fechada), M7 (tenant no e-mail) feitos. **Pendente:** M8 (truncamento silencioso no fechamento financeiro — priorizar, é bug de correção não só performance), M3/M4/M5 (idempotência sistêmica, reservas, crediário), M9-M11 (agregações/performance por tenant — adiado com M10/M11 até escalar) | M1–M11 | M8 é o próximo mais importante — número financeiro errado gravado como definitivo |
 | **P4** | Segurança média e higiene: DTOs de produto/config/push, permissões por prefixo, CSC criptografado, padrão de erro/`ProblemDetails`, Gemini por tenant, type-check no CI, smoke test real, resíduos TCG, hardcodes, docs, senha default, compose | M12–M27, B1–B13 | Superfície de ataque e dívida de consistência |
 | ~~**P5**~~ | ✅ F5-F15 corrigidos (F7 parcial — só a mensagem, estorno automático fica como feature separada). Restam as decisões de escopo L1-L5 (CC-e, inutilização manual de faixa, ajuste de numeração inicial — não são bugs) | F5–F15, L1–L5 | — |
 
