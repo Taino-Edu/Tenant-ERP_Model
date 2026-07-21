@@ -9,7 +9,7 @@
 
 ## Sumário executivo
 
-O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 224 testes de backend incluindo isolamento de tenant contra Postgres real. Mas a auditoria encontrou **12 problemas críticos**, sendo que **4 deles já têm correção no working copy aguardando commit** (ver próxima seção), e 4 críticos **novos e ainda abertos**: duplo fechamento de comanda (dupla NFC-e), commit parcial em venda avulsa, escalação de privilégio Operator→Admin e certificado do Banco Inter global para todos os tenants.
+O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 224 testes de backend incluindo isolamento de tenant contra Postgres real. A auditoria encontrou **12 problemas críticos** — **9 já corrigidos e verificados em 2026-07-20** (placar na seção 📊 Verificação), 1 parcial e 3 de arquitetura/escala ainda abertos (C3, C4, C5). O módulo fiscal segue com os 4 graves (F1–F4) sem correção.
 
 O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, mas **4 problemas graves impedem a homologação hoje** (F1–F4) e há mais 11 achados + 2 lacunas de escopo.
 
@@ -23,32 +23,57 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 
 ---
 
-## ⚠️ Estado do working copy (não commitado) — verificar e commitar
+## 📊 Verificação pós-correções — 2026-07-20 (o que foi feito de verdade)
 
-Há correções **já escritas mas não commitadas** (detectado via `git status`/`git diff` em 2026-07-17), cobrindo achados desta auditoria:
+Verificado item a item contra o código atual (HEAD `fbce607`). Commits analisados: `39a8e84` (tenant em jobs/NFC-e), `f63de14` (subdomínio 404), `8a17f1f` (deploy backup/rollback), `45e05e5` (limpeza Campeonatos), `fbce607` (audit fixes + mTLS por tenant).
 
-| Correção | Arquivos | Achado |
-|---|---|---|
-| Propagação de tenant na emissão de NFC-e da comanda | `ComandaService.cs` (+`ITenantContext.Set`) | C1 |
-| Novo helper `ForEachActiveTenantAsync` aplicado aos 5 background services | `Multitenancy/TenantIteration.cs` (novo), `FiscalRetry/FiscalXmlExport/FiscalAlert/SefazDist/InterSyncService` | C2 |
-| Subdomínio inexistente agora retorna 404 (não serve mais o tenant-zero) | `TenantResolutionMiddleware.cs` + `TenantResolutionMiddlewareTests.cs` (+20 linhas de teste) | C10 |
-| Deploy seguro: backup pré-deploy, imagens `:rollback`, health check com reversão automática | `deploy/update.sh` (+85 linhas) | C11 |
-| Backup diário via cron no setup + backup inicial + verificação de integridade do dump + opção off-site (`BACKUP_REMOTE_CMD`) | `deploy/setup.sh` (+25), `deploy/backup.sh` (+41) | C12 (parcial) |
-| Limpeza parcial de resíduos TCG/Campeonatos | `frontend/app/{termos,privacidade,cadastro}`, `admin/perfis`, `contexts/SiteConfigContext`, `lib/api.ts` | M18 (parcial) |
+### Placar
 
-**Ação recomendada:** revisar, rodar a suíte (`dotnet test softNerd.sln`) e commitar — são correções de bugs de isolamento fiscal e de segurança de deploy. Nota: o rollback do `update.sh` reverte **código** (imagens), não **schema** — o próprio script documenta o limite.
+| Grupo | ✅ Corrigido | 🟡 Parcial | ❌ Não corrigido |
+|---|---|---|---|
+| 🔴 Críticos C1–C12 | 9 | 1 (C12) | 3 (C3, C4, C5) |
+| 🧾 Fiscal F1–F15 | 0 | 3 (F2, F12, F15) | 12 |
+| 🟡 Médios M1–M27 | 0 | 4 (M1, M18, M25, M26) | 23 |
+| 🔵 Baixos B1–B13 | 0 | 0 | 13 |
+| 🟠 Escala H1–H4 | 0 | 0 | 4 |
+| Lacunas fiscais L1–L5 | 0 | 0 | 5 |
+
+### ✅ Feito de verdade (verificado no código)
+
+- **C1** — propagação de tenant na emissão NFC-e da comanda (`ComandaService.cs:698-701`) — commit `39a8e84`
+- **C2** — 5 background services iteram tenants via `ForEachActiveTenantAsync` (`Multitenancy/TenantIteration.cs`) — commit `39a8e84`
+- **C6** — guarda de status no `CloseComandaAsync` (`ComandaService.cs:447-448`) — commit `fbce607`
+- **C7** — venda avulsa: validação antecipada + `CreateExecutionStrategy` + transação cobrindo estoque/venda/pós-venda (`VendaAvulsaService.cs:44-378`); NFC-e fora da transação com tenant propagado — commit `fbce607`
+- **C8** — Operator não reseta senha de Admin (`UserService.cs:264-266`) nem auto-eleva perfil (`UserController.cs:417-418,:424-425`) — commit `fbce607`
+- **C9** — certificado mTLS do Inter por tenant (`IntegrationConfig.CertificateCrtEncrypted/KeyEncrypted`, descriptografado por request em `InterSyncService.cs:325-328`; upload em `ContasReceberController.cs:434-445`) — commit `fbce607`
+- **C10** — subdomínio inexistente retorna 404 (`TenantResolutionMiddleware.cs:63-68`) — commit `f63de14`
+- **C11** — `update.sh` com backup pré-deploy, imagens `:rollback`, health check e auto-rollback — commit `8a17f1f`
+- **C12** 🟡 — cron diário + backup inicial + verificação de integridade + opção off-site (`BACKUP_REMOTE_CMD`); **persistem**: retenção 7 dias e dump full sem restore por tenant
+- **M18** 🟡 — Campeonatos removido de manual/perfis/termos/privacidade/cadastro/api.ts/tests (`45e05e5`); **sobraram**: remotePatterns TCG em `next.config.js:18,21`, seção TCG em `admin/manual/page.tsx:309-325`, `termos/page.tsx:178`, placeholder em `admin/usuarios/page.tsx:1123`
+
+### ❌ Não corrigido (confirmado no código atual)
+
+- **Críticos de arquitetura/escala:** C3 (tenant-zero silencioso), C4 (migrations no boot sem lock), C5 (SignalR sem backplane)
+- **Fiscal:** 12 de 15 abertos — inclusive os 4 graves **F1–F4** (cupom de contingência com chave/QR errados; retransmissão morre em ~2,5 h; certificado vencido → contingência indevida; XML sem `nfeProc`). Parciais: F2 (alerta existe, mas passivo), F12 (pré-voo antes da reserva, mas sem CNPJ/IE/CSC), F15 (pontos de emissão checam módulo; jobs e DF-e não)
+- **Médios:** 23 de 27 abertos (M2–M17, M19–M24, M27)
+- **Baixos e escala:** B1–B13 e H1–H4 todos abertos (não eram alvo dos commits)
+- **Lacunas fiscais L1–L5:** nenhuma implementada
+
+### ⚠️ Problema novo introduzido
+
+- O commit `fbce607` versionou `.next/trace` e `.next/trace-build` (artefatos de build) — a raiz `.next/` não está no `.gitignore` (só `frontend/.next/`). Remover do tracking (`git rm --cached`) e adicionar `/.next/` ao `.gitignore`.
 
 ---
 
 ## 🔴 Críticos — risco de dados, segurança ou bloqueio imediato
 
-### C1. Emissão de NFC-e no fechamento de comanda grava no tenant errado  `🛠 correção no working copy`
+### C1. Emissão de NFC-e no fechamento de comanda grava no tenant errado  `✅ corrigido e verificado (20/07)`
 
 - **Onde:** `CardGameStore/Services/Implementations/ComandaService.cs:688-691`
 - **Problema:** o escopo criado para emitir a nota não propagava o `ITenantContext` da requisição → `NotaFiscalEmitida` gravada no schema `public` (tenant-zero), presa em `PendenteEmissao` para sempre, reprocessada em loop pelo retry fiscal.
 - **Status:** corrigido no working copy (`Set(...)` propagado, mesmo padrão que `VendaAvulsaService.cs:200-201` já tinha). **Falta commit + teste de regressão.**
 
-### C2. Cinco dos seis background services operam silenciosamente só no tenant-zero  `🛠 correção no working copy`
+### C2. Cinco dos seis background services operam silenciosamente só no tenant-zero  `✅ corrigido e verificado (20/07)`
 
 - **Onde:** `FiscalRetryBackgroundService.cs:45`, `FiscalXmlExportBackgroundService.cs:49`, `FiscalAlertBackgroundService.cs:46`, `SefazDistBackgroundService.cs:48`, `InterSyncService.cs:365`
 - **Problema:** `CreateScope()` sem `ITenantContext.Set(...)` → retry de NF-e, envio mensal de XML ao contador, alerta de vencimento do certificado A1, manifestação do destinatário (DDA) e sync do Banco Inter **nunca rodavam para tenants reais** — só para o tenant-zero. O cabeçalho de `FechamentoBackgroundService.cs:5-14` documentava o problema.
@@ -72,43 +97,43 @@ Há correções **já escritas mas não commitadas** (detectado via `git status`
 - **Problema:** eventos de comanda via `IHubContext<ComandaHub>` só alcançam conexões da instância local. Com 2+ instâncias, o dashboard em tempo real deixa de ser confiável.
 - **Sugestão:** `AddStackExchangeRedis(...)` ao subir a 2ª réplica. **Aberto** (só bloqueia multi-instância).
 
-### C6. Fechamento de comanda sem guarda de status — duplo fechamento duplica crediário, pontos e NFC-e  `🆕 aberto`
+### C6. Fechamento de comanda sem guarda de status — duplo fechamento duplica crediário, pontos e NFC-e  `✅ corrigido em fbce607 (verificado 20/07)`
 
 - **Onde:** `ComandaService.cs` — `CloseComandaAsync` não verifica se a comanda já está `Fechada`/`Cancelada` (todos os outros métodos da classe verificam: `:382,:722,:840,:884,:1019`).
 - **Efeito:** um segundo `POST /close` (duplo clique, retry de rede) re-executa todos os efeitos colaterais: crediário duplicado, segundo débito de pontos/cashback e — se `emitirNotaFiscal=true` — **segunda NFC-e autorizada na SEFAZ para a mesma venda** (`:685-699`, sem a guarda de duplicidade que a emissão manual tem em `FiscalController.cs:372-374`). `ComandaController.cs:408` captura `InvalidOperationException` esperando "já fechada", exceção que nunca é lançada.
 - **Sugestão:** uma linha de guarda de status no início + constraint/índice. Resolve também a dupla emissão.
 
-### C7. Venda avulsa faz commit parcial sem transação  `🆕 aberto`
+### C7. Venda avulsa faz commit parcial sem transação  `✅ corrigido em fbce607 (verificado 20/07)`
 
 - **Onde:** `Services/Implementations/VendaAvulsaService.cs` — estoque decrementado via `ExecuteUpdateAsync` (`:96-111`), venda gravada (`:180-181`), NFC-e possivelmente autorizada (`:192-204`), e **só depois** validações pós-venda lançam `InvalidOperationException` (`:217-219,:223,:286-363`).
 - **Efeito:** cliente recebe HTTP 400 mas a venda fica persistida, o estoque baixado e a nota possivelmente autorizada. Validação do 2º pagamento (`:141-149`) também ocorre após o decremento de estoque. Contraste com `CancelComandaAsync` (`ComandaService.cs:739-763`), que usa `CreateExecutionStrategy` + transação.
 - **Sugestão:** validar antes de escrever + transação explícita com execution strategy.
 
-### C8. Operator com permissão "usuarios" tem poderes de fato de Admin (escalação de privilégio)  `🆕 aberto`
+### C8. Operator com permissão "usuarios" tem poderes de fato de Admin (escalação de privilégio)  `✅ corrigido em fbce607 (verificado 20/07)`
 
 - **Onde:** `Program.cs:181` (policy `AdminOnly` aceita Admin **e** Operator) + `Perfil.cs:69` (permissão "usuarios" libera prefixo `/api/user`) + `UserService.cs`.
 - **Efeito:** `AdminResetPasswordAsync` (`:255-272`) não restringe a role do alvo → **Operator reseta a senha do Admin e toma a conta**; `UserController.AtualizarPerfil` (`:409-444`) → Operator atribui a si mesmo qualquer perfil; `AdminCreateUserAsync` (`:200-253`) → cria outro Operator com qualquer `PerfilId`. A permissão granular vira escalação total.
 - **Sugestão:** restringir role do alvo (Operator só gerencia Customer/Operator), impedir auto-elevação de perfil, auditar essas ações.
 
-### C9. Certificado mTLS do Banco Inter é global do servidor, não por tenant  `🆕 aberto`
+### C9. Certificado mTLS do Banco Inter é global do servidor, não por tenant  `✅ corrigido em fbce607 (verificado 20/07)`
 
 - **Onde:** `InterSyncService.cs:329-339` (`BuildMtlsClient` lê `Inter:CertificatePath`/`KeyPath` do processo — um único cert para todos os tenants) + `ContasReceberController.cs:426-449`.
 - **Efeito:** ClientId/ClientSecret são por tenant, mas o certificado é compartilhado — e o endpoint `UploadCertificado` permite que **qualquer admin de qualquer tenant sobrescreva o certificado usado por todos** → cobranças Pix de outros tenants quebradas ou direcionadas à conta errada.
 - **Sugestão:** mover certificado para config por tenant (mesmo padrão do ClientId/Secret e do certificado A1 fiscal, que já é por tenant).
 
-### C10. Subdomínio desconhecido serve silenciosamente a loja do tenant-zero  `🛠 correção no working copy`
+### C10. Subdomínio desconhecido serve silenciosamente a loja do tenant-zero  `✅ corrigido e verificado (20/07)`
 
 - **Onde:** `CardGameStore/Multitenancy/TenantResolutionMiddleware.cs:84-86`
 - **Problema:** slug bem-formado inexistente no catálogo (ex: `loja-errada.2esysten.com.br`) caía no fallback do tenant-zero — exibindo vitrine, produtos e tela de login **da loja errada**, com cookies válidos para aquele host. O usuário podia logar/comprar sem perceber.
 - **Status:** corrigido no working copy — slug bem-formado sem tenant agora retorna **404** ("Loja não encontrada"), com teste novo em `TenantResolutionMiddlewareTests.cs`. **Falta commit.**
 
-### C11. Deploy sem backup prévio e sem rollback  `🛠 correção no working copy`
+### C11. Deploy sem backup prévio e sem rollback  `✅ corrigido e verificado (20/07)`
 
 - **Onde:** `deploy/update.sh:20-32` (versão commitada: `git pull` → `build` → `up -d` → prune), disparado automaticamente pelo CI a cada push verde na `main`.
 - **Problema:** migrations rodam no boot; se uma migration quebrasse um schema ou o boot, não havia backup pré-deploy, imagem anterior, nem rollback.
 - **Status:** corrigido no working copy — backup obrigatório antes de atualizar (aborta se falhar), imagens tagueadas `:rollback`, health check em `/health` com reversão automática. Limite documentado: rollback reverte código, não schema. **Falta commit.**
 
-### C12. Backup não agendado por padrão e só na própria VPS  `🛠 parcialmente corrigido no working copy`
+### C12. Backup não agendado por padrão e só na própria VPS  `🟡 parcial — cron/integridade/off-site ok; retenção 7d e restore por tenant pendentes (verificado 20/07)`
 
 - **Onde:** `deploy/setup.sh` (versão commitada: nenhum cron), `deploy/backup.sh` (destino `/opt/tenant-erp/backups` na mesma máquina, retenção 7 dias, sem verificação de integridade).
 - **Status no working copy:** setup agenda cron diário (03:00) + backup inicial; `backup.sh` valida integridade (`gzip -t` + tamanho mínimo) e oferece `BACKUP_REMOTE_CMD` para cópia off-site (ainda opcional — default continua local).

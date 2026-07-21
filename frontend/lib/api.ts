@@ -1198,7 +1198,7 @@ export interface CupomDto {
   razaoSocial: string; cnpj: string; endereco: string
   chaveAcesso?: string; protocolo?: string; emitidoEm?: string
   serie: number; numero: number; status: string
-  itens: CupomItemDto[]; valorTotalCentavos: number; formaPagamento: string
+  itens: CupomItemDto[]; descontoTotalCentavos: number; valorTotalCentavos: number; formaPagamento: string
   qrCodeUrl?: string
 }
 

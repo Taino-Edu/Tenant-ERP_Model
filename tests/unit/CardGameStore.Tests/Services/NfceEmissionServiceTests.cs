@@ -13,6 +13,10 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using DFe.Classes.Entidades;
+using DFe.Classes.Flags;
+using DFe.Utils;
+using NFe.Classes.Informacoes.Identificacao.Tipos;
 using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual;
 using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual.Tipos;
 
@@ -91,6 +95,41 @@ public class NfceEmissionServiceTests
         var nota = await service.EmitirParaComandaAsync(comanda.Id);
 
         nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
+    }
+
+    [Fact]
+    public async Task EmitirParaComandaAsync_ComDescontoEPontos_RegistraValorLiquido()
+    {
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        comanda.TotalInCents = 1000;
+        comanda.DiscountInCents = 300;
+        comanda.PointsApplied = 200;
+        await db.SaveChangesAsync();
+
+        var nota = await CreateService(db).EmitirParaComandaAsync(comanda.Id);
+
+        nota.ValorTotalEmCentavos.Should().Be(1000);
+        nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
+    }
+
+    [Fact]
+    public void CriarConfiguracaoCertificado_UsaA1ByteArray()
+    {
+        var config = NfceEmissionService.CriarConfiguracaoCertificado([1, 2, 3], "senha");
+
+        config.TipoCertificado.Should().Be(TipoCertificado.A1ByteArray);
+        config.ArrayBytesArquivo.Should().Equal(1, 2, 3);
+        config.Senha.Should().Be("senha");
+    }
+
+    [Fact]
+    public void CriarConfiguracaoServico_DefineTipoEmissaoNormal()
+    {
+        var config = NfceEmissionService.CriarConfiguracaoServico(Estado.SP, TipoAmbiente.Homologacao);
+
+        config.tpEmis.Should().Be(TipoEmissao.teNormal);
+        config.ModeloDocumento.Should().Be(ModeloDocumento.NFCe);
     }
 
     [Fact]
@@ -239,6 +278,74 @@ public class NfceEmissionServiceTests
             PercentualCreditoSn: percentualCredito, Quantidade: 1, PrecoUnitarioCentavos: 1000, SubtotalCentavos: 1000);
 
     [Theory]
+    [InlineData("8474.31.00", "84743100")]
+    [InlineData(" 9504 4000 ", "95044000")]
+    public void SanitizarNcm_RemoveFormatacao(string entrada, string esperado)
+    {
+        NfceEmissionService.SanitizarNcm(entrada).Should().Be(esperado);
+    }
+
+    [Fact]
+    public void SanitizarNcm_QuantidadeDeDigitosInvalida_ExplicaErro()
+    {
+        var act = () => NfceEmissionService.SanitizarNcm("123.45");
+
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*8 digitos*");
+    }
+
+    [Theory]
+    [InlineData("5.102", 5102)]
+    [InlineData(" 5102 ", 5102)]
+    public void SanitizarCfop_RemoveFormatacao(string entrada, int esperado)
+    {
+        NfceEmissionService.SanitizarCfop(entrada).Should().Be(esperado);
+    }
+
+    [Fact]
+    public void SanitizarCfop_Invalido_ExplicaErro()
+    {
+        var act = () => NfceEmissionService.SanitizarCfop("51-A");
+
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*4 digitos*");
+    }
+
+    [Theory]
+    [InlineData("01310-100", "01310100")]
+    [InlineData("01.310 100", "01310100")]
+    public void SanitizarCep_RemoveFormatacao(string entrada, string esperado)
+    {
+        NfceEmissionService.SanitizarCep(entrada).Should().Be(esperado);
+    }
+
+    [Fact]
+    public void DistribuirDesconto_PreservaTotalExatoMesmoComArredondamento()
+    {
+        var itens = new[]
+        {
+            Item("102") with { SubtotalCentavos = 1000 },
+            Item("102") with { SubtotalCentavos = 2000 },
+            Item("102") with { SubtotalCentavos = 3000 },
+        };
+
+        var descontos = NfceEmissionService.DistribuirDesconto(itens, 1001);
+
+        descontos.Sum().Should().Be(1001);
+        descontos.Zip(itens).Should().OnlyContain(x => x.First <= x.Second.SubtotalCentavos);
+    }
+
+    [Fact]
+    public void MontarItem_IncluiDescontoESanitizaCamposFiscais()
+    {
+        var item = Item("102") with { Ncm = "8474.31.00", Cfop = "5.102" };
+
+        var det = NfceEmissionService.MontarItem(item, 1, 125);
+
+        det.prod.NCM.Should().Be("84743100");
+        det.prod.CFOP.Should().Be(5102);
+        det.prod.vDesc.Should().Be(1.25m);
+    }
+
+    [Theory]
     [InlineData("102", Csosnicms.Csosn102)]
     [InlineData(null,  Csosnicms.Csosn102)]
     [InlineData("",    Csosnicms.Csosn102)]
@@ -262,6 +369,15 @@ public class NfceEmissionServiceTests
         sn101.CSOSN.Should().Be(Csosnicms.Csosn101);
         sn101.pCredSN.Should().Be(2.5m);
         sn101.vCredICMSSN.Should().Be(0.25m); // R$10,00 (1000 centavos) * 2,5% = R$0,25
+    }
+
+    [Fact]
+    public void MontarIcmsSimplesNacional_Csosn101_UsaBaseLiquidaAposDesconto()
+    {
+        var icms = NfceEmissionService.MontarIcmsSimplesNacional(
+            Item("101", percentualCredito: 2.5m), descontoCentavos: 200);
+
+        icms.Should().BeOfType<ICMSSN101>().Which.vCredICMSSN.Should().Be(0.20m);
     }
 
     [Fact]

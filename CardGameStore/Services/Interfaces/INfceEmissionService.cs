@@ -47,5 +47,5 @@ public record CupomDto(
     string RazaoSocial, string Cnpj, string Endereco,
     string? ChaveAcesso, string? Protocolo, DateTime? EmitidoEm,
     int Serie, int Numero, string Status,
-    List<CupomItemDto> Itens, int ValorTotalCentavos, string FormaPagamento,
+    List<CupomItemDto> Itens, int DescontoTotalCentavos, int ValorTotalCentavos, string FormaPagamento,
     string? QrCodeUrl);

@@ -78,7 +78,7 @@ public class FiscalController : ControllerBase
         if (req.CodigoMunicipioIbge is not null) cfg.CodigoMunicipioIbge = req.CodigoMunicipioIbge;
         if (req.Municipio           is not null) cfg.Municipio           = req.Municipio;
         if (req.Uf                  is not null) cfg.Uf                  = req.Uf.ToUpperInvariant();
-        if (req.Cep                 is not null) cfg.Cep                 = req.Cep.Replace("-", "");
+        if (req.Cep                 is not null) cfg.Cep                 = new string(req.Cep.Where(char.IsDigit).ToArray());
         if (req.CscId               is not null) cfg.CscId               = req.CscId;
         if (req.CscToken            is not null) cfg.CscToken            = req.CscToken;
 
@@ -437,15 +437,16 @@ public class FiscalController : ControllerBase
     /// <summary>Gera um .zip com os XMLs de todas as NFC-e emitidas no período, pra
     /// entregar ao contador.</summary>
     /// <param name="inicio">Data inicial do período (inclusive).</param>
-    /// <param name="fim">Data final do período — deve ser depois de <paramref name="inicio"/>.</param>
+    /// <param name="fim">Data final do período (inclusive).</param>
     // ── GET /api/fiscal/exportar-xmls?inicio=&fim= ────────────────────────────
     [HttpGet("exportar-xmls")]
     public async Task<IActionResult> ExportarXmls([FromQuery] DateTime inicio, [FromQuery] DateTime fim)
     {
-        if (fim <= inicio)
-            return BadRequest(new { Message = "O período final deve ser depois do inicial." });
+        if (fim.Date < inicio.Date)
+            return BadRequest(new { Message = "O período final não pode ser anterior ao inicial." });
 
-        var zipBytes = await _export.GerarZipAsync(inicio.ToUniversalTime(), fim.ToUniversalTime());
+        var (inicioUtc, fimExclusivoUtc) = FiscalXmlExportService.NormalizarPeriodoInclusivo(inicio, fim);
+        var zipBytes = await _export.GerarZipAsync(inicioUtc, fimExclusivoUtc);
         var fileName = $"xmls-fiscais-{inicio:yyyy-MM-dd}-a-{fim:yyyy-MM-dd}.zip";
 
         return File(zipBytes, "application/zip", fileName);

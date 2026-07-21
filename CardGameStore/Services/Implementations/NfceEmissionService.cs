@@ -85,6 +85,25 @@ public class NfceEmissionService : INfceEmissionService
     private static DateTimeOffset ParaBrasil(DateTime momentoUtc) =>
         TimeZoneInfo.ConvertTime(new DateTimeOffset(DateTime.SpecifyKind(momentoUtc, DateTimeKind.Utc)), FusoBrasil);
 
+    internal static ConfiguracaoCertificado CriarConfiguracaoCertificado(byte[] pfxBytes, string senha) => new()
+    {
+        TipoCertificado   = TipoCertificado.A1ByteArray,
+        ArrayBytesArquivo = pfxBytes,
+        Senha             = senha,
+    };
+
+    internal static ConfiguracaoServico CriarConfiguracaoServico(
+        Estado estado, TipoAmbiente ambiente, ModeloDocumento modelo = ModeloDocumento.NFCe) => new()
+    {
+        cUF             = estado,
+        tpAmb           = ambiente,
+        ModeloDocumento = modelo,
+        tpEmis           = TipoEmissao.teNormal,
+        VersaoLayout    = VersaoServico.Versao400,
+        TimeOut         = 15000,
+        ValidarSchemas  = false,
+    };
+
     /// <summary>
     /// Distingue "SEFAZ inalcançável" (entra em contingência) de uma rejeição de negócio de
     /// verdade (SEFAZ respondeu, só não autorizou). Só os tipos de exceção claramente ligados
@@ -141,7 +160,7 @@ public class NfceEmissionService : INfceEmissionService
                 ? await CarregarDadosComandaAsync(nota.ComandaId!.Value)
                 : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value);
 
-            nota.ValorTotalEmCentavos = dados.Itens.Sum(i => i.SubtotalCentavos);
+            nota.ValorTotalEmCentavos = dados.ValorLiquidoCentavos;
             await TransmitirAsync(nota, dados);
         });
 
@@ -211,6 +230,7 @@ public class NfceEmissionService : INfceEmissionService
             Numero:      nota.Numero ?? 0,
             Status:      nota.Status.ToString(),
             Itens:       dados.Itens.Select(i => new CupomItemDto(i.Nome, i.Quantidade, i.PrecoUnitarioCentavos, i.SubtotalCentavos)).ToList(),
+            DescontoTotalCentavos: dados.DescontoTotalCentavos,
             ValorTotalCentavos: nota.ValorTotalEmCentavos,
             FormaPagamento: dados.FormaPagamento,
             QrCodeUrl:   nota.UrlQrCode);
@@ -236,7 +256,7 @@ public class NfceEmissionService : INfceEmissionService
                 ? await CarregarDadosComandaAsync(comandaId!.Value)
                 : await CarregarDadosVendaAvulsaAsync(vendaAvulsaId!.Value);
 
-            nota.ValorTotalEmCentavos = dados.Itens.Sum(i => i.SubtotalCentavos);
+            nota.ValorTotalEmCentavos = dados.ValorLiquidoCentavos;
             await TransmitirAsync(nota, dados);
         });
 
@@ -294,7 +314,11 @@ public class NfceEmissionService : INfceEmissionService
 
     private record DadosEmissao(
         List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
-        string? SegundaFormaPagamento, int SegundoValorCentavos);
+        string? SegundaFormaPagamento, int SegundoValorCentavos, int DescontoTotalCentavos)
+    {
+        public int ValorBrutoCentavos => Itens.Sum(i => i.SubtotalCentavos);
+        public int ValorLiquidoCentavos => Math.Max(0, ValorBrutoCentavos - DescontoTotalCentavos);
+    }
 
     private async Task<DadosEmissao> CarregarDadosComandaAsync(Guid comandaId)
     {
@@ -330,9 +354,12 @@ public class NfceEmissionService : INfceEmissionService
             SubtotalCentavos:     item.SubtotalInCents
         )).ToList();
 
+        var valorBruto = itens.Sum(i => i.SubtotalCentavos);
+        var descontoTotal = Math.Clamp(valorBruto - comanda.TotalInCents, 0, valorBruto);
+
         return new DadosEmissao(
             itens, comanda.PaymentMethod ?? PaymentMethod.Dinheiro, comanda.User?.Cpf,
-            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents);
+            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents, descontoTotal);
     }
 
     private async Task<DadosEmissao> CarregarDadosVendaAvulsaAsync(Guid vendaAvulsaId)
@@ -379,7 +406,8 @@ public class NfceEmissionService : INfceEmissionService
 
         return new DadosEmissao(
             itens, venda.PaymentMethod, cpf,
-            venda.SecondPaymentMethod, venda.SecondPaymentAmountInCents);
+            venda.SecondPaymentMethod, venda.SecondPaymentAmountInCents,
+            Math.Clamp(venda.DiscountInCents, 0, itens.Sum(i => i.SubtotalCentavos)));
     }
 
     // ── Montagem, assinatura e transmissão ─────────────────────────────────────
@@ -403,21 +431,13 @@ public class NfceEmissionService : INfceEmissionService
         var pfxBytes    = Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted!));
         var senha       = _enc.Decrypt(cfg.CertificadoSenhaEncrypted!);
         var certificado = Pkcs12Loader.Abrir(pfxBytes, senha);
-        var cfgCertificado = new ConfiguracaoCertificado { ArrayBytesArquivo = pfxBytes, Senha = senha };
+        var cfgCertificado = CriarConfiguracaoCertificado(pfxBytes, senha);
 
         var estado   = Enum.Parse<Estado>(cfg.Uf);
         var ambiente = cfg.Ambiente == AmbienteFiscal.Producao ? TipoAmbiente.Producao : TipoAmbiente.Homologacao;
 
-        var cfgServico = new ConfiguracaoServico
-        {
-            cUF             = estado,
-            tpAmb           = ambiente,
-            ModeloDocumento = ModeloDocumento.NFCe,
-            VersaoLayout    = VersaoServico.Versao400,
-            TimeOut         = 15000,
-            // Sem XSDs locais empacotados — a SEFAZ valida o schema no recebimento de qualquer forma.
-            ValidarSchemas  = false,
-        };
+        // Sem XSDs locais empacotados: a SEFAZ valida o schema no recebimento.
+        var cfgServico = CriarConfiguracaoServico(estado, ambiente);
 
         return (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente);
     }
@@ -454,7 +474,10 @@ public class NfceEmissionService : INfceEmissionService
 
         // Monta os itens (e valida CSOSN) ANTES de reservar o número — uma Natureza de
         // Operação mal configurada não pode queimar um número de NFC-e sem transmitir nada.
-        var detItens = dados.Itens.Select((item, idx) => MontarItem(item, idx + 1)).ToList();
+        var descontosPorItem = DistribuirDesconto(dados.Itens, dados.DescontoTotalCentavos);
+        var detItens = dados.Itens
+            .Select((item, idx) => MontarItem(item, idx + 1, descontosPorItem[idx]))
+            .ToList();
 
         // Se esta nota já entrou em contingência offline numa tentativa anterior, a
         // retransmissão precisa reconstruir a MESMA chave de acesso (já mostrada ao
@@ -466,10 +489,14 @@ public class NfceEmissionService : INfceEmissionService
         var dhEmi  = ParaBrasil(nota.CreatedAt);
         var cNf    = jaEmContingencia ? nota.CnfContingencia!.Value : Random.Shared.Next(10_000_000, 99_999_999);
         var tpEmis = jaEmContingencia ? TipoEmissao.teOffLine : TipoEmissao.teNormal;
+        cfgServico.tpEmis = tpEmis;
         var chave  = ChaveFiscal.ObterChave(estado, dhEmi, cfg.Cnpj, ModeloDocumento.NFCe, cfg.SerieNfce, numero, (int)tpEmis, cNf);
 
         var municipioIbge = long.Parse(cfg.CodigoMunicipioIbge!);
-        var valorTotal     = dados.Itens.Sum(i => i.SubtotalCentavos) / 100m;
+        var valorBruto     = dados.ValorBrutoCentavos / 100m;
+        var valorDesconto  = dados.DescontoTotalCentavos / 100m;
+        var valorTotal     = dados.ValorLiquidoCentavos / 100m;
+        var cep            = SanitizarCep(cfg.Cep);
 
         var nfe = new NfeDocumento
         {
@@ -513,7 +540,7 @@ public class NfceEmissionService : INfceEmissionService
                         cMun    = municipioIbge,
                         xMun    = cfg.Municipio ?? "-",
                         UF      = estado,
-                        CEP     = cfg.Cep,
+                        CEP     = cep,
                     },
                 },
                 dest = string.IsNullOrWhiteSpace(dados.ClienteCpf) ? null : new dest(VersaoServico.Versao400)
@@ -526,8 +553,8 @@ public class NfceEmissionService : INfceEmissionService
                     ICMSTot = new ICMSTot
                     {
                         vBC = 0, vICMS = 0, vBCST = 0, vST = 0,
-                        vProd    = valorTotal,
-                        vFrete   = 0, vSeg = 0, vDesc = 0, vII = 0, vIPI = 0,
+                        vProd    = valorBruto,
+                        vFrete   = 0, vSeg = 0, vDesc = valorDesconto, vII = 0, vIPI = 0,
                         vPIS     = 0, vCOFINS = 0, vOutro = 0,
                         vNF      = valorTotal,
                     },
@@ -678,7 +705,58 @@ public class NfceEmissionService : INfceEmissionService
         };
     }
 
-    private static det MontarItem(ItemFiscal item, int numero) => new()
+    internal static string SanitizarNcm(string ncm)
+    {
+        var digitos = new string((ncm ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digitos.Length != 8)
+            throw new FiscalNaoConfiguradoException(
+                $"NCM \"{ncm}\" invalido. Informe exatamente 8 digitos numericos no cadastro do produto.");
+        return digitos;
+    }
+
+    internal static int SanitizarCfop(string cfop)
+    {
+        var digitos = new string((cfop ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digitos.Length != 4 || !int.TryParse(digitos, out var valor))
+            throw new FiscalNaoConfiguradoException(
+                $"CFOP \"{cfop}\" invalido. Informe exatamente 4 digitos numericos em Admin > Fiscal.");
+        return valor;
+    }
+
+    internal static string? SanitizarCep(string? cep)
+    {
+        if (string.IsNullOrWhiteSpace(cep)) return null;
+        var digitos = new string(cep.Where(char.IsDigit).ToArray());
+        if (digitos.Length != 8)
+            throw new FiscalNaoConfiguradoException(
+                $"CEP \"{cep}\" invalido. Informe exatamente 8 digitos numericos em Admin > Fiscal.");
+        return digitos;
+    }
+
+    internal static IReadOnlyList<int> DistribuirDesconto(IReadOnlyList<ItemFiscal> itens, int descontoTotalCentavos)
+    {
+        if (itens.Count == 0) return Array.Empty<int>();
+
+        var valorBruto = itens.Sum(i => i.SubtotalCentavos);
+        if (valorBruto <= 0) return new int[itens.Count];
+        var desconto = Math.Clamp(descontoTotalCentavos, 0, valorBruto);
+        var resultado = new int[itens.Count];
+        var restante = desconto;
+
+        for (var i = 0; i < itens.Count; i++)
+        {
+            var descontoItem = i == itens.Count - 1
+                ? restante
+                : (int)((long)desconto * itens[i].SubtotalCentavos / valorBruto);
+            descontoItem = Math.Clamp(descontoItem, 0, itens[i].SubtotalCentavos);
+            resultado[i] = descontoItem;
+            restante -= descontoItem;
+        }
+
+        return resultado;
+    }
+
+    internal static det MontarItem(ItemFiscal item, int numero, int descontoCentavos = 0) => new()
     {
         nItem = numero,
         prod = new prod
@@ -687,12 +765,13 @@ public class NfceEmissionService : INfceEmissionService
             cEAN       = "SEM GTIN",
             cEANTrib   = "SEM GTIN",
             xProd      = item.Nome,
-            NCM        = item.Ncm,
-            CFOP       = int.Parse(item.Cfop),
+            NCM        = SanitizarNcm(item.Ncm),
+            CFOP       = SanitizarCfop(item.Cfop),
             uCom       = "UN",
             qCom       = item.Quantidade,
             vUnCom     = item.PrecoUnitarioCentavos / 100m,
             vProd      = item.SubtotalCentavos / 100m,
+            vDesc      = descontoCentavos / 100m,
             uTrib      = "UN",
             qTrib      = item.Quantidade,
             vUnTrib    = item.PrecoUnitarioCentavos / 100m,
@@ -700,7 +779,7 @@ public class NfceEmissionService : INfceEmissionService
         },
         imposto = new imposto
         {
-            ICMS   = new ICMS   { TipoICMS   = MontarIcmsSimplesNacional(item) },
+            ICMS   = new ICMS   { TipoICMS   = MontarIcmsSimplesNacional(item, descontoCentavos) },
             // CST 99 "Outras Operações" é o padrão de fato usado por optantes do Simples
             // Nacional (o DAS já unifica PIS/COFINS — não há CST federal específico pra
             // esse regime na NFC-e). Confirmado contra prática de mercado, não é chute.
@@ -717,14 +796,16 @@ public class NfceEmissionService : INfceEmissionService
     /// propósito: exigem MVA/base de cálculo de ICMS-ST que este sistema não calcula sozinho —
     /// inventar esses valores seria pior do que não emitir. Ajustar aqui só com o contador.
     /// </summary>
-    internal static ICMSBasico MontarIcmsSimplesNacional(ItemFiscal item) => item.Csosn switch
+    internal static ICMSBasico MontarIcmsSimplesNacional(ItemFiscal item, int descontoCentavos = 0) => item.Csosn switch
     {
         "101" => new ICMSSN101
         {
             orig        = OrigemMercadoria.OmNacional,
             CSOSN       = Csosnicms.Csosn101,
             pCredSN     = item.PercentualCreditoSn ?? 0,
-            vCredICMSSN = Math.Round(item.SubtotalCentavos / 100m * (item.PercentualCreditoSn ?? 0) / 100m, 2),
+            vCredICMSSN = Math.Round(
+                Math.Max(0, item.SubtotalCentavos - descontoCentavos) / 100m *
+                (item.PercentualCreditoSn ?? 0) / 100m, 2),
         },
         "102" or null or "" => new ICMSSN102 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn102 },
         "103"  => new ICMSSN102 { orig = OrigemMercadoria.OmNacional, CSOSN = Csosnicms.Csosn103 },

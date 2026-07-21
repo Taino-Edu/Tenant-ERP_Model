@@ -99,6 +99,12 @@ export default function CupomNfcePage() {
         ))}
 
         <hr />
+        {cupom.descontoTotalCentavos > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>DESCONTOS / PONTOS</span>
+            <span>-{fmtMoeda(cupom.descontoTotalCentavos)}</span>
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
           <span>TOTAL</span>
           <span>{fmtMoeda(cupom.valorTotalCentavos)}</span>

@@ -16,6 +16,26 @@ public class FiscalXmlExportServiceTests
     private static AppDbContext CreateDb() => TestDbFactory.Create(nameof(FiscalXmlExportServiceTests));
 
     [Fact]
+    public void NormalizarPeriodoInclusivo_MesmoDia_CobreODiaInteiroEmBrasilia()
+    {
+        var data = new DateTime(2026, 7, 21);
+
+        var (inicioUtc, fimExclusivoUtc) = FiscalXmlExportService.NormalizarPeriodoInclusivo(data, data);
+
+        inicioUtc.Should().Be(new DateTime(2026, 7, 21, 3, 0, 0, DateTimeKind.Utc));
+        fimExclusivoUtc.Should().Be(new DateTime(2026, 7, 22, 3, 0, 0, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public void NormalizarPeriodoInclusivo_FimAnterior_LancaErroClaro()
+    {
+        var act = () => FiscalXmlExportService.NormalizarPeriodoInclusivo(
+            new DateTime(2026, 7, 22), new DateTime(2026, 7, 21));
+
+        act.Should().Throw<ArgumentException>().WithMessage("*anterior*");
+    }
+
+    [Fact]
     public async Task GerarZipAsync_IncluiApenasNotasAutorizadasECanceladasDoPeriodo()
     {
         using var db = CreateDb();

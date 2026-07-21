@@ -24,6 +24,7 @@ using DFe.Classes.Flags;
 using Microsoft.EntityFrameworkCore;
 using NFe.Classes.Servicos.DistribuicaoDFe;
 using NFe.Classes.Servicos.Tipos;
+using NFe.Classes.Informacoes.Identificacao.Tipos;
 using NFe.Servicos;
 using NFe.Utils;
 
@@ -79,6 +80,7 @@ public class SefazNfeService
             cUF             = Enum.Parse<Estado>(cfg.Uf),
             tpAmb           = cfg.Ambiente == AmbienteFiscal.Producao ? TipoAmbiente.Producao : TipoAmbiente.Homologacao,
             ModeloDocumento = ModeloDocumento.NFe, // distribuição/manifestação são serviços da NF-e (55), não da NFC-e
+            tpEmis           = TipoEmissao.teNormal,
             VersaoLayout    = VersaoServico.Versao400,
             TimeOut         = 30000,
             ValidarSchemas  = false,
