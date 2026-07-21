@@ -80,7 +80,7 @@ public class FiscalController : ControllerBase
         if (req.Uf                  is not null) cfg.Uf                  = req.Uf.ToUpperInvariant();
         if (req.Cep                 is not null) cfg.Cep                 = new string(req.Cep.Where(char.IsDigit).ToArray());
         if (req.CscId               is not null) cfg.CscId               = req.CscId;
-        if (req.CscToken            is not null) cfg.CscToken            = req.CscToken;
+        if (req.CscToken            is not null) cfg.CscToken            = _enc.Encrypt(req.CscToken);
 
         if (req.RegimeTributario is not null &&
             Enum.TryParse<RegimeTributario>(req.RegimeTributario, out var regime))
@@ -166,10 +166,8 @@ public class FiscalController : ControllerBase
         return Ok(naturezas);
     }
 
-    /// <summary>CSOSN que o motor de emissão sabe montar sozinho — ver
-    /// NfceEmissionService.MontarIcmsSimplesNacional. 201/202/203 exigem ICMS-ST como
-    /// substituto (MVA, base reduzida) que ninguém aqui calcula, por isso ficam de fora.</summary>
-    private static readonly string[] CsosnSuportados = { "101", "102", "103", "300", "400", "500", "900" };
+    private static readonly string[] CsosnSuportados =
+        { "101", "102", "103", "201", "202", "203", "300", "400", "500", "900" };
 
     private BadRequestObjectResult? ValidarCsosn(string? csosn)
     {
@@ -177,11 +175,51 @@ public class FiscalController : ControllerBase
         if (!CsosnSuportados.Contains(csosn))
             return BadRequest(new
             {
-                Message = csosn is "201" or "202" or "203"
-                    ? $"CSOSN {csosn} exige ICMS-ST como substituto tributário (MVA, base reduzida) — este sistema não calcula isso sozinho. Consulte o contador ou use um CSOSN sem ICMS-ST."
-                    : $"CSOSN \"{csosn}\" não é suportado. Use um destes: {string.Join(", ", CsosnSuportados)}."
+                Message = $"CSOSN \"{csosn}\" não é suportado. Use um destes: {string.Join(", ", CsosnSuportados)}."
             });
         return null;
+    }
+
+    private BadRequestObjectResult? ValidarRegraFiscal(SaveNaturezaRequest req)
+    {
+        if (ValidarCsosn(req.Csosn) is BadRequestObjectResult erro) return erro;
+        if (req.OrigemMercadoria is < 0 or > 8)
+            return BadRequest(new { Message = "Origem da mercadoria deve estar entre 0 e 8." });
+        if (req.IbsCbsCst is null || req.IbsCbsCst.Length != 3 || !req.IbsCbsCst.All(char.IsDigit))
+            return BadRequest(new { Message = "CST IBS/CBS deve conter 3 dígitos." });
+        if (req.IbsCbsClassTrib is null || req.IbsCbsClassTrib.Length != 6 || !req.IbsCbsClassTrib.All(char.IsDigit))
+            return BadRequest(new { Message = "cClassTrib IBS/CBS deve conter 6 dígitos." });
+
+        if (req.Csosn is "201" or "202" or "203")
+        {
+            if (req.ModalidadeBcSt is null or < 0 or > 6)
+                return BadRequest(new { Message = "ICMS-ST exige modalidade da BC-ST entre 0 e 6." });
+            if (req.AliquotaIcmsSt is null or <= 0 || req.AliquotaIcmsProprio is null or < 0)
+                return BadRequest(new { Message = "ICMS-ST exige alíquota ST e alíquota da operação própria." });
+            if (req.ModalidadeBcSt == 4 && req.PercentualMvaSt is null or < 0)
+                return BadRequest(new { Message = "Modalidade MVA exige o percentual de MVA-ST." });
+            if (req.ModalidadeBcSt is 0 or 1 or 2 or 3 or 5 && req.BaseStFixaEmCentavos is null or <= 0)
+                return BadRequest(new { Message = "A modalidade selecionada exige base/pauta ST fixa por unidade." });
+        }
+        return null;
+    }
+
+    private static void AplicarRegraFiscal(NaturezaOperacao natureza, SaveNaturezaRequest req)
+    {
+        natureza.Descricao = req.Descricao;
+        natureza.Cfop = req.Cfop;
+        natureza.Csosn = req.Csosn;
+        natureza.PercentualCreditoIcmsSn = req.Csosn is "101" or "201" ? req.PercentualCreditoSn : null;
+        natureza.OrigemMercadoria = req.OrigemMercadoria;
+        natureza.ModalidadeBcSt = req.ModalidadeBcSt;
+        natureza.PercentualMvaSt = req.PercentualMvaSt;
+        natureza.PercentualReducaoBcSt = req.PercentualReducaoBcSt;
+        natureza.AliquotaIcmsSt = req.AliquotaIcmsSt;
+        natureza.AliquotaIcmsProprio = req.AliquotaIcmsProprio;
+        natureza.AliquotaFcpSt = req.AliquotaFcpSt;
+        natureza.BaseStFixaEmCentavos = req.BaseStFixaEmCentavos;
+        natureza.IbsCbsCst = req.IbsCbsCst;
+        natureza.IbsCbsClassTrib = req.IbsCbsClassTrib;
     }
 
     /// <summary>Cria uma natureza de operação (CFOP/CSOSN). Marcar como padrão desmarca
@@ -192,16 +230,13 @@ public class FiscalController : ControllerBase
     public async Task<IActionResult> CreateNatureza([FromBody] SaveNaturezaRequest req)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        if (ValidarCsosn(req.Csosn) is BadRequestObjectResult erro) return erro;
+        if (ValidarRegraFiscal(req) is BadRequestObjectResult erro) return erro;
 
         var natureza = new NaturezaOperacao
         {
-            Descricao = req.Descricao,
-            Cfop      = req.Cfop,
-            Csosn     = req.Csosn,
-            PercentualCreditoIcmsSn = req.Csosn == "101" ? req.PercentualCreditoSn : null,
             IsPadrao  = req.IsPadrao,
         };
+        AplicarRegraFiscal(natureza, req);
 
         // Trocar o padrão (limpar os outros + gravar este) precisa ser atômico:
         // duas requisições concorrentes marcando padrão=true só podem ter uma vencedora
@@ -247,15 +282,12 @@ public class FiscalController : ControllerBase
     [HttpPut("naturezas-operacao/{id:guid}")]
     public async Task<IActionResult> UpdateNatureza(Guid id, [FromBody] SaveNaturezaRequest req)
     {
-        if (ValidarCsosn(req.Csosn) is BadRequestObjectResult erro) return erro;
+        if (ValidarRegraFiscal(req) is BadRequestObjectResult erro) return erro;
 
         var natureza = await _db.NaturezasOperacao.FindAsync(id);
         if (natureza is null) return NotFound();
 
-        natureza.Descricao = req.Descricao;
-        natureza.Cfop      = req.Cfop;
-        natureza.Csosn     = req.Csosn;
-        natureza.PercentualCreditoIcmsSn = req.Csosn == "101" ? req.PercentualCreditoSn : null;
+        AplicarRegraFiscal(natureza, req);
         natureza.UpdatedAt = DateTime.UtcNow;
 
         // AppDbContext usa EnableRetryOnFailure — precisa rodar através de
@@ -337,6 +369,8 @@ public class FiscalController : ControllerBase
                 n.EmitidoEm,
                 n.CanceladoEm,
                 n.InutilizadoEm,
+                n.ErpEstornadoEm,
+                n.ErpEstornoErro,
                 n.TentativasReprocessamento,
                 n.CreatedAt,
             })
@@ -415,7 +449,53 @@ public class FiscalController : ControllerBase
         try
         {
             var nota = await _emissao.CancelarAsync(id, req.Justificativa);
-            return Ok(new { nota.Id, Status = nota.Status.ToString() });
+            return Ok(new
+            {
+                nota.Id,
+                Status = nota.Status.ToString(),
+                nota.ErpEstornadoEm,
+                nota.ErpEstornoErro,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>Inutiliza na SEFAZ uma faixa de numeração que foi abandonada e não
+    /// contém documento autorizado. A operação é fiscalmente irreversível.</summary>
+    [HttpPost("inutilizacoes")]
+    public async Task<IActionResult> InutilizarFaixa([FromBody] InutilizarFaixaRequest req)
+    {
+        try
+        {
+            var registro = await _emissao.InutilizarFaixaAsync(
+                req.Ano, req.Serie, req.NumeroInicial, req.NumeroFinal, req.Justificativa);
+            return Ok(new
+            {
+                registro.Id,
+                registro.Ano,
+                registro.Serie,
+                registro.NumeroInicial,
+                registro.NumeroFinal,
+                registro.Protocolo,
+                registro.InutilizadoEm,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    [HttpPost("notas/{id:guid}/reprocessar-estorno-erp")]
+    public async Task<IActionResult> ReprocessarEstornoErp(Guid id)
+    {
+        try
+        {
+            var nota = await _emissao.ReprocessarEstornoErpAsync(id);
+            return Ok(new { nota.Id, nota.ErpEstornadoEm, nota.ErpEstornoErro });
         }
         catch (InvalidOperationException ex)
         {
@@ -735,6 +815,17 @@ public class CancelarNotaRequest
     public string Justificativa { get; init; } = "";
 }
 
+public class InutilizarFaixaRequest
+{
+    public int Ano { get; init; }
+    public int Serie { get; init; }
+    public int NumeroInicial { get; init; }
+    public int NumeroFinal { get; init; }
+
+    [Required, MinLength(15), MaxLength(255)]
+    public string Justificativa { get; init; } = "";
+}
+
 public class SaveNaturezaRequest
 {
     [Required, MaxLength(150)]
@@ -749,6 +840,36 @@ public class SaveNaturezaRequest
     /// <summary>% de crédito de ICMS (pCredSN) — só considerado quando Csosn = "101".</summary>
     [Range(0, 100)]
     public decimal? PercentualCreditoSn { get; init; }
+
+    [Range(0, 8)]
+    public int OrigemMercadoria { get; init; } = 0;
+
+    [Range(0, 6)]
+    public int? ModalidadeBcSt { get; init; }
+
+    [Range(0, 1000)]
+    public decimal? PercentualMvaSt { get; init; }
+
+    [Range(0, 100)]
+    public decimal? PercentualReducaoBcSt { get; init; }
+
+    [Range(0, 100)]
+    public decimal? AliquotaIcmsSt { get; init; }
+
+    [Range(0, 100)]
+    public decimal? AliquotaIcmsProprio { get; init; }
+
+    [Range(0, 100)]
+    public decimal? AliquotaFcpSt { get; init; }
+
+    [Range(1, int.MaxValue)]
+    public int? BaseStFixaEmCentavos { get; init; }
+
+    [Required, RegularExpression("^[0-9]{3}$")]
+    public string IbsCbsCst { get; init; } = "000";
+
+    [Required, RegularExpression("^[0-9]{6}$")]
+    public string IbsCbsClassTrib { get; init; } = "000001";
 
     public bool IsPadrao { get; init; }
 }

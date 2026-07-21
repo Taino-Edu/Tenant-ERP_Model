@@ -37,6 +37,13 @@ public interface INfceEmissionService
     /// </summary>
     Task<NotaFiscalEmitida> CancelarAsync(Guid notaId, string justificativa);
 
+    /// <summary>Repete somente o estorno ERP de uma nota já cancelada na SEFAZ.</summary>
+    Task<NotaFiscalEmitida> ReprocessarEstornoErpAsync(Guid notaId);
+
+    /// <summary>Inutiliza explicitamente uma faixa de numeração que não será usada.</summary>
+    Task<InutilizacaoFiscal> InutilizarFaixaAsync(
+        int ano, int serie, int numeroInicial, int numeroFinal, string justificativa);
+
     /// <summary>Monta os dados pra exibir/imprimir o cupom da NFC-e (com QR Code, se o CSC estiver configurado).</summary>
     Task<CupomDto?> ObterCupomAsync(Guid notaId);
 }

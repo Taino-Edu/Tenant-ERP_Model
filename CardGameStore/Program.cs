@@ -351,7 +351,12 @@ builder.Services.AddHostedService<InterSyncBackgroundService>();
 // Fiscal — emissão de NFC-e, certificado A1, exportação de XMLs
 builder.Services.AddScoped<FiscalCertificadoService>();
 builder.Services.AddScoped<FiscalXmlExportService>();
-builder.Services.AddScoped<INfceEmissionService, NfceEmissionService>();
+builder.Services.AddScoped<IFiscalTaxEngine, ConfigurableFiscalTaxEngine>();
+builder.Services.AddScoped<INfceEmissionService>(sp => new NfceEmissionService(
+    sp.GetRequiredService<AppDbContext>(),
+    sp.GetRequiredService<EncryptionService>(),
+    sp.GetRequiredService<ILogger<NfceEmissionService>>(),
+    sp.GetRequiredService<IFiscalTaxEngine>()));
 builder.Services.AddHostedService<FiscalAlertBackgroundService>();
 builder.Services.AddHostedService<FiscalXmlExportBackgroundService>();
 builder.Services.AddHostedService<FiscalRetryBackgroundService>();

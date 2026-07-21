@@ -475,6 +475,11 @@ public class ComandaService : IComandaService
             throw new InvalidOperationException("O valor do segundo pagamento não pode cobrir o total inteiro. Selecione apenas o método principal.");
 
         var primaryAmt = hasSecond ? netTotal - secondPaymentAmountInCents : netTotal;
+        var pointsDebitedAtSale = comanda.PointsApplied;
+        var cashbackDebitedAtSale = 0;
+        var pointsAwardedAtSale = 0;
+        Guid? crediarioIdAtSale = null;
+        var crediarioAmountAtSale = 0;
 
         if (hasSecond)
         {
@@ -487,6 +492,7 @@ public class ComandaService : IComandaService
                     throw new InvalidOperationException(
                         $"Saldo de cashback insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, solicitado R$ {secondPaymentAmountInCents / 100m:N2}.");
                 comanda.User.BalanceInCents -= secondPaymentAmountInCents;
+                cashbackDebitedAtSale += secondPaymentAmountInCents;
                 comanda.User.UpdatedAt       = DateTime.UtcNow;
                 _logger.LogInformation("Split: R$ {Val:N2} de cashback aplicado na comanda {Id}.", secondPaymentAmountInCents / 100m, comandaId);
             }
@@ -498,6 +504,7 @@ public class ComandaService : IComandaService
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, solicitado {secondPaymentAmountInCents} pts.");
                 comanda.User.PointsBalance -= secondPaymentAmountInCents;
+                pointsDebitedAtSale += secondPaymentAmountInCents;
                 comanda.User.UpdatedAt      = DateTime.UtcNow;
                 _logger.LogInformation("Split: {Pts} pontos aplicados na comanda {Id}.", secondPaymentAmountInCents, comandaId);
             }
@@ -525,6 +532,8 @@ public class ComandaService : IComandaService
                     throw new InvalidOperationException("O crediário selecionado já foi quitado.");
 
                 existente.ValorEmCentavos += primaryAmt;
+                crediarioIdAtSale = existente.Id;
+                crediarioAmountAtSale = primaryAmt;
                 if (!string.IsNullOrWhiteSpace(observacao))
                     existente.Observacao = observacao;
 
@@ -588,6 +597,8 @@ public class ComandaService : IComandaService
                 };
 
                 _db.Crediarios.Add(crediario);
+                crediarioIdAtSale = crediario.Id;
+                crediarioAmountAtSale = primaryAmt;
                 _logger.LogInformation(
                     "Crediário {CredId} criado para usuário {UserId} — R$ {Valor:N2}, vence em {Venc:dd/MM/yyyy}",
                     crediario.Id, comanda.UserId, crediario.ValorEmReais, vencimento);
@@ -619,6 +630,7 @@ public class ComandaService : IComandaService
                     $"Saldo de pontos insuficiente. Cliente tem {comanda.User.PointsBalance} pts, faltam {primaryAmt} pts.");
 
             comanda.User.PointsBalance -= primaryAmt;
+            pointsDebitedAtSale += primaryAmt;
             comanda.User.UpdatedAt      = DateTime.UtcNow;
             _logger.LogInformation(
                 "Comanda {Id} quitada com {Pts} pontos do usuário {UserId}. Saldo restante: {Saldo}",
@@ -636,6 +648,7 @@ public class ComandaService : IComandaService
                     $"Saldo insuficiente. Cliente tem R$ {comanda.User.BalanceInCents / 100m:N2}, falta R$ {primaryAmt / 100m:N2}.");
 
             comanda.User.BalanceInCents -= primaryAmt;
+            cashbackDebitedAtSale += primaryAmt;
             comanda.User.UpdatedAt       = DateTime.UtcNow;
             _logger.LogInformation(
                 "Comanda {Id} quitada com R$ {Valor:N2} de cashback do usuário {UserId}. Saldo restante: R$ {Saldo:N2}",
@@ -667,12 +680,20 @@ public class ComandaService : IComandaService
                 if (comanda.User.PointsExpiresAt.HasValue && comanda.User.PointsExpiresAt.Value < DateTime.UtcNow)
                     comanda.User.PointsBalance = 0;
                 comanda.User.PointsBalance  += pontosGanhos;
+                pointsAwardedAtSale = pontosGanhos;
                 comanda.User.PointsExpiresAt = DateTime.UtcNow.AddDays(30);
                 _logger.LogInformation(
                     "Usuário {UserId} ganhou {Pontos} pontos na comanda {ComandaId}.",
                     comanda.UserId, pontosGanhos, comandaId);
             }
         }
+
+        comanda.FiscalEffectsCapturedAt = DateTime.UtcNow;
+        comanda.PointsDebitedAtSale = pointsDebitedAtSale;
+        comanda.CashbackDebitedAtSale = cashbackDebitedAtSale;
+        comanda.PointsAwardedAtSale = pointsAwardedAtSale;
+        comanda.CrediarioIdAtSale = crediarioIdAtSale;
+        comanda.CrediarioAmountAtSale = crediarioAmountAtSale;
 
         await _db.SaveChangesAsync();
 

@@ -59,6 +59,7 @@ public class AppDbContext : DbContext
     public DbSet<FiscalConfig>       FiscalConfigs        { get; set; }
     public DbSet<NaturezaOperacao>   NaturezasOperacao    { get; set; }
     public DbSet<NotaFiscalEmitida>  NotasFiscaisEmitidas { get; set; }
+    public DbSet<InutilizacaoFiscal> InutilizacoesFiscais  { get; set; }
 
     // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
     public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
@@ -174,7 +175,14 @@ public class AppDbContext : DbContext
                   .HasDatabaseName("ix_notas_fiscais_status");
 
             entity.HasIndex(n => n.ComandaId)
+                  .IsUnique()
+                  .HasFilter("comanda_id IS NOT NULL")
                   .HasDatabaseName("ix_notas_fiscais_comanda");
+
+            entity.HasIndex(n => n.VendaAvulsaId)
+                  .IsUnique()
+                  .HasFilter("venda_avulsa_id IS NOT NULL")
+                  .HasDatabaseName("ix_notas_fiscais_venda_avulsa");
 
             entity.HasIndex(n => n.EmitidoEm)
                   .HasDatabaseName("ix_notas_fiscais_emitido_em");
@@ -183,6 +191,13 @@ public class AppDbContext : DbContext
                   .IsUnique()
                   .HasFilter("chave_acesso IS NOT NULL")
                   .HasDatabaseName("ix_notas_fiscais_chave_acesso");
+        });
+
+        modelBuilder.Entity<InutilizacaoFiscal>(entity =>
+        {
+            entity.HasIndex(i => new { i.Ano, i.Serie, i.NumeroInicial, i.NumeroFinal })
+                  .IsUnique()
+                  .HasDatabaseName("ix_inutilizacoes_fiscais_faixa");
         });
 
         // =====================================================================

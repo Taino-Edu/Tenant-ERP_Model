@@ -72,7 +72,7 @@ public class RelatoriosController : ControllerBase
 
         // ── 2. VendasAvulsas no mês ───────────────────────────────────────────
         var vendasAvulsas = await _db.VendasAvulsas.AsNoTracking()
-            .Where(v => v.SoldAt >= inicio && v.SoldAt < fim)
+            .Where(v => v.CanceladoEm == null && v.SoldAt >= inicio && v.SoldAt < fim)
             .ToListAsync();
 
         // ── 3. Acumula em dicionário categoria → produto → (qty, total) ───────

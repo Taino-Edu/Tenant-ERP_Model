@@ -1,5 +1,41 @@
 # Backlog — Tenant-ERP
 
+## Pacote fiscal de homologação — 2026-07-21
+
+- **CNPJ vai mudar de contrato/modelagem.** Não criar constraint, índice funcional ou
+  validação estrutural definitiva baseada no campo atual. Toda normalização usada
+  pelo motor SEFAZ deve ficar centralizada em uma função adaptadora, para que a
+  futura origem/formatação do CNPJ seja trocada sem espalhar regras pelos serviços.
+  Antes de fechar o novo modelo, definir: origem do identificador, representação por
+  tenant/estabelecimento, compatibilidade com matriz/filial e migração dos dados atuais.
+- **ICMS-ST configurável implementado.** CSOSN `201`, `202` e `203` aceitam origem,
+  modalidade BC-ST, MVA ou pauta/base fixa, redução, alíquota própria, alíquota ST e
+  FCP-ST por natureza dentro do schema da loja. O preço cadastrado é tratado como final
+  ao consumidor e decomposto em operação + ST + FCP sem alterar o total pago. Parâmetros
+  incompletos bloqueiam somente a emissão daquele documento, com erro acionável.
+- **Implementado nesta leva:** contingência offline com identidade imutável e QR
+  coerente; retransmissão contínua com alerta antes de 24 horas; certificado validado
+  localmente; `nfeProc` e `procEventoNFe` persistidos/exportados; pré-voo sem engessar
+  o futuro CNPJ; CSC criptografado; unicidade por origem; numeração atômica e estável
+  no reprocessamento; bloqueio de regimes ainda não suportados; gates do módulo fiscal
+  nos jobs/DF-e; janela de cancelamento baseada na autorização real; QR Code v3 com
+  `urlChave`; campos obrigatórios da NFC-e 4.00; textos de homologação; IE sanitizada;
+  persistência de NCM/natureza ao editar produto; e IBS/CBS 2026 com base líquida após
+  desconto, totalizadores e trava explícita para anos cujas alíquotas não estejam
+  configuradas.
+- **Implementado para o go-live de 25/07:** inutilização explícita de número/faixa,
+  com protocolo/XML e bloqueio de documentos válidos; estorno ERP transacional e
+  idempotente após cancelamento, cobrindo estoque, crediário ainda não pago,
+  cashback, pontos usados/ganhos e pagamento dividido. Reembolso externo de
+  dinheiro/Pix/cartão gera alerta e continua sendo confirmação operacional humana.
+- **Bloqueadores restantes de produção:** validar com o contador os parâmetros das
+  naturezas efetivamente usadas e executar/registrar o roteiro real de
+  homologação da SEFAZ em `docs/GO-LIVE-FISCAL-2026-07-25.md` com certificado/CSC
+  do estabelecimento. Código aprovado localmente não substitui autorização real.
+- **Critério de conclusão:** teste real em ambiente de homologação da SEFAZ,
+  incluindo autorização, rejeição, contingência/retransmissão, cancelamento,
+  inutilização e abertura do XML pelo sistema do contador.
+
 ## Concluído (sessão 2026-07-15, módulos/export/BYO domain)
 - **Seletor de módulos na criação de tenant** — `CreateTenantModal` perguntava
   nada antes (dava pra escolher só depois, editando); agora pergunta já na
@@ -137,6 +173,27 @@ Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi fei
   mas sem nenhum teste escrito; mínimo: login, abrir comanda, fechar comanda.
 
 ## Backlog — configuração fiscal por tenant (motores de cálculo de tributos)
+### Diretriz arquitetural não negociável
+
+- O `softNerd`/Santuário é caso de teste e fonte de bugs reais, não regra fiscal global.
+- O catálogo identifica o tenant e seus módulos; os dados fiscais operacionais ficam no
+  schema PostgreSQL exclusivo da loja. Não duplicar `tenant_id` indiscriminadamente nas
+  tabelas já isoladas por schema.
+- Certificado, CSC, ambiente, credenciamento, série, numeração, emitente, regime,
+  naturezas, produtos, NCM e regras tributárias são independentes por loja.
+- O módulo `fiscal` controla acesso às telas/endpoints e execução dos jobs. Tenant sem o
+  módulo deve continuar vendendo normalmente e não pode gerar documento fiscal.
+- Falha ou configuração incompleta de uma loja pode deixar apenas sua NFC-e pendente/
+  rejeitada; não pode desfazer a venda, travar o PDV, executar no schema `public` por
+  engano nem interromper jobs de outros tenants.
+- O motor deve resolver uma regra tributária configurável por natureza/produto e regime,
+  com provedores substituíveis. Valores fixos do Santuário (CSOSN, CST, `cClassTrib`,
+  MVA, reduções ou alíquotas) só podem virar padrão explícito daquela loja, nunca
+  constante universal silenciosa.
+- Regra ainda não suportada deve bloquear somente a emissão fiscal daquele documento,
+  com diagnóstico acionável e sem inventar imposto. O objetivo é ampliar os provedores
+  até cobrir ICMS-ST, regimes normais e classificações IBS/CBS por produto/tenant.
+
 Proposta nova da `avaliacao_completa_2esysten.md` (a única seção que difere da
 outra avaliação). Hoje a emissão de NFC-e já existe (Zeus/DFe.NET no
 `NfceEmissionService`), mas o **cálculo de tributos** é fixo (Simples Nacional,

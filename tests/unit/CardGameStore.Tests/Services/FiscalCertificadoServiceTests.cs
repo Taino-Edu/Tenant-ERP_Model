@@ -56,4 +56,26 @@ public class FiscalCertificadoServiceTests
 
         act.Should().Throw<CertificadoInvalidoException>();
     }
+
+    [Fact]
+    public void Validar_CertificadoVencido_LancaErroClaro()
+    {
+        var pfxBytes = CreateSelfSignedPfx(
+            Senha, DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddDays(-1));
+
+        var act = () => new FiscalCertificadoService().Validar(pfxBytes, Senha);
+
+        act.Should().Throw<CertificadoInvalidoException>().WithMessage("*venceu*");
+    }
+
+    [Fact]
+    public void Validar_CertificadoAindaNaoValido_LancaErroClaro()
+    {
+        var pfxBytes = CreateSelfSignedPfx(
+            Senha, DateTimeOffset.UtcNow.AddDays(1), DateTimeOffset.UtcNow.AddDays(30));
+
+        var act = () => new FiscalCertificadoService().Validar(pfxBytes, Senha);
+
+        act.Should().Throw<CertificadoInvalidoException>().WithMessage("*ainda não é válido*");
+    }
 }

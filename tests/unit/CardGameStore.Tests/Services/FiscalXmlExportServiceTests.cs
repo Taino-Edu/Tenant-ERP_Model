@@ -44,7 +44,7 @@ public class FiscalXmlExportServiceTests
 
         db.NotasFiscaisEmitidas.AddRange(
             new NotaFiscalEmitida { Status = NotaFiscalStatus.Autorizada, EmitidoEm = dentroDoPeriodo, ChaveAcesso = "CHAVE-AUTORIZADA", XmlAutorizado = "<xml>autorizada</xml>" },
-            new NotaFiscalEmitida { Status = NotaFiscalStatus.Cancelada,  EmitidoEm = dentroDoPeriodo, ChaveAcesso = "CHAVE-CANCELADA",  XmlAutorizado = "<xml>cancelada</xml>" },
+            new NotaFiscalEmitida { Status = NotaFiscalStatus.Cancelada,  EmitidoEm = dentroDoPeriodo, ChaveAcesso = "CHAVE-CANCELADA",  XmlAutorizado = "<xml>cancelada</xml>", XmlEventoCancelamento = "<procEventoNFe />" },
             new NotaFiscalEmitida { Status = NotaFiscalStatus.PendenteEmissao, EmitidoEm = dentroDoPeriodo, XmlAutorizado = null },
             new NotaFiscalEmitida { Status = NotaFiscalStatus.Autorizada, EmitidoEm = foraDoPeriodo, ChaveAcesso = "CHAVE-FORA", XmlAutorizado = "<xml>fora</xml>" }
         );
@@ -56,9 +56,10 @@ public class FiscalXmlExportServiceTests
         using var ms  = new MemoryStream(zipBytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
 
-        zip.Entries.Should().HaveCount(2);
+        zip.Entries.Should().HaveCount(3);
         zip.Entries.Select(e => e.Name).Should().Contain(n => n.StartsWith("CHAVE-AUTORIZADA"));
         zip.Entries.Select(e => e.Name).Should().Contain(n => n.StartsWith("CHAVE-CANCELADA"));
+        zip.Entries.Select(e => e.Name).Should().Contain("CHAVE-CANCELADA-cancelamento-procEvento.xml");
         zip.Entries.Select(e => e.Name).Should().NotContain(n => n.StartsWith("CHAVE-FORA"));
     }
 }

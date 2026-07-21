@@ -72,6 +72,9 @@ public class NotaFiscalEmitida
     [Column("protocolo")]
     public string? Protocolo { get; set; }
 
+    [Column("autorizado_em")]
+    public DateTime? AutorizadoEm { get; set; }
+
     [Column("motivo_rejeicao")]
     public string? MotivoRejeicao { get; set; }
 
@@ -95,7 +98,20 @@ public class NotaFiscalEmitida
     [Column("justificativa_cancelamento")]
     public string? JustificativaCancelamento { get; set; }
 
-    /// <summary>Preenchido quando o número desta nota foi formalmente inutilizado (nota rejeitada).</summary>
+    [MaxLength(30)]
+    [Column("protocolo_cancelamento")]
+    public string? ProtocoloCancelamento { get; set; }
+
+    [Column("xml_evento_cancelamento")]
+    public string? XmlEventoCancelamento { get; set; }
+
+    [Column("erp_estornado_em")]
+    public DateTime? ErpEstornadoEm { get; set; }
+
+    [Column("erp_estorno_erro")]
+    public string? ErpEstornoErro { get; set; }
+
+    /// <summary>Preenchido somente quando o número foi formalmente inutilizado na SEFAZ.</summary>
     [Column("inutilizado_em")]
     public DateTime? InutilizadoEm { get; set; }
 

@@ -58,14 +58,14 @@ declare global {
   }
   interface SpeechRecognitionResultList {
     [index: number]: SpeechRecognitionResult
-    length: number
+    readonly length: number
   }
   interface SpeechRecognitionResult {
     [index: number]: SpeechRecognitionAlternative
-    isFinal: boolean
+    readonly isFinal: boolean
   }
   interface SpeechRecognitionAlternative {
-    transcript: string
+    readonly transcript: string
   }
   interface SpeechRecognitionErrorEvent extends Event {
     error: string

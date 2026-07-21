@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -318,6 +319,7 @@ public class ContasReceberController : ControllerBase
     /// e contagem de notas destinadas por status do pipeline.
     /// </summary>
     [HttpGet("sefaz-status")]
+    [RequireModule("fiscal")]
     public async Task<IActionResult> SefazStatus()
     {
         var fiscal     = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
@@ -352,6 +354,7 @@ public class ContasReceberController : ControllerBase
     /// Mesmo processo que roda automaticamente a cada 2h em background.
     /// </summary>
     [HttpPost("sefaz/sync")]
+    [RequireModule("fiscal")]
     public async Task<IActionResult> SefazSync(CancellationToken ct)
     {
         var result = await _sefaz.SincronizarAsync(ct);

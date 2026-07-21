@@ -159,6 +159,11 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         // Valor cobrado pelo método principal (total menos a parcela do segundo método)
         var primaryAmt = finalTotal - secondAmt;
+        var pointsDebitedAtSale = 0;
+        var cashbackDebitedAtSale = 0;
+        var pointsAwardedAtSale = 0;
+        Guid? crediarioIdAtSale = null;
+        var crediarioAmountAtSale = 0;
 
         // ── 3. Persistir evento de caixa (PostgreSQL) ──────────────────────────────
         // Resolve nome do cliente: prioriza nome explícito, depois busca no banco pelo userId
@@ -184,6 +189,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             SoldAt                     = DateTime.UtcNow,
             SoldByAdminId              = adminId,
             SoldByAdminName            = adminName,
+            FiscalEffectsCapturedAt    = DateTime.UtcNow,
         };
 
         _db.VendasAvulsas.Add(venda);
@@ -233,6 +239,8 @@ public class VendaAvulsaService : IVendaAvulsaService
                     itensAtuais.AddRange(novosItens);
                     crediarioExistente.ItensJson        = JsonSerializer.Serialize(itensAtuais);
                     crediarioExistente.ValorEmCentavos += primaryAmt;
+                    crediarioIdAtSale = crediarioExistente.Id;
+                    crediarioAmountAtSale = primaryAmt;
                     crediarioExistente.DataVencimento   = vencimento;
                     _logger.LogInformation(
                         "Venda avulsa acumulada no crediário {CredId} do usuário {UserId} — novo total R$ {Valor:N2}",
@@ -253,6 +261,8 @@ public class VendaAvulsaService : IVendaAvulsaService
                         ItensJson        = JsonSerializer.Serialize(novosItens),
                     };
                     _db.Crediarios.Add(crediario);
+                    crediarioIdAtSale = crediario.Id;
+                    crediarioAmountAtSale = primaryAmt;
                     _logger.LogInformation(
                         "Crediário {CredId} criado para usuário {UserId} via venda avulsa — R$ {Valor:N2}",
                         crediario.Id, userId, primaryAmt / 100m);
@@ -272,6 +282,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente. Cliente tem {user.PointsBalance} pts, método principal custa {primaryAmt} pts.");
+                pointsDebitedAtSale += primaryAmt;
                 _logger.LogInformation(
                     "Usuário {UserId} usou {Pts} pontos (principal) em venda avulsa.", userId, primaryAmt);
             }
@@ -285,6 +296,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo insuficiente. Cliente tem R$ {user.BalanceInCents / 100m:N2}, método principal custa R$ {primaryAmt / 100m:N2}.");
+                cashbackDebitedAtSale += primaryAmt;
                 _logger.LogInformation(
                     "Usuário {UserId} usou R$ {Valor:N2} de cashback (principal) em venda avulsa.", userId, primaryAmt / 100m);
             }
@@ -300,6 +312,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo cashback insuficiente para o segundo pagamento. Disponível: R$ {user.BalanceInCents / 100m:N2}.");
+                cashbackDebitedAtSale += secondAmt;
                 _logger.LogInformation("Usuário {UserId} usou R$ {Amt:N2} de cashback como segundo pagamento.", userId, secondAmt / 100m);
             }
             else if (secondPm == PaymentMethod.Pontos)
@@ -312,6 +325,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente para o segundo pagamento. Disponível: {user.PointsBalance} pts.");
+                pointsDebitedAtSale += secondAmt;
                 _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
             }
 
@@ -335,6 +349,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo cashback insuficiente para o segundo pagamento. Disponível: R$ {user.BalanceInCents / 100m:N2}.");
+                cashbackDebitedAtSale += secondAmt;
                 _logger.LogInformation("Usuário {UserId} usou R$ {Amt:N2} de cashback como segundo pagamento.", userId, secondAmt / 100m);
             }
             else if (secondPm == PaymentMethod.Pontos)
@@ -347,6 +362,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente para o segundo pagamento. Disponível: {user.PointsBalance} pts.");
+                pointsDebitedAtSale += secondAmt;
                 _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
             }
 
@@ -354,6 +370,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             var pontosGanhos = pontosAtivo ? finalTotal / 100 : 0;
             if (pontosGanhos > 0)
             {
+                pointsAwardedAtSale = pontosGanhos;
                 var expirado = user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow;
                 if (expirado)
                     await _db.Users
@@ -374,6 +391,13 @@ public class VendaAvulsaService : IVendaAvulsaService
                     userId, pontosGanhos, venda.Id);
             }
         }
+
+        venda.PointsDebitedAtSale = pointsDebitedAtSale;
+        venda.CashbackDebitedAtSale = cashbackDebitedAtSale;
+        venda.PointsAwardedAtSale = pointsAwardedAtSale;
+        venda.CrediarioIdAtSale = crediarioIdAtSale;
+        venda.CrediarioAmountAtSale = crediarioAmountAtSale;
+        await _db.SaveChangesAsync();
 
         await transaction.CommitAsync();
         });
@@ -396,7 +420,7 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     public async Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50, DateTime? desde = null)
     {
-        var query = _db.VendasAvulsas.AsNoTracking().AsQueryable();
+        var query = _db.VendasAvulsas.AsNoTracking().Where(v => v.CanceladoEm == null);
         if (desde.HasValue)
             query = query.Where(v => v.SoldAt >= desde.Value);
 
@@ -415,7 +439,7 @@ public class VendaAvulsaService : IVendaAvulsaService
         var (inicio, fim) = BrazilTime.Dia(date);
 
         var vendas = await _db.VendasAvulsas.AsNoTracking()
-            .Where(v => v.SoldAt >= inicio && v.SoldAt < fim)
+            .Where(v => v.CanceladoEm == null && v.SoldAt >= inicio && v.SoldAt < fim)
             .OrderByDescending(v => v.SoldAt)
             .ToListAsync();
 
@@ -484,6 +508,20 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         var venda = await _db.VendasAvulsas.FindAsync(id)
             ?? throw new KeyNotFoundException($"Venda avulsa {id} não encontrada.");
+
+        if (venda.CanceladoEm.HasValue)
+            throw new InvalidOperationException("Venda cancelada não pode ser editada.");
+        var possuiDocumentoFiscalImutavel = await _db.NotasFiscaisEmitidas.AnyAsync(n =>
+            n.VendaAvulsaId == id && (n.Status == NotaFiscalStatus.Autorizada ||
+                                      n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+                                      n.Status == NotaFiscalStatus.Cancelada));
+        if (possuiDocumentoFiscalImutavel)
+            throw new InvalidOperationException(
+                "A venda já possui documento fiscal e não pode ter pagamento, cliente ou desconto alterados.");
+        if (venda.PointsDebitedAtSale != 0 || venda.PointsAwardedAtSale != 0 ||
+            venda.CashbackDebitedAtSale != 0 || venda.CrediarioAmountAtSale != 0)
+            throw new InvalidOperationException(
+                "A venda movimentou pontos, cashback ou crediário e exige estorno, não edição direta.");
 
         venda.PaymentMethod              = request.PaymentMethod;
         venda.SecondPaymentMethod        = request.SecondPaymentMethod;

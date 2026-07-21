@@ -95,7 +95,8 @@ public class FiscalConfig
     [Column("csc_id")]
     public string? CscId { get; set; }
 
-    /// <summary>Token do CSC — nunca exposto em resposta de API, só usado internamente pra montar o QR Code.</summary>
+    /// <summary>Token do CSC criptografado com AES-256-GCM. O nome da propriedade/coluna
+    /// foi mantido para compatibilidade; nunca contém texto puro após a migração lazy.</summary>
     [MaxLength(100)]
     [Column("csc_token")]
     public string? CscToken { get; set; }

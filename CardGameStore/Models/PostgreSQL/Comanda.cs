@@ -92,6 +92,25 @@ public class Comanda
     [Column("discount_in_cents")]
     public int DiscountInCents { get; set; } = 0;
 
+    // Efeitos financeiros congelados no fechamento para permitir estorno fiscal exato.
+    [Column("fiscal_effects_captured_at")]
+    public DateTime? FiscalEffectsCapturedAt { get; set; }
+
+    [Column("points_debited_at_sale")]
+    public int PointsDebitedAtSale { get; set; }
+
+    [Column("cashback_debited_at_sale")]
+    public int CashbackDebitedAtSale { get; set; }
+
+    [Column("points_awarded_at_sale")]
+    public int PointsAwardedAtSale { get; set; }
+
+    [Column("crediario_id_at_sale")]
+    public Guid? CrediarioIdAtSale { get; set; }
+
+    [Column("crediario_amount_at_sale")]
+    public int CrediarioAmountAtSale { get; set; }
+
     /// <summary>Observações do Admin (ex: "cliente solicitou desconto").</summary>
     [MaxLength(500)]
     [Column("notes")]

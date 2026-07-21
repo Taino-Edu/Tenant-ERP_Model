@@ -19,6 +19,7 @@ using DFe.Utils;
 using NFe.Classes.Informacoes.Identificacao.Tipos;
 using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual;
 using NFe.Classes.Informacoes.Detalhe.Tributacao.Estadual.Tipos;
+using System.Security.Authentication;
 
 namespace CardGameStore.Tests.Services;
 
@@ -98,6 +99,20 @@ public class NfceEmissionServiceTests
     }
 
     [Fact]
+    public async Task EmitirParaComandaAsync_Repetido_ReutilizaMesmaNota()
+    {
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        var service = CreateService(db);
+
+        var primeira = await service.EmitirParaComandaAsync(comanda.Id);
+        var segunda = await service.EmitirParaComandaAsync(comanda.Id);
+
+        segunda.Id.Should().Be(primeira.Id);
+        (await db.NotasFiscaisEmitidas.CountAsync(n => n.ComandaId == comanda.Id)).Should().Be(1);
+    }
+
+    [Fact]
     public async Task EmitirParaComandaAsync_ComDescontoEPontos_RegistraValorLiquido()
     {
         using var db = CreateDb();
@@ -130,6 +145,38 @@ public class NfceEmissionServiceTests
 
         config.tpEmis.Should().Be(TipoEmissao.teNormal);
         config.ModeloDocumento.Should().Be(ModeloDocumento.NFCe);
+    }
+
+    [Theory]
+    [InlineData("12.345.678/0001-90", "12345678000190")]
+    [InlineData("12345678000190", "12345678000190")]
+    public void NormalizarCnpjParaSefaz_CentralizaFormatoDaFronteira(string entrada, string esperado)
+    {
+        NfceEmissionService.NormalizarCnpjParaSefaz(entrada).Should().Be(esperado);
+    }
+
+    [Fact]
+    public void NormalizarCnpjParaSefaz_FormatoIncompativel_ExplicaContrato()
+    {
+        var act = () => NfceEmissionService.NormalizarCnpjParaSefaz("identificador-futuro");
+
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*identificador fiscal*");
+    }
+
+    [Theory]
+    [InlineData("123.456.789-01", "12345678901")]
+    [InlineData("12345678901", "12345678901")]
+    public void NormalizarCpfOpcionalParaSefaz_RemoveFormatacao(string entrada, string esperado)
+    {
+        NfceEmissionService.NormalizarCpfOpcionalParaSefaz(entrada).Should().Be(esperado);
+    }
+
+    [Fact]
+    public void NormalizarCpfOpcionalParaSefaz_CpfInvalido_ExplicaProblema()
+    {
+        var act = () => NfceEmissionService.NormalizarCpfOpcionalParaSefaz("123");
+
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*11 dígitos*");
     }
 
     [Fact]
@@ -171,6 +218,41 @@ public class NfceEmissionServiceTests
     }
 
     [Fact]
+    public async Task EstornarOrigemNoErpAsync_Comanda_RestauraUmaUnicaVez()
+    {
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        comanda.FiscalEffectsCapturedAt = DateTime.UtcNow;
+        comanda.PointsDebitedAtSale = 300;
+        comanda.PointsAwardedAtSale = 10;
+        comanda.CashbackDebitedAtSale = 200;
+        comanda.User.PointsBalance = 500;
+        comanda.User.BalanceInCents = 800;
+        (await db.Products.SingleAsync()).StockQuantity = 9;
+        var nota = new NotaFiscalEmitida
+        {
+            Origem = NotaFiscalOrigem.Comanda,
+            ComandaId = comanda.Id,
+            Status = NotaFiscalStatus.Cancelada,
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        await service.EstornarOrigemNoErpAsync(nota.Id);
+        await service.EstornarOrigemNoErpAsync(nota.Id);
+
+        db.ChangeTracker.Clear();
+        var atual = await db.Comandas.Include(c => c.User).Include(c => c.Items).ThenInclude(i => i.Product)
+            .SingleAsync(c => c.Id == comanda.Id);
+        atual.Status.Should().Be(ComandaStatus.Cancelada);
+        atual.User.PointsBalance.Should().Be(790);
+        atual.User.BalanceInCents.Should().Be(1000);
+        atual.Items.Single().Product!.StockQuantity.Should().Be(10);
+        (await db.NotasFiscaisEmitidas.FindAsync(nota.Id))!.ErpEstornadoEm.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task ReprocessarAsync_AcimaDoLimiteDeTentativas_NaoTentaDeNovo()
     {
         using var db = CreateDb();
@@ -185,6 +267,24 @@ public class NfceEmissionServiceTests
     }
 
     [Fact]
+    public async Task ReprocessarAsync_NumeroJaInutilizado_NaoTentaNovamente()
+    {
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status = NotaFiscalStatus.Rejeitada,
+            InutilizadoEm = DateTime.UtcNow,
+            TentativasReprocessamento = 2,
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var resultado = await CreateService(db).ReprocessarAsync(nota.Id);
+
+        resultado.TentativasReprocessamento.Should().Be(2);
+    }
+
+    [Fact]
     public async Task CancelarAsync_NotaNaoAutorizada_LancaExcecao()
     {
         using var db = CreateDb();
@@ -196,6 +296,59 @@ public class NfceEmissionServiceTests
         Func<Task> act = () => service.CancelarAsync(nota.Id, "Motivo com mais de quinze caracteres");
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*Autorizada*");
+    }
+
+    [Fact]
+    public async Task InutilizarFaixaAsync_FaixaComDocumentoAutorizado_BloqueiaAntesDaSefaz()
+    {
+        using var db = CreateDb();
+        db.NotasFiscaisEmitidas.Add(new NotaFiscalEmitida
+        {
+            Status = NotaFiscalStatus.Autorizada,
+            Serie = 1,
+            Numero = 50,
+        });
+        await db.SaveChangesAsync();
+
+        Func<Task> act = async () => await CreateService(db).InutilizarFaixaAsync(
+            DateTime.Now.Year, 1, 49, 51, "Faixa abandonada por erro operacional");
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*autorizada*");
+    }
+
+    [Fact]
+    public async Task InutilizarFaixaAsync_MesmaFaixaJaRegistrada_EhIdempotente()
+    {
+        using var db = CreateDb();
+        var existente = new InutilizacaoFiscal
+        {
+            Ano = DateTime.Now.Year,
+            Serie = 1,
+            NumeroInicial = 10,
+            NumeroFinal = 12,
+            Justificativa = "Faixa abandonada por erro operacional",
+            Protocolo = "123",
+        };
+        db.InutilizacoesFiscais.Add(existente);
+        await db.SaveChangesAsync();
+
+        var resultado = await CreateService(db).InutilizarFaixaAsync(
+            existente.Ano, 1, 10, 12, existente.Justificativa);
+
+        resultado.Id.Should().Be(existente.Id);
+        (await db.InutilizacoesFiscais.CountAsync()).Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(1, 1002)]
+    public async Task InutilizarFaixaAsync_FaixaInvalida_BloqueiaAntesDaSefaz(int inicio, int fim)
+    {
+        using var db = CreateDb();
+        Func<Task> act = async () => await CreateService(db).InutilizarFaixaAsync(
+            DateTime.Now.Year, 1, inicio, fim, "Faixa abandonada por erro operacional");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
@@ -404,7 +557,48 @@ public class NfceEmissionServiceTests
     {
         var act = () => NfceEmissionService.MontarIcmsSimplesNacional(Item(csosn));
 
-        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*ICMS-ST*");
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*BC-ST*");
+    }
+
+    [Fact]
+    public void MontarItem_Csosn202Configurado_DecompoeStSemAlterarTotalConsumidor()
+    {
+        var item = new NfceEmissionService.ItemFiscal(
+            Nome: "Produto ST", Ncm: "95044000", Cfop: "5403", Csosn: "202",
+            PercentualCreditoSn: null, Quantidade: 1, PrecoUnitarioCentavos: 10000,
+            SubtotalCentavos: 10000, OrigemMercadoria: 0, ModalidadeBcSt: 4,
+            PercentualMvaSt: 40m, PercentualReducaoBcSt: 0m,
+            AliquotaIcmsSt: 18m, AliquotaIcmsProprio: 12m, AliquotaFcpSt: 2m);
+
+        var det = NfceEmissionService.MontarItem(item, 1);
+        var icms = det.imposto.ICMS.TipoICMS.Should().BeOfType<ICMSSN202>().Subject;
+
+        icms.CSOSN.Should().Be(Csosnicms.Csosn202);
+        icms.vBCST.Should().Be(120.69m);
+        icms.vICMSST.Should().Be(11.38m);
+        icms.vFCPST.Should().Be(2.41m);
+        (det.prod.vProd - det.prod.vDesc + icms.vICMSST + icms.vFCPST!.Value)
+            .Should().Be(100m, "o preço cadastrado já é o total final ao consumidor");
+    }
+
+    [Fact]
+    public void MontarItem_Csosn201_CalculaCreditoESomaTotaisSt()
+    {
+        var item = new NfceEmissionService.ItemFiscal(
+            Nome: "Produto ST", Ncm: "95044000", Cfop: "5403", Csosn: "201",
+            PercentualCreditoSn: 2.5m, Quantidade: 1, PrecoUnitarioCentavos: 10000,
+            SubtotalCentavos: 10000, ModalidadeBcSt: 6,
+            PercentualReducaoBcSt: 0m, AliquotaIcmsSt: 18m,
+            AliquotaIcmsProprio: 12m, AliquotaFcpSt: 0m);
+
+        var det = NfceEmissionService.MontarItem(item, 1);
+        var icms = det.imposto.ICMS.TipoICMS.Should().BeOfType<ICMSSN201>().Subject;
+        var totais = NfceEmissionService.SomarTotaisIcms(new[] { det });
+
+        icms.vCredICMSSN.Should().BeGreaterThan(0);
+        totais.BaseSt.Should().Be(icms.vBCST);
+        totais.ValorSt.Should().Be(icms.vICMSST);
+        totais.ValorFcpSt.Should().Be(0);
     }
 
     [Fact]
@@ -413,6 +607,46 @@ public class NfceEmissionServiceTests
         var act = () => NfceEmissionService.MontarIcmsSimplesNacional(Item("999"));
 
         act.Should().Throw<FiscalNaoConfiguradoException>();
+    }
+
+    [Fact]
+    public void MontarItem_ComIbsCbs2026_UsaBaseLiquidaEClassificacaoOficial()
+    {
+        var det = NfceEmissionService.MontarItem(
+            Item("102"), numero: 1, descontoCentavos: 200, incluirIbsCbs: true);
+
+        var ibsCbs = det.imposto.IBSCBS!;
+        ibsCbs.CST.ToString().Should().Be("Cst000");
+        ibsCbs.cClassTrib.Should().Be("000001");
+        ibsCbs.gIBSCBS!.vBC.Should().Be(8m);
+        ibsCbs.gIBSCBS.gIBSUF!.pIBSUF.Should().Be(0.1m);
+        ibsCbs.gIBSCBS.gIBSUF.vIBSUF.Should().Be(0.01m);
+        ibsCbs.gIBSCBS.gIBSMun!.pIBSMun.Should().Be(0m);
+        ibsCbs.gIBSCBS.gCBS!.pCBS.Should().Be(0.9m);
+        ibsCbs.gIBSCBS.gCBS.vCBS.Should().Be(0.07m);
+
+        var xml = DFe.Utils.FuncoesXml.ClasseParaXmlString(det);
+        xml.Should().Contain("<IBSCBS>");
+        xml.Should().Contain("<CST>000</CST>");
+        xml.Should().Contain("<cClassTrib>000001</cClassTrib>");
+    }
+
+    [Fact]
+    public void MontarTotaisIbsCbs2026_SomaBasesLiquidasETributosDosItens()
+    {
+        var itens = new[]
+        {
+            NfceEmissionService.MontarItem(Item("102"), 1, 200, incluirIbsCbs: true),
+            NfceEmissionService.MontarItem(Item("102"), 2, 0, incluirIbsCbs: true),
+        };
+
+        var total = NfceEmissionService.MontarTotaisIbsCbs2026(itens);
+
+        total.vBCIBSCBS.Should().Be(18m);
+        total.gIBS!.gIBSUF!.vIBSUF.Should().Be(0.02m);
+        total.gIBS.gIBSMun!.vIBSMun.Should().Be(0m);
+        total.gIBS.vIBS.Should().Be(0.02m);
+        total.gCBS!.vCBS.Should().Be(0.16m);
     }
 
     // ── Detecção de falha de conectividade (contingência) ─────────────────────
@@ -444,5 +678,15 @@ public class NfceEmissionServiceTests
         var ex = new InvalidOperationException("CNPJ inválido");
 
         NfceEmissionService.EhFalhaDeConectividade(ex).Should().BeFalse();
+    }
+
+    [Fact]
+    public void EhFalhaDeConectividade_ErroTlsLocalEmHttpRequest_NaoViraContingencia()
+    {
+        var ex = new System.Net.Http.HttpRequestException(
+            "TLS", new AuthenticationException("certificado rejeitado"));
+
+        NfceEmissionService.EhFalhaDeConectividade(ex).Should().BeFalse();
+        NfceEmissionService.EhFalhaDeCertificadoLocal(ex).Should().BeTrue();
     }
 }

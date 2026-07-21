@@ -35,7 +35,7 @@ public class FiscalXmlExportBackgroundService : BackgroundService
                 // trabalho a fazer — evita abrir scope de catálogo à toa nos outros dias.
                 var hojeBrasil = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone).Date;
                 if (hojeBrasil.Day == 1)
-                    await _scopeFactory.ForEachActiveTenantAsync(_logger, CheckAsync, ct);
+                    await _scopeFactory.ForEachActiveTenantAsync(_logger, CheckAsync, ct, requiredModule: "fiscal");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

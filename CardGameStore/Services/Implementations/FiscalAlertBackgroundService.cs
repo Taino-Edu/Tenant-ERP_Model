@@ -31,7 +31,7 @@ public class FiscalAlertBackgroundService : BackgroundService
         {
             try
             {
-                await _scopeFactory.ForEachActiveTenantAsync(_logger, CheckAsync, ct);
+                await _scopeFactory.ForEachActiveTenantAsync(_logger, CheckAsync, ct, requiredModule: "fiscal");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

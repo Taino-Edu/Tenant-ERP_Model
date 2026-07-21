@@ -53,9 +53,17 @@ public class FiscalXmlExportService
                 var fileName = $"{nomeBase}-{nota.Status}.xml";
                 var entry    = zip.CreateEntry(fileName, CompressionLevel.Optimal);
 
-                await using var entryStream = entry.Open();
-                await using var writer      = new StreamWriter(entryStream);
-                await writer.WriteAsync(nota.XmlAutorizado);
+                await using (var entryStream = entry.Open())
+                await using (var writer = new StreamWriter(entryStream))
+                    await writer.WriteAsync(nota.XmlAutorizado);
+
+                if (nota.Status == NotaFiscalStatus.Cancelada && !string.IsNullOrWhiteSpace(nota.XmlEventoCancelamento))
+                {
+                    var eventoEntry = zip.CreateEntry($"{nomeBase}-cancelamento-procEvento.xml", CompressionLevel.Optimal);
+                    await using (var eventoStream = eventoEntry.Open())
+                    await using (var eventoWriter = new StreamWriter(eventoStream))
+                        await eventoWriter.WriteAsync(nota.XmlEventoCancelamento);
+                }
             }
         }
 
