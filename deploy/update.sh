@@ -62,7 +62,9 @@ $COMPOSE up -d
 # ── 4. Health check + auto-rollback ─────────────────────────────────────────
 echo -n "  Aguardando API responder /health"
 healthy=false
-for _ in {1..30}; do
+# Até 3 minutos: em instalações com vários tenants, as migrations de todos os
+# schemas rodam antes de o servidor começar a responder.
+for _ in {1..60}; do
     if $COMPOSE exec -T api curl -sf http://localhost:5000/health &>/dev/null; then
         healthy=true
         break
@@ -82,7 +84,10 @@ if [ "$healthy" != true ]; then
         fi
     done
     if [ "$reverted" = true ]; then
-        $COMPOSE up -d
+        # Retaguear :latest não troca a imagem de um container já criado.
+        # --force-recreate garante que api/frontend voltem de fato aos IDs
+        # preservados em :rollback.
+        $COMPOSE up -d --force-recreate api frontend
         echo -e "${YELLOW}↩️  Rollback de código aplicado (imagens :rollback restauradas).${NC}"
         echo -e "${YELLOW}   Se o problema foi de schema/migration, restaure o dump do backup (ver cabeçalho deste script).${NC}"
     else
