@@ -825,10 +825,12 @@ export interface ImportResultDto {
 // ── Leads (captação pública, CTA da landing) ──────────────────────────────────
 
 export type LeadStatus = 'Novo' | 'Contatado' | 'Convertido' | 'Perdido'
+export type LeadDigitalPresence = 'SemSite' | 'SiteLegado' | 'ECommerce'
 
 export interface LeadDto {
   id: string; nome: string; telefone: string; email: string | null; mensagem: string | null
   origem: string; status: LeadStatus; notas: string | null
+  digitalPresence: LeadDigitalPresence | null; opportunityScore: number | null; placeId: string | null
   createdAt: string; updatedAt: string; convertedTenantId: string | null
 }
 
@@ -838,6 +840,7 @@ export interface CreateLeadRequest {
 
 export interface UpdateLeadRequest {
   status: LeadStatus; notas?: string | null; convertedTenantId?: string | null
+  digitalPresence?: LeadDigitalPresence | null; opportunityScore?: number | null; placeId?: string | null
 }
 
 export const leadsApi = {

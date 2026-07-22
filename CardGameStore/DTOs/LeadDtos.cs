@@ -32,6 +32,9 @@ public class LeadDto
     public string Origem { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string? Notas { get; set; }
+    public string? DigitalPresence { get; set; }
+    public int? OpportunityScore { get; set; }
+    public string? PlaceId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public Guid? ConvertedTenantId { get; set; }
@@ -46,4 +49,14 @@ public class UpdateLeadRequest
     public string? Notas { get; set; }
 
     public Guid? ConvertedTenantId { get; set; }
+
+    [RegularExpression("^(SemSite|SiteLegado|ECommerce)$",
+        ErrorMessage = "DigitalPresence deve ser SemSite, SiteLegado ou ECommerce.")]
+    public string? DigitalPresence { get; set; }
+
+    [Range(0, 100)]
+    public int? OpportunityScore { get; set; }
+
+    [MaxLength(255)]
+    public string? PlaceId { get; set; }
 }
