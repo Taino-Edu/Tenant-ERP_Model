@@ -1284,15 +1284,30 @@ public class NfceEmissionService : INfceEmissionService
     private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal)
     {
         if (string.IsNullOrWhiteSpace(dados.SegundaFormaPagamento) || dados.SegundoValorCentavos <= 0)
-            return new List<detPag> { new detPag { tPag = MapFormaPagamento(dados.FormaPagamento), vPag = valorTotal } };
+            return new List<detPag> { MontarDetPagUnico(dados.FormaPagamento, valorTotal) };
 
         var valorSegundo  = dados.SegundoValorCentavos / 100m;
         var valorPrimeiro = valorTotal - valorSegundo;
         return new List<detPag>
         {
-            new detPag { tPag = MapFormaPagamento(dados.FormaPagamento), vPag = valorPrimeiro },
-            new detPag { tPag = MapFormaPagamento(dados.SegundaFormaPagamento), vPag = valorSegundo },
+            MontarDetPagUnico(dados.FormaPagamento, valorPrimeiro),
+            MontarDetPagUnico(dados.SegundaFormaPagamento, valorSegundo),
         };
+    }
+
+    /// <summary>
+    /// Monta um detPag. Para cartão de crédito/débito, a SEFAZ exige o grupo `card`
+    /// (rejeição observada em homologação: "Não informados os dados do cartão de
+    /// crédito/débito"). O sistema não integra com maquininha/TEF — não há CNPJ da
+    /// credenciadora, bandeira nem autorização pra informar — então o grupo é enviado
+    /// só com `tpIntegra = Não integrado`, que é o mínimo aceito pela SEFAZ nesse caso.
+    /// </summary>
+    private static detPag MontarDetPagUnico(string formaPagamento, decimal valor)
+    {
+        var pag = new detPag { tPag = MapFormaPagamento(formaPagamento), vPag = valor };
+        if (formaPagamento is PaymentMethod.CartaoCredito or PaymentMethod.CartaoDebito)
+            pag.card = new card { tpIntegra = TipoIntegracaoPagamento.TipNaoIntegrado };
+        return pag;
     }
 
     internal static string SanitizarNcm(string ncm)
