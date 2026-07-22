@@ -126,9 +126,11 @@ public class NfceEmissionServiceTests
         {
             Cnpj                      = "12345678000100",
             RazaoSocial                = "Loja Teste LTDA",
+            InscricaoEstadual          = "110042490114",
             Logradouro                 = "Rua Teste",
             CodigoMunicipioIbge        = "3550308",
             Uf                         = "SP",
+            Cep                        = "01001000",
             CscId                      = "000001", // F12: pré-voo exige CSC antes do certificado
             CscTokenEncrypted          = enc.Encrypt(Guid.NewGuid().ToString()),
             CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
@@ -140,7 +142,7 @@ public class NfceEmissionServiceTests
         var nota = await service.EmitirParaComandaAsync(comanda.Id);
 
         nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
-        nota.MotivoRejeicao.Should().Contain("vencido");
+        nota.MotivoRejeicao.Should().Contain("venceu");
         nota.ChaveAcesso.Should().BeNull(); // nunca chegou a tentar transmitir
     }
 
@@ -158,9 +160,11 @@ public class NfceEmissionServiceTests
         {
             Cnpj                      = "12345678000100",
             RazaoSocial                = "Loja Teste LTDA",
+            InscricaoEstadual          = "110042490114",
             Logradouro                 = "Rua Teste",
             CodigoMunicipioIbge        = "3550308",
             Uf                         = "SP",
+            Cep                        = "01001000",
             CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
             CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
             // CscId/CscToken deliberadamente ausentes

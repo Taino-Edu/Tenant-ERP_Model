@@ -940,11 +940,12 @@ public class NfceEmissionService : INfceEmissionService
             certificado.Dispose();
             throw new FiscalNaoConfiguradoException("O certificado A1 ainda não está dentro do período de validade.");
         }
-        if (certificado.NotAfter.ToUniversalTime() <= agora)
+        var certificadoValidoAte = certificado.NotAfter;
+        if (certificadoValidoAte.ToUniversalTime() <= agora)
         {
             certificado.Dispose();
             throw new FiscalNaoConfiguradoException(
-                $"O certificado A1 venceu em {certificado.NotAfter:dd/MM/yyyy}. Atualize-o em Admin > Fiscal.");
+                $"O certificado A1 venceu em {certificadoValidoAte:dd/MM/yyyy}. Atualize-o em Admin > Fiscal.");
         }
         var cfgCertificado = CriarConfiguracaoCertificado(pfxBytes, senha);
 
