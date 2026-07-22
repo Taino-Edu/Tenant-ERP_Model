@@ -90,9 +90,6 @@ public class NotaFiscalEmitida
     [Column("protocolo")]
     public string? Protocolo { get; set; }
 
-    [Column("autorizado_em")]
-    public DateTime? AutorizadoEm { get; set; }
-
     [Column("motivo_rejeicao")]
     public string? MotivoRejeicao { get; set; }
 
@@ -109,6 +106,14 @@ public class NotaFiscalEmitida
     [Column("emitido_em")]
     public DateTime? EmitidoEm { get; set; }
 
+    /// <summary>Momento (UTC) da confirmação de autorização pela SEFAZ (cStat 100) — distinto
+    /// de <see cref="EmitidoEm"/>, que preserva o momento real da venda mesmo em contingência.
+    /// A janela legal de cancelamento (F14) conta a partir daqui: uma nota autorizada
+    /// tardiamente (retransmissão de contingência horas depois) precisa nascer com a janela
+    /// cheia, não já expirada por causa do EmitidoEm antigo.</summary>
+    [Column("autorizado_em")]
+    public DateTime? AutorizadoEm { get; set; }
+
     [Column("cancelado_em")]
     public DateTime? CanceladoEm { get; set; }
 
@@ -116,10 +121,14 @@ public class NotaFiscalEmitida
     [Column("justificativa_cancelamento")]
     public string? JustificativaCancelamento { get; set; }
 
+    /// <summary>Protocolo (nProt) devolvido pela SEFAZ no evento de cancelamento — distinto do
+    /// protocolo de autorização em <see cref="Protocolo"/>. Exigido como prova documental do
+    /// cancelamento (guarda de 5 anos, ZIP do contador).</summary>
     [MaxLength(30)]
     [Column("protocolo_cancelamento")]
     public string? ProtocoloCancelamento { get; set; }
 
+    /// <summary>XML do procEventoNFe assinado/autorizado pela SEFAZ.</summary>
     [Column("xml_evento_cancelamento")]
     public string? XmlEventoCancelamento { get; set; }
 
@@ -129,7 +138,7 @@ public class NotaFiscalEmitida
     [Column("erp_estorno_erro")]
     public string? ErpEstornoErro { get; set; }
 
-    /// <summary>Preenchido somente quando o número foi formalmente inutilizado na SEFAZ.</summary>
+    /// <summary>Preenchido quando o número desta nota foi formalmente inutilizado (nota rejeitada).</summary>
     [Column("inutilizado_em")]
     public DateTime? InutilizadoEm { get; set; }
 

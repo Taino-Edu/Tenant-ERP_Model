@@ -4,6 +4,7 @@
 // GET  /api/admin/mensageria/clients  → lista clientes para seleção de alvos
 // =============================================================================
 
+using System.ComponentModel.DataAnnotations;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
@@ -173,10 +174,17 @@ public class MensageriaController : ControllerBase
 
 public class MensageriaRequest
 {
+    // B6: sem limite de tamanho, um título/corpo absurdamente grande só falhava tarde (erro
+    // cru de "string too long" do Postgres no SaveChangesAsync) em vez de um 400 limpo — mesmos
+    // limites já usados pela entidade Notification, que este envio acaba criando.
+    [Required, MaxLength(120)]
     public string       Title    { get; set; } = string.Empty;
+    [Required, MaxLength(500)]
     public string       Body     { get; set; } = string.Empty;
+    [MaxLength(300)]
     public string?      Link     { get; set; }
     /// <summary>URL da imagem/banner exibida na notificação, push e e-mail.</summary>
+    [MaxLength(500)]
     public string?      ImageUrl { get; set; }
     /// <summary>"inapp" | "email" | "both"</summary>
     public string       Channel  { get; set; } = "inapp";

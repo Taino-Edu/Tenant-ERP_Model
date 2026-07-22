@@ -12,11 +12,6 @@ public partial class HardenFiscalDocuments : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        // Campos já existentes no modelo de integrações, mas ausentes do histórico
-        // de migrations anterior. Sem eles, configuração mTLS falha em produção.
-        migrationBuilder.AddColumn<string>(name: "certificate_crt_encrypted", table: "integration_configs", type: "text", nullable: true);
-        migrationBuilder.AddColumn<string>(name: "certificate_key_encrypted", table: "integration_configs", type: "text", nullable: true);
-
         migrationBuilder.CreateTable(
             name: "inutilizacoes_fiscais",
             columns: table => new
@@ -39,25 +34,6 @@ public partial class HardenFiscalDocuments : Migration
             columns: new[] { "ano", "serie", "numero_inicial", "numero_final" },
             unique: true);
 
-        migrationBuilder.AddColumn<DateTime>(
-            name: "autorizado_em",
-            table: "notas_fiscais_emitidas",
-            type: "timestamp with time zone",
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "protocolo_cancelamento",
-            table: "notas_fiscais_emitidas",
-            type: "character varying(30)",
-            maxLength: 30,
-            nullable: true);
-
-        migrationBuilder.AddColumn<string>(
-            name: "xml_evento_cancelamento",
-            table: "notas_fiscais_emitidas",
-            type: "text",
-            nullable: true);
-
         migrationBuilder.AddColumn<DateTime>(name: "erp_estornado_em", table: "notas_fiscais_emitidas", type: "timestamp with time zone", nullable: true);
         migrationBuilder.AddColumn<string>(name: "erp_estorno_erro", table: "notas_fiscais_emitidas", type: "text", nullable: true);
 
@@ -76,60 +52,11 @@ public partial class HardenFiscalDocuments : Migration
         migrationBuilder.AddColumn<int>(name: "crediario_amount_at_sale", table: "vendas_avulsas", type: "integer", nullable: false, defaultValue: 0);
         migrationBuilder.AddColumn<DateTime>(name: "cancelado_em", table: "vendas_avulsas", type: "timestamp with time zone", nullable: true);
 
-        migrationBuilder.Sql("""
-            DO $$
-            BEGIN
-                IF EXISTS (
-                    SELECT 1 FROM notas_fiscais_emitidas
-                    WHERE comanda_id IS NOT NULL
-                    GROUP BY comanda_id HAVING count(*) > 1
-                ) OR EXISTS (
-                    SELECT 1 FROM notas_fiscais_emitidas
-                    WHERE venda_avulsa_id IS NOT NULL
-                    GROUP BY venda_avulsa_id HAVING count(*) > 1
-                ) THEN
-                    RAISE EXCEPTION 'Existem NFC-e duplicadas por origem. Corrija os registros antes de aplicar HardenFiscalDocuments.';
-                END IF;
-            END $$;
-            """);
-
-        migrationBuilder.DropIndex(
-            name: "ix_notas_fiscais_comanda",
-            table: "notas_fiscais_emitidas");
-
-        migrationBuilder.CreateIndex(
-            name: "ix_notas_fiscais_comanda",
-            table: "notas_fiscais_emitidas",
-            column: "comanda_id",
-            unique: true,
-            filter: "comanda_id IS NOT NULL");
-
-        migrationBuilder.CreateIndex(
-            name: "ix_notas_fiscais_venda_avulsa",
-            table: "notas_fiscais_emitidas",
-            column: "venda_avulsa_id",
-            unique: true,
-            filter: "venda_avulsa_id IS NOT NULL");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
     {
-        migrationBuilder.DropColumn(name: "certificate_crt_encrypted", table: "integration_configs");
-        migrationBuilder.DropColumn(name: "certificate_key_encrypted", table: "integration_configs");
-
         migrationBuilder.DropTable(name: "inutilizacoes_fiscais");
-
-        migrationBuilder.DropIndex(
-            name: "ix_notas_fiscais_comanda",
-            table: "notas_fiscais_emitidas");
-
-        migrationBuilder.DropIndex(
-            name: "ix_notas_fiscais_venda_avulsa",
-            table: "notas_fiscais_emitidas");
-
-        migrationBuilder.DropColumn(name: "autorizado_em", table: "notas_fiscais_emitidas");
-        migrationBuilder.DropColumn(name: "protocolo_cancelamento", table: "notas_fiscais_emitidas");
-        migrationBuilder.DropColumn(name: "xml_evento_cancelamento", table: "notas_fiscais_emitidas");
         migrationBuilder.DropColumn(name: "erp_estornado_em", table: "notas_fiscais_emitidas");
         migrationBuilder.DropColumn(name: "erp_estorno_erro", table: "notas_fiscais_emitidas");
 
@@ -148,9 +75,5 @@ public partial class HardenFiscalDocuments : Migration
         migrationBuilder.DropColumn(name: "crediario_amount_at_sale", table: "vendas_avulsas");
         migrationBuilder.DropColumn(name: "cancelado_em", table: "vendas_avulsas");
 
-        migrationBuilder.CreateIndex(
-            name: "ix_notas_fiscais_comanda",
-            table: "notas_fiscais_emitidas",
-            column: "comanda_id");
     }
 }

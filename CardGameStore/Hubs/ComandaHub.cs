@@ -53,7 +53,10 @@ public class ComandaHub : Hub
 
         _logger.LogInformation("Usuário {UserId} ({Role}) conectado ao ComandaHub", userId, role);
 
-        if (role == "Admin")
+        // B3: Operator tinha o mesmo acesso administrativo via REST (policy AdminOnly aceita
+        // os dois papéis em todo o resto do sistema) mas caía no branch de Customer aqui —
+        // sem tempo real do dashboard, precisava recarregar a página pra ver atualização.
+        if (role == "Admin" || role == "Operator")
         {
             await Groups.AddToGroupAsync(Context.ConnectionId, GetAdminGroup(_tenant.TenantId));
         }
@@ -108,7 +111,9 @@ public class ComandaHub : Hub
     // ADMIN → HUB: fechar comanda (via Hub — mantido para compatibilidade)
     // =========================================================================
 
-    [Authorize(Roles = "Admin")]
+    // B3: alinhado com a policy AdminOnly do REST (aceita Admin e Operator) — antes só Admin
+    // conseguia usar este RPC do hub, inconsistente com o endpoint REST equivalente.
+    [Authorize(Roles = "Admin,Operator")]
     public async Task CloseComanda(Guid comandaId)
     {
         var adminId = GetUserId();
@@ -128,7 +133,7 @@ public class ComandaHub : Hub
     // ADMIN → HUB: adicionar item manualmente (via Hub — mantido para compatibilidade)
     // =========================================================================
 
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Operator")]
     public async Task AdminAddItemToComanda(Guid comandaId, AddItemToComandaRequest request)
     {
         var adminId = GetUserId();

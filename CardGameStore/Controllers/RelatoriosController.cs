@@ -162,6 +162,13 @@ public class RelatoriosController : ControllerBase
         [FromQuery] int mes = 0,
         [FromQuery] int ano = 0)
     {
+        // M13: esta rota cai sob o prefixo "/api/relatorios" — qualquer Operator com a
+        // permissão genérica "relatorios" (pensada pra vendas/analytics) também enxergaria
+        // nome/e-mail/WhatsApp de devedores em aberto. Exige "crediario" especificamente
+        // (Admin sempre passa, mesmo espírito do middleware de permissões).
+        if (!OperatorTemPermissao(Permissao.Crediario))
+            return Forbid();
+
         var agoraBr2 = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone);
         if (mes <= 0 || mes > 12) mes = agoraBr2.Month;
         if (ano <= 0)             ano = agoraBr2.Year;
@@ -231,5 +238,27 @@ public class RelatoriosController : ControllerBase
             Devedores            = devedores,
             PagamentosNoMes      = pagamentosMesDto,
         });
+    }
+
+    /// <summary>Admin sempre tem; Operator precisa da permissão específica no claim "permissions"
+    /// (mesmo formato lido pelo OperatorPermissionMiddleware) — usado quando uma rota precisa de
+    /// uma permissão mais granular do que o prefixo geral do controller garante (M13).</summary>
+    private bool OperatorTemPermissao(string permissao)
+    {
+        var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (role == UserRole.Admin) return true;
+
+        var claim = User.FindFirst("permissions")?.Value;
+        if (string.IsNullOrEmpty(claim)) return false;
+
+        try
+        {
+            var permissoes = System.Text.Json.JsonSerializer.Deserialize<string[]>(claim) ?? [];
+            return permissoes.Contains(permissao);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

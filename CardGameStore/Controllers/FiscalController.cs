@@ -3,6 +3,7 @@
 // operação e exportação de XMLs de NFC-e pro contador.
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -84,7 +85,8 @@ public class FiscalController : ControllerBase
         if (req.Uf                  is not null) cfg.Uf                  = req.Uf.ToUpperInvariant();
         if (req.Cep                 is not null) cfg.Cep                 = new string(req.Cep.Where(char.IsDigit).ToArray());
         if (req.CscId               is not null) cfg.CscId               = req.CscId;
-        if (req.CscToken            is not null) cfg.CscToken            = _enc.Encrypt(req.CscToken);
+        // CSC e IBPT são segredos independentes, ambos criptografados por tenant.
+        if (req.CscToken            is not null) cfg.CscTokenEncrypted   = _enc.Encrypt(req.CscToken);
 
         if (req.RemoverIbptToken == true)
         {
@@ -103,10 +105,25 @@ public class FiscalController : ControllerBase
                 return BadRequest(new { Message = "Configure o token IBPT antes de ativar o preenchimento automático." });
             cfg.IbptAutoSyncEnabled = req.IbptAutoSyncEnabled.Value;
         }
+        if (req.RegimeTributario is not null)
+        {
+            if (!Enum.TryParse<RegimeTributario>(req.RegimeTributario, out var regime))
+                return BadRequest(new { Message = $"Regime tributário \"{req.RegimeTributario}\" inválido." });
 
-        if (req.RegimeTributario is not null &&
-            Enum.TryParse<RegimeTributario>(req.RegimeTributario, out var regime))
+            // F10: a montagem de itens (NfceEmissionService.MontarIcmsSimplesNacional) só sabe
+            // gerar classes ICMSSN* (CSOSN do Simples Nacional) — Lucro Presumido/Real exigiria
+            // CST de ICMS normal (regime não-cumulativo), que este sistema não calcula. Permitir
+            // a escolha aqui geraria CRT×CSOSN inconsistente no XML: 100% de rejeição da SEFAZ.
+            if (regime != RegimeTributario.SimplesNacional)
+                return BadRequest(new
+                {
+                    Message = "Este sistema só emite NFC-e pra empresas no Simples Nacional — a montagem " +
+                               "de impostos usa CSOSN, incompatível com Lucro Presumido/Real (exigiria CST " +
+                               "de ICMS normal, não implementado). Consulte o contador antes de mudar de regime.",
+                });
+
             cfg.RegimeTributario = regime;
+        }
 
         if (req.Ambiente is not null &&
             Enum.TryParse<AmbienteFiscal>(req.Ambiente, out var ambiente))
@@ -811,7 +828,7 @@ public class FiscalController : ControllerBase
             cfg.Municipio,
             cfg.Uf,
             cfg.Cep,
-            CscConfigurado = !string.IsNullOrWhiteSpace(cfg.CscId) && !string.IsNullOrWhiteSpace(cfg.CscToken),
+            CscConfigurado = !string.IsNullOrWhiteSpace(cfg.CscId) && !string.IsNullOrWhiteSpace(cfg.CscTokenEncrypted),
             cfg.CscId, // não sensível isoladamente; o token nunca é retornado
             RegimeTributario = cfg.RegimeTributario.ToString(),
             Ambiente         = cfg.Ambiente.ToString(),

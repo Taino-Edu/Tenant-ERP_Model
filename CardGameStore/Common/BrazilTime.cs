@@ -23,6 +23,15 @@ public static class BrazilTime
         TimeZoneInfo.ConvertTimeToUtc(
             DateTime.SpecifyKind(brDate.Date, DateTimeKind.Unspecified), Zone);
 
+    /// <summary>Converte um DateTime (com hora, não só a data) interpretado como horário local
+    /// de Brasília pro UTC correspondente — para janelas arbitrárias vindas de query string
+    /// (model binding do ASP.NET Core gera Kind=Unspecified, e <c>.ToUniversalTime()</c> nesse
+    /// caso assume o fuso do SERVIDOR, não o de Brasília: em container rodando em UTC isso vira
+    /// no-op e desloca a janela em 3h — bug real de exportação fiscal encontrado nesta auditoria,
+    /// F11).</summary>
+    public static DateTime ToUtcFromLocal(DateTime brLocal) =>
+        TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(brLocal, DateTimeKind.Unspecified), Zone);
+
     /// <summary>Retorna o intervalo UTC correspondente a um dia no fuso de Brasília.
     /// Ex.: dia 29/05 BR → [29/05 03:00 UTC, 30/05 03:00 UTC). Sem argumento, usa hoje.</summary>
     public static (DateTime InicioUtc, DateTime FimUtc) Dia(DateTime? dia = null)

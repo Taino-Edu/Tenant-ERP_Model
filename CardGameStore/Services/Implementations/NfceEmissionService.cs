@@ -66,9 +66,10 @@ using NFe.Classes.Servicos.Tipos;
 using NFe.Servicos;
 using NFe.Servicos.Retorno;
 using NFe.Utils;
+using NFe.Utils.Consulta;
+using Npgsql;
 using NFe.Utils.InformacoesSuplementares;
 using NFe.Utils.NFe;
-using Npgsql;
 using CbsItem = NFe.Classes.Informacoes.Detalhe.Tributacao.Compartilhado.InformacoesIbsCbs.InformacoesCbs.gCBS;
 using CbsTotal = NFe.Classes.Informacoes.Total.IbsCbs.Cbs.gCBSTotal;
 using IbsCbsCst = NFe.Classes.Informacoes.Detalhe.Tributacao.Compartilhado.Tipos.CST;
@@ -94,8 +95,20 @@ public class NfceEmissionService : INfceEmissionService
     // Janela legal pra cancelar uma NFC-e após autorizada (padrão nacional: 30 minutos).
     private static readonly TimeSpan JanelaCancelamento = TimeSpan.FromMinutes(30);
 
-    // Trava contra loop de reprocessamento em nota permanentemente quebrada.
+    // Trava contra loop de reprocessamento em nota permanentemente quebrada — só se aplica a
+    // PendenteEmissao/Rejeitada. Contingência (AutorizadaContingencia) usa prazo por TEMPO
+    // (ver PrazoLegalContingencia): a 10 tentativas em ciclos de 15 min (FiscalRetryBackgroundService)
+    // desistiria em ~2,5h, bem antes do prazo legal de 24h da NT 2015.002.
     private const int MaxTentativasReprocessamento = 10;
+
+    // Prazo legal (NT 2015.002) pra uma NFC-e emitida em contingência offline ser retransmitida
+    // e autorizada de verdade pela SEFAZ — passado isso, a venda fica permanentemente sem
+    // documento fiscal válido e exige ação manual/regularização com o contador.
+    private static readonly TimeSpan PrazoLegalContingencia = TimeSpan.FromHours(24);
+
+    // Log de alerta quando a contingência está perto do prazo legal, pra dar chance de ação
+    // manual antes de virar problema irreversível.
+    private static readonly TimeSpan AlertaContingencia = TimeSpan.FromHours(20);
 
     // Todo horário enviado à SEFAZ usa esse fuso explicitamente — nunca o fuso
     // do servidor (containers em nuvem tipicamente rodam em UTC por padrão).
@@ -219,21 +232,31 @@ public class NfceEmissionService : INfceEmissionService
             return nota;
         }
 
-        var emContingencia = nota.Status == NotaFiscalStatus.AutorizadaContingencia;
-        if (!emContingencia && nota.TentativasReprocessamento >= MaxTentativasReprocessamento)
+        if (nota.Status == NotaFiscalStatus.AutorizadaContingencia)
+        {
+            // Prazo por TEMPO, não por contagem — 10 tentativas em ciclos de 15 min
+            // esgotariam em ~2,5h, bem antes do prazo legal de 24h. Também vale pro botão de
+            // retry manual: contingência nunca é bloqueada pelo contador de tentativas comum.
+            if (nota.DhContingencia.HasValue && DateTime.UtcNow - nota.DhContingencia.Value > PrazoLegalContingencia)
+            {
+                _logger.LogError(
+                    "NFC-e {NotaId} em contingência desde {DhContingencia:o} ultrapassou o prazo legal de 24h sem " +
+                    "retransmitir — a venda ficou sem documento fiscal válido. Requer ação manual (regularização " +
+                    "com o contador).", nota.Id, nota.DhContingencia);
+                return nota;
+            }
+
+            if (nota.DhContingencia.HasValue && DateTime.UtcNow - nota.DhContingencia.Value > AlertaContingencia)
+                _logger.LogWarning(
+                    "NFC-e {NotaId} em contingência desde {DhContingencia:o} está se aproximando do prazo legal " +
+                    "de 24h sem retransmitir com sucesso.", nota.Id, nota.DhContingencia);
+        }
+        else if (nota.TentativasReprocessamento >= MaxTentativasReprocessamento)
         {
             _logger.LogWarning(
                 "NFC-e {NotaId} atingiu o limite de {Max} tentativas de reprocessamento — não vai tentar de novo.",
                 nota.Id, MaxTentativasReprocessamento);
             return nota;
-        }
-
-        if (emContingencia && nota.DhContingencia.HasValue &&
-            DateTime.UtcNow - nota.DhContingencia.Value >= TimeSpan.FromHours(24))
-        {
-            _logger.LogCritical(
-                "NFC-e {NotaId} ultrapassou 24 horas em contingência sem autorização. " +
-                "A retransmissão continuará, mas exige ação imediata do responsável fiscal.", nota.Id);
         }
 
         nota.TentativasReprocessamento++;
@@ -263,8 +286,12 @@ public class NfceEmissionService : INfceEmissionService
         if (nota.Status != NotaFiscalStatus.Autorizada)
             throw new InvalidOperationException("Só é possível cancelar uma nota Autorizada.");
 
-        var inicioJanelaCancelamento = nota.AutorizadoEm ?? nota.EmitidoEm;
-        if (inicioJanelaCancelamento is null || DateTime.UtcNow - inicioJanelaCancelamento.Value > JanelaCancelamento)
+        // F14: a janela conta a partir da AUTORIZAÇÃO de verdade (AutorizadoEm), não de
+        // EmitidoEm — que em contingência preserva o momento da venda, não da autorização
+        // pela SEFAZ. Sem essa distinção, uma nota retransmitida horas depois (dentro do
+        // prazo legal de 24h de F2) nasceria autorizada já fora da janela de cancelamento,
+        // incancelável desde o primeiro segundo.
+        if (nota.AutorizadoEm is null || DateTime.UtcNow - nota.AutorizadoEm.Value > JanelaCancelamento)
             throw new InvalidOperationException(
                 $"Fora da janela legal de cancelamento ({JanelaCancelamento.TotalMinutes:0} minutos após a autorização).");
 
@@ -287,6 +314,7 @@ public class NfceEmissionService : INfceEmissionService
         nota.Status                    = NotaFiscalStatus.Cancelada;
         nota.CanceladoEm                = DateTime.UtcNow;
         nota.JustificativaCancelamento  = justificativa.Trim();
+        // Persiste a prova fiscal e sinaliza o estorno transacional do ERP.
         nota.ProtocoloCancelamento      = infEvento.nProt;
         nota.ErpEstornoErro             = "Estorno ERP aguardando processamento.";
         var procEvento = retorno.ProcEventosNFe?.FirstOrDefault();
@@ -388,11 +416,19 @@ public class NfceEmissionService : INfceEmissionService
         {
             await _db.SaveChangesAsync();
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg &&
+            (pg.ConstraintName == "ix_notas_fiscais_comanda_unica" || pg.ConstraintName == "ix_notas_fiscais_venda_avulsa_unica"))
         {
-            _db.Entry(nota).State = EntityState.Detached;
-            return await BuscarNotaDaOrigemAsync(origem, comandaId, vendaAvulsaId)
-                ?? throw new InvalidOperationException("Conflito ao registrar NFC-e da origem, mas a nota existente não foi encontrada.", ex);
+            // F8: corrida entre duas chamadas concorrentes pra emitir NFC-e da mesma origem —
+            // o guard de aplicação em FiscalController (checa-então-insere) não é atômico;
+            // esse índice único no banco é a rede de segurança de verdade. Descarta a linha
+            // que perdeu a corrida e devolve a nota que já existe pra essa origem, em vez de
+            // derrubar o caller com exceção (quebraria a garantia de "nunca lança" do serviço).
+            _db.ChangeTracker.Clear();
+            return origem == NotaFiscalOrigem.Comanda
+                ? await _db.NotasFiscaisEmitidas.FirstAsync(n => n.ComandaId == comandaId)
+                : await _db.NotasFiscaisEmitidas.FirstAsync(n => n.VendaAvulsaId == vendaAvulsaId);
         }
 
         await ExecutarComTratamentoDeErroAsync(nota, async () =>
@@ -427,8 +463,13 @@ public class NfceEmissionService : INfceEmissionService
             i.NumeroInicial == numeroInicial && i.NumeroFinal == numeroFinal);
         if (existente is not null) return existente;
 
+        var inicioAnoUtc = BrazilTime.ToUtcFromLocal(new DateTime(ano, 1, 1));
+        var fimAnoUtc = BrazilTime.ToUtcFromLocal(new DateTime(ano + 1, 1, 1));
+
         var conflitaComDocumentoValido = await _db.NotasFiscaisEmitidas.AnyAsync(n =>
             n.Serie == serie && n.Numero >= numeroInicial && n.Numero <= numeroFinal &&
+            ((n.EmitidoEm.HasValue && n.EmitidoEm.Value >= inicioAnoUtc && n.EmitidoEm.Value < fimAnoUtc) ||
+             (!n.EmitidoEm.HasValue && n.CreatedAt >= inicioAnoUtc && n.CreatedAt < fimAnoUtc)) &&
             (n.Status == NotaFiscalStatus.Autorizada ||
              n.Status == NotaFiscalStatus.AutorizadaContingencia ||
              n.Status == NotaFiscalStatus.Cancelada));
@@ -462,6 +503,8 @@ public class NfceEmissionService : INfceEmissionService
 
         var notasAbandonadas = await _db.NotasFiscaisEmitidas
             .Where(n => n.Serie == serie && n.Numero >= numeroInicial && n.Numero <= numeroFinal &&
+                        ((n.EmitidoEm.HasValue && n.EmitidoEm.Value >= inicioAnoUtc && n.EmitidoEm.Value < fimAnoUtc) ||
+                         (!n.EmitidoEm.HasValue && n.CreatedAt >= inicioAnoUtc && n.CreatedAt < fimAnoUtc)) &&
                         n.Status != NotaFiscalStatus.Autorizada &&
                         n.Status != NotaFiscalStatus.AutorizadaContingencia &&
                         n.Status != NotaFiscalStatus.Cancelada)
@@ -877,7 +920,7 @@ public class NfceEmissionService : INfceEmissionService
         _ = NormalizarCnpjParaSefaz(cfg.Cnpj);
         if (string.IsNullOrWhiteSpace(cfg.InscricaoEstadual))
             throw new FiscalNaoConfiguradoException("Inscrição Estadual não configurada em Admin > Fiscal.");
-        if (string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscToken))
+        if (string.IsNullOrWhiteSpace(cfg.CscId) || string.IsNullOrWhiteSpace(cfg.CscTokenEncrypted))
             throw new FiscalNaoConfiguradoException("CSC (identificador e token) não configurado em Admin > Fiscal.");
         if (cfg.SerieNfce is < 1 or > 999 || cfg.ProximoNumeroNfce < 1)
             throw new FiscalNaoConfiguradoException("Série ou próximo número da NFC-e inválido.");
@@ -887,19 +930,6 @@ public class NfceEmissionService : INfceEmissionService
         _ = SanitizarCep(cfg.Cep);
         if (new string(cfg.CodigoMunicipioIbge.Where(char.IsDigit).ToArray()).Length != 7)
             throw new FiscalNaoConfiguradoException("Código IBGE do município deve ter 7 dígitos.");
-
-        // Compatibilidade com tenants existentes: converte o CSC legado em texto puro
-        // para AES-GCM na primeira utilização. Novas gravações já chegam criptografadas.
-        try
-        {
-            _ = _enc.Decrypt(cfg.CscToken);
-        }
-        catch (Exception ex) when (ex is FormatException or CryptographicException or ArgumentOutOfRangeException)
-        {
-            cfg.CscToken = _enc.Encrypt(cfg.CscToken);
-            cfg.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync();
-        }
 
         var pfxBytes    = Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted!));
         var senha       = _enc.Decrypt(cfg.CertificadoSenhaEncrypted!);
@@ -960,6 +990,9 @@ public class NfceEmissionService : INfceEmissionService
     {
         var (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
+
+        // M14: decriptado uma vez aqui — cfg.CscTokenEncrypted nunca é usado direto no QR Code.
+        var cscToken = string.IsNullOrWhiteSpace(cfg.CscTokenEncrypted) ? null : _enc.Decrypt(cfg.CscTokenEncrypted);
 
         // Monta os itens (e valida CSOSN) ANTES de reservar o número — uma Natureza de
         // Operação mal configurada não pode queimar um número de NFC-e sem transmitir nada.
@@ -1034,7 +1067,6 @@ public class NfceEmissionService : INfceEmissionService
         var valorDesconto  = dados.DescontoTotalCentavos / 100m;
         var valorTotal     = dados.ValorLiquidoCentavos / 100m;
         var cep            = SanitizarCep(cfg.Cep);
-        var cscToken       = _enc.Decrypt(cfg.CscToken!);
 
         var nfe = new NfeDocumento
         {
@@ -1185,10 +1217,9 @@ public class NfceEmissionService : INfceEmissionService
 
         var protInfo = retorno.Retorno?.protNFe?.infProt;
 
-        // Número já foi consumido e persistido atomicamente em ReservarProximoNumeroNfceAsync,
-        // autorizada ou não — a numeração da NFC-e não pode ser reaproveitada sem inutilização.
-        nota.Serie  = cfg.SerieNfce;
-        nota.Numero = numero;
+        // Número já foi consumido, persistido atomicamente em ReservarProximoNumeroNfceAsync
+        // e gravado na nota logo após a reserva (F6, acima) — autorizada ou não, a numeração
+        // da NFC-e não pode ser reaproveitada sem inutilização.
 
         if (protInfo is not null && protInfo.cStat == 100)
         {
@@ -1202,6 +1233,12 @@ public class NfceEmissionService : INfceEmissionService
             nota.XmlAutorizado  = MontarNfeProcXml(nfe, retorno.Retorno!.protNFe);
             nota.UrlQrCode      = qrCodeUrl;
             nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
+            // F13: se esta nota foi Rejeitada antes (número anterior inutilizado
+            // automaticamente) e agora autoriza com um número NOVO, os campos de
+            // inutilização do número antigo não fazem mais sentido aqui — sem isso a nota
+            // fica com estado contraditório ("Autorizada" mas mostrando "inutilizado em X").
+            nota.InutilizadoEm         = null;
+            nota.ProtocoloInutilizacao = null;
         }
         else
         {
@@ -1211,6 +1248,20 @@ public class NfceEmissionService : INfceEmissionService
                 _logger.LogError(
                     "SEFAZ rejeitou NFC-e {NotaId} com cStat 225. XML exato enviado: {XmlEnvio}",
                     nota.Id, retorno.EnvioStr);
+
+            // F5: rejeição de uma nota que estava em contingência (retransmissão alcançou a
+            // SEFAZ, mas foi rejeitada por motivo de negócio) inutiliza o número atual — sem
+            // limpar os campos de contingência, o PRÓXIMO reprocessamento veria jaEmContingencia
+            // ainda true e tentaria reusar esse MESMO número já inutilizado, num loop que só
+            // erra. Limpa aqui pra o próximo TransmitirAsync reservar um número novo do zero
+            // (nota.Numero/Serie continuam documentando qual número foi inutilizado, só os
+            // campos de reconstrução de chave de contingência são limpos).
+            if (jaEmContingencia)
+            {
+                nota.CnfContingencia           = null;
+                nota.DhContingencia            = null;
+                nota.JustificativaContingencia = null;
+            }
         }
 
         await _db.SaveChangesAsync();

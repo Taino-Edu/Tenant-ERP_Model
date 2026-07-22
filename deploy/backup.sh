@@ -33,13 +33,19 @@ MAX_DAYS="${BACKUP_RETAIN_DAYS:-7}"
 
 mkdir -p "$BACKUP_DIR"
 
-# Carrega variáveis do .env
-if [ -f "$PROJECT_DIR/.env" ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$PROJECT_DIR/.env"
-  set +a
-fi
+# Lê só as chaves que este script precisa do .env, em vez de dar `source` no
+# arquivo inteiro — o .env é escrito no formato docker-compose (não exige aspas
+# em valores com espaço, ex: SMTP_FROM_NAME=Tenant ERP), mas um `source` bash
+# quebra nesse mesmo caso ("ERP: command not found") porque interpreta a segunda
+# palavra como um comando. Extrai só a chave pedida, tolerando aspas opcionais.
+env_get() {
+  local key="$1" file="$2"
+  [ -f "$file" ] || return 0
+  grep -E "^${key}=" "$file" | tail -1 | cut -d= -f2- | sed -E 's/^"(.*)"$/\1/; s/^'"'"'(.*)'"'"'$/\1/' || true
+}
+
+if [ -z "${POSTGRES_DB:-}" ];   then POSTGRES_DB=$(env_get POSTGRES_DB "$PROJECT_DIR/.env"); fi
+if [ -z "${POSTGRES_USER:-}" ]; then POSTGRES_USER=$(env_get POSTGRES_USER "$PROJECT_DIR/.env"); fi
 
 POSTGRES_DB="${POSTGRES_DB:-cardgamestore}"
 POSTGRES_USER="${POSTGRES_USER:-cardgame_user}"

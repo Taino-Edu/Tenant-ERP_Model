@@ -50,6 +50,10 @@ public class SefazDistBackgroundService : BackgroundService
 
     private static async Task SincronizarAsync(IServiceProvider sp, CancellationToken ct)
     {
+        // F15: módulo fiscal desativado não deve continuar consultando DF-e/manifestando notas.
+        if (!sp.GetRequiredService<ITenantContext>().EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+            return;
+
         var db    = sp.GetRequiredService<AppDbContext>();
         var sefaz = sp.GetRequiredService<SefazNfeService>();
 

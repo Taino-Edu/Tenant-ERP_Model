@@ -376,6 +376,7 @@ public class ContasReceberController : ControllerBase
     /// </summary>
     /// <param name="status">Filtra por status do pipeline (ex: "Resumo", "Ciencia", "XmlBaixado", "ContasGeradas", "Cancelada").</param>
     [HttpGet("notas-destinadas")]
+    [RequireModule("fiscal")]
     public async Task<IActionResult> NotasDestinadas([FromQuery] string? status = null)
     {
         var q = _db.NotasDestinadas.AsQueryable();

@@ -47,6 +47,11 @@ public class FiscalRetryBackgroundService : BackgroundService
 
     private async Task ReprocessarPendentesAsync(IServiceProvider sp, CancellationToken ct)
     {
+        // F15: módulo fiscal desativado (mas com notas residuais no schema) não deve
+        // continuar retransmitindo pra SEFAZ.
+        if (!sp.GetRequiredService<ITenantContext>().EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+            return;
+
         var db      = sp.GetRequiredService<AppDbContext>();
         var emissao = sp.GetRequiredService<INfceEmissionService>();
 

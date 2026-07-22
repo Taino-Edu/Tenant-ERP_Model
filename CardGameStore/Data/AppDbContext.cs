@@ -174,15 +174,19 @@ public class AppDbContext : DbContext
             entity.HasIndex(n => n.Status)
                   .HasDatabaseName("ix_notas_fiscais_status");
 
+            // F8: única por origem — fecha a corrida (TOCTOU) entre duas chamadas concorrentes
+            // pra emitir NFC-e da mesma comanda/venda avulsa (o guard de aplicação em
+            // FiscalController checa-então-insere, sem lock). NULL não conta como duplicata
+            // pro Postgres, então não precisa de filtro condicional pelo Origem.
             entity.HasIndex(n => n.ComandaId)
                   .IsUnique()
                   .HasFilter("comanda_id IS NOT NULL")
-                  .HasDatabaseName("ix_notas_fiscais_comanda");
+                  .HasDatabaseName("ix_notas_fiscais_comanda_unica");
 
             entity.HasIndex(n => n.VendaAvulsaId)
                   .IsUnique()
                   .HasFilter("venda_avulsa_id IS NOT NULL")
-                  .HasDatabaseName("ix_notas_fiscais_venda_avulsa");
+                  .HasDatabaseName("ix_notas_fiscais_venda_avulsa_unica");
 
             entity.HasIndex(n => n.EmitidoEm)
                   .HasDatabaseName("ix_notas_fiscais_emitido_em");

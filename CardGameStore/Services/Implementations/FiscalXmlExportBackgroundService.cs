@@ -52,6 +52,10 @@ public class FiscalXmlExportBackgroundService : BackgroundService
 
     private async Task CheckAsync(IServiceProvider sp, CancellationToken ct)
     {
+        // F15: módulo fiscal desativado não deve continuar mandando ZIP mensal ao contador.
+        if (!sp.GetRequiredService<ITenantContext>().EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+            return;
+
         var hojeBrasil = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone).Date;
 
         var db     = sp.GetRequiredService<AppDbContext>();

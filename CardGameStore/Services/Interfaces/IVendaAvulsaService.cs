@@ -10,8 +10,15 @@ public interface IVendaAvulsaService
     /// </summary>
     Task<VendaAvulsaDto> RegisterAsync(VendaAvulsaRequest request, Guid adminId, string adminName);
 
-    /// <summary>Retorna as vendas avulsas mais recentes (padrão: últimas 50). Se <paramref name="desde"/> for informado, filtra por SoldAt.</summary>
+    /// <summary>Retorna as vendas avulsas mais recentes (padrão: últimas 50). Se <paramref name="desde"/> for informado, filtra por SoldAt.
+    /// USO: dashboards/UI que só precisam de uma amostra recente — nunca para cálculo financeiro de período
+    /// (o limite trunca silenciosamente; ver <see cref="GetInPeriodAsync"/>).</summary>
     Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50, DateTime? desde = null);
+
+    /// <summary>Retorna TODAS as vendas avulsas com SoldAt em [<paramref name="inicioUtc"/>, <paramref name="fimUtc"/>) —
+    /// sem limite de quantidade (M8: usado por fechamento/relatório financeiro, onde um corte silencioso
+    /// gravaria receita/custo errados como definitivos).</summary>
+    Task<IEnumerable<VendaAvulsaDto>> GetInPeriodAsync(DateTime inicioUtc, DateTime fimUtc);
 
     /// <summary>Retorna todas as vendas avulsas de um dia específico (fuso de Brasília). Padrão: hoje BR.</summary>
     Task<IEnumerable<VendaAvulsaDto>> GetByDateAsync(DateTime? date = null);

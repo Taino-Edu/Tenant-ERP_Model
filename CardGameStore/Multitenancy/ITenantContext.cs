@@ -29,6 +29,13 @@ public interface ITenantContext
     /// RequireModuleAttribute. Default preserva o módulo fiscal pra qualquer código
     /// que rode fora do pipeline HTTP normal (mesmo espírito do resto desta classe).</summary>
     string[] EnabledModules { get; }
+    /// <summary>True assim que <see cref="Set"/> é chamado nesta instância — inclusive pra
+    /// tenant-zero explícito. Usado pelo <see cref="TenantConnectionInterceptor"/> pra
+    /// detectar (fail-fast) um scope que nunca chamou Set() antes de abrir conexão —
+    /// todo caminho legítimo do código (middleware, background services, scopes manuais)
+    /// já chama Set() sempre, mesmo pra tenant-zero; um scope que abre conexão sem isso
+    /// é bug de verdade, não uso intencional do default.</summary>
+    bool IsExplicitlySet { get; }
     void Set(Guid tenantId, string schemaName, string[] enabledModules);
 }
 
@@ -37,11 +44,13 @@ public class TenantContext : ITenantContext
     public Guid TenantId { get; private set; } = TenantConstants.TenantZeroId;
     public string SchemaName { get; private set; } = TenantConstants.TenantZeroSchema;
     public string[] EnabledModules { get; private set; } = new[] { "fiscal" };
+    public bool IsExplicitlySet { get; private set; }
 
     public void Set(Guid tenantId, string schemaName, string[] enabledModules)
     {
         TenantId = tenantId;
         SchemaName = schemaName;
         EnabledModules = enabledModules;
+        IsExplicitlySet = true;
     }
 }

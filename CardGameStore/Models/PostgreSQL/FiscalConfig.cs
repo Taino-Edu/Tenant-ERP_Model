@@ -95,11 +95,11 @@ public class FiscalConfig
     [Column("csc_id")]
     public string? CscId { get; set; }
 
-    /// <summary>Token do CSC criptografado com AES-256-GCM. O nome da propriedade/coluna
-    /// foi mantido para compatibilidade; nunca contém texto puro após a migração lazy.</summary>
-    [MaxLength(100)]
-    [Column("csc_token")]
-    public string? CscToken { get; set; }
+    /// <summary>Token do CSC, criptografado com EncryptionService (M14) — antes ficava em claro;
+    /// permite gerar QR Codes válidos em nome da loja se o banco vazar. Nunca exposto em resposta
+    /// de API; decriptado só na hora de montar o QR Code (NfceEmissionService).</summary>
+    [Column("csc_token_encrypted")]
+    public string? CscTokenEncrypted { get; set; }
 
     [Column("regime_tributario")]
     public RegimeTributario RegimeTributario { get; set; } = RegimeTributario.SimplesNacional;

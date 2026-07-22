@@ -6,6 +6,8 @@
 // como PendenteEmissao quando a emissão não pode ser concluída.
 // =============================================================================
 
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
@@ -96,6 +98,81 @@ public class NfceEmissionServiceTests
         var nota = await service.EmitirParaComandaAsync(comanda.Id);
 
         nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
+    }
+
+    private const string SenhaCertificadoTeste = "senha-teste-123";
+
+    private static byte[] CreateSelfSignedPfx(string senha, DateTimeOffset notBefore, DateTimeOffset notAfter)
+    {
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest("CN=Fiscal Teste", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var cert = req.CreateSelfSigned(notBefore, notAfter);
+        return cert.Export(X509ContentType.Pfx, senha);
+    }
+
+    [Fact]
+    public async Task EmitirParaComandaAsync_ComCertificadoVencido_RegistraPendenteEmissaoSemLancarExcecao()
+    {
+        // F3: certificado vencido tem que bloquear ANTES de qualquer tentativa de rede — senão
+        // o handshake mTLS falho seria mal-classificado como "SEFAZ fora do ar" e cairia em
+        // contingência offline (tpEmis=9) indevidamente.
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        var enc     = CreateEncryptionService();
+
+        var pfxBytes = CreateSelfSignedPfx(SenhaCertificadoTeste, DateTimeOffset.UtcNow.AddDays(-400), DateTimeOffset.UtcNow.AddDays(-1));
+
+        db.FiscalConfigs.Add(new FiscalConfig
+        {
+            Cnpj                      = "12345678000100",
+            RazaoSocial                = "Loja Teste LTDA",
+            Logradouro                 = "Rua Teste",
+            CodigoMunicipioIbge        = "3550308",
+            Uf                         = "SP",
+            CscId                      = "000001", // F12: pré-voo exige CSC antes do certificado
+            CscTokenEncrypted          = enc.Encrypt(Guid.NewGuid().ToString()),
+            CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
+            CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var nota = await service.EmitirParaComandaAsync(comanda.Id);
+
+        nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
+        nota.MotivoRejeicao.Should().Contain("vencido");
+        nota.ChaveAcesso.Should().BeNull(); // nunca chegou a tentar transmitir
+    }
+
+    [Fact]
+    public async Task EmitirParaComandaAsync_SemCsc_RegistraPendenteEmissaoSemLancarExcecao()
+    {
+        // F12: sem CSC a transmissão sai sem QR Code (obrigatório em NFC-e) — bloqueia no
+        // pré-voo, antes de reservar número, em vez de queimar numeração à toa.
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        var enc     = CreateEncryptionService();
+        var pfxBytes = CreateSelfSignedPfx(SenhaCertificadoTeste, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        db.FiscalConfigs.Add(new FiscalConfig
+        {
+            Cnpj                      = "12345678000100",
+            RazaoSocial                = "Loja Teste LTDA",
+            Logradouro                 = "Rua Teste",
+            CodigoMunicipioIbge        = "3550308",
+            Uf                         = "SP",
+            CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
+            CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
+            // CscId/CscToken deliberadamente ausentes
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var nota = await service.EmitirParaComandaAsync(comanda.Id);
+
+        nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
+        nota.MotivoRejeicao.Should().Contain("CSC");
+        nota.Numero.Should().BeNull(); // nunca chegou a reservar número
     }
 
     [Fact]
@@ -285,6 +362,47 @@ public class NfceEmissionServiceTests
     }
 
     [Fact]
+    public async Task ReprocessarAsync_ContingenciaDentroDoPrazoLegal_IgnoraLimiteDeTentativasComum()
+    {
+        // F2: contingência (AutorizadaContingencia) NUNCA deve ser bloqueada pelo contador de
+        // tentativas comum (10, pensado pra PendenteEmissao/Rejeitada) — só pelo prazo legal de
+        // 24h. Nota com 10+ tentativas mas dentro do prazo ainda deve tentar de novo.
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status                     = NotaFiscalStatus.AutorizadaContingencia,
+            TentativasReprocessamento  = 10,
+            DhContingencia             = DateTime.UtcNow.AddHours(-1), // bem dentro das 24h
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var resultado = await service.ReprocessarAsync(nota.Id);
+
+        resultado.TentativasReprocessamento.Should().Be(11); // tentou de novo apesar do contador alto
+    }
+
+    [Fact]
+    public async Task ReprocessarAsync_ContingenciaAposPrazoLegalDe24h_NaoTentaDeNovo()
+    {
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status         = NotaFiscalStatus.AutorizadaContingencia,
+            DhContingencia = DateTime.UtcNow.AddHours(-25), // passou das 24h
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var resultado = await service.ReprocessarAsync(nota.Id);
+
+        resultado.TentativasReprocessamento.Should().Be(0); // não incrementou — nem tentou
+        resultado.Status.Should().Be(NotaFiscalStatus.AutorizadaContingencia); // continua como estava, exige ação manual
+    }
+
+    [Fact]
     public async Task CancelarAsync_NotaNaoAutorizada_LancaExcecao()
     {
         using var db = CreateDb();
@@ -314,6 +432,28 @@ public class NfceEmissionServiceTests
             DateTime.Now.Year, 1, 49, 51, "Faixa abandonada por erro operacional");
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*autorizada*");
+    }
+
+    [Fact]
+    public async Task InutilizarFaixaAsync_DocumentoDeOutroAnoNaoBloqueiaFaixa()
+    {
+        using var db = CreateDb();
+        var anoAtual = DateTime.Now.Year;
+        db.NotasFiscaisEmitidas.Add(new NotaFiscalEmitida
+        {
+            Status = NotaFiscalStatus.Autorizada,
+            Serie = 1,
+            Numero = 50,
+            EmitidoEm = new DateTime(anoAtual - 1, 6, 1, 12, 0, 0, DateTimeKind.Utc),
+        });
+        await db.SaveChangesAsync();
+
+        Func<Task> act = async () => await CreateService(db).InutilizarFaixaAsync(
+            anoAtual, 1, 49, 51, "Faixa abandonada por erro operacional");
+
+        // Sem configuração fiscal, a execução só deve parar no pré-voo da SEFAZ,
+        // demonstrando que a nota do ano anterior não conflitou com a faixa atual.
+        await act.Should().ThrowAsync<FiscalNaoConfiguradoException>().WithMessage("*Certificado*");
     }
 
     [Fact]
@@ -371,8 +511,9 @@ public class NfceEmissionServiceTests
         using var db = CreateDb();
         var nota = new NotaFiscalEmitida
         {
-            Status = NotaFiscalStatus.Autorizada,
-            EmitidoEm = DateTime.UtcNow.AddHours(-2), // muito depois dos 30 min de janela
+            Status       = NotaFiscalStatus.Autorizada,
+            EmitidoEm    = DateTime.UtcNow, // recente — mas EmitidoEm não conta pra janela (F14)
+            AutorizadoEm = DateTime.UtcNow.AddHours(-2), // muito depois dos 30 min de janela
         };
         db.NotasFiscaisEmitidas.Add(nota);
         await db.SaveChangesAsync();
@@ -381,6 +522,51 @@ public class NfceEmissionServiceTests
         Func<Task> act = () => service.CancelarAsync(nota.Id, "Motivo com mais de quinze caracteres");
 
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*janela legal*");
+    }
+
+    [Fact]
+    public async Task CancelarAsync_SemAutorizadoEm_LancaExcecaoMesmoComEmitidoEmRecente()
+    {
+        // F14: a janela conta a partir de AutorizadoEm, não de EmitidoEm — uma nota antiga
+        // (de antes da migration, ou nunca corretamente autorizada) sem AutorizadoEm não pode
+        // ser tratada como "dentro da janela" só porque EmitidoEm é recente.
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status    = NotaFiscalStatus.Autorizada,
+            EmitidoEm = DateTime.UtcNow,
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        Func<Task> act = () => service.CancelarAsync(nota.Id, "Motivo com mais de quinze caracteres");
+
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*janela legal*");
+    }
+
+    [Fact]
+    public async Task CancelarAsync_DentroDaJanelaPorAutorizadoEm_PassaDaValidacaoDeJanela()
+    {
+        // F14: EmitidoEm antigo (contingência com venda de horas atrás) não deve mais barrar o
+        // cancelamento se a autorização de verdade (AutorizadoEm) foi recente — o teste prova
+        // isso indiretamente: sem FiscalConfig, se passasse da checagem de janela cairia na
+        // checagem de configuração fiscal (exceção diferente), não na de janela.
+        using var db = CreateDb();
+        var nota = new NotaFiscalEmitida
+        {
+            Status       = NotaFiscalStatus.Autorizada,
+            EmitidoEm    = DateTime.UtcNow.AddHours(-6), // venda em contingência, horas atrás
+            AutorizadoEm = DateTime.UtcNow.AddMinutes(-5), // autorizada de verdade agora há pouco
+        };
+        db.NotasFiscaisEmitidas.Add(nota);
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        Func<Task> act = () => service.CancelarAsync(nota.Id, "Motivo com mais de quinze caracteres");
+
+        await act.Should().ThrowAsync<FiscalNaoConfiguradoException>(
+            "passou da checagem de janela (é isso que o teste prova) e caiu na falta de FiscalConfig");
     }
 
     [Fact]

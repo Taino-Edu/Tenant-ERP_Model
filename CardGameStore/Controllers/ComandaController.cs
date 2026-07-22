@@ -341,7 +341,10 @@ public class ComandaController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { Message = $"Erro interno ao gerar cobrança Pix: {ex.Message}" });
+            // M15: ex.Message vazava detalhe interno (driver do banco, stack de terceiro) pro
+            // cliente num 500 — loga o detalhe completo e devolve mensagem genérica.
+            _logger.LogError(ex, "Erro inesperado ao gerar cobrança Pix pra comanda {ComandaId}.", id);
+            return StatusCode(500, new { Message = "Erro interno ao gerar cobrança Pix. Tente novamente." });
         }
     }
 

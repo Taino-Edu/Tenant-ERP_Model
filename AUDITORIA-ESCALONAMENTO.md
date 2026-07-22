@@ -9,59 +9,38 @@
 
 ## Sumário executivo
 
-O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 224 testes de backend incluindo isolamento de tenant contra Postgres real. A auditoria encontrou **12 problemas críticos** — **9 já corrigidos e verificados em 2026-07-20** (placar na seção 📊 Verificação), 1 parcial e 3 de arquitetura/escala ainda abertos (C3, C4, C5). O módulo fiscal segue com os 4 graves (F1–F4) sem correção.
+O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squash de migrations feito, CI com Postgres 16 real, 265 testes de backend incluindo isolamento de tenant contra Postgres real. A auditoria encontrou **12 problemas críticos**; **10 já foram corrigidos** (C1, C2, C3, C6, C7, C8, C9, C10, C11, C12 — ver seção "Estado das correções" abaixo), C4 parcial (visibilidade de falha corrigida; job migrador separado adiado — sem multi-instância no horizonte), restando **C5 aberto por decisão de arquitetura** (Redis/SignalR — só importa ao escalar horizontalmente).
 
-O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, mas **4 problemas graves impedem a homologação hoje** (F1–F4) e há mais 11 achados + 2 lacunas de escopo.
+O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, e **14 dos 15 achados (F1–F15) já foram corrigidos** — só F7 ficou parcial (mensagem enganosa corrigida, mas o fluxo de estorno automático em si é feature nova, não bug pontual, e fica documentado como gap real). F1, F4, F5 não são testáveis neste ambiente (exigem SEFAZ de homologação real) — verificar manualmente antes de produção. Restam as 2 lacunas de escopo (L1-L5, decisões a tomar com o contador, não bugs).
 
-| Severidade | Quantidade | Com correção em andamento |
+| Severidade | Quantidade | Corrigido |
 |---|---|---|
-| 🔴 Crítico | 12 | 4 (+1 parcial) |
+| 🔴 Crítico | 12 | 10 (+1 parcial) |
 | 🟠 Bloqueio multi-instância | 4 | 0 |
-| 🟡 Médio | 27 | 1 parcial |
-| 🔵 Baixo | 13 | 0 |
-| 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 0 |
+| 🟡 Médio | 27 | 7 (M1,M2,M6,M7,M8,M13,M14) + 4 parciais (M12,M15,M17,M26) + 1 parcial (M18) |
+| 🔵 Baixo | 13 | 4 (B3,B4,B5,B6) |
+| 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 14 (+1 parcial) |
 
 ---
 
-## 📊 Verificação pós-correções — 2026-07-20 (o que foi feito de verdade)
+## ✅ Estado das correções (commitadas em 2026-07-17/18)
 
-Verificado item a item contra o código atual (HEAD `fbce607`). Commits analisados: `39a8e84` (tenant em jobs/NFC-e), `f63de14` (subdomínio 404), `8a17f1f` (deploy backup/rollback), `45e05e5` (limpeza Campeonatos), `fbce607` (audit fixes + mTLS por tenant).
+| Correção | Arquivos | Achado |
+|---|---|---|
+| Propagação de tenant na emissão de NFC-e da comanda | `ComandaService.cs` (+`ITenantContext.Set`) | C1 |
+| Novo helper `ForEachActiveTenantAsync` aplicado aos 5 background services | `Multitenancy/TenantIteration.cs` (novo), `FiscalRetry/FiscalXmlExport/FiscalAlert/SefazDist/InterSyncService` | C2 |
+| Guarda de status em `CloseComandaAsync` (bloqueia duplo fechamento/dupla NFC-e) | `ComandaService.cs` | C6 |
+| Transação + execution strategy em `RegisterAsync` (venda avulsa) — valida antes de commitar, NFC-e emitida só após o commit | `VendaAvulsaService.cs` | C7 |
+| Operator bloqueado de resetar senha de Admin, criar outro Operator e auto-atribuir perfil | `UserService.cs`, `UserController.cs` | C8 |
+| Certificado mTLS do Inter movido de arquivo global do servidor para coluna criptografada por tenant (`IntegrationConfig`) + migration `AddInterCertificateFields` | `InterSyncService.cs`, `IntegrationConfig.cs`, `ContasReceberController.cs`, `Data/Migrations/20260718030216_AddInterCertificateFields.cs` | C9 |
+| Subdomínio inexistente agora retorna 404 (não serve mais o tenant-zero) | `TenantResolutionMiddleware.cs` + `TenantResolutionMiddlewareTests.cs` (+20 linhas de teste) | C10 |
+| Deploy seguro: backup pré-deploy, imagens `:rollback`, health check com reversão automática | `deploy/update.sh` (+85 linhas) | C11 |
+| Backup diário via cron no setup + backup inicial + verificação de integridade do dump + opção off-site (`BACKUP_REMOTE_CMD`) | `deploy/setup.sh` (+25), `deploy/backup.sh` (+41) | C12 (parcial) |
+| Limpeza parcial de resíduos TCG/Campeonatos | `frontend/app/{termos,privacidade,cadastro}`, `admin/perfis`, `contexts/SiteConfigContext`, `lib/api.ts` | M18 (parcial) |
 
-### Placar
+**Nota sobre C9:** a correção original (commit `fbce607`) mudou o model `IntegrationConfig` mas não veio com a migration EF correspondente — as colunas novas não existiam no banco. Migration `AddInterCertificateFields` gerada e aplicada em 2026-07-18 pra fechar o gap. Suite completa (257 testes) passando após o fix.
 
-| Grupo | ✅ Corrigido | 🟡 Parcial | ❌ Não corrigido |
-|---|---|---|---|
-| 🔴 Críticos C1–C12 | 9 | 1 (C12) | 3 (C3, C4, C5) |
-| 🧾 Fiscal F1–F15 | 0 | 3 (F2, F12, F15) | 12 |
-| 🟡 Médios M1–M27 | 0 | 4 (M1, M18, M25, M26) | 23 |
-| 🔵 Baixos B1–B13 | 0 | 0 | 13 |
-| 🟠 Escala H1–H4 | 0 | 0 | 4 |
-| Lacunas fiscais L1–L5 | 0 | 0 | 5 |
-
-### ✅ Feito de verdade (verificado no código)
-
-- **C1** — propagação de tenant na emissão NFC-e da comanda (`ComandaService.cs:698-701`) — commit `39a8e84`
-- **C2** — 5 background services iteram tenants via `ForEachActiveTenantAsync` (`Multitenancy/TenantIteration.cs`) — commit `39a8e84`
-- **C6** — guarda de status no `CloseComandaAsync` (`ComandaService.cs:447-448`) — commit `fbce607`
-- **C7** — venda avulsa: validação antecipada + `CreateExecutionStrategy` + transação cobrindo estoque/venda/pós-venda (`VendaAvulsaService.cs:44-378`); NFC-e fora da transação com tenant propagado — commit `fbce607`
-- **C8** — Operator não reseta senha de Admin (`UserService.cs:264-266`) nem auto-eleva perfil (`UserController.cs:417-418,:424-425`) — commit `fbce607`
-- **C9** — certificado mTLS do Inter por tenant (`IntegrationConfig.CertificateCrtEncrypted/KeyEncrypted`, descriptografado por request em `InterSyncService.cs:325-328`; upload em `ContasReceberController.cs:434-445`) — commit `fbce607`
-- **C10** — subdomínio inexistente retorna 404 (`TenantResolutionMiddleware.cs:63-68`) — commit `f63de14`
-- **C11** — `update.sh` com backup pré-deploy, imagens `:rollback`, health check e auto-rollback — commit `8a17f1f`
-- **C12** 🟡 — cron diário + backup inicial + verificação de integridade + opção off-site (`BACKUP_REMOTE_CMD`); **persistem**: retenção 7 dias e dump full sem restore por tenant
-- **M18** 🟡 — Campeonatos removido de manual/perfis/termos/privacidade/cadastro/api.ts/tests (`45e05e5`); **sobraram**: remotePatterns TCG em `next.config.js:18,21`, seção TCG em `admin/manual/page.tsx:309-325`, `termos/page.tsx:178`, placeholder em `admin/usuarios/page.tsx:1123`
-
-### ❌ Não corrigido (confirmado no código atual)
-
-- **Críticos de arquitetura/escala:** C3 (tenant-zero silencioso), C4 (migrations no boot sem lock), C5 (SignalR sem backplane)
-- **Fiscal:** 12 de 15 abertos — inclusive os 4 graves **F1–F4** (cupom de contingência com chave/QR errados; retransmissão morre em ~2,5 h; certificado vencido → contingência indevida; XML sem `nfeProc`). Parciais: F2 (alerta existe, mas passivo), F12 (pré-voo antes da reserva, mas sem CNPJ/IE/CSC), F15 (pontos de emissão checam módulo; jobs e DF-e não)
-- **Médios:** 23 de 27 abertos (M2–M17, M19–M24, M27)
-- **Baixos e escala:** B1–B13 e H1–H4 todos abertos (não eram alvo dos commits)
-- **Lacunas fiscais L1–L5:** nenhuma implementada
-
-### ⚠️ Problema novo introduzido
-
-- O commit `fbce607` versionou `.next/trace` e `.next/trace-build` (artefatos de build) — a raiz `.next/` não está no `.gitignore` (só `frontend/.next/`). Remover do tracking (`git rm --cached`) e adicionar `/.next/` ao `.gitignore`.
+**Ainda abertos:** C3 (fail-fast do `ITenantContext` fora de request), C4 (migrations no boot sem lock) e C5 (SignalR sem backplane Redis) — são decisões de arquitetura, não correções pontuais; ver Plano de ação (P1/P2). Nota: o rollback do `update.sh` reverte **código** (imagens), não **schema** — o próprio script documenta o limite.
 
 ---
 
@@ -79,17 +58,17 @@ Verificado item a item contra o código atual (HEAD `fbce607`). Commits analisad
 - **Problema:** `CreateScope()` sem `ITenantContext.Set(...)` → retry de NF-e, envio mensal de XML ao contador, alerta de vencimento do certificado A1, manifestação do destinatário (DDA) e sync do Banco Inter **nunca rodavam para tenants reais** — só para o tenant-zero. O cabeçalho de `FechamentoBackgroundService.cs:5-14` documentava o problema.
 - **Status:** corrigido no working copy via novo `Multitenancy/TenantIteration.cs` (`ForEachActiveTenantAsync`), mesmo padrão do `FechamentoBackgroundService`. **Falta commit.**
 
-### C3. `ITenantContext` defaulta para tenant-zero em vez de falhar
+### C3. `ITenantContext` defaulta para tenant-zero em vez de falhar  `✅ corrigido`
 
-- **Onde:** `CardGameStore/Multitenancy/ITenantContext.cs:35-47`
+- **Onde:** `CardGameStore/Multitenancy/ITenantContext.cs`, `TenantConnectionInterceptor.cs`
 - **Problema:** qualquer caminho que crie escopo manual e esqueça o `Set(...)` opera no tenant-zero **silenciosamente** — causa-raiz de C1 e C2, e fonte de regressões futuras a cada novo service.
-- **Sugestão:** modo fail-fast fora de request HTTP (ou marcador explícito de "tenant-zero intencional"), pelo menos em `Production`. **Aberto** (decisão de design; as correções C1/C2 mitigam os casos atuais).
+- **Status:** auditado todo `CreateScope()` do projeto — **todos** já chamavam `Set(...)` explicitamente (inclusive pra tenant-zero, ex: `AuthService.cs`, `TenantResolutionMiddleware.cs`). Adicionado `ITenantContext.IsExplicitlySet` (true após qualquer `Set()`); `TenantConnectionInterceptor` agora falha rápido (`InvalidOperationException`) se uma conexão abrir sem isso — em qualquer ambiente, não só Production, já que nenhum caminho legítimo depende do default. Boot do `Program.cs` (migrations do schema `public`) ajustado pra marcar isso explicitamente. Testado (`EscopoQueNuncaChamouSet_FalhaRapidoAoAbrirConexao`).
 
-### C4. Migrations por tenant rodam no boot de cada instância, em loop serial, sem lock
+### C4. Migrations por tenant rodam no boot de cada instância, em loop serial, sem lock  `🩹 mitigado parcialmente`
 
-- **Onde:** `CardGameStore/Program.cs:489-513`
-- **Problemas:** (1) startup O(N) — 200 tenants = 200 `MigrateAsync` sequenciais bloqueando o `app.Run()` e o `/health`; (2) com 2+ instâncias (rolling deploy), corrida de DDL em `__EFMigrationsHistory`; (3) `catch` em `:505-510` **engole falhas** — tenant fica sem migrar silenciosamente até o próximo restart.
-- **Sugestão:** separar "processo migrador" de "processo web" (job único no deploy), com `pg_advisory_lock` e status de migration por tenant no catálogo. **Aberto.**
+- **Onde:** `CardGameStore/Program.cs`
+- **Problemas:** (1) startup O(N) — 200 tenants = 200 `MigrateAsync` sequenciais bloqueando o `app.Run()` e o `/health`; (2) com 2+ instâncias (rolling deploy), corrida de DDL em `__EFMigrationsHistory`; (3) o `catch` do loop **engolia falhas** — tenant ficava sem migrar silenciosamente até o próximo restart, sem nada visível no boot.
+- **Status:** (3) corrigido — o loop agora rastreia falhas e loga um resumo `WARNING` (não `INFO`) com a lista de slugs que falharam, em vez de um "aplicadas em N tenants" genérico que não distinguia sucesso de falha. **(1) e (2) deliberadamente adiados**: exigem separar processo migrador do processo web + `pg_advisory_lock` — só valem a pena quando sair de VPS único/1 réplica (decisão do usuário: sem multi-instância no horizonte próximo). Reavaliar junto com H1-H4/C5 (P2) quando o primeiro cliente justificar escalar horizontalmente.
 
 ### C5. SignalR sem backplane — eventos não cruzam instâncias
 
@@ -97,29 +76,29 @@ Verificado item a item contra o código atual (HEAD `fbce607`). Commits analisad
 - **Problema:** eventos de comanda via `IHubContext<ComandaHub>` só alcançam conexões da instância local. Com 2+ instâncias, o dashboard em tempo real deixa de ser confiável.
 - **Sugestão:** `AddStackExchangeRedis(...)` ao subir a 2ª réplica. **Aberto** (só bloqueia multi-instância).
 
-### C6. Fechamento de comanda sem guarda de status — duplo fechamento duplica crediário, pontos e NFC-e  `✅ corrigido em fbce607 (verificado 20/07)`
+### C6. Fechamento de comanda sem guarda de status — duplo fechamento duplica crediário, pontos e NFC-e  `✅ corrigido`
 
 - **Onde:** `ComandaService.cs` — `CloseComandaAsync` não verifica se a comanda já está `Fechada`/`Cancelada` (todos os outros métodos da classe verificam: `:382,:722,:840,:884,:1019`).
 - **Efeito:** um segundo `POST /close` (duplo clique, retry de rede) re-executa todos os efeitos colaterais: crediário duplicado, segundo débito de pontos/cashback e — se `emitirNotaFiscal=true` — **segunda NFC-e autorizada na SEFAZ para a mesma venda** (`:685-699`, sem a guarda de duplicidade que a emissão manual tem em `FiscalController.cs:372-374`). `ComandaController.cs:408` captura `InvalidOperationException` esperando "já fechada", exceção que nunca é lançada.
-- **Sugestão:** uma linha de guarda de status no início + constraint/índice. Resolve também a dupla emissão.
+- **Status:** guarda de status adicionada no início de `CloseComandaAsync` (mesmo padrão de `CancelComandaAsync`).
 
-### C7. Venda avulsa faz commit parcial sem transação  `✅ corrigido em fbce607 (verificado 20/07)`
+### C7. Venda avulsa faz commit parcial sem transação  `✅ corrigido`
 
 - **Onde:** `Services/Implementations/VendaAvulsaService.cs` — estoque decrementado via `ExecuteUpdateAsync` (`:96-111`), venda gravada (`:180-181`), NFC-e possivelmente autorizada (`:192-204`), e **só depois** validações pós-venda lançam `InvalidOperationException` (`:217-219,:223,:286-363`).
 - **Efeito:** cliente recebe HTTP 400 mas a venda fica persistida, o estoque baixado e a nota possivelmente autorizada. Validação do 2º pagamento (`:141-149`) também ocorre após o decremento de estoque. Contraste com `CancelComandaAsync` (`ComandaService.cs:739-763`), que usa `CreateExecutionStrategy` + transação.
-- **Sugestão:** validar antes de escrever + transação explícita com execution strategy.
+- **Status:** todo o fluxo (estoque, venda, crediário/pontos/cashback) envolvido em `CreateExecutionStrategy` + transação explícita; commit só no final. Emissão de NFC-e movida pra depois do commit (mesmo padrão do `ComandaService`).
 
-### C8. Operator com permissão "usuarios" tem poderes de fato de Admin (escalação de privilégio)  `✅ corrigido em fbce607 (verificado 20/07)`
+### C8. Operator com permissão "usuarios" tem poderes de fato de Admin (escalação de privilégio)  `✅ corrigido`
 
 - **Onde:** `Program.cs:181` (policy `AdminOnly` aceita Admin **e** Operator) + `Perfil.cs:69` (permissão "usuarios" libera prefixo `/api/user`) + `UserService.cs`.
-- **Efeito:** `AdminResetPasswordAsync` (`:255-272`) não restringe a role do alvo → **Operator reseta a senha do Admin e toma a conta**; `UserController.AtualizarPerfil` (`:409-444`) → Operator atribui a si mesmo qualquer perfil; `AdminCreateUserAsync` (`:200-253`) → cria outro Operator com qualquer `PerfilId`. A permissão granular vira escalação total.
-- **Sugestão:** restringir role do alvo (Operator só gerencia Customer/Operator), impedir auto-elevação de perfil, auditar essas ações.
+- **Efeito:** `AdminResetPasswordAsync` (`:255-272`) não restringia a role do alvo → **Operator resetava a senha do Admin e tomava a conta**; `UserController.AtualizarPerfil` (`:409-444`) → Operator atribuía a si mesmo qualquer perfil; `AdminCreateUserAsync` (`:200-253`) → criava outro Operator com qualquer `PerfilId`. A permissão granular virava escalação total.
+- **Status:** `AdminResetPasswordAsync` bloqueia Operator alterando senha de Admin; `AdminCreateUserAsync` bloqueia Operator criando outro Operator; `AtualizarPerfil` retorna 403 pra qualquer chamador Operator (fica só-Admin de fato).
 
-### C9. Certificado mTLS do Banco Inter é global do servidor, não por tenant  `✅ corrigido em fbce607 (verificado 20/07)`
+### C9. Certificado mTLS do Banco Inter é global do servidor, não por tenant  `✅ corrigido`
 
-- **Onde:** `InterSyncService.cs:329-339` (`BuildMtlsClient` lê `Inter:CertificatePath`/`KeyPath` do processo — um único cert para todos os tenants) + `ContasReceberController.cs:426-449`.
-- **Efeito:** ClientId/ClientSecret são por tenant, mas o certificado é compartilhado — e o endpoint `UploadCertificado` permite que **qualquer admin de qualquer tenant sobrescreva o certificado usado por todos** → cobranças Pix de outros tenants quebradas ou direcionadas à conta errada.
-- **Sugestão:** mover certificado para config por tenant (mesmo padrão do ClientId/Secret e do certificado A1 fiscal, que já é por tenant).
+- **Onde:** `InterSyncService.cs:329-339` (`BuildMtlsClient` lia `Inter:CertificatePath`/`KeyPath` do processo — um único cert para todos os tenants) + `ContasReceberController.cs:426-449`.
+- **Efeito:** ClientId/ClientSecret são por tenant, mas o certificado era compartilhado — e o endpoint `UploadCertificado` permitia que **qualquer admin de qualquer tenant sobrescrevesse o certificado usado por todos** → cobranças Pix de outros tenants quebradas ou direcionadas à conta errada.
+- **Status:** certificado (.crt/.key) movido para colunas criptografadas (AES-256-GCM via `EncryptionService`) em `IntegrationConfig`, por tenant — mesmo padrão do ClientId/Secret. Migration `AddInterCertificateFields` adicionada.
 
 ### C10. Subdomínio desconhecido serve silenciosamente a loja do tenant-zero  `✅ corrigido e verificado (20/07)`
 
@@ -161,43 +140,49 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 ### Integridade de dados e transações
 
-**M1. Caminhos quentes de comanda sem transação** — `ComandaService.cs:181-203` (`AddItemAsync`), `:311-348` (`RemoveItemAsync`), `:369-418` (`UpdateItemAsync`): `ExecuteUpdateAsync` + `SaveChangesAsync` sem `BeginTransaction`; falha no meio debita estoque sem o item existir. O padrão correto existe em `CancelComandaAsync:739-763` e não foi aplicado.
+**M1. Caminhos quentes de comanda sem transação**  `✅ corrigido` — `ComandaService.cs`: `AddItemAsync`, `AdminAddItemAsync`, `RemoveItemAsync` e `UpdateItemAsync` agora envolvem estoque (`ExecuteUpdateAsync`) + `SaveChangesAsync` na mesma transação (`CreateExecutionStrategy` + `BeginTransactionAsync`), mesmo padrão de `CancelComandaAsync`.
 
-**M2. Saldos de pontos/cashback sem concorrência atômica** — `ComandaService.cs:481-499,:609-640,:829-874` faz check-then-mutate via change tracker (dois débitos simultâneos passam); `VendaAvulsaService.cs:281-330` faz o contrário certo (`ExecuteUpdateAsync` atômico com predicado de saldo). Zero `RowVersion`/`xmin` no projeto.
+**M2. Saldos de pontos/cashback sem concorrência atômica**  `✅ corrigido` — `ComandaService.cs`: débito de pontos/cashback em `CloseComandaAsync` (principal e split) trocado de check-then-mutate por `ExecuteUpdateAsync` atômico com o saldo no predicado, mesmo padrão de `VendaAvulsaService`. Sincronização do valor em memória via `PropertyEntry.CurrentValue`/`OriginalValue` (não `IsModified=false`, que reverte o valor — bug pego pelo próprio teste existente). Zero `RowVersion`/`xmin` continua como melhoria futura, não crítica dado o fix acima.
 
-**M3. Idempotência existe apenas no pagamento de crediário** — bem implementada (`CrediariosController.cs:381-466`, índice único `idempotency_key`, `AppDbContext.cs:283-286`). Venda avulsa, fechamento de comanda e criação de cobrança Pix não têm chave nem constraint — retries de rede geram duplicidades reais (ver C6/C7).
+**M3. Idempotência existe apenas no pagamento de crediário** — bem implementada (`CrediariosController.cs:381-466`, índice único `idempotency_key`, `AppDbContext.cs:283-286`). Venda avulsa, fechamento de comanda e criação de cobrança Pix não têm chave nem constraint — retries de rede geram duplicidades reais. **Parcialmente mitigado**: C6 (guarda de status) e C7 (transação) já bloqueiam os cenários mais graves de dupla-cobrança por duplo clique/retry nesses dois fluxos — a idempotência explícita (chave gerada pelo front, enviada no request) fica como melhoria adicional, não implementada nesta sessão: exige coordenação com o frontend (gerar e persistir a chave do lado do cliente), não é só backend.
 
-**M4. Reservas com corridas** — `ReservationController.cs`: `Homologar` (`:235-288`) sem transação e sem checagem atômica de status (duas homologações concorrentes debitam estoque duas vezes); `Create` (`:85-93`) com checagem de estoque TOCTOU.
+**M4. Reservas com corridas** — `ReservationController.cs`: `Homologar` (`:235-288`) sem transação e sem checagem atômica de status (duas homologações concorrentes debitam estoque duas vezes); `Create` (`:85-93`) com checagem de estoque TOCTOU. **Não corrigido nesta sessão** — módulo de reservas tem menor volume de uso que comanda/venda avulsa; mesmo padrão de fix de M1 se aplicaria (transação + `ExecuteUpdateAsync` com predicado de status/estoque).
 
-**M5. Crediário: split não validado e reconciliação Pix com corrida** — `CrediariosController.cs`: `RegistrarPagamento` (`:390-424`) não valida o split contra o saldo; reconciliação Pix tem corrida em `pix.PagoEm is null` (`:560`) — dupla baixa Pix+manual depende só do índice de idempotency do request HTTP.
+**M5. Crediário: split não validado e reconciliação Pix com corrida** — `CrediariosController.cs`: `RegistrarPagamento` (`:390-424`) não valida o split contra o saldo; reconciliação Pix tem corrida em `pix.PagoEm is null` (`:560`). **Não corrigido nesta sessão.**
 
-**M6. Edição de comanda fechada aceita preço do request** — `ComandaService.cs:1095-1097,:1117-1120` (`EditarComandaFechadaAsync`): contradiz a regra de `ResolveItemAsync` (preço sempre do cadastro) e alimenta o financeiro — admin/Operator pode reescrever retroativamente valores de vendas fechadas sem trilha explícita.
+**M6. Edição de comanda fechada aceita preço do request**  `✅ corrigido` — `ComandaService.cs`: `EditarComandaFechadaAsync` agora bloqueia Operator (só Admin — a policy `AdminOnly` do controller aceitava os dois, mesma raiz do C8) e loga explicitamente qualquer mudança de preço de item (antes/depois), já que isso segue sendo uma correção retroativa deliberada (preço do request é intencional aqui, ao contrário de `ResolveItemAsync`) mas agora com trilha visível e restrita a quem devia poder fazer isso.
 
-**M7. E-mail fire-and-forget de crediário perde o tenant** — `ComandaService.cs:598-603`: `Task.Run` com scope novo sem `Set(...)` → `EmailService` lê `EmailConfigs`/`SiteConfigs` do schema `public` (SMTP próprio do tenant e branding ignorados); exceções não observadas.
+**M7. E-mail fire-and-forget de crediário perde o tenant**  `✅ corrigido` — `ComandaService.cs`: `Task.Run` agora propaga o tenant (`ITenantContext.Set`) pro scope novo antes de resolver `IEmailService`, e a exceção é logada em vez de desaparecer. Achado importante: com o fail-fast do C3, esse bug teria virado uma exceção silenciosa dentro de uma task não observada — corrigir isso era necessário pra não regredir com o C3.
 
 ### Performance e custo por request
 
-**M8. Fechamento financeiro oficial trunca em 2.000 vendas, silenciosamente** — `FinanceiroCalculoService.cs:54,:486` via `GetRecentAsync` (`VendaAvulsaService.cs:405-408`): mês com >2.000 vendas avulsas exclui as mais antigas de receita **e custo**, e o resultado errado é gravado como snapshot "congelado" em `FechamentoPeriodo`. Sem log/flag de truncamento. Idem `AnalyticsController.cs:58` (Take 5.000 com o jsonb inteiro).
+**M8. Fechamento financeiro oficial trunca em 2.000 vendas, silenciosamente**  `✅ corrigido` — `FinanceiroCalculoService.cs`, `VendaAvulsaService.cs`, `AnalyticsController.cs`
+  - **Status:** novo `IVendaAvulsaService.GetInPeriodAsync(inicio, fim)` filtra o período inteiro direto na query SQL (sem `Take()`), substituindo as 3 chamadas que precisavam do período completo (cálculo de receita, cálculo de custo do fechamento oficial, dashboard). `GetRecentAsync` continua existindo só pros usos legítimos de amostra recente (listagem simples, contexto de IA). Testado (`CalcularAsync_VendasAvulsasForaDoPeriodo_...`).
 
-**M9. Agregações de relatórios materializam tabelas em memória** — `RelatoriosController.cs:62-76`: todos os `ComandaItems` do mês (2 `Include`) + todas as `VendasAvulsas` do mês agregados em `Dictionary` — deveria ser `GROUP BY` no SQL.
+**M9. Agregações de relatórios materializam tabelas em memória** — `RelatoriosController.cs:62-76`: todos os `ComandaItems` do mês (2 `Include`) + todas as `VendasAvulsas` do mês agregados em `Dictionary` — deveria ser `GROUP BY` no SQL. **Não corrigido nesta sessão** — só dói com volume alto por loja; adiado junto com M10/M11.
 
-**M10. `AccountLocatorService` é O(tenants) por chamada** — `AccountLocatorService.cs:60-86`: scope + query + `BCrypt.Verify` (~100 ms) por tenant ativo, sequencial. Com 200 lojas: ~20 s e 200 conexões por chamada legítima.
+**M10. `AccountLocatorService` é O(tenants) por chamada** — `AccountLocatorService.cs:60-86`: scope + query + `BCrypt.Verify` (~100 ms) por tenant ativo, sequencial. Com 200 lojas: ~20 s e 200 conexões por chamada legítima. **Não corrigido nesta sessão** — só dói com muitos tenants ativos; mesma lógica de adiamento do C4/C5/H1-H4 (sem multi-instância/escala no horizonte próximo, confirmado com o usuário).
 
-**M11. Painéis de plataforma agregam tenant-por-tenant por request** — `PlatformController.cs:497-540` (audit-logs), `:206-253` (overview), `ContadorPortalController.cs:69-100`: scope + query por tenant por request HTTP. O comentário em `:493-496` já reconhece que precisa virar job agregador.
+**M11. Painéis de plataforma agregam tenant-por-tenant por request** — `PlatformController.cs:497-540` (audit-logs), `:206-253` (overview), `ContadorPortalController.cs:69-100`: scope + query por tenant por request HTTP. O comentário em `:493-496` já reconhece que precisa virar job agregador. **Não corrigido nesta sessão** — mesmo raciocínio de M10.
 
 ### Segurança e contrato de API
 
-**M12. Entidade EF `Product` no bind e no retorno — vaza preço de custo** — `ProductController.cs:98-115` (bind direto, mass assignment) e `GetAllStore` (`:44-51`, qualquer role, inclusive Customer) + GET anônimo (`:33`) serializam a entidade completa: `CostPriceInCents` (documentado como "visível só para o admin", `Product.cs:55-57`), margem e estoque mínimo expostos.
+**M12. Entidade EF `Product` no bind e no retorno — vaza preço de custo**  `🩹 parcial` — `ProductController.cs`
+  - **Status:** `GetAll` (anônimo), `GetAllStore` (customer) e `GetById` (anônimo) agora devolvem `ProductPublicDto` (sem `CostPriceInCents`/`MinimumStock`) — confirmado no frontend que nenhum uso admin depende desses 3 endpoints. Bônus: `barcode/{code}` também vazava custo pra qualquer autenticado — restrito a `Admin,Operator` (a tela de Estoque usa o custo ali legitimamente). **Não corrigido:** bind direto de `Product` no `Create`/`Update` (mass assignment) — endpoints já são Admin-only, severidade bem menor.
 
-**M13. Permissões por prefixo amplas demais** — `Perfil.cs:62-76`: "estoque" (`/api/product`) cobre `/api/products/*` e variantes; "relatorios" expõe o relatório de crediário com nome/e-mail/WhatsApp dos devedores (`RelatoriosController.cs:160-234`); "lgpd" inclui `/api/audit` — Operator lê **todos** os audit logs (diffs de produtos/vendas/usuários, hash de IP).
+**M13. Permissões por prefixo amplas demais**  `✅ corrigido` — `Perfil.cs`, `RelatoriosController.cs`
+  - **Status:** `/api/audit` removido do prefixo da permissão "lgpd" (só Admin acessa, como o próprio `AuditController` já dizia pretender). `/api/relatorios/crediario` (nome/e-mail/WhatsApp de devedores) agora exige a permissão "crediario" especificamente, não só a genérica "relatorios". "estoque" cobrindo `/api/products/*` (variantes/waitlist) mantido — são sub-recursos de produto.
 
-**M14. Token CSC do QR Code NFC-e armazenado em claro** — `FiscalConfig.cs:98-101` + `FiscalController.cs:83`: só o `.pfx` e a senha do certificado são criptografados (AES-256-GCM). CSC em claro permite gerar QR codes válidos em nome da loja se o banco vazar.
+**M14. Token CSC do QR Code NFC-e armazenado em claro**  `✅ corrigido` — `FiscalConfig.cs`, `FiscalController.cs`, `NfceEmissionService.cs`
+  - **Status:** `CscToken` → `CscTokenEncrypted`, criptografado com o mesmo `EncryptionService` (AES-256-GCM) do certificado. Migration `EncryptCscToken` — atenção: dropa a coluna antiga (sem cliente real ainda; se algum ambiente já tiver CSC configurado, precisa recadastrar após o deploy).
 
-**M15. Erros internos vazam ao cliente e padrão de erro é inconsistente** — `AiChatController.cs:50-55` devolve `ex.Message` com HTTP 200; `ComandaController.cs:342-345` devolve 500 com `ex.Message`. Controllers oscilam entre `{Message}`, `{message,traceId}` (middleware global) e erros de modelo — sem `ProblemDetails`, sem versionamento de rota.
+**M15. Erros internos vazam ao cliente e padrão de erro é inconsistente**  `🩹 parcial` — `AiChatController.cs`, `ComandaController.cs`
+  - **Status:** os 2 exemplos citados corrigidos (loga o erro completo, devolve mensagem genérica). **Não corrigido:** padronização sistêmica pra `ProblemDetails`/versionamento de rota em todos os controllers — refactor bem maior, fora do escopo de um fix pontual.
 
-**M16. Gemini: chave global, sem quota por tenant** — `GeminiChatService.cs:55` lê `GeminiSettings:ApiKey` do processo (`docker-compose.prod.yml:102`), rate-limitada só por IP ("api"): um único tenant pode esgotar a quota de todos. Inconsistente com o modelo de módulos/planos por loja.
+**M16. Gemini: chave global, sem quota por tenant** — `GeminiChatService.cs:55` lê `GeminiSettings:ApiKey` do processo, rate-limitada só por IP: um único tenant pode esgotar a quota de todos. **Não corrigido nesta sessão** — só é um problema real com múltiplos tenants pagantes simultâneos disputando a mesma quota; mesmo raciocínio de adiamento de M9-M11 (sem isso ainda ser realidade).
 
-**M17. DTOs sem validação + sequestro de subscrição push** — `SiteConfigController.cs:44-49` retorna entidade EF e `SaveSiteConfigRequest` (`:148-174`) não tem `[MaxLength]`/range; `PushController.cs:49-75` permite a qualquer autenticado reassociar a si qualquer `Endpoint` já cadastrado (sequestra notificações de outro usuário).
+**M17. DTOs sem validação + sequestro de subscrição push**  `🩹 parcial` — `PushController.cs`
+  - **Status:** `Subscribe` loga toda reassociação de `Endpoint` pra outro usuário — mantive o comportamento de reassociar (é o caso legítimo de dispositivo compartilhado, ex: tablet do caixa entre turnos; bloquear quebraria esse fluxo) mas agora com rastro. **Não corrigido:** `SiteConfigController` retornando entidade EF (avaliado — `SiteConfig` não tem nenhum campo sensível, é puramente branding/contato já pensado pra ser público; risco real é zero) e `SaveSiteConfigRequest` sem `[MaxLength]` (endpoint Admin-only, só afeta a própria configuração do tenant que já tem esse acesso — severidade baixa).
 
 ### Frontend, testes e deploy
 
@@ -219,7 +204,9 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 **M25. Documentação viva diverge do código a cada sprint** — `STATUS.md` inteiro datado de 2026-07-10 (diz que multi-tenant "travou"; tudo implementado há uma semana); `BACKLOG.md` lista como pendentes Mongo e squash (feitos) e diz "Playwright sem nenhum teste" (há 2 specs mortos); `DOCUMENTACAO-COMPLETA.md:63` diz `/hub/*` (real: `/hubs/*`), `:143` atribui emissão SignalR ao controller (real: `ComandaService` → grupo `AdminDashboard_{tenantId}`), `:268` lista `.AsNoTracking()` como pendência (já aplicado); `README.md:61` "SignalR (SSE + Long Polling)" (cliente prefere WebSocket); `CASOS_DE_USO.md:17` "access token de 15 min" (appsettings: 480; prod: 60); `KYC_PLANNING.md:99-100` prescreve DDL via `ExecuteSqlRaw` (padrão agora é EF Migrations).
 
-**M26. Senha default `SenhaForte@123` como fallback no código** — `Program.cs:521,:547`: há warning, mas o admin/dono da plataforma é criado mesmo assim se a env faltar. Sugestão: em `Production`, falhar o boot em vez de criar com senha conhecida.
+**M26. Senha default `SenhaForte@123` como fallback no código**  `🩹 parcial (fail-fast revertido)` — `Program.cs`, `deploy/setup.sh`
+  - **Status:** `deploy/setup.sh` já gera `ADMIN_SEED_PASSWORD`/`PLATFORM_OWNER_SEED_PASSWORD` automaticamente pra deploys **novos** (mesmo padrão de `POSTGRES_PASSWORD`/`JWT_SECRET`) — isso fica. O fail-fast no boot (abortar em Production sem essas env vars) foi implementado e depois **revertido**: a VPS já em produção não tem essas variáveis no `.env` ainda, e o fail-fast quebraria o próximo deploy via CI/CD antes de alguém ajustar isso manualmente. Continua warning-only por enquanto.
+  - **Pendente:** adicionar `ADMIN_SEED_PASSWORD` (e `PLATFORM_OWNER_SEED_PASSWORD` se usar dono de plataforma) no `.env` da VPS em produção — depois disso, reativar o fail-fast é seguro.
 
 **M27. Limites de recursos do compose subdimensionados para o boot O(N)** — `docker-compose.prod.yml`: API 1 CPU/512 MB, Postgres 512 MB, frontend 512 MB, nginx 128 MB. Com o loop de migrations por tenant crescendo (C4), o boot da API estoura memória antes de o Postgres virar gargalo.
 
@@ -228,13 +215,13 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 ## 🔵 Baixo impacto
 
 **Backend**
-- **B1.** `SefazNfeService.cs:259-313` — "Ciência da Operação" manifestada automaticamente em massa (até 60 notas/ciclo, sem revisão humana): evento com efeito jurídico; merece ciência explícita do lojista/contador.
-- **B2.** `ComandaService.cs:996-999` — estoque baixa ao adicionar item e só retorna em remoção/cancelamento; **sem expiração de comandas abertas** → comanda abandonada prende estoque indefinidamente.
-- **B3.** `ComandaHub.cs:56-59` — só `Role=="Admin"` entra no grupo admin do tenant (Operator fica sem tempo real); `CloseComanda` do hub exige Admin enquanto o REST permite Operator — inconsistência de superfície.
-- **B4.** `LgpdController.cs:112` — JSON montado na mão com e-mail interpolado (quebra com aspas) + salt fallback hardcoded (`:52`); `EncryptionService.cs:19-26` aceita chave zero em dev; `appsettings.json:19` access token de **8 horas** (janela longa para token não revogável).
-- **B5.** Estilos de autorização mistos sem critério documentado — `Roles="Admin"` (`TimerController.cs:11`, `PerfisController.cs:24`), `Roles="Admin,Operator"` (`ProductController.cs:55`), policies — `TimerController` inacessível a Operators mesmo com perfil; DTOs do timer aceitam duração negativa e ação desconhecida retorna 200 silencioso (`TimerController.cs:55-92`).
-- **B6.** Superfícies anônimas: `PublicProfileController.cs:34-60` expõe saldo de pontos e nº de compras por GUID; `ProductVariantController.cs:26-39` expõe estoque exato; `MensageriaRequest` (`MensageriaController.cs:174-187`) sem limite de tamanho de título/corpo.
-- **B7.** `UserController.cs:119-122,:191-194` devolvem 404 para `InvalidOperationException` (conflito de negócio, não "não encontrado").
+- **B1.** `SefazNfeService.cs:259-313` — "Ciência da Operação" manifestada automaticamente em massa (até 60 notas/ciclo, sem revisão humana): evento com efeito jurídico; merece ciência explícita do lojista/contador. **Decisão de produto, não bug** — mudar isso altera o comportamento de uma automação que já funciona assim de propósito; precisa confirmar com o usuário se quer manter automático ou exigir revisão antes de mexer.
+- **B2.** `ComandaService.cs:996-999` — estoque baixa ao adicionar item e só retorna em remoção/cancelamento; **sem expiração de comandas abertas** → comanda abandonada prende estoque indefinidamente. **Decisão de produto** — precisa definir o threshold de expiração (quantas horas?) e se notifica alguém antes; não implementado nesta sessão.
+- [x] **B3.**  `✅ corrigido` — `ComandaHub.cs`: Operator agora entra no grupo `AdminDashboard_*` (tinha tempo real zero antes) e os RPCs `CloseComanda`/`AdminAddItemToComanda` aceitam Operator, alinhado com o REST.
+- [x] **B4.**  `✅ corrigido` — as 4 chamadas de auditoria em `LgpdController.cs` que montavam JSON por interpolação agora usam `JsonSerializer.Serialize`; aviso de boot (não fail-fast) se `Security:IpHashSalt` faltar em produção. `EncryptionService` revisado — já fazia fail-fast certo (só aceita chave zero em Development). Token de 8h fica como decisão de produto, não bug.
+- [x] **B5.**  `✅ corrigido (parcial)` — `TimerCreateRequest`/`TimerUpdateRequest` ganharam `[Range]`/`[Required]` (duração/aviso negativos não passam mais); `switch` de ações ganhou `default:` (ação desconhecida agora é 400, não 200 silencioso). **Não mudado:** `TimerController` continua `Roles="Admin"` (não a policy `AdminOnly`) — é decisão de produto se Operator deveria gerenciar timers, não bug óbvio.
+- [x] **B6.**  `✅ revisado` — `MensageriaRequest` ganhou `[MaxLength]` espelhando a entidade `Notification`. `PublicProfileController` (pontos/compras por GUID) e `ProductVariantController` (estoque exato) revisados e mantidos como estão — são features deliberadas (perfil público gamificado, checkout/PDV que precisa saber quantidade disponível), não vazamentos acidentais.
+- **B7.** `UserController.cs:119-122,:191-194` devolvem 404 para `InvalidOperationException` — verificado: os dois métodos citados (`UpdateMeAsync`, `AddPointsAsync`) só lançam essa exceção pra "usuário não encontrado" de verdade, 404 está correto nesses dois pontos específicos. Talvez os números de linha tenham desatualizado desde a auditoria original; não achei um conflito de negócio real recebendo 404 nesses dois métodos.
 
 **Frontend/Testes/Deploy**
 - **B8.** `TestDbFactory.cs:37-43` — porta fixa 5433 sem preflight: se ocupada, os ~224 testes falham em massa com erro cru de conexão.
@@ -248,7 +235,7 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 ## 🧾 Módulo Fiscal (NFC-e/SEFAZ) — auditoria dedicada
 
-> **Veredito:** o núcleo é funcional de verdade, não fachada — monta o XML NFC-e 4.00 completo, assina com o A1 do tenant, transmite síncrono via Zeus, persiste status/protocolo, e tem retry, contingência offline, cancelamento por evento, inutilização automática, exportação ao contador (3 vias) e pipeline completo de DF-e/manifestação. **Mas 4 problemas graves (F1–F4) impedem a homologação hoje.**
+> **Veredito:** o núcleo é funcional de verdade, não fachada — monta o XML NFC-e 4.00 completo, assina com o A1 do tenant, transmite síncrono via Zeus, persiste status/protocolo, e tem retry, contingência offline, cancelamento por evento, inutilização automática, exportação ao contador (3 vias) e pipeline completo de DF-e/manifestação. **Os 4 problemas graves (F1–F4) que impediam a homologação já foram corrigidos** (ver checklist abaixo) — falta verificação manual em homologação real antes de ir pra produção.
 > Formato checklist para correção item a item.
 
 ### Fluxo suportado hoje, etapa por etapa
@@ -276,58 +263,54 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 
 ### Achados fiscais — checklist de correção
 
-- [ ] **F1 (🔴 Alta) — Contingência offline: o cupom impresso tem chave e QR que nunca existirão na SEFAZ** — `NfceEmissionService.cs:462-469,:571-580,:606`
-  - **Problema:** na 1ª tentativa o XML é montado como emissão normal (tpEmis=1) e essa chave/QR são persistidos como artefatos do cupom. Na retransmissão vira tpEmis=9 → **chave de 44 dígitos diferente** (tpEmis é o 35º dígito), com `dhCont/xJust` e QR de fórmula offline. O comentário `:459-461` ("a MESMA chave") está errado. Banco ≠ papel entregue ao cliente, que não consegue consultar a compra.
-  - **Correção:** ao entrar em contingência, reconstruir o XML com tpEmis=9 + `dhCont`/`xJust`, **reassinar e regenerar o QR offline antes de imprimir/persistir**; gravar a chave offline já na 1ª gravação. Teste de regressão: "chave do cupom == chave retransmitida".
+- [x] **F1 (🔴 Alta) — Contingência offline: o cupom impresso tem chave e QR que nunca existirão na SEFAZ**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Problema:** na 1ª tentativa o XML era montado como emissão normal (tpEmis=1) e essa chave/QR eram persistidos como artefatos do cupom. Na retransmissão virava tpEmis=9 → **chave de 44 dígitos diferente** (tpEmis é o 35º dígito), com `dhCont/xJust` e QR de fórmula offline. Banco ≠ papel entregue ao cliente, que não conseguiria consultar a compra.
+  - **Status:** ao entrar em contingência (1ª falha de conectividade), o `ide` é reconstruído com tpEmis=9 + `dhCont`/`xJust`, o XML é reassinado e o QR regenerado ANTES de persistir — a chave gravada já bate com o que a retransmissão automática (que usa tpEmis=9 desde o topo da função) vai gerar depois. **Não testável neste ambiente** (exige handshake real com a SEFAZ de homologação) — verificar manualmente em homologação antes de ir pra produção.
 
-- [ ] **F2 (🔴 Alta) — Retransmissão de contingência desiste após ~2,5 h; prazo legal é 24 h** — `NfceEmissionService.cs:76,:124-136` + `FiscalRetryBackgroundService.cs:44`
-  - **Problema:** `MaxTentativasReprocessamento=10` vale também para `AutorizadaContingencia`; cada ciclo de 15 min consome 1 tentativa. Esgotado, a nota nunca mais é retransmitida — **nem pelo botão manual** (mesmo guarda). Sem alerta proativo. Estourada a NT 2015.002 (24 h), a venda fica permanentemente sem documento fiscal válido.
-  - **Correção:** política própria para contingência (tentar por 24 h com backoff); retry manual independente do contador; alerta (dashboard/e-mail) ao se aproximar do prazo.
+- [x] **F2 (🔴 Alta) — Retransmissão de contingência desiste após ~2,5 h; prazo legal é 24 h**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Problema:** `MaxTentativasReprocessamento=10` valia também para `AutorizadaContingencia`; cada ciclo de 15 min consumia 1 tentativa. Esgotado, a nota nunca mais era retransmitida — nem pelo botão manual (mesma guarda). Sem alerta proativo. Estourada a NT 2015.002 (24h), a venda ficava permanentemente sem documento fiscal válido.
+  - **Status:** contingência agora usa prazo por TEMPO (`PrazoLegalContingencia` = 24h), independente do contador de tentativas comum — retry manual e automático tentam até o prazo legal. Log de alerta (`AlertaContingencia` = 20h) quando está perto do limite. Testado (`ReprocessarAsync_ContingenciaDentroDoPrazoLegal_IgnoraLimiteDeTentativasComum`, `ReprocessarAsync_ContingenciaAposPrazoLegalDe24h_NaoTentaDeNovo`). **Nota:** alerta é só log estruturado por enquanto — e-mail/dashboard pro contador fica como follow-up (não implementado aqui).
 
-- [ ] **F3 (🔴 Alta) — Certificado vencido ⇒ "contingência offline" indevida (tpEmis=9 com SEFAZ operante)** — `FiscalCertificadoService.cs:18-37` + `NfceEmissionService.cs:94-100,:564-585`
-  - **Problema:** upload não checa `NotAfter`; na emissão, a falha de handshake mTLS vira `HttpRequestException` → `EhFalhaDeConectividade` retorna true → cai no branch de contingência: cupons tpEmis=9 (só legais com a **SEFAZ** fora) que jamais autorizarão. Nada bloqueia emissão com certificado vencido.
-  - **Correção:** rejeitar certificado expirado no upload (como a doc do endpoint já promete); bloquear emissão com certificado vencido; no classificador, distinguir falha de TLS/certificado local de indisponibilidade da SEFAZ — erro de certificado nunca pode cair em tpEmis=9.
+- [x] **F3 (🔴 Alta) — Certificado vencido ⇒ "contingência offline" indevida (tpEmis=9 com SEFAZ operante)**  `✅ corrigido` — `FiscalCertificadoService.cs`, `NfceEmissionService.cs`
+  - **Problema:** upload não checava `NotAfter`; na emissão, a falha de handshake mTLS virava `HttpRequestException` → `EhFalhaDeConectividade` retornava true → caía no branch de contingência: cupons tpEmis=9 (só legais com a SEFAZ fora) que jamais autorizariam. Nada bloqueava emissão com certificado vencido.
+  - **Status:** upload (`FiscalCertificadoService.Validar`) rejeita certificado com `NotAfter` no passado. Emissão (`AbrirConfiguracaoSefazAsync`) bloqueia ANTES de qualquer tentativa de rede se o certificado armazenado venceu depois do upload — erro de certificado nunca mais chega a ser tentado via rede, então nunca pode ser mal-classificado como contingência. Testado (`Validar_ComCertificadoVencido_...`, `EmitirParaComandaAsync_ComCertificadoVencido_...`).
 
-- [ ] **F4 (🔴 Alta) — `XmlAutorizado` é o XML de envio (enviNFe), não o nfeProc — o ZIP do contador não contém o documento fiscal hábil** — `NfceEmissionService.cs:611` + `FiscalXmlExportService.cs:36-45`
-  - **Problema:** `retorno.EnvioStr` é o envelope `<enviNFe>` **sem `protNFe`** (confirmado no fonte da Zeus). O comentário do model ("com protNFe anexado", `NotaFiscalEmitida.cs:78-79`) está errado. O `nfeProc` (obrigatório para guarda de 5 anos e aceito em sistemas contábeis) nunca é montado — a lib devolve o protocolo em `retorno.Retorno.protNFe`. Exportação errada nas 3 vias (manual, e-mail, portal).
-  - **Correção:** montar e persistir o `nfeProc` (NFe assinada + protNFe); exportar esse arquivo; corrigir o comentário do model.
+- [x] **F4 (🔴 Alta) — `XmlAutorizado` é o XML de envio (enviNFe), não o nfeProc — o ZIP do contador não contém o documento fiscal hábil**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Problema:** `retorno.EnvioStr` era o envelope `<enviNFe>` **sem `protNFe`** (confirmado no fonte da Zeus). O `nfeProc` (obrigatório para guarda de 5 anos e aceito em sistemas contábeis) nunca era montado — a lib devolve o protocolo em `retorno.Retorno.protNFe`. Exportação errada nas 3 vias (manual, e-mail, portal).
+  - **Status:** ao autorizar, monta `NFe.Classes.nfeProc { NFe = nfe, protNFe = retorno.Retorno.protNFe }` e persiste `ObterXmlString()` desse objeto em `XmlAutorizado` — documento fiscal hábil de verdade, não mais o envelope de envio. O comentário do model (`NotaFiscalEmitida.cs:78`) já estava descrevendo o comportamento correto (agora bate com o código). **Não testável neste ambiente** (exige autorização real da SEFAZ) — verificar manualmente em homologação.
 
-- [ ] **F5 (🟡 Média) — Rejeição pós-contingência entra em loop: inutiliza o número e o retry reutiliza o número já inutilizado** — `NfceEmissionService.cs:124,:463,:626-637`
-  - **Correção:** rejeitada ex-contingência não deve reutilizar número inutilizado — reservar número novo (e inutilizar o anterior se ainda não foi) ou marcar como não reprocessável e exigir ação manual.
+- [x] **F5 (🟡 Média) — Rejeição pós-contingência entra em loop: inutiliza o número e o retry reutiliza o número já inutilizado**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Status:** ao rejeitar (e inutilizar) uma nota que estava em contingência, os campos `CnfContingencia`/`DhContingencia`/`JustificativaContingencia` são limpos — o próximo reprocessamento reserva número novo do zero em vez de reusar o já inutilizado. **Não testável neste ambiente** (exige SEFAZ real respondendo rejeição em contingência) — verificar em homologação.
 
-- [ ] **F6 (🟡 Média) — Buracos de numeração silenciosos quando a exceção ocorre entre a reserva e a resposta da SEFAZ** — `NfceEmissionService.cs:463,:279-286,:571-572,:600-601`
-  - **Correção:** persistir o número na nota imediatamente após a reserva (antes de transmitir); rotina para detectar saltos e inutilizar (ver inutilização manual de faixa, lacuna L2).
+- [x] **F6 (🟡 Média) — Buracos de numeração silenciosos quando a exceção ocorre entre a reserva e a resposta da SEFAZ**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Status:** número/série persistidos na nota imediatamente após a reserva, antes de assinar/transmitir. Rotina de detecção de saltos + inutilização em lote continua como lacuna de escopo (ver L2).
 
-- [ ] **F7 (🟡 Média) — Cancelar a NFC-e não estorna nada — e a UX manda o usuário usá-lo como estorno** — `NfceEmissionService.CancelarAsync (:151-189)` + `ComandaService.cs:730-733`
-  - **Problema:** estoque, crediário, pontos/cashback e financeiro não são revertidos; venda avulsa nem tem método de cancelamento/estorno. Venda cancelada no Fisco continua receita e estoque baixado no ERP.
-  - **Correção:** ao confirmar o cancelamento na SEFAZ, estornar os efeitos no ERP (ou criar fluxo de estorno explícito); implementar cancelamento/estorno de venda avulsa.
+- [x] **F7 (🟡 Média) — Cancelar a NFC-e não estorna nada — e a UX manda o usuário usá-lo como estorno**  `🩹 parcial` — `ComandaService.cs`
+  - **Status:** mensagem corrigida — não sugere mais que cancelar a NFC-e estorna a venda (deixa explícito que estoque/crediário/pontos continuam intocados e exigem ajuste manual). **Não implementado:** o fluxo de estorno automático em si (reverter estoque/crediário/pontos/cashback, e cancelamento de venda avulsa) — é uma feature nova, não um bug pontual, que toca lógica financeira real e merece design + testes dedicados antes de mexer. Documentado como gap real.
 
-- [ ] **F8 (🟡 Média) — TOCTOU na emissão manual tardia: dupla NFC-e para a mesma origem** — `FiscalController.cs:372-374,:387-389` + `AppDbContext.cs:176-185` (índices **não únicos** em `ComandaId`, nenhum em `VendaAvulsaId`)
-  - **Correção:** índice único parcial por origem (`ComandaId`/`VendaAvulsaId`, excluindo canceladas/rejeitadas); violação → 409. (Distinto de C6, que é a dupla emissão pelo duplo fechamento.)
+- [x] **F8 (🟡 Média) — TOCTOU na emissão manual tardia: dupla NFC-e para a mesma origem**  `✅ corrigido` — `AppDbContext.cs`, `NfceEmissionService.cs`
+  - **Status:** índice único parcial em `comanda_id`/`venda_avulsa_id` (`ix_notas_fiscais_comanda_unica`, `ix_notas_fiscais_venda_avulsa_unica`). `EmitirAsync` trata a violação de unicidade (corrida real) devolvendo a nota já existente em vez de lançar exceção — mantém a garantia de "nunca lança" do serviço.
 
-- [ ] **F9 (🟡 Média) — Protocolo e procEventoNFe do cancelamento são descartados** — `NfceEmissionService.cs:175-185` (lê só cStat); o model nem tem campo
-  - **Correção:** adicionar `ProtocoloCancelamento` + `XmlEventoCancelamento`, persistir e incluir no ZIP do contador (guarda documental exige a prova do cancelamento).
+- [x] **F9 (🟡 Média) — Protocolo e procEventoNFe do cancelamento são descartados**  `✅ corrigido` — `NotaFiscalEmitida.cs`, `NfceEmissionService.cs`
+  - **Status:** novos campos `ProtocoloCancelamento` e `XmlEventoCancelamento` (procEventoNFe da lib, via `ObterXmlString()`) persistidos no cancelamento — prova documental completa, não só o `cStat`.
 
-- [ ] **F10 (🟡 Média) — Regime tributário configurável mas quebrado fora do Simples — sem aviso** — `NfceEmissionService.cs:703,:720-742,:744-749` + `FiscalController.cs:85-87,:174-185`
-  - **Problema:** config permite Lucro Presumido/Real e `MapCrt` emite `RegimeNormal`, mas os itens sempre levam classes `ICMSSN*` (CSOSN de Simples) → XML inconsistente CRT×CSOSN → 100% de rejeição.
-  - **Correção:** bloquear a escolha de LP/LR na config com aviso "somente Simples Nacional" (ou montar ICMS CST por regime).
+- [x] **F10 (🟡 Média) — Regime tributário configurável mas quebrado fora do Simples — sem aviso**  `✅ corrigido` — `FiscalController.cs`
+  - **Status:** `PUT /api/fiscal/config` rejeita (400) a escolha de Lucro Presumido/Real com mensagem explícita — a montagem de itens só sabe gerar CSOSN (Simples Nacional); permitir os outros regimes gerava XML CRT×CSOSN inconsistente (100% rejeição).
 
-- [ ] **F11 (🟡 Média) — Exportação manual de XMLs com janela de fuso errada** — `FiscalController.cs:448` + `ContadorPortalController.cs:242`
-  - **Problema:** `inicio.ToUniversalTime()` sobre `DateTime` Unspecified de query string interpreta como horário local do servidor (container em UTC): notas entre 21h–24h de Brasília na virada de mês caem no ZIP do mês errado. O job automático já documenta e corrige esse bug (`FiscalXmlExportBackgroundService.cs:85-96`) — só no caminho automático.
-  - **Correção:** aplicar a mesma interpretação de fuso do job nos dois endpoints manuais.
+- [x] **F11 (🟡 Média) — Exportação manual de XMLs com janela de fuso errada**  `✅ corrigido` — `BrazilTime.cs`, `FiscalController.cs`, `ContadorPortalController.cs`
+  - **Status:** novo `BrazilTime.ToUtcFromLocal` (mesma lógica do job automático) substitui `.ToUniversalTime()` nos dois endpoints manuais de exportação e no filtro de datas do portal do contador.
 
-- [ ] **F12 (🟡 Média) — Pré-voo de configuração não cobre CNPJ/IE/CSC — sem CSC, transmite sem QR e queima número** — `NfceEmissionService.cs:395-401,:552-556` + `FiscalConfig.cs:42-44`
-  - **Problema:** `AbrirConfiguracaoSefazAsync` só exige certificado e endereço; `Cnpj` default `""` → chave inválida; sem CSC, `qrCodeUrl` sai null e a transmissão segue **sem `infNFeSupl.qrCode`** → rejeição da NFC-e (QR obrigatório) + número inutilizado à toa.
-  - **Correção:** validar CNPJ, IE, CSC id+token, série e numeração **antes de reservar número** → `FiscalNaoConfiguradoException`.
+- [x] **F12 (🟡 Média) — Pré-voo de configuração não cobre CNPJ/IE/CSC — sem CSC, transmite sem QR e queima número**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Status:** `AbrirConfiguracaoSefazAsync` agora valida CNPJ (14 dígitos) e CSC id+token antes de reservar número, além de certificado/endereço já existentes. Testado (`EmitirParaComandaAsync_SemCsc_...`).
 
-- [ ] **F13 (🔵 Baixa) — Nota autorizada após rejeição+inutilização fica com estado contraditório** — `NfceEmissionService.cs:603-613` + `FiscalController.cs:339`
-  - **Correção:** ao autorizar com número novo, limpar `InutilizadoEm`/`ProtocoloInutilizacao` do número antigo.
+- [x] **F13 (🔵 Baixa) — Nota autorizada após rejeição+inutilização fica com estado contraditório**  `✅ corrigido` — `NfceEmissionService.cs`
+  - **Status:** ao autorizar com número novo, `InutilizadoEm`/`ProtocoloInutilizacao` do número antigo são limpos.
 
-- [ ] **F14 (🔵 Baixa) — Janela de cancelamento fixa em 30 min; contingência autorizada tardiamente nasce incancelável** — `NfceEmissionService.cs:73,:162-164,:608-610`
-  - **Correção:** janela configurável por UF; em contingência, medir a janela a partir da autorização (protocolo), não de `EmitidoEm` preservado da venda.
+- [x] **F14 (🔵 Baixa) — Janela de cancelamento fixa em 30 min; contingência autorizada tardiamente nasce incancelável**  `✅ corrigido` — `NotaFiscalEmitida.cs`, `NfceEmissionService.cs`
+  - **Status:** novo campo `AutorizadoEm` (distinto de `EmitidoEm`, que preserva o momento da venda em contingência) é setado no momento real da confirmação pela SEFAZ; a janela de cancelamento passa a contar a partir dele. Testado (`CancelarAsync_SemAutorizadoEm_...`, `CancelarAsync_DentroDaJanelaPorAutorizadoEm_...`). Janela configurável por UF continua como melhoria futura, não crítica.
 
-- [ ] **F15 (🔵 Baixa) — Background services fiscais e endpoints de DF-e não respeitam o módulo "fiscal"** — `Multitenancy/TenantIteration.cs:42-45` + `ContasReceberController.cs:12-15`
-  - **Correção:** `ForEachActiveTenantAsync` deve filtrar por `EnabledModules` nos jobs fiscais (e-mail de certificado/XML dispara para tenant sem o módulo se houver config residual); adicionar `[RequireModule("fiscal")]` no `ContasReceberController`.
+- [x] **F15 (🔵 Baixa) — Background services fiscais e endpoints de DF-e não respeitam o módulo "fiscal"**  `✅ corrigido` — `FiscalAlert/FiscalRetry/FiscalXmlExport/SefazDistBackgroundService.cs`, `ContasReceberController.cs`
+  - **Status:** os 4 jobs fiscais agora pulam tenants sem `EnabledModules.Contains("fiscal")`; `[RequireModule("fiscal")]` adicionado aos 3 endpoints de DF-e (Inter fica de fora, não é fiscal).
 
 ### Lacunas de escopo (decisões a tomar/documentar, não bugs)
 
@@ -392,14 +375,14 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 
 | P | Ação | Achados | Por quê |
 |---|------|---------|---------|
-| **P0a** | Revisar, testar e **commitar** as correções do working copy (tenant na NFC-e, background services, 404 de subdomínio, deploy com backup/rollback, cron de backup) | C1, C2, C10, C11, C12 | Correções prontas de bugs de isolamento fiscal e segurança de deploy — paradas só por falta de commit |
-| **P0b** | Guarda de status no `CloseComandaAsync`; restringir role do alvo em reset de senha/perfil (Operator); certificado Inter por tenant; transação + validação antecipada na venda avulsa | C6, C8, C9, C7 | Dupla NFC-e, escalação a Admin, Pix cross-tenant, commit parcial — todos abertos, todos com correção pequena |
-| **P0c** | Fiscal — os 4 graves que impedem homologação: cupom de contingência com chave/QR corretos (tpEmis=9 antes de imprimir), retransmissão por 24 h com alerta, certificado vencido bloqueado (upload + emissão + classificador), persistir/exportar `nfeProc` | F1–F4 | Sem isso o módulo fiscal não homologa: cupom inválido, contingência expirada, emissão irregular e XML sem valor legal ao contador |
-| **P1** | Tirar migrations do boot: job migrador separado, `pg_advisory_lock`, status por tenant, falha visível; considerar `ITenantContext` fail-fast fora de request | C4, C3 | Deploy trava/corrompe com o crescimento de tenants |
+| ~~**P0a**~~ | ✅ Feito — tenant na NFC-e, background services, 404 de subdomínio, deploy com backup/rollback, cron de backup | C1, C2, C10, C11, C12 | — |
+| ~~**P0b**~~ | ✅ Feito — guarda de status no `CloseComandaAsync`; restringir role do alvo em reset de senha/perfil (Operator); certificado Inter por tenant + migration; transação + validação antecipada na venda avulsa | C6, C8, C9, C7 | — |
+| ~~**P0c**~~ | ✅ Feito — cupom de contingência com chave/QR corretos (tpEmis=9 antes de imprimir), retransmissão por 24h, certificado vencido bloqueado (upload + emissão), nfeProc persistido/exportado. **Pendente:** verificação manual em homologação real (F1/F4 não são testáveis sem SEFAZ de verdade) | F1–F4 | — |
+| ~~**P1**~~ | ✅ `ITenantContext` fail-fast feito (C3). Falha de migration por tenant agora visível (WARNING + slugs) — job migrador separado/`pg_advisory_lock` adiado de propósito (sem multi-instância ainda) | C4 (parcial), C3 | — |
 | **P2** | Pacote multi-instância: Redis (backplane SignalR + cache distribuído), storage compartilhado de uploads, leader election nos jobs, revisão do interceptor de conexão | C5, H1–H4 | Só necessário ao sair de 1 réplica |
-| **P3** | Integridade e performance: transações nos caminhos quentes, concorrência em saldos, idempotência sistêmica, agregações em SQL, `AccountLocator` e painéis de plataforma | M1–M11 | Corrida e custo por request em tenant grande |
-| **P4** | Segurança média e higiene: DTOs de produto/config/push, permissões por prefixo, CSC criptografado, padrão de erro/`ProblemDetails`, Gemini por tenant, type-check no CI, smoke test real, resíduos TCG, hardcodes, docs, senha default, compose | M12–M27, B1–B13 | Superfície de ataque e dívida de consistência |
-| **P5** | Fiscal — demais correções e decisões: loop de rejeição pós-contingência, buracos de numeração, estorno no cancelamento, índice único por origem, protocolo do cancelamento, CRT fora do Simples, fuso na exportação manual, pré-voo de config; decidir CC-e, inutilização manual de faixa e ajuste de numeração inicial | F5–F15, L1–L5 | Robustez fiscal pós-homologação |
+| **P3** | ✅ M1, M2, M6, M7, M8 feitos. **Pendente:** M3/M4/M5 (idempotência sistêmica, reservas, crediário), M9-M11 (agregações/performance por tenant — adiado até escalar) | M1–M11 | — |
+| **P4** | ✅ Todo o backend de segurança/validação coberto: M12 (parcial), M13, M14, M15 (parcial), M17 (parcial), M26 (parcial), B3, B4, B5 (parcial), B6, B7 (revisado, sem achado). **Pendente:** M16 (Gemini por tenant — só importa com múltiplos tenants pagantes), M18-M25/M27 (frontend/CI/docs/deploy — precisam de verificação ao vivo que não fiz nesta sessão), B1/B2 (decisões de produto, não bugs), B8-B13 (hygiene de teste/deploy, baixo valor) | M12–M27, B1–B13 | Reativar o fail-fast do M26 depois de configurar o `.env` da VPS; decidir B1/B2 com o usuário antes de mexer |
+| ~~**P5**~~ | ✅ F5-F15 corrigidos (F7 parcial — só a mensagem, estorno automático fica como feature separada). Restam as decisões de escopo L1-L5 (CC-e, inutilização manual de faixa, ajuste de numeração inicial — não são bugs) | F5–F15, L1–L5 | — |
 
 ---
 

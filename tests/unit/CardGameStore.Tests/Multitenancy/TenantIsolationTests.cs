@@ -120,6 +120,23 @@ public class TenantIsolationTests
 
     // ── Validações defensivas do interceptor ──────────────────────────────────
 
+    [Fact]
+    public void EscopoQueNuncaChamouSet_FalhaRapidoAoAbrirConexao()
+    {
+        // C3: um ITenantContext "cru" (nunca teve Set() chamado) não pode abrir conexão
+        // silenciosamente no default (tenant-zero/public) — todo caminho legítimo do
+        // código (middleware, background services, scopes manuais) sempre chama Set()
+        // explicitamente, mesmo pra tenant-zero. Abrir conexão sem isso é bug de
+        // propagação de tenant, não uso intencional do default.
+        var tenantNuncaSetado = new TenantContext();
+
+        using var db = CreateDbFor(tenantNuncaSetado);
+        var abrirConexao = () => db.Database.OpenConnection();
+
+        abrirConexao.Should().Throw<InvalidOperationException>()
+            .WithMessage("*Set(*", "o interceptor deve barrar antes de sequer tentar o SET search_path");
+    }
+
     [Theory]
     [InlineData("tenant; DROP SCHEMA public")] // injeção via separador SQL
     [InlineData("tenant-com-hifen")]           // hífen não passa na allowlist
