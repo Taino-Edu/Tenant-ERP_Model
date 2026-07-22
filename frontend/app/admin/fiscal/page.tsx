@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { fiscalApi, FiscalConfigDto, IbptStatusDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
+import { fiscalApi, FiscalConfigDto, FiscalSaudeDto, IbptStatusDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
@@ -49,10 +49,37 @@ function fmtDate(d?: string) {
   return new Date(d).toLocaleDateString('pt-BR')
 }
 
+const CHECKLIST_LABELS: Record<string, string> = {
+  Empresa:       'Dados da empresa',
+  Certificado:   'Certificado digital',
+  RegrasFiscais: 'Regra fiscal padrão',
+  Produtos:      'Produtos com NCM',
+  Homologacao:   'Homologação concluída',
+}
+
 export default function FiscalPage() {
   const [config,   setConfig]   = useState<FiscalConfigDto | null>(null)
   const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
+
+  // Visão geral — endpoint agregador de saúde fiscal, carregado à parte do
+  // formulário de configuração pra não bloquear a tela inteira num só loading.
+  const [saude, setSaude] = useState<FiscalSaudeDto | null>(null)
+  const [loadingSaude, setLoadingSaude] = useState(true)
+
+  async function loadSaude() {
+    setLoadingSaude(true)
+    try {
+      const { data } = await fiscalApi.getSaude()
+      setSaude(data)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar visão geral fiscal'))
+    } finally {
+      setLoadingSaude(false)
+    }
+  }
+
+  useEffect(() => { loadSaude() }, [])
 
   // Formulário de dados da empresa
   const [cnpj, setCnpj]                   = useState('')
@@ -562,6 +589,80 @@ export default function FiscalPage() {
           <p className="text-sm text-gray-400">Certificado digital, dados da empresa e naturezas de operação</p>
         </div>
       </div>
+
+      {/* Visão geral — status fiscal, checklist e próxima ação, em poucos segundos */}
+      {loadingSaude ? (
+        <div className="card p-5 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
+      ) : saude && (
+        <div className={clsx(
+          'card p-5 border',
+          saude.status === 'Pronto'        && 'border-green-500/30',
+          saude.status === 'RequerAtencao' && 'border-amber-500/30',
+          saude.status === 'Bloqueado'     && 'border-red-500/30',
+        )}>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div className="flex items-center gap-2">
+              {saude.status === 'Pronto'
+                ? <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
+                : <AlertTriangle className={clsx('w-5 h-5 shrink-0', saude.status === 'Bloqueado' ? 'text-red-400' : 'text-amber-400')} />}
+              <span className={clsx(
+                'font-bold',
+                saude.status === 'Pronto'        && 'text-green-400',
+                saude.status === 'RequerAtencao' && 'text-amber-400',
+                saude.status === 'Bloqueado'     && 'text-red-400',
+              )}>
+                {saude.status === 'Pronto' ? 'Pronto para emitir' : saude.status === 'Bloqueado' ? 'Bloqueado' : 'Requer atenção'}
+              </span>
+              <span className="text-xs text-gray-500">— {saude.ambiente === 'Producao' ? 'Produção' : 'Homologação'}</span>
+            </div>
+            <span className="text-sm text-gray-300">Próxima ação: <strong className="text-white">{saude.proximaAcao}</strong></span>
+          </div>
+
+          {/* Checklist de ativação */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {saude.checklist.map(item => (
+              <span key={item.etapa} className={clsx(
+                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border',
+                item.concluido ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30',
+              )}>
+                {item.concluido ? <Check className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                {CHECKLIST_LABELS[item.etapa] ?? item.etapa}
+              </span>
+            ))}
+          </div>
+
+          {/* Últimas 24h */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="rounded-lg bg-white/5 p-3 text-center">
+              <div className="text-lg font-black text-green-400">{saude.notas.autorizadas24h}</div>
+              <div className="text-xs text-gray-500">Autorizadas 24h</div>
+            </div>
+            <div className="rounded-lg bg-white/5 p-3 text-center">
+              <div className="text-lg font-black text-red-400">{saude.notas.rejeitadas24h}</div>
+              <div className="text-xs text-gray-500">Rejeitadas 24h</div>
+            </div>
+            <div className="rounded-lg bg-white/5 p-3 text-center">
+              <div className="text-lg font-black text-amber-400">{saude.notas.pendentesTotal}</div>
+              <div className="text-xs text-gray-500">Pendentes</div>
+            </div>
+          </div>
+
+          {/* Pendências, ordenadas por impacto (o backend já manda bloqueantes primeiro) */}
+          {saude.pendencias.length > 0 && (
+            <ul className="flex flex-col gap-1.5">
+              {saude.pendencias.map((p, i) => (
+                <li key={i} className={clsx(
+                  'flex items-center gap-2 text-sm rounded-lg px-3 py-2',
+                  p.bloqueia ? 'bg-red-500/10 text-red-300' : 'bg-amber-500/10 text-amber-300',
+                )}>
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  {p.mensagem}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Certificado */}
       <div className={clsx('card p-5', certStatusColor === 'red' && 'border-red-500/30', certStatusColor === 'green' && 'border-green-500/20')}>

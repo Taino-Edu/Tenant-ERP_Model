@@ -50,6 +50,125 @@ public class FiscalController : ControllerBase
         _audit       = audit;
     }
 
+    /// <summary>Agrega configuração, certificado, regra fiscal padrão, produtos e notas das
+    /// últimas 24h num único payload — usado pela tela "Visão geral" pra responder em poucos
+    /// segundos se o fiscal está pronto pra emitir e qual é a próxima ação.</summary>
+    // ── GET /api/fiscal/saude ──────────────────────────────────────────────────
+    [HttpGet("saude")]
+    public async Task<IActionResult> GetSaude(CancellationToken ct)
+    {
+        var cfg = await _db.FiscalConfigs.FindAsync(new object?[] { FiscalConfig.SingletonId }, ct);
+        var temNaturezaPadrao = await _db.NaturezasOperacao.AnyAsync(n => n.IsPadrao, ct);
+        var ibpt = await _ibpt.ObterStatusAsync(ct);
+
+        var empresaCompleta = cfg is not null &&
+            !string.IsNullOrWhiteSpace(cfg.Cnpj) &&
+            !string.IsNullOrWhiteSpace(cfg.RazaoSocial) &&
+            !string.IsNullOrWhiteSpace(cfg.Logradouro) &&
+            !string.IsNullOrWhiteSpace(cfg.CodigoMunicipioIbge) &&
+            !string.IsNullOrWhiteSpace(cfg.Uf);
+
+        var certificadoConfigurado = cfg?.CertificadoConfigurado == true;
+        int? diasParaVencerCertificado = cfg?.CertificadoValidade.HasValue == true
+            ? (int)(cfg.CertificadoValidade!.Value.Date - DateTime.UtcNow.Date).TotalDays
+            : null;
+        var certificadoVencido = diasParaVencerCertificado is < 0;
+        var certificadoPertoDeVencer = diasParaVencerCertificado is >= 0 and <= 30;
+
+        var produtosSemNcm = await _db.Products.CountAsync(p => p.IsActive && string.IsNullOrEmpty(p.Ncm), ct);
+
+        var desde24h = DateTime.UtcNow.AddHours(-24);
+        var notas24h = await _db.NotasFiscaisEmitidas
+            .Where(n => n.CreatedAt >= desde24h)
+            .GroupBy(n => n.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        int Contagem24h(NotaFiscalStatus s) => notas24h.FirstOrDefault(x => x.Status == s)?.Count ?? 0;
+
+        var pendentesQuery = _db.NotasFiscaisEmitidas.Where(n =>
+            n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia);
+        var pendentesCount = await pendentesQuery.CountAsync(ct);
+        var pendenteMaisAntiga = pendentesCount > 0
+            ? await pendentesQuery.OrderBy(n => n.CreatedAt).Select(n => n.CreatedAt).FirstAsync(ct)
+            : (DateTime?)null;
+        var rejeitadas24h = Contagem24h(NotaFiscalStatus.Rejeitada);
+
+        // Checklist de ativação, na ordem em que o lojista deve resolver (seção 4.2 do
+        // wizard: Empresa → Certificado → Regras → Produtos → Homologação/Produção).
+        var checklist = new[]
+        {
+            new { Etapa = "Empresa",       Concluido = empresaCompleta },
+            new { Etapa = "Certificado",   Concluido = certificadoConfigurado && !certificadoVencido },
+            new { Etapa = "RegrasFiscais", Concluido = temNaturezaPadrao },
+            new { Etapa = "Produtos",      Concluido = produtosSemNcm == 0 },
+            new { Etapa = "Homologacao",   Concluido = cfg?.Ambiente == AmbienteFiscal.Producao },
+        };
+
+        // Pendências ordenadas por impacto: primeiro o que bloqueia emissão, depois o
+        // que só requer atenção.
+        var pendencias = new List<object>();
+        if (!empresaCompleta)
+            pendencias.Add(new { Categoria = "ConfiguracaoLoja", Mensagem = "Complete os dados da empresa (CNPJ, endereço, município).", Bloqueia = true });
+        if (!certificadoConfigurado)
+            pendencias.Add(new { Categoria = "ConfiguracaoLoja", Mensagem = "Envie o certificado digital A1.", Bloqueia = true });
+        else if (certificadoVencido)
+            pendencias.Add(new { Categoria = "ConfiguracaoLoja", Mensagem = "O certificado A1 está vencido.", Bloqueia = true });
+        else if (certificadoPertoDeVencer)
+            pendencias.Add(new { Categoria = "ConfiguracaoLoja", Mensagem = $"O certificado A1 vence em {diasParaVencerCertificado} dia(s).", Bloqueia = false });
+        if (!temNaturezaPadrao)
+            pendencias.Add(new { Categoria = "RegraFiscal", Mensagem = "Cadastre uma natureza de operação padrão.", Bloqueia = true });
+        if (produtosSemNcm > 0)
+            pendencias.Add(new { Categoria = "CadastroProduto", Mensagem = $"{produtosSemNcm} produto(s) sem NCM cadastrado.", Bloqueia = false });
+        if (ibpt.ProdutosVencidos > 0)
+            pendencias.Add(new { Categoria = "CadastroProduto", Mensagem = $"{ibpt.ProdutosVencidos} produto(s) com tabela IBPT vencida.", Bloqueia = false });
+        if (pendentesCount > 0)
+            pendencias.Add(new { Categoria = "Comunicacao", Mensagem = $"{pendentesCount} nota(s) pendente(s) ou em contingência.", Bloqueia = false });
+        if (rejeitadas24h > 0)
+            pendencias.Add(new { Categoria = "Comunicacao", Mensagem = $"{rejeitadas24h} nota(s) rejeitada(s) nas últimas 24h.", Bloqueia = false });
+
+        var bloqueado = !empresaCompleta || !certificadoConfigurado || certificadoVencido || !temNaturezaPadrao;
+        var status = bloqueado ? "Bloqueado" : pendencias.Count > 0 ? "RequerAtencao" : "Pronto";
+
+        var proximaAcao =
+            !empresaCompleta ? "Completar dados da empresa" :
+            !certificadoConfigurado || certificadoVencido ? "Enviar certificado A1" :
+            !temNaturezaPadrao ? "Cadastrar natureza fiscal padrão" :
+            produtosSemNcm > 0 ? $"Corrigir {produtosSemNcm} produto(s) sem NCM" :
+            pendentesCount > 0 ? "Reprocessar notas pendentes" :
+            rejeitadas24h > 0 ? "Revisar notas rejeitadas" :
+            "Nenhuma ação necessária";
+
+        return Ok(new
+        {
+            Status    = status,
+            Ambiente  = (cfg?.Ambiente ?? AmbienteFiscal.Homologacao).ToString(),
+            Checklist = checklist,
+            Notas = new
+            {
+                Autorizadas24h          = Contagem24h(NotaFiscalStatus.Autorizada),
+                Rejeitadas24h           = rejeitadas24h,
+                PendentesTotal          = pendentesCount,
+                PendenteMaisAntigaDesde = pendenteMaisAntiga,
+            },
+            Certificado = new
+            {
+                Configurado    = certificadoConfigurado,
+                cfg?.CertificadoValidade,
+                DiasParaVencer = diasParaVencerCertificado,
+                Vencido        = certificadoVencido,
+            },
+            Produtos = new
+            {
+                ibpt.ProdutosAtivos,
+                SemNcm = produtosSemNcm,
+                ibpt.ProdutosPendentes,
+                ibpt.ProdutosVencidos,
+            },
+            Pendencias  = pendencias,
+            ProximaAcao = proximaAcao,
+        });
+    }
+
     /// <summary>Retorna a configuração fiscal da loja (CNPJ, endereço, regime tributário,
     /// certificado, CSC). Nunca inclui a senha do certificado nem o CSC token.</summary>
     // ── GET /api/fiscal/config ────────────────────────────────────────────────
