@@ -753,6 +753,12 @@ public class NfceEmissionService : INfceEmissionService
         }
         catch (Exception ex)
         {
+            // Deixa a causa visível ao admin; sem isso a UI só mostrava
+            // "PendenteEmissao" e o diagnóstico ficava preso no log da VPS.
+            var mensagem = ex.GetBaseException().Message;
+            nota.MotivoRejeicao = $"Falha na emissão: {mensagem[..Math.Min(mensagem.Length, 900)]}";
+            await _db.SaveChangesAsync();
+
             // Nunca deixa a emissão fiscal derrubar o fechamento da venda — mas isso AQUI
             // é um erro de verdade (motor configurado mas falhou), por isso LogError.
             _logger.LogError(ex,
@@ -969,22 +975,16 @@ public class NfceEmissionService : INfceEmissionService
     /// </summary>
     private async Task<int> ReservarProximoNumeroNfceAsync(Guid fiscalConfigId)
     {
-        var conn = _db.Database.GetDbConnection();
-        if (conn.State != System.Data.ConnectionState.Open)
-            await conn.OpenAsync();
-
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
+        // Usa a pipeline do EF para o interceptor de tenant aplicar o search_path.
+        // DbConnection aberta manualmente atualizava o schema public, não a loja.
+        var resultado = await _db.Database.SqlQueryRaw<int?>(
             "UPDATE fiscal_config SET proximo_numero_nfce = proximo_numero_nfce + 1, updated_at = now() " +
-            "WHERE id = @id RETURNING proximo_numero_nfce - 1";
-        var param = cmd.CreateParameter();
-        param.ParameterName = "id";
-        param.Value = fiscalConfigId;
-        cmd.Parameters.Add(param);
+            "WHERE id = {0} RETURNING proximo_numero_nfce - 1 AS \"Value\"",
+            fiscalConfigId)
+            .SingleOrDefaultAsync();
 
-        var resultado = await cmd.ExecuteScalarAsync()
+        return resultado
             ?? throw new InvalidOperationException("Não foi possível reservar o número da NFC-e — FiscalConfig não encontrado.");
-        return Convert.ToInt32(resultado);
     }
 
     private async Task TransmitirAsync(NotaFiscalEmitida nota, DadosEmissao dados)
