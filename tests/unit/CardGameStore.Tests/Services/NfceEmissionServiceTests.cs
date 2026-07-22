@@ -428,7 +428,9 @@ public class NfceEmissionServiceTests
 
     private static NfceEmissionService.ItemFiscal Item(string? csosn, decimal? percentualCredito = null) =>
         new(Nome: "Item Teste", Ncm: "95044000", Cfop: "5102", Csosn: csosn,
-            PercentualCreditoSn: percentualCredito, Quantidade: 1, PrecoUnitarioCentavos: 1000, SubtotalCentavos: 1000);
+            PercentualCreditoSn: percentualCredito, Quantidade: 1, PrecoUnitarioCentavos: 1000, SubtotalCentavos: 1000,
+            PercentualTributosFederais: 10m, PercentualTributosEstaduais: 5m,
+            PercentualTributosMunicipais: 0m, FonteTributos: "Tabela teste 2026");
 
     [Theory]
     [InlineData("8474.31.00", "84743100")]
@@ -444,6 +446,28 @@ public class NfceEmissionServiceTests
         var act = () => NfceEmissionService.SanitizarNcm("123.45");
 
         act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*8 digitos*");
+    }
+
+    [Theory]
+    [InlineData("28.063.00", "2806300")]
+    [InlineData(" 2806300 ", "2806300")]
+    public void SanitizarCest_RemoveFormatacao(string entrada, string esperado)
+    {
+        NfceEmissionService.SanitizarCest(entrada, obrigatorio: true).Should().Be(esperado);
+    }
+
+    [Fact]
+    public void MontarItem_ComIcmsStSemCest_BloqueiaAntesDaEmissao()
+    {
+        var item = Item("202") with
+        {
+            Cfop = "5403", ModalidadeBcSt = 4, PercentualMvaSt = 40m,
+            PercentualReducaoBcSt = 0m, AliquotaIcmsSt = 18m, AliquotaIcmsProprio = 12m,
+        };
+
+        var act = () => NfceEmissionService.MontarItem(item, 1);
+
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*CEST obrigatorio*");
     }
 
     [Theory]
@@ -494,8 +518,38 @@ public class NfceEmissionServiceTests
         var det = NfceEmissionService.MontarItem(item, 1, 125);
 
         det.prod.NCM.Should().Be("84743100");
+        det.prod.CEST.Should().BeNull();
         det.prod.CFOP.Should().Be(5102);
         det.prod.vDesc.Should().Be(1.25m);
+        det.imposto.vTotTrib.Should().Be(1.32m);
+        var xml = DFe.Utils.FuncoesXml.ClasseParaXmlString(det);
+        xml.Should().Contain("<vTotTrib>1.32</vTotTrib>");
+    }
+
+    [Fact]
+    public void CalcularTributosAproximados_UsaValorLiquidoESeparaEsferas()
+    {
+        var tributos = NfceEmissionService.CalcularTributosAproximados(Item("102"), descontoCentavos: 200);
+
+        tributos.Federal.Should().Be(0.80m);
+        tributos.Estadual.Should().Be(0.40m);
+        tributos.Municipal.Should().Be(0m);
+        tributos.Total.Should().Be(1.20m);
+        tributos.Fonte.Should().Be("Tabela teste 2026");
+    }
+
+    [Fact]
+    public void CalcularTributosAproximados_TabelaAutomaticaVencida_BloqueiaDocumento()
+    {
+        var item = Item("102") with
+        {
+            TributosPreenchidosAutomaticamente = true,
+            TributosVigenciaFim = DateTime.UtcNow.AddDays(-2),
+        };
+
+        var act = () => NfceEmissionService.CalcularTributosAproximados(item);
+
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*venceu*");
     }
 
     [Theory]
@@ -568,12 +622,17 @@ public class NfceEmissionServiceTests
             PercentualCreditoSn: null, Quantidade: 1, PrecoUnitarioCentavos: 10000,
             SubtotalCentavos: 10000, OrigemMercadoria: 0, ModalidadeBcSt: 4,
             PercentualMvaSt: 40m, PercentualReducaoBcSt: 0m,
-            AliquotaIcmsSt: 18m, AliquotaIcmsProprio: 12m, AliquotaFcpSt: 2m);
+            AliquotaIcmsSt: 18m, AliquotaIcmsProprio: 12m, AliquotaFcpSt: 2m,
+            Cest: "2806300", PercentualTributosFederais: 10m,
+            PercentualTributosEstaduais: 5m, PercentualTributosMunicipais: 0m,
+            FonteTributos: "Tabela teste 2026");
 
         var det = NfceEmissionService.MontarItem(item, 1);
         var icms = det.imposto.ICMS.TipoICMS.Should().BeOfType<ICMSSN202>().Subject;
 
         icms.CSOSN.Should().Be(Csosnicms.Csosn202);
+        det.prod.CEST.Should().Be("2806300");
+        DFe.Utils.FuncoesXml.ClasseParaXmlString(det).Should().Contain("<CEST>2806300</CEST>");
         icms.vBCST.Should().Be(120.69m);
         icms.vICMSST.Should().Be(11.38m);
         icms.vFCPST.Should().Be(2.41m);
@@ -589,7 +648,10 @@ public class NfceEmissionServiceTests
             PercentualCreditoSn: 2.5m, Quantidade: 1, PrecoUnitarioCentavos: 10000,
             SubtotalCentavos: 10000, ModalidadeBcSt: 6,
             PercentualReducaoBcSt: 0m, AliquotaIcmsSt: 18m,
-            AliquotaIcmsProprio: 12m, AliquotaFcpSt: 0m);
+            AliquotaIcmsProprio: 12m, AliquotaFcpSt: 0m,
+            Cest: "2806300", PercentualTributosFederais: 10m,
+            PercentualTributosEstaduais: 5m, PercentualTributosMunicipais: 0m,
+            FonteTributos: "Tabela teste 2026");
 
         var det = NfceEmissionService.MontarItem(item, 1);
         var icms = det.imposto.ICMS.TipoICMS.Should().BeOfType<ICMSSN201>().Subject;

@@ -151,6 +151,19 @@ export interface Product {
   hasVariants: boolean
   /** NCM (Nomenclatura Comum do Mercosul) — obrigatório para emitir NFC-e deste produto. */
   ncm: string | null
+  /** CEST com 7 digitos; obrigatorio quando a natureza usa ICMS-ST. */
+  cest: string | null
+  percentualTributosFederais: number | null
+  percentualTributosEstaduais: number | null
+  percentualTributosMunicipais: number | null
+  /** Fonte/versao aprovada pelo contador, por exemplo IBPT 26.1.A. */
+  fonteTributos: string | null
+  tributosPreenchidosAutomaticamente: boolean
+  tributosAtualizadosEm: string | null
+  tributosVigenciaInicio: string | null
+  tributosVigenciaFim: string | null
+  ibptVersao: string | null
+  ibptChave: string | null
   /** Natureza de operação (CFOP/CSOSN) usada na emissão fiscal. Null = usa a marcada como padrão. */
   naturezaOperacaoId: string | null
   updatedAt: string; createdAt: string
@@ -1171,6 +1184,24 @@ export interface FiscalConfigDto {
   certificadoValidade?: string
   diasParaVencer?: number
   formasPagamentoAutoEmissao: string[]
+  ibptConfigurado: boolean
+  ibptAutoSyncEnabled: boolean
+  ibptUltimaSincronizacao?: string
+  ibptUltimaVersao?: string
+  ibptVigenciaInicio?: string
+  ibptVigenciaFim?: string
+  ibptUltimoErro?: string
+}
+
+export interface IbptStatusDto {
+  configurado: boolean; autoSyncAtivo: boolean
+  ultimaSincronizacao?: string; ultimaVersao?: string
+  vigenciaInicio?: string; vigenciaFim?: string; ultimoErro?: string
+  produtosAtivos: number; produtosAutomaticos: number; produtosPendentes: number; produtosVencidos: number
+}
+
+export interface IbptSyncResult {
+  total: number; atualizados: number; ignoradosManuais: number; falhas: number; erros: string[]
 }
 
 export interface NaturezaOperacaoDto {
@@ -1212,6 +1243,7 @@ export interface NotaFiscalDto {
 
 export interface CupomItemDto {
   nome: string; quantidade: number; precoUnitarioCentavos: number; subtotalCentavos: number
+  tributosAproximadosCentavos: number
 }
 
 export interface CupomDto {
@@ -1219,6 +1251,8 @@ export interface CupomDto {
   chaveAcesso?: string; protocolo?: string; emitidoEm?: string
   serie: number; numero: number; status: string
   itens: CupomItemDto[]; descontoTotalCentavos: number; valorTotalCentavos: number; formaPagamento: string
+  tributosFederaisCentavos: number; tributosEstaduaisCentavos: number; tributosMunicipaisCentavos: number
+  fontesTributos?: string
   qrCodeUrl?: string
 }
 
@@ -1231,7 +1265,11 @@ export const fiscalApi = {
     cscId: string; cscToken: string
     regimeTributario: string; ambiente: string; serieNfce: number; emailContador: string
     formasPagamentoAutoEmissao: string[]
+    ibptToken: string; ibptAutoSyncEnabled: boolean; removerIbptToken: boolean
   }>) => api.put<FiscalConfigDto>('/api/fiscal/config', body),
+
+  getIbptStatus: () => api.get<IbptStatusDto>('/api/fiscal/ibpt/status'),
+  sincronizarIbpt: () => api.post<IbptSyncResult>('/api/fiscal/ibpt/sincronizar'),
 
   uploadCertificado: (file: File, senha: string) => {
     const form = new FormData()

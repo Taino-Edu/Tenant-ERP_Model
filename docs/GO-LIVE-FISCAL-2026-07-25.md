@@ -8,6 +8,9 @@ chave e protocolo. Nunca anotar senha do A1 ou token CSC neste arquivo.
 
 - [ ] Backup do PostgreSQL concluído e restauração testada.
 - [ ] Migration `20260721152500_HardenFiscalDocuments` aplicada em staging.
+- [ ] Migrations `20260721202936_AddConfigurableTenantTaxProfiles` e
+      `20260722114021_AddCestAndTaxTransparency` e
+      `20260722120251_AddIbptAutomaticTaxFill` aplicadas em todos os schemas ativos.
 - [ ] Tenant correto com módulo `fiscal` habilitado.
 - [ ] CNPJ atual convertido pelo adaptador SEFAZ para 14 dígitos.
 - [ ] Razão social, IE, endereço, CEP, município/IBGE e UF conferidos.
@@ -19,6 +22,14 @@ chave e protocolo. Nunca anotar senha do A1 ou token CSC neste arquivo.
       modalidade BC-ST, MVA, redução, alíquota e FCP aplicáveis; XML homologado confere
       base e valor de ICMS-ST antes da liberação em produção.
 - [ ] Natureza padrão e NCM de todos os produtos do cenário conferidos.
+- [ ] CEST de 7 dígitos conferido em todo produto com CSOSN 201/202/203/500.
+- [ ] Empresa cadastrada no De Olho no Imposto/IBPT e token próprio da loja salvo na
+      configuração fiscal; nunca registrar o token neste checklist.
+- [ ] Sincronização IBPT concluída com versão/vigência atuais, zero produtos pendentes
+      ou vencidos e conferência separada de um item nacional e um importado.
+- [ ] Overrides manuais de percentuais/fonte, se necessários, documentados e validados
+      pelo contador; a API IBPT fornece carga tributária aproximada e não define
+      CSOSN/CST, CEST, ICMS-ST ou a tributação real da empresa.
 - [ ] **IBS/CBS (Reforma Tributária, NT 2025.002):** implementação 2026 presente no
       motor e suportada pelo pacote `Zeus.Net.NFe.NFCe 2026.6.30.1332`. Confirmar no XML
       homologado `CST=000`, `cClassTrib=000001`, IBS-UF 0,1%, IBS-Mun 0%, CBS 0,9%,
@@ -31,6 +42,11 @@ chave e protocolo. Nunca anotar senha do A1 ou token CSC neste arquivo.
 - [ ] Abrir o QR Code e conferir chave, CNPJ, série, número e valor.
 - [ ] Validar o `nfeProc` salvo no validador/XML do contador.
 - [ ] Emitir venda com desconto e confirmar `vProd`, `vDesc`, `vNF` e pagamentos.
+- [ ] Confirmar `prod/CEST` nos itens sujeitos a ST e ausência da tag nos demais.
+- [ ] Confirmar `det/imposto/vTotTrib`, `ICMSTot/vTotTrib`, texto em `infCpl` e valores
+      por item/federal/estadual/municipal no cupom impresso.
+- [ ] Confirmar que fonte e versão IBPT exibidas no cupom correspondem à sincronização
+      vigente e que desconto reduz proporcionalmente a base dos tributos aproximados.
 - [ ] Na mesma venda, confirmar que `gIBSCBS/vBC = vProd - vDesc` por item e que não
       ocorre rejeição 1104.
 - [ ] Emitir venda com pontos/cashback e confirmar total líquido.

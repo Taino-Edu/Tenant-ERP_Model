@@ -35,6 +35,7 @@
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Authentication;
 using System.Security.Cryptography;
+using System.Globalization;
 using System.Text.Json;
 using CardGameStore.Common;
 using CardGameStore.Data;
@@ -57,6 +58,7 @@ using NFe.Classes.Informacoes.Detalhe.Tributacao.Federal.Tipos;
 using NFe.Classes.Informacoes.Emitente;
 using NFe.Classes.Informacoes.Identificacao;
 using NFe.Classes.Informacoes.Identificacao.Tipos;
+using NFe.Classes.Informacoes.Observacoes;
 using NFe.Classes.Informacoes.Pagamento;
 using NFe.Classes.Informacoes.Total;
 using NFe.Classes.Informacoes.Transporte;
@@ -321,6 +323,9 @@ public class NfceEmissionService : INfceEmissionService
         var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
         var endereco = cfg is null ? "" : $"{cfg.Logradouro}, {cfg.Numero} - {cfg.Bairro} - {cfg.Municipio}/{cfg.Uf}";
 
+        var descontos = DistribuirDesconto(dados.Itens, dados.DescontoTotalCentavos);
+        var tributosItens = ObterTributosItensDoSnapshot(nota, dados.Itens, descontos);
+
         return new CupomDto(
             RazaoSocial: cfg?.RazaoSocial ?? "",
             Cnpj:        cfg?.Cnpj ?? "",
@@ -331,11 +336,37 @@ public class NfceEmissionService : INfceEmissionService
             Serie:       nota.Serie ?? 0,
             Numero:      nota.Numero ?? 0,
             Status:      nota.Status.ToString(),
-            Itens:       dados.Itens.Select(i => new CupomItemDto(i.Nome, i.Quantidade, i.PrecoUnitarioCentavos, i.SubtotalCentavos)).ToList(),
+            Itens:       dados.Itens.Select((i, indice) => new CupomItemDto(
+                i.Nome, i.Quantidade, i.PrecoUnitarioCentavos, i.SubtotalCentavos,
+                tributosItens.ElementAtOrDefault(indice))).ToList(),
             DescontoTotalCentavos: dados.DescontoTotalCentavos,
             ValorTotalCentavos: nota.ValorTotalEmCentavos,
             FormaPagamento: dados.FormaPagamento,
+            TributosFederaisCentavos: nota.TributosFederaisEmCentavos,
+            TributosEstaduaisCentavos: nota.TributosEstaduaisEmCentavos,
+            TributosMunicipaisCentavos: nota.TributosMunicipaisEmCentavos,
+            FontesTributos: nota.FontesTributos,
             QrCodeUrl:   nota.UrlQrCode);
+    }
+
+    private static List<int> ObterTributosItensDoSnapshot(
+        NotaFiscalEmitida nota, IReadOnlyList<ItemFiscal> itens, IReadOnlyList<int> descontos)
+    {
+        if (!string.IsNullOrWhiteSpace(nota.TributosItensJson))
+        {
+            try
+            {
+                var snapshot = JsonSerializer.Deserialize<List<int>>(nota.TributosItensJson);
+                if (snapshot is { Count: > 0 }) return snapshot;
+            }
+            catch (JsonException)
+            {
+                // Notas antigas ou snapshot corrompido usam o calculo atual como fallback visual.
+            }
+        }
+
+        return itens.Select((item, indice) =>
+            DecimalParaCentavos(CalcularTributosAproximados(item, descontos[indice]).Total)).ToList();
     }
 
     // ── Orquestração ──────────────────────────────────────────────────────────
@@ -696,7 +727,14 @@ public class NfceEmissionService : INfceEmissionService
         decimal? PercentualMvaSt = null, decimal? PercentualReducaoBcSt = null,
         decimal? AliquotaIcmsSt = null, decimal? AliquotaIcmsProprio = null,
         decimal? AliquotaFcpSt = null, int? BaseStFixaEmCentavos = null,
-        string IbsCbsCst = "000", string IbsCbsClassTrib = "000001");
+        string IbsCbsCst = "000", string IbsCbsClassTrib = "000001",
+        string? Cest = null,
+        decimal? PercentualTributosFederais = null,
+        decimal? PercentualTributosEstaduais = null,
+        decimal? PercentualTributosMunicipais = null,
+        string? FonteTributos = null,
+        bool TributosPreenchidosAutomaticamente = false,
+        DateTime? TributosVigenciaFim = null);
 
     private record DadosEmissao(
         List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
@@ -733,7 +771,7 @@ public class NfceEmissionService : INfceEmissionService
         {
             var regra = item.Product?.NaturezaOperacao ?? padrao;
             return CriarItemFiscal(
-                item.ItemNameSnapshot, item.Product!.Ncm!, item.Quantity,
+                item.ItemNameSnapshot, item.Product!, item.Quantity,
                 item.UnitPriceInCents, item.SubtotalInCents, regra);
         }).ToList();
 
@@ -774,7 +812,7 @@ public class NfceEmissionService : INfceEmissionService
         {
             products.TryGetValue(item.ProductId, out var product);
             return CriarItemFiscal(
-                item.ProductName, product!.Ncm!, item.Quantity,
+                item.ProductName, product!, item.Quantity,
                 item.UnitPriceInCents, item.SubtotalInCents,
                 product?.NaturezaOperacao ?? padrao);
         }).ToList();
@@ -790,10 +828,10 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     private static ItemFiscal CriarItemFiscal(
-        string nome, string ncm, int quantidade, int precoUnitarioCentavos,
+        string nome, Product product, int quantidade, int precoUnitarioCentavos,
         int subtotalCentavos, NaturezaOperacao? regra) => new(
         Nome: nome,
-        Ncm: ncm,
+        Ncm: product.Ncm!,
         Cfop: regra?.Cfop ?? "5102",
         Csosn: regra?.Csosn ?? "102",
         PercentualCreditoSn: regra?.PercentualCreditoIcmsSn,
@@ -809,7 +847,14 @@ public class NfceEmissionService : INfceEmissionService
         AliquotaFcpSt: regra?.AliquotaFcpSt,
         BaseStFixaEmCentavos: regra?.BaseStFixaEmCentavos,
         IbsCbsCst: regra?.IbsCbsCst ?? "000",
-        IbsCbsClassTrib: regra?.IbsCbsClassTrib ?? "000001");
+        IbsCbsClassTrib: regra?.IbsCbsClassTrib ?? "000001",
+        Cest: product.Cest,
+        PercentualTributosFederais: product.PercentualTributosFederais,
+        PercentualTributosEstaduais: product.PercentualTributosEstaduais,
+        PercentualTributosMunicipais: product.PercentualTributosMunicipais,
+        FonteTributos: product.FonteTributos,
+        TributosPreenchidosAutomaticamente: product.TributosPreenchidosAutomaticamente,
+        TributosVigenciaFim: product.TributosVigenciaFim);
 
     // ── Montagem, assinatura e transmissão ─────────────────────────────────────
 
@@ -935,6 +980,25 @@ public class NfceEmissionService : INfceEmissionService
         if (ambiente == TipoAmbiente.Homologacao && detItens.Count > 0)
             detItens[0].prod.xProd = ProdutoHomologacao;
         var totaisIcms = _taxEngine.SomarTotaisIcms(detItens);
+        var tributosPorItem = dados.Itens
+            .Select((item, indice) => CalcularTributosAproximados(item, descontosPorItem[indice]))
+            .ToList();
+        var tributosFederais = tributosPorItem.Sum(t => t.Federal);
+        var tributosEstaduais = tributosPorItem.Sum(t => t.Estadual);
+        var tributosMunicipais = tributosPorItem.Sum(t => t.Municipal);
+        var tributosTotais = tributosFederais + tributosEstaduais + tributosMunicipais;
+        var fontesTributos = string.Join(", ", tributosPorItem.Select(t => t.Fonte).Distinct(StringComparer.OrdinalIgnoreCase));
+        if (fontesTributos.Length > 500)
+            throw new FiscalNaoConfiguradoException(
+                "As fontes de transparencia tributaria da venda ultrapassam 500 caracteres. " +
+                "Padronize a mesma fonte/versao nos produtos antes de emitir.");
+
+        nota.TributosFederaisEmCentavos = DecimalParaCentavos(tributosFederais);
+        nota.TributosEstaduaisEmCentavos = DecimalParaCentavos(tributosEstaduais);
+        nota.TributosMunicipaisEmCentavos = DecimalParaCentavos(tributosMunicipais);
+        nota.FontesTributos = fontesTributos;
+        nota.TributosItensJson = JsonSerializer.Serialize(
+            tributosPorItem.Select(t => DecimalParaCentavos(t.Total)).ToList());
 
         // Mantém número e cNF imutáveis também após rejeição corrigível. O nome da
         // coluna CnfContingencia é preservado por compatibilidade; DhContingencia é
@@ -1037,12 +1101,18 @@ public class NfceEmissionService : INfceEmissionService
                         vFrete   = 0, vSeg = 0, vDesc = valorDesconto, vII = 0, vIPI = 0,
                         vIPIDevol = 0,
                         vPIS     = 0, vCOFINS = 0, vOutro = 0,
+                        vTotTrib = tributosTotais,
                         vNF      = valorTotal,
                     },
                     IBSCBSTot = incluirIbsCbs ? _taxEngine.MontarTotaisIbsCbs2026(detItens) : null,
                 },
                 transp = new transp { modFrete = ModalidadeFrete.mfSemFrete },
                 pag = new List<pag> { new pag { detPag = MontarDetPag(dados, valorTotal) } },
+                infAdic = new infAdic
+                {
+                    infCpl = MontarTextoTransparenciaTributaria(
+                        tributosFederais, tributosEstaduais, tributosMunicipais, fontesTributos),
+                },
             },
         };
 
@@ -1178,6 +1248,18 @@ public class NfceEmissionService : INfceEmissionService
         return digitos;
     }
 
+    internal static string? SanitizarCest(string? cest, bool obrigatorio)
+    {
+        var digitos = new string((cest ?? string.Empty).Where(char.IsDigit).ToArray());
+        if (digitos.Length == 0 && !obrigatorio) return null;
+        if (digitos.Length != 7)
+            throw new FiscalNaoConfiguradoException(
+                obrigatorio
+                    ? "CEST obrigatorio para produto sujeito a ICMS-ST. Informe exatamente 7 digitos no cadastro do produto."
+                    : $"CEST \"{cest}\" invalido. Informe exatamente 7 digitos ou deixe o campo vazio.");
+        return digitos;
+    }
+
     internal static int SanitizarCfop(string cfop)
     {
         var digitos = new string((cfop ?? string.Empty).Where(char.IsDigit).ToArray());
@@ -1233,6 +1315,8 @@ public class NfceEmissionService : INfceEmissionService
             ? item.SubtotalCentavos / 100m
             : calculoSt.ValorOperacaoLiquido + desconto;
         var baseIbsCbs = Math.Max(0, valorProduto - desconto);
+        var tributosAproximados = CalcularTributosAproximados(item, descontoCentavos);
+        var cest = SanitizarCest(item.Cest, CsosnExigeCest(item.Csosn));
 
         return new det
         {
@@ -1244,6 +1328,7 @@ public class NfceEmissionService : INfceEmissionService
                 cEANTrib   = "SEM GTIN",
                 xProd      = item.Nome,
                 NCM        = SanitizarNcm(item.Ncm),
+                CEST       = cest,
                 CFOP       = SanitizarCfop(item.Cfop),
                 uCom       = "UN",
                 qCom       = item.Quantidade,
@@ -1257,6 +1342,7 @@ public class NfceEmissionService : INfceEmissionService
             },
             imposto = new imposto
             {
+                vTotTrib = tributosAproximados.Total,
                 ICMS   = new ICMS { TipoICMS = MontarIcmsSimplesNacional(item, descontoCentavos, calculoSt) },
                 PIS    = new PIS    { TipoPIS    = new PISOutr    { CST = CSTPIS.pis99,    vBC = 0, pPIS    = 0, vPIS    = 0 } },
                 COFINS = new COFINS { TipoCOFINS = new COFINSOutr { CST = CSTCOFINS.cofins99, vBC = 0, pCOFINS = 0, vCOFINS = 0 } },
@@ -1264,6 +1350,50 @@ public class NfceEmissionService : INfceEmissionService
             },
         };
     }
+
+    internal sealed record TributosAproximados(
+        decimal Federal, decimal Estadual, decimal Municipal, string Fonte)
+    {
+        public decimal Total => Federal + Estadual + Municipal;
+    }
+
+    internal static TributosAproximados CalcularTributosAproximados(
+        ItemFiscal item, int descontoCentavos = 0)
+    {
+        if (!item.PercentualTributosFederais.HasValue ||
+            !item.PercentualTributosEstaduais.HasValue ||
+            !item.PercentualTributosMunicipais.HasValue ||
+            string.IsNullOrWhiteSpace(item.FonteTributos))
+            throw new FiscalNaoConfiguradoException(
+                $"Produto \"{item.Nome}\" sem transparencia tributaria configurada. " +
+                "Informe os percentuais federal, estadual e municipal e a fonte/versao em Admin > Estoque.");
+        if (item.TributosPreenchidosAutomaticamente &&
+            item.TributosVigenciaFim is { } fim && fim.Date < BrazilTime.NowBr().Date)
+            throw new FiscalNaoConfiguradoException(
+                $"Tabela IBPT do produto \"{item.Nome}\" venceu em {fim:dd/MM/yyyy}. " +
+                "Sincronize o IBPT em Admin > Fiscal antes de emitir.");
+
+        ValidarPercentualTributario(item.PercentualTributosFederais.Value, "federal", item.Nome);
+        ValidarPercentualTributario(item.PercentualTributosEstaduais.Value, "estadual", item.Nome);
+        ValidarPercentualTributario(item.PercentualTributosMunicipais.Value, "municipal", item.Nome);
+
+        var baseCalculo = Math.Max(0, item.SubtotalCentavos - descontoCentavos) / 100m;
+        return new TributosAproximados(
+            ArredondarTributo(baseCalculo * item.PercentualTributosFederais.Value / 100m),
+            ArredondarTributo(baseCalculo * item.PercentualTributosEstaduais.Value / 100m),
+            ArredondarTributo(baseCalculo * item.PercentualTributosMunicipais.Value / 100m),
+            item.FonteTributos.Trim());
+    }
+
+    private static void ValidarPercentualTributario(decimal percentual, string esfera, string produto)
+    {
+        if (percentual is < 0 or > 100)
+            throw new FiscalNaoConfiguradoException(
+                $"Percentual aproximado {esfera} do produto \"{produto}\" deve ficar entre 0 e 100.");
+    }
+
+    private static bool CsosnExigeCest(string? csosn) =>
+        csosn is "201" or "202" or "203" or "500";
 
     /// <summary>
     /// Tributação integral usada na fase de testes de 2026. Pela regra UB16-10 da
@@ -1350,6 +1480,18 @@ public class NfceEmissionService : INfceEmissionService
 
     private static decimal ArredondarTributo(decimal valor) =>
         Math.Round(valor, 2, MidpointRounding.AwayFromZero);
+
+    private static int DecimalParaCentavos(decimal valor) =>
+        checked((int)Math.Round(valor * 100m, 0, MidpointRounding.AwayFromZero));
+
+    internal static string MontarTextoTransparenciaTributaria(
+        decimal federal, decimal estadual, decimal municipal, string fontes) =>
+        $"Tributos aproximados: Federal R$ {FormatarValorFiscal(federal)}, " +
+        $"Estadual R$ {FormatarValorFiscal(estadual)}, Municipal R$ {FormatarValorFiscal(municipal)}. " +
+        $"Fonte: {fontes}. Lei 12.741/2012.";
+
+    private static string FormatarValorFiscal(decimal valor) =>
+        valor.ToString("F2", CultureInfo.GetCultureInfo("pt-BR"));
 
     internal sealed record CalculoIcmsSt(
         DeterminacaoBaseIcmsSt Modalidade, decimal? Mva, decimal? Reducao,

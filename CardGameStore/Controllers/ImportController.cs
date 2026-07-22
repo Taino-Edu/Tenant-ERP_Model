@@ -87,6 +87,19 @@ public class ImportController : ControllerBase
             var precoPromo = ParseDecimalBr(CsvReader.Cell(row, index, "PrecoPromocional"));
             var estoque    = ParseInt(CsvReader.Cell(row, index, "Estoque")) ?? 0;
             var estoqueMin = ParseInt(CsvReader.Cell(row, index, "EstoqueMinimo")) ?? 5;
+            var ncm = SomenteDigitosOuNull(CsvReader.Cell(row, index, "NCM"));
+            var cest = SomenteDigitosOuNull(CsvReader.Cell(row, index, "CEST"));
+            var tribFederal = ParseDecimalBr(CsvReader.Cell(row, index, "TributosFederaisPercentual"));
+            var tribEstadual = ParseDecimalBr(CsvReader.Cell(row, index, "TributosEstaduaisPercentual"));
+            var tribMunicipal = ParseDecimalBr(CsvReader.Cell(row, index, "TributosMunicipaisPercentual"));
+            var fonteTributos = CsvReader.Cell(row, index, "FonteTributos")?.Trim();
+
+            if (ncm is not null && ncm.Length != 8) { result.Erros.Add(Erro(linha, "NCM deve conter 8 digitos.")); continue; }
+            if (cest is not null && cest.Length != 7) { result.Erros.Add(Erro(linha, "CEST deve conter 7 digitos.")); continue; }
+            if (new[] { tribFederal, tribEstadual, tribMunicipal }.Any(p => p is < 0 or > 100))
+            { result.Erros.Add(Erro(linha, "Percentuais de tributos devem ficar entre 0 e 100.")); continue; }
+            if (fonteTributos?.Length > 100)
+            { result.Erros.Add(Erro(linha, "FonteTributos deve ter no maximo 100 caracteres.")); continue; }
 
             novos.Add(new Product
             {
@@ -94,7 +107,12 @@ public class ImportController : ControllerBase
                 Category          = categoria,
                 Description       = CsvReader.Cell(row, index, "Descricao"),
                 Barcode           = string.IsNullOrWhiteSpace(CsvReader.Cell(row, index, "CodigoBarras")) ? null : CsvReader.Cell(row, index, "CodigoBarras"),
-                Ncm               = string.IsNullOrWhiteSpace(CsvReader.Cell(row, index, "NCM")) ? null : CsvReader.Cell(row, index, "NCM"),
+                Ncm               = ncm,
+                Cest              = cest,
+                PercentualTributosFederais = tribFederal,
+                PercentualTributosEstaduais = tribEstadual,
+                PercentualTributosMunicipais = tribMunicipal,
+                FonteTributos     = string.IsNullOrWhiteSpace(fonteTributos) ? null : fonteTributos,
                 PriceInCents      = (int)Math.Round(precoVenda.Value * 100),
                 CostPriceInCents  = (int)Math.Round(precoCusto * 100),
                 DiscountPriceInCents = precoPromo.HasValue ? (int)Math.Round(precoPromo.Value * 100) : null,
@@ -288,6 +306,12 @@ public class ImportController : ControllerBase
 
     private static int? ParseInt(string? s) =>
         int.TryParse(s?.Trim(), out var v) ? v : null;
+
+    private static string? SomenteDigitosOuNull(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor)) return null;
+        return new string(valor.Where(char.IsDigit).ToArray());
+    }
 
     private static bool? ParseBool(string? s)
     {

@@ -48,11 +48,14 @@ public interface INfceEmissionService
     Task<CupomDto?> ObterCupomAsync(Guid notaId);
 }
 
-public record CupomItemDto(string Nome, int Quantidade, int PrecoUnitarioCentavos, int SubtotalCentavos);
+public record CupomItemDto(
+    string Nome, int Quantidade, int PrecoUnitarioCentavos, int SubtotalCentavos,
+    int TributosAproximadosCentavos);
 
 public record CupomDto(
     string RazaoSocial, string Cnpj, string Endereco,
     string? ChaveAcesso, string? Protocolo, DateTime? EmitidoEm,
     int Serie, int Numero, string Status,
     List<CupomItemDto> Itens, int DescontoTotalCentavos, int ValorTotalCentavos, string FormaPagamento,
-    string? QrCodeUrl);
+    int TributosFederaisCentavos, int TributosEstaduaisCentavos, int TributosMunicipaisCentavos,
+    string? FontesTributos, string? QrCodeUrl);

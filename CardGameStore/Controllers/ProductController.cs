@@ -9,6 +9,7 @@
 // =============================================================================
 
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,10 +22,12 @@ namespace CardGameStore.Controllers;
 public class ProductController : ControllerBase
 {
     private readonly IProductService _service;
+    private readonly IbptTaxService _ibpt;
 
-    public ProductController(IProductService service)
+    public ProductController(IProductService service, IbptTaxService ibpt)
     {
         _service = service;
+        _ibpt = ibpt;
     }
 
     /// <summary>Lista todos os produtos ativos. Acessível por todos.</summary>
@@ -100,6 +103,7 @@ public class ProductController : ControllerBase
     public async Task<IActionResult> Create([FromBody] Product product)
     {
         var created = await _service.CreateAsync(product);
+        await _ibpt.TentarSincronizarProdutoAsync(created.Id, HttpContext.RequestAborted);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -112,7 +116,9 @@ public class ProductController : ControllerBase
     public async Task<IActionResult> Update(Guid id, [FromBody] Product product)
     {
         product.Id = id;
-        return Ok(await _service.UpdateAsync(product));
+        var updated = await _service.UpdateAsync(product);
+        await _ibpt.TentarSincronizarProdutoAsync(updated.Id, HttpContext.RequestAborted);
+        return Ok(await _service.GetByIdAsync(updated.Id));
     }
 
     /// <summary>Desativa um produto (soft delete). Apenas Admin.</summary>

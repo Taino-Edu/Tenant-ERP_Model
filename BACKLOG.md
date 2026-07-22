@@ -194,20 +194,48 @@ Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi fei
   com diagnóstico acionável e sem inventar imposto. O objetivo é ampliar os provedores
   até cobrir ICMS-ST, regimes normais e classificações IBS/CBS por produto/tenant.
 
-Proposta nova da `avaliacao_completa_2esysten.md` (a única seção que difere da
-outra avaliação). Hoje a emissão de NFC-e já existe (Zeus/DFe.NET no
-`NfceEmissionService`), mas o **cálculo de tributos** é fixo (Simples Nacional,
-PIS/COFINS CST 99) e igual pra todo tenant:
+### Concluído em 2026-07-22 — CEST e transparência tributária
+
+- CEST opcional por produto e por tenant, sanitizado para 7 dígitos e obrigatório na
+  emissão quando o CSOSN é 201, 202, 203 ou 500; o XML recebe `prod/CEST`.
+- Percentuais aproximados federal, estadual e municipal e fonte/versão configuráveis
+  por produto. A emissão bloqueia apenas a NFC-e sem esses dados, sem inventar alíquota.
+- `vTotTrib` calculado por item sobre o valor efetivamente pago após desconto, somado em
+  `ICMSTot/vTotTrib` e detalhado em `infCpl` conforme a Lei 12.741/2012.
+- Snapshot dos valores/fontes persistido na nota para o cupom continuar auditável mesmo
+  se a tabela do produto mudar depois. Cupom admin e cliente exibem valor por item e
+  totais federal/estadual/municipal.
+- Importação/exportação CSV inclui CEST, percentuais e fonte.
+
+### Concluído em 2026-07-22 — preenchimento automático pela API IBPT
+
+- Credencial IBPT própria por tenant, armazenada criptografada e nunca devolvida pela
+  API. A chamada usa o CNPJ/UF do emitente e NCM, descrição, unidade, valor e GTIN do
+  produto conforme o contrato oficial do IBPT.
+- Preenchimento automático ao cadastrar/alterar produto e sincronização em lote na tela
+  fiscal. Job periódico opera apenas tenants ativos com módulo fiscal e não deixa a
+  falha de uma loja interromper as demais.
+- Origem da mercadoria seleciona corretamente a alíquota nacional ou importada. Fonte,
+  versão, chave e vigência ficam gravadas no produto para auditoria.
+- Cadastro manual continua permitido como override: sincronizações não sobrescrevem
+  valores completos informados pelo contador. Alterar manualmente percentuais/fonte
+  retira a marca automática; trocar apenas o NCM invalida os valores antigos.
+- Tabela automática vencida bloqueia somente a emissão fiscal do documento afetado,
+  com mensagem acionável. Token não aparece em logs, respostas ou exportações CSV.
+
+Registro histórico da proposta de `avaliacao_completa_2esysten.md`. A emissão usa
+Zeus/DFe.NET e o motor atual já resolve regras configuráveis por natureza/produto no
+schema de cada tenant; os itens abaixo continuam como opções futuras de provedores:
 - Campo `FiscalMode` (`Online` | `Offline` | `Hybrid`) no `FiscalConfig` do
   tenant, com escolha de motor de cálculo por loja.
-- Candidatos avaliados na análise: MotorTributarioNet (cálculo completo,
-  multi-UF), Fiscal.Net, API pública do IBPT (alíquotas por NCM — precisa de
-  cache), Focus NFe (emissão em escala, pago), ACBrNCM (lookup offline).
-- Chaves de API por tenant (`IbptApiKey` etc.) criptografadas — o mecanismo
-  AES-256-GCM com `ENCRYPTION_KEY` já existe e é usado pra certificado/Inter.
+- Candidatos ainda avaliáveis para cálculo completo: MotorTributarioNet (multi-UF),
+  Fiscal.Net, Focus NFe (emissão em escala, pago) e ACBrNCM (lookup offline). A API
+  IBPT já está integrada para transparência tributária aproximada; ela não substitui
+  as regras fiscais da operação nem a validação do contador.
+- Credencial IBPT por tenant já usa o mecanismo AES-256-GCM com `ENCRYPTION_KEY`.
 - Frontend expõe só as opções permitidas ao admin da loja.
-- Escopo a decidir antes de implementar: quais motores entram no MVP e se
-  isso vira módulo de billing (como Fiscal/Estoque já são).
+- Escopo futuro: decidir quais motores de cálculo adicionais entram e se viram módulo
+  de billing. O sincronizador IBPT já respeita o módulo fiscal existente.
 
 ## Concluído (sessão 2026-07-12, achados da análise técnica externa)
 - Documento externo (`analise_tecnica.md`, feito pelo usuário com Gemini/outra

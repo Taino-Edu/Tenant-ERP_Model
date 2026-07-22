@@ -30,11 +30,13 @@ public class FiscalController : ControllerBase
     private readonly INfceEmissionService      _emissao;
     private readonly CatalogDbContext          _catalog;
     private readonly ITenantContext            _tenant;
+    private readonly IbptTaxService            _ibpt;
+    private readonly IAuditService             _audit;
 
     public FiscalController(
         AppDbContext db, EncryptionService enc, FiscalCertificadoService certificado,
         FiscalXmlExportService export, INfceEmissionService emissao,
-        CatalogDbContext catalog, ITenantContext tenant)
+        CatalogDbContext catalog, ITenantContext tenant, IbptTaxService ibpt, IAuditService audit)
     {
         _db          = db;
         _enc         = enc;
@@ -43,6 +45,8 @@ public class FiscalController : ControllerBase
         _emissao     = emissao;
         _catalog     = catalog;
         _tenant      = tenant;
+        _ibpt        = ibpt;
+        _audit       = audit;
     }
 
     /// <summary>Retorna a configuração fiscal da loja (CNPJ, endereço, regime tributário,
@@ -82,6 +86,24 @@ public class FiscalController : ControllerBase
         if (req.CscId               is not null) cfg.CscId               = req.CscId;
         if (req.CscToken            is not null) cfg.CscToken            = _enc.Encrypt(req.CscToken);
 
+        if (req.RemoverIbptToken == true)
+        {
+            cfg.IbptTokenEncrypted = null;
+            cfg.IbptAutoSyncEnabled = false;
+            cfg.IbptUltimoErro = null;
+        }
+        else if (!string.IsNullOrWhiteSpace(req.IbptToken))
+        {
+            cfg.IbptTokenEncrypted = _enc.Encrypt(req.IbptToken.Trim());
+            cfg.IbptUltimoErro = null;
+        }
+        if (req.IbptAutoSyncEnabled.HasValue)
+        {
+            if (req.IbptAutoSyncEnabled.Value && string.IsNullOrWhiteSpace(cfg.IbptTokenEncrypted))
+                return BadRequest(new { Message = "Configure o token IBPT antes de ativar o preenchimento automático." });
+            cfg.IbptAutoSyncEnabled = req.IbptAutoSyncEnabled.Value;
+        }
+
         if (req.RegimeTributario is not null &&
             Enum.TryParse<RegimeTributario>(req.RegimeTributario, out var regime))
             cfg.RegimeTributario = regime;
@@ -103,6 +125,29 @@ public class FiscalController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(ToDto(cfg));
+    }
+
+    [HttpGet("ibpt/status")]
+    public async Task<IActionResult> GetIbptStatus(CancellationToken ct) =>
+        Ok(await _ibpt.ObterStatusAsync(ct));
+
+    /// <summary>Atualiza produtos incompletos ou já gerenciados pelo IBPT. Overrides manuais são preservados.</summary>
+    [HttpPost("ibpt/sincronizar")]
+    public async Task<IActionResult> SincronizarIbpt(CancellationToken ct)
+    {
+        try
+        {
+            var resultado = await _ibpt.SincronizarTodosAsync(ct);
+            await _audit.LogAsync(
+                "SincronizouTributosIbpt", "Product",
+                details: $"atualizados={resultado.Atualizados}; manuais_preservados={resultado.IgnoradosManuais}; falhas={resultado.Falhas}",
+                httpContext: HttpContext);
+            return Ok(resultado);
+        }
+        catch (IbptIntegrationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
     }
 
     /// <summary>Valida e salva o certificado digital A1 (.pfx) usado para assinar NFC-e.
@@ -779,6 +824,13 @@ public class FiscalController : ControllerBase
             FormasPagamentoAutoEmissao = string.IsNullOrWhiteSpace(cfg.FormasPagamentoAutoEmissao)
                 ? Array.Empty<string>()
                 : cfg.FormasPagamentoAutoEmissao.Split(',', StringSplitOptions.RemoveEmptyEntries),
+            IbptConfigurado = cfg.IbptConfigurado,
+            cfg.IbptAutoSyncEnabled,
+            cfg.IbptUltimaSincronizacao,
+            cfg.IbptUltimaVersao,
+            cfg.IbptVigenciaInicio,
+            cfg.IbptVigenciaFim,
+            cfg.IbptUltimoErro,
         };
     }
 }
@@ -804,6 +856,9 @@ public class SaveFiscalConfigRequest
     public string? Ambiente          { get; init; }
     public int?    SerieNfce         { get; init; }
     public string? EmailContador     { get; init; }
+    public string? IbptToken         { get; init; }
+    public bool? IbptAutoSyncEnabled { get; init; }
+    public bool? RemoverIbptToken    { get; init; }
 
     /// <summary>Formas de pagamento que emitem NFC-e automaticamente ao fechar a venda, sem perguntar. Null = não altera.</summary>
     public string[]? FormasPagamentoAutoEmissao { get; init; }

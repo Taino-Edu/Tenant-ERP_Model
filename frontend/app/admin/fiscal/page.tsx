@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
+import { fiscalApi, FiscalConfigDto, IbptStatusDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
@@ -76,6 +76,13 @@ export default function FiscalPage() {
   // CSC (Código de Segurança do Contribuinte) — usado pro QR Code do cupom
   const [cscId, setCscId]       = useState('')
   const [cscToken, setCscToken] = useState('')
+
+  // IBPT / De Olho no Imposto — token nunca volta da API.
+  const [ibptToken, setIbptToken] = useState('')
+  const [ibptAutoSync, setIbptAutoSync] = useState(false)
+  const [ibptStatus, setIbptStatus] = useState<IbptStatusDto | null>(null)
+  const [savingIbpt, setSavingIbpt] = useState(false)
+  const [syncingIbpt, setSyncingIbpt] = useState(false)
 
   // Formas de pagamento que emitem NFC-e sozinhas ao fechar a venda, sem perguntar.
   // Vazio por padrão — o admin decide a cada fechamento via checkbox (ver /admin/comanda
@@ -340,9 +347,10 @@ export default function FiscalPage() {
   async function load() {
     setLoading(true)
     try {
-      const [{ data: cfg }, { data: nats }] = await Promise.all([
+      const [{ data: cfg }, { data: nats }, { data: statusIbpt }] = await Promise.all([
         fiscalApi.getConfig(),
         fiscalApi.listNaturezas(),
+        fiscalApi.getIbptStatus(),
       ])
       setConfig(cfg)
       setCnpj(cfg.cnpj ?? '')
@@ -362,6 +370,8 @@ export default function FiscalPage() {
       setCep(cfg.cep ?? '')
       setCscId(cfg.cscId ?? '')
       setAutoEmit(cfg.formasPagamentoAutoEmissao ?? [])
+      setIbptAutoSync(cfg.ibptAutoSyncEnabled ?? false)
+      setIbptStatus(statusIbpt)
       setNaturezas(nats)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao carregar dados fiscais'))
@@ -382,6 +392,8 @@ export default function FiscalPage() {
         codigoMunicipioIbge, municipio, uf, cep,
         cscId, ...(cscToken ? { cscToken } : {}),
         formasPagamentoAutoEmissao: autoEmit,
+        ibptAutoSyncEnabled: ibptAutoSync,
+        ...(ibptToken ? { ibptToken } : {}),
       })
       setConfig(data)
       toast.success('Configuração fiscal salva!')
@@ -389,6 +401,43 @@ export default function FiscalPage() {
       toast.error(getErrorMessage(err, 'Erro ao salvar configuração fiscal'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveIbptConfig() {
+    setSavingIbpt(true)
+    try {
+      await fiscalApi.saveConfig({
+        ibptAutoSyncEnabled: ibptAutoSync,
+        ...(ibptToken ? { ibptToken } : {}),
+      })
+      setIbptToken('')
+      const { data } = await fiscalApi.getIbptStatus()
+      setIbptStatus(data)
+      toast.success('Integração IBPT salva com segurança.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar integração IBPT'))
+    } finally {
+      setSavingIbpt(false)
+    }
+  }
+
+  async function syncIbpt() {
+    setSyncingIbpt(true)
+    try {
+      if (ibptToken) {
+        await fiscalApi.saveConfig({ ibptToken, ibptAutoSyncEnabled: ibptAutoSync })
+        setIbptToken('')
+      }
+      const { data } = await fiscalApi.sincronizarIbpt()
+      const { data: status } = await fiscalApi.getIbptStatus()
+      setIbptStatus(status)
+      toast.success(`${data.atualizados} produto(s) atualizado(s); ${data.ignoradosManuais} override(s) preservado(s).`)
+      if (data.falhas > 0) toast.error(`${data.falhas} produto(s) falharam. Consulte o status da integração.`)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao sincronizar tabela IBPT'))
+    } finally {
+      setSyncingIbpt(false)
     }
   }
 
@@ -653,6 +702,73 @@ export default function FiscalPage() {
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Salvar
         </button>
+      </div>
+
+      {/* De Olho no Imposto / IBPT */}
+      <div className="card p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-bold text-white">Preenchimento automático — IBPT</h3>
+            <p className="text-xs text-gray-400 mt-1">
+              Consulta a API oficial por NCM, UF e origem da mercadoria. Produtos preenchidos manualmente pelo contador são preservados.
+            </p>
+          </div>
+          <span className={clsx(
+            'text-xs px-2 py-1 rounded border shrink-0',
+            ibptStatus?.configurado
+              ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+              : 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+          )}>
+            {ibptStatus?.configurado ? 'Token configurado' : 'Token pendente'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">Token da empresa no IBPT</label>
+            <input type="password" value={ibptToken} onChange={e => setIbptToken(e.target.value)}
+              placeholder={ibptStatus?.configurado ? '•••••••• (deixe vazio para manter)' : 'Cole o token do De Olho no Imposto'}
+              className="input w-full" autoComplete="new-password" />
+          </div>
+          <label className="flex items-center gap-3 rounded-lg border border-surface-600 bg-surface-700/50 px-3 py-2 cursor-pointer">
+            <input type="checkbox" checked={ibptAutoSync} onChange={e => setIbptAutoSync(e.target.checked)} />
+            <span>
+              <span className="block text-sm text-white font-medium">Preencher automaticamente</span>
+              <span className="block text-xs text-gray-400">Ao criar/alterar produto com NCM e quando a tabela vencer.</span>
+            </span>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-center">
+          <div className="rounded-lg bg-surface-700 p-2"><div className="text-lg font-bold text-white">{ibptStatus?.produtosAutomaticos ?? 0}</div><div className="text-[10px] text-gray-400">Automáticos</div></div>
+          <div className="rounded-lg bg-surface-700 p-2"><div className="text-lg font-bold text-amber-400">{ibptStatus?.produtosPendentes ?? 0}</div><div className="text-[10px] text-gray-400">Pendentes</div></div>
+          <div className="rounded-lg bg-surface-700 p-2"><div className="text-lg font-bold text-red-400">{ibptStatus?.produtosVencidos ?? 0}</div><div className="text-[10px] text-gray-400">Vencidos</div></div>
+          <div className="rounded-lg bg-surface-700 p-2"><div className="text-sm font-bold text-white">{ibptStatus?.ultimaVersao ?? '—'}</div><div className="text-[10px] text-gray-400">Versão</div></div>
+        </div>
+
+        {(ibptStatus?.vigenciaFim || ibptStatus?.ultimaSincronizacao) && (
+          <p className="text-xs text-gray-400 mt-3">
+            {ibptStatus.ultimaSincronizacao && <>Última sincronização: {fmtDate(ibptStatus.ultimaSincronizacao)}. </>}
+            {ibptStatus.vigenciaFim && <>Tabela válida até {fmtDate(ibptStatus.vigenciaFim)}.</>}
+          </p>
+        )}
+        {ibptStatus?.ultimoErro && (
+          <p className="text-xs text-red-400 mt-2">Último erro: {ibptStatus.ultimoErro}</p>
+        )}
+
+        <div className="flex flex-wrap gap-2 mt-4">
+          <button onClick={saveIbptConfig} disabled={savingIbpt} className="btn-secondary">
+            {savingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Salvar integração
+          </button>
+          <button onClick={syncIbpt} disabled={syncingIbpt || (!ibptStatus?.configurado && !ibptToken)} className="btn-primary">
+            {syncingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sincronizar produtos agora
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-500 mt-3">
+          O token é criptografado e nunca é exibido novamente. A fonte, versão, chave e vigência ficam registradas por produto.
+        </p>
       </div>
 
       {/* Emissão automática por forma de pagamento */}
