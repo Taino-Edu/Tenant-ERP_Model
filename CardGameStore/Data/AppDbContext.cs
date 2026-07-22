@@ -59,6 +59,7 @@ public class AppDbContext : DbContext
     public DbSet<FiscalConfig>       FiscalConfigs        { get; set; }
     public DbSet<NaturezaOperacao>   NaturezasOperacao    { get; set; }
     public DbSet<NotaFiscalEmitida>  NotasFiscaisEmitidas { get; set; }
+    public DbSet<InutilizacaoFiscal> InutilizacoesFiscais  { get; set; }
 
     // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
     public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
@@ -194,6 +195,13 @@ public class AppDbContext : DbContext
                   .IsUnique()
                   .HasFilter("chave_acesso IS NOT NULL")
                   .HasDatabaseName("ix_notas_fiscais_chave_acesso");
+        });
+
+        modelBuilder.Entity<InutilizacaoFiscal>(entity =>
+        {
+            entity.HasIndex(i => new { i.Ano, i.Serie, i.NumeroInicial, i.NumeroFinal })
+                  .IsUnique()
+                  .HasDatabaseName("ix_inutilizacoes_fiscais_faixa");
         });
 
         // =====================================================================

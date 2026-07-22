@@ -31,11 +31,13 @@ public class FiscalController : ControllerBase
     private readonly INfceEmissionService      _emissao;
     private readonly CatalogDbContext          _catalog;
     private readonly ITenantContext            _tenant;
+    private readonly IbptTaxService            _ibpt;
+    private readonly IAuditService             _audit;
 
     public FiscalController(
         AppDbContext db, EncryptionService enc, FiscalCertificadoService certificado,
         FiscalXmlExportService export, INfceEmissionService emissao,
-        CatalogDbContext catalog, ITenantContext tenant)
+        CatalogDbContext catalog, ITenantContext tenant, IbptTaxService ibpt, IAuditService audit)
     {
         _db          = db;
         _enc         = enc;
@@ -44,6 +46,8 @@ public class FiscalController : ControllerBase
         _emissao     = emissao;
         _catalog     = catalog;
         _tenant      = tenant;
+        _ibpt        = ibpt;
+        _audit       = audit;
     }
 
     /// <summary>Retorna a configuração fiscal da loja (CNPJ, endereço, regime tributário,
@@ -79,12 +83,28 @@ public class FiscalController : ControllerBase
         if (req.CodigoMunicipioIbge is not null) cfg.CodigoMunicipioIbge = req.CodigoMunicipioIbge;
         if (req.Municipio           is not null) cfg.Municipio           = req.Municipio;
         if (req.Uf                  is not null) cfg.Uf                  = req.Uf.ToUpperInvariant();
-        if (req.Cep                 is not null) cfg.Cep                 = req.Cep.Replace("-", "");
+        if (req.Cep                 is not null) cfg.Cep                 = new string(req.Cep.Where(char.IsDigit).ToArray());
         if (req.CscId               is not null) cfg.CscId               = req.CscId;
-        // M14: criptografado com o mesmo EncryptionService do certificado — em claro, um
-        // vazamento do banco permitiria gerar QR Codes válidos em nome da loja.
+        // CSC e IBPT são segredos independentes, ambos criptografados por tenant.
         if (req.CscToken            is not null) cfg.CscTokenEncrypted   = _enc.Encrypt(req.CscToken);
 
+        if (req.RemoverIbptToken == true)
+        {
+            cfg.IbptTokenEncrypted = null;
+            cfg.IbptAutoSyncEnabled = false;
+            cfg.IbptUltimoErro = null;
+        }
+        else if (!string.IsNullOrWhiteSpace(req.IbptToken))
+        {
+            cfg.IbptTokenEncrypted = _enc.Encrypt(req.IbptToken.Trim());
+            cfg.IbptUltimoErro = null;
+        }
+        if (req.IbptAutoSyncEnabled.HasValue)
+        {
+            if (req.IbptAutoSyncEnabled.Value && string.IsNullOrWhiteSpace(cfg.IbptTokenEncrypted))
+                return BadRequest(new { Message = "Configure o token IBPT antes de ativar o preenchimento automático." });
+            cfg.IbptAutoSyncEnabled = req.IbptAutoSyncEnabled.Value;
+        }
         if (req.RegimeTributario is not null)
         {
             if (!Enum.TryParse<RegimeTributario>(req.RegimeTributario, out var regime))
@@ -122,6 +142,29 @@ public class FiscalController : ControllerBase
         await _db.SaveChangesAsync();
 
         return Ok(ToDto(cfg));
+    }
+
+    [HttpGet("ibpt/status")]
+    public async Task<IActionResult> GetIbptStatus(CancellationToken ct) =>
+        Ok(await _ibpt.ObterStatusAsync(ct));
+
+    /// <summary>Atualiza produtos incompletos ou já gerenciados pelo IBPT. Overrides manuais são preservados.</summary>
+    [HttpPost("ibpt/sincronizar")]
+    public async Task<IActionResult> SincronizarIbpt(CancellationToken ct)
+    {
+        try
+        {
+            var resultado = await _ibpt.SincronizarTodosAsync(ct);
+            await _audit.LogAsync(
+                "SincronizouTributosIbpt", "Product",
+                details: $"atualizados={resultado.Atualizados}; manuais_preservados={resultado.IgnoradosManuais}; falhas={resultado.Falhas}",
+                httpContext: HttpContext);
+            return Ok(resultado);
+        }
+        catch (IbptIntegrationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
     }
 
     /// <summary>Valida e salva o certificado digital A1 (.pfx) usado para assinar NFC-e.
@@ -185,10 +228,8 @@ public class FiscalController : ControllerBase
         return Ok(naturezas);
     }
 
-    /// <summary>CSOSN que o motor de emissão sabe montar sozinho — ver
-    /// NfceEmissionService.MontarIcmsSimplesNacional. 201/202/203 exigem ICMS-ST como
-    /// substituto (MVA, base reduzida) que ninguém aqui calcula, por isso ficam de fora.</summary>
-    private static readonly string[] CsosnSuportados = { "101", "102", "103", "300", "400", "500", "900" };
+    private static readonly string[] CsosnSuportados =
+        { "101", "102", "103", "201", "202", "203", "300", "400", "500", "900" };
 
     private BadRequestObjectResult? ValidarCsosn(string? csosn)
     {
@@ -196,11 +237,51 @@ public class FiscalController : ControllerBase
         if (!CsosnSuportados.Contains(csosn))
             return BadRequest(new
             {
-                Message = csosn is "201" or "202" or "203"
-                    ? $"CSOSN {csosn} exige ICMS-ST como substituto tributário (MVA, base reduzida) — este sistema não calcula isso sozinho. Consulte o contador ou use um CSOSN sem ICMS-ST."
-                    : $"CSOSN \"{csosn}\" não é suportado. Use um destes: {string.Join(", ", CsosnSuportados)}."
+                Message = $"CSOSN \"{csosn}\" não é suportado. Use um destes: {string.Join(", ", CsosnSuportados)}."
             });
         return null;
+    }
+
+    private BadRequestObjectResult? ValidarRegraFiscal(SaveNaturezaRequest req)
+    {
+        if (ValidarCsosn(req.Csosn) is BadRequestObjectResult erro) return erro;
+        if (req.OrigemMercadoria is < 0 or > 8)
+            return BadRequest(new { Message = "Origem da mercadoria deve estar entre 0 e 8." });
+        if (req.IbsCbsCst is null || req.IbsCbsCst.Length != 3 || !req.IbsCbsCst.All(char.IsDigit))
+            return BadRequest(new { Message = "CST IBS/CBS deve conter 3 dígitos." });
+        if (req.IbsCbsClassTrib is null || req.IbsCbsClassTrib.Length != 6 || !req.IbsCbsClassTrib.All(char.IsDigit))
+            return BadRequest(new { Message = "cClassTrib IBS/CBS deve conter 6 dígitos." });
+
+        if (req.Csosn is "201" or "202" or "203")
+        {
+            if (req.ModalidadeBcSt is null or < 0 or > 6)
+                return BadRequest(new { Message = "ICMS-ST exige modalidade da BC-ST entre 0 e 6." });
+            if (req.AliquotaIcmsSt is null or <= 0 || req.AliquotaIcmsProprio is null or < 0)
+                return BadRequest(new { Message = "ICMS-ST exige alíquota ST e alíquota da operação própria." });
+            if (req.ModalidadeBcSt == 4 && req.PercentualMvaSt is null or < 0)
+                return BadRequest(new { Message = "Modalidade MVA exige o percentual de MVA-ST." });
+            if (req.ModalidadeBcSt is 0 or 1 or 2 or 3 or 5 && req.BaseStFixaEmCentavos is null or <= 0)
+                return BadRequest(new { Message = "A modalidade selecionada exige base/pauta ST fixa por unidade." });
+        }
+        return null;
+    }
+
+    private static void AplicarRegraFiscal(NaturezaOperacao natureza, SaveNaturezaRequest req)
+    {
+        natureza.Descricao = req.Descricao;
+        natureza.Cfop = req.Cfop;
+        natureza.Csosn = req.Csosn;
+        natureza.PercentualCreditoIcmsSn = req.Csosn is "101" or "201" ? req.PercentualCreditoSn : null;
+        natureza.OrigemMercadoria = req.OrigemMercadoria;
+        natureza.ModalidadeBcSt = req.ModalidadeBcSt;
+        natureza.PercentualMvaSt = req.PercentualMvaSt;
+        natureza.PercentualReducaoBcSt = req.PercentualReducaoBcSt;
+        natureza.AliquotaIcmsSt = req.AliquotaIcmsSt;
+        natureza.AliquotaIcmsProprio = req.AliquotaIcmsProprio;
+        natureza.AliquotaFcpSt = req.AliquotaFcpSt;
+        natureza.BaseStFixaEmCentavos = req.BaseStFixaEmCentavos;
+        natureza.IbsCbsCst = req.IbsCbsCst;
+        natureza.IbsCbsClassTrib = req.IbsCbsClassTrib;
     }
 
     /// <summary>Cria uma natureza de operação (CFOP/CSOSN). Marcar como padrão desmarca
@@ -211,16 +292,13 @@ public class FiscalController : ControllerBase
     public async Task<IActionResult> CreateNatureza([FromBody] SaveNaturezaRequest req)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
-        if (ValidarCsosn(req.Csosn) is BadRequestObjectResult erro) return erro;
+        if (ValidarRegraFiscal(req) is BadRequestObjectResult erro) return erro;
 
         var natureza = new NaturezaOperacao
         {
-            Descricao = req.Descricao,
-            Cfop      = req.Cfop,
-            Csosn     = req.Csosn,
-            PercentualCreditoIcmsSn = req.Csosn == "101" ? req.PercentualCreditoSn : null,
             IsPadrao  = req.IsPadrao,
         };
+        AplicarRegraFiscal(natureza, req);
 
         // Trocar o padrão (limpar os outros + gravar este) precisa ser atômico:
         // duas requisições concorrentes marcando padrão=true só podem ter uma vencedora
@@ -266,15 +344,12 @@ public class FiscalController : ControllerBase
     [HttpPut("naturezas-operacao/{id:guid}")]
     public async Task<IActionResult> UpdateNatureza(Guid id, [FromBody] SaveNaturezaRequest req)
     {
-        if (ValidarCsosn(req.Csosn) is BadRequestObjectResult erro) return erro;
+        if (ValidarRegraFiscal(req) is BadRequestObjectResult erro) return erro;
 
         var natureza = await _db.NaturezasOperacao.FindAsync(id);
         if (natureza is null) return NotFound();
 
-        natureza.Descricao = req.Descricao;
-        natureza.Cfop      = req.Cfop;
-        natureza.Csosn     = req.Csosn;
-        natureza.PercentualCreditoIcmsSn = req.Csosn == "101" ? req.PercentualCreditoSn : null;
+        AplicarRegraFiscal(natureza, req);
         natureza.UpdatedAt = DateTime.UtcNow;
 
         // AppDbContext usa EnableRetryOnFailure — precisa rodar através de
@@ -356,6 +431,8 @@ public class FiscalController : ControllerBase
                 n.EmitidoEm,
                 n.CanceladoEm,
                 n.InutilizadoEm,
+                n.ErpEstornadoEm,
+                n.ErpEstornoErro,
                 n.TentativasReprocessamento,
                 n.CreatedAt,
             })
@@ -434,7 +511,53 @@ public class FiscalController : ControllerBase
         try
         {
             var nota = await _emissao.CancelarAsync(id, req.Justificativa);
-            return Ok(new { nota.Id, Status = nota.Status.ToString() });
+            return Ok(new
+            {
+                nota.Id,
+                Status = nota.Status.ToString(),
+                nota.ErpEstornadoEm,
+                nota.ErpEstornoErro,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>Inutiliza na SEFAZ uma faixa de numeração que foi abandonada e não
+    /// contém documento autorizado. A operação é fiscalmente irreversível.</summary>
+    [HttpPost("inutilizacoes")]
+    public async Task<IActionResult> InutilizarFaixa([FromBody] InutilizarFaixaRequest req)
+    {
+        try
+        {
+            var registro = await _emissao.InutilizarFaixaAsync(
+                req.Ano, req.Serie, req.NumeroInicial, req.NumeroFinal, req.Justificativa);
+            return Ok(new
+            {
+                registro.Id,
+                registro.Ano,
+                registro.Serie,
+                registro.NumeroInicial,
+                registro.NumeroFinal,
+                registro.Protocolo,
+                registro.InutilizadoEm,
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    [HttpPost("notas/{id:guid}/reprocessar-estorno-erp")]
+    public async Task<IActionResult> ReprocessarEstornoErp(Guid id)
+    {
+        try
+        {
+            var nota = await _emissao.ReprocessarEstornoErpAsync(id);
+            return Ok(new { nota.Id, nota.ErpEstornadoEm, nota.ErpEstornoErro });
         }
         catch (InvalidOperationException ex)
         {
@@ -456,19 +579,16 @@ public class FiscalController : ControllerBase
     /// <summary>Gera um .zip com os XMLs de todas as NFC-e emitidas no período, pra
     /// entregar ao contador.</summary>
     /// <param name="inicio">Data inicial do período (inclusive).</param>
-    /// <param name="fim">Data final do período — deve ser depois de <paramref name="inicio"/>.</param>
+    /// <param name="fim">Data final do período (inclusive).</param>
     // ── GET /api/fiscal/exportar-xmls?inicio=&fim= ────────────────────────────
     [HttpGet("exportar-xmls")]
     public async Task<IActionResult> ExportarXmls([FromQuery] DateTime inicio, [FromQuery] DateTime fim)
     {
-        if (fim <= inicio)
-            return BadRequest(new { Message = "O período final deve ser depois do inicial." });
+        if (fim.Date < inicio.Date)
+            return BadRequest(new { Message = "O período final não pode ser anterior ao inicial." });
 
-        // F11: inicio/fim chegam do query string com Kind=Unspecified — .ToUniversalTime()
-        // assumiria o fuso do SERVIDOR (UTC em container), não o de Brasília, deslocando a
-        // janela em 3h (notas entre 21h-24h de Brasília caindo no ZIP do dia/mês errado). O job
-        // automático (FiscalXmlExportBackgroundService) já fazia essa conversão certa.
-        var zipBytes = await _export.GerarZipAsync(BrazilTime.ToUtcFromLocal(inicio), BrazilTime.ToUtcFromLocal(fim));
+        var (inicioUtc, fimExclusivoUtc) = FiscalXmlExportService.NormalizarPeriodoInclusivo(inicio, fim);
+        var zipBytes = await _export.GerarZipAsync(inicioUtc, fimExclusivoUtc);
         var fileName = $"xmls-fiscais-{inicio:yyyy-MM-dd}-a-{fim:yyyy-MM-dd}.zip";
 
         return File(zipBytes, "application/zip", fileName);
@@ -721,6 +841,13 @@ public class FiscalController : ControllerBase
             FormasPagamentoAutoEmissao = string.IsNullOrWhiteSpace(cfg.FormasPagamentoAutoEmissao)
                 ? Array.Empty<string>()
                 : cfg.FormasPagamentoAutoEmissao.Split(',', StringSplitOptions.RemoveEmptyEntries),
+            IbptConfigurado = cfg.IbptConfigurado,
+            cfg.IbptAutoSyncEnabled,
+            cfg.IbptUltimaSincronizacao,
+            cfg.IbptUltimaVersao,
+            cfg.IbptVigenciaInicio,
+            cfg.IbptVigenciaFim,
+            cfg.IbptUltimoErro,
         };
     }
 }
@@ -746,6 +873,9 @@ public class SaveFiscalConfigRequest
     public string? Ambiente          { get; init; }
     public int?    SerieNfce         { get; init; }
     public string? EmailContador     { get; init; }
+    public string? IbptToken         { get; init; }
+    public bool? IbptAutoSyncEnabled { get; init; }
+    public bool? RemoverIbptToken    { get; init; }
 
     /// <summary>Formas de pagamento que emitem NFC-e automaticamente ao fechar a venda, sem perguntar. Null = não altera.</summary>
     public string[]? FormasPagamentoAutoEmissao { get; init; }
@@ -754,6 +884,17 @@ public class SaveFiscalConfigRequest
 public class CancelarNotaRequest
 {
     [Required, MinLength(15)]
+    public string Justificativa { get; init; } = "";
+}
+
+public class InutilizarFaixaRequest
+{
+    public int Ano { get; init; }
+    public int Serie { get; init; }
+    public int NumeroInicial { get; init; }
+    public int NumeroFinal { get; init; }
+
+    [Required, MinLength(15), MaxLength(255)]
     public string Justificativa { get; init; } = "";
 }
 
@@ -771,6 +912,36 @@ public class SaveNaturezaRequest
     /// <summary>% de crédito de ICMS (pCredSN) — só considerado quando Csosn = "101".</summary>
     [Range(0, 100)]
     public decimal? PercentualCreditoSn { get; init; }
+
+    [Range(0, 8)]
+    public int OrigemMercadoria { get; init; } = 0;
+
+    [Range(0, 6)]
+    public int? ModalidadeBcSt { get; init; }
+
+    [Range(0, 1000)]
+    public decimal? PercentualMvaSt { get; init; }
+
+    [Range(0, 100)]
+    public decimal? PercentualReducaoBcSt { get; init; }
+
+    [Range(0, 100)]
+    public decimal? AliquotaIcmsSt { get; init; }
+
+    [Range(0, 100)]
+    public decimal? AliquotaIcmsProprio { get; init; }
+
+    [Range(0, 100)]
+    public decimal? AliquotaFcpSt { get; init; }
+
+    [Range(1, int.MaxValue)]
+    public int? BaseStFixaEmCentavos { get; init; }
+
+    [Required, RegularExpression("^[0-9]{3}$")]
+    public string IbsCbsCst { get; init; } = "000";
+
+    [Required, RegularExpression("^[0-9]{6}$")]
+    public string IbsCbsClassTrib { get; init; } = "000001";
 
     public bool IsPadrao { get; init; }
 }

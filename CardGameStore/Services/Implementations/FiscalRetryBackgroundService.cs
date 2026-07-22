@@ -30,7 +30,7 @@ public class FiscalRetryBackgroundService : BackgroundService
         {
             try
             {
-                await _scopeFactory.ForEachActiveTenantAsync(_logger, ReprocessarPendentesAsync, ct);
+                await _scopeFactory.ForEachActiveTenantAsync(_logger, ReprocessarPendentesAsync, ct, requiredModule: "fiscal");
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -62,7 +62,16 @@ public class FiscalRetryBackgroundService : BackgroundService
             .Select(n => n.Id)
             .ToListAsync(ct);
 
-        if (pendentesIds.Count == 0) return;
+        var estornosPendentesIds = await db.NotasFiscaisEmitidas
+            .Where(n => n.Status == NotaFiscalStatus.Cancelada && n.ErpEstornadoEm == null)
+            .OrderBy(n => n.CanceladoEm)
+            .Take(50)
+            .Select(n => n.Id)
+            .ToListAsync(ct);
+
+        if (pendentesIds.Count == 0 && estornosPendentesIds.Count == 0) return;
+
+        await AlertarContingenciasCriticasAsync(db, ct);
 
         int autorizadas = 0;
         foreach (var id in pendentesIds)
@@ -71,8 +80,51 @@ public class FiscalRetryBackgroundService : BackgroundService
             if (nota.Status == NotaFiscalStatus.Autorizada) autorizadas++;
         }
 
+        foreach (var id in estornosPendentesIds)
+            await emissao.ReprocessarEstornoErpAsync(id);
+
         _logger.LogInformation(
             "Reprocessamento automático: {Total} pendente(s) verificada(s), {Autorizadas} autorizada(s) agora.",
             pendentesIds.Count, autorizadas);
+    }
+
+    private static async Task AlertarContingenciasCriticasAsync(AppDbContext db, CancellationToken ct)
+    {
+        var limite = DateTime.UtcNow.AddHours(-20);
+        var criticas = await db.NotasFiscaisEmitidas
+            .Where(n => n.Status == NotaFiscalStatus.AutorizadaContingencia &&
+                        n.DhContingencia != null && n.DhContingencia <= limite)
+            .OrderBy(n => n.DhContingencia)
+            .Select(n => new { n.Id, n.Numero, n.DhContingencia })
+            .Take(20)
+            .ToListAsync(ct);
+        if (criticas.Count == 0) return;
+
+        // Evita uma notificação nova a cada ciclo de 15 minutos.
+        var dedupeDesde = DateTime.UtcNow.AddHours(-6);
+        var jaAlertou = await db.Notifications.AnyAsync(
+            n => n.Title == "NFC-e em contingência crítica" && n.CreatedAt >= dedupeDesde, ct);
+        if (jaAlertou) return;
+
+        var admins = await db.Users
+            .Where(u => u.Role == UserRole.Admin && u.IsActive)
+            .Select(u => u.Id)
+            .ToListAsync(ct);
+        var maisAntiga = criticas[0];
+        var horas = maisAntiga.DhContingencia.HasValue
+            ? (int)Math.Floor((DateTime.UtcNow - maisAntiga.DhContingencia.Value).TotalHours)
+            : 20;
+
+        foreach (var adminId in admins)
+        {
+            db.Notifications.Add(new Notification
+            {
+                UserId = adminId,
+                Title = "NFC-e em contingência crítica",
+                Body = $"{criticas.Count} NFC-e(s) aguardam autorização. A mais antiga está há {horas}h em contingência. Verifique antes do prazo de 24h.",
+                Link = "/admin/fiscal",
+            });
+        }
+        await db.SaveChangesAsync(ct);
     }
 }

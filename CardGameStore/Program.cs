@@ -313,6 +313,15 @@ builder.Services.AddHttpClient("gemini", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+// IBPT — token vai na query string por exigência do contrato legado da API.
+// Remove os loggers do HttpClient para a credencial nunca aparecer em logs de URL.
+builder.Services.AddHttpClient("ibpt", client =>
+{
+    client.BaseAddress = new Uri("https://apidoni.ibpt.org.br/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).RemoveAllLoggers();
+
 // ---------------------------------------------------------------------------
 // 10. HEALTH CHECKS — Postgres via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
@@ -351,7 +360,14 @@ builder.Services.AddHostedService<InterSyncBackgroundService>();
 // Fiscal — emissão de NFC-e, certificado A1, exportação de XMLs
 builder.Services.AddScoped<FiscalCertificadoService>();
 builder.Services.AddScoped<FiscalXmlExportService>();
-builder.Services.AddScoped<INfceEmissionService, NfceEmissionService>();
+builder.Services.AddScoped<IbptTaxService>();
+builder.Services.AddHostedService<IbptSyncBackgroundService>();
+builder.Services.AddScoped<IFiscalTaxEngine, ConfigurableFiscalTaxEngine>();
+builder.Services.AddScoped<INfceEmissionService>(sp => new NfceEmissionService(
+    sp.GetRequiredService<AppDbContext>(),
+    sp.GetRequiredService<EncryptionService>(),
+    sp.GetRequiredService<ILogger<NfceEmissionService>>(),
+    sp.GetRequiredService<IFiscalTaxEngine>()));
 builder.Services.AddHostedService<FiscalAlertBackgroundService>();
 builder.Services.AddHostedService<FiscalXmlExportBackgroundService>();
 builder.Services.AddHostedService<FiscalRetryBackgroundService>();

@@ -37,15 +37,25 @@ public interface INfceEmissionService
     /// </summary>
     Task<NotaFiscalEmitida> CancelarAsync(Guid notaId, string justificativa);
 
+    /// <summary>Repete somente o estorno ERP de uma nota já cancelada na SEFAZ.</summary>
+    Task<NotaFiscalEmitida> ReprocessarEstornoErpAsync(Guid notaId);
+
+    /// <summary>Inutiliza explicitamente uma faixa de numeração que não será usada.</summary>
+    Task<InutilizacaoFiscal> InutilizarFaixaAsync(
+        int ano, int serie, int numeroInicial, int numeroFinal, string justificativa);
+
     /// <summary>Monta os dados pra exibir/imprimir o cupom da NFC-e (com QR Code, se o CSC estiver configurado).</summary>
     Task<CupomDto?> ObterCupomAsync(Guid notaId);
 }
 
-public record CupomItemDto(string Nome, int Quantidade, int PrecoUnitarioCentavos, int SubtotalCentavos);
+public record CupomItemDto(
+    string Nome, int Quantidade, int PrecoUnitarioCentavos, int SubtotalCentavos,
+    int TributosAproximadosCentavos);
 
 public record CupomDto(
     string RazaoSocial, string Cnpj, string Endereco,
     string? ChaveAcesso, string? Protocolo, DateTime? EmitidoEm,
     int Serie, int Numero, string Status,
-    List<CupomItemDto> Itens, int ValorTotalCentavos, string FormaPagamento,
-    string? QrCodeUrl);
+    List<CupomItemDto> Itens, int DescontoTotalCentavos, int ValorTotalCentavos, string FormaPagamento,
+    int TributosFederaisCentavos, int TributosEstaduaisCentavos, int TributosMunicipaisCentavos,
+    string? FontesTributos, string? QrCodeUrl);

@@ -56,6 +56,24 @@ public class NotaFiscalEmitida
     [Column("valor_total_em_centavos")]
     public int ValorTotalEmCentavos { get; set; }
 
+    /// <summary>Snapshot dos valores aproximados exibidos ao consumidor.</summary>
+    [Column("tributos_federais_em_centavos")]
+    public int TributosFederaisEmCentavos { get; set; }
+
+    [Column("tributos_estaduais_em_centavos")]
+    public int TributosEstaduaisEmCentavos { get; set; }
+
+    [Column("tributos_municipais_em_centavos")]
+    public int TributosMunicipaisEmCentavos { get; set; }
+
+    [MaxLength(500)]
+    [Column("fontes_tributos")]
+    public string? FontesTributos { get; set; }
+
+    /// <summary>Snapshot JSON dos tributos aproximados de cada item, na ordem do XML.</summary>
+    [Column("tributos_itens_json")]
+    public string? TributosItensJson { get; set; }
+
     [Column("serie")]
     public int? Serie { get; set; }
 
@@ -110,10 +128,15 @@ public class NotaFiscalEmitida
     [Column("protocolo_cancelamento")]
     public string? ProtocoloCancelamento { get; set; }
 
-    /// <summary>XML do procEventoNFe (evento de cancelamento assinado pela SEFAZ) — prova
-    /// documental completa do cancelamento, não só o protocolo numérico.</summary>
+    /// <summary>XML do procEventoNFe assinado/autorizado pela SEFAZ.</summary>
     [Column("xml_evento_cancelamento")]
     public string? XmlEventoCancelamento { get; set; }
+
+    [Column("erp_estornado_em")]
+    public DateTime? ErpEstornadoEm { get; set; }
+
+    [Column("erp_estorno_erro")]
+    public string? ErpEstornoErro { get; set; }
 
     /// <summary>Preenchido quando o número desta nota foi formalmente inutilizado (nota rejeitada).</summary>
     [Column("inutilizado_em")]

@@ -161,6 +161,30 @@ public class FiscalConfig
     [Column("formas_pagamento_auto_emissao")]
     public string FormasPagamentoAutoEmissao { get; set; } = string.Empty;
 
+    /// <summary>Token da API De Olho no Imposto/IBPT, sempre criptografado em repouso.</summary>
+    [Column("ibpt_token_encrypted")]
+    public string? IbptTokenEncrypted { get; set; }
+
+    [Column("ibpt_auto_sync_enabled")]
+    public bool IbptAutoSyncEnabled { get; set; }
+
+    [Column("ibpt_ultima_sincronizacao")]
+    public DateTime? IbptUltimaSincronizacao { get; set; }
+
+    [MaxLength(30)]
+    [Column("ibpt_ultima_versao")]
+    public string? IbptUltimaVersao { get; set; }
+
+    [Column("ibpt_vigencia_inicio")]
+    public DateTime? IbptVigenciaInicio { get; set; }
+
+    [Column("ibpt_vigencia_fim")]
+    public DateTime? IbptVigenciaFim { get; set; }
+
+    [MaxLength(500)]
+    [Column("ibpt_ultimo_erro")]
+    public string? IbptUltimoErro { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -169,4 +193,7 @@ public class FiscalConfig
 
     [NotMapped]
     public bool CertificadoConfigurado => !string.IsNullOrWhiteSpace(CertificadoPfxEncrypted);
+
+    [NotMapped]
+    public bool IbptConfigurado => !string.IsNullOrWhiteSpace(IbptTokenEncrypted);
 }

@@ -48,13 +48,18 @@ public class ExportController : ControllerBase
 
         var headers = new[]
         {
-            "Id", "Nome", "Categoria", "Descricao", "CodigoBarras", "NCM",
+            "Id", "Nome", "Categoria", "Descricao", "CodigoBarras", "NCM", "CEST",
+            "TributosFederaisPercentual", "TributosEstaduaisPercentual", "TributosMunicipaisPercentual", "FonteTributos",
+            "TributosAutomaticos", "IbptVersao", "IbptChave", "TributosVigenciaInicio", "TributosVigenciaFim", "TributosAtualizadosEm",
             "PrecoVenda", "PrecoCusto", "PrecoPromocional",
             "Estoque", "EstoqueMinimo", "Ativo", "Destaque", "CriadoEm",
         };
         var linhas = produtos.Select(p => new object?[]
         {
-            p.Id, p.Name, p.Category, p.Description, p.Barcode, p.Ncm,
+            p.Id, p.Name, p.Category, p.Description, p.Barcode, p.Ncm, p.Cest,
+            p.PercentualTributosFederais, p.PercentualTributosEstaduais, p.PercentualTributosMunicipais, p.FonteTributos,
+            p.TributosPreenchidosAutomaticamente, p.IbptVersao, p.IbptChave,
+            p.TributosVigenciaInicio, p.TributosVigenciaFim, p.TributosAtualizadosEm,
             p.PriceInCents / 100m, p.CostPriceInCents / 100m,
             p.DiscountPriceInCents.HasValue ? p.DiscountPriceInCents.Value / 100m : (decimal?)null,
             p.StockQuantity, p.MinimumStock, p.IsActive, p.IsFeatured, p.CreatedAt,

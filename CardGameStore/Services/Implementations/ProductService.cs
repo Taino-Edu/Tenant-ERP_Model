@@ -80,6 +80,8 @@ public class ProductService : IProductService
 
     public async Task<Product> CreateAsync(Product product)
     {
+        NormalizarDadosFiscais(product);
+        LimparMetadadosIbpt(product);
         _db.Products.Add(product);
         await _db.SaveChangesAsync();
         return product;
@@ -87,10 +89,17 @@ public class ProductService : IProductService
 
     public async Task<Product> UpdateAsync(Product updated)
     {
+        NormalizarDadosFiscais(updated);
         var existing = await _db.Products.FindAsync(updated.Id)
             ?? throw new KeyNotFoundException($"Produto {updated.Id} não encontrado.");
 
         var estoqueAntes = existing.StockQuantity;
+        var ncmMudou = !string.Equals(existing.Ncm, updated.Ncm, StringComparison.Ordinal);
+        var transparenciaMudou =
+            existing.PercentualTributosFederais != updated.PercentualTributosFederais ||
+            existing.PercentualTributosEstaduais != updated.PercentualTributosEstaduais ||
+            existing.PercentualTributosMunicipais != updated.PercentualTributosMunicipais ||
+            !string.Equals(existing.FonteTributos, updated.FonteTributos, StringComparison.Ordinal);
 
         // Atualização campo a campo — evita sobrescrever com null/0 campos não enviados pelo frontend.
         existing.Name                 = updated.Name;
@@ -110,6 +119,25 @@ public class ProductService : IProductService
         existing.ShowOnSite           = updated.ShowOnSite;
         existing.ShowOnMarketplace    = updated.ShowOnMarketplace;
         existing.IsPreVenda           = updated.IsPreVenda;
+        existing.Ncm                  = updated.Ncm;
+        existing.Cest                 = updated.Cest;
+        existing.PercentualTributosFederais  = updated.PercentualTributosFederais;
+        existing.PercentualTributosEstaduais = updated.PercentualTributosEstaduais;
+        existing.PercentualTributosMunicipais = updated.PercentualTributosMunicipais;
+        existing.FonteTributos        = updated.FonteTributos;
+        existing.NaturezaOperacaoId   = updated.NaturezaOperacaoId;
+        if (ncmMudou && !transparenciaMudou)
+        {
+            existing.PercentualTributosFederais = null;
+            existing.PercentualTributosEstaduais = null;
+            existing.PercentualTributosMunicipais = null;
+            existing.FonteTributos = null;
+            LimparMetadadosIbpt(existing);
+        }
+        else if (transparenciaMudou)
+        {
+            LimparMetadadosIbpt(existing);
+        }
         existing.UpdatedAt            = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -126,6 +154,46 @@ public class ProductService : IProductService
         }
 
         return existing;
+    }
+
+    private static void NormalizarDadosFiscais(Product product)
+    {
+        product.Ncm = SomenteDigitosOuNull(product.Ncm);
+        product.Cest = SomenteDigitosOuNull(product.Cest);
+        product.FonteTributos = string.IsNullOrWhiteSpace(product.FonteTributos)
+            ? null
+            : product.FonteTributos.Trim();
+
+        if (product.Ncm is not null && product.Ncm.Length != 8)
+            throw new ArgumentException("NCM deve conter exatamente 8 digitos.");
+        if (product.Cest is not null && product.Cest.Length != 7)
+            throw new ArgumentException("CEST deve conter exatamente 7 digitos.");
+
+        ValidarPercentual(product.PercentualTributosFederais, "tributos federais");
+        ValidarPercentual(product.PercentualTributosEstaduais, "tributos estaduais");
+        ValidarPercentual(product.PercentualTributosMunicipais, "tributos municipais");
+    }
+
+    private static string? SomenteDigitosOuNull(string? valor)
+    {
+        if (string.IsNullOrWhiteSpace(valor)) return null;
+        return new string(valor.Where(char.IsDigit).ToArray());
+    }
+
+    private static void ValidarPercentual(decimal? percentual, string campo)
+    {
+        if (percentual is < 0 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(percentual), $"Percentual de {campo} deve ficar entre 0 e 100.");
+    }
+
+    private static void LimparMetadadosIbpt(Product product)
+    {
+        product.TributosPreenchidosAutomaticamente = false;
+        product.TributosAtualizadosEm = null;
+        product.TributosVigenciaInicio = null;
+        product.TributosVigenciaFim = null;
+        product.IbptVersao = null;
+        product.IbptChave = null;
     }
 
     /// <summary>

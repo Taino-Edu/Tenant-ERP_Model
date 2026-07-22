@@ -16,6 +16,26 @@ public class FiscalXmlExportServiceTests
     private static AppDbContext CreateDb() => TestDbFactory.Create(nameof(FiscalXmlExportServiceTests));
 
     [Fact]
+    public void NormalizarPeriodoInclusivo_MesmoDia_CobreODiaInteiroEmBrasilia()
+    {
+        var data = new DateTime(2026, 7, 21);
+
+        var (inicioUtc, fimExclusivoUtc) = FiscalXmlExportService.NormalizarPeriodoInclusivo(data, data);
+
+        inicioUtc.Should().Be(new DateTime(2026, 7, 21, 3, 0, 0, DateTimeKind.Utc));
+        fimExclusivoUtc.Should().Be(new DateTime(2026, 7, 22, 3, 0, 0, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public void NormalizarPeriodoInclusivo_FimAnterior_LancaErroClaro()
+    {
+        var act = () => FiscalXmlExportService.NormalizarPeriodoInclusivo(
+            new DateTime(2026, 7, 22), new DateTime(2026, 7, 21));
+
+        act.Should().Throw<ArgumentException>().WithMessage("*anterior*");
+    }
+
+    [Fact]
     public async Task GerarZipAsync_IncluiApenasNotasAutorizadasECanceladasDoPeriodo()
     {
         using var db = CreateDb();
@@ -24,7 +44,7 @@ public class FiscalXmlExportServiceTests
 
         db.NotasFiscaisEmitidas.AddRange(
             new NotaFiscalEmitida { Status = NotaFiscalStatus.Autorizada, EmitidoEm = dentroDoPeriodo, ChaveAcesso = "CHAVE-AUTORIZADA", XmlAutorizado = "<xml>autorizada</xml>" },
-            new NotaFiscalEmitida { Status = NotaFiscalStatus.Cancelada,  EmitidoEm = dentroDoPeriodo, ChaveAcesso = "CHAVE-CANCELADA",  XmlAutorizado = "<xml>cancelada</xml>" },
+            new NotaFiscalEmitida { Status = NotaFiscalStatus.Cancelada,  EmitidoEm = dentroDoPeriodo, ChaveAcesso = "CHAVE-CANCELADA",  XmlAutorizado = "<xml>cancelada</xml>", XmlEventoCancelamento = "<procEventoNFe />" },
             new NotaFiscalEmitida { Status = NotaFiscalStatus.PendenteEmissao, EmitidoEm = dentroDoPeriodo, XmlAutorizado = null },
             new NotaFiscalEmitida { Status = NotaFiscalStatus.Autorizada, EmitidoEm = foraDoPeriodo, ChaveAcesso = "CHAVE-FORA", XmlAutorizado = "<xml>fora</xml>" }
         );
@@ -36,9 +56,10 @@ public class FiscalXmlExportServiceTests
         using var ms  = new MemoryStream(zipBytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
 
-        zip.Entries.Should().HaveCount(2);
+        zip.Entries.Should().HaveCount(3);
         zip.Entries.Select(e => e.Name).Should().Contain(n => n.StartsWith("CHAVE-AUTORIZADA"));
         zip.Entries.Select(e => e.Name).Should().Contain(n => n.StartsWith("CHAVE-CANCELADA"));
+        zip.Entries.Select(e => e.Name).Should().Contain("CHAVE-CANCELADA-cancelamento-procEvento.xml");
         zip.Entries.Select(e => e.Name).Should().NotContain(n => n.StartsWith("CHAVE-FORA"));
     }
 }

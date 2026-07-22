@@ -319,7 +319,7 @@ public class ContasReceberController : ControllerBase
     /// e contagem de notas destinadas por status do pipeline.
     /// </summary>
     [HttpGet("sefaz-status")]
-    [RequireModule("fiscal")] // F15: DF-e é parte do módulo fiscal — sem isso, tenant sem o módulo ainda vê/aciona
+    [RequireModule("fiscal")]
     public async Task<IActionResult> SefazStatus()
     {
         var fiscal     = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);

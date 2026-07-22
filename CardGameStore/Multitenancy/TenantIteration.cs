@@ -33,7 +33,8 @@ public static class TenantIteration
         this IServiceScopeFactory scopeFactory,
         ILogger logger,
         Func<IServiceProvider, CancellationToken, Task> perTenant,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? requiredModule = null)
     {
         List<TenantSlot> tenants;
         using (var catalogScope = scopeFactory.CreateScope())
@@ -48,6 +49,9 @@ public static class TenantIteration
         foreach (var tenant in tenants)
         {
             ct.ThrowIfCancellationRequested();
+            if (!string.IsNullOrWhiteSpace(requiredModule) &&
+                !tenant.EnabledModules.Contains(requiredModule, StringComparer.OrdinalIgnoreCase))
+                continue;
             try
             {
                 using var scope = scopeFactory.CreateScope();

@@ -46,13 +46,13 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 
 ## 🔴 Críticos — risco de dados, segurança ou bloqueio imediato
 
-### C1. Emissão de NFC-e no fechamento de comanda grava no tenant errado  `🛠 correção no working copy`
+### C1. Emissão de NFC-e no fechamento de comanda grava no tenant errado  `✅ corrigido e verificado (20/07)`
 
 - **Onde:** `CardGameStore/Services/Implementations/ComandaService.cs:688-691`
 - **Problema:** o escopo criado para emitir a nota não propagava o `ITenantContext` da requisição → `NotaFiscalEmitida` gravada no schema `public` (tenant-zero), presa em `PendenteEmissao` para sempre, reprocessada em loop pelo retry fiscal.
 - **Status:** corrigido no working copy (`Set(...)` propagado, mesmo padrão que `VendaAvulsaService.cs:200-201` já tinha). **Falta commit + teste de regressão.**
 
-### C2. Cinco dos seis background services operam silenciosamente só no tenant-zero  `🛠 correção no working copy`
+### C2. Cinco dos seis background services operam silenciosamente só no tenant-zero  `✅ corrigido e verificado (20/07)`
 
 - **Onde:** `FiscalRetryBackgroundService.cs:45`, `FiscalXmlExportBackgroundService.cs:49`, `FiscalAlertBackgroundService.cs:46`, `SefazDistBackgroundService.cs:48`, `InterSyncService.cs:365`
 - **Problema:** `CreateScope()` sem `ITenantContext.Set(...)` → retry de NF-e, envio mensal de XML ao contador, alerta de vencimento do certificado A1, manifestação do destinatário (DDA) e sync do Banco Inter **nunca rodavam para tenants reais** — só para o tenant-zero. O cabeçalho de `FechamentoBackgroundService.cs:5-14` documentava o problema.
@@ -100,19 +100,19 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 - **Efeito:** ClientId/ClientSecret são por tenant, mas o certificado era compartilhado — e o endpoint `UploadCertificado` permitia que **qualquer admin de qualquer tenant sobrescrevesse o certificado usado por todos** → cobranças Pix de outros tenants quebradas ou direcionadas à conta errada.
 - **Status:** certificado (.crt/.key) movido para colunas criptografadas (AES-256-GCM via `EncryptionService`) em `IntegrationConfig`, por tenant — mesmo padrão do ClientId/Secret. Migration `AddInterCertificateFields` adicionada.
 
-### C10. Subdomínio desconhecido serve silenciosamente a loja do tenant-zero  `🛠 correção no working copy`
+### C10. Subdomínio desconhecido serve silenciosamente a loja do tenant-zero  `✅ corrigido e verificado (20/07)`
 
 - **Onde:** `CardGameStore/Multitenancy/TenantResolutionMiddleware.cs:84-86`
 - **Problema:** slug bem-formado inexistente no catálogo (ex: `loja-errada.2esysten.com.br`) caía no fallback do tenant-zero — exibindo vitrine, produtos e tela de login **da loja errada**, com cookies válidos para aquele host. O usuário podia logar/comprar sem perceber.
 - **Status:** corrigido no working copy — slug bem-formado sem tenant agora retorna **404** ("Loja não encontrada"), com teste novo em `TenantResolutionMiddlewareTests.cs`. **Falta commit.**
 
-### C11. Deploy sem backup prévio e sem rollback  `🛠 correção no working copy`
+### C11. Deploy sem backup prévio e sem rollback  `✅ corrigido e verificado (20/07)`
 
 - **Onde:** `deploy/update.sh:20-32` (versão commitada: `git pull` → `build` → `up -d` → prune), disparado automaticamente pelo CI a cada push verde na `main`.
 - **Problema:** migrations rodam no boot; se uma migration quebrasse um schema ou o boot, não havia backup pré-deploy, imagem anterior, nem rollback.
 - **Status:** corrigido no working copy — backup obrigatório antes de atualizar (aborta se falhar), imagens tagueadas `:rollback`, health check em `/health` com reversão automática. Limite documentado: rollback reverte código, não schema. **Falta commit.**
 
-### C12. Backup não agendado por padrão e só na própria VPS  `🛠 parcialmente corrigido no working copy`
+### C12. Backup não agendado por padrão e só na própria VPS  `🟡 parcial — cron/integridade/off-site ok; retenção 7d e restore por tenant pendentes (verificado 20/07)`
 
 - **Onde:** `deploy/setup.sh` (versão commitada: nenhum cron), `deploy/backup.sh` (destino `/opt/tenant-erp/backups` na mesma máquina, retenção 7 dias, sem verificação de integridade).
 - **Status no working copy:** setup agenda cron diário (03:00) + backup inicial; `backup.sh` valida integridade (`gzip -t` + tamanho mínimo) e oferece `BACKUP_REMOTE_CMD` para cópia off-site (ainda opcional — default continua local).

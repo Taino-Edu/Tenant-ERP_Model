@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260722120251_AddIbptAutomaticTaxFill")]
+    partial class AddIbptAutomaticTaxFill
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -684,9 +687,10 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("character varying(10)")
                         .HasColumnName("csc_id");
 
-                    b.Property<string>("CscTokenEncrypted")
-                        .HasColumnType("text")
-                        .HasColumnName("csc_token_encrypted");
+                    b.Property<string>("CscToken")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("csc_token");
 
                     b.Property<long>("DistUltimoNsu")
                         .HasColumnType("bigint")
@@ -1347,7 +1351,7 @@ namespace CardGameStore.Data.Migrations
 
                     b.HasIndex("ComandaId")
                         .IsUnique()
-                        .HasDatabaseName("ix_notas_fiscais_comanda_unica")
+                        .HasDatabaseName("ix_notas_fiscais_comanda")
                         .HasFilter("comanda_id IS NOT NULL");
 
                     b.HasIndex("EmitidoEm")
@@ -1358,7 +1362,7 @@ namespace CardGameStore.Data.Migrations
 
                     b.HasIndex("VendaAvulsaId")
                         .IsUnique()
-                        .HasDatabaseName("ix_notas_fiscais_venda_avulsa_unica")
+                        .HasDatabaseName("ix_notas_fiscais_venda_avulsa")
                         .HasFilter("venda_avulsa_id IS NOT NULL");
 
                     b.ToTable("notas_fiscais_emitidas");

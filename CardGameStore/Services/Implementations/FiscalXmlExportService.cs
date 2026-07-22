@@ -4,6 +4,7 @@
 // =============================================================================
 
 using System.IO.Compression;
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,19 @@ public class FiscalXmlExportService
     public FiscalXmlExportService(AppDbContext db)
     {
         _db = db;
+    }
+
+    /// <summary>Converte datas informadas pela UI como intervalo inclusivo de dias em
+    /// Brasília para o intervalo UTC semiaberto usado pela consulta.</summary>
+    internal static (DateTime InicioUtc, DateTime FimExclusivoUtc) NormalizarPeriodoInclusivo(
+        DateTime inicio, DateTime fim)
+    {
+        if (fim.Date < inicio.Date)
+            throw new ArgumentException("O período final não pode ser anterior ao inicial.", nameof(fim));
+
+        return (
+            BrazilTime.DateToUtcStart(inicio),
+            BrazilTime.DateToUtcStart(fim.Date.AddDays(1)));
     }
 
     /// <summary>Gera um .zip em memória com os XMLs autorizados e cancelados emitidos no período [inicio, fimExclusivo).</summary>
@@ -39,9 +53,17 @@ public class FiscalXmlExportService
                 var fileName = $"{nomeBase}-{nota.Status}.xml";
                 var entry    = zip.CreateEntry(fileName, CompressionLevel.Optimal);
 
-                await using var entryStream = entry.Open();
-                await using var writer      = new StreamWriter(entryStream);
-                await writer.WriteAsync(nota.XmlAutorizado);
+                await using (var entryStream = entry.Open())
+                await using (var writer = new StreamWriter(entryStream))
+                    await writer.WriteAsync(nota.XmlAutorizado);
+
+                if (nota.Status == NotaFiscalStatus.Cancelada && !string.IsNullOrWhiteSpace(nota.XmlEventoCancelamento))
+                {
+                    var eventoEntry = zip.CreateEntry($"{nomeBase}-cancelamento-procEvento.xml", CompressionLevel.Optimal);
+                    await using (var eventoStream = eventoEntry.Open())
+                    await using (var eventoWriter = new StreamWriter(eventoStream))
+                        await eventoWriter.WriteAsync(nota.XmlEventoCancelamento);
+                }
             }
         }
 

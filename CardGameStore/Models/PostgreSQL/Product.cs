@@ -77,6 +77,49 @@ public class Product
     [Column("ncm")]
     public string? Ncm { get; set; }
 
+    /// <summary>CEST do produto, com 7 digitos. Obrigatorio nas operacoes sujeitas a ICMS-ST.</summary>
+    [MaxLength(7)]
+    [Column("cest")]
+    public string? Cest { get; set; }
+
+    /// <summary>Percentuais aproximados usados na transparencia tributaria (Lei 12.741/2012).</summary>
+    [Range(typeof(decimal), "0", "100")]
+    [Column("percentual_tributos_federais", TypeName = "numeric(7,4)")]
+    public decimal? PercentualTributosFederais { get; set; }
+
+    [Range(typeof(decimal), "0", "100")]
+    [Column("percentual_tributos_estaduais", TypeName = "numeric(7,4)")]
+    public decimal? PercentualTributosEstaduais { get; set; }
+
+    [Range(typeof(decimal), "0", "100")]
+    [Column("percentual_tributos_municipais", TypeName = "numeric(7,4)")]
+    public decimal? PercentualTributosMunicipais { get; set; }
+
+    /// <summary>Fonte e versao da tabela aprovada pelo contador, por exemplo "IBPT 26.1.A".</summary>
+    [MaxLength(100)]
+    [Column("fonte_tributos")]
+    public string? FonteTributos { get; set; }
+
+    [Column("tributos_preenchidos_automaticamente")]
+    public bool TributosPreenchidosAutomaticamente { get; set; }
+
+    [Column("tributos_atualizados_em")]
+    public DateTime? TributosAtualizadosEm { get; set; }
+
+    [Column("tributos_vigencia_inicio")]
+    public DateTime? TributosVigenciaInicio { get; set; }
+
+    [Column("tributos_vigencia_fim")]
+    public DateTime? TributosVigenciaFim { get; set; }
+
+    [MaxLength(30)]
+    [Column("ibpt_versao")]
+    public string? IbptVersao { get; set; }
+
+    [MaxLength(30)]
+    [Column("ibpt_chave")]
+    public string? IbptChave { get; set; }
+
     /// <summary>Natureza de operação (CFOP/CSOSN) aplicada na emissão da NFC-e deste produto.</summary>
     [Column("natureza_operacao_id")]
     public Guid? NaturezaOperacaoId { get; set; }

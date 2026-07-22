@@ -219,6 +219,113 @@ public class ProductServiceTests
         atualizado.UpdatedAt.Should().BeAfter(antes);
     }
 
+    [Fact]
+    public async Task Update_DevePersistirNcmENaturezaOperacao()
+    {
+        var db      = CreateDb(nameof(Update_DevePersistirNcmENaturezaOperacao));
+        var service = CreateService(db);
+        var p       = MakeProduct("Produto fiscal");
+        p.Ncm       = "84747100";
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+        var naturezaId = Guid.NewGuid();
+        db.NaturezasOperacao.Add(new NaturezaOperacao
+        {
+            Id = naturezaId,
+            Descricao = "Venda interna",
+            Cfop = "5102",
+            Csosn = "102",
+        });
+        await db.SaveChangesAsync();
+        var atualizado = MakeProduct("Produto fiscal");
+        atualizado.Id                 = p.Id;
+        atualizado.Ncm                = "9504.40.00";
+        atualizado.Cest               = "28.063.00";
+        atualizado.PercentualTributosFederais = 12.34m;
+        atualizado.PercentualTributosEstaduais = 18m;
+        atualizado.PercentualTributosMunicipais = 0m;
+        atualizado.FonteTributos      = "  Tabela contador 2026  ";
+        atualizado.NaturezaOperacaoId = naturezaId;
+
+        await service.UpdateAsync(atualizado);
+        db.ChangeTracker.Clear();
+
+        var salvo = await db.Products.FindAsync(p.Id);
+        salvo!.Ncm.Should().Be("95044000");
+        salvo.Cest.Should().Be("2806300");
+        salvo.PercentualTributosFederais.Should().Be(12.34m);
+        salvo.PercentualTributosEstaduais.Should().Be(18m);
+        salvo.PercentualTributosMunicipais.Should().Be(0m);
+        salvo.FonteTributos.Should().Be("Tabela contador 2026");
+        salvo.NaturezaOperacaoId.Should().Be(naturezaId);
+    }
+
+    [Fact]
+    public async Task Update_SemAlterarTributos_DevePreservarMetadadosAutomaticosIbpt()
+    {
+        var db = CreateDb(nameof(Update_SemAlterarTributos_DevePreservarMetadadosAutomaticosIbpt));
+        var service = CreateService(db);
+        var p = MakeProduct("Produto IBPT");
+        p.Ncm = "95044000";
+        p.PercentualTributosFederais = 13.45m;
+        p.PercentualTributosEstaduais = 18m;
+        p.PercentualTributosMunicipais = 0m;
+        p.FonteTributos = "IBPT 26.1.L";
+        p.TributosPreenchidosAutomaticamente = true;
+        p.TributosAtualizadosEm = DateTime.UtcNow.AddDays(-1);
+        p.TributosVigenciaInicio = DateTime.UtcNow.AddDays(-10);
+        p.TributosVigenciaFim = DateTime.UtcNow.AddDays(10);
+        p.IbptVersao = "26.1.L";
+        p.IbptChave = "chave-auditoria";
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+        var atualizado = await db.Products.AsNoTracking().SingleAsync(x => x.Id == p.Id);
+        atualizado.Name = "Produto IBPT renomeado";
+        await service.UpdateAsync(atualizado);
+        db.ChangeTracker.Clear();
+
+        var salvo = await db.Products.FindAsync(p.Id);
+        salvo!.TributosPreenchidosAutomaticamente.Should().BeTrue();
+        salvo.IbptVersao.Should().Be("26.1.L");
+        salvo.IbptChave.Should().Be("chave-auditoria");
+        salvo.TributosVigenciaFim.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Update_AoTrocarSomenteNcm_DeveInvalidarTributosAnteriores()
+    {
+        var db = CreateDb(nameof(Update_AoTrocarSomenteNcm_DeveInvalidarTributosAnteriores));
+        var service = CreateService(db);
+        var p = MakeProduct("Produto IBPT");
+        p.Ncm = "95044000";
+        p.PercentualTributosFederais = 13.45m;
+        p.PercentualTributosEstaduais = 18m;
+        p.PercentualTributosMunicipais = 0m;
+        p.FonteTributos = "IBPT 26.1.L";
+        p.TributosPreenchidosAutomaticamente = true;
+        p.IbptVersao = "26.1.L";
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        db.ChangeTracker.Clear();
+        var atualizado = await db.Products.AsNoTracking().SingleAsync(x => x.Id == p.Id);
+        atualizado.Ncm = "84743100";
+        await service.UpdateAsync(atualizado);
+        db.ChangeTracker.Clear();
+
+        var salvo = await db.Products.FindAsync(p.Id);
+        salvo!.PercentualTributosFederais.Should().BeNull();
+        salvo.PercentualTributosEstaduais.Should().BeNull();
+        salvo.PercentualTributosMunicipais.Should().BeNull();
+        salvo.FonteTributos.Should().BeNull();
+        salvo.TributosPreenchidosAutomaticamente.Should().BeFalse();
+        salvo.IbptVersao.Should().BeNull();
+    }
+
     // ── Busca por ID ─────────────────────────────────────────────────────────
 
     [Fact]

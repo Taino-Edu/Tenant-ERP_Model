@@ -24,15 +24,20 @@ public class FiscalCertificadoService
             if (!cert.HasPrivateKey)
                 throw new CertificadoInvalidoException("O certificado não possui chave privada — verifique se é um .pfx/.p12 válido.");
 
+            var agora = DateTime.UtcNow;
+            var validoDe = cert.NotBefore.ToUniversalTime();
+            var validoAte = cert.NotAfter.ToUniversalTime();
+            if (validoDe > agora)
+                throw new CertificadoInvalidoException(
+                    $"O certificado ainda não é válido. Início da validade: {validoDe:dd/MM/yyyy HH:mm} UTC.");
+            if (validoAte <= agora)
+                throw new CertificadoInvalidoException(
+                    $"O certificado venceu em {validoAte:dd/MM/yyyy HH:mm} UTC. Envie um certificado A1 válido antes de emitir.");
+
             // X509Certificate2.NotBefore/NotAfter vêm com Kind=Local (conversão do .NET a
             // partir do UTC original do certificado) — Npgsql rejeita gravar DateTime não-UTC
             // em timestamptz. ToUniversalTime() converte preservando o instante real.
-            var notAfterUtc = cert.NotAfter.ToUniversalTime();
-            if (notAfterUtc < DateTime.UtcNow)
-                throw new CertificadoInvalidoException(
-                    $"Certificado vencido em {notAfterUtc:dd/MM/yyyy} — não pode ser usado pra assinar NFC-e. Renove com a AC antes de reenviar.");
-
-            return new CertificadoInfo(cert.Subject, cert.NotBefore.ToUniversalTime(), notAfterUtc);
+            return new CertificadoInfo(cert.Subject, validoDe, validoAte);
         }
         catch (CryptographicException ex)
         {

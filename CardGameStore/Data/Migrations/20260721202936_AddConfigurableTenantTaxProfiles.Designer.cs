@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260721202936_AddConfigurableTenantTaxProfiles")]
+    partial class AddConfigurableTenantTaxProfiles
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -684,9 +687,10 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("character varying(10)")
                         .HasColumnName("csc_id");
 
-                    b.Property<string>("CscTokenEncrypted")
-                        .HasColumnType("text")
-                        .HasColumnName("csc_token_encrypted");
+                    b.Property<string>("CscToken")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("csc_token");
 
                     b.Property<long>("DistUltimoNsu")
                         .HasColumnType("bigint")
@@ -701,36 +705,6 @@ namespace CardGameStore.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("formas_pagamento_auto_emissao");
-
-                    b.Property<bool>("IbptAutoSyncEnabled")
-                        .HasColumnType("boolean")
-                        .HasColumnName("ibpt_auto_sync_enabled");
-
-                    b.Property<string>("IbptTokenEncrypted")
-                        .HasColumnType("text")
-                        .HasColumnName("ibpt_token_encrypted");
-
-                    b.Property<DateTime?>("IbptUltimaSincronizacao")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ibpt_ultima_sincronizacao");
-
-                    b.Property<string>("IbptUltimaVersao")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("ibpt_ultima_versao");
-
-                    b.Property<string>("IbptUltimoErro")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("ibpt_ultimo_erro");
-
-                    b.Property<DateTime?>("IbptVigenciaFim")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ibpt_vigencia_fim");
-
-                    b.Property<DateTime?>("IbptVigenciaInicio")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ibpt_vigencia_inicio");
 
                     b.Property<string>("InscricaoEstadual")
                         .HasMaxLength(20)
@@ -1239,11 +1213,6 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("erp_estorno_erro");
 
-                    b.Property<string>("FontesTributos")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("fontes_tributos");
-
                     b.Property<DateTime?>("InutilizadoEm")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("inutilizado_em");
@@ -1298,22 +1267,6 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("tentativas_reprocessamento");
 
-                    b.Property<int>("TributosEstaduaisEmCentavos")
-                        .HasColumnType("integer")
-                        .HasColumnName("tributos_estaduais_em_centavos");
-
-                    b.Property<int>("TributosFederaisEmCentavos")
-                        .HasColumnType("integer")
-                        .HasColumnName("tributos_federais_em_centavos");
-
-                    b.Property<string>("TributosItensJson")
-                        .HasColumnType("text")
-                        .HasColumnName("tributos_itens_json");
-
-                    b.Property<int>("TributosMunicipaisEmCentavos")
-                        .HasColumnType("integer")
-                        .HasColumnName("tributos_municipais_em_centavos");
-
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -1347,7 +1300,7 @@ namespace CardGameStore.Data.Migrations
 
                     b.HasIndex("ComandaId")
                         .IsUnique()
-                        .HasDatabaseName("ix_notas_fiscais_comanda_unica")
+                        .HasDatabaseName("ix_notas_fiscais_comanda")
                         .HasFilter("comanda_id IS NOT NULL");
 
                     b.HasIndex("EmitidoEm")
@@ -1358,7 +1311,7 @@ namespace CardGameStore.Data.Migrations
 
                     b.HasIndex("VendaAvulsaId")
                         .IsUnique()
-                        .HasDatabaseName("ix_notas_fiscais_venda_avulsa_unica")
+                        .HasDatabaseName("ix_notas_fiscais_venda_avulsa")
                         .HasFilter("venda_avulsa_id IS NOT NULL");
 
                     b.ToTable("notas_fiscais_emitidas");
@@ -1648,11 +1601,6 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("category");
 
-                    b.Property<string>("Cest")
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)")
-                        .HasColumnName("cest");
-
                     b.Property<int>("CostPriceInCents")
                         .HasColumnType("integer")
                         .HasColumnName("cost_price_in_cents");
@@ -1670,11 +1618,6 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("discount_price_in_cents");
 
-                    b.Property<string>("FonteTributos")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("fonte_tributos");
-
                     b.Property<string>("FullDescription")
                         .HasColumnType("text")
                         .HasColumnName("full_description");
@@ -1682,16 +1625,6 @@ namespace CardGameStore.Data.Migrations
                     b.Property<bool>("HasVariants")
                         .HasColumnType("boolean")
                         .HasColumnName("has_variants");
-
-                    b.Property<string>("IbptChave")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("ibpt_chave");
-
-                    b.Property<string>("IbptVersao")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("ibpt_versao");
 
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(500)
@@ -1734,18 +1667,6 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("character varying(8)")
                         .HasColumnName("ncm");
 
-                    b.Property<decimal?>("PercentualTributosEstaduais")
-                        .HasColumnType("numeric(7,4)")
-                        .HasColumnName("percentual_tributos_estaduais");
-
-                    b.Property<decimal?>("PercentualTributosFederais")
-                        .HasColumnType("numeric(7,4)")
-                        .HasColumnName("percentual_tributos_federais");
-
-                    b.Property<decimal?>("PercentualTributosMunicipais")
-                        .HasColumnType("numeric(7,4)")
-                        .HasColumnName("percentual_tributos_municipais");
-
                     b.Property<int>("PriceInCents")
                         .HasColumnType("integer")
                         .HasColumnName("price_in_cents");
@@ -1761,22 +1682,6 @@ namespace CardGameStore.Data.Migrations
                     b.Property<int>("StockQuantity")
                         .HasColumnType("integer")
                         .HasColumnName("stock_quantity");
-
-                    b.Property<DateTime?>("TributosAtualizadosEm")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("tributos_atualizados_em");
-
-                    b.Property<bool>("TributosPreenchidosAutomaticamente")
-                        .HasColumnType("boolean")
-                        .HasColumnName("tributos_preenchidos_automaticamente");
-
-                    b.Property<DateTime?>("TributosVigenciaFim")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("tributos_vigencia_fim");
-
-                    b.Property<DateTime?>("TributosVigenciaInicio")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("tributos_vigencia_inicio");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")

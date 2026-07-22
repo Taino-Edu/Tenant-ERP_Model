@@ -151,6 +151,19 @@ export interface Product {
   hasVariants: boolean
   /** NCM (Nomenclatura Comum do Mercosul) — obrigatório para emitir NFC-e deste produto. */
   ncm: string | null
+  /** CEST com 7 digitos; obrigatorio quando a natureza usa ICMS-ST. */
+  cest: string | null
+  percentualTributosFederais: number | null
+  percentualTributosEstaduais: number | null
+  percentualTributosMunicipais: number | null
+  /** Fonte/versao aprovada pelo contador, por exemplo IBPT 26.1.A. */
+  fonteTributos: string | null
+  tributosPreenchidosAutomaticamente: boolean
+  tributosAtualizadosEm: string | null
+  tributosVigenciaInicio: string | null
+  tributosVigenciaFim: string | null
+  ibptVersao: string | null
+  ibptChave: string | null
   /** Natureza de operação (CFOP/CSOSN) usada na emissão fiscal. Null = usa a marcada como padrão. */
   naturezaOperacaoId: string | null
   updatedAt: string; createdAt: string
@@ -667,6 +680,7 @@ export interface AiChatResponse {
   reply:   string
   success: boolean
   error?:  string
+  action?: { type: 'navigate' | 'openWizard'; route?: string }
 }
 
 export const aiApi = {
@@ -1170,12 +1184,48 @@ export interface FiscalConfigDto {
   certificadoValidade?: string
   diasParaVencer?: number
   formasPagamentoAutoEmissao: string[]
+  ibptConfigurado: boolean
+  ibptAutoSyncEnabled: boolean
+  ibptUltimaSincronizacao?: string
+  ibptUltimaVersao?: string
+  ibptVigenciaInicio?: string
+  ibptVigenciaFim?: string
+  ibptUltimoErro?: string
+}
+
+export interface IbptStatusDto {
+  configurado: boolean; autoSyncAtivo: boolean
+  ultimaSincronizacao?: string; ultimaVersao?: string
+  vigenciaInicio?: string; vigenciaFim?: string; ultimoErro?: string
+  produtosAtivos: number; produtosAutomaticos: number; produtosPendentes: number; produtosVencidos: number
+}
+
+export interface IbptSyncResult {
+  total: number; atualizados: number; ignoradosManuais: number; falhas: number; erros: string[]
 }
 
 export interface NaturezaOperacaoDto {
   id: string; descricao: string; cfop: string; csosn?: string
   percentualCreditoIcmsSn?: number
+  origemMercadoria: number
+  modalidadeBcSt?: number
+  percentualMvaSt?: number
+  percentualReducaoBcSt?: number
+  aliquotaIcmsSt?: number
+  aliquotaIcmsProprio?: number
+  aliquotaFcpSt?: number
+  baseStFixaEmCentavos?: number
+  ibsCbsCst: string
+  ibsCbsClassTrib: string
   isPadrao: boolean; isActive: boolean
+}
+
+export interface SaveNaturezaFiscalBody {
+  descricao: string; cfop: string; csosn?: string; percentualCreditoSn?: number
+  origemMercadoria: number; modalidadeBcSt?: number; percentualMvaSt?: number
+  percentualReducaoBcSt?: number; aliquotaIcmsSt?: number; aliquotaIcmsProprio?: number
+  aliquotaFcpSt?: number; baseStFixaEmCentavos?: number
+  ibsCbsCst: string; ibsCbsClassTrib: string; isPadrao: boolean
 }
 
 export interface NotaFiscalDto {
@@ -1186,19 +1236,23 @@ export interface NotaFiscalDto {
   serie?: number; numero?: number
   chaveAcesso?: string; protocolo?: string; motivoRejeicao?: string
   emitidoEm?: string; canceladoEm?: string; inutilizadoEm?: string
+  erpEstornadoEm?: string; erpEstornoErro?: string
   tentativasReprocessamento: number
   createdAt: string
 }
 
 export interface CupomItemDto {
   nome: string; quantidade: number; precoUnitarioCentavos: number; subtotalCentavos: number
+  tributosAproximadosCentavos: number
 }
 
 export interface CupomDto {
   razaoSocial: string; cnpj: string; endereco: string
   chaveAcesso?: string; protocolo?: string; emitidoEm?: string
   serie: number; numero: number; status: string
-  itens: CupomItemDto[]; valorTotalCentavos: number; formaPagamento: string
+  itens: CupomItemDto[]; descontoTotalCentavos: number; valorTotalCentavos: number; formaPagamento: string
+  tributosFederaisCentavos: number; tributosEstaduaisCentavos: number; tributosMunicipaisCentavos: number
+  fontesTributos?: string
   qrCodeUrl?: string
 }
 
@@ -1211,7 +1265,11 @@ export const fiscalApi = {
     cscId: string; cscToken: string
     regimeTributario: string; ambiente: string; serieNfce: number; emailContador: string
     formasPagamentoAutoEmissao: string[]
+    ibptToken: string; ibptAutoSyncEnabled: boolean; removerIbptToken: boolean
   }>) => api.put<FiscalConfigDto>('/api/fiscal/config', body),
+
+  getIbptStatus: () => api.get<IbptStatusDto>('/api/fiscal/ibpt/status'),
+  sincronizarIbpt: () => api.post<IbptSyncResult>('/api/fiscal/ibpt/sincronizar'),
 
   uploadCertificado: (file: File, senha: string) => {
     const form = new FormData()
@@ -1222,9 +1280,9 @@ export const fiscalApi = {
   },
 
   listNaturezas:  ()                                => api.get<NaturezaOperacaoDto[]>('/api/fiscal/naturezas-operacao'),
-  createNatureza: (body: { descricao: string; cfop: string; csosn?: string; percentualCreditoSn?: number; isPadrao: boolean }) =>
+  createNatureza: (body: SaveNaturezaFiscalBody) =>
                    api.post<NaturezaOperacaoDto>('/api/fiscal/naturezas-operacao', body),
-  updateNatureza: (id: string, body: { descricao: string; cfop: string; csosn?: string; percentualCreditoSn?: number; isPadrao: boolean }) =>
+  updateNatureza: (id: string, body: SaveNaturezaFiscalBody) =>
                    api.put<NaturezaOperacaoDto>(`/api/fiscal/naturezas-operacao/${id}`, body),
   removeNatureza: (id: string)                      => api.delete(`/api/fiscal/naturezas-operacao/${id}`),
 
@@ -1236,7 +1294,15 @@ export const fiscalApi = {
   reprocessarNota: (id: string) =>
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/notas/${id}/reprocessar`),
   cancelarNota: (id: string, justificativa: string) =>
-    api.post<{ id: string; status: string }>(`/api/fiscal/notas/${id}/cancelar`, { justificativa }),
+    api.post<{ id: string; status: string; erpEstornadoEm?: string; erpEstornoErro?: string }>(`/api/fiscal/notas/${id}/cancelar`, { justificativa }),
+  inutilizarFaixa: (body: {
+    ano: number; serie: number; numeroInicial: number; numeroFinal: number; justificativa: string
+  }) => api.post<{
+    id: string; ano: number; serie: number; numeroInicial: number; numeroFinal: number
+    protocolo: string; inutilizadoEm: string
+  }>('/api/fiscal/inutilizacoes', body),
+  reprocessarEstornoErp: (id: string) =>
+    api.post<{ id: string; erpEstornadoEm?: string; erpEstornoErro?: string }>(`/api/fiscal/notas/${id}/reprocessar-estorno-erp`),
   obterCupom: (id: string) => api.get<CupomDto>(`/api/fiscal/notas/${id}/cupom`),
 
   emitirNotaComanda: (comandaId: string) =>
