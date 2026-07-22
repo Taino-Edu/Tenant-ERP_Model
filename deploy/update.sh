@@ -76,6 +76,10 @@ echo ""
 
 if [ "$healthy" != true ]; then
     echo -e "${RED}❌ A API não respondeu /health após o deploy. Revertendo pras imagens anteriores...${NC}"
+    echo -e "${YELLOW}📋 Últimos logs da API que falhou:${NC}"
+    # O --force-recreate do rollback remove o container defeituoso. Exiba os
+    # logs antes disso para a causa não desaparecer junto com ele.
+    $COMPOSE logs --no-color --tail=200 api >&2 || true
     reverted=false
     for img in "${IMAGES[@]}"; do
         if docker image inspect "$img:rollback" &>/dev/null; then
