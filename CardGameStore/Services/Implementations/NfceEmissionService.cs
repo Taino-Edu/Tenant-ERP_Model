@@ -977,14 +977,18 @@ public class NfceEmissionService : INfceEmissionService
     {
         // Usa a pipeline do EF para o interceptor de tenant aplicar o search_path.
         // DbConnection aberta manualmente atualizava o schema public, não a loja.
-        var resultado = await _db.Database.SqlQueryRaw<int?>(
+        var resultados = await _db.Database.SqlQueryRaw<int>(
             "UPDATE fiscal_config SET proximo_numero_nfce = proximo_numero_nfce + 1, updated_at = now() " +
             "WHERE id = {0} RETURNING proximo_numero_nfce - 1 AS \"Value\"",
             fiscalConfigId)
-            .SingleOrDefaultAsync();
+            // UPDATE ... RETURNING não é SQL componível. ToListAsync executa o
+            // comando exatamente como está; SingleOrDefaultAsync tentaria envolvê-lo
+            // em SELECT e o Postgres rejeita essa composição.
+            .ToListAsync();
 
-        return resultado
-            ?? throw new InvalidOperationException("Não foi possível reservar o número da NFC-e — FiscalConfig não encontrado.");
+        if (resultados.Count != 1)
+            throw new InvalidOperationException("Não foi possível reservar o número da NFC-e — FiscalConfig não encontrado.");
+        return resultados[0];
     }
 
     private async Task TransmitirAsync(NotaFiscalEmitida nota, DadosEmissao dados)
