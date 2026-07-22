@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { fiscalApi, FiscalConfigDto, FiscalSaudeDto, IbptStatusDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
@@ -57,7 +58,25 @@ const CHECKLIST_LABELS: Record<string, string> = {
   Homologacao:   'Homologação concluída',
 }
 
+// Onde cada etapa do checklist é resolvida — âncora nesta própria página, ou rota
+// externa (produtos ficam no cadastro de estoque, não no módulo fiscal).
+const CHECKLIST_DESTINO: Record<string, { anchor?: string; href?: string }> = {
+  Empresa:       { anchor: 'secao-empresa' },
+  Certificado:   { anchor: 'secao-certificado' },
+  RegrasFiscais: { anchor: 'secao-naturezas' },
+  Produtos:      { href: '/admin/estoque' },
+  Homologacao:   { anchor: 'secao-empresa' },
+}
+
+function irParaSecao(etapa: string, router: ReturnType<typeof useRouter>) {
+  const destino = CHECKLIST_DESTINO[etapa]
+  if (!destino) return
+  if (destino.href) { router.push(destino.href); return }
+  if (destino.anchor) document.getElementById(destino.anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 export default function FiscalPage() {
+  const router = useRouter()
   const [config,   setConfig]   = useState<FiscalConfigDto | null>(null)
   const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
@@ -615,19 +634,32 @@ export default function FiscalPage() {
               </span>
               <span className="text-xs text-gray-500">— {saude.ambiente === 'Producao' ? 'Produção' : 'Homologação'}</span>
             </div>
-            <span className="text-sm text-gray-300">Próxima ação: <strong className="text-white">{saude.proximaAcao}</strong></span>
+            {(() => {
+              const proximaEtapa = saude.checklist.find(i => !i.concluido)?.etapa
+              return (
+                <button
+                  onClick={() => proximaEtapa && irParaSecao(proximaEtapa, router)}
+                  disabled={!proximaEtapa}
+                  className="text-sm text-gray-300 text-left enabled:hover:text-white enabled:cursor-pointer disabled:cursor-default"
+                >
+                  Próxima ação: <strong className="text-white">{saude.proximaAcao}</strong>
+                </button>
+              )
+            })()}
           </div>
 
-          {/* Checklist de ativação */}
+          {/* Checklist de ativação — cada etapa leva direto pra seção correspondente */}
           <div className="flex flex-wrap gap-2 mb-4">
             {saude.checklist.map(item => (
-              <span key={item.etapa} className={clsx(
-                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border',
-                item.concluido ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30',
+              <button key={item.etapa} onClick={() => irParaSecao(item.etapa, router)} className={clsx(
+                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors',
+                item.concluido
+                  ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20'
+                  : 'bg-gray-500/10 text-gray-400 border-gray-500/30 hover:bg-gray-500/20',
               )}>
                 {item.concluido ? <Check className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
                 {CHECKLIST_LABELS[item.etapa] ?? item.etapa}
-              </span>
+              </button>
             ))}
           </div>
 
@@ -665,7 +697,7 @@ export default function FiscalPage() {
       )}
 
       {/* Certificado */}
-      <div className={clsx('card p-5', certStatusColor === 'red' && 'border-red-500/30', certStatusColor === 'green' && 'border-green-500/20')}>
+      <div id="secao-certificado" className={clsx('card p-5', certStatusColor === 'red' && 'border-red-500/30', certStatusColor === 'green' && 'border-green-500/20')}>
         <h3 className="font-bold text-white flex items-center gap-2 mb-3">
           <ShieldCheck className="w-4 h-4 text-brand-400" /> Certificado Digital A1
         </h3>
@@ -708,7 +740,7 @@ export default function FiscalPage() {
       </div>
 
       {/* Dados da empresa */}
-      <div className="card p-5">
+      <div id="secao-empresa" className="card p-5">
         <h3 className="font-bold text-white mb-3">Dados da Empresa Emitente</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -911,7 +943,7 @@ export default function FiscalPage() {
       </div>
 
       {/* Naturezas de operação */}
-      <div className="card p-5">
+      <div id="secao-naturezas" className="card p-5">
         <h3 className="font-bold text-white mb-3">Naturezas de Operação</h3>
         <p className="text-xs text-gray-400 mb-4">
           Cadastre CFOP/CSOSN uma vez e vincule aos produtos — em vez de configurar item a item.
@@ -1204,7 +1236,7 @@ export default function FiscalPage() {
       </div>
 
       {/* Histórico de notas emitidas */}
-      <div className="card p-5">
+      <div id="secao-notas" className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-white flex items-center gap-2">
             <ScrollText className="w-4 h-4 text-brand-400" /> Notas Emitidas
