@@ -1,4 +1,5 @@
 using CardGameStore.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace CardGameStore.HealthChecks;
@@ -16,10 +17,12 @@ public sealed class DbHealthCheck : IHealthCheck
     {
         try
         {
-            var ok = await _db.Database.CanConnectAsync(cancellationToken);
-            return ok
-                ? HealthCheckResult.Healthy()
-                : HealthCheckResult.Unhealthy("Postgres não respondeu ao ping.");
+            // CanConnectAsync() pode retornar false sem propagar a causa e produziu
+            // falso negativo em produção mesmo enquanto o mesmo DbContext executava
+            // migrations e SELECTs normalmente. Execute um comando real: sucesso
+            // comprova a conexão; falha preserva a exceção para o diagnóstico.
+            await _db.Database.ExecuteSqlRawAsync("SELECT 1;", cancellationToken);
+            return HealthCheckResult.Healthy();
         }
         catch (Exception ex)
         {
