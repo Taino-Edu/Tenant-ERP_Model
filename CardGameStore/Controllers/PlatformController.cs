@@ -6,6 +6,7 @@
 // PATCH /api/platform/tenants/{id}/status → suspende/reativa um tenant
 // =============================================================================
 
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
@@ -30,6 +31,7 @@ public class PlatformController : ControllerBase
     private readonly ILogger<PlatformController> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly string? _rootDomain;
+    private readonly string? _connectionString;
 
     // Formato básico de domínio (labels alfanuméricos/hífen, pelo menos um ponto) — não
     // valida se o domínio existe/resolve de verdade, só barra lixo óbvio antes de gravar.
@@ -47,7 +49,8 @@ public class PlatformController : ControllerBase
         _provisioning = provisioning;
         _logger       = logger;
         _scopeFactory = scopeFactory;
-        _rootDomain   = configuration["Multitenancy:RootDomain"];
+        _rootDomain       = configuration["Multitenancy:RootDomain"];
+        _connectionString = configuration.GetConnectionString("PostgreSQL");
     }
 
     private static TenantSummaryDto ToDto(Tenant t) => new()
@@ -150,6 +153,106 @@ public class PlatformController : ControllerBase
         await _catalog.SaveChangesAsync();
 
         return Ok(ToDto(tenant));
+    }
+
+    /// <summary>Gera um dump SQL (pg_dump, formato plano) do schema inteiro de um
+    /// tenant e devolve como arquivo pra download. Não altera nada — seguro rodar
+    /// a qualquer momento, inclusive antes de uma exclusão.</summary>
+    /// <param name="id">Id do tenant.</param>
+    [HttpGet("tenants/{id:guid}/backup")]
+    public async Task<IActionResult> DownloadTenantBackup(Guid id)
+    {
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(_connectionString))
+            return StatusCode(500, new { Message = "Connection string não configurada." });
+
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(_connectionString);
+
+        var psi = new ProcessStartInfo
+        {
+            FileName               = "pg_dump",
+            RedirectStandardOutput = true,
+            RedirectStandardError  = true,
+            UseShellExecute        = false,
+        };
+        psi.ArgumentList.Add("-h"); psi.ArgumentList.Add(csb.Host ?? "localhost");
+        psi.ArgumentList.Add("-p"); psi.ArgumentList.Add(csb.Port.ToString());
+        psi.ArgumentList.Add("-U"); psi.ArgumentList.Add(csb.Username ?? "");
+        psi.ArgumentList.Add("-d"); psi.ArgumentList.Add(csb.Database ?? "");
+        psi.ArgumentList.Add("-n"); psi.ArgumentList.Add(tenant.SchemaName);
+        psi.ArgumentList.Add("--no-owner");
+        psi.ArgumentList.Add("--no-privileges");
+        psi.EnvironmentVariables["PGPASSWORD"] = csb.Password ?? "";
+
+        try
+        {
+            using var process = Process.Start(psi)
+                ?? throw new InvalidOperationException("Não foi possível iniciar o pg_dump.");
+
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask  = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var output = await outputTask;
+            var error  = await errorTask;
+
+            if (process.ExitCode != 0)
+            {
+                _logger.LogError("pg_dump falhou pro tenant {Slug} (exit {Code}): {Error}", tenant.Slug, process.ExitCode, error);
+                return StatusCode(500, new { Message = "Falha ao gerar backup." });
+            }
+
+            var bytes    = System.Text.Encoding.UTF8.GetBytes(output);
+            var fileName = $"backup-{tenant.Slug}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.sql";
+            return File(bytes, "application/sql", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao gerar backup do tenant {Slug}", tenant.Slug);
+            return StatusCode(500, new { Message = "Falha ao gerar backup." });
+        }
+    }
+
+    /// <summary>Apaga um tenant PERMANENTEMENTE — derruba o schema Postgres inteiro
+    /// (CASCADE) e remove a entrada do catálogo. Irreversível; por isso exige que o
+    /// slug seja digitado de volta no corpo da requisição como confirmação, igual
+    /// convenções de "digite o nome pra confirmar" de outras plataformas.</summary>
+    /// <param name="id">Id do tenant.</param>
+    /// <param name="request">Slug do tenant, pra confirmar a exclusão.</param>
+    [HttpDelete("tenants/{id:guid}")]
+    public async Task<IActionResult> DeleteTenant(Guid id, [FromBody] DeleteTenantRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        if (!string.Equals(request.ConfirmSlug.Trim(), tenant.Slug, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { Message = "Slug de confirmação não bate com o da loja." });
+
+        try
+        {
+#pragma warning disable EF1002
+            // schemaName só contém [a-z0-9_] (validado na criação — ver
+            // TenantProvisioningService), então a interpolação é segura; nome de
+            // schema é identificador, não dá pra parametrizar via ExecuteSqlAsync.
+            await _catalog.Database.ExecuteSqlRawAsync($"DROP SCHEMA IF EXISTS \"{tenant.SchemaName}\" CASCADE");
+#pragma warning restore EF1002
+
+            _catalog.Tenants.Remove(tenant);
+            await _catalog.SaveChangesAsync();
+
+            _logger.LogWarning(
+                "Tenant '{Slug}' (schema '{Schema}') apagado PERMANENTEMENTE pelo dono da plataforma.",
+                tenant.Slug, tenant.SchemaName);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao apagar tenant {Slug}", tenant.Slug);
+            return StatusCode(500, new { Message = "Falha ao apagar a loja." });
+        }
     }
 
     /// <summary>
