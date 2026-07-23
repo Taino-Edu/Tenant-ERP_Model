@@ -58,14 +58,15 @@ export default function CreateTenantModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500 shrink-0">
           <h2 className="font-bold text-white text-lg flex items-center gap-2">
             <Building2 className="w-5 h-5 text-brand-400" /> Cadastrar Tenant
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
         </div>
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        <div className="px-6 py-4 space-y-4 overflow-y-auto">
           <div>
             <label className="label">Slug (subdomínio) *</label>
             <input
@@ -90,7 +91,7 @@ export default function CreateTenantModal({
           </div>
           <div>
             <label className="label">Plano</label>
-            <div className="flex gap-2 mt-1">
+            <div className="flex flex-col sm:flex-row gap-2 mt-1">
               {TENANT_PLAN_PRESETS.map(preset => (
                 <button
                   key={preset.name} type="button" onClick={() => applyPreset(preset)}
@@ -138,12 +139,13 @@ export default function CreateTenantModal({
             />
             <p className="text-xs text-gray-400 mt-1">Vazio = sem limite. Conta Admin + Operator, não clientes.</p>
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
-            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando...</> : <><Plus className="w-4 h-4" /> Criar Tenant</>}
-            </button>
-          </div>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-surface-500 shrink-0">
+          <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+          <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
+            {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando...</> : <><Plus className="w-4 h-4" /> Criar Tenant</>}
+          </button>
+        </div>
         </form>
       </div>
     </div>

@@ -13,6 +13,7 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
+using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -316,6 +317,59 @@ public class PlatformController : ControllerBase
         {
             _logger.LogError(ex, "Falha ao listar funcionários do tenant {Slug}", tenant.Slug);
             return StatusCode(500, new { Message = "Falha ao carregar funcionários desta loja." });
+        }
+    }
+
+    /// <summary>Redefine a senha de um funcionário/admin de um tenant, sem precisar
+    /// impersonar ("Acessar admin") pra entrar na loja e usar o fluxo de lá. Fica
+    /// registrado no audit log do próprio tenant, igual qualquer outra redefinição.</summary>
+    /// <param name="id">Id do tenant.</param>
+    /// <param name="userId">Id do funcionário/admin dentro do schema do tenant.</param>
+    /// <param name="request">Nova senha.</param>
+    [HttpPost("tenants/{id:guid}/staff/{userId:guid}/reset-password")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ResetStaffPassword(Guid id, Guid userId, [FromBody] AdminResetPasswordRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var tc = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+            tc.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.FirstOrDefaultAsync(u =>
+                u.Id == userId && (u.Role == UserRole.Admin || u.Role == UserRole.Operator));
+            if (user is null) return NotFound(new { Message = "Funcionário não encontrado nesta loja." });
+
+            user.PasswordHash             = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, workFactor: 12);
+            user.RefreshToken             = null;
+            user.RefreshTokenExpiry       = null;
+            user.PasswordResetToken       = null;
+            user.PasswordResetTokenExpiry = null;
+            user.UpdatedAt                = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+
+            var audit = scope.ServiceProvider.GetRequiredService<IAuditService>();
+            await audit.LogAsync(
+                "RedefinirSenha", "User", userId.ToString(),
+                details: "Redefinida pelo suporte da plataforma.",
+                httpContext: HttpContext, severity: AuditSeverity.Warning);
+
+            _logger.LogInformation(
+                "Dono da plataforma redefiniu a senha do funcionário {UserId} do tenant {Slug}", userId, tenant.Slug);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao redefinir senha de funcionário do tenant {Slug}", tenant.Slug);
+            return StatusCode(500, new { Message = "Falha ao redefinir a senha." });
         }
     }
 
