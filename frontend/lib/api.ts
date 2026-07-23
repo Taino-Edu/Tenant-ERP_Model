@@ -632,6 +632,9 @@ export interface ClienteHistoricoDto {
   userId: string; userName: string
   totalVisitas: number; totalGasto: number
   primeiraVisita: string | null; ultimaVisita: string | null
+  mediaDiasEntreVisitas: number | null
+  diaSemanaFavorito: string | null
+  categoriaFavorita: string | null
   comandas: ClienteHistoricoComanda[]
   vendasAvulsas: ClienteHistoricoVendaAvulsa[]
   crediarios: ClienteHistoricoCrediario[]
@@ -698,23 +701,46 @@ export interface TenantSummary {
   status: TenantStatus; createdAt: string
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
   customDomain: string | null
+  maxUsers: number | null
 }
 
 export interface CreateTenantRequest {
   slug: string; adminEmail: string; adminPassword: string; enabledModules?: string[]
+  planName?: string; maxUsers?: number | null
 }
 
 /** Catálogo de módulos pagos — mesma lista que o backend aceita
  * (TenantProvisioningService.KnownModules / RequireModuleAttribute). */
 export const TENANT_MODULES = [
   { value: 'fiscal',   label: 'Fiscal',              description: 'Emissão de NFC-e' },
-  { value: 'estoque',  label: 'Estoque',              description: 'Variantes, reservas e lista de espera' },
+  { value: 'estoque',  label: 'Estoque',              description: 'Variantes, reservas e lista de espera (pré-venda)' },
   { value: 'pontos',   label: 'Fidelidade (Pontos)',  description: 'Programa de pontos/cashback dos clientes' },
   { value: 'contador', label: 'Portal do Contador',   description: 'Acesso cross-tenant do contador da loja' },
+  { value: 'ia',       label: 'Assistente de IA',     description: 'Chat com IA (Gemini) sobre estoque e devedores' },
+  { value: 'eventos',  label: 'Gestão de Eventos',    description: 'Cadastro de eventos e cobrança de entrada' },
+] as const
+
+/** Presets de plano pro painel de criação de tenant — só pré-marcam os
+ * módulos e o limite de acesso; o dono da plataforma ainda pode ajustar
+ * manualmente antes de criar (módulos personalizados continuam possíveis). */
+export const TENANT_PLAN_PRESETS = [
+  {
+    name: 'Mar',
+    description: 'Plano completo — todos os módulos',
+    modules: TENANT_MODULES.map(m => m.value) as string[],
+    maxUsers: null as number | null,
+  },
+  {
+    name: 'Lagoa',
+    description: 'Plano base — sem IA, eventos, contador ou estoque avançado',
+    modules: ['fiscal', 'pontos'] as string[],
+    maxUsers: 4 as number | null,
+  },
 ] as const
 
 export interface UpdateTenantBillingRequest {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
+  maxUsers?: number | null
 }
 
 export interface TenantActivity {
@@ -1517,4 +1543,46 @@ export const pushApi = {
                  api.post('/api/push/subscribe', sub),
   unsubscribe: (endpoint: string) =>
                  api.delete('/api/push/subscribe', { data: { endpoint } }),
+}
+
+// ── Eventos (gestão de eventos + cobrança de entrada) ─────────────────────────
+
+export type EventoStatus = 'Planejado' | 'EmAndamento' | 'Concluido' | 'Cancelado'
+
+export interface EventoDto {
+  id: string; nome: string; descricao: string | null; dataEvento: string
+  precoEntradaInCents: number; capacidadeMaxima: number | null; status: EventoStatus
+  entradasVendidas: number; entradasCheckIn: number; faturamentoInCents: number
+  createdAt: string
+}
+
+export interface EventoEntradaDto {
+  id: string; nomeCliente: string; userId: string | null
+  formaPagamento: string; valorPagoInCents: number
+  checkInEm: string | null; canceladaEm: string | null
+  vendidaPorAdminNome: string; createdAt: string
+}
+
+export interface SaveEventoRequest {
+  nome: string; descricao?: string; dataEvento: string
+  precoEntradaInCents: number; capacidadeMaxima?: number | null
+}
+
+export const eventosApi = {
+  list: (status?: EventoStatus) =>
+    api.get<EventoDto[]>('/api/eventos', { params: status ? { status } : undefined }),
+  create: (body: SaveEventoRequest) =>
+    api.post<EventoDto>('/api/eventos', body),
+  update: (id: string, body: SaveEventoRequest & { status: EventoStatus }) =>
+    api.put<EventoDto>(`/api/eventos/${id}`, body),
+  cancel: (id: string) =>
+    api.delete(`/api/eventos/${id}`),
+  listEntradas: (eventoId: string) =>
+    api.get<EventoEntradaDto[]>(`/api/eventos/${eventoId}/entradas`),
+  venderEntrada: (eventoId: string, body: { nomeCliente: string; formaPagamento: string; userId?: string; valorPagoInCents?: number }) =>
+    api.post<EventoEntradaDto>(`/api/eventos/${eventoId}/entradas`, body),
+  checkIn: (eventoId: string, entradaId: string) =>
+    api.post<EventoEntradaDto>(`/api/eventos/${eventoId}/entradas/${entradaId}/checkin`),
+  cancelarEntrada: (eventoId: string, entradaId: string) =>
+    api.delete(`/api/eventos/${eventoId}/entradas/${entradaId}`),
 }

@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { platformApi, getErrorMessage, TENANT_MODULES } from '@/lib/api'
+import { platformApi, getErrorMessage, TENANT_MODULES, TENANT_PLAN_PRESETS } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Building2, Plus, Loader2, X, Check } from 'lucide-react'
 import clsx from 'clsx'
@@ -19,10 +19,22 @@ export default function CreateTenantModal({
   // Fiscal vem marcado por padrão — mesmo default que o backend já aplicava
   // antes desse seletor existir (Tenant.EnabledModules = ["fiscal"]).
   const [modules, setModules]   = useState<string[]>(['fiscal'])
+  const [planName, setPlanName] = useState('Personalizado')
+  const [maxUsers, setMaxUsers] = useState<number | ''>('')
   const [loading, setLoading]   = useState(false)
 
+  function applyPreset(preset: typeof TENANT_PLAN_PRESETS[number]) {
+    setPlanName(preset.name)
+    setModules([...preset.modules])
+    setMaxUsers(preset.maxUsers ?? '')
+  }
+
+  // Qualquer ajuste manual depois de escolher um preset deixa de ser
+  // exatamente aquele plano — evita mandar "Mar"/"Lagoa" pro backend quando
+  // os módulos já não batem mais com o preset original.
   function toggleModule(value: string) {
     setModules(prev => prev.includes(value) ? prev.filter(m => m !== value) : [...prev, value])
+    setPlanName('Personalizado')
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -31,7 +43,8 @@ export default function CreateTenantModal({
     try {
       const { data } = await platformApi.createTenant({
         slug: slug.trim().toLowerCase(), adminEmail: email.trim(), adminPassword: password,
-        enabledModules: modules,
+        enabledModules: modules, planName,
+        maxUsers: maxUsers === '' ? null : maxUsers,
       })
       toast.success(`Tenant "${slug}" criado com sucesso!`)
       onCreated(data.id)
@@ -76,6 +89,26 @@ export default function CreateTenantModal({
             />
           </div>
           <div>
+            <label className="label">Plano</label>
+            <div className="flex gap-2 mt-1">
+              {TENANT_PLAN_PRESETS.map(preset => (
+                <button
+                  key={preset.name} type="button" onClick={() => applyPreset(preset)}
+                  className={clsx(
+                    'flex-1 px-3 py-2 rounded-lg border text-left transition-colors',
+                    planName === preset.name ? 'border-brand-500 bg-brand-600/10' : 'border-surface-500 hover:border-surface-400',
+                  )}
+                >
+                  <span className="block text-sm font-bold text-white">{preset.name}</span>
+                  <span className="block text-xs text-gray-400">{preset.description}</span>
+                </button>
+              ))}
+            </div>
+            {planName === 'Personalizado' && (
+              <p className="text-xs text-gray-500 mt-1">Nenhum preset selecionado — ajuste os módulos manualmente abaixo.</p>
+            )}
+          </div>
+          <div>
             <label className="label">Módulos habilitados</label>
             <div className="space-y-1.5 mt-1">
               {TENANT_MODULES.map(m => (
@@ -95,6 +128,15 @@ export default function CreateTenantModal({
               ))}
             </div>
             <p className="text-xs text-gray-400 mt-1">Dá pra mudar depois na tela da loja.</p>
+          </div>
+          <div>
+            <label className="label">Limite de usuários com acesso ao painel</label>
+            <input
+              type="number" min={1} className="input" placeholder="Sem limite"
+              value={maxUsers}
+              onChange={e => { setMaxUsers(e.target.value === '' ? '' : Number(e.target.value)); setPlanName('Personalizado') }}
+            />
+            <p className="text-xs text-gray-400 mt-1">Vazio = sem limite. Conta Admin + Operator, não clientes.</p>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>

@@ -1301,14 +1301,30 @@ public class NfceEmissionService : INfceEmissionService
     /// crédito/débito"). O sistema não integra com maquininha/TEF — não há CNPJ da
     /// credenciadora, bandeira nem autorização pra informar — então o grupo é enviado
     /// só com `tpIntegra = Não integrado`, que é o mínimo aceito pela SEFAZ nesse caso.
+    ///
+    /// Crediário, Pontos e Cashback não têm código próprio no layout da NFC-e — caem
+    /// em tPag=99 ("Outros"), e a SEFAZ rejeita esse código sem uma descrição em xPag
+    /// (rejeição observada em produção: "Descrição do pagamento obrigatória para meio
+    /// de pagamento 99-outros").
     /// </summary>
     private static detPag MontarDetPagUnico(string formaPagamento, decimal valor)
     {
-        var pag = new detPag { tPag = MapFormaPagamento(formaPagamento), vPag = valor };
+        var tPag = MapFormaPagamento(formaPagamento);
+        var pag = new detPag { tPag = tPag, vPag = valor };
         if (formaPagamento is PaymentMethod.CartaoCredito or PaymentMethod.CartaoDebito)
             pag.card = new card { tpIntegra = TipoIntegracaoPagamento.TipNaoIntegrado };
+        if (tPag == FormaPagamento.fpOutro)
+            pag.xPag = DescricaoFormaPagamentoOutro(formaPagamento);
         return pag;
     }
+
+    private static string DescricaoFormaPagamentoOutro(string formaPagamento) => formaPagamento switch
+    {
+        PaymentMethod.Crediario => "Crediário próprio da loja",
+        PaymentMethod.Pontos    => "Resgate de pontos de fidelidade",
+        PaymentMethod.Cashback  => "Cashback (saldo da loja)",
+        _                       => formaPagamento,
+    };
 
     internal static string SanitizarNcm(string ncm)
     {

@@ -56,10 +56,17 @@ public class Tenant
     public TenantPaymentStatus PaymentStatus { get; set; } = TenantPaymentStatus.Pago;
 
     /// <summary>Módulos pagos habilitados pra este tenant — hoje "fiscal", "estoque",
-    /// "pontos" (fidelidade) e "contador" (portal cross-tenant). Ver RequireModuleAttribute
+    /// "pontos" (fidelidade), "contador" (portal cross-tenant), "ia" (assistente Gemini)
+    /// e "eventos" (gestão de eventos com cobrança de entrada). Ver RequireModuleAttribute
     /// e, pro portal do contador, o gate manual em ContadorPortalController.AutorizarEObterTenantAsync.</summary>
     [Column("enabled_modules")]
     public string[] EnabledModules { get; set; } = new[] { "fiscal" };
+
+    /// <summary>Limite de usuários com acesso ao painel (Admin + Operator) pro plano
+    /// contratado — null significa sem limite. Enforçado em UserService.AdminCreateUserAsync
+    /// na criação de Operator (Customer não conta nem é limitado por isso).</summary>
+    [Column("max_users")]
+    public int? MaxUsers { get; set; }
 
     /// <summary>Cópia denormalizada de SiteConfig.SiteName do schema deste tenant — mantida em
     /// sincronia por SiteConfigController.SaveConfig. Existe só pra o diretório público de lojas

@@ -6,6 +6,7 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/ai")]
 [Authorize(Policy = "AdminOnly")]
+[RequireModule("ia")]
 [EnableRateLimiting("api")]
 public class AiChatController : ControllerBase
 {

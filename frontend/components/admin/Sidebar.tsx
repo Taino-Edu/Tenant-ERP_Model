@@ -10,7 +10,7 @@ import {
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
   Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy, Mail,
-  ChevronsLeft, ChevronsRight, Rocket,
+  ChevronsLeft, ChevronsRight, Rocket, PartyPopper,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -57,6 +57,12 @@ const sections = [
     ],
   },
   {
+    label: 'Eventos',
+    items: [
+      { href: '/admin/eventos', label: 'Gestão de Eventos', icon: PartyPopper, perm: null },
+    ],
+  },
+  {
     label: 'Financeiro',
     items: [
       { href: '/admin/financeiro',     label: 'Financeiro',        icon: TrendingUp,    perm: 'financeiro' },
@@ -100,6 +106,7 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
           (perm === null || hasPermission(perm))
           && (href !== '/admin/fiscal' || enabledModules.includes('fiscal'))
           && (href !== '/admin/reservas' || enabledModules.includes('estoque'))
+          && (href !== '/admin/eventos' || enabledModules.includes('eventos'))
         )
         if (visibleItems.length === 0) return null
         return (

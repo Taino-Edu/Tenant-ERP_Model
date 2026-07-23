@@ -38,9 +38,10 @@ public class ExportController : ControllerBase
         _audit = audit;
     }
 
-    /// <summary>Exporta todos os produtos do catálogo (ativos e inativos) em CSV.</summary>
+    /// <summary>Exporta todos os produtos do catálogo (ativos e inativos).</summary>
+    /// <param name="formato">"csv" (padrão) ou "xlsx".</param>
     [HttpGet("produtos")]
-    public async Task<IActionResult> ExportProdutos()
+    public async Task<IActionResult> ExportProdutos([FromQuery] string formato = "csv")
     {
         var produtos = await _db.Products.AsNoTracking()
             .OrderBy(p => p.Name)
@@ -67,13 +68,14 @@ public class ExportController : ControllerBase
 
         await _audit.LogAsync("ExportouDados", "Product", details: $"{produtos.Count} produtos", httpContext: HttpContext);
 
-        return CsvFile(headers, linhas, "produtos");
+        return ExportFile(headers, linhas, "produtos", formato);
     }
 
     /// <summary>Exporta a base de clientes (não inclui staff/admin nem qualquer dado de
     /// autenticação — só o necessário pra recadastro em outro sistema).</summary>
+    /// <param name="formato">"csv" (padrão) ou "xlsx".</param>
     [HttpGet("clientes")]
-    public async Task<IActionResult> ExportClientes()
+    public async Task<IActionResult> ExportClientes([FromQuery] string formato = "csv")
     {
         var clientes = await _db.Users.AsNoTracking()
             .Where(u => u.Role == UserRole.Customer)
@@ -93,13 +95,14 @@ public class ExportController : ControllerBase
 
         await _audit.LogAsync("ExportouDados", "User", details: $"{clientes.Count} clientes", httpContext: HttpContext);
 
-        return CsvFile(headers, linhas, "clientes");
+        return ExportFile(headers, linhas, "clientes", formato);
     }
 
     /// <summary>Exporta os crediários em aberto (saldo devedor) — histórico já quitado
     /// fica de fora de propósito, é o que importa pra continuar cobrando após migrar.</summary>
+    /// <param name="formato">"csv" (padrão) ou "xlsx".</param>
     [HttpGet("crediario")]
-    public async Task<IActionResult> ExportCrediario()
+    public async Task<IActionResult> ExportCrediario([FromQuery] string formato = "csv")
     {
         var crediarios = await _db.Crediarios.AsNoTracking()
             .Include(c => c.User)
@@ -123,13 +126,22 @@ public class ExportController : ControllerBase
 
         await _audit.LogAsync("ExportouDados", "Crediario", details: $"{crediarios.Count} crediários em aberto", httpContext: HttpContext);
 
-        return CsvFile(headers, linhas, "crediario-em-aberto");
+        return ExportFile(headers, linhas, "crediario-em-aberto", formato);
     }
 
-    private FileContentResult CsvFile(string[] headers, IEnumerable<object?[]> linhas, string nomeBase)
+    /// <summary>Gera o arquivo no formato pedido — "xlsx" pra planilha real (tipos
+    /// numéricos/data preservados, útil pra tabela dinâmica), qualquer outro valor
+    /// cai no CSV padrão (compatibilidade com quem já usava sem o parâmetro).</summary>
+    private FileContentResult ExportFile(string[] headers, IEnumerable<object?[]> linhas, string nomeBase, string formato)
     {
-        var bytes = CsvWriter.Build(headers, linhas);
-        var fileName = $"{nomeBase}-{DateTime.UtcNow:yyyy-MM-dd}.csv";
-        return File(bytes, "text/csv", fileName);
+        var data = linhas as object?[][] ?? linhas.ToArray(); // evita enumerar 2x se vier de uma query já materializada
+        if (string.Equals(formato, "xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            var bytes = ExcelWriter.Build(headers, data, nomeBase);
+            return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"{nomeBase}-{DateTime.UtcNow:yyyy-MM-dd}.xlsx");
+        }
+
+        var csvBytes = CsvWriter.Build(headers, data);
+        return File(csvBytes, "text/csv", $"{nomeBase}-{DateTime.UtcNow:yyyy-MM-dd}.csv");
     }
 }

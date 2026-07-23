@@ -521,6 +521,24 @@ function HistoricoDrawer({ user, onClose, onAnonimized }: { user: UserSummary; o
               </div>
             </div>
 
+            {/* Hábitos de compra */}
+            {(data.diaSemanaFavorito || data.categoriaFavorita || data.mediaDiasEntreVisitas != null) && (
+              <div className="grid grid-cols-3 gap-3 px-5 py-3 border-b border-surface-600 shrink-0">
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white truncate">{data.diaSemanaFavorito ?? '—'}</p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Dia que mais vem</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white truncate">{data.categoriaFavorita ?? '—'}</p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Categoria favorita</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-bold text-white">{data.mediaDiasEntreVisitas != null ? `${data.mediaDiasEntreVisitas}d` : '—'}</p>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Média entre visitas</p>
+                </div>
+              </div>
+            )}
+
             {/* Tabs */}
             <div className="flex gap-1 px-5 py-3 border-b border-surface-600 shrink-0 overflow-x-auto">
               {([
@@ -680,6 +698,7 @@ export default function UsuariosPage() {
   const [insights, setInsights]               = useState<ClienteInsightDto[]>([])
   const [operators, setOperators]             = useState<UserSummary[]>([])
   const [showMobileDetail, setShowMobileDetail] = useState(false)
+  const [novosClientesMes, setNovosClientesMes] = useState(0)
 
   const fetchUsers = useCallback(async (q?: string) => {
     setLoading(true)
@@ -711,6 +730,10 @@ export default function UsuariosPage() {
     fetchUsers()
     fetchOperators()
     analyticsApi.clientes().then(r => setInsights(r.data)).catch(() => {})
+    // Endpoint compartilhado com /admin/dashboard não é tipado (api.get sem
+    // generic) — só usamos o campo novosClientesMes daqui, o resto do payload
+    // fica solto como "any" de propósito, sem redefinir o DTO inteiro aqui.
+    analyticsApi.dashboard().then(r => setNovosClientesMes(r.data?.novosClientesMes ?? 0)).catch(() => {})
   }, [fetchUsers, fetchOperators])
 
   // Busca ao digitar (debounce simples)
@@ -887,7 +910,56 @@ export default function UsuariosPage() {
         </div>
       )}
 
-      {tabSection === 'clientes' && <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:h-[calc(100vh-280px)]">
+      {tabSection === 'clientes' && (<>
+        {/* ── Análises da carteira de clientes ────────────────────────────────── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <div className="card p-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-brand-500/10 flex items-center justify-center shrink-0">
+              <UserPlus className="w-4.5 h-4.5 text-brand-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-lg font-black text-white leading-tight">{novosClientesMes}</p>
+              <p className="text-[11px] text-gray-500 uppercase tracking-wider">Novos clientes (mês)</p>
+            </div>
+          </div>
+          <div className="card p-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4.5 h-4.5 text-emerald-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-lg font-black text-white leading-tight">
+                {(() => {
+                  const comVisita = insights.filter(i => i.numVisitas > 0)
+                  if (comVisita.length === 0) return '—'
+                  return `${Math.round((comVisita.filter(i => i.numVisitas >= 2).length / comVisita.length) * 100)}%`
+                })()}
+              </p>
+              <p className="text-[11px] text-gray-500 uppercase tracking-wider">Taxa de reincidência</p>
+            </div>
+          </div>
+          <div className="card p-3 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-accent-gold/10 flex items-center justify-center shrink-0">
+              <Star className="w-4.5 h-4.5 text-accent-gold" />
+            </div>
+            <div className="min-w-0 flex-1">
+              {insights.length > 0 && insights[0].gastoTotal > 0 ? (
+                <>
+                  <p className="text-sm font-black text-white leading-tight truncate">{insights[0].nome}</p>
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">
+                    Top cliente · R$ {insights[0].gastoTotal.toFixed(2).replace('.', ',')}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-black text-white leading-tight">—</p>
+                  <p className="text-[11px] text-gray-500 uppercase tracking-wider">Top cliente</p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:h-[calc(100vh-280px)]">
 
         {/* ── Lista de clientes ──────────────────────────────────────────────── */}
         <div className={`flex-1 flex flex-col min-w-0 ${showMobileDetail ? 'hidden md:flex' : ''}`}>
@@ -1013,7 +1085,8 @@ export default function UsuariosPage() {
           )}
         </div>
 
-        {/* ── Painel de pontos ──────────────────────────────────────────────── */}
+        {/* ── Painel de pontos — só aparece quando um cliente é selecionado ───── */}
+        {selected && (
         <div className={`${showMobileDetail ? '' : 'hidden md:block'} w-full md:w-80 md:shrink-0`}>
           <div className="md:hidden mb-3">
             <button
@@ -1023,12 +1096,6 @@ export default function UsuariosPage() {
               <ChevronLeft className="w-4 h-4" /> Voltar para lista
             </button>
           </div>
-          {!selected ? (
-            <div className="card h-full flex flex-col items-center justify-center text-gray-400 gap-3">
-              <Star className="w-10 h-10" />
-              <p className="text-sm text-center">Selecione um cliente<br />para gerenciar pontos de fidelidade e cashback</p>
-            </div>
-          ) : (
             <div className="card space-y-5">
               {/* Dados do cliente */}
               <div>
@@ -1194,9 +1261,10 @@ export default function UsuariosPage() {
                 </div>
               </div>
             </div>
-          )}
         </div>
-      </div>}
+        )}
+        </div>
+      </>)}
     </div>
   )
 }
