@@ -1541,3 +1541,45 @@ export const pushApi = {
   unsubscribe: (endpoint: string) =>
                  api.delete('/api/push/subscribe', { data: { endpoint } }),
 }
+
+// ── Eventos (gestão de eventos + cobrança de entrada) ─────────────────────────
+
+export type EventoStatus = 'Planejado' | 'EmAndamento' | 'Concluido' | 'Cancelado'
+
+export interface EventoDto {
+  id: string; nome: string; descricao: string | null; dataEvento: string
+  precoEntradaInCents: number; capacidadeMaxima: number | null; status: EventoStatus
+  entradasVendidas: number; entradasCheckIn: number; faturamentoInCents: number
+  createdAt: string
+}
+
+export interface EventoEntradaDto {
+  id: string; nomeCliente: string; userId: string | null
+  formaPagamento: string; valorPagoInCents: number
+  checkInEm: string | null; canceladaEm: string | null
+  vendidaPorAdminNome: string; createdAt: string
+}
+
+export interface SaveEventoRequest {
+  nome: string; descricao?: string; dataEvento: string
+  precoEntradaInCents: number; capacidadeMaxima?: number | null
+}
+
+export const eventosApi = {
+  list: (status?: EventoStatus) =>
+    api.get<EventoDto[]>('/api/eventos', { params: status ? { status } : undefined }),
+  create: (body: SaveEventoRequest) =>
+    api.post<EventoDto>('/api/eventos', body),
+  update: (id: string, body: SaveEventoRequest & { status: EventoStatus }) =>
+    api.put<EventoDto>(`/api/eventos/${id}`, body),
+  cancel: (id: string) =>
+    api.delete(`/api/eventos/${id}`),
+  listEntradas: (eventoId: string) =>
+    api.get<EventoEntradaDto[]>(`/api/eventos/${eventoId}/entradas`),
+  venderEntrada: (eventoId: string, body: { nomeCliente: string; formaPagamento: string; userId?: string; valorPagoInCents?: number }) =>
+    api.post<EventoEntradaDto>(`/api/eventos/${eventoId}/entradas`, body),
+  checkIn: (eventoId: string, entradaId: string) =>
+    api.post<EventoEntradaDto>(`/api/eventos/${eventoId}/entradas/${entradaId}/checkin`),
+  cancelarEntrada: (eventoId: string, entradaId: string) =>
+    api.delete(`/api/eventos/${eventoId}/entradas/${entradaId}`),
+}

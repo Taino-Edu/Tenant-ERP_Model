@@ -76,6 +76,10 @@ public class AppDbContext : DbContext
     // ── Financeiro: fechamentos formais de período (dia/semana/mês) ───────────
     public DbSet<FechamentoPeriodo>  FechamentosPeriodo   { get; set; }
 
+    // ── Eventos: cadastro de evento + venda/check-in de entradas ──────────────
+    public DbSet<Evento>         Eventos        { get; set; }
+    public DbSet<EventoEntrada>  EventoEntradas { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------
@@ -514,6 +518,23 @@ public class AppDbContext : DbContext
             entity.HasIndex(f => new { f.Tipo, f.DataInicio, f.DataFim })
                   .IsUnique()
                   .HasDatabaseName("ix_fechamentos_periodo_janela");
+        });
+
+        // =====================================================================
+        // EVENTOS
+        // =====================================================================
+        modelBuilder.Entity<Evento>(entity =>
+        {
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasIndex(e => e.DataEvento)
+                  .HasDatabaseName("ix_eventos_data_evento");
+        });
+
+        modelBuilder.Entity<EventoEntrada>(entity =>
+        {
+            entity.HasIndex(e => e.EventoId)
+                  .HasDatabaseName("ix_evento_entradas_evento_id");
         });
     }
 }
