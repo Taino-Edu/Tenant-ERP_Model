@@ -788,6 +788,10 @@ export const platformApi = {
     api.get<TenantStaffDto[]>(`/api/platform/tenants/${id}/staff`),
   resetTenantStaffPassword: (id: string, userId: string, newPassword: string) =>
     api.post<void>(`/api/platform/tenants/${id}/staff/${userId}/reset-password`, { newPassword }),
+  downloadTenantBackup: (id: string) =>
+    api.get(`/api/platform/tenants/${id}/backup`, { responseType: 'blob' }),
+  deleteTenant: (id: string, confirmSlug: string) =>
+    api.delete<void>(`/api/platform/tenants/${id}`, { data: { confirmSlug } }),
   getTenantCustomers: (id: string, page = 1, pageSize = 50) =>
     api.get<PagedResult<TenantCustomerDto>>(`/api/platform/tenants/${id}/customers`, { params: { page, pageSize } }),
   getTenantAuditLogs: (id: string, page = 1, pageSize = 50) =>

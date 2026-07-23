@@ -60,6 +60,15 @@ public class UpdateTenantStatusRequest
     public string Status { get; set; } = string.Empty;
 }
 
+/// <summary>Body de DELETE /api/platform/tenants/{id}. Exclusão apaga o schema
+/// inteiro do tenant (irreversível) — exigir o slug digitado de volta evita
+/// um clique/confirm acidental derrubando a loja errada.</summary>
+public class DeleteTenantRequest
+{
+    [Required]
+    public string ConfirmSlug { get; set; } = string.Empty;
+}
+
 public class UpdateTenantBillingRequest
 {
     [Required, MaxLength(63)]

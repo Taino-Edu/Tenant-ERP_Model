@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { platformApi, TenantSummary, TenantStatus, TenantPaymentStatus, PlatformOverviewDto, getErrorMessage, TENANT_MODULES } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import toast from 'react-hot-toast'
-import { Building2, Plus, Loader2, Power, PowerOff, Check, LogIn, ChevronRight } from 'lucide-react'
+import { Building2, Plus, Loader2, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, X, AlertTriangle } from 'lucide-react'
 import clsx from 'clsx'
 
 function fmtDate(iso: string) {
@@ -49,11 +50,71 @@ const PAYMENT_STYLES: Record<TenantPaymentStatus, string> = {
   Isento:   'bg-gray-500/10 text-gray-400 border-gray-500/30',
 }
 
+// ── Modal: Apagar Tenant (irreversível — exige digitar o slug de volta) ───────
+function DeleteTenantModal({ tenant, onClose, onDeleted }: { tenant: TenantSummary; onClose: () => void; onDeleted: () => void }) {
+  const [confirmSlug, setConfirmSlug] = useState('')
+  const [loading, setLoading]         = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await platformApi.deleteTenant(tenant.id, confirmSlug)
+      toast.success(`Tenant "${tenant.slug}" apagado.`)
+      onDeleted()
+      onClose()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao apagar tenant'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 border border-red-500/40 rounded-2xl w-full max-w-sm shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+          <h2 className="font-bold text-white text-lg flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-400" /> Apagar Tenant
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          <p className="text-sm text-gray-400">
+            Isso apaga <strong className="text-white">{tenant.slug}</strong> e todos os seus dados
+            (produtos, vendas, clientes) <strong className="text-red-400">permanentemente</strong>. Não dá pra desfazer.
+            Considera baixar um backup antes.
+          </p>
+          <div>
+            <label className="label">Digite <code className="text-red-400">{tenant.slug}</code> pra confirmar</label>
+            <input
+              className="input" value={confirmSlug} onChange={e => setConfirmSlug(e.target.value)}
+              placeholder={tenant.slug} required
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button
+              type="submit" disabled={loading || confirmSlug !== tenant.slug}
+              className="flex-1 justify-center inline-flex items-center gap-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium py-2 transition-colors"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Apagar Definitivamente
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummary; lastActivityAt: string | null | undefined; onChanged: () => void }) {
   const [planName, setPlanName]   = useState(tenant.planName)
   const [savingBilling, setSavingBilling] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [impersonating, setImpersonating] = useState(false)
+  const [backingUp, setBackingUp] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
 
   useEffect(() => { setPlanName(tenant.planName) }, [tenant.planName])
 
@@ -94,6 +155,23 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
       ? tenant.enabledModules.filter(m => m !== module)
       : [...tenant.enabledModules, module]
     saveBilling({ enabledModules: nextModules })
+  }
+
+  async function baixarBackup() {
+    setBackingUp(true)
+    try {
+      const { data } = await platformApi.downloadTenantBackup(tenant.id)
+      const url = URL.createObjectURL(data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `backup-${tenant.slug}-${new Date().toISOString().slice(0, 10)}.sql`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao gerar backup'))
+    } finally {
+      setBackingUp(false)
+    }
   }
 
   async function acessarAdmin() {
@@ -196,8 +274,28 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
               : tenant.status === 'Active' ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
             {tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
           </button>
+          <button
+            onClick={baixarBackup}
+            disabled={backingUp}
+            title="Baixar backup (.sql) desta loja"
+            className="btn-secondary text-xs py-1 px-2.5"
+          >
+            {backingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            Backup
+          </button>
+          <button
+            onClick={() => setShowDelete(true)}
+            title="Apagar esta loja permanentemente"
+            className="text-xs py-1 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Apagar
+          </button>
         </div>
       </td>
+      {showDelete && createPortal(
+        <DeleteTenantModal tenant={tenant} onClose={() => setShowDelete(false)} onDeleted={onChanged} />,
+        document.body,
+      )}
     </tr>
   )
 }

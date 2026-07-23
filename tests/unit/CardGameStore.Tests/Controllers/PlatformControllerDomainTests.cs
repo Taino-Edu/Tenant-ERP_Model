@@ -12,6 +12,7 @@ using CardGameStore.Multitenancy;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -37,6 +38,7 @@ public class PlatformControllerDomainTests
             new Mock<ITenantProvisioningService>().Object,
             NullLogger<PlatformController>.Instance,
             new Mock<IServiceScopeFactory>().Object,
+            new MemoryCache(new MemoryCacheOptions()),
             config);
     }
 
