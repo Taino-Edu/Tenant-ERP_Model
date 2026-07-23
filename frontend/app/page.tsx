@@ -724,7 +724,7 @@ function ProductCard({ product: p, onClick, C }: { product: Product; onClick: ()
           {p.isOnPromo && p.discountPriceInReais != null ? (
             <div className="flex flex-col">
               <span className="text-[10px] line-through" style={{ color: C.text }}>
-                R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}
               </span>
               <span className="text-sm font-black" style={{ color: '#FF3B3B' }}>
                 R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}
@@ -732,7 +732,7 @@ function ProductCard({ product: p, onClick, C }: { product: Product; onClick: ()
             </div>
           ) : (
             <span className="text-sm font-black" style={{ color: C.yellow }}>
-              R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+              R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}
             </span>
           )}
             <span className="text-[10px] font-medium" style={{ color: C.cardText }}>
@@ -910,12 +910,12 @@ function ProductModal({ product: p, onClose, C }: { product: Product; onClose: (
                     R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}
                   </span>
                   <span className="text-sm line-through mb-0.5" style={{ color: C.text }}>
-                    R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                    R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}
                   </span>
                 </div>
               ) : (
                 <span className="text-3xl font-black" style={{ color: C.yellow }}>
-                  R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                  R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}
                 </span>
               )}
 
