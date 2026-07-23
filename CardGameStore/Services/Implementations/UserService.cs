@@ -234,22 +234,6 @@ public class UserService : IUserService
                 throw new InvalidOperationException("E-mail é obrigatório para Operadores.");
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Senha é obrigatória para Operadores.");
-
-            // Limite de acesso do plano (ex: Lagoa = 4) — conta quem loga no painel
-            // (Admin+Operator), nunca Customer. Null = sem limite.
-            var maxUsers = await _catalog.Tenants
-                .Where(t => t.Id == _tenant.TenantId)
-                .Select(t => t.MaxUsers)
-                .FirstOrDefaultAsync();
-            if (maxUsers.HasValue)
-            {
-                var acessosAtuais = await _db.Users.CountAsync(u =>
-                    u.IsActive && (u.Role == UserRole.Admin || u.Role == UserRole.Operator));
-                if (acessosAtuais >= maxUsers.Value)
-                    throw new InvalidOperationException(
-                        $"Limite de {maxUsers.Value} usuário(s) com acesso ao painel atingido pro plano atual. " +
-                        "Fale com o suporte pra fazer upgrade de plano.");
-            }
         }
 
         var user = new User
@@ -267,8 +251,53 @@ public class UserService : IUserService
         if (!string.IsNullOrWhiteSpace(request.Password))
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
 
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        // Limite de acesso do plano (ex: Lagoa = 4) — conta quem loga no painel
+        // (Admin+Operator), nunca Customer. Null = sem limite.
+        var maxUsers = role == UserRole.Operator
+            ? await _catalog.Tenants.Where(t => t.Id == _tenant.TenantId).Select(t => t.MaxUsers).FirstOrDefaultAsync()
+            : null;
+
+        if (maxUsers.HasValue)
+        {
+            // Trava consultiva (advisory lock, escopada à transação) chaveada pelo
+            // tenant — serializa duas criações de Operator concorrentes pro MESMO
+            // tenant. Não há uma linha própria do tenant pra travar aqui (o Tenant
+            // vive noutro DbContext/schema, o "public"), daí o advisory lock em vez
+            // de um SELECT ... FOR UPDATE comum. Achado de review: sem isso, duas
+            // requisições concorrentes podiam as duas passar pelo CountAsync abaixo
+            // do limite e criar usuários acima dele.
+            var limiteExcedido = false;
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await _db.Database.BeginTransactionAsync();
+                await _db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtext({_tenant.TenantId.ToString()}))");
+
+                var acessosAtuais = await _db.Users.CountAsync(u =>
+                    u.IsActive && (u.Role == UserRole.Admin || u.Role == UserRole.Operator));
+                if (acessosAtuais >= maxUsers.Value)
+                {
+                    limiteExcedido = true;
+                    await tx.RollbackAsync();
+                    return;
+                }
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+            });
+
+            if (limiteExcedido)
+                throw new InvalidOperationException(
+                    $"Limite de {maxUsers.Value} usuário(s) com acesso ao painel atingido pro plano atual. " +
+                    "Fale com o suporte pra fazer upgrade de plano.");
+        }
+        else
+        {
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
+        }
 
         _logger.LogInformation(
             "Admin {AdminId} criou conta para o cliente {UserId} ({Name}).",

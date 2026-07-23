@@ -66,6 +66,7 @@ public class VendaAvulsaDto
     public string              SoldByAdminName            { get; set; } = string.Empty;
     public int                 DiscountPercent            { get; set; }
     public decimal             DiscountInReais            { get; set; }
+    public DateTime?           CanceladoEm                { get; set; }
     public List<VendaAvulsaItemDto> Items                 { get; set; } = new();
 
     /// <summary>Preenchidos só quando o registro pediu emissão de NFC-e (EmitirNotaFiscal=true) —

@@ -76,6 +76,12 @@ public class TenantProvisioningService : ITenantProvisioningService
         if (slugInUse)
             throw new InvalidOperationException($"Já existe um tenant com o slug '{slug}'.");
 
+        // Defesa em profundidade: o [Range(1,10000)] do DTO já barra isso no único
+        // caller real (PlatformController), mas o service não deveria confiar só
+        // nisso — qualquer chamador futuro também precisa respeitar o limite.
+        if (maxUsers is < 1 or > 10000)
+            throw new InvalidOperationException("Limite de usuários deve estar entre 1 e 10000.");
+
         string[]? modulosValidos = null;
         if (enabledModules is { Length: > 0 })
         {

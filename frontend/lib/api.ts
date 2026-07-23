@@ -740,7 +740,9 @@ export const TENANT_PLAN_PRESETS = [
 
 export interface UpdateTenantBillingRequest {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
+  /** Omitido/null preserva o limite atual — para remover de vez, use removerMaxUsers. */
   maxUsers?: number | null
+  removerMaxUsers?: boolean
 }
 
 export interface TenantActivity {

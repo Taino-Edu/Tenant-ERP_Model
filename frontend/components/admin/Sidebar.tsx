@@ -58,6 +58,9 @@ const sections = [
   },
   {
     label: 'Eventos',
+    // EventosController é [Authorize(Policy = "AdminOnly")] — sem isso, Operator
+    // via o link e recebia 403 (perm: null só pula o filtro de perfil, não o de role).
+    adminOnly: true,
     items: [
       { href: '/admin/eventos', label: 'Gestão de Eventos', icon: PartyPopper, perm: null },
     ],
