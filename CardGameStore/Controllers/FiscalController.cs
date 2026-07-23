@@ -126,6 +126,13 @@ public class FiscalController : ControllerBase
         if (rejeitadas24h > 0)
             pendencias.Add(new { Categoria = "Comunicacao", Mensagem = $"{rejeitadas24h} nota(s) rejeitada(s) nas últimas 24h.", Bloqueia = false });
 
+        // Homologação não bloqueia (a loja pode testar antes de ir pra produção), mas
+        // também não deixa o status virar "Pronto" — nota emitida em Homologação não
+        // tem valor fiscal, então "pronto pra emitir" seria enganoso nesse ambiente.
+        var emHomologacao = cfg?.Ambiente != AmbienteFiscal.Producao;
+        if (emHomologacao)
+            pendencias.Add(new { Categoria = "Ambiente", Mensagem = "Loja ainda em ambiente de Homologação — notas emitidas não têm valor fiscal.", Bloqueia = false });
+
         var bloqueado = !empresaCompleta || !certificadoConfigurado || certificadoVencido || !temNaturezaPadrao;
         var status = bloqueado ? "Bloqueado" : pendencias.Count > 0 ? "RequerAtencao" : "Pronto";
 
@@ -136,6 +143,7 @@ public class FiscalController : ControllerBase
             produtosSemNcm > 0 ? $"Corrigir {produtosSemNcm} produto(s) sem NCM" :
             pendentesCount > 0 ? "Reprocessar notas pendentes" :
             rejeitadas24h > 0 ? "Revisar notas rejeitadas" :
+            emHomologacao ? "Mudar para o ambiente de Produção" :
             "Nenhuma ação necessária";
 
         return Ok(new

@@ -649,9 +649,9 @@ public class PlatformController : ControllerBase
 
         lead.Status            = status;
         lead.Notas             = request.Notas;
-        lead.DigitalPresence   = request.DigitalPresence;
-        lead.OpportunityScore  = request.OpportunityScore;
-        lead.PlaceId           = request.PlaceId;
+        lead.DigitalPresence   = request.DigitalPresence  ?? lead.DigitalPresence;
+        lead.OpportunityScore  = request.OpportunityScore ?? lead.OpportunityScore;
+        lead.PlaceId           = request.PlaceId          ?? lead.PlaceId;
         lead.ConvertedTenantId = request.ConvertedTenantId ?? lead.ConvertedTenantId;
         lead.UpdatedAt         = DateTime.UtcNow;
         await _catalog.SaveChangesAsync();
