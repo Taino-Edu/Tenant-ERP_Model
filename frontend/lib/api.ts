@@ -632,6 +632,9 @@ export interface ClienteHistoricoDto {
   userId: string; userName: string
   totalVisitas: number; totalGasto: number
   primeiraVisita: string | null; ultimaVisita: string | null
+  mediaDiasEntreVisitas: number | null
+  diaSemanaFavorito: string | null
+  categoriaFavorita: string | null
   comandas: ClienteHistoricoComanda[]
   vendasAvulsas: ClienteHistoricoVendaAvulsa[]
   crediarios: ClienteHistoricoCrediario[]

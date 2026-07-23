@@ -205,6 +205,17 @@ public class ClienteHistoricoDto
     public DateTime? PrimeiraVisita { get; set; }
     public DateTime? UltimaVisita   { get; set; }
 
+    /// <summary>Média de dias entre visitas consecutivas (comandas fechadas + vendas
+    /// avulsas com cliente identificado) — null com menos de 2 visitas.</summary>
+    public double? MediaDiasEntreVisitas { get; set; }
+
+    /// <summary>Dia da semana com mais visitas (ex: "Sábado") — null sem visitas.</summary>
+    public string? DiaSemanaFavorito { get; set; }
+
+    /// <summary>Categoria de produto mais comprada por quantidade (comandas + vendas
+    /// avulsas) — null sem itens categorizados.</summary>
+    public string? CategoriaFavorita { get; set; }
+
     // Paginação de comandas
     public int TotalComandas { get; set; }
     public int Page          { get; set; }
