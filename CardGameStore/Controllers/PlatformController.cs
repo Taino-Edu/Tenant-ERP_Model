@@ -30,6 +30,7 @@ public class PlatformController : ControllerBase
     private readonly ITenantProvisioningService _provisioning;
     private readonly ILogger<PlatformController> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
     private readonly string? _rootDomain;
     private readonly string? _connectionString;
 
@@ -43,12 +44,14 @@ public class PlatformController : ControllerBase
         ITenantProvisioningService provisioning,
         ILogger<PlatformController> logger,
         IServiceScopeFactory scopeFactory,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
         IConfiguration configuration)
     {
         _catalog      = catalog;
         _provisioning = provisioning;
         _logger       = logger;
         _scopeFactory = scopeFactory;
+        _cache            = cache;
         _rootDomain       = configuration["Multitenancy:RootDomain"];
         _connectionString = configuration.GetConnectionString("PostgreSQL");
     }
@@ -233,6 +236,14 @@ public class PlatformController : ControllerBase
 
         try
         {
+            // TenantResolutionMiddleware cacheia o lookup de slug/domínio por até
+            // 30s (CacheTtl) — sem invalidar aqui, uma requisição que caia nessa
+            // janela depois do DROP tentaria rotear pro schema que acabou de
+            // sumir, em vez de um 404 limpo (achado de review da PR).
+            _cache.Remove($"tenant-slug:{tenant.Slug}");
+            if (!string.IsNullOrWhiteSpace(tenant.CustomDomain))
+                _cache.Remove($"tenant-domain:{tenant.CustomDomain.ToLowerInvariant()}");
+
 #pragma warning disable EF1002
             // schemaName só contém [a-z0-9_] (validado na criação — ver
             // TenantProvisioningService), então a interpolação é segura; nome de
