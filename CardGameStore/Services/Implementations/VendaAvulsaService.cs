@@ -576,6 +576,7 @@ public class VendaAvulsaService : IVendaAvulsaService
         DiscountInReais            = v.DiscountInReais,
         SoldAt                     = v.SoldAt,
         SoldByAdminName            = v.SoldByAdminName,
+        CanceladoEm                = v.CanceladoEm,
         Items                      = v.Items.Select(i => new VendaAvulsaItemDto
         {
             ProductName      = i.ProductName,

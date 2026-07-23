@@ -49,7 +49,7 @@ public class EventosController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(status))
         {
-            if (!Enum.TryParse<EventoStatus>(status, out var parsed))
+            if (!Enum.TryParse<EventoStatus>(status, out var parsed) || !Enum.IsDefined(parsed))
                 return BadRequest(new { Message = $"Status inválido: '{status}'." });
             query = query.Where(e => e.Status == parsed);
         }
@@ -103,11 +103,18 @@ public class EventosController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        if (!Enum.TryParse<EventoStatus>(request.Status, out var status))
+        if (!Enum.TryParse<EventoStatus>(request.Status, out var status) || !Enum.IsDefined(status))
             return BadRequest(new { Message = $"Status inválido: '{request.Status}'." });
 
         var evento = await _db.Eventos.FindAsync(id);
         if (evento is null) return NotFound();
+
+        if (request.CapacidadeMaxima.HasValue)
+        {
+            var vendidasAtivas = await _db.EventoEntradas.CountAsync(en => en.EventoId == id && en.CanceladaEm == null);
+            if (request.CapacidadeMaxima.Value < vendidasAtivas)
+                return BadRequest(new { Message = $"Já há {vendidasAtivas} entrada(s) ativa(s) vendida(s) — a capacidade não pode ser menor que isso." });
+        }
 
         evento.Nome                = request.Nome.Trim();
         evento.Descricao           = string.IsNullOrWhiteSpace(request.Descricao) ? null : request.Descricao.Trim();
@@ -170,13 +177,6 @@ public class EventosController : ControllerBase
         if (evento.Status is EventoStatus.Cancelado or EventoStatus.Concluido)
             return BadRequest(new { Message = $"Evento está {evento.Status} — não é possível vender mais entradas." });
 
-        if (evento.CapacidadeMaxima.HasValue)
-        {
-            var vendidas = await _db.EventoEntradas.CountAsync(en => en.EventoId == id && en.CanceladaEm == null);
-            if (vendidas >= evento.CapacidadeMaxima.Value)
-                return BadRequest(new { Message = $"Capacidade máxima ({evento.CapacidadeMaxima.Value}) já atingida pro evento." });
-        }
-
         var entrada = new EventoEntrada
         {
             EventoId            = id,
@@ -188,8 +188,36 @@ public class EventosController : ControllerBase
             VendidaPorAdminNome = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "Admin",
         };
 
-        _db.EventoEntradas.Add(entrada);
-        await _db.SaveChangesAsync();
+        // Trava a linha do evento (SELECT ... FOR UPDATE) antes de contar as entradas
+        // ativas — duas vendas concorrentes pro último lugar não podem mais as duas
+        // passar pela checagem de capacidade e inserir (achado de review: sem a trava,
+        // a checagem e o INSERT são operações separadas e dá pra vender acima do limite).
+        var capacidadeExcedida = false;
+        var strategy = _db.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            await _db.Database.ExecuteSqlInterpolatedAsync($"SELECT id FROM eventos WHERE id = {id} FOR UPDATE");
+
+            if (evento.CapacidadeMaxima.HasValue)
+            {
+                var vendidas = await _db.EventoEntradas.CountAsync(en => en.EventoId == id && en.CanceladaEm == null);
+                if (vendidas >= evento.CapacidadeMaxima.Value)
+                {
+                    capacidadeExcedida = true;
+                    await tx.RollbackAsync();
+                    return;
+                }
+            }
+
+            _db.EventoEntradas.Add(entrada);
+            await _db.SaveChangesAsync();
+            await tx.CommitAsync();
+        });
+
+        if (capacidadeExcedida)
+            return BadRequest(new { Message = $"Capacidade máxima ({evento.CapacidadeMaxima}) já atingida pro evento." });
+
         await _audit.LogAsync("VendeuEntradaEvento", "EventoEntrada", entrada.Id.ToString(),
             details: $"{entrada.NomeCliente} — {entrada.ValorPagoInCents / 100m:F2}", httpContext: HttpContext);
 

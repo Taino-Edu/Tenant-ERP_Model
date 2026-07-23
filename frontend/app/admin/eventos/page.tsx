@@ -33,12 +33,20 @@ function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
+// datetime-local espera componentes de HORÁRIO LOCAL — um slice(0,16) direto no ISO
+// (que vem em UTC da API) trata UTC como se já fosse local, deslocando a data pelo
+// fuso do navegador toda vez que o evento é reaberto sem alterações (achado de review).
+function toDateTimeLocal(iso: string): string {
+  const date = new Date(iso)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+}
+
 // ── Modal de criar/editar evento ──────────────────────────────────────────────
 
 function EventoFormModal({ evento, onClose, onSaved }: { evento: EventoDto | null; onClose: () => void; onSaved: () => void }) {
   const [nome, setNome]           = useState(evento?.nome ?? '')
   const [descricao, setDescricao] = useState(evento?.descricao ?? '')
-  const [data, setData]           = useState(evento ? evento.dataEvento.slice(0, 16) : '')
+  const [data, setData]           = useState(evento ? toDateTimeLocal(evento.dataEvento) : '')
   const [preco, setPreco]         = useState(evento ? (evento.precoEntradaInCents / 100).toString() : '')
   const [capacidade, setCapacidade] = useState(evento?.capacidadeMaxima?.toString() ?? '')
   const [status, setStatus]       = useState<EventoStatus>(evento?.status ?? 'Planejado')
@@ -317,8 +325,18 @@ export default function EventosPage() {
           {eventos.map(ev => (
             <div
               key={ev.id}
+              role="button"
+              tabIndex={0}
               onClick={() => setSelectedId(ev.id)}
-              className="w-full card p-4 flex items-center justify-between gap-3 text-left hover:border-brand-500/40 transition-colors cursor-pointer"
+              onKeyDown={e => {
+                // Só ativa quando o foco está no card em si (não no botão "Editar"
+                // aninhado) — senão Enter/Espaço no botão também dispararia a seleção.
+                if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+                  e.preventDefault()
+                  setSelectedId(ev.id)
+                }
+              }}
+              className="w-full card p-4 flex items-center justify-between gap-3 text-left hover:border-brand-500/40 transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500/50"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">

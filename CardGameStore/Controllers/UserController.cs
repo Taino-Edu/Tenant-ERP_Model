@@ -301,8 +301,12 @@ public class UserController : ControllerBase
 
         // ── Análises: dia da semana favorito, média de dias entre visitas e
         // categoria mais comprada — combinando comandas fechadas + vendas avulsas.
+        // Vendas canceladas não contam como visita nem entram na categoria favorita
+        // (achado de review: cliente com só uma venda cancelada não pode "ganhar"
+        // um dia/categoria favorita a partir dela).
+        var vendasAtivas = vendasAvulsas.Where(v => v.CanceladoEm == null).ToList();
         var datasComandas = await statsQuery.Select(c => c.ClosedAt!.Value).ToListAsync();
-        var todasVisitas = datasComandas.Concat(vendasAvulsas.Select(v => v.SoldAt)).OrderBy(d => d).ToList();
+        var todasVisitas = datasComandas.Concat(vendasAtivas.Select(v => v.SoldAt)).OrderBy(d => d).ToList();
 
         string? diaSemanaFavorito = null;
         double? mediaDiasEntreVisitas = null;
@@ -340,7 +344,7 @@ public class UserController : ControllerBase
             .ToListAsync();
         foreach (var item in itensComandaCategorias.Where(i => !string.IsNullOrWhiteSpace(i.Categoria)))
             categoriaContagem[item.Categoria!] = categoriaContagem.GetValueOrDefault(item.Categoria!) + item.Quantity;
-        foreach (var item in vendasAvulsas.SelectMany(v => v.Items).Where(i => !string.IsNullOrWhiteSpace(i.ProductCategory)))
+        foreach (var item in vendasAtivas.SelectMany(v => v.Items).Where(i => !string.IsNullOrWhiteSpace(i.ProductCategory)))
             categoriaContagem[item.ProductCategory!] = categoriaContagem.GetValueOrDefault(item.ProductCategory!) + item.Quantity;
         var categoriaFavorita = categoriaContagem.Count > 0
             ? categoriaContagem.OrderByDescending(kv => kv.Value).First().Key
