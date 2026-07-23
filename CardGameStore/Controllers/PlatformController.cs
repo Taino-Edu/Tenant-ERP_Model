@@ -60,6 +60,7 @@ public class PlatformController : ControllerBase
         PaymentStatus  = t.PaymentStatus.ToString(),
         EnabledModules = t.EnabledModules,
         CustomDomain   = t.CustomDomain,
+        MaxUsers       = t.MaxUsers,
     };
 
     /// <summary>Lista todos os tenants cadastrados na plataforma, mais recente primeiro.
@@ -84,7 +85,9 @@ public class PlatformController : ControllerBase
 
         try
         {
-            var tenant = await _provisioning.ProvisionAsync(request.Slug, request.AdminEmail, request.AdminPassword, request.EnabledModules);
+            var tenant = await _provisioning.ProvisionAsync(
+                request.Slug, request.AdminEmail, request.AdminPassword, request.EnabledModules,
+                request.PlanName, request.MaxUsers);
             return CreatedAtAction(nameof(ListTenants), ToDto(tenant));
         }
         catch (InvalidOperationException ex)
@@ -137,6 +140,7 @@ public class PlatformController : ControllerBase
         tenant.PlanName       = request.PlanName;
         tenant.PaymentStatus  = paymentStatus;
         tenant.EnabledModules = request.EnabledModules;
+        tenant.MaxUsers       = request.MaxUsers;
         await _catalog.SaveChangesAsync();
 
         return Ok(ToDto(tenant));

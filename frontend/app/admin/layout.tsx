@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
 import { saveAuth, clearAuth, getImpersonatingOwnerName } from '@/lib/auth'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 // Aplica o último ramp de cor de marca cacheado ANTES da hidratação — evita
 // flash da cor default no reload, mesmo padrão já usado pro tema claro/escuro
@@ -21,6 +22,7 @@ const REFRESH_INTERVAL_MS = 45 * 60 * 1000
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const { site } = useSiteConfig()
   const [impersonatingOwner, setImpersonatingOwner] = useState<string | null>(null)
 
   useEffect(() => {
@@ -78,7 +80,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         />
         {children}
       </main>
-      <AiChatWidget />
+      {site.enabledModules.includes('ia') && <AiChatWidget />}
       <KeyboardShortcutsOverlay />
       <TimerAlarmOverlay />
     </div>

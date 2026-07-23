@@ -20,7 +20,7 @@ public class TenantProvisioningService : ITenantProvisioningService
     /// pra montar os checkboxes de criação/edição de tenant (ver lib/api.ts TENANT_MODULES).
     /// Módulo desconhecido na criação é rejeitado em vez de gravado silenciosamente (typo
     /// no request viraria um módulo fantasma, sem RequireModule nenhum lendo aquele nome).</summary>
-    public static readonly string[] KnownModules = ["fiscal", "estoque", "pontos", "contador"];
+    public static readonly string[] KnownModules = ["fiscal", "estoque", "pontos", "contador", "ia", "eventos"];
 
     // Provisionamento (criar schema + rodar migrations + admin inicial) não
     // tinha nenhuma trava de concorrência: dois cadastros de tenant no mesmo
@@ -45,12 +45,14 @@ public class TenantProvisioningService : ITenantProvisioningService
         _logger       = logger;
     }
 
-    public async Task<Tenant> ProvisionAsync(string slug, string adminEmail, string adminPassword, string[]? enabledModules = null)
+    public async Task<Tenant> ProvisionAsync(
+        string slug, string adminEmail, string adminPassword, string[]? enabledModules = null,
+        string? planName = null, int? maxUsers = null)
     {
         await _provisionLock.WaitAsync();
         try
         {
-            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules);
+            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules, planName, maxUsers);
         }
         finally
         {
@@ -58,7 +60,9 @@ public class TenantProvisioningService : ITenantProvisioningService
         }
     }
 
-    private async Task<Tenant> ProvisionLockedAsync(string slug, string adminEmail, string adminPassword, string[]? enabledModules)
+    private async Task<Tenant> ProvisionLockedAsync(
+        string slug, string adminEmail, string adminPassword, string[]? enabledModules,
+        string? planName, int? maxUsers)
     {
         slug = slug.Trim().ToLowerInvariant();
 
@@ -94,6 +98,10 @@ public class TenantProvisioningService : ITenantProvisioningService
         // preserva o comportamento de antes desse parâmetro existir.
         if (modulosValidos is not null)
             tenant.EnabledModules = modulosValidos;
+        if (!string.IsNullOrWhiteSpace(planName))
+            tenant.PlanName = planName.Trim();
+        if (maxUsers.HasValue)
+            tenant.MaxUsers = maxUsers.Value;
 
         _catalog.Tenants.Add(tenant);
         await _catalog.SaveChangesAsync();

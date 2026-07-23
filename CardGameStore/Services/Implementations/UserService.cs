@@ -5,6 +5,7 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,12 +14,16 @@ namespace CardGameStore.Services.Implementations;
 public class UserService : IUserService
 {
     private readonly AppDbContext          _db;
+    private readonly CatalogDbContext      _catalog;
+    private readonly ITenantContext        _tenant;
     private readonly ILogger<UserService>  _logger;
 
-    public UserService(AppDbContext db, ILogger<UserService> logger)
+    public UserService(AppDbContext db, CatalogDbContext catalog, ITenantContext tenant, ILogger<UserService> logger)
     {
-        _db     = db;
-        _logger = logger;
+        _db      = db;
+        _catalog = catalog;
+        _tenant  = tenant;
+        _logger  = logger;
     }
 
     public async Task<IEnumerable<UserSummaryDto>> GetAllAsync(string? search = null, string? role = null)
@@ -229,6 +234,22 @@ public class UserService : IUserService
                 throw new InvalidOperationException("E-mail é obrigatório para Operadores.");
             if (string.IsNullOrWhiteSpace(request.Password))
                 throw new InvalidOperationException("Senha é obrigatória para Operadores.");
+
+            // Limite de acesso do plano (ex: Lagoa = 4) — conta quem loga no painel
+            // (Admin+Operator), nunca Customer. Null = sem limite.
+            var maxUsers = await _catalog.Tenants
+                .Where(t => t.Id == _tenant.TenantId)
+                .Select(t => t.MaxUsers)
+                .FirstOrDefaultAsync();
+            if (maxUsers.HasValue)
+            {
+                var acessosAtuais = await _db.Users.CountAsync(u =>
+                    u.IsActive && (u.Role == UserRole.Admin || u.Role == UserRole.Operator));
+                if (acessosAtuais >= maxUsers.Value)
+                    throw new InvalidOperationException(
+                        $"Limite de {maxUsers.Value} usuário(s) com acesso ao painel atingido pro plano atual. " +
+                        "Fale com o suporte pra fazer upgrade de plano.");
+            }
         }
 
         var user = new User

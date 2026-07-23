@@ -698,23 +698,46 @@ export interface TenantSummary {
   status: TenantStatus; createdAt: string
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
   customDomain: string | null
+  maxUsers: number | null
 }
 
 export interface CreateTenantRequest {
   slug: string; adminEmail: string; adminPassword: string; enabledModules?: string[]
+  planName?: string; maxUsers?: number | null
 }
 
 /** Catálogo de módulos pagos — mesma lista que o backend aceita
  * (TenantProvisioningService.KnownModules / RequireModuleAttribute). */
 export const TENANT_MODULES = [
   { value: 'fiscal',   label: 'Fiscal',              description: 'Emissão de NFC-e' },
-  { value: 'estoque',  label: 'Estoque',              description: 'Variantes, reservas e lista de espera' },
+  { value: 'estoque',  label: 'Estoque',              description: 'Variantes, reservas e lista de espera (pré-venda)' },
   { value: 'pontos',   label: 'Fidelidade (Pontos)',  description: 'Programa de pontos/cashback dos clientes' },
   { value: 'contador', label: 'Portal do Contador',   description: 'Acesso cross-tenant do contador da loja' },
+  { value: 'ia',       label: 'Assistente de IA',     description: 'Chat com IA (Gemini) sobre estoque e devedores' },
+  { value: 'eventos',  label: 'Gestão de Eventos',    description: 'Cadastro de eventos e cobrança de entrada' },
+] as const
+
+/** Presets de plano pro painel de criação de tenant — só pré-marcam os
+ * módulos e o limite de acesso; o dono da plataforma ainda pode ajustar
+ * manualmente antes de criar (módulos personalizados continuam possíveis). */
+export const TENANT_PLAN_PRESETS = [
+  {
+    name: 'Mar',
+    description: 'Plano completo — todos os módulos',
+    modules: TENANT_MODULES.map(m => m.value) as string[],
+    maxUsers: null as number | null,
+  },
+  {
+    name: 'Lagoa',
+    description: 'Plano base — sem IA, eventos, contador ou estoque avançado',
+    modules: ['fiscal', 'pontos'] as string[],
+    maxUsers: 4 as number | null,
+  },
 ] as const
 
 export interface UpdateTenantBillingRequest {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
+  maxUsers?: number | null
 }
 
 export interface TenantActivity {

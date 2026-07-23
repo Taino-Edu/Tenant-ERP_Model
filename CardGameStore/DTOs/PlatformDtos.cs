@@ -21,6 +21,15 @@ public class CreateTenantRequest
     /// cai no default do model (["fiscal"]) — ver TenantProvisioningService.KnownModules pra
     /// lista de nomes aceitos.</summary>
     public string[]? EnabledModules { get; set; }
+
+    /// <summary>Nome do plano contratado (ex: "Mar", "Lagoa", "Personalizado"). Texto livre —
+    /// sem enum fixo, pricing ainda não fechado.</summary>
+    [MaxLength(63)]
+    public string? PlanName { get; set; }
+
+    /// <summary>Limite de usuários com acesso ao painel (Admin+Operator). Null = sem limite.</summary>
+    [Range(1, 10000)]
+    public int? MaxUsers { get; set; }
 }
 
 public class TenantSummaryDto
@@ -34,6 +43,7 @@ public class TenantSummaryDto
     public string PaymentStatus { get; set; } = string.Empty;
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
     public string? CustomDomain { get; set; }
+    public int? MaxUsers { get; set; }
 }
 
 /// <summary>Body de PATCH /api/platform/tenants/{id}/domain. CustomDomain null ou
@@ -59,6 +69,10 @@ public class UpdateTenantBillingRequest
     public string PaymentStatus { get; set; } = string.Empty;
 
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
+
+    /// <summary>Limite de usuários com acesso ao painel (Admin+Operator). Null = sem limite.</summary>
+    [Range(1, 10000)]
+    public int? MaxUsers { get; set; }
 }
 
 public class PlatformOverviewDto
