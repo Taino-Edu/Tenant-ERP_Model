@@ -337,13 +337,13 @@ public class PlatformController : ControllerBase
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
         if (tenant is null) return NotFound();
 
+        using var scope = _scopeFactory.CreateScope();
+        var tc = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tc.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
         try
         {
-            using var scope = _scopeFactory.CreateScope();
-            var tc = scope.ServiceProvider.GetRequiredService<ITenantContext>();
-            tc.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
-
-            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var user = await db.Users.FirstOrDefaultAsync(u =>
                 u.Id == userId && (u.Role == UserRole.Admin || u.Role == UserRole.Operator));
             if (user is null) return NotFound(new { Message = "Funcionário não encontrado nesta loja." });
@@ -355,22 +355,32 @@ public class PlatformController : ControllerBase
             user.PasswordResetTokenExpiry = null;
             user.UpdatedAt                = DateTime.UtcNow;
             await db.SaveChangesAsync();
-
-            var audit = scope.ServiceProvider.GetRequiredService<IAuditService>();
-            await audit.LogAsync(
-                "RedefinirSenha", "User", userId.ToString(),
-                details: "Redefinida pelo suporte da plataforma.",
-                httpContext: HttpContext, severity: AuditSeverity.Warning);
-
-            _logger.LogInformation(
-                "Dono da plataforma redefiniu a senha do funcionário {UserId} do tenant {Slug}", userId, tenant.Slug);
-            return NoContent();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Falha ao redefinir senha de funcionário do tenant {Slug}", tenant.Slug);
             return StatusCode(500, new { Message = "Falha ao redefinir a senha." });
         }
+
+        // Senha já trocada com sucesso a partir daqui — uma falha no audit log (best-effort,
+        // nunca deve derrubar a resposta) não pode virar um 500 enganoso dizendo que a
+        // redefinição falhou quando na verdade já foi aplicada.
+        try
+        {
+            var audit = scope.ServiceProvider.GetRequiredService<IAuditService>();
+            await audit.LogAsync(
+                "RedefinirSenha", "User", userId.ToString(),
+                details: "Redefinida pelo suporte da plataforma.",
+                httpContext: HttpContext, severity: AuditSeverity.Warning);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao registrar audit log da redefinição de senha do funcionário {UserId}", userId);
+        }
+
+        _logger.LogInformation(
+            "Dono da plataforma redefiniu a senha do funcionário {UserId} do tenant {Slug}", userId, tenant.Slug);
+        return NoContent();
     }
 
     /// <summary>Lista os clientes (Role Customer) do schema de um tenant, paginado.</summary>

@@ -124,7 +124,7 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Preço de Venda</span>
               <span className="text-lg font-black font-mono text-accent-gold">
-                R$ {(product.priceInReais ?? 0).toFixed(2).replace('.', ',')}
+                R$ {(product.priceInReais ?? (product.priceInCents / 100)).toFixed(2).replace('.', ',')}
               </span>
             </div>
             {product.costPriceInCents > 0 && (
@@ -1311,7 +1311,7 @@ function EstoqueContent() {
                     {p.costPriceInCents > 0 ? `R$ ${p.costPriceInReais.toFixed(2).replace('.', ',')}` : '—'}
                   </td>
                   <td className="px-4 py-3 font-mono text-accent-gold font-semibold">
-                    R$ {(p.priceInReais ?? 0).toFixed(2).replace('.', ',')}
+                    R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">
                     {p.costPriceInCents > 0
@@ -1420,7 +1420,7 @@ function EstoqueContent() {
 
               {/* Linha 2: preço + custo + margem */}
               <div className="flex items-center gap-3 text-xs flex-wrap">
-                <span className="text-accent-gold font-bold">R$ {(p.priceInReais ?? 0).toFixed(2).replace('.', ',')}</span>
+                <span className="text-accent-gold font-bold">R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}</span>
                 {p.costPriceInCents > 0 && (
                   <>
                     <span className="text-gray-500">Custo: R$ {p.costPriceInReais.toFixed(2).replace('.', ',')}</span>
