@@ -605,6 +605,9 @@ public class PlatformController : ControllerBase
         Origem            = l.Origem,
         Status            = l.Status.ToString(),
         Notas             = l.Notas,
+        DigitalPresence   = l.DigitalPresence,
+        OpportunityScore  = l.OpportunityScore,
+        PlaceId           = l.PlaceId,
         CreatedAt         = l.CreatedAt,
         UpdatedAt         = l.UpdatedAt,
         ConvertedTenantId = l.ConvertedTenantId,
@@ -646,6 +649,9 @@ public class PlatformController : ControllerBase
 
         lead.Status            = status;
         lead.Notas             = request.Notas;
+        lead.DigitalPresence   = request.DigitalPresence  ?? lead.DigitalPresence;
+        lead.OpportunityScore  = request.OpportunityScore ?? lead.OpportunityScore;
+        lead.PlaceId           = request.PlaceId          ?? lead.PlaceId;
         lead.ConvertedTenantId = request.ConvertedTenantId ?? lead.ConvertedTenantId;
         lead.UpdatedAt         = DateTime.UtcNow;
         await _catalog.SaveChangesAsync();

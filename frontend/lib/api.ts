@@ -825,10 +825,12 @@ export interface ImportResultDto {
 // ── Leads (captação pública, CTA da landing) ──────────────────────────────────
 
 export type LeadStatus = 'Novo' | 'Contatado' | 'Convertido' | 'Perdido'
+export type LeadDigitalPresence = 'SemSite' | 'SiteLegado' | 'ECommerce'
 
 export interface LeadDto {
   id: string; nome: string; telefone: string; email: string | null; mensagem: string | null
   origem: string; status: LeadStatus; notas: string | null
+  digitalPresence: LeadDigitalPresence | null; opportunityScore: number | null; placeId: string | null
   createdAt: string; updatedAt: string; convertedTenantId: string | null
 }
 
@@ -838,6 +840,7 @@ export interface CreateLeadRequest {
 
 export interface UpdateLeadRequest {
   status: LeadStatus; notas?: string | null; convertedTenantId?: string | null
+  digitalPresence?: LeadDigitalPresence | null; opportunityScore?: number | null; placeId?: string | null
 }
 
 export const leadsApi = {
@@ -1193,6 +1196,20 @@ export interface FiscalConfigDto {
   ibptUltimoErro?: string
 }
 
+export interface FiscalSaudeDto {
+  status: 'Pronto' | 'RequerAtencao' | 'Bloqueado'
+  ambiente: 'Homologacao' | 'Producao'
+  checklist: { etapa: string; concluido: boolean }[]
+  notas: {
+    autorizadas24h: number; rejeitadas24h: number
+    pendentesTotal: number; pendenteMaisAntigaDesde?: string
+  }
+  certificado: { configurado: boolean; certificadoValidade?: string; diasParaVencer?: number; vencido: boolean }
+  produtos: { produtosAtivos: number; semNcm: number; produtosPendentes: number; produtosVencidos: number }
+  pendencias: { categoria: string; mensagem: string; bloqueia: boolean }[]
+  proximaAcao: string
+}
+
 export interface IbptStatusDto {
   configurado: boolean; autoSyncAtivo: boolean
   ultimaSincronizacao?: string; ultimaVersao?: string
@@ -1257,6 +1274,7 @@ export interface CupomDto {
 }
 
 export const fiscalApi = {
+  getSaude:   () => api.get<FiscalSaudeDto>('/api/fiscal/saude'),
   getConfig:  ()                                    => api.get<FiscalConfigDto>('/api/fiscal/config'),
   saveConfig: (body: Partial<{
     cnpj: string; razaoSocial: string; inscricaoEstadual: string

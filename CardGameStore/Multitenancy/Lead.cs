@@ -54,6 +54,26 @@ public class Lead
     [Column("notas")]
     public string? Notas { get; set; }
 
+    /// <summary>Presença digital do comércio, anotada manualmente pelo dono da
+    /// plataforma ao prospectar (ex: achou no Google Maps sem site). Valores:
+    /// "SemSite", "SiteLegado", "ECommerce". Sem scouting automático ainda —
+    /// isso é preenchido à mão até existir um bot de prospecção.</summary>
+    [MaxLength(20)]
+    [Column("digital_presence")]
+    public string? DigitalPresence { get; set; }
+
+    /// <summary>Pontuação de oportunidade (0 a 100), anotada manualmente —
+    /// mesma ressalva do campo acima.</summary>
+    [Range(0, 100)]
+    [Column("opportunity_score")]
+    public int? OpportunityScore { get; set; }
+
+    /// <summary>Place ID do Google Maps do estabelecimento, se o lead veio de
+    /// prospecção local — permite abrir a ficha do lugar direto.</summary>
+    [MaxLength(255)]
+    [Column("place_id")]
+    public string? PlaceId { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
