@@ -70,9 +70,16 @@ public class UpdateTenantBillingRequest
 
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
 
-    /// <summary>Limite de usuários com acesso ao painel (Admin+Operator). Null = sem limite.</summary>
+    /// <summary>Limite de usuários com acesso ao painel (Admin+Operator). Null e omitido são
+    /// indistinguíveis em JSON — por isso este campo sozinho nunca LIMPA um limite já
+    /// configurado (só define um novo ou é ignorado). Pra remover o limite (virar "sem
+    /// limite"), use <see cref="RemoverMaxUsers"/> explicitamente.</summary>
     [Range(1, 10000)]
     public int? MaxUsers { get; set; }
+
+    /// <summary>True para remover o limite de acesso (tenant vira "sem limite"). Sem isso,
+    /// MaxUsers null/omitido preserva o valor já configurado — nunca zera sem querer.</summary>
+    public bool RemoverMaxUsers { get; set; } = false;
 }
 
 public class PlatformOverviewDto

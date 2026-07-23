@@ -142,8 +142,10 @@ public class PlatformController : ControllerBase
         tenant.EnabledModules = request.EnabledModules;
         // A tela de edição de tenant hoje só manda planName/paymentStatus/enabledModules
         // (sem maxUsers) — atribuição direta zeraria um limite já configurado toda vez
-        // que o dono só ajusta plano/pagamento. Preserva o valor atual quando omitido.
-        tenant.MaxUsers       = request.MaxUsers ?? tenant.MaxUsers;
+        // que o dono só ajusta plano/pagamento. Preserva o valor atual quando omitido;
+        // RemoverMaxUsers explícito é o único jeito de voltar a "sem limite" por aqui
+        // (achado de review: null omitido e null explícito são indistinguíveis em JSON).
+        tenant.MaxUsers = request.RemoverMaxUsers ? null : (request.MaxUsers ?? tenant.MaxUsers);
         await _catalog.SaveChangesAsync();
 
         return Ok(ToDto(tenant));
