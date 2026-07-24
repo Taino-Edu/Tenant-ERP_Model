@@ -185,6 +185,27 @@ builder.Services.AddAuthorization(options =>
 });
 
 // ---------------------------------------------------------------------------
+// 5b. MCP (Model Context Protocol) — expõe o ERP como ferramentas para a IA
+// do próprio tenant (Claude, ChatGPT, n8n...). Ver CardGameStore/Mcp/ErpTools.cs.
+//
+// O endpoint fica sob o mesmo pipeline de autenticação e resolução de tenant
+// dos controllers: o JWT identifica quem é, e o TenantResolutionMiddleware
+// define em qual schema as tools operam. Nenhuma tool recebe tenant por
+// parâmetro — seria uma porta pra IA de um cliente ler dados de outro.
+// ---------------------------------------------------------------------------
+// Stateless = true é OBRIGATÓRIO aqui, não é ajuste de performance: no modo
+// com sessão, a tool executa num escopo de DI que sobrevive ao request e NÃO
+// passou pelo UseTenantResolution() — o AppDbContext resolvido ali não tem
+// tenant, e o guard do TenantConnectionInterceptor derruba a chamada
+// ("ITenantContext.Set(...) nunca foi chamado neste escopo"). Em stateless
+// cada chamada roda dentro do escopo do próprio request HTTP, então a
+// resolução de tenant do middleware vale normalmente.
+builder.Services
+    .AddMcpServer()
+    .WithHttpTransport(options => options.Stateless = true)
+    .WithTools<CardGameStore.Mcp.ErpTools>();
+
+// ---------------------------------------------------------------------------
 // 6. RATE LIMITING — Proteção contra força bruta e abuso de API
 //
 // "auth"  → endpoints de login/refresh: 5 tentativas/minuto por IP.
@@ -748,6 +769,12 @@ app.UseOperatorPermissions();
 
 app.MapControllers();
 app.MapHub<ComandaHub>("/hubs/comanda").RequireRateLimiting("comanda-hub");
+
+// MCP — o tenant pluga a IA dele aqui (ver CardGameStore/Mcp/ErpTools.cs).
+// Exige o mesmo JWT do painel admin: sem AdminOnly, qualquer um com a URL
+// leria estoque, faturamento e crediário da loja. O tenant já foi resolvido
+// pelo middleware, então as tools operam no schema certo automaticamente.
+app.MapMcp("/mcp").RequireAuthorization("AdminOnly");
 
 // /health — sem autenticação, sem rate limit
 app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
