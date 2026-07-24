@@ -216,9 +216,14 @@ public class ProspectingService : IProspectingService
 
     internal static string BuildOverpassQuery(string categoria, (double Sul, double Oeste, double Norte, double Leste) bbox)
     {
+        // Overpass QL espera bbox na ordem (sul,oeste,norte,leste) — inverter
+        // norte/oeste aqui faz o Overpass ler uma longitude no lugar da
+        // latitude norte e rejeitar toda query com "n must be >= s" (longitude
+        // é quase sempre bem menor que a latitude sul), derrubando 100% das
+        // buscas independente de cidade/categoria.
         var bboxStr = $"{bbox.Sul.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
-                      $"{bbox.Norte.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                       $"{bbox.Oeste.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
+                      $"{bbox.Norte.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                       $"{bbox.Leste.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
         var tag = ResolveTagOsm(categoria);

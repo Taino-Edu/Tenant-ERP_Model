@@ -63,4 +63,16 @@ public class ProspectingServiceTests
         var query = ProspectingService.BuildOverpassQuery("brechó vintage raro", BboxDummy);
         query.Should().Contain("[\"name\"~\"brechó vintage raro\",i]");
     }
+
+    [Fact]
+    public void BuildOverpassQuery_MontaBboxNaOrdemQueOOverpassEspera_SulOesteNorteLeste()
+    {
+        // Overpass QL exige bbox como (sul,oeste,norte,leste). Inverter
+        // norte/oeste faz TODA busca falhar com "n must be >= s" em produção
+        // (bug real já visto: overpass-api.de retornando 400 pra qualquer
+        // cidade/categoria) — este teste trava a ordem certa pra nunca mais
+        // regredir silenciosamente.
+        var query = ProspectingService.BuildOverpassQuery("roupas", BboxDummy);
+        query.Should().Contain("(-21.2,-47.9,-21.1,-47.7)");
+    }
 }
