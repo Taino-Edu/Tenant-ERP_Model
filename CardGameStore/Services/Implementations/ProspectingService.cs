@@ -27,8 +27,18 @@ namespace CardGameStore.Services.Implementations;
 public class ProspectingService : IProspectingService
 {
     private const string NominatimUrl = "https://nominatim.openstreetmap.org/search";
-    private const string OverpassUrl  = "https://overpass-api.de/api/interpreter";
     private const string GeminiUrl    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+
+    // A instância pública principal (overpass-api.de) é gratuita mas sofre
+    // rate-limiting e quedas com frequência — sem SLA nenhuma. Mirrors
+    // públicos conhecidos como fallback pra não depender de uma única
+    // instância no ar pra prospecção funcionar.
+    private static readonly string[] OverpassUrls =
+    [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.openstreetmap.ru/api/interpreter",
+    ];
 
     // Mapeia termos comuns em português pro par tag=valor do OpenStreetMap.
     // Sem entrada exata, cai no fallback (nome contendo o termo buscado, ver
@@ -85,19 +95,9 @@ public class ProspectingService : IProspectingService
     {
         var bbox = await GeocodeCityAsync(cidade);
         var query = BuildOverpassQuery(categoria, bbox);
+        var body = await QueryOverpassWithFallbackAsync(query);
 
-        var client = _factory.CreateClient("osm");
-        var response = await client.PostAsync(OverpassUrl,
-            new StringContent($"data={Uri.EscapeDataString(query)}", Encoding.UTF8, "application/x-www-form-urlencoded"));
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync();
-            _logger.LogError("Overpass API retornou {Status}: {Error}", response.StatusCode, error);
-            throw new InvalidOperationException("Falha ao buscar no OpenStreetMap — tenta de novo em instantes.");
-        }
-
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var doc = JsonDocument.Parse(body);
         var rawPlaces = new List<(string PlaceId, string Nome, string? Endereco, string? Telefone, string? Website, bool TemHorario)>();
 
         if (doc.RootElement.TryGetProperty("elements", out var elements))
@@ -153,6 +153,39 @@ public class ProspectingService : IProspectingService
         }));
 
         return candidates.ToList();
+    }
+
+    /// <summary>Tenta cada instância pública do Overpass em ordem até uma
+    /// responder com sucesso — a instância principal (overpass-api.de) é de
+    /// graça mas sem SLA, então cai com frequência sob rate-limit. Só lança
+    /// erro (o "não está respondendo" que o admin vê) se todas falharem.</summary>
+    private async Task<string> QueryOverpassWithFallbackAsync(string query)
+    {
+        var client = _factory.CreateClient("osm");
+        var content = new StringContent($"data={Uri.EscapeDataString(query)}", Encoding.UTF8, "application/x-www-form-urlencoded");
+
+        Exception? lastError = null;
+        foreach (var url in OverpassUrls)
+        {
+            try
+            {
+                var response = await client.PostAsync(url, content);
+                if (response.IsSuccessStatusCode)
+                    return await response.Content.ReadAsStringAsync();
+
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Overpass ({Url}) retornou {Status}: {Error}", url, response.StatusCode, error);
+                lastError = new InvalidOperationException($"{url} → {response.StatusCode}");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                _logger.LogWarning(ex, "Overpass ({Url}) falhou", url);
+                lastError = ex;
+            }
+        }
+
+        _logger.LogError(lastError, "Todas as instâncias Overpass falharam");
+        throw new InvalidOperationException("Falha ao buscar no OpenStreetMap — tenta de novo em instantes.");
     }
 
     /// <summary>Resolve "cidade, UF" pra um bounding box [sul, oeste, norte,
