@@ -43,4 +43,24 @@ public class ProspectingServiceTests
     {
         ProspectingService.EstimateRevenueRangeHeuristic(temTelefone, temHorario, temEndereco).Should().Be(esperado);
     }
+
+    private static readonly (double Sul, double Oeste, double Norte, double Leste) BboxDummy = (-21.2, -47.9, -21.1, -47.7);
+
+    [Theory]
+    [InlineData("roupas")]           // chave exata
+    [InlineData("Roupas")]           // case-insensitive
+    [InlineData("loja de roupas")]   // frase natural — palavra "roupas" bate dentro da frase
+    [InlineData("  roupas  ")]       // espaços nas pontas
+    public void BuildOverpassQuery_CategoriaComPalavraConhecida_UsaTagOsmExata(string categoria)
+    {
+        var query = ProspectingService.BuildOverpassQuery(categoria, BboxDummy);
+        query.Should().Contain("[\"shop\"=\"clothes\"]");
+    }
+
+    [Fact]
+    public void BuildOverpassQuery_CategoriaSemPalavraConhecida_CaiNoFallbackPorNome()
+    {
+        var query = ProspectingService.BuildOverpassQuery("brechó vintage raro", BboxDummy);
+        query.Should().Contain("[\"name\"~\"brechó vintage raro\",i]");
+    }
 }

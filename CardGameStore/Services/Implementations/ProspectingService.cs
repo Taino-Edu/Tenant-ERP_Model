@@ -214,18 +214,18 @@ public class ProspectingService : IProspectingService
         return (sul, oeste, norte, leste);
     }
 
-    private static string BuildOverpassQuery(string categoria, (double Sul, double Oeste, double Norte, double Leste) bbox)
+    internal static string BuildOverpassQuery(string categoria, (double Sul, double Oeste, double Norte, double Leste) bbox)
     {
         var bboxStr = $"{bbox.Sul.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                       $"{bbox.Norte.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                       $"{bbox.Oeste.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                       $"{bbox.Leste.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
-        var termoNormalizado = categoria.Trim().ToLowerInvariant();
-        var filtro = CategoriaParaTagOsm.TryGetValue(termoNormalizado, out var tag)
-            ? $"[\"{tag.Tag}\"=\"{tag.Value}\"]"
-            // Fallback: sem mapeamento exato, busca qualquer comércio/serviço cujo
-            // nome contenha o termo buscado.
+        var tag = ResolveTagOsm(categoria);
+        var filtro = tag is { } t
+            ? $"[\"{t.Tag}\"=\"{t.Value}\"]"
+            // Fallback: nenhuma palavra da frase bateu com o dicionário, busca
+            // qualquer comércio/serviço cujo nome contenha o termo buscado.
             : $"[~\"^(shop|amenity|office)$\"~\".\"][\"name\"~\"{categoria.Trim()}\",i]";
 
         return $"""
@@ -236,6 +236,28 @@ public class ProspectingService : IProspectingService
             );
             out center 60;
             """;
+    }
+
+    /// <summary>Acha o tag OSM pra categoria digitada: primeiro tenta a frase
+    /// inteira (ex: "petshop"), depois cada palavra isolada (ex: "loja de
+    /// roupas" → "loja", "de", "roupas" → bate em "roupas"). Sem usar essa
+    /// segunda tentativa, qualquer frase natural que não fosse exatamente uma
+    /// chave do dicionário caía no fallback por nome — que quase nunca acha
+    /// nada, já que estabelecimentos raramente têm o tipo de negócio como
+    /// nome literal no OSM.</summary>
+    private static (string Tag, string Value)? ResolveTagOsm(string categoria)
+    {
+        var termoNormalizado = categoria.Trim().ToLowerInvariant();
+        if (CategoriaParaTagOsm.TryGetValue(termoNormalizado, out var tagFraseInteira))
+            return tagFraseInteira;
+
+        foreach (var palavra in termoNormalizado.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (CategoriaParaTagOsm.TryGetValue(palavra, out var tagPalavra))
+                return tagPalavra;
+        }
+
+        return null;
     }
 
     private static string? GetTag(JsonElement tags, string key) =>
