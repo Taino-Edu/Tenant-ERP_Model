@@ -100,6 +100,10 @@ services:
       SmtpSettings__AppUrl: "${APP_URL:-http://localhost}"
       # Integrações
       GeminiSettings__ApiKey: "${GEMINI_API_KEY}"
+      # Prospecção de leads (/plataforma/prospeccao) — chave dedicada e opcional,
+      # separada da GEMINI_API_KEY acima; sem ela, a busca funciona normalmente
+      # e só o botão "Enriquecer com IA" fica indisponível.
+      ProspectingSettings__GeminiApiKey: "${PROSPECTING_GEMINI_API_KEY}"
       # Inter PJ — certificado mTLS (Client ID/Secret são salvos via /admin/integracoes)
       Inter__CertificatePath: "/app/certs/inter/inter.crt"
       Inter__KeyPath: "/app/certs/inter/inter.key"
