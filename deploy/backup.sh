@@ -83,6 +83,38 @@ fi
 PG_SIZE=$(du -sh "$PG_FILE" | cut -f1)
 echo "[$(date '+%H:%M:%S')] PostgreSQL OK ($PG_SIZE, integridade verificada)"
 
+# ── Banco da Evolution API (WhatsApp), se existir ──────────────────────────────
+# Fica num banco separado do ERP, então o pg_dump acima NÃO o cobre. É aqui que
+# moram as credenciais de sessão do WhatsApp de cada tenant: perder este banco
+# significa que todo tenant premium precisa reler o QR Code do zero — ou seja,
+# ligar pra cada cliente pedindo pra escanear de novo.
+# Só roda se o banco existir (a feature é opcional, atrás do profile "whatsapp"),
+# então instalações sem WhatsApp seguem sem nenhuma mudança de comportamento.
+EVOLUTION_DB="${EVOLUTION_DB:-evolution}"
+if docker exec cardgamestore_postgres \
+     psql -U "$POSTGRES_USER" -lqt 2>/dev/null | cut -d'|' -f1 | grep -qw "$EVOLUTION_DB"; then
+
+  EVO_FILE="$BACKUP_DIR/evolution_${TIMESTAMP}.sql.gz"
+  echo "[$(date '+%H:%M:%S')] Evolution (WhatsApp) → $EVO_FILE"
+
+  docker exec cardgamestore_postgres \
+    pg_dump -U "$POSTGRES_USER" "$EVOLUTION_DB" \
+    | gzip > "$EVO_FILE"
+
+  # Mesma checagem de integridade do dump principal — um backup de sessões
+  # corrompido só é descoberto no dia do desastre.
+  if ! gzip -t "$EVO_FILE" 2>/dev/null; then
+    echo "[$(date '+%H:%M:%S')] ❌ ERRO: $EVO_FILE corrompido (gzip -t falhou) — removendo." >&2
+    rm -f "$EVO_FILE"
+    exit 1
+  fi
+
+  EVO_SIZE=$(du -sh "$EVO_FILE" | cut -f1)
+  echo "[$(date '+%H:%M:%S')] Evolution OK ($EVO_SIZE, integridade verificada)"
+else
+  echo "[$(date '+%H:%M:%S')] Evolution: banco '$EVOLUTION_DB' não existe — pulando (feature desligada)"
+fi
+
 # ── Cópia off-site (opcional) ──────────────────────────────────────────────────
 # Sem isto, o backup vive no MESMO disco do banco — uma falha de VPS/disco leva
 # banco e backup juntos. Só roda se BACKUP_REMOTE_CMD estiver definido.
