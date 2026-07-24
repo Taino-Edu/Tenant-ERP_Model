@@ -189,12 +189,112 @@ services:
       timeout: 5s
       retries: 5
 
+  # ---------------------------------------------------------------------------
+  # EVOLUTION API — WhatsApp por tenant (feature premium). NÃO SOBE POR PADRÃO.
+  #
+  # Está atrás do profile "whatsapp": `docker compose up -d` normal (o que o
+  # update.sh roda) ignora estes dois serviços. Para ligar:
+  #     docker compose -f docker-compose.prod.yml --profile whatsapp up -d
+  #
+  # POR QUE CONTAINER SEPARADO (e não dentro da api): todo deploy recria o
+  # container da api. Se as sessões de WhatsApp morassem lá, cada deploy
+  # derrubaria a conexão de TODOS os tenants de uma vez — e reconectar sessão
+  # Baileys frequentemente exige o cliente reler o QR Code. Separado, o ERP faz
+  # deploy à vontade sem encostar nas sessões.
+  #
+  # ANTES DE LIGAR:
+  #   1. Criar o banco:  docker exec cardgamestore_postgres \
+  #        psql -U $POSTGRES_USER -c "CREATE DATABASE evolution;"
+  #   2. Preencher EVOLUTION_API_KEY e EVOLUTION_SERVER_URL no .env
+  #   3. Decidir o backend (ver DECISAO_WHATSAPP em docs/) — Baileys (não
+  #      oficial, risco de ban do número do cliente) vs Cloud API oficial.
+  #      A Evolution suporta os dois, então dá pra migrar sem trocar de stack.
+  # ---------------------------------------------------------------------------
+  evolution:
+    image: evoapicloud/evolution-api:v2.1.1
+    container_name: cardgamestore_evolution
+    profiles: ["whatsapp"]
+    environment:
+      SERVER_URL: "${EVOLUTION_SERVER_URL}"
+      AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY}"
+      # Persistência — as credenciais de sessão vivem aqui. Ver backup.sh.
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: "postgresql"
+      DATABASE_CONNECTION_URI: "postgresql://${POSTGRES_USER:-cardgame_user}:${POSTGRES_PASSWORD}@postgres:5432/evolution"
+      DATABASE_CONNECTION_CLIENT_NAME: "evolution"
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      # Cache — Redis dedicado. SAVE_INSTANCES=false porque a fonte de verdade
+      # das instâncias é o Postgres; o Redis aqui é cache descartável.
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: "redis://redis:6379/6"
+      CACHE_REDIS_PREFIX_KEY: "evolution"
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      CACHE_LOCAL_ENABLED: "false"
+      # A API .NET recebe os eventos aqui e resolve o tenant pelo nome da instância.
+      WEBHOOK_GLOBAL_URL: "${EVOLUTION_WEBHOOK_URL:-http://api:5000/api/whatsapp/webhook}"
+      WEBHOOK_GLOBAL_ENABLED: "${EVOLUTION_WEBHOOK_ENABLED:-false}"
+      WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
+    volumes:
+      - evolution_instances:/evolution/instances
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          # ~50-150 MB por sessão Baileys viva 24/7 → ~30 tenants premium aqui.
+          # Esta é a ÚNICA parte do stack que escala linearmente por tenant.
+          cpus: '2.0'
+          memory: 4G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: cardgamestore_redis
+    profiles: ["whatsapp"]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - cardgame_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 # -----------------------------------------------------------------------------
 # Volumes persistentes (dados sobrevivem a reinicios e redeploys)
 # -----------------------------------------------------------------------------
 volumes:
   postgres_data:
   api_uploads:
+  evolution_instances:
+  redis_data:
 
 # -----------------------------------------------------------------------------
 # Rede interna Docker (containers se falam pelo nome do serviço)
