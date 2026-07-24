@@ -59,6 +59,22 @@ cd "$COMPOSE_DIR"
 $COMPOSE build --build-arg CACHEBUST="$(date +%s)"
 $COMPOSE up -d
 
+# nginx.conf entra por bind mount, não pela imagem: o `up -d` acima só recria
+# containers cuja DEFINIÇÃO de serviço mudou, então alterar o nginx.conf no
+# repositório deixava o nginx servindo a config antiga indefinidamente — sem
+# erro nenhum, o deploy passava verde e a mudança simplesmente não valia (bug
+# real: a rota /mcp caiu no frontend por isso). Recarrega de forma graciosa,
+# sem derrubar conexão. Se a config estiver inválida, o `nginx -t` falha e o
+# nginx segue com a anterior em vez de morrer.
+if $COMPOSE ps --status running --services 2>/dev/null | grep -qx nginx; then
+    if $COMPOSE exec -T nginx nginx -t >/dev/null 2>&1; then
+        $COMPOSE exec -T nginx nginx -s reload >/dev/null 2>&1 \
+            && echo -e "${GREEN}✅ nginx recarregado (config atualizada).${NC}"
+    else
+        echo -e "${YELLOW}⚠️  nginx -t reprovou a config nova — mantendo a anterior. Rode '$COMPOSE exec nginx nginx -t' pra ver o erro.${NC}"
+    fi
+fi
+
 # ── 4. Health check + auto-rollback ─────────────────────────────────────────
 echo -n "  Aguardando API responder /health"
 healthy=false
