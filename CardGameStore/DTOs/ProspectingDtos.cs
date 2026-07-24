@@ -1,7 +1,8 @@
 // =============================================================================
-// ProspectingDtos.cs — Busca de possíveis clientes (lojas físicas) via Google
-// Places API, com classificação heurística (sem IA) e enriquecimento opcional
-// via Gemini. Ver CardGameStore/Services/Implementations/ProspectingService.cs.
+// ProspectingDtos.cs — Busca de possíveis clientes (lojas físicas) via
+// OpenStreetMap (Nominatim + Overpass API), com classificação heurística (sem
+// IA) e enriquecimento opcional via Gemini. Ver
+// CardGameStore/Services/Implementations/ProspectingService.cs.
 // =============================================================================
 
 using System.ComponentModel.DataAnnotations;
@@ -24,29 +25,30 @@ public class ProspectingSearchRequest
 /// POST /api/platform/leads/prospeccao.</summary>
 public class ProspectCandidateDto
 {
+    // Convenção do próprio OSM pra referenciar um elemento: "{tipo}/{id}" (ex: "node/123456").
     public string  PlaceId               { get; set; } = string.Empty;
     public string  Nome                  { get; set; } = string.Empty;
     public string? Endereco              { get; set; }
     public string? Telefone              { get; set; }
     public string? Website               { get; set; }
-    public double? Rating                { get; set; }
-    public int?    ReviewCount           { get; set; }
 
     /// <summary>"SemSite", "SiteLegado" ou "ECommerce" — calculado sem IA
     /// (ver ProspectingService.ClassifyDigitalPresenceAsync).</summary>
     public string  DigitalPresence       { get; set; } = string.Empty;
 
-    /// <summary>0-100, calculado sem IA a partir de nota/reviews/presença digital.</summary>
+    /// <summary>0-100, calculado sem IA a partir da presença digital e da
+    /// completude do cadastro no OSM (telefone, horário, endereço) — o OSM não
+    /// tem nota/avaliações como o Google Maps.</summary>
     public int     OpportunityScore      { get; set; }
 
-    /// <summary>Faixa grosseira baseada em nº de avaliações como proxy de
-    /// movimento — nunca é dado financeiro real, só heurística de porte.</summary>
+    /// <summary>Faixa grosseira baseada na completude do cadastro como proxy
+    /// de porte — nunca é dado financeiro real, só heurística de priorização.</summary>
     public string  EstimatedRevenueRange { get; set; } = string.Empty;
 }
 
 public class ProspectingEnrichRequest
 {
-    [Required, MaxLength(255)]
+    [Required]
     public string PlaceId { get; set; } = string.Empty;
 
     [Required, MaxLength(150)]
@@ -57,9 +59,6 @@ public class ProspectingEnrichRequest
 
     [MaxLength(255)]
     public string? Endereco { get; set; }
-
-    public double? Rating { get; set; }
-    public int?    ReviewCount { get; set; }
 
     [Required, MaxLength(20)]
     public string DigitalPresence { get; set; } = string.Empty;
@@ -82,7 +81,6 @@ public class CreateProspectLeadRequest
     [MaxLength(30)]
     public string? Telefone { get; set; }
 
-    [MaxLength(255)]
     public string? PlaceId { get; set; }
 
     [MaxLength(20)]

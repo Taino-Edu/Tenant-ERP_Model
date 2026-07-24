@@ -70,9 +70,11 @@ public class Lead
     public int? OpportunityScore { get; set; }
 
     /// <summary>Place ID do Google Maps do estabelecimento, se o lead veio de
-    /// prospecção local — permite abrir a ficha do lugar direto.</summary>
-    [MaxLength(255)]
-    [Column("place_id")]
+    /// prospecção local — permite abrir a ficha do lugar direto. Sem limite de
+    /// tamanho fixo: a documentação do Google não define um máximo pro Place
+    /// ID (varia), então um limite arbitrário podia rejeitar/truncar um
+    /// candidato válido.</summary>
+    [Column("place_id", TypeName = "text")]
     public string? PlaceId { get; set; }
 
     /// <summary>Faixa de faturamento estimado do negócio (ex: "R$10-30k/mês")

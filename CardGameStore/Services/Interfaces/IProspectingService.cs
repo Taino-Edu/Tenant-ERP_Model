@@ -4,10 +4,11 @@ namespace CardGameStore.Services.Interfaces;
 
 public interface IProspectingService
 {
-    /// <summary>Busca negócios por categoria+cidade via Google Places API e já
-    /// classifica cada um (presença digital, score, faixa de faturamento) sem
-    /// gastar IA. Lança InvalidOperationException se a chave do Places não
-    /// estiver configurada.</summary>
+    /// <summary>Busca negócios por categoria+cidade via OpenStreetMap
+    /// (Nominatim + Overpass API) e já classifica cada um (presença digital,
+    /// score, faixa de faturamento) sem gastar IA. Lança ArgumentException se
+    /// a cidade não for encontrada, ou InvalidOperationException se o
+    /// Overpass/Nominatim falhar.</summary>
     Task<List<ProspectCandidateDto>> SearchAsync(string categoria, string cidade);
 
     /// <summary>Enriquece um candidato específico via Gemini (chave dedicada de

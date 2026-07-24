@@ -59,7 +59,7 @@ public class UpdateLeadRequest
     [Range(0, 100)]
     public int? OpportunityScore { get; set; }
 
-    [MaxLength(255)]
+    // Sem MaxLength de propósito — Google não define um tamanho máximo pro Place ID.
     public string? PlaceId { get; set; }
 
     [MaxLength(60)]

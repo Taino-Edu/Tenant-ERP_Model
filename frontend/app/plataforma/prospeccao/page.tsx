@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { prospectingApi, ProspectCandidateDto, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import toast from 'react-hot-toast'
-import { Search, Loader2, Star, Globe, Sparkles, UserPlus, Check } from 'lucide-react'
+import { Search, Loader2, Globe, Sparkles, UserPlus, Check } from 'lucide-react'
 import clsx from 'clsx'
 
 function scoreColor(score: number): string {
@@ -18,7 +18,7 @@ const DIGITAL_PRESENCE_LABEL: Record<string, string> = {
   ECommerce:  'Já tem e-commerce',
 }
 
-function CandidateCard({ candidate, onAdded }: { candidate: ProspectCandidateDto; onAdded: () => void }) {
+function CandidateCard({ candidate, categoria, onAdded }: { candidate: ProspectCandidateDto; categoria: string; onAdded: () => void }) {
   const [data, setData]           = useState(candidate)
   const [enriching, setEnriching] = useState(false)
   const [adding, setAdding]       = useState(false)
@@ -27,7 +27,7 @@ function CandidateCard({ candidate, onAdded }: { candidate: ProspectCandidateDto
   async function enrich() {
     setEnriching(true)
     try {
-      const { data: result } = await prospectingApi.enrich(data)
+      const { data: result } = await prospectingApi.enrich(data, categoria)
       setData(prev => ({ ...prev, estimatedRevenueRange: result.estimatedRevenueRange }))
       setAbordagem(result.abordagemSugerida)
       toast.success('Enriquecido com IA.')
@@ -69,12 +69,6 @@ function CandidateCard({ candidate, onAdded }: { candidate: ProspectCandidateDto
           <p className="text-white font-semibold truncate">{data.nome}</p>
           {data.endereco && <p className="text-xs text-gray-400 mt-0.5">{data.endereco}</p>}
           <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
-            {data.rating != null && (
-              <span className="flex items-center gap-1">
-                <Star className="w-3.5 h-3.5 text-amber-400" /> {data.rating.toFixed(1)}
-                {data.reviewCount != null && ` (${data.reviewCount})`}
-              </span>
-            )}
             {data.website && (
               <a href={data.website} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1 text-brand-400 hover:underline">
@@ -137,7 +131,7 @@ export default function ProspeccaoPage() {
       setResults(data)
       if (data.length === 0) toast('Nenhum resultado encontrado — tenta outra categoria/cidade.')
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao buscar — confira se a chave do Google Places está configurada.'))
+      toast.error(getErrorMessage(err, 'Erro ao buscar — tenta de novo em instantes.'))
     } finally {
       setLoading(false)
     }
@@ -175,7 +169,7 @@ export default function ProspeccaoPage() {
       {results && results.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {results.map(c => (
-            <CandidateCard key={c.placeId} candidate={c} onAdded={() => setAddedCount(n => n + 1)} />
+            <CandidateCard key={c.placeId} candidate={c} categoria={categoria} onAdded={() => setAddedCount(n => n + 1)} />
           ))}
         </div>
       )}

@@ -1,8 +1,8 @@
 // =============================================================================
 // ProspectingServiceTests.cs — Testa só as partes puras/sem IA do serviço de
 // prospecção (score de oportunidade e faixa de faturamento heurística). A
-// busca via Places API e o enriquecimento via Gemini precisam de chave real,
-// não são testados aqui.
+// busca via Overpass API/Nominatim e o enriquecimento via Gemini precisam de
+// rede, não são testados aqui.
 // =============================================================================
 
 using CardGameStore.Services.Implementations;
@@ -14,51 +14,33 @@ namespace CardGameStore.Tests.Services;
 public class ProspectingServiceTests
 {
     [Theory]
-    [InlineData("SemSite", 5.0, 500, 100)]     // sem site + nota máxima + muitas avaliações = topo
-    [InlineData("ECommerce", 5.0, 500, 60)]    // já tem e-commerce = perde os 40 pts de presença digital
-    [InlineData("SemSite", 0.0, 0, 45)]        // sem site + sem nota + poucas avaliações
-    [InlineData("SiteLegado", 3.0, 30, 47)]    // meio-termo
-    public void CalculateOpportunityScore_CombinaOsTresFatoresCorretamente(
-        string digitalPresence, double rating, int reviewCount, int esperado)
+    [InlineData("SemSite", true, true, true, 100)]        // sem site + cadastro completo = topo
+    [InlineData("ECommerce", true, true, true, 60)]       // já tem e-commerce = perde os 40 pts de presença digital
+    [InlineData("SemSite", false, false, false, 40)]       // sem site + cadastro vazio
+    [InlineData("SiteLegado", true, false, true, 60)]      // meio-termo
+    public void CalculateOpportunityScore_CombinaPresencaDigitalECompletudeCorretamente(
+        string digitalPresence, bool temTelefone, bool temHorario, bool temEndereco, int esperado)
     {
-        var score = ProspectingService.CalculateOpportunityScore(rating, reviewCount, digitalPresence);
+        var score = ProspectingService.CalculateOpportunityScore(temTelefone, temHorario, temEndereco, digitalPresence);
         score.Should().Be(esperado);
     }
 
     [Fact]
-    public void CalculateOpportunityScore_NuncaPassaDe100NemFicaNegativo()
+    public void CalculateOpportunityScore_DesconhecidoSemNadaPreenchido_ZeraAmbosOsFatores()
     {
-        var scoreMax = ProspectingService.CalculateOpportunityScore(5.0, 10_000, "SemSite");
-        var scoreMin = ProspectingService.CalculateOpportunityScore(0.0, 0, "ECommerce");
-
-        scoreMax.Should().BeLessOrEqualTo(100);
-        scoreMin.Should().BeGreaterOrEqualTo(0);
-    }
-
-    [Fact]
-    public void CalculateOpportunityScore_SemNotaOuReviews_NaoLancaExcecao()
-    {
-        var act = () => ProspectingService.CalculateOpportunityScore(null, null, "SemSite");
-        act.Should().NotThrow();
+        // Presença digital não reconhecida (ex: "Desconhecido") não pontua nada,
+        // igual a "ECommerce" — só "SemSite"/"SiteLegado" pontuam.
+        ProspectingService.CalculateOpportunityScore(false, false, false, "Desconhecido").Should().Be(0);
     }
 
     [Theory]
-    [InlineData(0,   "R$5-15k/mês (estimativa)")]
-    [InlineData(19,  "R$5-15k/mês (estimativa)")]
-    [InlineData(20,  "R$15-40k/mês (estimativa)")]
-    [InlineData(99,  "R$15-40k/mês (estimativa)")]
-    [InlineData(100, "R$40-100k/mês (estimativa)")]
-    [InlineData(299, "R$40-100k/mês (estimativa)")]
-    [InlineData(300, "R$100k+/mês (estimativa)")]
-    [InlineData(5000,"R$100k+/mês (estimativa)")]
-    public void EstimateRevenueRangeHeuristic_UsaFaixasCorretasPorNumeroDeAvaliacoes(int reviewCount, string esperado)
+    [InlineData(false, false, false, "R$5-15k/mês (estimativa)")]
+    [InlineData(true,  false, false, "R$15-40k/mês (estimativa)")]
+    [InlineData(true,  true,  false, "R$40-100k/mês (estimativa)")]
+    [InlineData(true,  true,  true,  "R$100k+/mês (estimativa)")]
+    public void EstimateRevenueRangeHeuristic_UsaFaixasCorretasPorCompletudeDoCadastro(
+        bool temTelefone, bool temHorario, bool temEndereco, string esperado)
     {
-        ProspectingService.EstimateRevenueRangeHeuristic(reviewCount).Should().Be(esperado);
-    }
-
-    [Fact]
-    public void EstimateRevenueRangeHeuristic_SemReviews_UsaFaixaMaisBaixa()
-    {
-        ProspectingService.EstimateRevenueRangeHeuristic(null).Should().Be("R$5-15k/mês (estimativa)");
+        ProspectingService.EstimateRevenueRangeHeuristic(temTelefone, temHorario, temEndereco).Should().Be(esperado);
     }
 }

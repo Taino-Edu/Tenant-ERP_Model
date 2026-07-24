@@ -322,21 +322,25 @@ builder.Services.AddHttpClient("ibpt", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 }).RemoveAllLoggers();
 
-// Google Places API — busca de possíveis clientes (prospecção). Chave vai em
-// header (X-Goog-Api-Key), não em query string, mas remove loggers mesmo
-// assim por padrão de segurança consistente com o client "ibpt" acima.
-builder.Services.AddHttpClient("places", client =>
+// OpenStreetMap (Nominatim + Overpass API) — busca de possíveis clientes
+// (prospecção). Gratuito e sem chave, mas a política de uso deles exige um
+// User-Agent descritivo identificando a aplicação (não o default do HttpClient).
+builder.Services.AddHttpClient("osm", client =>
 {
-    client.Timeout = TimeSpan.FromSeconds(15);
+    client.Timeout = TimeSpan.FromSeconds(25);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
-}).RemoveAllLoggers();
+    client.DefaultRequestHeaders.Add("User-Agent", "TenantERP-Prospecting/1.0 (contato: suporte@3esysten.com.br)");
+});
 
 // Checagem de site de terceiro (classificação de presença digital sem IA) —
-// timeout curto e sem seguir redirect em excesso, é só uma sondagem rápida.
+// a URL vem do OpenStreetMap (dado editável por qualquer pessoa, não
+// confiável: um cadastro malicioso poderia apontar pra rede interna), por
+// isso usa o handler que só permite conectar em IP público (ver CardGameStore/Common/SafeOutboundHttp.cs).
 builder.Services.AddHttpClient("prospecting-site-check", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(8);
-});
+    client.MaxResponseContentBufferSize = 262_144; // 256 KB — só precisa checar assinatura no HTML, não a página inteira
+}).ConfigurePrimaryHttpMessageHandler(() => CardGameStore.Common.SafeOutboundHttp.CreatePublicOnlyHandler());
 
 // ---------------------------------------------------------------------------
 // 10. HEALTH CHECKS — Postgres via IHealthCheck com injeção correta

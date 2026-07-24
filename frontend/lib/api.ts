@@ -888,7 +888,7 @@ export const leadsApi = {
 
 export interface ProspectCandidateDto {
   placeId: string; nome: string; endereco: string | null; telefone: string | null
-  website: string | null; rating: number | null; reviewCount: number | null
+  website: string | null
   digitalPresence: LeadDigitalPresence; opportunityScore: number; estimatedRevenueRange: string
 }
 
@@ -905,10 +905,10 @@ export interface CreateProspectLeadRequest {
 export const prospectingApi = {
   search: (categoria: string, cidade: string) =>
     api.post<ProspectCandidateDto[]>('/api/platform/prospecting/search', { categoria, cidade }),
-  enrich: (candidate: ProspectCandidateDto) =>
+  enrich: (candidate: ProspectCandidateDto, categoria: string) =>
     api.post<ProspectingEnrichResponse>('/api/platform/prospecting/enrich', {
-      placeId: candidate.placeId, nome: candidate.nome, endereco: candidate.endereco,
-      rating: candidate.rating, reviewCount: candidate.reviewCount, digitalPresence: candidate.digitalPresence,
+      placeId: candidate.placeId, nome: candidate.nome, endereco: candidate.endereco, categoria,
+      digitalPresence: candidate.digitalPresence,
     }),
   createLead: (req: CreateProspectLeadRequest) =>
     api.post<LeadDto>('/api/platform/leads/prospeccao', req),

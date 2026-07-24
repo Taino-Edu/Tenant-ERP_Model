@@ -18,6 +18,7 @@ using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CardGameStore.Controllers;
 
@@ -842,7 +843,21 @@ public class PlatformController : ControllerBase
         };
 
         _catalog.Leads.Add(lead);
-        await _catalog.SaveChangesAsync();
+
+        try
+        {
+            await _catalog.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg &&
+            pg.ConstraintName == "ix_leads_place_id_unique")
+        {
+            // Mesmo negócio do Places já virou lead antes (busca repetida,
+            // duplo-clique, retry) — em vez de duplicar, devolve o existente.
+            _catalog.ChangeTracker.Clear();
+            var existente = await _catalog.Leads.FirstAsync(l => l.PlaceId == request.PlaceId);
+            return Conflict(ToDto(existente));
+        }
 
         return Ok(ToDto(lead));
     }

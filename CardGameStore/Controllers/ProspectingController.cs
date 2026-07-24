@@ -1,7 +1,8 @@
 // =============================================================================
 // ProspectingController.cs — Busca de possíveis clientes (prospecção) pelo
 // dono da plataforma. Ver CardGameStore/Services/Implementations/ProspectingService.cs
-// pro racional de duas chaves de API separadas (Places + Gemini dedicado).
+// pro racional da busca via OpenStreetMap (gratuita) + enriquecimento via
+// Gemini com chave dedicada.
 // =============================================================================
 
 using CardGameStore.DTOs;
@@ -25,7 +26,7 @@ public class ProspectingController : ControllerBase
         _logger      = logger;
     }
 
-    /// <summary>Busca negócios por categoria+cidade via Google Places API, já
+    /// <summary>Busca negócios por categoria+cidade via OpenStreetMap, já
     /// classificados (presença digital, score, faixa de faturamento) sem
     /// gastar IA. Resultados são efêmeros — só viram Lead de verdade em
     /// POST /api/platform/leads/prospeccao.</summary>
@@ -38,6 +39,10 @@ public class ProspectingController : ControllerBase
         {
             var candidates = await _prospecting.SearchAsync(request.Categoria, request.Cidade);
             return Ok(candidates);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
