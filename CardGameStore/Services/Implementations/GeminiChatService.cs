@@ -24,8 +24,14 @@ namespace CardGameStore.Services.Implementations;
 
 public class GeminiChatService : IAiChatService
 {
+    // Alias "-latest" em vez de um modelo fixo (ex: gemini-2.5-flash): o Google
+    // aposenta versões específicas sem aviso e a API passa a responder 404
+    // ("no longer available to new users"), derrubando o assistente inteiro —
+    // foi exatamente o que aconteceu com gemini-2.5-flash. O alias acompanha a
+    // geração atual da linha Flash (rápida/barata, adequada ao volume do chat).
+    // Contrapartida: a resposta pode mudar quando o Google promove um modelo novo.
     private const string GEMINI_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
     private readonly AppDbContext              _db;
     private readonly IVendaAvulsaService       _vendas;

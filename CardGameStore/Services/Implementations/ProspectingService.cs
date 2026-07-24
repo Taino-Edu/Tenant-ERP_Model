@@ -27,7 +27,11 @@ namespace CardGameStore.Services.Implementations;
 public class ProspectingService : IProspectingService
 {
     private const string NominatimUrl = "https://nominatim.openstreetmap.org/search";
-    private const string GeminiUrl    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+    // Alias "-latest" em vez de modelo fixo (ver comentário em GeminiChatService):
+    // versões específicas são aposentadas sem aviso e viram 404. Aqui é a linha
+    // Pro, não Flash — o enriquecimento roda só sob clique explícito (volume
+    // baixo), então vale pagar mais por uma análise melhor do lead.
+    private const string GeminiUrl    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:generateContent";
 
     // A instância pública principal (overpass-api.de) é gratuita mas sofre
     // rate-limiting e quedas com frequência — sem SLA nenhuma. Mirrors
