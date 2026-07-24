@@ -10,6 +10,14 @@
 #   git pull && docker compose -f docker-compose.prod.yml build && docker compose -f docker-compose.prod.yml up -d
 #
 # Acesso público: via domínio configurado em APP_URL (Cloudflare → porta 80)
+#
+# DIMENSIONAMENTO (VPS atual: 8 vCPU / 32 GB):
+# Os limites abaixo somam ~7,5 vCPU e ~7,5 GB, deixando folga larga pro SO e
+# page cache. Antes eram ~1,6 GB no total — ou seja, ~5% da RAM da máquina, com
+# o Postgres preso em 512 MB numa VPS de 32 GB (era o gargalo mais caro e mais
+# bobo do stack, já que Postgres usa RAM basicamente como cache).
+# Limites não são reservas: o container só consome o que precisa, o teto existe
+# pra um serviço com vazamento não derrubar os vizinhos.
 # =============================================================================
 
 services:
@@ -36,7 +44,7 @@ services:
       resources:
         limits:
           cpus: '0.5'
-          memory: 128M
+          memory: 256M
     logging:
       driver: "json-file"
       options:
@@ -63,7 +71,7 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 512M
+          memory: 1G
     logging:
       driver: "json-file"
       options:
@@ -136,8 +144,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 512M
+          cpus: '2.0'
+          memory: 2G
     logging:
       driver: "json-file"
       options:
@@ -168,8 +176,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
-          memory: 512M
+          cpus: '2.0'
+          memory: 4G
     logging:
       driver: "json-file"
       options:
