@@ -147,6 +147,10 @@ SMTP_FROM_NAME="Tenant ERP"
 # --- Google Gemini IA ---
 GEMINI_API_KEY=PREENCHA_COM_SUA_CHAVE_GEMINI
 
+# --- Prospecção de leads: chave opcional, só pro botão "Enriquecer com IA" ---
+# Pode deixar em branco ou repetir a GEMINI_API_KEY acima.
+PROSPECTING_GEMINI_API_KEY=
+
 # --- Segurança ---
 IP_HASH_SALT=${IP_SALT}
 

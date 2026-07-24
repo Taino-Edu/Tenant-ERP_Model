@@ -27,8 +27,18 @@ namespace CardGameStore.Services.Implementations;
 public class ProspectingService : IProspectingService
 {
     private const string NominatimUrl = "https://nominatim.openstreetmap.org/search";
-    private const string OverpassUrl  = "https://overpass-api.de/api/interpreter";
     private const string GeminiUrl    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+
+    // A instância pública principal (overpass-api.de) é gratuita mas sofre
+    // rate-limiting e quedas com frequência — sem SLA nenhuma. Mirrors
+    // públicos conhecidos como fallback pra não depender de uma única
+    // instância no ar pra prospecção funcionar.
+    private static readonly string[] OverpassUrls =
+    [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.openstreetmap.ru/api/interpreter",
+    ];
 
     // Mapeia termos comuns em português pro par tag=valor do OpenStreetMap.
     // Sem entrada exata, cai no fallback (nome contendo o termo buscado, ver
@@ -85,19 +95,9 @@ public class ProspectingService : IProspectingService
     {
         var bbox = await GeocodeCityAsync(cidade);
         var query = BuildOverpassQuery(categoria, bbox);
+        var body = await QueryOverpassWithFallbackAsync(query);
 
-        var client = _factory.CreateClient("osm");
-        var response = await client.PostAsync(OverpassUrl,
-            new StringContent($"data={Uri.EscapeDataString(query)}", Encoding.UTF8, "application/x-www-form-urlencoded"));
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync();
-            _logger.LogError("Overpass API retornou {Status}: {Error}", response.StatusCode, error);
-            throw new InvalidOperationException("Falha ao buscar no OpenStreetMap — tenta de novo em instantes.");
-        }
-
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var doc = JsonDocument.Parse(body);
         var rawPlaces = new List<(string PlaceId, string Nome, string? Endereco, string? Telefone, string? Website, bool TemHorario)>();
 
         if (doc.RootElement.TryGetProperty("elements", out var elements))
@@ -155,6 +155,39 @@ public class ProspectingService : IProspectingService
         return candidates.ToList();
     }
 
+    /// <summary>Tenta cada instância pública do Overpass em ordem até uma
+    /// responder com sucesso — a instância principal (overpass-api.de) é de
+    /// graça mas sem SLA, então cai com frequência sob rate-limit. Só lança
+    /// erro (o "não está respondendo" que o admin vê) se todas falharem.</summary>
+    private async Task<string> QueryOverpassWithFallbackAsync(string query)
+    {
+        var client = _factory.CreateClient("osm");
+        var content = new StringContent($"data={Uri.EscapeDataString(query)}", Encoding.UTF8, "application/x-www-form-urlencoded");
+
+        Exception? lastError = null;
+        foreach (var url in OverpassUrls)
+        {
+            try
+            {
+                var response = await client.PostAsync(url, content);
+                if (response.IsSuccessStatusCode)
+                    return await response.Content.ReadAsStringAsync();
+
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Overpass ({Url}) retornou {Status}: {Error}", url, response.StatusCode, error);
+                lastError = new InvalidOperationException($"{url} → {response.StatusCode}");
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                _logger.LogWarning(ex, "Overpass ({Url}) falhou", url);
+                lastError = ex;
+            }
+        }
+
+        _logger.LogError(lastError, "Todas as instâncias Overpass falharam");
+        throw new InvalidOperationException("Falha ao buscar no OpenStreetMap — tenta de novo em instantes.");
+    }
+
     /// <summary>Resolve "cidade, UF" pra um bounding box [sul, oeste, norte,
     /// leste] via Nominatim (geocodificador do OSM) — necessário porque o
     /// Overpass busca por coordenadas, não por nome de cidade.</summary>
@@ -181,18 +214,23 @@ public class ProspectingService : IProspectingService
         return (sul, oeste, norte, leste);
     }
 
-    private static string BuildOverpassQuery(string categoria, (double Sul, double Oeste, double Norte, double Leste) bbox)
+    internal static string BuildOverpassQuery(string categoria, (double Sul, double Oeste, double Norte, double Leste) bbox)
     {
+        // Overpass QL espera bbox na ordem (sul,oeste,norte,leste) — inverter
+        // norte/oeste aqui faz o Overpass ler uma longitude no lugar da
+        // latitude norte e rejeitar toda query com "n must be >= s" (longitude
+        // é quase sempre bem menor que a latitude sul), derrubando 100% das
+        // buscas independente de cidade/categoria.
         var bboxStr = $"{bbox.Sul.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
-                      $"{bbox.Norte.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                       $"{bbox.Oeste.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
+                      $"{bbox.Norte.ToString(System.Globalization.CultureInfo.InvariantCulture)}," +
                       $"{bbox.Leste.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
-        var termoNormalizado = categoria.Trim().ToLowerInvariant();
-        var filtro = CategoriaParaTagOsm.TryGetValue(termoNormalizado, out var tag)
-            ? $"[\"{tag.Tag}\"=\"{tag.Value}\"]"
-            // Fallback: sem mapeamento exato, busca qualquer comércio/serviço cujo
-            // nome contenha o termo buscado.
+        var tag = ResolveTagOsm(categoria);
+        var filtro = tag is { } t
+            ? $"[\"{t.Tag}\"=\"{t.Value}\"]"
+            // Fallback: nenhuma palavra da frase bateu com o dicionário, busca
+            // qualquer comércio/serviço cujo nome contenha o termo buscado.
             : $"[~\"^(shop|amenity|office)$\"~\".\"][\"name\"~\"{categoria.Trim()}\",i]";
 
         return $"""
@@ -203,6 +241,28 @@ public class ProspectingService : IProspectingService
             );
             out center 60;
             """;
+    }
+
+    /// <summary>Acha o tag OSM pra categoria digitada: primeiro tenta a frase
+    /// inteira (ex: "petshop"), depois cada palavra isolada (ex: "loja de
+    /// roupas" → "loja", "de", "roupas" → bate em "roupas"). Sem usar essa
+    /// segunda tentativa, qualquer frase natural que não fosse exatamente uma
+    /// chave do dicionário caía no fallback por nome — que quase nunca acha
+    /// nada, já que estabelecimentos raramente têm o tipo de negócio como
+    /// nome literal no OSM.</summary>
+    private static (string Tag, string Value)? ResolveTagOsm(string categoria)
+    {
+        var termoNormalizado = categoria.Trim().ToLowerInvariant();
+        if (CategoriaParaTagOsm.TryGetValue(termoNormalizado, out var tagFraseInteira))
+            return tagFraseInteira;
+
+        foreach (var palavra in termoNormalizado.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (CategoriaParaTagOsm.TryGetValue(palavra, out var tagPalavra))
+                return tagPalavra;
+        }
+
+        return null;
     }
 
     private static string? GetTag(JsonElement tags, string key) =>
