@@ -1,4 +1,4 @@
-# 📖 Tenant-ERP (Plataforma 2esysten) — O Guia Definitivo de Arquitetura e Engenharia
+# 📖 Tenant-ERP (Plataforma 3esysten) — O Guia Definitivo de Arquitetura e Engenharia
 
 > **Documento elaborado para *Onboarding* de Novos Desenvolvedores, Arquitetos e Tech Leads.**
 > Esta documentação é o mapa completo do sistema, cobrindo requisitos, infraestrutura, fluxos de dados, arquitetura lógica de código e dívidas técnicas da versão atual (SaaS Multi-tenant v4.0).
@@ -7,7 +7,7 @@
 
 ## 1. Levantamento de Requisitos (Visão de Produto)
 
-O Tenant-ERP nasceu como um sistema local para uma loja de TCG (Santuário Nerd) e evoluiu para uma **Plataforma SaaS Multi-tenant** (2esysten) que atende dezenas de lojas simultaneamente, garantindo isolamento total de dados e regras de negócio.
+O Tenant-ERP nasceu como um sistema local para uma loja de TCG (Santuário Nerd) e evoluiu para uma **Plataforma SaaS Multi-tenant** (3esysten) que atende dezenas de lojas simultaneamente, garantindo isolamento total de dados e regras de negócio.
 
 ### Requisitos Funcionais (RFs)
 - **RF01 - Multi-tenancy:** O sistema deve suportar múltiplas lojas, cada uma com seus próprios produtos, clientes e configurações, sem vazamento de dados.
@@ -51,7 +51,7 @@ O sistema foi desenhado para escalabilidade horizontal no Frontend e vertical no
                      |
         (HTTPS - TLS Terminado pela Cloudflare)
                      |
-[ Cloudflare (DNS *.2esysten.com.br / santuarionerd.tech) ]
+[ Cloudflare (DNS *.3esysten.com.br / santuarionerd.tech) ]
                      |
                      V
          [ VPS Ubuntu 24.04 (Hostinger) ]
@@ -112,12 +112,12 @@ Saber onde as coisas moram é 50% do trabalho no onboarding.
 ## 5. Mapeamento de Rotas e URLs
 
 ### Frontend URLs Principais
-- `https://{slug}.2esysten.com.br/` -> Home da Loja (Landing page do tenant).
-- `https://{slug}.2esysten.com.br/admin` -> Painel do Lojista.
-- `https://{slug}.2esysten.com.br/mesa/01` -> Abertura de comanda via QR Code.
-- `https://2esysten.com.br/institucional` -> Site de vendas do SaaS.
-- `https://2esysten.com.br/plataforma` -> Super-Admin (Host).
-- `https://2esysten.com.br/contador` -> Portal Cross-Tenant.
+- `https://{slug}.3esysten.com.br/` -> Home da Loja (Landing page do tenant).
+- `https://{slug}.3esysten.com.br/admin` -> Painel do Lojista.
+- `https://{slug}.3esysten.com.br/mesa/01` -> Abertura de comanda via QR Code.
+- `https://3esysten.com.br/institucional` -> Site de vendas do SaaS.
+- `https://3esysten.com.br/plataforma` -> Super-Admin (Host).
+- `https://3esysten.com.br/contador` -> Portal Cross-Tenant.
 
 ### API Endpoints Vitais (Prefixo `/api`)
 - `POST /auth/quick-login`: Rota de fricção zero. Recebe CPF e WhatsApp do cliente na mesa, cria/recupera o usuário e abre uma comanda instantaneamente, injetando cookies de Auth.
@@ -152,7 +152,7 @@ No Tenant-ERP, **nenhuma entidade de banco (Model) é trafegada via JSON diretam
 ## 7. Explicações de Fluxo Passo-a-Passo
 
 ### 🪄 Fluxo 1: A Mágica do Multi-tenant (Como o isolamento ocorre)
-1. Cliente acessa `nerd.2esysten.com.br/api/product`.
+1. Cliente acessa `nerd.3esysten.com.br/api/product`.
 2. O **`TenantResolutionMiddleware`** entra em ação. Extrai "nerd" do cabeçalho `Host`.
 3. Busca no `CatalogDbContext` (schema `public`) o Tenant com slug "nerd". Acha o `TenantId = 'uuid-123'`.
 4. Armazena a informação no `ITenantContext` (Scoped por requisição HTTP).
