@@ -30,11 +30,6 @@ public class ProspectingService : IProspectingService
     private const string OverpassUrl  = "https://overpass-api.de/api/interpreter";
     private const string GeminiUrl    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
-    // Nominatim/Overpass pedem um User-Agent identificando a aplicação (uso
-    // deles é público e gratuito, mas com política de uso justo) — nunca usar
-    // o default do HttpClient.
-    private const string UserAgent = "TenantERP-Prospecting/1.0";
-
     // Mapeia termos comuns em português pro par tag=valor do OpenStreetMap.
     // Sem entrada exata, cai no fallback (nome contendo o termo buscado, ver
     // BuildOverpassQuery). Lista pequena de propósito — cresce sob demanda.
