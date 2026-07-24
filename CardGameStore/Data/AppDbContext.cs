@@ -70,6 +70,9 @@ public class AppDbContext : DbContext
     // ── SMTP próprio do tenant (opcional) ──────────────────────────────────────
     public DbSet<EmailConfig>        EmailConfigs         { get; set; }
 
+    // ── Chave própria do Gemini (BYOK) pro tenant (opcional) ──────────────────
+    public DbSet<AiConfig>           AiConfigs            { get; set; }
+
     // ── Analytics de uso: telas acessadas pelo admin do tenant ────────────────
     public DbSet<PageViewEvent>      PageViewEvents       { get; set; }
 

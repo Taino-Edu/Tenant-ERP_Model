@@ -1530,6 +1530,23 @@ export const emailConfigApi = {
   save: (body: SaveEmailConfigRequest) => api.put<EmailConfigDto>('/api/email-config', body),
 }
 
+// ── Chave própria do Gemini (BYOK) pro tenant (opcional, cai pra global se não configurado) ──
+
+export interface AiConfigDto {
+  isActive: boolean
+  hasKey: boolean
+}
+
+export interface SaveAiConfigRequest {
+  geminiApiKey?: string
+  isActive?: boolean
+}
+
+export const aiConfigApi = {
+  get:  () => api.get<AiConfigDto>('/api/ai-config'),
+  save: (body: SaveAiConfigRequest) => api.put<AiConfigDto>('/api/ai-config', body),
+}
+
 // ── Diretório público de lojas (site institucional) ──────────────────────────
 
 export interface PublicTenantDto {

@@ -48,6 +48,7 @@ const PATH_LABELS: Record<string, string> = {
   '/admin/perfis':         'Perfis de Acesso',
   '/admin/site':           'Personalizar Site',
   '/admin/email':          'E-mail',
+  '/admin/ia-config':      'Assistente de IA',
   '/admin/suporte':        'Suporte',
 }
 
