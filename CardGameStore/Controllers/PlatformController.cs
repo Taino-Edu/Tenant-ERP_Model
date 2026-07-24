@@ -792,9 +792,11 @@ public class PlatformController : ControllerBase
         Origem            = l.Origem,
         Status            = l.Status.ToString(),
         Notas             = l.Notas,
-        DigitalPresence   = l.DigitalPresence,
-        OpportunityScore  = l.OpportunityScore,
-        PlaceId           = l.PlaceId,
+        DigitalPresence       = l.DigitalPresence,
+        OpportunityScore      = l.OpportunityScore,
+        PlaceId               = l.PlaceId,
+        EstimatedRevenueRange = l.EstimatedRevenueRange,
+        AbordagemSugerida     = l.AbordagemSugerida,
         CreatedAt         = l.CreatedAt,
         UpdatedAt         = l.UpdatedAt,
         ConvertedTenantId = l.ConvertedTenantId,
@@ -819,6 +821,32 @@ public class PlatformController : ControllerBase
         return Ok(leads.Select(ToDto));
     }
 
+    /// <summary>Cria um Lead a partir de um candidato de prospecção confirmado
+    /// pelo dono da plataforma (ver ProspectingController.Search) — distinto do
+    /// POST /api/leads público (form da landing), que não tem PlaceId/score/etc.</summary>
+    [HttpPost("leads/prospeccao")]
+    public async Task<IActionResult> CreateProspectLead([FromBody] CreateProspectLeadRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var lead = new Lead
+        {
+            Nome                  = request.Nome,
+            Telefone              = request.Telefone ?? "",
+            Origem                = "prospeccao",
+            DigitalPresence       = request.DigitalPresence,
+            OpportunityScore      = request.OpportunityScore,
+            PlaceId               = request.PlaceId,
+            EstimatedRevenueRange = request.EstimatedRevenueRange,
+            AbordagemSugerida     = request.AbordagemSugerida,
+        };
+
+        _catalog.Leads.Add(lead);
+        await _catalog.SaveChangesAsync();
+
+        return Ok(ToDto(lead));
+    }
+
     /// <summary>Atualiza status/anotações de um lead — inclui marcar como
     /// convertido quando o dono cadastra o tenant correspondente.</summary>
     /// <param name="id">Id do lead.</param>
@@ -838,7 +866,9 @@ public class PlatformController : ControllerBase
         lead.Notas             = request.Notas;
         lead.DigitalPresence   = request.DigitalPresence  ?? lead.DigitalPresence;
         lead.OpportunityScore  = request.OpportunityScore ?? lead.OpportunityScore;
-        lead.PlaceId           = request.PlaceId          ?? lead.PlaceId;
+        lead.PlaceId              = request.PlaceId              ?? lead.PlaceId;
+        lead.EstimatedRevenueRange = request.EstimatedRevenueRange ?? lead.EstimatedRevenueRange;
+        lead.AbordagemSugerida    = request.AbordagemSugerida    ?? lead.AbordagemSugerida;
         lead.ConvertedTenantId = request.ConvertedTenantId ?? lead.ConvertedTenantId;
         lead.UpdatedAt         = DateTime.UtcNow;
         await _catalog.SaveChangesAsync();

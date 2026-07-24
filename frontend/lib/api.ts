@@ -865,6 +865,7 @@ export interface LeadDto {
   id: string; nome: string; telefone: string; email: string | null; mensagem: string | null
   origem: string; status: LeadStatus; notas: string | null
   digitalPresence: LeadDigitalPresence | null; opportunityScore: number | null; placeId: string | null
+  estimatedRevenueRange: string | null; abordagemSugerida: string | null
   createdAt: string; updatedAt: string; convertedTenantId: string | null
 }
 
@@ -875,11 +876,42 @@ export interface CreateLeadRequest {
 export interface UpdateLeadRequest {
   status: LeadStatus; notas?: string | null; convertedTenantId?: string | null
   digitalPresence?: LeadDigitalPresence | null; opportunityScore?: number | null; placeId?: string | null
+  estimatedRevenueRange?: string | null; abordagemSugerida?: string | null
 }
 
 export const leadsApi = {
   create: (req: CreateLeadRequest) =>
     api.post<{ message: string }>('/api/leads', req),
+}
+
+// ── Prospecção (busca de possíveis clientes — painel da plataforma) ───────────
+
+export interface ProspectCandidateDto {
+  placeId: string; nome: string; endereco: string | null; telefone: string | null
+  website: string | null; rating: number | null; reviewCount: number | null
+  digitalPresence: LeadDigitalPresence; opportunityScore: number; estimatedRevenueRange: string
+}
+
+export interface ProspectingEnrichResponse {
+  estimatedRevenueRange: string; abordagemSugerida: string
+}
+
+export interface CreateProspectLeadRequest {
+  nome: string; telefone?: string; placeId?: string
+  digitalPresence?: LeadDigitalPresence; opportunityScore?: number
+  estimatedRevenueRange?: string; abordagemSugerida?: string
+}
+
+export const prospectingApi = {
+  search: (categoria: string, cidade: string) =>
+    api.post<ProspectCandidateDto[]>('/api/platform/prospecting/search', { categoria, cidade }),
+  enrich: (candidate: ProspectCandidateDto) =>
+    api.post<ProspectingEnrichResponse>('/api/platform/prospecting/enrich', {
+      placeId: candidate.placeId, nome: candidate.nome, endereco: candidate.endereco,
+      rating: candidate.rating, reviewCount: candidate.reviewCount, digitalPresence: candidate.digitalPresence,
+    }),
+  createLead: (req: CreateProspectLeadRequest) =>
+    api.post<LeadDto>('/api/platform/leads/prospeccao', req),
 }
 
 // ── Suporte (chamados entre lojista e plataforma) ──────────────────────────────

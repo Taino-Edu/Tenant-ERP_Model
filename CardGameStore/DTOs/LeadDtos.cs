@@ -35,6 +35,8 @@ public class LeadDto
     public string? DigitalPresence { get; set; }
     public int? OpportunityScore { get; set; }
     public string? PlaceId { get; set; }
+    public string? EstimatedRevenueRange { get; set; }
+    public string? AbordagemSugerida { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public Guid? ConvertedTenantId { get; set; }
@@ -59,4 +61,10 @@ public class UpdateLeadRequest
 
     [MaxLength(255)]
     public string? PlaceId { get; set; }
+
+    [MaxLength(60)]
+    public string? EstimatedRevenueRange { get; set; }
+
+    [MaxLength(2000)]
+    public string? AbordagemSugerida { get; set; }
 }

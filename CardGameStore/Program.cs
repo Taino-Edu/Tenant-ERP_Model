@@ -322,6 +322,22 @@ builder.Services.AddHttpClient("ibpt", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 }).RemoveAllLoggers();
 
+// Google Places API — busca de possíveis clientes (prospecção). Chave vai em
+// header (X-Goog-Api-Key), não em query string, mas remove loggers mesmo
+// assim por padrão de segurança consistente com o client "ibpt" acima.
+builder.Services.AddHttpClient("places", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).RemoveAllLoggers();
+
+// Checagem de site de terceiro (classificação de presença digital sem IA) —
+// timeout curto e sem seguir redirect em excesso, é só uma sondagem rápida.
+builder.Services.AddHttpClient("prospecting-site-check", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(8);
+});
+
 // ---------------------------------------------------------------------------
 // 10. HEALTH CHECKS — Postgres via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
@@ -342,6 +358,7 @@ builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
+builder.Services.AddScoped<IProspectingService,  ProspectingService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
 builder.Services.AddScoped<IFinanceiroCalculoService, FinanceiroCalculoService>();
 builder.Services.AddHostedService<FechamentoBackgroundService>();
