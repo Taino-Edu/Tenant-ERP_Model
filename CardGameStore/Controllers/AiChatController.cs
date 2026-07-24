@@ -6,6 +6,7 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/ai")]
 [Authorize(Policy = "AdminOnly")]
+[RequireModule("ia")]
 [EnableRateLimiting("api")]
 public class AiChatController : ControllerBase
 {
@@ -46,12 +48,15 @@ public class AiChatController : ControllerBase
         }
         catch (Exception ex)
         {
+            // M15: Error carregava ex.Message pro cliente — frontend nunca leu esse campo
+            // (só Reply/Success/Action), então era vazamento puro de detalhe interno (stack
+            // trace, mensagem de driver de banco etc.) sem nenhum uso legítimo do outro lado.
+            // O log já tem o detalhe completo; a resposta ao cliente fica só com o texto genérico.
             _logger.LogError(ex, "AiChatController: erro inesperado.");
             return Ok(new AiChatResponse
             {
                 Reply   = "Ocorreu um erro ao processar sua pergunta. Tente novamente.",
                 Success = false,
-                Error   = ex.Message,
             });
         }
     }

@@ -31,7 +31,7 @@ step() { echo -e "\n${YELLOW}${BOLD}[$1/$TOTAL] $2${NC}"; }
 ok()   { echo -e "  ${GREEN}✅ $1${NC}"; }
 warn() { echo -e "  ${RED}⚠️  $1${NC}"; }
 
-TOTAL=7
+TOTAL=8
 banner
 
 # =============================================================================
@@ -97,6 +97,12 @@ if [ ! -f "$APP_DIR/.env" ]; then
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
     IP_SALT=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -base64 32)
+    # M26: API agora falha o boot em Production se ADMIN_SEED_PASSWORD/
+    # PLATFORM_OWNER_SEED_PASSWORD não estiverem definidas (em vez de criar as contas
+    # com a senha padrão "SenhaForte@123" conhecida no código-fonte) — gera senhas
+    # fortes aqui, igual aos outros segredos.
+    ADMIN_SEED_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 18)
+    PLATFORM_OWNER_SEED_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c 18)
     # -4 força IPv4 — em VPS com IPv6 configurado, ifconfig.me sem essa flag pode
     # devolver o endereço IPv6, que fica inacessível pro navegador (bug real já visto
     # em produção: NEXT_PUBLIC_API_URL/JwtSettings:Issuer gravados com IPv6 e o login
@@ -123,13 +129,20 @@ POSTGRES_PASSWORD=${POSTGRES_PASS}
 # --- JWT (não altere após primeiro deploy) ---
 JWT_SECRET=${JWT_SECRET}
 
+# --- Senha inicial das contas seed (gerada automaticamente) ---
+# admin@tenant-erp.local usa ADMIN_SEED_PASSWORD; troque a senha pelo painel depois
+# do primeiro login. PLATFORM_OWNER_SEED_PASSWORD só é usada se você configurar
+# PLATFORM_OWNER_EMAIL abaixo (dono da plataforma, acesso a todos os tenants).
+ADMIN_SEED_PASSWORD=${ADMIN_SEED_PASS}
+PLATFORM_OWNER_SEED_PASSWORD=${PLATFORM_OWNER_SEED_PASS}
+
 # --- E-mail via Resend (resend.com — plano gratuito) ---
 SMTP_HOST=smtp.resend.com
 SMTP_PORT=587
 SMTP_USERNAME=resend
 SMTP_PASSWORD=PREENCHA_COM_API_KEY_DO_RESEND
 SMTP_FROM_EMAIL=noreply@tenant-erp.local
-SMTP_FROM_NAME=Tenant ERP
+SMTP_FROM_NAME="Tenant ERP"
 
 # --- Google Gemini IA ---
 GEMINI_API_KEY=PREENCHA_COM_SUA_CHAVE_GEMINI
@@ -146,6 +159,9 @@ EOF
     warn "Edite o .env antes de continuar:"
     warn "  nano $APP_DIR/.env"
     warn "Preencha: SMTP_PASSWORD e GEMINI_API_KEY"
+    echo ""
+    echo -e "${BOLD}  Login inicial: admin@tenant-erp.local / ${ADMIN_SEED_PASS}${NC}"
+    echo -e "${BOLD}  (troque a senha pelo painel assim que logar — ela também está salva em $APP_DIR/.env)${NC}"
     echo ""
     echo -e "${BOLD}  Pressione ENTER após editar o .env para continuar...${NC}"
     read -r
@@ -182,6 +198,29 @@ for i in {1..30}; do
     echo -n "."
     sleep 3
 done
+
+# =============================================================================
+# 8. Agendar backup diário (cron) + backup inicial
+# =============================================================================
+step 8 "Agendando backup diário do banco..."
+CRON_LINE="0 3 * * * cd $APP_DIR && bash deploy/backup.sh >> /var/log/tenant-erp-backup.log 2>&1"
+if crontab -l 2>/dev/null | grep -Fq "deploy/backup.sh"; then
+    ok "Cron de backup já estava configurado"
+else
+    # Preserva o crontab existente e adiciona a linha do backup
+    (crontab -l 2>/dev/null; echo "$CRON_LINE") | crontab -
+    ok "Backup diário agendado (03:00) → /var/log/tenant-erp-backup.log"
+fi
+
+# Backup inicial: garante que existe pelo menos um ponto de restauração já no
+# fim da instalação, sem esperar o primeiro disparo do cron às 03:00.
+if bash "$APP_DIR/deploy/backup.sh" >/dev/null 2>&1; then
+    ok "Backup inicial criado em $APP_DIR/backups"
+else
+    warn "Backup inicial falhou — rode manualmente e verifique: bash $APP_DIR/deploy/backup.sh"
+fi
+warn "Backup fica na PRÓPRIA VPS. Para proteção real contra perda do disco,"
+warn "configure BACKUP_REMOTE_CMD (cópia off-site) — ver deploy/backup.sh."
 
 APP_URL_LINE=$(grep '^APP_URL=' "$APP_DIR/.env" | cut -d= -f2-)
 echo ""

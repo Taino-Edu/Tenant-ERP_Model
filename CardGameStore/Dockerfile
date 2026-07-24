@@ -14,6 +14,11 @@ RUN dotnet restore
 # Copia o restante e publica em modo Release
 # Nota: --no-restore omitido intencionalmente — garante resolve correto de pacotes
 # mesmo quando a camada de restore está em cache com versão anterior do .csproj
+# O update.sh fornece CACHEBUST em cada deploy. Sem consumir esse argumento, o
+# BuildKit da VPS já reutilizou COPY/publish antigos após um git pull e publicou
+# uma API anterior com uma tag nova.
+ARG CACHEBUST=local
+RUN echo "Build: ${CACHEBUST}"
 COPY . .
 RUN dotnet publish -c Release -o /app/publish
 
@@ -22,8 +27,16 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 
 # curl é necessário para o healthcheck do docker-compose; openssl para verificar
-# o provider legacy no build (abaixo)
-RUN apt-get update && apt-get install -y --no-install-recommends curl openssl && rm -rf /var/lib/apt/lists/*
+# o provider legacy no build (abaixo); postgresql-client-16 pro backup de tenant
+# (Multitenancy/Backup) via pg_dump — versão 16 pra bater com o servidor
+# (postgres:16-alpine no docker-compose.prod.yml), em vez do postgresql-client
+# genérico do Debian (fica em v15, cliente mais velho que o servidor).
+RUN apt-get update && apt-get install -y --no-install-recommends curl openssl gnupg lsb-release wget \
+    && sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+    && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && sed -i 's|deb https://apt.postgresql.org|deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org|' /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Habilita o provider "legacy" do OpenSSL 3 — certificados A1 ICP-Brasil (.pfx)
 # costumam ser empacotados com PBE antigo (RC2/3DES), que o OpenSSL 3 desativa

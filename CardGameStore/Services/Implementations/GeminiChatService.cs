@@ -2,9 +2,12 @@
 // GeminiChatService.cs — Assistente IA usando Gemini 2.0 Flash (Google)
 //
 // Configuração:
-//   GEMINI_API_KEY → chave do Google AI Studio (aistudio.google.com/apikey)
+//   GeminiSettings:ApiKey → chave global da plataforma (aistudio.google.com/apikey)
+//   AiConfig (por tenant, tabela ai_config) → BYOK opcional: se o tenant tiver
+//   uma chave própria salva e ativa (AiConfigController), ela é usada no lugar
+//   da chave global — assim o custo/cota fica por conta do próprio tenant.
 //
-// Funciona sem a chave configurada — retorna mensagem amigável de erro.
+// Funciona sem nenhuma chave configurada — retorna mensagem amigável de erro.
 // O sistema não quebra se o Gemini estiver indisponível.
 // =============================================================================
 
@@ -28,6 +31,7 @@ public class GeminiChatService : IAiChatService
     private readonly IVendaAvulsaService       _vendas;
     private readonly IHttpClientFactory        _http;
     private readonly IConfiguration            _config;
+    private readonly EncryptionService         _enc;
     private readonly ILogger<GeminiChatService> _logger;
 
     public GeminiChatService(
@@ -35,12 +39,14 @@ public class GeminiChatService : IAiChatService
         IVendaAvulsaService vendas,
         IHttpClientFactory http,
         IConfiguration config,
+        EncryptionService enc,
         ILogger<GeminiChatService> logger)
     {
         _db     = db;
         _vendas = vendas;
         _http   = http;
         _config = config;
+        _enc    = enc;
         _logger = logger;
     }
 
@@ -52,13 +58,13 @@ public class GeminiChatService : IAiChatService
 
     public async Task<AiChatResponse> ChatAsync(string userMessage)
     {
-        var apiKey = _config["GeminiSettings:ApiKey"];
+        var apiKey = await ResolveApiKeyAsync();
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            _logger.LogWarning("GeminiChatService: GEMINI_API_KEY não configurado.");
+            _logger.LogWarning("GeminiChatService: nenhuma chave Gemini configurada (nem própria do tenant, nem global).");
             return new AiChatResponse
             {
-                Reply   = "O assistente IA não está configurado. Peça ao administrador para adicionar a chave GEMINI_API_KEY.",
+                Reply   = "O assistente IA não está configurado. Peça ao administrador para adicionar a chave do Gemini.",
                 Success = false,
             };
         }
@@ -131,6 +137,17 @@ public class GeminiChatService : IAiChatService
                 Success = false,
             };
         }
+    }
+
+    /// <summary>Usa a chave própria do tenant (BYOK) se ele tiver uma salva e
+    /// ativa via /api/ai-config; senão cai na chave global da plataforma.</summary>
+    private async Task<string?> ResolveApiKeyAsync()
+    {
+        var aiConfig = await _db.AiConfigs.FindAsync(AiConfig.SingletonId);
+        if (aiConfig is { IsActive: true, GeminiApiKeyEncrypted: not null })
+            return _enc.Decrypt(aiConfig.GeminiApiKeyEncrypted);
+
+        return _config["GeminiSettings:ApiKey"];
     }
 
     // ── Contexto ──────────────────────────────────────────────────────────────

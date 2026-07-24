@@ -96,9 +96,9 @@ export const MANUAL_SECOES: ManualSectionData[] = [
       { t: 'Cadastrar cliente', d: 'Clique em "Novo Cliente". Nome é obrigatório; CPF, WhatsApp e e-mail são opcionais, mas ajudam na identificação.' },
       { t: 'Pontos de Fidelidade', d: 'A cada R$1 gasto, o cliente ganha 1 ponto. Os pontos expiram em 30 dias após a última compra e podem ser usados como desconto.' },
       { t: 'Pontos não acumulam com cashback', d: 'Se qualquer parte do pagamento usar cashback, o cliente não acumula pontos naquela venda.' },
-      { t: 'Adicionar pontos manualmente', d: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Campeonato de Pokémon").' },
+      { t: 'Adicionar pontos manualmente', d: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Bônus de aniversário").' },
       { t: 'Cashback (Saldo)', d: 'Diferente de pontos — é saldo em reais que o cliente pode usar como pagamento. Crédite ou débite manualmente pelo painel.' },
-      { t: 'Histórico completo', d: 'Clique em "Ver Histórico" no painel do cliente para ver todas as comandas, vendas no caixa, crediários e campeonatos em um único lugar.' },
+      { t: 'Histórico completo', d: 'Clique em "Ver Histórico" no painel do cliente para ver todas as comandas, vendas no caixa e crediários em um único lugar.' },
     ],
     dicas: [
       'Pontos e cashback são coisas diferentes: pontos têm validade de 30 dias; cashback é saldo em reais sem validade.',
@@ -125,24 +125,6 @@ export const MANUAL_SECOES: ManualSectionData[] = [
   },
   {
     num: '07',
-    titulo: 'Campeonatos',
-    cor: '#FBBF24',
-    itens: [
-      { t: 'Criar campeonato', d: 'Vá em Campeonatos → Novo. Informe nome, jogo (Pokémon, Magic, etc.), data, taxa de inscrição e número máximo de participantes.' },
-      { t: 'Status do campeonato', d: '"Planejado" → "Inscrições Abertas" → "Em Andamento" → "Finalizado". Mude o status conforme o evento avança.' },
-      { t: 'Inscrever participantes', d: 'No painel do campeonato, adicione participantes manualmente ou deixe que eles se inscrevam pela landing page pública.' },
-      { t: 'Pré-inscrições da landing page', d: 'Clientes sem conta podem se pré-inscrever pelo link público. Você aprova ou rejeita as pré-inscrições no painel.' },
-      { t: 'Pix na inscrição (opcional)', d: 'O jogador pode pagar a taxa de inscrição na hora via Pix — botão "Pagar inscrição via Pix" em Meus Campeonatos, com QR Code/copia-e-cola e confirmação automática. A vaga já vale mesmo sem pagar, então pagamento no balcão continua funcionando normalmente.' },
-      { t: 'Acompanhar pagamentos', d: 'Na lista de participantes, veja quem já pagou (Pix ou balcão) e marque manualmente o pagamento de quem pagar no balcão.' },
-      { t: 'Definir colocações', d: 'Após o campeonato, clique no participante e informe o lugar (1º, 2º, 3º...). O sistema monta o pódio automaticamente.' },
-    ],
-    dicas: [
-      'A taxa de inscrição paga no balcão é registrada manualmente — só o Pix confirma sozinho.',
-      'Use "Cancelado" para campeonatos que não aconteceram para manter o histórico limpo.',
-    ],
-  },
-  {
-    num: '07b',
     titulo: 'Grade de Produtos (Tamanhos & Cores)',
     cor: '#34D399',
     itens: [
@@ -159,7 +141,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     ],
   },
   {
-    num: '07c',
+    num: '07b',
     titulo: 'Reservas de Produtos (Site)',
     cor: '#60A5FA',
     itens: [
@@ -176,7 +158,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     ],
   },
   {
-    num: '07d',
+    num: '07c',
     titulo: 'Mercado de Cartas (Vitrine)',
     cor: '#F472B6',
     itens: [
@@ -193,7 +175,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     ],
   },
   {
-    num: '07e',
+    num: '07d',
     titulo: 'Fila de Espera (Pré-venda)',
     cor: '#38BDF8',
     itens: [
@@ -226,7 +208,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     itens: [
       { t: 'O que são perfis', d: 'Perfis permitem criar usuários operadores com acesso restrito. Você define quais módulos cada perfil pode acessar.' },
       { t: 'Criar um perfil', d: 'Vá em Administração → Perfis de Acesso → Novo Perfil. Dê um nome (ex: "Caixa") e marque as permissões desejadas.' },
-      { t: 'Permissões disponíveis', d: 'Dashboard, PDV, Comandas, Estoque, Categorias, Clientes, Crediário, Campeonatos, Financeiro, Relatórios, Anúncios, Cartas TCG, QR Codes e LGPD.' },
+      { t: 'Permissões disponíveis', d: 'Dashboard, PDV, Comandas, Estoque, Categorias, Clientes, Crediário, Financeiro, Relatórios, Anúncios, QR Codes e LGPD.' },
       { t: 'Atribuir perfil a operador', d: 'Em Clientes → aba Operadores, crie ou edite um operador e selecione o perfil. O operador verá apenas os módulos do perfil ao fazer login.' },
       { t: 'Alterar permissões', d: 'Edite o perfil a qualquer momento. As mudanças valem na próxima vez que o operador fizer login.' },
       { t: 'Excluir perfil', d: 'Só é possível excluir um perfil se nenhum operador estiver usando. Reatribua os operadores antes.' },
@@ -253,7 +235,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     titulo: 'Atalhos de Teclado',
     cor: '#F472B6',
     itens: [
-      { t: 'Navegar pelo teclado', d: 'Quando nenhum campo de texto está focado, pressione uma tecla para ir direto à página: D → Dashboard, P → PDV (Frente de Caixa), E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios, A → Campeonatos.' },
+      { t: 'Navegar pelo teclado', d: 'Quando nenhum campo de texto está focado, pressione uma tecla para ir direto à página: D → Comandas, G → Dashboard, P → PDV (Frente de Caixa), E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios.' },
       { t: 'Ver todos os atalhos', d: 'Pressione ? (shift + /) em qualquer tela para abrir o painel de atalhos com a lista completa. Pressione ? novamente ou Esc para fechar.' },
       { t: 'Fechar com Esc', d: 'A tecla Esc fecha modais, painéis flutuantes e o painel de atalhos. Funciona em qualquer contexto.' },
       { t: 'Badges no menu lateral', d: 'Ao passar o mouse sobre um item do menu no desktop, aparece a tecla de atalho correspondente em destaque ao lado do nome.' },
@@ -403,6 +385,79 @@ export const MANUAL_SECOES: ManualSectionData[] = [
       'Enquanto nada é preenchido, o site continua exatamente como está hoje — todo campo já vem com o valor atual como padrão.',
       'Esse painel é a base pro sistema virar white-label no futuro — quanto mais aqui, menos precisa mexer em código depois.',
       'O menu lateral do admin (Painel Geral, Estoque, etc.) ainda não é personalizável por aqui — só a página pública.',
+    ],
+  },
+  {
+    num: '18b',
+    titulo: 'Módulos Pagos por Loja',
+    cor: '#14B8A6',
+    itens: [
+      { t: 'O que são', d: 'Fiscal, Estoque, Fidelidade e Portal do Contador são módulos habilitados por loja — dá pra contratar só o que faz sentido pro seu negócio. Sem o módulo, o item some do menu e a tela/endpoint correspondente fica bloqueado.' },
+      { t: 'Como saber o que está ativo', d: 'Se um item do menu (ex: Fiscal) não aparece, o módulo não está habilitado pra essa loja. Fale com o suporte pra contratar.' },
+      { t: 'Fidelidade tem dois níveis', d: 'Além do módulo estar contratado, o programa de pontos também tem um interruptor próprio em Configurações — dá pra desligar temporariamente sem perder o histórico de pontos já dado, mesmo com o módulo ativo.' },
+    ],
+    dicas: [
+      'Só o dono da plataforma pode habilitar/desabilitar módulos de uma loja — não é uma configuração que o admin da loja mexe sozinho.',
+    ],
+  },
+  {
+    num: '18c',
+    titulo: 'Migração de Dados (Importar / Exportar)',
+    cor: '#8B5CF6',
+    itens: [
+      { t: 'Onde fica', d: 'LGPD & Auditoria → seção "Portabilidade de dados", logo no topo da página.' },
+      { t: 'Exportar', d: 'Três botões (Produtos, Clientes, Crediário em aberto) baixam um CSV com os dados de agora. Útil pra backup, conferência em planilha, ou levar seus dados embora se um dia quiser sair da plataforma.' },
+      { t: 'Importar', d: 'Suba um CSV com as mesmas colunas do export. Linhas válidas são cadastradas; linhas com problema (nome duplicado, CPF inválido, cliente não encontrado) ficam listadas com o motivo — corrige só essas e reenvia.' },
+      { t: 'Crediário exige cliente já cadastrado', d: 'Pra evitar dívida em nome de cliente errado ou inventado, a importação de crediário só funciona se o CPF ou e-mail da linha já bater com um cliente existente no sistema. Se ainda não migrou os clientes, importe eles primeiro.' },
+    ],
+    dicas: [
+      'Edite o CSV exportado direto no Excel/Google Sheets e suba de volta — é o jeito mais rápido de cadastrar produtos em lote.',
+      'O separador de coluna é ponto-e-vírgula ( ; ), não vírgula — abre certinho em planilha configurada em português.',
+    ],
+  },
+  {
+    num: '18d',
+    titulo: 'Portal do Contador',
+    cor: '#0EA5E9',
+    itens: [
+      { t: 'O que é', d: 'Acesso próprio (fora do admin da loja) pra contador acompanhar dados fiscais de uma ou mais lojas que atende — cross-tenant, sem precisar de login separado por loja.' },
+      { t: 'Como o contador entra', d: 'Cadastro próprio em /contador/cadastro. Depois, solicita vínculo com uma loja pelo slug (endereço) dela — o vínculo só libera dados depois que alguém da loja aprova.' },
+      { t: 'Convite às cegas', d: 'A loja também pode convidar um contador pelo e-mail antes dele ter conta — quando ele se cadastra, o vínculo já nasce aprovado automaticamente.' },
+      { t: 'O que o contador vê', d: 'Notas fiscais emitidas, dados cadastrais da loja (sem certificado nem senha), exportação de XMLs por período, e um mural de avisos trocado com a loja.' },
+      { t: 'Aprovar/recusar contador', d: 'Painel do admin mostra solicitações pendentes de contador — aprova ou recusa por lá.' },
+    ],
+    dicas: [
+      'O portal do contador só funciona se o módulo "Portal do Contador" estiver contratado pela loja.',
+      'Um mesmo contador pode estar vinculado a várias lojas diferentes — o seletor de "qual cliente" aparece se houver mais de uma.',
+    ],
+  },
+  {
+    num: '18e',
+    titulo: 'Domínio Próprio (para o dono da plataforma)',
+    cor: '#EC4899',
+    itens: [
+      { t: 'O que é', d: 'Além do endereço padrão (slug.dominio.com), uma loja pode usar um domínio totalmente próprio (ex: minhaloja.com.br).' },
+      { t: 'Quem configura', d: 'Só o dono da plataforma, na tela de detalhe da loja em /plataforma/tenants — campo "Domínio próprio".' },
+      { t: 'Passo a passo pro lojista', d: 'O lojista precisa ter o domínio numa conta Cloudflare própria dele (grátis), apontando pro servidor da plataforma em modo "Flexible". A plataforma não emite certificado automaticamente — quem cuida disso é a Cloudflare do próprio domínio.' },
+    ],
+    dicas: [
+      'Sem o domínio configurado corretamente na Cloudflare do lojista antes de cadastrar aqui, o site fica inacessível por esse endereço — o subdomínio padrão continua funcionando normalmente enquanto isso.',
+    ],
+  },
+  {
+    num: '18f',
+    titulo: 'Painel da Plataforma (dono do SaaS)',
+    cor: '#10B981',
+    itens: [
+      { t: 'Onde fica', d: 'Acesso separado do admin de loja — login do dono da plataforma entra direto em /plataforma.' },
+      { t: 'Visão geral', d: 'Receita agregada do mês, quantidade de lojas ativas/suspensas, adoção de cada módulo pago, e sinal de atividade recente por loja.' },
+      { t: 'Gestão de lojas', d: 'Criar loja nova (já escolhendo os módulos), suspender/reativar, editar plano e status de pagamento, habilitar/desabilitar módulo, configurar domínio próprio.' },
+      { t: 'Acessar o admin de qualquer loja', d: 'Botão de "entrar como" abre o painel daquela loja já autenticado, sem digitar subdomínio nem senha — a sessão expira sozinha em ~20 minutos e nunca mexe na conta real do admin de lá.' },
+      { t: 'Leads e Suporte', d: 'Funis de leads (interessados em contratar) e central de tickets de suporte cross-tenant, tudo num só lugar.' },
+      { t: 'Logs cross-tenant', d: 'Audit log agregado de todas as lojas, filtrável por loja de origem.' },
+    ],
+    dicas: [
+      'Esse painel é só pro dono da plataforma — o admin de uma loja individual não tem acesso, nem vê que ele existe.',
     ],
   },
 ]

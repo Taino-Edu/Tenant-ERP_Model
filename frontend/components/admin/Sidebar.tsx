@@ -10,7 +10,7 @@ import {
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
   Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy, Mail,
-  ChevronsLeft, ChevronsRight,
+  ChevronsLeft, ChevronsRight, Rocket, PartyPopper, Sparkles,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -39,6 +39,7 @@ const sections = [
       { href: '/admin/fiscal',      label: 'Fiscal',           icon: Receipt, perm: null },
       { href: '/admin/site',        label: 'Personalizar Site', icon: Palette, perm: null },
       { href: '/admin/email',      label: 'E-mail',           icon: Mail,    perm: null },
+      { href: '/admin/ia-config',  label: 'Assistente de IA', icon: Sparkles, perm: null },
       { href: '/admin/suporte',     label: 'Suporte',          icon: LifeBuoy, perm: null },
     ],
   },
@@ -54,6 +55,15 @@ const sections = [
     label: 'Estoque & Catálogo',
     items: [
       { href: '/admin/estoque',     label: 'Estoque',      icon: Package,     perm: 'estoque' },
+    ],
+  },
+  {
+    label: 'Eventos',
+    // EventosController é [Authorize(Policy = "AdminOnly")] — sem isso, Operator
+    // via o link e recebia 403 (perm: null só pula o filtro de perfil, não o de role).
+    adminOnly: true,
+    items: [
+      { href: '/admin/eventos', label: 'Gestão de Eventos', icon: PartyPopper, perm: null },
     ],
   },
   {
@@ -76,6 +86,7 @@ const sections = [
     label: 'Compliance',
     items: [
       { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield, perm: 'lgpd' },
+      { href: '/admin/primeiros-passos', label: 'Primeiros Passos', icon: Rocket, perm: null },
       { href: '/admin/sobre',     label: 'Sobre o Sistema',  icon: Info,     perm: null },
     ],
   },
@@ -99,6 +110,8 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
           (perm === null || hasPermission(perm))
           && (href !== '/admin/fiscal' || enabledModules.includes('fiscal'))
           && (href !== '/admin/reservas' || enabledModules.includes('estoque'))
+          && (href !== '/admin/eventos' || enabledModules.includes('eventos'))
+          && (href !== '/admin/ia-config' || enabledModules.includes('ia'))
         )
         if (visibleItems.length === 0) return null
         return (

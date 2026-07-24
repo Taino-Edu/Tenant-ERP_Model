@@ -188,6 +188,11 @@ namespace CardGameStore.Data.Migrations.Catalog
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AbordagemSugerida")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("abordagem_sugerida");
+
                     b.Property<Guid?>("ConvertedTenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("converted_tenant_id");
@@ -196,10 +201,20 @@ namespace CardGameStore.Data.Migrations.Catalog
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DigitalPresence")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("digital_presence");
+
                     b.Property<string>("Email")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("email");
+
+                    b.Property<string>("EstimatedRevenueRange")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("estimated_revenue_range");
 
                     b.Property<string>("Mensagem")
                         .HasMaxLength(1000)
@@ -217,11 +232,19 @@ namespace CardGameStore.Data.Migrations.Catalog
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("notas");
 
+                    b.Property<int?>("OpportunityScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("opportunity_score");
+
                     b.Property<string>("Origem")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
                         .HasColumnName("origem");
+
+                    b.Property<string>("PlaceId")
+                        .HasColumnType("text")
+                        .HasColumnName("place_id");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -243,6 +266,11 @@ namespace CardGameStore.Data.Migrations.Catalog
 
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_leads_created_at");
+
+                    b.HasIndex("PlaceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_leads_place_id_unique")
+                        .HasFilter("place_id IS NOT NULL");
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_leads_status");
@@ -488,6 +516,10 @@ namespace CardGameStore.Data.Migrations.Catalog
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)")
                         .HasColumnName("logo_url");
+
+                    b.Property<int?>("MaxUsers")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_users");
 
                     b.Property<int>("PaymentStatus")
                         .HasColumnType("integer")

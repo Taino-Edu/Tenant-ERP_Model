@@ -59,6 +59,7 @@ public class AppDbContext : DbContext
     public DbSet<FiscalConfig>       FiscalConfigs        { get; set; }
     public DbSet<NaturezaOperacao>   NaturezasOperacao    { get; set; }
     public DbSet<NotaFiscalEmitida>  NotasFiscaisEmitidas { get; set; }
+    public DbSet<InutilizacaoFiscal> InutilizacoesFiscais  { get; set; }
 
     // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
     public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
@@ -69,11 +70,18 @@ public class AppDbContext : DbContext
     // ── SMTP próprio do tenant (opcional) ──────────────────────────────────────
     public DbSet<EmailConfig>        EmailConfigs         { get; set; }
 
+    // ── Chave própria do Gemini (BYOK) pro tenant (opcional) ──────────────────
+    public DbSet<AiConfig>           AiConfigs            { get; set; }
+
     // ── Analytics de uso: telas acessadas pelo admin do tenant ────────────────
     public DbSet<PageViewEvent>      PageViewEvents       { get; set; }
 
     // ── Financeiro: fechamentos formais de período (dia/semana/mês) ───────────
     public DbSet<FechamentoPeriodo>  FechamentosPeriodo   { get; set; }
+
+    // ── Eventos: cadastro de evento + venda/check-in de entradas ──────────────
+    public DbSet<Evento>         Eventos        { get; set; }
+    public DbSet<EventoEntrada>  EventoEntradas { get; set; }
 
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
@@ -173,8 +181,19 @@ public class AppDbContext : DbContext
             entity.HasIndex(n => n.Status)
                   .HasDatabaseName("ix_notas_fiscais_status");
 
+            // F8: única por origem — fecha a corrida (TOCTOU) entre duas chamadas concorrentes
+            // pra emitir NFC-e da mesma comanda/venda avulsa (o guard de aplicação em
+            // FiscalController checa-então-insere, sem lock). NULL não conta como duplicata
+            // pro Postgres, então não precisa de filtro condicional pelo Origem.
             entity.HasIndex(n => n.ComandaId)
-                  .HasDatabaseName("ix_notas_fiscais_comanda");
+                  .IsUnique()
+                  .HasFilter("comanda_id IS NOT NULL")
+                  .HasDatabaseName("ix_notas_fiscais_comanda_unica");
+
+            entity.HasIndex(n => n.VendaAvulsaId)
+                  .IsUnique()
+                  .HasFilter("venda_avulsa_id IS NOT NULL")
+                  .HasDatabaseName("ix_notas_fiscais_venda_avulsa_unica");
 
             entity.HasIndex(n => n.EmitidoEm)
                   .HasDatabaseName("ix_notas_fiscais_emitido_em");
@@ -183,6 +202,13 @@ public class AppDbContext : DbContext
                   .IsUnique()
                   .HasFilter("chave_acesso IS NOT NULL")
                   .HasDatabaseName("ix_notas_fiscais_chave_acesso");
+        });
+
+        modelBuilder.Entity<InutilizacaoFiscal>(entity =>
+        {
+            entity.HasIndex(i => new { i.Ano, i.Serie, i.NumeroInicial, i.NumeroFinal })
+                  .IsUnique()
+                  .HasDatabaseName("ix_inutilizacoes_fiscais_faixa");
         });
 
         // =====================================================================
@@ -495,6 +521,23 @@ public class AppDbContext : DbContext
             entity.HasIndex(f => new { f.Tipo, f.DataInicio, f.DataFim })
                   .IsUnique()
                   .HasDatabaseName("ix_fechamentos_periodo_janela");
+        });
+
+        // =====================================================================
+        // EVENTOS
+        // =====================================================================
+        modelBuilder.Entity<Evento>(entity =>
+        {
+            entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(20);
+
+            entity.HasIndex(e => e.DataEvento)
+                  .HasDatabaseName("ix_eventos_data_evento");
+        });
+
+        modelBuilder.Entity<EventoEntrada>(entity =>
+        {
+            entity.HasIndex(e => e.EventoId)
+                  .HasDatabaseName("ix_evento_entradas_evento_id");
         });
     }
 }

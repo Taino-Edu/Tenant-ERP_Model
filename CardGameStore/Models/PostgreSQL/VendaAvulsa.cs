@@ -62,6 +62,27 @@ public class VendaAvulsa
     [Column("discount_in_cents")]
     public int DiscountInCents { get; set; } = 0;
 
+    [Column("fiscal_effects_captured_at")]
+    public DateTime? FiscalEffectsCapturedAt { get; set; }
+
+    [Column("points_debited_at_sale")]
+    public int PointsDebitedAtSale { get; set; }
+
+    [Column("cashback_debited_at_sale")]
+    public int CashbackDebitedAtSale { get; set; }
+
+    [Column("points_awarded_at_sale")]
+    public int PointsAwardedAtSale { get; set; }
+
+    [Column("crediario_id_at_sale")]
+    public Guid? CrediarioIdAtSale { get; set; }
+
+    [Column("crediario_amount_at_sale")]
+    public int CrediarioAmountAtSale { get; set; }
+
+    [Column("cancelado_em")]
+    public DateTime? CanceladoEm { get; set; }
+
     [NotMapped]
     public decimal TotalInReais => TotalInCents / 100m;
 

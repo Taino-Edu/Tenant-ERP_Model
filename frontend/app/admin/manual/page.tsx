@@ -1,10 +1,11 @@
 'use client'
 import { useEffect } from 'react'
+import Link from 'next/link'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { MANUAL_SECOES as SECOES } from '@/lib/manualContent'
 
-const VERSION = 'v1.21.0'
-const DATA = '08/07/2026'
+const VERSION = 'v1.22.0'
+const DATA = '15/07/2026'
 
 export default function ManualPdfPage() {
   const { site } = useSiteConfig()
@@ -45,6 +46,25 @@ export default function ManualPdfPage() {
           margin-bottom: 32px;
         }
         .print-btn:hover { background: #00d494; }
+
+        .btn-row { display: flex; gap: 10px; margin-bottom: 32px; }
+        .btn-row .print-btn { margin-bottom: 0; }
+        .quick-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #fff;
+          color: #0C3D5A;
+          font-weight: 700;
+          font-size: 13px;
+          border: 1.5px solid #e5e7eb;
+          border-radius: 10px;
+          padding: 10px 20px;
+          cursor: pointer;
+          text-decoration: none;
+        }
+        .quick-btn:hover { border-color: #00F0A8; }
+        @media print { .quick-btn { display: none !important; } }
 
         /* Capa */
         .capa {
@@ -157,10 +177,15 @@ export default function ManualPdfPage() {
       `}</style>
 
       <div className="page">
-        {/* Botão imprimir */}
-        <button className="print-btn" onClick={() => window.print()}>
-          🖨️ Imprimir / Salvar como PDF
-        </button>
+        {/* Botões */}
+        <div className="btn-row">
+          <button className="print-btn" onClick={() => window.print()}>
+            🖨️ Imprimir / Salvar como PDF
+          </button>
+          <Link href="/admin/primeiros-passos" className="quick-btn">
+            🚀 Prefere um resumo rápido? Primeiros Passos
+          </Link>
+        </div>
 
         {/* Capa */}
         <div className="capa">

@@ -95,10 +95,17 @@ export default function CupomNfcePage() {
               <span>{item.quantidade} x {fmtMoeda(item.precoUnitarioCentavos)}</span>
               <span>{fmtMoeda(item.subtotalCentavos)}</span>
             </div>
+            <div style={{ fontSize: 10 }}>Trib. aprox. do item: {fmtMoeda(item.tributosAproximadosCentavos)}</div>
           </div>
         ))}
 
         <hr />
+        {cupom.descontoTotalCentavos > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>DESCONTOS / PONTOS</span>
+            <span>-{fmtMoeda(cupom.descontoTotalCentavos)}</span>
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
           <span>TOTAL</span>
           <span>{fmtMoeda(cupom.valorTotalCentavos)}</span>
@@ -106,6 +113,10 @@ export default function CupomNfcePage() {
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>Forma de pagamento</span>
           <span>{cupom.formaPagamento}</span>
+        </div>
+        <div style={{ fontSize: 10, marginTop: 6 }}>
+          Tributos aproximados: Federal {fmtMoeda(cupom.tributosFederaisCentavos)}, Estadual {fmtMoeda(cupom.tributosEstaduaisCentavos)}, Municipal {fmtMoeda(cupom.tributosMunicipaisCentavos)}.
+          {cupom.fontesTributos && <> Fonte: {cupom.fontesTributos}. Lei 12.741/2012.</>}
         </div>
         <hr />
 

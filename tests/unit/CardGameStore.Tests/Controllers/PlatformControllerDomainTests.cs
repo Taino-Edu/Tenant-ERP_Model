@@ -12,6 +12,7 @@ using CardGameStore.Multitenancy;
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,7 +27,7 @@ public class PlatformControllerDomainTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-    private static PlatformController CreateController(CatalogDbContext catalog, string? rootDomain = "2esysten.com.br")
+    private static PlatformController CreateController(CatalogDbContext catalog, string? rootDomain = "3esysten.com.br")
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(rootDomain is null ? [] : new Dictionary<string, string?> { ["Multitenancy:RootDomain"] = rootDomain })
@@ -37,6 +38,7 @@ public class PlatformControllerDomainTests
             new Mock<ITenantProvisioningService>().Object,
             NullLogger<PlatformController>.Instance,
             new Mock<IServiceScopeFactory>().Object,
+            new MemoryCache(new MemoryCacheOptions()),
             config);
     }
 
@@ -115,13 +117,13 @@ public class PlatformControllerDomainTests
     }
 
     [Theory]
-    [InlineData("2esysten.com.br")]
-    [InlineData("loja-x.2esysten.com.br")]
+    [InlineData("3esysten.com.br")]
+    [InlineData("loja-x.3esysten.com.br")]
     public async Task UpdateCustomDomain_ColideComDominioDaPlataforma_RetornaBadRequest(string dominio)
     {
         var db = CreateCatalogDb();
         var id = await SeedTenantAsync(db, "loja-g");
-        var controller = CreateController(db, rootDomain: "2esysten.com.br");
+        var controller = CreateController(db, rootDomain: "3esysten.com.br");
 
         var result = await controller.UpdateCustomDomain(id, new UpdateTenantDomainRequest { CustomDomain = dominio });
 

@@ -124,7 +124,7 @@ function ProductDrawer({ product, onClose, onEdit, onStock }: {
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Preço de Venda</span>
               <span className="text-lg font-black font-mono text-accent-gold">
-                R$ {product.priceInReais.toFixed(2).replace('.', ',')}
+                R$ {(product.priceInReais ?? (product.priceInCents / 100)).toFixed(2).replace('.', ',')}
               </span>
             </div>
             {product.costPriceInCents > 0 && (
@@ -440,6 +440,10 @@ function ProductModal({
   const [barcodeScanning, setBarcodeScanning] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
   const set = (k: keyof Product, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+  const naturezaSelecionada = form.naturezaOperacaoId
+    ? naturezas.find(n => n.id === form.naturezaOperacaoId)
+    : naturezas.find(n => n.isPadrao)
+  const cestObrigatorio = ['201', '202', '203', '500'].includes(naturezaSelecionada?.csosn ?? '')
 
   async function handleCameraDetected(code: string) {
     setCameraOpen(false)
@@ -548,6 +552,61 @@ function ProductModal({
               </select>
             </div>
           </div>
+
+          <details className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3" open={cestObrigatorio}>
+            <summary className="cursor-pointer text-sm font-semibold text-gray-300">
+              Classificacao e transparencia tributaria
+            </summary>
+            <div className="mt-3 space-y-3">
+              {form.tributosPreenchidosAutomaticamente && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+                  Preenchido automaticamente pelo IBPT {form.ibptVersao ? `(${form.ibptVersao})` : ''}
+                  {form.tributosVigenciaFim ? `, válido até ${new Date(form.tributosVigenciaFim).toLocaleDateString('pt-BR')}` : ''}.
+                  Alterar percentuais ou fonte transforma este cadastro em override manual preservado nas próximas sincronizações.
+                </div>
+              )}
+              <div>
+                <label className="label">CEST {cestObrigatorio ? '*' : '(quando aplicavel)'}</label>
+                <input className="input" inputMode="numeric" value={form.cest ?? ''}
+                  onChange={e => set('cest', e.target.value.replace(/\D/g, '').slice(0, 7) || null)}
+                  placeholder="0000000" maxLength={7} required={cestObrigatorio} />
+                <p className="text-xs text-gray-400 mt-1">
+                  {cestObrigatorio
+                    ? `Obrigatorio para o CSOSN ${naturezaSelecionada?.csosn}. Consulte o contador.`
+                    : 'Preencha somente se o produto possuir CEST.'}
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="label">Federal % *</label>
+                  <input className="input" type="number" min="0" max="100" step="0.0001" required
+                    value={form.percentualTributosFederais ?? ''}
+                    onChange={e => set('percentualTributosFederais', e.target.value === '' ? null : Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="label">Estadual % *</label>
+                  <input className="input" type="number" min="0" max="100" step="0.0001" required
+                    value={form.percentualTributosEstaduais ?? ''}
+                    onChange={e => set('percentualTributosEstaduais', e.target.value === '' ? null : Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="label">Municipal % *</label>
+                  <input className="input" type="number" min="0" max="100" step="0.0001" required
+                    value={form.percentualTributosMunicipais ?? ''}
+                    onChange={e => set('percentualTributosMunicipais', e.target.value === '' ? null : Number(e.target.value))} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Fonte e versao *</label>
+                <input className="input" required maxLength={100} value={form.fonteTributos ?? ''}
+                  onChange={e => set('fonteTributos', e.target.value || null)}
+                  placeholder="Ex.: IBPT 26.1.A / tabela validada pelo contador" />
+                <p className="text-xs text-amber-400 mt-1">
+                  Use os percentuais e a fonte fornecidos pelo contador; o sistema nao inventa aliquotas.
+                </p>
+              </div>
+            </div>
+          </details>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -1252,7 +1311,7 @@ function EstoqueContent() {
                     {p.costPriceInCents > 0 ? `R$ ${p.costPriceInReais.toFixed(2).replace('.', ',')}` : '—'}
                   </td>
                   <td className="px-4 py-3 font-mono text-accent-gold font-semibold">
-                    R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                    R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs">
                     {p.costPriceInCents > 0
@@ -1361,7 +1420,7 @@ function EstoqueContent() {
 
               {/* Linha 2: preço + custo + margem */}
               <div className="flex items-center gap-3 text-xs flex-wrap">
-                <span className="text-accent-gold font-bold">R$ {p.priceInReais.toFixed(2).replace('.', ',')}</span>
+                <span className="text-accent-gold font-bold">R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}</span>
                 {p.costPriceInCents > 0 && (
                   <>
                     <span className="text-gray-500">Custo: R$ {p.costPriceInReais.toFixed(2).replace('.', ',')}</span>

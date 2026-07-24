@@ -22,14 +22,14 @@ const EXPORTS = [
 function ExportarDadosSection() {
   const [baixando, setBaixando] = useState<string | null>(null)
 
-  async function baixar(key: string) {
-    setBaixando(key)
+  async function baixar(key: string, formato: 'csv' | 'xlsx') {
+    setBaixando(`${key}-${formato}`)
     try {
-      const { data } = await api.get(`/api/export/${key}`, { responseType: 'blob' })
+      const { data } = await api.get(`/api/export/${key}`, { params: { formato }, responseType: 'blob' })
       const url = URL.createObjectURL(data as Blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${key}-${new Date().toISOString().slice(0, 10)}.csv`
+      a.download = `${key}-${new Date().toISOString().slice(0, 10)}.${formato}`
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
@@ -46,24 +46,38 @@ function ExportarDadosSection() {
         <h2 className="text-sm font-bold text-white">Portabilidade de dados</h2>
       </div>
       <p className="text-xs text-gray-400 mb-3">
-        Baixe seus dados em CSV a qualquer momento — sem depender de pedir pra gente. Reduz o risco de ficar preso à plataforma.
+        Baixe seus dados em CSV ou Excel a qualquer momento — sem depender de pedir pra gente. Reduz o risco de ficar preso à plataforma.
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {EXPORTS.map(({ key, label, desc, icon: Icon }) => (
-          <button
+          <div
             key={key}
-            onClick={() => baixar(key)}
-            disabled={baixando !== null}
-            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors text-left disabled:opacity-50"
+            className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-surface-500"
           >
-            {baixando === key
-              ? <Loader2 className="w-4 h-4 text-brand-400 animate-spin shrink-0" />
-              : <Icon className="w-4 h-4 text-brand-400 shrink-0" />}
-            <span className="min-w-0">
+            <Icon className="w-4 h-4 text-brand-400 shrink-0" />
+            <span className="min-w-0 flex-1">
               <span className="block text-sm text-white">{label}</span>
               <span className="block text-xs text-gray-500 truncate">{desc}</span>
             </span>
-          </button>
+            <div className="flex gap-1 shrink-0">
+              <button
+                onClick={() => baixar(key, 'csv')}
+                disabled={baixando !== null}
+                title="Baixar CSV"
+                className="px-2 py-1 rounded-lg text-xs font-semibold border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors disabled:opacity-50"
+              >
+                {baixando === `${key}-csv` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'CSV'}
+              </button>
+              <button
+                onClick={() => baixar(key, 'xlsx')}
+                disabled={baixando !== null}
+                title="Baixar Excel"
+                className="px-2 py-1 rounded-lg text-xs font-semibold border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors disabled:opacity-50"
+              >
+                {baixando === `${key}-xlsx` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Excel'}
+              </button>
+            </div>
+          </div>
         ))}
       </div>
     </div>

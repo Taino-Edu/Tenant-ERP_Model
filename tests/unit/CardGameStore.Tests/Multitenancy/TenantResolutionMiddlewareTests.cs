@@ -21,13 +21,13 @@ public class TenantResolutionMiddlewareTests
     // ── ExtractSlug (função pura) ────────────────────────────────────────────
 
     [Theory]
-    [InlineData("loja-maikon.2esysten.com.br", "2esysten.com.br", "loja-maikon")]
-    [InlineData("2esysten.com.br",             "2esysten.com.br", null)]        // domínio raiz — sem slug
-    [InlineData("a.b.2esysten.com.br",         "2esysten.com.br", null)]        // multi-nível — não é slug válido
-    [InlineData("179.197.67.64",               "2esysten.com.br", null)]        // IP puro
-    [InlineData("localhost",                   "2esysten.com.br", null)]
-    [InlineData("outrodominio.com",            "2esysten.com.br", null)]        // domínio de terceiro — não é subdomínio
-    [InlineData("loja.2esysten.com.br",        null,               null)]       // sem RootDomain configurado
+    [InlineData("loja-maikon.3esysten.com.br", "3esysten.com.br", "loja-maikon")]
+    [InlineData("3esysten.com.br",             "3esysten.com.br", null)]        // domínio raiz — sem slug
+    [InlineData("a.b.3esysten.com.br",         "3esysten.com.br", null)]        // multi-nível — não é slug válido
+    [InlineData("179.197.67.64",               "3esysten.com.br", null)]        // IP puro
+    [InlineData("localhost",                   "3esysten.com.br", null)]
+    [InlineData("outrodominio.com",            "3esysten.com.br", null)]        // domínio de terceiro — não é subdomínio
+    [InlineData("loja.3esysten.com.br",        null,               null)]       // sem RootDomain configurado
     public void ExtractSlug_CasosDeHost(string host, string? rootDomain, string? esperado)
     {
         TenantResolutionMiddleware.ExtractSlug(host, rootDomain).Should().Be(esperado);
@@ -36,7 +36,7 @@ public class TenantResolutionMiddlewareTests
     [Fact]
     public void ExtractSlug_CaseInsensitive()
     {
-        TenantResolutionMiddleware.ExtractSlug("Loja-Maikon.2ESYSTEN.COM.BR", "2esysten.com.br")
+        TenantResolutionMiddleware.ExtractSlug("Loja-Maikon.3ESYSTEN.COM.BR", "3esysten.com.br")
             .Should().Be("loja-maikon");
     }
 
@@ -77,7 +77,7 @@ public class TenantResolutionMiddlewareTests
         var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
         var (ctx, tenantContext) = BuildContext("minhaloja.com.br", services);
 
-        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "2esysten.com.br");
+        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "3esysten.com.br");
         await middleware.InvokeAsync(ctx, tenantContext, catalog);
 
         tenantContext.TenantId.Should().Be(tenantId);
@@ -95,9 +95,9 @@ public class TenantResolutionMiddlewareTests
         await catalog.SaveChangesAsync();
 
         var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
-        var (ctx, tenantContext) = BuildContext("loja-y.2esysten.com.br", services);
+        var (ctx, tenantContext) = BuildContext("loja-y.3esysten.com.br", services);
 
-        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "2esysten.com.br");
+        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "3esysten.com.br");
         await middleware.InvokeAsync(ctx, tenantContext, catalog);
 
         tenantContext.TenantId.Should().Be(idPorSlug);
@@ -118,7 +118,7 @@ public class TenantResolutionMiddlewareTests
         var (ctx, tenantContext) = BuildContext("lojasuspensa.com.br", services);
         ctx.Response.Body = new MemoryStream();
 
-        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "2esysten.com.br");
+        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "3esysten.com.br");
         await middleware.InvokeAsync(ctx, tenantContext, catalog);
 
         ctx.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
@@ -131,10 +131,30 @@ public class TenantResolutionMiddlewareTests
         var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
         var (ctx, tenantContext) = BuildContext("dominio-nunca-cadastrado.com", services);
 
-        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "2esysten.com.br");
+        var middleware = CreateMiddleware(_ => Task.CompletedTask, rootDomain: "3esysten.com.br");
         await middleware.InvokeAsync(ctx, tenantContext, catalog);
 
         tenantContext.TenantId.Should().Be(TenantConstants.TenantZeroId);
         tenantContext.SchemaName.Should().Be(TenantConstants.TenantZeroSchema);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_SubdominioInexistente_Retorna404_NaoServeTenantZero()
+    {
+        // Subdomínio BEM-FORMADO do RootDomain, mas sem tenant no catálogo (typo,
+        // loja removida): tem de dar 404, não pode servir a vitrine/login do
+        // tenant-zero (schema "public") — ver comentário em InvokeAsync.
+        var catalog = CreateCatalogDb();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("loja-que-nao-existe.3esysten.com.br", services);
+        ctx.Response.Body = new MemoryStream();
+
+        var nextChamado = false;
+        var middleware = CreateMiddleware(_ => { nextChamado = true; return Task.CompletedTask; }, rootDomain: "3esysten.com.br");
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        ctx.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        nextChamado.Should().BeFalse("a requisição não pode seguir o pipeline servindo o tenant-zero");
+        tenantContext.TenantId.Should().Be(TenantConstants.TenantZeroId, "o contexto não deve ter sido alterado para nenhum tenant real");
     }
 }

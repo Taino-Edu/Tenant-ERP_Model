@@ -5,6 +5,7 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,12 +14,16 @@ namespace CardGameStore.Services.Implementations;
 public class UserService : IUserService
 {
     private readonly AppDbContext          _db;
+    private readonly CatalogDbContext      _catalog;
+    private readonly ITenantContext        _tenant;
     private readonly ILogger<UserService>  _logger;
 
-    public UserService(AppDbContext db, ILogger<UserService> logger)
+    public UserService(AppDbContext db, CatalogDbContext catalog, ITenantContext tenant, ILogger<UserService> logger)
     {
-        _db     = db;
-        _logger = logger;
+        _db      = db;
+        _catalog = catalog;
+        _tenant  = tenant;
+        _logger  = logger;
     }
 
     public async Task<IEnumerable<UserSummaryDto>> GetAllAsync(string? search = null, string? role = null)
@@ -219,6 +224,10 @@ public class UserService : IUserService
 
         var role = request.Role == UserRole.Operator ? UserRole.Operator : UserRole.Customer;
 
+        var adminUser = await _db.Users.FindAsync(adminId);
+        if (adminUser?.Role == UserRole.Operator && role == UserRole.Operator)
+            throw new UnauthorizedAccessException("Operadores não podem criar outros operadores.");
+
         if (role == UserRole.Operator)
         {
             if (string.IsNullOrWhiteSpace(request.Email))
@@ -242,8 +251,53 @@ public class UserService : IUserService
         if (!string.IsNullOrWhiteSpace(request.Password))
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
 
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
+        // Limite de acesso do plano (ex: Lagoa = 4) — conta quem loga no painel
+        // (Admin+Operator), nunca Customer. Null = sem limite.
+        var maxUsers = role == UserRole.Operator
+            ? await _catalog.Tenants.Where(t => t.Id == _tenant.TenantId).Select(t => t.MaxUsers).FirstOrDefaultAsync()
+            : null;
+
+        if (maxUsers.HasValue)
+        {
+            // Trava consultiva (advisory lock, escopada à transação) chaveada pelo
+            // tenant — serializa duas criações de Operator concorrentes pro MESMO
+            // tenant. Não há uma linha própria do tenant pra travar aqui (o Tenant
+            // vive noutro DbContext/schema, o "public"), daí o advisory lock em vez
+            // de um SELECT ... FOR UPDATE comum. Achado de review: sem isso, duas
+            // requisições concorrentes podiam as duas passar pelo CountAsync abaixo
+            // do limite e criar usuários acima dele.
+            var limiteExcedido = false;
+            var strategy = _db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await _db.Database.BeginTransactionAsync();
+                await _db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT pg_advisory_xact_lock(hashtext({_tenant.TenantId.ToString()}))");
+
+                var acessosAtuais = await _db.Users.CountAsync(u =>
+                    u.IsActive && (u.Role == UserRole.Admin || u.Role == UserRole.Operator));
+                if (acessosAtuais >= maxUsers.Value)
+                {
+                    limiteExcedido = true;
+                    await tx.RollbackAsync();
+                    return;
+                }
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+            });
+
+            if (limiteExcedido)
+                throw new InvalidOperationException(
+                    $"Limite de {maxUsers.Value} usuário(s) com acesso ao painel atingido pro plano atual. " +
+                    "Fale com o suporte pra fazer upgrade de plano.");
+        }
+        else
+        {
+            _db.Users.Add(user);
+            await _db.SaveChangesAsync();
+        }
 
         _logger.LogInformation(
             "Admin {AdminId} criou conta para o cliente {UserId} ({Name}).",
@@ -256,6 +310,10 @@ public class UserService : IUserService
     {
         var user = await _db.Users.FindAsync(userId)
             ?? throw new InvalidOperationException("Usuário não encontrado.");
+
+        var adminUser = await _db.Users.FindAsync(adminId);
+        if (adminUser?.Role == UserRole.Operator && user.Role == UserRole.Admin)
+            throw new UnauthorizedAccessException("Operadores não podem redefinir a senha de administradores.");
 
         user.PasswordHash           = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, workFactor: 12);
         user.RefreshToken           = null;

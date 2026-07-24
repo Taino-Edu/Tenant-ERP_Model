@@ -151,6 +151,19 @@ export interface Product {
   hasVariants: boolean
   /** NCM (Nomenclatura Comum do Mercosul) — obrigatório para emitir NFC-e deste produto. */
   ncm: string | null
+  /** CEST com 7 digitos; obrigatorio quando a natureza usa ICMS-ST. */
+  cest: string | null
+  percentualTributosFederais: number | null
+  percentualTributosEstaduais: number | null
+  percentualTributosMunicipais: number | null
+  /** Fonte/versao aprovada pelo contador, por exemplo IBPT 26.1.A. */
+  fonteTributos: string | null
+  tributosPreenchidosAutomaticamente: boolean
+  tributosAtualizadosEm: string | null
+  tributosVigenciaInicio: string | null
+  tributosVigenciaFim: string | null
+  ibptVersao: string | null
+  ibptChave: string | null
   /** Natureza de operação (CFOP/CSOSN) usada na emissão fiscal. Null = usa a marcada como padrão. */
   naturezaOperacaoId: string | null
   updatedAt: string; createdAt: string
@@ -615,19 +628,16 @@ export interface ClienteHistoricoCrediario {
   dataAbertura: string; dataVencimento: string; dataPagamento: string | null
   observacao: string | null
 }
-export interface ClienteHistoricoCampeonato {
-  championshipId: string; championshipName: string; game: string
-  status: string; startDate: string; playerNumber: number
-  deckName: string | null; placement: number | null; registeredAt: string
-}
 export interface ClienteHistoricoDto {
   userId: string; userName: string
   totalVisitas: number; totalGasto: number
   primeiraVisita: string | null; ultimaVisita: string | null
+  mediaDiasEntreVisitas: number | null
+  diaSemanaFavorito: string | null
+  categoriaFavorita: string | null
   comandas: ClienteHistoricoComanda[]
   vendasAvulsas: ClienteHistoricoVendaAvulsa[]
   crediarios: ClienteHistoricoCrediario[]
-  campeonatos: ClienteHistoricoCampeonato[]
 }
 
 export const userApi = {
@@ -673,6 +683,7 @@ export interface AiChatResponse {
   reply:   string
   success: boolean
   error?:  string
+  action?: { type: 'navigate' | 'openWizard'; route?: string }
 }
 
 export const aiApi = {
@@ -690,23 +701,48 @@ export interface TenantSummary {
   status: TenantStatus; createdAt: string
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
   customDomain: string | null
+  maxUsers: number | null
 }
 
 export interface CreateTenantRequest {
   slug: string; adminEmail: string; adminPassword: string; enabledModules?: string[]
+  planName?: string; maxUsers?: number | null
 }
 
 /** Catálogo de módulos pagos — mesma lista que o backend aceita
  * (TenantProvisioningService.KnownModules / RequireModuleAttribute). */
 export const TENANT_MODULES = [
   { value: 'fiscal',   label: 'Fiscal',              description: 'Emissão de NFC-e' },
-  { value: 'estoque',  label: 'Estoque',              description: 'Variantes, reservas e lista de espera' },
+  { value: 'estoque',  label: 'Estoque',              description: 'Variantes, reservas e lista de espera (pré-venda)' },
   { value: 'pontos',   label: 'Fidelidade (Pontos)',  description: 'Programa de pontos/cashback dos clientes' },
   { value: 'contador', label: 'Portal do Contador',   description: 'Acesso cross-tenant do contador da loja' },
+  { value: 'ia',       label: 'Assistente de IA',     description: 'Chat com IA (Gemini) sobre estoque e devedores' },
+  { value: 'eventos',  label: 'Gestão de Eventos',    description: 'Cadastro de eventos e cobrança de entrada' },
+] as const
+
+/** Presets de plano pro painel de criação de tenant — só pré-marcam os
+ * módulos e o limite de acesso; o dono da plataforma ainda pode ajustar
+ * manualmente antes de criar (módulos personalizados continuam possíveis). */
+export const TENANT_PLAN_PRESETS = [
+  {
+    name: 'Mar',
+    description: 'Plano completo — todos os módulos',
+    modules: TENANT_MODULES.map(m => m.value) as string[],
+    maxUsers: null as number | null,
+  },
+  {
+    name: 'Lagoa',
+    description: 'Plano base — sem IA, eventos, contador ou estoque avançado',
+    modules: ['fiscal', 'pontos'] as string[],
+    maxUsers: 4 as number | null,
+  },
 ] as const
 
 export interface UpdateTenantBillingRequest {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
+  /** Omitido/null preserva o limite atual — para remover de vez, use removerMaxUsers. */
+  maxUsers?: number | null
+  removerMaxUsers?: boolean
 }
 
 export interface TenantActivity {
@@ -750,6 +786,12 @@ export const platformApi = {
     api.patch<LeadDto>(`/api/platform/leads/${id}`, req),
   getTenantStaff: (id: string) =>
     api.get<TenantStaffDto[]>(`/api/platform/tenants/${id}/staff`),
+  resetTenantStaffPassword: (id: string, userId: string, newPassword: string) =>
+    api.post<void>(`/api/platform/tenants/${id}/staff/${userId}/reset-password`, { newPassword }),
+  downloadTenantBackup: (id: string) =>
+    api.get(`/api/platform/tenants/${id}/backup`, { responseType: 'blob' }),
+  deleteTenant: (id: string, confirmSlug: string) =>
+    api.delete<void>(`/api/platform/tenants/${id}`, { data: { confirmSlug } }),
   getTenantCustomers: (id: string, page = 1, pageSize = 50) =>
     api.get<PagedResult<TenantCustomerDto>>(`/api/platform/tenants/${id}/customers`, { params: { page, pageSize } }),
   getTenantAuditLogs: (id: string, page = 1, pageSize = 50) =>
@@ -817,10 +859,13 @@ export interface ImportResultDto {
 // ── Leads (captação pública, CTA da landing) ──────────────────────────────────
 
 export type LeadStatus = 'Novo' | 'Contatado' | 'Convertido' | 'Perdido'
+export type LeadDigitalPresence = 'SemSite' | 'SiteLegado' | 'ECommerce'
 
 export interface LeadDto {
   id: string; nome: string; telefone: string; email: string | null; mensagem: string | null
   origem: string; status: LeadStatus; notas: string | null
+  digitalPresence: LeadDigitalPresence | null; opportunityScore: number | null; placeId: string | null
+  estimatedRevenueRange: string | null; abordagemSugerida: string | null
   createdAt: string; updatedAt: string; convertedTenantId: string | null
 }
 
@@ -830,11 +875,43 @@ export interface CreateLeadRequest {
 
 export interface UpdateLeadRequest {
   status: LeadStatus; notas?: string | null; convertedTenantId?: string | null
+  digitalPresence?: LeadDigitalPresence | null; opportunityScore?: number | null; placeId?: string | null
+  estimatedRevenueRange?: string | null; abordagemSugerida?: string | null
 }
 
 export const leadsApi = {
   create: (req: CreateLeadRequest) =>
     api.post<{ message: string }>('/api/leads', req),
+}
+
+// ── Prospecção (busca de possíveis clientes — painel da plataforma) ───────────
+
+export interface ProspectCandidateDto {
+  placeId: string; nome: string; endereco: string | null; telefone: string | null
+  website: string | null
+  digitalPresence: LeadDigitalPresence; opportunityScore: number; estimatedRevenueRange: string
+}
+
+export interface ProspectingEnrichResponse {
+  estimatedRevenueRange: string; abordagemSugerida: string
+}
+
+export interface CreateProspectLeadRequest {
+  nome: string; telefone?: string; placeId?: string
+  digitalPresence?: LeadDigitalPresence; opportunityScore?: number
+  estimatedRevenueRange?: string; abordagemSugerida?: string
+}
+
+export const prospectingApi = {
+  search: (categoria: string, cidade: string) =>
+    api.post<ProspectCandidateDto[]>('/api/platform/prospecting/search', { categoria, cidade }),
+  enrich: (candidate: ProspectCandidateDto, categoria: string) =>
+    api.post<ProspectingEnrichResponse>('/api/platform/prospecting/enrich', {
+      placeId: candidate.placeId, nome: candidate.nome, endereco: candidate.endereco, categoria,
+      digitalPresence: candidate.digitalPresence,
+    }),
+  createLead: (req: CreateProspectLeadRequest) =>
+    api.post<LeadDto>('/api/platform/leads/prospeccao', req),
 }
 
 // ── Suporte (chamados entre lojista e plataforma) ──────────────────────────────
@@ -1176,12 +1253,62 @@ export interface FiscalConfigDto {
   certificadoValidade?: string
   diasParaVencer?: number
   formasPagamentoAutoEmissao: string[]
+  ibptConfigurado: boolean
+  ibptAutoSyncEnabled: boolean
+  ibptUltimaSincronizacao?: string
+  ibptUltimaVersao?: string
+  ibptVigenciaInicio?: string
+  ibptVigenciaFim?: string
+  ibptUltimoErro?: string
+}
+
+export interface FiscalSaudeDto {
+  status: 'Pronto' | 'RequerAtencao' | 'Bloqueado'
+  ambiente: 'Homologacao' | 'Producao'
+  checklist: { etapa: string; concluido: boolean }[]
+  notas: {
+    autorizadas24h: number; rejeitadas24h: number
+    pendentesTotal: number; pendenteMaisAntigaDesde?: string
+  }
+  certificado: { configurado: boolean; certificadoValidade?: string; diasParaVencer?: number; vencido: boolean }
+  produtos: { produtosAtivos: number; semNcm: number; produtosPendentes: number; produtosVencidos: number }
+  pendencias: { categoria: string; mensagem: string; bloqueia: boolean }[]
+  proximaAcao: string
+}
+
+export interface IbptStatusDto {
+  configurado: boolean; autoSyncAtivo: boolean
+  ultimaSincronizacao?: string; ultimaVersao?: string
+  vigenciaInicio?: string; vigenciaFim?: string; ultimoErro?: string
+  produtosAtivos: number; produtosAutomaticos: number; produtosPendentes: number; produtosVencidos: number
+}
+
+export interface IbptSyncResult {
+  total: number; atualizados: number; ignoradosManuais: number; falhas: number; erros: string[]
 }
 
 export interface NaturezaOperacaoDto {
   id: string; descricao: string; cfop: string; csosn?: string
   percentualCreditoIcmsSn?: number
+  origemMercadoria: number
+  modalidadeBcSt?: number
+  percentualMvaSt?: number
+  percentualReducaoBcSt?: number
+  aliquotaIcmsSt?: number
+  aliquotaIcmsProprio?: number
+  aliquotaFcpSt?: number
+  baseStFixaEmCentavos?: number
+  ibsCbsCst: string
+  ibsCbsClassTrib: string
   isPadrao: boolean; isActive: boolean
+}
+
+export interface SaveNaturezaFiscalBody {
+  descricao: string; cfop: string; csosn?: string; percentualCreditoSn?: number
+  origemMercadoria: number; modalidadeBcSt?: number; percentualMvaSt?: number
+  percentualReducaoBcSt?: number; aliquotaIcmsSt?: number; aliquotaIcmsProprio?: number
+  aliquotaFcpSt?: number; baseStFixaEmCentavos?: number
+  ibsCbsCst: string; ibsCbsClassTrib: string; isPadrao: boolean
 }
 
 export interface NotaFiscalDto {
@@ -1192,23 +1319,28 @@ export interface NotaFiscalDto {
   serie?: number; numero?: number
   chaveAcesso?: string; protocolo?: string; motivoRejeicao?: string
   emitidoEm?: string; canceladoEm?: string; inutilizadoEm?: string
+  erpEstornadoEm?: string; erpEstornoErro?: string
   tentativasReprocessamento: number
   createdAt: string
 }
 
 export interface CupomItemDto {
   nome: string; quantidade: number; precoUnitarioCentavos: number; subtotalCentavos: number
+  tributosAproximadosCentavos: number
 }
 
 export interface CupomDto {
   razaoSocial: string; cnpj: string; endereco: string
   chaveAcesso?: string; protocolo?: string; emitidoEm?: string
   serie: number; numero: number; status: string
-  itens: CupomItemDto[]; valorTotalCentavos: number; formaPagamento: string
+  itens: CupomItemDto[]; descontoTotalCentavos: number; valorTotalCentavos: number; formaPagamento: string
+  tributosFederaisCentavos: number; tributosEstaduaisCentavos: number; tributosMunicipaisCentavos: number
+  fontesTributos?: string
   qrCodeUrl?: string
 }
 
 export const fiscalApi = {
+  getSaude:   () => api.get<FiscalSaudeDto>('/api/fiscal/saude'),
   getConfig:  ()                                    => api.get<FiscalConfigDto>('/api/fiscal/config'),
   saveConfig: (body: Partial<{
     cnpj: string; razaoSocial: string; inscricaoEstadual: string
@@ -1217,7 +1349,11 @@ export const fiscalApi = {
     cscId: string; cscToken: string
     regimeTributario: string; ambiente: string; serieNfce: number; emailContador: string
     formasPagamentoAutoEmissao: string[]
+    ibptToken: string; ibptAutoSyncEnabled: boolean; removerIbptToken: boolean
   }>) => api.put<FiscalConfigDto>('/api/fiscal/config', body),
+
+  getIbptStatus: () => api.get<IbptStatusDto>('/api/fiscal/ibpt/status'),
+  sincronizarIbpt: () => api.post<IbptSyncResult>('/api/fiscal/ibpt/sincronizar'),
 
   uploadCertificado: (file: File, senha: string) => {
     const form = new FormData()
@@ -1228,9 +1364,9 @@ export const fiscalApi = {
   },
 
   listNaturezas:  ()                                => api.get<NaturezaOperacaoDto[]>('/api/fiscal/naturezas-operacao'),
-  createNatureza: (body: { descricao: string; cfop: string; csosn?: string; percentualCreditoSn?: number; isPadrao: boolean }) =>
+  createNatureza: (body: SaveNaturezaFiscalBody) =>
                    api.post<NaturezaOperacaoDto>('/api/fiscal/naturezas-operacao', body),
-  updateNatureza: (id: string, body: { descricao: string; cfop: string; csosn?: string; percentualCreditoSn?: number; isPadrao: boolean }) =>
+  updateNatureza: (id: string, body: SaveNaturezaFiscalBody) =>
                    api.put<NaturezaOperacaoDto>(`/api/fiscal/naturezas-operacao/${id}`, body),
   removeNatureza: (id: string)                      => api.delete(`/api/fiscal/naturezas-operacao/${id}`),
 
@@ -1242,7 +1378,15 @@ export const fiscalApi = {
   reprocessarNota: (id: string) =>
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/notas/${id}/reprocessar`),
   cancelarNota: (id: string, justificativa: string) =>
-    api.post<{ id: string; status: string }>(`/api/fiscal/notas/${id}/cancelar`, { justificativa }),
+    api.post<{ id: string; status: string; erpEstornadoEm?: string; erpEstornoErro?: string }>(`/api/fiscal/notas/${id}/cancelar`, { justificativa }),
+  inutilizarFaixa: (body: {
+    ano: number; serie: number; numeroInicial: number; numeroFinal: number; justificativa: string
+  }) => api.post<{
+    id: string; ano: number; serie: number; numeroInicial: number; numeroFinal: number
+    protocolo: string; inutilizadoEm: string
+  }>('/api/fiscal/inutilizacoes', body),
+  reprocessarEstornoErp: (id: string) =>
+    api.post<{ id: string; erpEstornadoEm?: string; erpEstornoErro?: string }>(`/api/fiscal/notas/${id}/reprocessar-estorno-erp`),
   obterCupom: (id: string) => api.get<CupomDto>(`/api/fiscal/notas/${id}/cupom`),
 
   emitirNotaComanda: (comandaId: string) =>
@@ -1386,6 +1530,23 @@ export const emailConfigApi = {
   save: (body: SaveEmailConfigRequest) => api.put<EmailConfigDto>('/api/email-config', body),
 }
 
+// ── Chave própria do Gemini (BYOK) pro tenant (opcional, cai pra global se não configurado) ──
+
+export interface AiConfigDto {
+  isActive: boolean
+  hasKey: boolean
+}
+
+export interface SaveAiConfigRequest {
+  geminiApiKey?: string
+  isActive?: boolean
+}
+
+export const aiConfigApi = {
+  get:  () => api.get<AiConfigDto>('/api/ai-config'),
+  save: (body: SaveAiConfigRequest) => api.put<AiConfigDto>('/api/ai-config', body),
+}
+
 // ── Diretório público de lojas (site institucional) ──────────────────────────
 
 export interface PublicTenantDto {
@@ -1439,4 +1600,46 @@ export const pushApi = {
                  api.post('/api/push/subscribe', sub),
   unsubscribe: (endpoint: string) =>
                  api.delete('/api/push/subscribe', { data: { endpoint } }),
+}
+
+// ── Eventos (gestão de eventos + cobrança de entrada) ─────────────────────────
+
+export type EventoStatus = 'Planejado' | 'EmAndamento' | 'Concluido' | 'Cancelado'
+
+export interface EventoDto {
+  id: string; nome: string; descricao: string | null; dataEvento: string
+  precoEntradaInCents: number; capacidadeMaxima: number | null; status: EventoStatus
+  entradasVendidas: number; entradasCheckIn: number; faturamentoInCents: number
+  createdAt: string
+}
+
+export interface EventoEntradaDto {
+  id: string; nomeCliente: string; userId: string | null
+  formaPagamento: string; valorPagoInCents: number
+  checkInEm: string | null; canceladaEm: string | null
+  vendidaPorAdminNome: string; createdAt: string
+}
+
+export interface SaveEventoRequest {
+  nome: string; descricao?: string; dataEvento: string
+  precoEntradaInCents: number; capacidadeMaxima?: number | null
+}
+
+export const eventosApi = {
+  list: (status?: EventoStatus) =>
+    api.get<EventoDto[]>('/api/eventos', { params: status ? { status } : undefined }),
+  create: (body: SaveEventoRequest) =>
+    api.post<EventoDto>('/api/eventos', body),
+  update: (id: string, body: SaveEventoRequest & { status: EventoStatus }) =>
+    api.put<EventoDto>(`/api/eventos/${id}`, body),
+  cancel: (id: string) =>
+    api.delete(`/api/eventos/${id}`),
+  listEntradas: (eventoId: string) =>
+    api.get<EventoEntradaDto[]>(`/api/eventos/${eventoId}/entradas`),
+  venderEntrada: (eventoId: string, body: { nomeCliente: string; formaPagamento: string; userId?: string; valorPagoInCents?: number }) =>
+    api.post<EventoEntradaDto>(`/api/eventos/${eventoId}/entradas`, body),
+  checkIn: (eventoId: string, entradaId: string) =>
+    api.post<EventoEntradaDto>(`/api/eventos/${eventoId}/entradas/${entradaId}/checkin`),
+  cancelarEntrada: (eventoId: string, entradaId: string) =>
+    api.delete(`/api/eventos/${eventoId}/entradas/${entradaId}`),
 }

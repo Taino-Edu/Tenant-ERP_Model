@@ -1,9 +1,9 @@
-# Tenant-ERP (Plataforma 2esysten)
+# Tenant-ERP (Plataforma 3esysten)
 
 > **Plataforma SaaS Multi-tenant de Gestão para Lojas e Varejo**
 > Plataforma white-label completa para gerenciamento de lojas — nasceu como sistema local de uma loja de card games e virou genérica para qualquer varejo. Oferece isolamento físico de dados por schema no PostgreSQL, painel administrativo personalizado por loja, frente de caixa (PDV), comandas por QR Code com SignalR, crediário, portal do contador cross-tenant, super-admin do dono da plataforma, assistente IA com Gemini e conformidade com a LGPD.
 
-**Produção:** [2esysten.com.br](https://2esysten.com.br) / Domínios dos lojistas (ex: [santuarionerd.tech](https://santuarionerd.tech))
+**Produção:** [3esysten.com.br](https://3esysten.com.br) / Domínios dos lojistas (ex: [santuarionerd.tech](https://santuarionerd.tech))
 
 ---
 
@@ -98,7 +98,7 @@ Tenant-ERP/
 │   │   ├── admin/                  # Painel da loja (estoque, comanda, financeiro, fiscal...)
 │   │   ├── plataforma/             # Painel do Dono da Plataforma (gerenciador de tenants)
 │   │   ├── contador/               # Portal do Contador (cross-tenant, convites, mural)
-│   │   ├── institucional/          # Landing page institucional da plataforma 2esysten
+│   │   ├── institucional/          # Landing page institucional da plataforma 3esysten
 │   │   ├── cliente/                # Área do cliente (histórico, pontos, cashback)
 │   │   └── mesa/[mesa]/            # Autoatendimento via QR Code
 │   ├── components/                 # Componentes compartilhados
@@ -133,7 +133,7 @@ COOKIE_SECURE=false # Defina como true em produção (com HTTPS configurado)
 IP_HASH_SALT=sal_aleatorio_para_anonimizar_ip
 
 # --- Seeds do Sistema (Executados no primeiro boot) ---
-PLATFORM_OWNER_EMAIL=dono@2esysten.com.br
+PLATFORM_OWNER_EMAIL=dono@3esysten.com.br
 PLATFORM_OWNER_SEED_PASSWORD=senha_forte_dono_plataforma
 ADMIN_SEED_PASSWORD=senha_forte_admin_loja_padrao
 

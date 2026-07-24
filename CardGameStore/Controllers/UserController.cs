@@ -14,6 +14,7 @@
 // =============================================================================
 
 using System.Text.Json;
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -294,9 +295,60 @@ public class UserController : ControllerBase
             .ToListAsync();
 
         // Vendas avulsas (apenas as que têm UserId — vendas com cliente identificado a partir de agora)
-        var vendasAvulsas = await _vendaService.GetByUserAsync(id);
+        var vendasAvulsas = (await _vendaService.GetByUserAsync(id)).ToList();
 
         var totalGasto = totalGastoCmds + vendasAvulsas.Sum(v => v.TotalInReais);
+
+        // ── Análises: dia da semana favorito, média de dias entre visitas e
+        // categoria mais comprada — combinando comandas fechadas + vendas avulsas.
+        // Vendas canceladas não contam como visita nem entram na categoria favorita
+        // (achado de review: cliente com só uma venda cancelada não pode "ganhar"
+        // um dia/categoria favorita a partir dela).
+        var vendasAtivas = vendasAvulsas.Where(v => v.CanceladoEm == null).ToList();
+        var datasComandas = await statsQuery.Select(c => c.ClosedAt!.Value).ToListAsync();
+        var todasVisitas = datasComandas.Concat(vendasAtivas.Select(v => v.SoldAt)).OrderBy(d => d).ToList();
+
+        string? diaSemanaFavorito = null;
+        double? mediaDiasEntreVisitas = null;
+        if (todasVisitas.Count > 0)
+        {
+            var diaMaisFrequente = todasVisitas
+                .Select(d => TimeZoneInfo.ConvertTimeFromUtc(d, BrazilTime.Zone).DayOfWeek)
+                .GroupBy(d => d)
+                .OrderByDescending(g => g.Count())
+                .First().Key;
+            diaSemanaFavorito = diaMaisFrequente switch
+            {
+                DayOfWeek.Sunday    => "Domingo",
+                DayOfWeek.Monday    => "Segunda-feira",
+                DayOfWeek.Tuesday   => "Terça-feira",
+                DayOfWeek.Wednesday => "Quarta-feira",
+                DayOfWeek.Thursday  => "Quinta-feira",
+                DayOfWeek.Friday    => "Sexta-feira",
+                DayOfWeek.Saturday  => "Sábado",
+                _                   => diaMaisFrequente.ToString(),
+            };
+        }
+        if (todasVisitas.Count >= 2)
+        {
+            var gaps = new List<double>();
+            for (var i = 1; i < todasVisitas.Count; i++)
+                gaps.Add((todasVisitas[i] - todasVisitas[i - 1]).TotalDays);
+            mediaDiasEntreVisitas = Math.Round(gaps.Average(), 1);
+        }
+
+        var categoriaContagem = new Dictionary<string, int>();
+        var itensComandaCategorias = await _db.ComandaItems
+            .Where(i => i.Comanda.UserId == id && i.Comanda.Status == ComandaStatus.Fechada)
+            .Select(i => new { Categoria = i.Product != null ? i.Product.Category : null, i.Quantity })
+            .ToListAsync();
+        foreach (var item in itensComandaCategorias.Where(i => !string.IsNullOrWhiteSpace(i.Categoria)))
+            categoriaContagem[item.Categoria!] = categoriaContagem.GetValueOrDefault(item.Categoria!) + item.Quantity;
+        foreach (var item in vendasAtivas.SelectMany(v => v.Items).Where(i => !string.IsNullOrWhiteSpace(i.ProductCategory)))
+            categoriaContagem[item.ProductCategory!] = categoriaContagem.GetValueOrDefault(item.ProductCategory!) + item.Quantity;
+        var categoriaFavorita = categoriaContagem.Count > 0
+            ? categoriaContagem.OrderByDescending(kv => kv.Value).First().Key
+            : null;
 
         var historico = new ClienteHistoricoDto
         {
@@ -309,6 +361,10 @@ public class UserController : ControllerBase
             TotalComandas  = totalComandas,
             Page           = page,
             PageSize       = pageSize,
+
+            MediaDiasEntreVisitas = mediaDiasEntreVisitas,
+            DiaSemanaFavorito     = diaSemanaFavorito,
+            CategoriaFavorita     = categoriaFavorita,
 
             Comandas = comandas.Select(c => new ComandaHistoricoDto
             {
@@ -412,6 +468,11 @@ public class UserController : ControllerBase
     [ProducesResponseType(404)]
     public async Task<IActionResult> AtualizarPerfil(Guid id, [FromBody] AtualizarPerfilOperadorRequest request)
     {
+        var adminId = GetUserId();
+        var adminUser = await _db.Users.FindAsync(adminId);
+        if (adminUser?.Role == "Operator")
+            return Forbid();
+
         var user = await _db.Users.Include(u => u.Perfil).FirstOrDefaultAsync(u => u.Id == id);
         if (user == null)
             return NotFound(new { Message = "Usuário não encontrado." });

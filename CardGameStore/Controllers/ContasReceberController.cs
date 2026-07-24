@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -318,6 +319,7 @@ public class ContasReceberController : ControllerBase
     /// e contagem de notas destinadas por status do pipeline.
     /// </summary>
     [HttpGet("sefaz-status")]
+    [RequireModule("fiscal")]
     public async Task<IActionResult> SefazStatus()
     {
         var fiscal     = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
@@ -352,6 +354,7 @@ public class ContasReceberController : ControllerBase
     /// Mesmo processo que roda automaticamente a cada 2h em background.
     /// </summary>
     [HttpPost("sefaz/sync")]
+    [RequireModule("fiscal")]
     public async Task<IActionResult> SefazSync(CancellationToken ct)
     {
         var result = await _sefaz.SincronizarAsync(ct);
@@ -373,6 +376,7 @@ public class ContasReceberController : ControllerBase
     /// </summary>
     /// <param name="status">Filtra por status do pipeline (ex: "Resumo", "Ciencia", "XmlBaixado", "ContasGeradas", "Cancelada").</param>
     [HttpGet("notas-destinadas")]
+    [RequireModule("fiscal")]
     public async Task<IActionResult> NotasDestinadas([FromQuery] string? status = null)
     {
         var q = _db.NotasDestinadas.AsQueryable();
@@ -405,7 +409,6 @@ public class ContasReceberController : ControllerBase
         return Ok(new { result.Imported, result.Duplicates });
     }
 
-    /// <summary>Status da integração com o Banco Inter: credenciais, certificado mTLS instalado, última sincronização.</summary>
     [HttpGet("integracoes/inter/status")]
     public async Task<IActionResult> InterStatus()
     {
@@ -413,16 +416,12 @@ public class ContasReceberController : ControllerBase
         return Ok(new
         {
             configured      = cfg is not null && _inter.IsConfigured(cfg),
-            certificateOk   = _inter.CertificateExists(),
+            certificateOk   = cfg is not null && !string.IsNullOrWhiteSpace(cfg.CertificateCrtEncrypted),
             hasCredentials  = !string.IsNullOrWhiteSpace(cfg?.ClientId) && !string.IsNullOrWhiteSpace(cfg?.ClientSecret),
             lastSyncAt      = cfg?.LastSyncAt,
         });
     }
 
-    /// <summary>
-    /// Instala o certificado mTLS (.crt + .key) exigido pela API do Banco Inter —
-    /// cada arquivo até 64 KB.
-    /// </summary>
     [HttpPost("integracoes/inter/certificado")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadCertificado(IFormFile crt, IFormFile key)
@@ -431,19 +430,23 @@ public class ContasReceberController : ControllerBase
         if (crt.Length > maxBytes || key.Length > maxBytes)
             return BadRequest(new { message = "Arquivo muito grande (máx 64 KB)." });
 
-        var certPath = _config["Inter:CertificatePath"]
-            ?? throw new InvalidOperationException("Inter:CertificatePath não configurado.");
-        var keyPath  = _config["Inter:KeyPath"]
-            ?? throw new InvalidOperationException("Inter:KeyPath não configurado.");
+        using var crtStream = new StreamReader(crt.OpenReadStream());
+        var crtStr = await crtStream.ReadToEndAsync();
+        using var keyStream = new StreamReader(key.OpenReadStream());
+        var keyStr = await keyStream.ReadToEndAsync();
 
-        Directory.CreateDirectory(Path.GetDirectoryName(certPath)!);
-        Directory.CreateDirectory(Path.GetDirectoryName(keyPath)!);
+        var cfg = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "inter");
+        if (cfg is null)
+        {
+            cfg = new IntegrationConfig { Source = "inter" };
+            _db.IntegrationConfigs.Add(cfg);
+        }
 
-        await using (var fs = System.IO.File.Create(certPath))
-            await crt.CopyToAsync(fs);
+        cfg.CertificateCrtEncrypted = _enc.Encrypt(crtStr);
+        cfg.CertificateKeyEncrypted = _enc.Encrypt(keyStr);
+        cfg.UpdatedAt = DateTime.UtcNow;
 
-        await using (var fs = System.IO.File.Create(keyPath))
-            await key.CopyToAsync(fs);
+        await _db.SaveChangesAsync();
 
         return Ok(new { message = "Certificado instalado com sucesso.", certificateOk = true });
     }

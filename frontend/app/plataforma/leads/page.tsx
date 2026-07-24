@@ -1,13 +1,26 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { leadsApi, platformApi, LeadDto, LeadStatus, getErrorMessage } from '@/lib/api'
+import { leadsApi, platformApi, LeadDto, LeadStatus, LeadDigitalPresence, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
 import toast from 'react-hot-toast'
-import { UserPlus, Loader2, MessageCircle } from 'lucide-react'
+import { UserPlus, Loader2, MessageCircle, MapPin } from 'lucide-react'
 
 const STATUS_OPTIONS: LeadStatus[] = ['Novo', 'Contatado', 'Convertido', 'Perdido']
+
+const DIGITAL_PRESENCE_OPTIONS: { value: LeadDigitalPresence; label: string }[] = [
+  { value: 'SemSite',    label: 'Sem site' },
+  { value: 'SiteLegado', label: 'Site desatualizado' },
+  { value: 'ECommerce',  label: 'Já tem e-commerce' },
+]
+
+function scoreColor(score: number | null): string {
+  if (score === null) return 'text-gray-500 border-gray-600'
+  if (score >= 70) return 'text-accent-green border-accent-green/40'
+  if (score >= 40) return 'text-amber-400 border-amber-500/40'
+  return 'text-gray-400 border-gray-600'
+}
 
 const STATUS_STYLES: Record<LeadStatus, string> = {
   Novo:       'bg-brand-500/10 text-brand-300 border-brand-500/30',
@@ -30,12 +43,23 @@ function whatsAppLink(telefone: string): string {
 
 function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void }) {
   const [notas, setNotas] = useState(lead.notas ?? '')
+  const [placeId, setPlaceId] = useState(lead.placeId ?? '')
   const [saving, setSaving] = useState(false)
+
+  // Base pra qualquer PATCH parcial — sempre reenvia os campos de oportunidade
+  // atuais além do que está sendo alterado, senão a API (que substitui o valor
+  // inteiro, não faz merge) apagaria o que já estava salvo.
+  function baseUpdate() {
+    return {
+      status: lead.status, notas: lead.notas,
+      digitalPresence: lead.digitalPresence, opportunityScore: lead.opportunityScore, placeId: lead.placeId,
+    }
+  }
 
   async function updateStatus(status: LeadStatus) {
     setSaving(true)
     try {
-      await platformApi.updateLead(lead.id, { status, notas: lead.notas })
+      await platformApi.updateLead(lead.id, { ...baseUpdate(), status })
       toast.success('Lead atualizado.')
       onChanged()
     } catch (err) {
@@ -49,10 +73,48 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
     if (notas === (lead.notas ?? '')) return
     setSaving(true)
     try {
-      await platformApi.updateLead(lead.id, { status: lead.status, notas })
+      await platformApi.updateLead(lead.id, { ...baseUpdate(), notas })
       onChanged()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao salvar anotação.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function updateDigitalPresence(digitalPresence: LeadDigitalPresence | '') {
+    setSaving(true)
+    try {
+      await platformApi.updateLead(lead.id, { ...baseUpdate(), digitalPresence: digitalPresence || null })
+      onChanged()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar presença digital.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function updateScore(value: string) {
+    const opportunityScore = value === '' ? null : Math.max(0, Math.min(100, Number(value)))
+    setSaving(true)
+    try {
+      await platformApi.updateLead(lead.id, { ...baseUpdate(), opportunityScore })
+      onChanged()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar pontuação.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function savePlaceId() {
+    if (placeId === (lead.placeId ?? '')) return
+    setSaving(true)
+    try {
+      await platformApi.updateLead(lead.id, { ...baseUpdate(), placeId: placeId || null })
+      onChanged()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar Place ID.'))
     } finally {
       setSaving(false)
     }
@@ -78,6 +140,52 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
       </td>
       <td className="py-3">
         <StatusPillSelect value={lead.status} options={STATUS_OPTIONS} styles={STATUS_STYLES} disabled={saving} onChange={updateStatus} />
+      </td>
+      <td className="py-3">
+        <div className="flex flex-col gap-1.5 w-36">
+          <select
+            className="input text-xs py-1"
+            value={lead.digitalPresence ?? ''}
+            disabled={saving}
+            onChange={e => updateDigitalPresence(e.target.value as LeadDigitalPresence | '')}
+          >
+            <option value="">Presença digital…</option>
+            {DIGITAL_PRESENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <div className="flex items-center gap-1.5">
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded border shrink-0 ${scoreColor(lead.opportunityScore)}`}>
+              {lead.opportunityScore ?? '—'}
+            </span>
+            <input
+              type="number" min={0} max={100}
+              className="input text-xs py-1 w-16"
+              placeholder="Score"
+              defaultValue={lead.opportunityScore ?? ''}
+              disabled={saving}
+              onBlur={e => updateScore(e.target.value)}
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <input
+              className="input text-xs py-1 flex-1 min-w-0"
+              placeholder="Place ID"
+              value={placeId}
+              disabled={saving}
+              onChange={e => setPlaceId(e.target.value)}
+              onBlur={savePlaceId}
+            />
+            {lead.placeId && (
+              <a
+                href={`https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(lead.placeId)}`}
+                target="_blank" rel="noopener noreferrer"
+                title="Abrir no Google Maps"
+                className="text-brand-400 hover:text-brand-300 shrink-0"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+        </div>
       </td>
       <td className="py-3">
         <textarea
@@ -149,11 +257,12 @@ export default function PlataformaLeadsPage() {
         ) : leads.length === 0 ? (
           <p className="text-gray-400 text-center py-16">Nenhum lead ainda.</p>
         ) : (
-          <table className="w-full min-w-[700px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="text-left text-gray-500 border-b border-surface-600">
                 <th className="py-2 font-medium">Contato</th>
                 <th className="py-2 font-medium">Status</th>
+                <th className="py-2 font-medium">Oportunidade</th>
                 <th className="py-2 font-medium">Anotações</th>
                 <th className="py-2 font-medium">Recebido em</th>
                 <th className="py-2 font-medium text-right">Ações</th>

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '2Esysten — ERP completo para lojas e varejo',
+  title: '3Esysten — ERP completo para lojas e varejo',
   description:
     'Plataforma de gestão white-label para lojistas: PDV, estoque, fiscal, crediário e app próprio — tudo em um só sistema.',
 }

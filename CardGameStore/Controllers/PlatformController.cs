@@ -6,6 +6,7 @@
 // PATCH /api/platform/tenants/{id}/status → suspende/reativa um tenant
 // =============================================================================
 
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
@@ -13,9 +14,11 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
+using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CardGameStore.Controllers;
 
@@ -28,7 +31,9 @@ public class PlatformController : ControllerBase
     private readonly ITenantProvisioningService _provisioning;
     private readonly ILogger<PlatformController> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
     private readonly string? _rootDomain;
+    private readonly string? _connectionString;
 
     // Formato básico de domínio (labels alfanuméricos/hífen, pelo menos um ponto) — não
     // valida se o domínio existe/resolve de verdade, só barra lixo óbvio antes de gravar.
@@ -40,13 +45,16 @@ public class PlatformController : ControllerBase
         ITenantProvisioningService provisioning,
         ILogger<PlatformController> logger,
         IServiceScopeFactory scopeFactory,
+        Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
         IConfiguration configuration)
     {
         _catalog      = catalog;
         _provisioning = provisioning;
         _logger       = logger;
         _scopeFactory = scopeFactory;
-        _rootDomain   = configuration["Multitenancy:RootDomain"];
+        _cache            = cache;
+        _rootDomain       = configuration["Multitenancy:RootDomain"];
+        _connectionString = configuration.GetConnectionString("PostgreSQL");
     }
 
     private static TenantSummaryDto ToDto(Tenant t) => new()
@@ -60,6 +68,7 @@ public class PlatformController : ControllerBase
         PaymentStatus  = t.PaymentStatus.ToString(),
         EnabledModules = t.EnabledModules,
         CustomDomain   = t.CustomDomain,
+        MaxUsers       = t.MaxUsers,
     };
 
     /// <summary>Lista todos os tenants cadastrados na plataforma, mais recente primeiro.
@@ -84,7 +93,9 @@ public class PlatformController : ControllerBase
 
         try
         {
-            var tenant = await _provisioning.ProvisionAsync(request.Slug, request.AdminEmail, request.AdminPassword, request.EnabledModules);
+            var tenant = await _provisioning.ProvisionAsync(
+                request.Slug, request.AdminEmail, request.AdminPassword, request.EnabledModules,
+                request.PlanName, request.MaxUsers);
             return CreatedAtAction(nameof(ListTenants), ToDto(tenant));
         }
         catch (InvalidOperationException ex)
@@ -137,9 +148,123 @@ public class PlatformController : ControllerBase
         tenant.PlanName       = request.PlanName;
         tenant.PaymentStatus  = paymentStatus;
         tenant.EnabledModules = request.EnabledModules;
+        // A tela de edição de tenant hoje só manda planName/paymentStatus/enabledModules
+        // (sem maxUsers) — atribuição direta zeraria um limite já configurado toda vez
+        // que o dono só ajusta plano/pagamento. Preserva o valor atual quando omitido;
+        // RemoverMaxUsers explícito é o único jeito de voltar a "sem limite" por aqui
+        // (achado de review: null omitido e null explícito são indistinguíveis em JSON).
+        tenant.MaxUsers = request.RemoverMaxUsers ? null : (request.MaxUsers ?? tenant.MaxUsers);
         await _catalog.SaveChangesAsync();
 
         return Ok(ToDto(tenant));
+    }
+
+    /// <summary>Gera um dump SQL (pg_dump, formato plano) do schema inteiro de um
+    /// tenant e devolve como arquivo pra download. Não altera nada — seguro rodar
+    /// a qualquer momento, inclusive antes de uma exclusão.</summary>
+    /// <param name="id">Id do tenant.</param>
+    [HttpGet("tenants/{id:guid}/backup")]
+    public async Task<IActionResult> DownloadTenantBackup(Guid id)
+    {
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(_connectionString))
+            return StatusCode(500, new { Message = "Connection string não configurada." });
+
+        var csb = new Npgsql.NpgsqlConnectionStringBuilder(_connectionString);
+
+        var psi = new ProcessStartInfo
+        {
+            FileName               = "pg_dump",
+            RedirectStandardOutput = true,
+            RedirectStandardError  = true,
+            UseShellExecute        = false,
+        };
+        psi.ArgumentList.Add("-h"); psi.ArgumentList.Add(csb.Host ?? "localhost");
+        psi.ArgumentList.Add("-p"); psi.ArgumentList.Add(csb.Port.ToString());
+        psi.ArgumentList.Add("-U"); psi.ArgumentList.Add(csb.Username ?? "");
+        psi.ArgumentList.Add("-d"); psi.ArgumentList.Add(csb.Database ?? "");
+        psi.ArgumentList.Add("-n"); psi.ArgumentList.Add(tenant.SchemaName);
+        psi.ArgumentList.Add("--no-owner");
+        psi.ArgumentList.Add("--no-privileges");
+        psi.EnvironmentVariables["PGPASSWORD"] = csb.Password ?? "";
+
+        try
+        {
+            using var process = Process.Start(psi)
+                ?? throw new InvalidOperationException("Não foi possível iniciar o pg_dump.");
+
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask  = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var output = await outputTask;
+            var error  = await errorTask;
+
+            if (process.ExitCode != 0)
+            {
+                _logger.LogError("pg_dump falhou pro tenant {Slug} (exit {Code}): {Error}", tenant.Slug, process.ExitCode, error);
+                return StatusCode(500, new { Message = "Falha ao gerar backup." });
+            }
+
+            var bytes    = System.Text.Encoding.UTF8.GetBytes(output);
+            var fileName = $"backup-{tenant.Slug}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.sql";
+            return File(bytes, "application/sql", fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao gerar backup do tenant {Slug}", tenant.Slug);
+            return StatusCode(500, new { Message = "Falha ao gerar backup." });
+        }
+    }
+
+    /// <summary>Apaga um tenant PERMANENTEMENTE — derruba o schema Postgres inteiro
+    /// (CASCADE) e remove a entrada do catálogo. Irreversível; por isso exige que o
+    /// slug seja digitado de volta no corpo da requisição como confirmação, igual
+    /// convenções de "digite o nome pra confirmar" de outras plataformas.</summary>
+    /// <param name="id">Id do tenant.</param>
+    /// <param name="request">Slug do tenant, pra confirmar a exclusão.</param>
+    [HttpDelete("tenants/{id:guid}")]
+    public async Task<IActionResult> DeleteTenant(Guid id, [FromBody] DeleteTenantRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        if (!string.Equals(request.ConfirmSlug.Trim(), tenant.Slug, StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { Message = "Slug de confirmação não bate com o da loja." });
+
+        try
+        {
+            // TenantResolutionMiddleware cacheia o lookup de slug/domínio por até
+            // 30s (CacheTtl) — sem invalidar aqui, uma requisição que caia nessa
+            // janela depois do DROP tentaria rotear pro schema que acabou de
+            // sumir, em vez de um 404 limpo (achado de review da PR).
+            _cache.Remove($"tenant-slug:{tenant.Slug}");
+            if (!string.IsNullOrWhiteSpace(tenant.CustomDomain))
+                _cache.Remove($"tenant-domain:{tenant.CustomDomain.ToLowerInvariant()}");
+
+#pragma warning disable EF1002
+            // schemaName só contém [a-z0-9_] (validado na criação — ver
+            // TenantProvisioningService), então a interpolação é segura; nome de
+            // schema é identificador, não dá pra parametrizar via ExecuteSqlAsync.
+            await _catalog.Database.ExecuteSqlRawAsync($"DROP SCHEMA IF EXISTS \"{tenant.SchemaName}\" CASCADE");
+#pragma warning restore EF1002
+
+            _catalog.Tenants.Remove(tenant);
+            await _catalog.SaveChangesAsync();
+
+            _logger.LogWarning(
+                "Tenant '{Slug}' (schema '{Schema}') apagado PERMANENTEMENTE pelo dono da plataforma.",
+                tenant.Slug, tenant.SchemaName);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao apagar tenant {Slug}", tenant.Slug);
+            return StatusCode(500, new { Message = "Falha ao apagar a loja." });
+        }
     }
 
     /// <summary>
@@ -308,6 +433,69 @@ public class PlatformController : ControllerBase
             _logger.LogError(ex, "Falha ao listar funcionários do tenant {Slug}", tenant.Slug);
             return StatusCode(500, new { Message = "Falha ao carregar funcionários desta loja." });
         }
+    }
+
+    /// <summary>Redefine a senha de um funcionário/admin de um tenant, sem precisar
+    /// impersonar ("Acessar admin") pra entrar na loja e usar o fluxo de lá. Fica
+    /// registrado no audit log do próprio tenant, igual qualquer outra redefinição.</summary>
+    /// <param name="id">Id do tenant.</param>
+    /// <param name="userId">Id do funcionário/admin dentro do schema do tenant.</param>
+    /// <param name="request">Nova senha.</param>
+    [HttpPost("tenants/{id:guid}/staff/{userId:guid}/reset-password")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> ResetStaffPassword(Guid id, Guid userId, [FromBody] AdminResetPasswordRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
+        if (tenant is null) return NotFound();
+
+        using var scope = _scopeFactory.CreateScope();
+        var tc = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tc.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        try
+        {
+            var user = await db.Users.FirstOrDefaultAsync(u =>
+                u.Id == userId && (u.Role == UserRole.Admin || u.Role == UserRole.Operator));
+            if (user is null) return NotFound(new { Message = "Funcionário não encontrado nesta loja." });
+
+            user.PasswordHash             = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, workFactor: 12);
+            user.RefreshToken             = null;
+            user.RefreshTokenExpiry       = null;
+            user.PasswordResetToken       = null;
+            user.PasswordResetTokenExpiry = null;
+            user.UpdatedAt                = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao redefinir senha de funcionário do tenant {Slug}", tenant.Slug);
+            return StatusCode(500, new { Message = "Falha ao redefinir a senha." });
+        }
+
+        // Senha já trocada com sucesso a partir daqui — uma falha no audit log (best-effort,
+        // nunca deve derrubar a resposta) não pode virar um 500 enganoso dizendo que a
+        // redefinição falhou quando na verdade já foi aplicada.
+        try
+        {
+            var audit = scope.ServiceProvider.GetRequiredService<IAuditService>();
+            await audit.LogAsync(
+                "RedefinirSenha", "User", userId.ToString(),
+                details: "Redefinida pelo suporte da plataforma.",
+                httpContext: HttpContext, severity: AuditSeverity.Warning);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao registrar audit log da redefinição de senha do funcionário {UserId}", userId);
+        }
+
+        _logger.LogInformation(
+            "Dono da plataforma redefiniu a senha do funcionário {UserId} do tenant {Slug}", userId, tenant.Slug);
+        return NoContent();
     }
 
     /// <summary>Lista os clientes (Role Customer) do schema de um tenant, paginado.</summary>
@@ -605,6 +793,11 @@ public class PlatformController : ControllerBase
         Origem            = l.Origem,
         Status            = l.Status.ToString(),
         Notas             = l.Notas,
+        DigitalPresence       = l.DigitalPresence,
+        OpportunityScore      = l.OpportunityScore,
+        PlaceId               = l.PlaceId,
+        EstimatedRevenueRange = l.EstimatedRevenueRange,
+        AbordagemSugerida     = l.AbordagemSugerida,
         CreatedAt         = l.CreatedAt,
         UpdatedAt         = l.UpdatedAt,
         ConvertedTenantId = l.ConvertedTenantId,
@@ -629,6 +822,46 @@ public class PlatformController : ControllerBase
         return Ok(leads.Select(ToDto));
     }
 
+    /// <summary>Cria um Lead a partir de um candidato de prospecção confirmado
+    /// pelo dono da plataforma (ver ProspectingController.Search) — distinto do
+    /// POST /api/leads público (form da landing), que não tem PlaceId/score/etc.</summary>
+    [HttpPost("leads/prospeccao")]
+    public async Task<IActionResult> CreateProspectLead([FromBody] CreateProspectLeadRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var lead = new Lead
+        {
+            Nome                  = request.Nome,
+            Telefone              = request.Telefone ?? "",
+            Origem                = "prospeccao",
+            DigitalPresence       = request.DigitalPresence,
+            OpportunityScore      = request.OpportunityScore,
+            PlaceId               = request.PlaceId,
+            EstimatedRevenueRange = request.EstimatedRevenueRange,
+            AbordagemSugerida     = request.AbordagemSugerida,
+        };
+
+        _catalog.Leads.Add(lead);
+
+        try
+        {
+            await _catalog.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg &&
+            pg.ConstraintName == "ix_leads_place_id_unique")
+        {
+            // Mesmo negócio do Places já virou lead antes (busca repetida,
+            // duplo-clique, retry) — em vez de duplicar, devolve o existente.
+            _catalog.ChangeTracker.Clear();
+            var existente = await _catalog.Leads.FirstAsync(l => l.PlaceId == request.PlaceId);
+            return Conflict(ToDto(existente));
+        }
+
+        return Ok(ToDto(lead));
+    }
+
     /// <summary>Atualiza status/anotações de um lead — inclui marcar como
     /// convertido quando o dono cadastra o tenant correspondente.</summary>
     /// <param name="id">Id do lead.</param>
@@ -646,6 +879,11 @@ public class PlatformController : ControllerBase
 
         lead.Status            = status;
         lead.Notas             = request.Notas;
+        lead.DigitalPresence   = request.DigitalPresence  ?? lead.DigitalPresence;
+        lead.OpportunityScore  = request.OpportunityScore ?? lead.OpportunityScore;
+        lead.PlaceId              = request.PlaceId              ?? lead.PlaceId;
+        lead.EstimatedRevenueRange = request.EstimatedRevenueRange ?? lead.EstimatedRevenueRange;
+        lead.AbordagemSugerida    = request.AbordagemSugerida    ?? lead.AbordagemSugerida;
         lead.ConvertedTenantId = request.ConvertedTenantId ?? lead.ConvertedTenantId;
         lead.UpdatedAt         = DateTime.UtcNow;
         await _catalog.SaveChangesAsync();

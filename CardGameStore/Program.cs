@@ -313,6 +313,35 @@ builder.Services.AddHttpClient("gemini", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
 
+// IBPT — token vai na query string por exigência do contrato legado da API.
+// Remove os loggers do HttpClient para a credencial nunca aparecer em logs de URL.
+builder.Services.AddHttpClient("ibpt", client =>
+{
+    client.BaseAddress = new Uri("https://apidoni.ibpt.org.br/");
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+}).RemoveAllLoggers();
+
+// OpenStreetMap (Nominatim + Overpass API) — busca de possíveis clientes
+// (prospecção). Gratuito e sem chave, mas a política de uso deles exige um
+// User-Agent descritivo identificando a aplicação (não o default do HttpClient).
+builder.Services.AddHttpClient("osm", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(25);
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.DefaultRequestHeaders.Add("User-Agent", "TenantERP-Prospecting/1.0 (contato: suporte@3esysten.com.br)");
+});
+
+// Checagem de site de terceiro (classificação de presença digital sem IA) —
+// a URL vem do OpenStreetMap (dado editável por qualquer pessoa, não
+// confiável: um cadastro malicioso poderia apontar pra rede interna), por
+// isso usa o handler que só permite conectar em IP público (ver CardGameStore/Common/SafeOutboundHttp.cs).
+builder.Services.AddHttpClient("prospecting-site-check", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(8);
+    client.MaxResponseContentBufferSize = 262_144; // 256 KB — só precisa checar assinatura no HTML, não a página inteira
+}).ConfigurePrimaryHttpMessageHandler(() => CardGameStore.Common.SafeOutboundHttp.CreatePublicOnlyHandler());
+
 // ---------------------------------------------------------------------------
 // 10. HEALTH CHECKS — Postgres via IHealthCheck com injeção correta
 // ---------------------------------------------------------------------------
@@ -333,6 +362,7 @@ builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
+builder.Services.AddScoped<IProspectingService,  ProspectingService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
 builder.Services.AddScoped<IFinanceiroCalculoService, FinanceiroCalculoService>();
 builder.Services.AddHostedService<FechamentoBackgroundService>();
@@ -351,7 +381,14 @@ builder.Services.AddHostedService<InterSyncBackgroundService>();
 // Fiscal — emissão de NFC-e, certificado A1, exportação de XMLs
 builder.Services.AddScoped<FiscalCertificadoService>();
 builder.Services.AddScoped<FiscalXmlExportService>();
-builder.Services.AddScoped<INfceEmissionService, NfceEmissionService>();
+builder.Services.AddScoped<IbptTaxService>();
+builder.Services.AddHostedService<IbptSyncBackgroundService>();
+builder.Services.AddScoped<IFiscalTaxEngine, ConfigurableFiscalTaxEngine>();
+builder.Services.AddScoped<INfceEmissionService>(sp => new NfceEmissionService(
+    sp.GetRequiredService<AppDbContext>(),
+    sp.GetRequiredService<EncryptionService>(),
+    sp.GetRequiredService<ILogger<NfceEmissionService>>(),
+    sp.GetRequiredService<IFiscalTaxEngine>()));
 builder.Services.AddHostedService<FiscalAlertBackgroundService>();
 builder.Services.AddHostedService<FiscalXmlExportBackgroundService>();
 builder.Services.AddHostedService<FiscalRetryBackgroundService>();
@@ -451,11 +488,33 @@ if (!app.Environment.IsDevelopment() && app.Configuration.GetValue<bool?>("COOKI
         "Assim que configurar domínio + Cloudflare, troque COOKIE_SECURE pra true no .env.");
 }
 
+// B4: Security:IpHashSalt cai num fallback fixo ("tenant-erp-ip-salt-dev", só pra
+// dev) se IP_HASH_SALT não estiver no .env — setup.sh já gera um valor aleatório em
+// todo deploy novo, então isso só dispara se alguém apagou a variável depois. Aviso
+// (não fail-fast, mesma lição do M26) porque não sei se algum ambiente já em produção
+// depende do fallback antigo.
+if (!app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(app.Configuration["Security:IpHashSalt"]))
+{
+    app.Logger.LogWarning(
+        "ATENÇÃO: Security:IpHashSalt não configurado em produção — caindo no salt fixo de " +
+        "desenvolvimento, conhecido no código-fonte. Configure IP_HASH_SALT no .env (setup.sh já " +
+        "gera um valor aleatório em deploys novos).");
+}
+
 // ---------------------------------------------------------------------------
 // 15. BANCO DE DADOS — EnsureCreated em dev sem Postgres (SQLite), Migrations em Postgres
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
+    // C3: marca explicitamente o tenant-zero ANTES de resolver o AppDbContext — o
+    // TenantConnectionInterceptor agora falha rápido se uma conexão abrir sem Set()
+    // ter sido chamado neste escopo (ver ValidateSchemaName). As migrations deste
+    // bloco (catálogo + schema "public") são a única operação legítima fora de
+    // request HTTP que opera no tenant-zero por padrão, então marca de propósito
+    // em vez de deixar cair no default silenciosamente.
+    scope.ServiceProvider.GetRequiredService<ITenantContext>()
+        .Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
+
     var db      = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var catalog = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
     var logger  = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -491,6 +550,14 @@ using (var scope = app.Services.CreateScope())
                 .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
                 .ToListAsync();
 
+            // C4 (parcial — VPS único por enquanto, sem lock/processo migrador separado):
+            // antes o catch abaixo só logava por tenant e o resumo final dizia sempre
+            // "aplicadas em N tenant(s)", sem distinguir sucesso de falha — um tenant
+            // ficava sem migrar silenciosamente até o próximo restart, sem nada gritando
+            // sobre isso. Agora rastreia falhas e o resumo final é WARNING (não INFO) se
+            // qualquer uma ocorreu, com a lista de slugs — visível no boot, não só grep de log.
+            var tenantsComFalha = new List<string>();
+
             foreach (var tenant in tenantsParaMigrar)
             {
                 try
@@ -506,11 +573,20 @@ using (var scope = app.Services.CreateScope())
                 {
                     // Um schema quebrado/tenant com migration pendente conflitante
                     // não pode travar o boot dos outros — loga e segue o loop.
+                    tenantsComFalha.Add(tenant.Slug);
                     logger.LogError(ex, "Falha ao migrar schema do tenant {Slug} ({SchemaName})", tenant.Slug, tenant.SchemaName);
                 }
             }
 
-            logger.LogInformation("Migrations aplicadas em {Count} tenant(s) ativo(s)", tenantsParaMigrar.Count);
+            if (tenantsComFalha.Count > 0)
+                logger.LogWarning(
+                    "Migrations: {Ok}/{Total} tenant(s) OK — FALHOU em {Falha}: {Slugs}. Esses tenants " +
+                    "continuam rodando no schema desatualizado até o próximo restart bem-sucedido — " +
+                    "investigar antes que um endpoint novo quebre pra eles.",
+                    tenantsParaMigrar.Count - tenantsComFalha.Count, tenantsParaMigrar.Count,
+                    tenantsComFalha.Count, string.Join(", ", tenantsComFalha));
+            else
+                logger.LogInformation("Migrations aplicadas em {Count} tenant(s) ativo(s)", tenantsParaMigrar.Count);
         }
 
         logger.LogInformation("Banco pronto.");

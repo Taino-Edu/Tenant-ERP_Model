@@ -1,5 +1,41 @@
 # Backlog — Tenant-ERP
 
+## Pacote fiscal de homologação — 2026-07-21
+
+- **CNPJ vai mudar de contrato/modelagem.** Não criar constraint, índice funcional ou
+  validação estrutural definitiva baseada no campo atual. Toda normalização usada
+  pelo motor SEFAZ deve ficar centralizada em uma função adaptadora, para que a
+  futura origem/formatação do CNPJ seja trocada sem espalhar regras pelos serviços.
+  Antes de fechar o novo modelo, definir: origem do identificador, representação por
+  tenant/estabelecimento, compatibilidade com matriz/filial e migração dos dados atuais.
+- **ICMS-ST configurável implementado.** CSOSN `201`, `202` e `203` aceitam origem,
+  modalidade BC-ST, MVA ou pauta/base fixa, redução, alíquota própria, alíquota ST e
+  FCP-ST por natureza dentro do schema da loja. O preço cadastrado é tratado como final
+  ao consumidor e decomposto em operação + ST + FCP sem alterar o total pago. Parâmetros
+  incompletos bloqueiam somente a emissão daquele documento, com erro acionável.
+- **Implementado nesta leva:** contingência offline com identidade imutável e QR
+  coerente; retransmissão contínua com alerta antes de 24 horas; certificado validado
+  localmente; `nfeProc` e `procEventoNFe` persistidos/exportados; pré-voo sem engessar
+  o futuro CNPJ; CSC criptografado; unicidade por origem; numeração atômica e estável
+  no reprocessamento; bloqueio de regimes ainda não suportados; gates do módulo fiscal
+  nos jobs/DF-e; janela de cancelamento baseada na autorização real; QR Code v3 com
+  `urlChave`; campos obrigatórios da NFC-e 4.00; textos de homologação; IE sanitizada;
+  persistência de NCM/natureza ao editar produto; e IBS/CBS 2026 com base líquida após
+  desconto, totalizadores e trava explícita para anos cujas alíquotas não estejam
+  configuradas.
+- **Implementado para o go-live de 25/07:** inutilização explícita de número/faixa,
+  com protocolo/XML e bloqueio de documentos válidos; estorno ERP transacional e
+  idempotente após cancelamento, cobrindo estoque, crediário ainda não pago,
+  cashback, pontos usados/ganhos e pagamento dividido. Reembolso externo de
+  dinheiro/Pix/cartão gera alerta e continua sendo confirmação operacional humana.
+- **Bloqueadores restantes de produção:** validar com o contador os parâmetros das
+  naturezas efetivamente usadas e executar/registrar o roteiro real de
+  homologação da SEFAZ em `docs/GO-LIVE-FISCAL-2026-07-25.md` com certificado/CSC
+  do estabelecimento. Código aprovado localmente não substitui autorização real.
+- **Critério de conclusão:** teste real em ambiente de homologação da SEFAZ,
+  incluindo autorização, rejeição, contingência/retransmissão, cancelamento,
+  inutilização e abertura do XML pelo sistema do contador.
+
 ## Concluído (sessão 2026-07-15, módulos/export/BYO domain)
 - **Seletor de módulos na criação de tenant** — `CreateTenantModal` perguntava
   nada antes (dava pra escolher só depois, editando); agora pergunta já na
@@ -137,20 +173,69 @@ Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi fei
   mas sem nenhum teste escrito; mínimo: login, abrir comanda, fechar comanda.
 
 ## Backlog — configuração fiscal por tenant (motores de cálculo de tributos)
-Proposta nova da `avaliacao_completa_2esysten.md` (a única seção que difere da
-outra avaliação). Hoje a emissão de NFC-e já existe (Zeus/DFe.NET no
-`NfceEmissionService`), mas o **cálculo de tributos** é fixo (Simples Nacional,
-PIS/COFINS CST 99) e igual pra todo tenant:
+### Diretriz arquitetural não negociável
+
+- O `softNerd`/Santuário é caso de teste e fonte de bugs reais, não regra fiscal global.
+- O catálogo identifica o tenant e seus módulos; os dados fiscais operacionais ficam no
+  schema PostgreSQL exclusivo da loja. Não duplicar `tenant_id` indiscriminadamente nas
+  tabelas já isoladas por schema.
+- Certificado, CSC, ambiente, credenciamento, série, numeração, emitente, regime,
+  naturezas, produtos, NCM e regras tributárias são independentes por loja.
+- O módulo `fiscal` controla acesso às telas/endpoints e execução dos jobs. Tenant sem o
+  módulo deve continuar vendendo normalmente e não pode gerar documento fiscal.
+- Falha ou configuração incompleta de uma loja pode deixar apenas sua NFC-e pendente/
+  rejeitada; não pode desfazer a venda, travar o PDV, executar no schema `public` por
+  engano nem interromper jobs de outros tenants.
+- O motor deve resolver uma regra tributária configurável por natureza/produto e regime,
+  com provedores substituíveis. Valores fixos do Santuário (CSOSN, CST, `cClassTrib`,
+  MVA, reduções ou alíquotas) só podem virar padrão explícito daquela loja, nunca
+  constante universal silenciosa.
+- Regra ainda não suportada deve bloquear somente a emissão fiscal daquele documento,
+  com diagnóstico acionável e sem inventar imposto. O objetivo é ampliar os provedores
+  até cobrir ICMS-ST, regimes normais e classificações IBS/CBS por produto/tenant.
+
+### Concluído em 2026-07-22 — CEST e transparência tributária
+
+- CEST opcional por produto e por tenant, sanitizado para 7 dígitos e obrigatório na
+  emissão quando o CSOSN é 201, 202, 203 ou 500; o XML recebe `prod/CEST`.
+- Percentuais aproximados federal, estadual e municipal e fonte/versão configuráveis
+  por produto. A emissão bloqueia apenas a NFC-e sem esses dados, sem inventar alíquota.
+- `vTotTrib` calculado por item sobre o valor efetivamente pago após desconto, somado em
+  `ICMSTot/vTotTrib` e detalhado em `infCpl` conforme a Lei 12.741/2012.
+- Snapshot dos valores/fontes persistido na nota para o cupom continuar auditável mesmo
+  se a tabela do produto mudar depois. Cupom admin e cliente exibem valor por item e
+  totais federal/estadual/municipal.
+- Importação/exportação CSV inclui CEST, percentuais e fonte.
+
+### Concluído em 2026-07-22 — preenchimento automático pela API IBPT
+
+- Credencial IBPT própria por tenant, armazenada criptografada e nunca devolvida pela
+  API. A chamada usa o CNPJ/UF do emitente e NCM, descrição, unidade, valor e GTIN do
+  produto conforme o contrato oficial do IBPT.
+- Preenchimento automático ao cadastrar/alterar produto e sincronização em lote na tela
+  fiscal. Job periódico opera apenas tenants ativos com módulo fiscal e não deixa a
+  falha de uma loja interromper as demais.
+- Origem da mercadoria seleciona corretamente a alíquota nacional ou importada. Fonte,
+  versão, chave e vigência ficam gravadas no produto para auditoria.
+- Cadastro manual continua permitido como override: sincronizações não sobrescrevem
+  valores completos informados pelo contador. Alterar manualmente percentuais/fonte
+  retira a marca automática; trocar apenas o NCM invalida os valores antigos.
+- Tabela automática vencida bloqueia somente a emissão fiscal do documento afetado,
+  com mensagem acionável. Token não aparece em logs, respostas ou exportações CSV.
+
+Registro histórico da proposta de `avaliacao_completa_2esysten.md`. A emissão usa
+Zeus/DFe.NET e o motor atual já resolve regras configuráveis por natureza/produto no
+schema de cada tenant; os itens abaixo continuam como opções futuras de provedores:
 - Campo `FiscalMode` (`Online` | `Offline` | `Hybrid`) no `FiscalConfig` do
   tenant, com escolha de motor de cálculo por loja.
-- Candidatos avaliados na análise: MotorTributarioNet (cálculo completo,
-  multi-UF), Fiscal.Net, API pública do IBPT (alíquotas por NCM — precisa de
-  cache), Focus NFe (emissão em escala, pago), ACBrNCM (lookup offline).
-- Chaves de API por tenant (`IbptApiKey` etc.) criptografadas — o mecanismo
-  AES-256-GCM com `ENCRYPTION_KEY` já existe e é usado pra certificado/Inter.
+- Candidatos ainda avaliáveis para cálculo completo: MotorTributarioNet (multi-UF),
+  Fiscal.Net, Focus NFe (emissão em escala, pago) e ACBrNCM (lookup offline). A API
+  IBPT já está integrada para transparência tributária aproximada; ela não substitui
+  as regras fiscais da operação nem a validação do contador.
+- Credencial IBPT por tenant já usa o mecanismo AES-256-GCM com `ENCRYPTION_KEY`.
 - Frontend expõe só as opções permitidas ao admin da loja.
-- Escopo a decidir antes de implementar: quais motores entram no MVP e se
-  isso vira módulo de billing (como Fiscal/Estoque já são).
+- Escopo futuro: decidir quais motores de cálculo adicionais entram e se viram módulo
+  de billing. O sincronizador IBPT já respeita o módulo fiscal existente.
 
 ## Concluído (sessão 2026-07-12, achados da análise técnica externa)
 - Documento externo (`analise_tecnica.md`, feito pelo usuário com Gemini/outra

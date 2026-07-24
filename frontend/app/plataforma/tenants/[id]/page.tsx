@@ -8,7 +8,7 @@ import {
 } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2, Globe, Check, X } from 'lucide-react'
+import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2, Globe, Check, X, KeyRound } from 'lucide-react'
 import clsx from 'clsx'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
@@ -48,6 +48,7 @@ const PATH_LABELS: Record<string, string> = {
   '/admin/perfis':         'Perfis de Acesso',
   '/admin/site':           'Personalizar Site',
   '/admin/email':          'E-mail',
+  '/admin/ia-config':      'Assistente de IA',
   '/admin/suporte':        'Suporte',
 }
 
@@ -55,8 +56,61 @@ function pathLabel(path: string) {
   return PATH_LABELS[path] ?? path
 }
 
+function ResetStaffPasswordModal({ tenantId, user, onClose }: { tenantId: string; user: TenantStaffDto; onClose: () => void }) {
+  const [senha, setSenha]       = useState('')
+  const [confirma, setConfirma] = useState('')
+  const [loading, setLoading]   = useState(false)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (senha.length < 8) { toast.error('Mínimo 8 caracteres'); return }
+    if (senha !== confirma) { toast.error('As senhas não coincidem'); return }
+    setLoading(true)
+    try {
+      await platformApi.resetTenantStaffPassword(tenantId, user.id, senha)
+      toast.success(`Senha de ${user.name} redefinida!`)
+      onClose()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao redefinir senha'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
+          <h2 className="font-bold text-white text-lg flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-brand-400" /> Redefinir Senha
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+          <p className="text-sm text-gray-400">Definindo nova senha para <strong className="text-white">{user.name}</strong> ({user.role}).</p>
+          <div>
+            <label className="label">Nova senha</label>
+            <input type="password" className="input" placeholder="Mínimo 8 caracteres" value={senha} onChange={e => setSenha(e.target.value)} required minLength={8} />
+          </div>
+          <div>
+            <label className="label">Confirmar senha</label>
+            <input type="password" className="input" placeholder="Repita a senha" value={confirma} onChange={e => setConfirma(e.target.value)} required minLength={8} />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn-primary flex-1 justify-center">
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><KeyRound className="w-4 h-4" /> Redefinir</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 function StaffTab({ tenantId }: { tenantId: string }) {
   const [staff, setStaff] = useState<TenantStaffDto[] | null>(null)
+  const [resetTarget, setResetTarget] = useState<TenantStaffDto | null>(null)
 
   useEffect(() => {
     platformApi.getTenantStaff(tenantId)
@@ -68,28 +122,42 @@ function StaffTab({ tenantId }: { tenantId: string }) {
   if (staff.length === 0) return <p className="text-gray-400 text-center py-10">Nenhum funcionário/admin cadastrado.</p>
 
   return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="text-left text-gray-500 border-b border-surface-600">
-          <th className="py-2 font-medium">Nome</th>
-          <th className="py-2 font-medium">E-mail</th>
-          <th className="py-2 font-medium">Papel</th>
-          <th className="py-2 font-medium">Perfil</th>
-          <th className="py-2 font-medium">Último login</th>
-        </tr>
-      </thead>
-      <tbody>
-        {staff.map(u => (
-          <tr key={u.id} className="border-b border-surface-700 last:border-0">
-            <td className="py-2.5 text-white">{u.name} {!u.isActive && <span className="text-xs text-red-400">(inativo)</span>}</td>
-            <td className="py-2.5 text-gray-400">{u.email ?? '—'}</td>
-            <td className="py-2.5 text-gray-400">{u.role}</td>
-            <td className="py-2.5 text-gray-400">{u.perfilNome ?? '—'}</td>
-            <td className="py-2.5 text-gray-400">{fmtDateTime(u.lastLoginAt)}</td>
+    <>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-gray-500 border-b border-surface-600">
+            <th className="py-2 font-medium">Nome</th>
+            <th className="py-2 font-medium">E-mail</th>
+            <th className="py-2 font-medium">Papel</th>
+            <th className="py-2 font-medium">Perfil</th>
+            <th className="py-2 font-medium">Último login</th>
+            <th className="py-2 font-medium"></th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {staff.map(u => (
+            <tr key={u.id} className="border-b border-surface-700 last:border-0">
+              <td className="py-2.5 text-white">{u.name} {!u.isActive && <span className="text-xs text-red-400">(inativo)</span>}</td>
+              <td className="py-2.5 text-gray-400">{u.email ?? '—'}</td>
+              <td className="py-2.5 text-gray-400">{u.role}</td>
+              <td className="py-2.5 text-gray-400">{u.perfilNome ?? '—'}</td>
+              <td className="py-2.5 text-gray-400">{fmtDateTime(u.lastLoginAt)}</td>
+              <td className="py-2.5 text-right">
+                <button
+                  onClick={() => setResetTarget(u)}
+                  className="inline-flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300"
+                >
+                  <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {resetTarget && (
+        <ResetStaffPasswordModal tenantId={tenantId} user={resetTarget} onClose={() => setResetTarget(null)} />
+      )}
+    </>
   )
 }
 

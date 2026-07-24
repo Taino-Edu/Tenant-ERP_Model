@@ -14,6 +14,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
+using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -109,7 +110,9 @@ public class LgpdController : ControllerBase
             action:      "SolicitacaoLgpdAberta",
             entityType:  "LgpdRequest",
             entityId:    request.Id,
-            details:     $"{{\"tipo\":\"{request.RequestType}\",\"email\":\"{request.RequesterEmail}\"}}",
+            // B4: JSON montado por interpolação quebrava (virava JSON inválido no log) se
+            // RequesterEmail (vindo de um form público) tivesse aspas/backslash.
+            details:     JsonSerializer.Serialize(new { tipo = request.RequestType, email = request.RequesterEmail }),
             httpContext: HttpContext
         );
 
@@ -334,7 +337,7 @@ public class LgpdController : ControllerBase
             action:      "RespondeuSolicitacaoLgpd",
             entityType:  "LgpdRequest",
             entityId:    req.Id,
-            details:     $"{{\"status\":\"{dto.Status}\"}}",
+            details:     JsonSerializer.Serialize(new { status = dto.Status }),
             httpContext: HttpContext
         );
 
@@ -411,7 +414,7 @@ public class LgpdController : ControllerBase
             action:      "AnexouArquivoLgpd",
             entityType:  "LgpdRequest",
             entityId:    req.Id,
-            details:     $"{{\"arquivo\":\"{req.AnexoNome}\",\"bytes\":{req.AnexoDados.Length}}}",
+            details:     JsonSerializer.Serialize(new { arquivo = req.AnexoNome, bytes = req.AnexoDados.Length }),
             httpContext: HttpContext
         );
 
@@ -540,7 +543,7 @@ public class LgpdController : ControllerBase
             action:      "GerarRelatorioLgpd",
             entityType:  "LgpdRequest",
             entityId:    lgpdReq.Id,
-            details:     $"{{\"tipo\":\"{lgpdReq.RequestType}\"}}",
+            details:     JsonSerializer.Serialize(new { tipo = lgpdReq.RequestType }),
             httpContext: HttpContext
         );
 

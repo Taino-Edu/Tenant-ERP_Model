@@ -6,6 +6,7 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -17,8 +18,17 @@ public class UserServiceTests
 {
     private static AppDbContext CreateDb(string name) => TestDbFactory.Create(name);
 
-    private static UserService CreateService(AppDbContext db) =>
-        new(db, NullLogger<UserService>.Instance);
+    private static CatalogDbContext CreateCatalogDb() =>
+        new(new DbContextOptionsBuilder<CatalogDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options);
+
+    private static UserService CreateService(AppDbContext db)
+    {
+        var tenant = new TenantContext();
+        tenant.Set(Guid.NewGuid(), "test", Array.Empty<string>());
+        return new(db, CreateCatalogDb(), tenant, NullLogger<UserService>.Instance);
+    }
 
     private static User MakeCustomer(string name = "Cliente", int points = 0, DateTime? expiresAt = null) =>
         new()

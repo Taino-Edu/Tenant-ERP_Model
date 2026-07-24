@@ -9,8 +9,8 @@ ver `Program.cs`; trocar via variável de ambiente assim que possível, não dei
 valor default em produção).
 
 DNS configurado pra multi-tenant:
-- `2esysten.com.br` → Cloudflare (conta do usuário), registros A + wildcard
-  (`*.2esysten.com.br`) apontando pro VPS `179.197.67.64`, SSL/TLS em modo
+- `3esysten.com.br` → Cloudflare (conta do usuário), registros A + wildcard
+  (`*.3esysten.com.br`) apontando pro VPS `179.197.67.64`, SSL/TLS em modo
   "Flexible" (origem só tem porta 80/HTTP aberta).
 - Domínio do Maikon (`santuarionerd.tech`) migrado pra Cloudflare própria dele
   (estava incorretamente na conta do usuário) — assunto à parte, não é do Tenant-ERP.
@@ -35,7 +35,7 @@ histórico da conversa), na ordem:
    pra não quebrar quando o interceptor exigir `ITenantContext`.
 6. Migração de dados do tenant-zero pra schema dedicado.
 7. Claim `tenant_id` no JWT + guard middleware + CORS wildcard.
-8. nginx `server_name` pra aceitar `*.2esysten.com.br` (DNS já pronto).
+8. nginx `server_name` pra aceitar `*.3esysten.com.br` (DNS já pronto).
 
 ## Backlog fora do multi-tenant
 Ver `BACKLOG.md` — cobrança da plataforma (dono do SaaS cobra os tenants) e

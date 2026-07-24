@@ -177,6 +177,43 @@ public class FinanceiroCalculoServiceTests
     }
 
     [Fact]
+    public async Task CalcularAsync_VendasAvulsasForaDoPeriodo_NaoEntramNaReceitaMesmoSendoMaisRecentes()
+    {
+        // M8: GetRecentAsync(2000, ini) ordenava por SoldAt DESC e cortava em 2000 — com
+        // muitas vendas DEPOIS do período fechado, o corte podia ser todo consumido por elas,
+        // zerando a receita do período. GetInPeriodAsync filtra o período inteiro na query SQL,
+        // sem depender de quantas vendas mais recentes existem fora dele.
+        var db = CreateDb(nameof(CalcularAsync_VendasAvulsasForaDoPeriodo_NaoEntramNaReceitaMesmoSendoMaisRecentes));
+        var product = await SeedProductAsync(db, costCents: 300);
+        var service = CreateService(db);
+        var (ini, end, dBrIni, dBrFim) = JanelaHoje();
+
+        // Venda dentro do período (o que o fechamento precisa enxergar)
+        db.VendasAvulsas.Add(new VendaAvulsa
+        {
+            PaymentMethod = "Dinheiro", TotalInCents = 500, SoldAt = DateTime.UtcNow,
+            SoldByAdminId = AdminId, SoldByAdminName = "Admin",
+            Items = [new VendaAvulsaItem { ProductId = product.Id, ProductName = product.Name, Quantity = 1, UnitPriceInCents = 500, SubtotalInCents = 500, UnitCostInCents = 300 }],
+        });
+
+        // Vendas bem depois do período — mais recentes, teriam prioridade num Take() ordenado por SoldAt DESC
+        for (var i = 0; i < 5; i++)
+        {
+            db.VendasAvulsas.Add(new VendaAvulsa
+            {
+                PaymentMethod = "Dinheiro", TotalInCents = 9999, SoldAt = end.AddDays(30 + i),
+                SoldByAdminId = AdminId, SoldByAdminName = "Admin",
+                Items = [new VendaAvulsaItem { ProductId = product.Id, ProductName = product.Name, Quantity = 1, UnitPriceInCents = 9999, SubtotalInCents = 9999, UnitCostInCents = 300 }],
+            });
+        }
+        await db.SaveChangesAsync();
+
+        var dto = await service.CalcularAsync(ini, end, dBrIni, dBrFim);
+
+        dto.ReceitaAvulsa.Should().Be(5.00m, "só a venda dentro do período conta, as 5 posteriores não podem vazar nem deslocar a do período");
+    }
+
+    [Fact]
     public async Task CalcularAsync_FiltroPorFormaDePagamento_SoConsideraTransacoesDaquelaForma()
     {
         var db = CreateDb(nameof(CalcularAsync_FiltroPorFormaDePagamento_SoConsideraTransacoesDaquelaForma));

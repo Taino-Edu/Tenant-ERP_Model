@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { fiscalApi, FiscalConfigDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
+import { useRouter } from 'next/navigation'
+import { fiscalApi, FiscalConfigDto, FiscalSaudeDto, IbptStatusDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import {
@@ -30,14 +31,14 @@ const AMBIENTES = [
   { value: 'Producao',    label: 'Produção' },
 ]
 
-// Só os CSOSN que o motor de emissão sabe montar sozinho (ver NfceEmissionService).
-// 201/202/203 (ICMS-ST como substituto) ficam de fora de propósito — exigem MVA/base
-// reduzida que ninguém aqui calcula; usar um desses exigiria ajuste com o contador antes.
 const CSOSN_OPCOES = [
   { value: '',    label: '— Nenhum —' },
   { value: '102', label: '102 — Tributada sem permissão de crédito (mais comum)' },
   { value: '101', label: '101 — Tributada com permissão de crédito' },
   { value: '103', label: '103 — Isenção por faixa de receita bruta' },
+  { value: '201', label: '201 — Com crédito e cobrança de ICMS-ST' },
+  { value: '202', label: '202 — Sem crédito e cobrança de ICMS-ST' },
+  { value: '203', label: '203 — Isenção e cobrança de ICMS-ST' },
   { value: '300', label: '300 — Imune' },
   { value: '400', label: '400 — Não tributada' },
   { value: '500', label: '500 — ICMS já retido antes (substituição tributária)' },
@@ -49,10 +50,55 @@ function fmtDate(d?: string) {
   return new Date(d).toLocaleDateString('pt-BR')
 }
 
+const CHECKLIST_LABELS: Record<string, string> = {
+  Empresa:       'Dados da empresa',
+  Certificado:   'Certificado digital',
+  RegrasFiscais: 'Regra fiscal padrão',
+  Produtos:      'Produtos com NCM',
+  Homologacao:   'Homologação concluída',
+}
+
+// Onde cada etapa do checklist é resolvida — âncora nesta própria página, ou rota
+// externa (produtos ficam no cadastro de estoque, não no módulo fiscal).
+const CHECKLIST_DESTINO: Record<string, { anchor?: string; href?: string }> = {
+  Empresa:       { anchor: 'secao-empresa' },
+  Certificado:   { anchor: 'secao-certificado' },
+  RegrasFiscais: { anchor: 'secao-naturezas' },
+  Produtos:      { href: '/admin/estoque' },
+  Homologacao:   { anchor: 'secao-empresa' },
+}
+
+function irParaSecao(etapa: string, router: ReturnType<typeof useRouter>) {
+  const destino = CHECKLIST_DESTINO[etapa]
+  if (!destino) return
+  if (destino.href) { router.push(destino.href); return }
+  if (destino.anchor) document.getElementById(destino.anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 export default function FiscalPage() {
+  const router = useRouter()
   const [config,   setConfig]   = useState<FiscalConfigDto | null>(null)
   const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
+
+  // Visão geral — endpoint agregador de saúde fiscal, carregado à parte do
+  // formulário de configuração pra não bloquear a tela inteira num só loading.
+  const [saude, setSaude] = useState<FiscalSaudeDto | null>(null)
+  const [loadingSaude, setLoadingSaude] = useState(true)
+
+  async function loadSaude() {
+    setLoadingSaude(true)
+    try {
+      const { data } = await fiscalApi.getSaude()
+      setSaude(data)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar visão geral fiscal'))
+    } finally {
+      setLoadingSaude(false)
+    }
+  }
+
+  useEffect(() => { loadSaude() }, [])
 
   // Formulário de dados da empresa
   const [cnpj, setCnpj]                   = useState('')
@@ -77,6 +123,13 @@ export default function FiscalPage() {
   const [cscId, setCscId]       = useState('')
   const [cscToken, setCscToken] = useState('')
 
+  // IBPT / De Olho no Imposto — token nunca volta da API.
+  const [ibptToken, setIbptToken] = useState('')
+  const [ibptAutoSync, setIbptAutoSync] = useState(false)
+  const [ibptStatus, setIbptStatus] = useState<IbptStatusDto | null>(null)
+  const [savingIbpt, setSavingIbpt] = useState(false)
+  const [syncingIbpt, setSyncingIbpt] = useState(false)
+
   // Formas de pagamento que emitem NFC-e sozinhas ao fechar a venda, sem perguntar.
   // Vazio por padrão — o admin decide a cada fechamento via checkbox (ver /admin/comanda
   // e /admin/venda-avulsa). Marcar aqui só muda o valor pré-marcado desse checkbox.
@@ -93,6 +146,16 @@ export default function FiscalPage() {
   const [novoCfop, setNovoCfop]           = useState('')
   const [novoCsosn, setNovoCsosn]         = useState('')
   const [novoPercentualCredito, setNovoPercentualCredito] = useState('')
+  const [novaOrigemMercadoria, setNovaOrigemMercadoria] = useState('0')
+  const [novaModalidadeBcSt, setNovaModalidadeBcSt] = useState('4')
+  const [novoMvaSt, setNovoMvaSt] = useState('')
+  const [novaReducaoBcSt, setNovaReducaoBcSt] = useState('0')
+  const [novaAliquotaIcmsSt, setNovaAliquotaIcmsSt] = useState('')
+  const [novaAliquotaIcmsProprio, setNovaAliquotaIcmsProprio] = useState('')
+  const [novaAliquotaFcpSt, setNovaAliquotaFcpSt] = useState('0')
+  const [novaBaseStFixa, setNovaBaseStFixa] = useState('')
+  const [novoIbsCbsCst, setNovoIbsCbsCst] = useState('000')
+  const [novoIbsCbsClassTrib, setNovoIbsCbsClassTrib] = useState('000001')
   const [novoPadrao, setNovoPadrao]       = useState(false)
   const [savingNatureza, setSavingNatureza] = useState(false)
 
@@ -100,6 +163,14 @@ export default function FiscalPage() {
   const [inicio, setInicio] = useState('')
   const [fim, setFim]       = useState('')
   const [exporting, setExporting] = useState(false)
+
+  // Inutilização explícita de lacunas de numeração
+  const [inutAno, setInutAno] = useState(new Date().getFullYear())
+  const [inutSerie, setInutSerie] = useState(1)
+  const [inutInicio, setInutInicio] = useState(1)
+  const [inutFim, setInutFim] = useState(1)
+  const [inutJustificativa, setInutJustificativa] = useState('')
+  const [inutilizando, setInutilizando] = useState(false)
 
   // Histórico de notas
   const [notas, setNotas]               = useState<NotaFiscalDto[]>([])
@@ -130,8 +201,8 @@ export default function FiscalPage() {
   // aprovado — no caso comum (0 ou 1) o formulário fica igual a antes.
   const contadoresAprovados = solicitacoes.filter(s => s.status === 'Approved')
 
-  async function loadNotas() {
-    setNotasLoading(true)
+  async function loadNotas(showLoading = true) {
+    if (showLoading) setNotasLoading(true)
     try {
       const { data } = await fiscalApi.listNotas({ pageSize: 30 })
       setNotas(data.items)
@@ -140,7 +211,7 @@ export default function FiscalPage() {
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao carregar notas emitidas'))
     } finally {
-      setNotasLoading(false)
+      if (showLoading) setNotasLoading(false)
     }
   }
 
@@ -243,9 +314,13 @@ export default function FiscalPage() {
     setReprocessingId(id)
     try {
       const { data } = await fiscalApi.reprocessarNota(id)
+      setNotas(prev => prev.map(n => n.id === id
+        ? { ...n, status: data.status, motivoRejeicao: data.motivoRejeicao }
+        : n))
       toast[data.status === 'Autorizada' ? 'success' : 'error'](
-        data.status === 'Autorizada' ? 'Nota autorizada!' : `Ainda não autorizou: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`)
-      loadNotas()
+        data.status === 'Autorizada' ? 'Nota autorizada!' : `Ainda não autorizou: ${data.status}${data.motivoRejeicao ? ' — ' + data.motivoRejeicao : ''}`,
+        { duration: data.status === 'Autorizada' ? 4000 : 10000 })
+      await loadNotas(false)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao reprocessar'))
     } finally {
@@ -261,8 +336,11 @@ export default function FiscalPage() {
     }
     setCancelling(true)
     try {
-      await fiscalApi.cancelarNota(cancelModalId, cancelJustificativa.trim())
-      toast.success('Nota cancelada!')
+      const { data } = await fiscalApi.cancelarNota(cancelModalId, cancelJustificativa.trim())
+      if (data.erpEstornoErro)
+        toast.error(`Nota cancelada na SEFAZ, mas o estorno ERP exige ação: ${data.erpEstornoErro}`, { duration: 10000 })
+      else
+        toast.success('Nota cancelada e ERP estornado!')
       setCancelModalId(null)
       setCancelJustificativa('')
       loadNotas()
@@ -273,12 +351,52 @@ export default function FiscalPage() {
     }
   }
 
+  async function reprocessarEstornoErp(id: string) {
+    setReprocessingId(id)
+    try {
+      const { data } = await fiscalApi.reprocessarEstornoErp(id)
+      if (data.erpEstornadoEm) toast.success('Estorno ERP concluído!')
+      else toast.error(`Estorno ainda pendente: ${data.erpEstornoErro ?? 'verifique os dados da venda'}`)
+      loadNotas()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao reprocessar estorno'))
+    } finally {
+      setReprocessingId(null)
+    }
+  }
+
+  async function inutilizarFaixa() {
+    if (inutJustificativa.trim().length < 15) {
+      toast.error('A justificativa precisa ter pelo menos 15 caracteres.')
+      return
+    }
+    if (!window.confirm(
+      `Inutilizar definitivamente a faixa ${inutSerie}/${inutInicio}-${inutFim} de ${inutAno}? Esta operação não pode ser desfeita.`
+    )) return
+
+    setInutilizando(true)
+    try {
+      const { data } = await fiscalApi.inutilizarFaixa({
+        ano: inutAno, serie: inutSerie, numeroInicial: inutInicio,
+        numeroFinal: inutFim, justificativa: inutJustificativa.trim(),
+      })
+      toast.success(`Faixa inutilizada. Protocolo ${data.protocolo}`)
+      setInutJustificativa('')
+      loadNotas()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao inutilizar faixa'))
+    } finally {
+      setInutilizando(false)
+    }
+  }
+
   async function load() {
     setLoading(true)
     try {
-      const [{ data: cfg }, { data: nats }] = await Promise.all([
+      const [{ data: cfg }, { data: nats }, { data: statusIbpt }] = await Promise.all([
         fiscalApi.getConfig(),
         fiscalApi.listNaturezas(),
+        fiscalApi.getIbptStatus(),
       ])
       setConfig(cfg)
       setCnpj(cfg.cnpj ?? '')
@@ -298,6 +416,8 @@ export default function FiscalPage() {
       setCep(cfg.cep ?? '')
       setCscId(cfg.cscId ?? '')
       setAutoEmit(cfg.formasPagamentoAutoEmissao ?? [])
+      setIbptAutoSync(cfg.ibptAutoSyncEnabled ?? false)
+      setIbptStatus(statusIbpt)
       setNaturezas(nats)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao carregar dados fiscais'))
@@ -318,6 +438,8 @@ export default function FiscalPage() {
         codigoMunicipioIbge, municipio, uf, cep,
         cscId, ...(cscToken ? { cscToken } : {}),
         formasPagamentoAutoEmissao: autoEmit,
+        ibptAutoSyncEnabled: ibptAutoSync,
+        ...(ibptToken ? { ibptToken } : {}),
       })
       setConfig(data)
       toast.success('Configuração fiscal salva!')
@@ -325,6 +447,43 @@ export default function FiscalPage() {
       toast.error(getErrorMessage(err, 'Erro ao salvar configuração fiscal'))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveIbptConfig() {
+    setSavingIbpt(true)
+    try {
+      await fiscalApi.saveConfig({
+        ibptAutoSyncEnabled: ibptAutoSync,
+        ...(ibptToken ? { ibptToken } : {}),
+      })
+      setIbptToken('')
+      const { data } = await fiscalApi.getIbptStatus()
+      setIbptStatus(data)
+      toast.success('Integração IBPT salva com segurança.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar integração IBPT'))
+    } finally {
+      setSavingIbpt(false)
+    }
+  }
+
+  async function syncIbpt() {
+    setSyncingIbpt(true)
+    try {
+      if (ibptToken) {
+        await fiscalApi.saveConfig({ ibptToken, ibptAutoSyncEnabled: ibptAutoSync })
+        setIbptToken('')
+      }
+      const { data } = await fiscalApi.sincronizarIbpt()
+      const { data: status } = await fiscalApi.getIbptStatus()
+      setIbptStatus(status)
+      toast.success(`${data.atualizados} produto(s) atualizado(s); ${data.ignoradosManuais} override(s) preservado(s).`)
+      if (data.falhas > 0) toast.error(`${data.falhas} produto(s) falharam. Consulte o status da integração.`)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao sincronizar tabela IBPT'))
+    } finally {
+      setSyncingIbpt(false)
     }
   }
 
@@ -358,13 +517,28 @@ export default function FiscalPage() {
     }
     setSavingNatureza(true)
     try {
+      const numero = (valor: string) => valor === '' ? undefined : Number(valor)
       await fiscalApi.createNatureza({
         descricao: novaDescricao, cfop: novoCfop,
         csosn: novoCsosn || undefined,
-        percentualCreditoSn: novoCsosn === '101' && novoPercentualCredito ? Number(novoPercentualCredito) : undefined,
+        percentualCreditoSn: ['101', '201'].includes(novoCsosn) && novoPercentualCredito ? Number(novoPercentualCredito) : undefined,
+        origemMercadoria: Number(novaOrigemMercadoria),
+        modalidadeBcSt: ['201', '202', '203'].includes(novoCsosn) ? Number(novaModalidadeBcSt) : undefined,
+        percentualMvaSt: novaModalidadeBcSt === '4' ? numero(novoMvaSt) : undefined,
+        percentualReducaoBcSt: numero(novaReducaoBcSt),
+        aliquotaIcmsSt: numero(novaAliquotaIcmsSt),
+        aliquotaIcmsProprio: numero(novaAliquotaIcmsProprio),
+        aliquotaFcpSt: numero(novaAliquotaFcpSt),
+        baseStFixaEmCentavos: !['4', '6'].includes(novaModalidadeBcSt) && novaBaseStFixa
+          ? Math.round(Number(novaBaseStFixa) * 100) : undefined,
+        ibsCbsCst: novoIbsCbsCst,
+        ibsCbsClassTrib: novoIbsCbsClassTrib,
         isPadrao: novoPadrao,
       })
       setNovaDescricao(''); setNovoCfop(''); setNovoCsosn(''); setNovoPercentualCredito(''); setNovoPadrao(false)
+      setNovaOrigemMercadoria('0'); setNovaModalidadeBcSt('4'); setNovoMvaSt('')
+      setNovaReducaoBcSt('0'); setNovaAliquotaIcmsSt(''); setNovaAliquotaIcmsProprio('')
+      setNovaAliquotaFcpSt('0'); setNovaBaseStFixa(''); setNovoIbsCbsCst('000'); setNovoIbsCbsClassTrib('000001')
       toast.success('Natureza de operação criada!')
       load()
     } catch (err) {
@@ -435,8 +609,95 @@ export default function FiscalPage() {
         </div>
       </div>
 
+      {/* Visão geral — status fiscal, checklist e próxima ação, em poucos segundos */}
+      {loadingSaude ? (
+        <div className="card p-5 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
+      ) : saude && (
+        <div className={clsx(
+          'card p-5 border',
+          saude.status === 'Pronto'        && 'border-green-500/30',
+          saude.status === 'RequerAtencao' && 'border-amber-500/30',
+          saude.status === 'Bloqueado'     && 'border-red-500/30',
+        )}>
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div className="flex items-center gap-2">
+              {saude.status === 'Pronto'
+                ? <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
+                : <AlertTriangle className={clsx('w-5 h-5 shrink-0', saude.status === 'Bloqueado' ? 'text-red-400' : 'text-amber-400')} />}
+              <span className={clsx(
+                'font-bold',
+                saude.status === 'Pronto'        && 'text-green-400',
+                saude.status === 'RequerAtencao' && 'text-amber-400',
+                saude.status === 'Bloqueado'     && 'text-red-400',
+              )}>
+                {saude.status === 'Pronto' ? 'Pronto para emitir' : saude.status === 'Bloqueado' ? 'Bloqueado' : 'Requer atenção'}
+              </span>
+              <span className="text-xs text-gray-500">— {saude.ambiente === 'Producao' ? 'Produção' : 'Homologação'}</span>
+            </div>
+            {(() => {
+              const proximaEtapa = saude.checklist.find(i => !i.concluido)?.etapa
+              return (
+                <button
+                  onClick={() => proximaEtapa && irParaSecao(proximaEtapa, router)}
+                  disabled={!proximaEtapa}
+                  className="text-sm text-gray-300 text-left enabled:hover:text-white enabled:cursor-pointer disabled:cursor-default"
+                >
+                  Próxima ação: <strong className="text-white">{saude.proximaAcao}</strong>
+                </button>
+              )
+            })()}
+          </div>
+
+          {/* Checklist de ativação — cada etapa leva direto pra seção correspondente */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {saude.checklist.map(item => (
+              <button key={item.etapa} onClick={() => irParaSecao(item.etapa, router)} className={clsx(
+                'flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors',
+                item.concluido
+                  ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20'
+                  : 'bg-gray-500/10 text-gray-400 border-gray-500/30 hover:bg-gray-500/20',
+              )}>
+                {item.concluido ? <Check className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                {CHECKLIST_LABELS[item.etapa] ?? item.etapa}
+              </button>
+            ))}
+          </div>
+
+          {/* Últimas 24h */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="rounded-lg bg-white/5 p-3 text-center">
+              <div className="text-lg font-black text-green-400">{saude.notas.autorizadas24h}</div>
+              <div className="text-xs text-gray-500">Autorizadas 24h</div>
+            </div>
+            <div className="rounded-lg bg-white/5 p-3 text-center">
+              <div className="text-lg font-black text-red-400">{saude.notas.rejeitadas24h}</div>
+              <div className="text-xs text-gray-500">Rejeitadas 24h</div>
+            </div>
+            <div className="rounded-lg bg-white/5 p-3 text-center">
+              <div className="text-lg font-black text-amber-400">{saude.notas.pendentesTotal}</div>
+              <div className="text-xs text-gray-500">Pendentes</div>
+            </div>
+          </div>
+
+          {/* Pendências, ordenadas por impacto (o backend já manda bloqueantes primeiro) */}
+          {saude.pendencias.length > 0 && (
+            <ul className="flex flex-col gap-1.5">
+              {saude.pendencias.map((p, i) => (
+                <li key={i} className={clsx(
+                  'flex items-center gap-2 text-sm rounded-lg px-3 py-2',
+                  p.bloqueia ? 'bg-red-500/10 text-red-300' : 'bg-amber-500/10 text-amber-300',
+                )}>
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  {p.mensagem}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {/* Certificado */}
-      <div className={clsx('card p-5', certStatusColor === 'red' && 'border-red-500/30', certStatusColor === 'green' && 'border-green-500/20')}>
+      <div id="secao-certificado" className={clsx('card p-5', certStatusColor === 'red' && 'border-red-500/30', certStatusColor === 'green' && 'border-green-500/20')}>
         <h3 className="font-bold text-white flex items-center gap-2 mb-3">
           <ShieldCheck className="w-4 h-4 text-brand-400" /> Certificado Digital A1
         </h3>
@@ -479,7 +740,7 @@ export default function FiscalPage() {
       </div>
 
       {/* Dados da empresa */}
-      <div className="card p-5">
+      <div id="secao-empresa" className="card p-5">
         <h3 className="font-bold text-white mb-3">Dados da Empresa Emitente</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -576,6 +837,73 @@ export default function FiscalPage() {
         </button>
       </div>
 
+      {/* De Olho no Imposto / IBPT */}
+      <div className="card p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
+          <div>
+            <h3 className="font-bold text-white">Preenchimento automático — IBPT</h3>
+            <p className="text-xs text-gray-400 mt-1">
+              Consulta a API oficial por NCM, UF e origem da mercadoria. Produtos preenchidos manualmente pelo contador são preservados.
+            </p>
+          </div>
+          <span className={clsx(
+            'text-xs px-2 py-1 rounded border shrink-0',
+            ibptStatus?.configurado
+              ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+              : 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+          )}>
+            {ibptStatus?.configurado ? 'Token configurado' : 'Token pendente'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">Token da empresa no IBPT</label>
+            <input type="password" value={ibptToken} onChange={e => setIbptToken(e.target.value)}
+              placeholder={ibptStatus?.configurado ? '•••••••• (deixe vazio para manter)' : 'Cole o token do De Olho no Imposto'}
+              className="input w-full" autoComplete="new-password" />
+          </div>
+          <label className="flex items-center gap-3 rounded-lg border border-surface-600 bg-surface-700/50 px-3 py-2 cursor-pointer">
+            <input type="checkbox" checked={ibptAutoSync} onChange={e => setIbptAutoSync(e.target.checked)} />
+            <span>
+              <span className="block text-sm text-white font-medium">Preencher automaticamente</span>
+              <span className="block text-xs text-gray-400">Ao criar/alterar produto com NCM e quando a tabela vencer.</span>
+            </span>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-center">
+          <div className="rounded-lg bg-surface-700 p-2"><div className="text-lg font-bold text-white">{ibptStatus?.produtosAutomaticos ?? 0}</div><div className="text-[10px] text-gray-400">Automáticos</div></div>
+          <div className="rounded-lg bg-surface-700 p-2"><div className="text-lg font-bold text-amber-400">{ibptStatus?.produtosPendentes ?? 0}</div><div className="text-[10px] text-gray-400">Pendentes</div></div>
+          <div className="rounded-lg bg-surface-700 p-2"><div className="text-lg font-bold text-red-400">{ibptStatus?.produtosVencidos ?? 0}</div><div className="text-[10px] text-gray-400">Vencidos</div></div>
+          <div className="rounded-lg bg-surface-700 p-2"><div className="text-sm font-bold text-white">{ibptStatus?.ultimaVersao ?? '—'}</div><div className="text-[10px] text-gray-400">Versão</div></div>
+        </div>
+
+        {(ibptStatus?.vigenciaFim || ibptStatus?.ultimaSincronizacao) && (
+          <p className="text-xs text-gray-400 mt-3">
+            {ibptStatus.ultimaSincronizacao && <>Última sincronização: {fmtDate(ibptStatus.ultimaSincronizacao)}. </>}
+            {ibptStatus.vigenciaFim && <>Tabela válida até {fmtDate(ibptStatus.vigenciaFim)}.</>}
+          </p>
+        )}
+        {ibptStatus?.ultimoErro && (
+          <p className="text-xs text-red-400 mt-2">Último erro: {ibptStatus.ultimoErro}</p>
+        )}
+
+        <div className="flex flex-wrap gap-2 mt-4">
+          <button onClick={saveIbptConfig} disabled={savingIbpt} className="btn-secondary">
+            {savingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Salvar integração
+          </button>
+          <button onClick={syncIbpt} disabled={syncingIbpt || (!ibptStatus?.configurado && !ibptToken)} className="btn-primary">
+            {syncingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sincronizar produtos agora
+          </button>
+        </div>
+        <p className="text-[11px] text-gray-500 mt-3">
+          O token é criptografado e nunca é exibido novamente. A fonte, versão, chave e vigência ficam registradas por produto.
+        </p>
+      </div>
+
       {/* Emissão automática por forma de pagamento */}
       <div className="card p-5">
         <h3 className="font-bold text-white mb-1">Emissão automática de nota fiscal</h3>
@@ -615,7 +943,7 @@ export default function FiscalPage() {
       </div>
 
       {/* Naturezas de operação */}
-      <div className="card p-5">
+      <div id="secao-naturezas" className="card p-5">
         <h3 className="font-bold text-white mb-3">Naturezas de Operação</h3>
         <p className="text-xs text-gray-400 mb-4">
           Cadastre CFOP/CSOSN uma vez e vincule aos produtos — em vez de configurar item a item.
@@ -662,13 +990,66 @@ export default function FiscalPage() {
             {savingNatureza ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           </button>
         </div>
-        {novoCsosn === '101' && (
+        {['101', '201'].includes(novoCsosn) && (
           <div className="mt-2 max-w-[200px]">
             <label className="text-xs text-gray-400 font-semibold mb-1 block">% de crédito de ICMS</label>
             <input type="number" min={0} max={100} step={0.01} value={novoPercentualCredito}
                    onChange={e => setNovoPercentualCredito(e.target.value)} placeholder="Ex: 2.5" className="input w-full" />
           </div>
         )}
+        <details className="mt-3 rounded-xl border border-surface-600 bg-surface-800/40 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-gray-300">
+            Parâmetros tributários avançados
+          </summary>
+          <p className="text-xs text-amber-300/90 mt-2">
+            Preencha conforme orientação do contador. Os valores pertencem somente a esta loja e natureza.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+            <div>
+              <label className="text-xs text-gray-400 font-semibold mb-1 block">Origem da mercadoria</label>
+              <select value={novaOrigemMercadoria} onChange={e => setNovaOrigemMercadoria(e.target.value)} className="input w-full">
+                <option value="0">0 — Nacional</option><option value="1">1 — Importação direta</option>
+                <option value="2">2 — Estrangeira, mercado interno</option><option value="3">3 — Nacional, importação &gt; 40%</option>
+                <option value="4">4 — Nacional, processo básico</option><option value="5">5 — Nacional, importação ≤ 40%</option>
+                <option value="6">6 — Importação sem similar</option><option value="7">7 — Estrangeira sem similar</option>
+                <option value="8">8 — Nacional, importação &gt; 70%</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 font-semibold mb-1 block">CST IBS/CBS</label>
+              <input value={novoIbsCbsCst} maxLength={3} onChange={e => setNovoIbsCbsCst(e.target.value.replace(/\D/g, ''))} className="input w-full" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 font-semibold mb-1 block">cClassTrib</label>
+              <input value={novoIbsCbsClassTrib} maxLength={6} onChange={e => setNovoIbsCbsClassTrib(e.target.value.replace(/\D/g, ''))} className="input w-full" />
+            </div>
+          </div>
+
+          {['201', '202', '203'].includes(novoCsosn) && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 border-t border-surface-600 pt-3">
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Modalidade BC-ST</label>
+                <select value={novaModalidadeBcSt} onChange={e => setNovaModalidadeBcSt(e.target.value)} className="input w-full">
+                  <option value="4">4 — MVA (%)</option><option value="6">6 — Valor da operação</option>
+                  <option value="0">0 — Preço tabelado</option><option value="1">1 — Lista negativa</option>
+                  <option value="2">2 — Lista positiva</option><option value="3">3 — Lista neutra</option>
+                  <option value="5">5 — Pauta</option>
+                </select>
+              </div>
+              {novaModalidadeBcSt === '4' ? <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">MVA-ST (%)</label>
+                <input type="number" min={0} step={0.01} value={novoMvaSt} onChange={e => setNovoMvaSt(e.target.value)} className="input w-full" />
+              </div> : !['6'].includes(novaModalidadeBcSt) ? <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Base/pauta por un. (R$)</label>
+                <input type="number" min={0.01} step={0.01} value={novaBaseStFixa} onChange={e => setNovaBaseStFixa(e.target.value)} className="input w-full" />
+              </div> : null}
+              <div><label className="text-xs text-gray-400 font-semibold mb-1 block">Redução BC-ST (%)</label><input type="number" min={0} max={100} step={0.01} value={novaReducaoBcSt} onChange={e => setNovaReducaoBcSt(e.target.value)} className="input w-full" /></div>
+              <div><label className="text-xs text-gray-400 font-semibold mb-1 block">Alíquota ICMS-ST (%)</label><input type="number" min={0} max={100} step={0.01} value={novaAliquotaIcmsSt} onChange={e => setNovaAliquotaIcmsSt(e.target.value)} className="input w-full" /></div>
+              <div><label className="text-xs text-gray-400 font-semibold mb-1 block">ICMS próprio (%)</label><input type="number" min={0} max={100} step={0.01} value={novaAliquotaIcmsProprio} onChange={e => setNovaAliquotaIcmsProprio(e.target.value)} className="input w-full" /></div>
+              <div><label className="text-xs text-gray-400 font-semibold mb-1 block">FCP-ST (%)</label><input type="number" min={0} max={100} step={0.01} value={novaAliquotaFcpSt} onChange={e => setNovaAliquotaFcpSt(e.target.value)} className="input w-full" /></div>
+            </div>
+          )}
+        </details>
         <label className="flex items-center gap-2 mt-2 text-xs text-gray-400 cursor-pointer">
           <input type="checkbox" checked={novoPadrao} onChange={e => setNovoPadrao(e.target.checked)} />
           Definir como padrão
@@ -694,6 +1075,46 @@ export default function FiscalPage() {
           <button onClick={exportarXmls} disabled={exporting} className="btn-primary justify-center">
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
             Baixar ZIP
+          </button>
+        </div>
+      </div>
+
+      {/* Inutilização explícita de numeração */}
+      <div className="card p-5 border border-red-500/20">
+        <h3 className="font-bold text-white mb-2 flex items-center gap-2">
+          <Ban className="w-4 h-4 text-red-400" /> Inutilizar faixa de numeração
+        </h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Use somente para números abandonados que nunca foram autorizados. A SEFAZ não permite desfazer esta operação.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          <div>
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">Ano</label>
+            <input type="number" value={inutAno} onChange={e => setInutAno(Number(e.target.value))} className="input w-full" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">Série</label>
+            <input type="number" min={1} max={999} value={inutSerie} onChange={e => setInutSerie(Number(e.target.value))} className="input w-full" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">Número inicial</label>
+            <input type="number" min={1} value={inutInicio} onChange={e => setInutInicio(Number(e.target.value))} className="input w-full" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">Número final</label>
+            <input type="number" min={1} value={inutFim} onChange={e => setInutFim(Number(e.target.value))} className="input w-full" />
+          </div>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-3 items-end">
+          <div className="flex-1 w-full">
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">Justificativa (mínimo 15 caracteres)</label>
+            <input value={inutJustificativa} onChange={e => setInutJustificativa(e.target.value)}
+                   maxLength={255} placeholder="Motivo pelo qual a faixa não será utilizada" className="input w-full" />
+          </div>
+          <button onClick={inutilizarFaixa} disabled={inutilizando}
+                  className="px-4 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-sm font-bold text-red-400 flex items-center justify-center gap-2">
+            {inutilizando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+            Inutilizar definitivamente
           </button>
         </div>
       </div>
@@ -815,12 +1236,12 @@ export default function FiscalPage() {
       </div>
 
       {/* Histórico de notas emitidas */}
-      <div className="card p-5">
+      <div id="secao-notas" className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold text-white flex items-center gap-2">
             <ScrollText className="w-4 h-4 text-brand-400" /> Notas Emitidas
           </h3>
-          <button onClick={loadNotas} className="p-2 rounded-lg bg-surface-700 hover:bg-surface-500 text-gray-400">
+          <button onClick={() => loadNotas()} className="p-2 rounded-lg bg-surface-700 hover:bg-surface-500 text-gray-400">
             <RefreshCw className={clsx('w-4 h-4', notasLoading && 'animate-spin')} />
           </button>
         </div>
@@ -859,6 +1280,7 @@ export default function FiscalPage() {
                     </div>
                     {n.chaveAcesso && <p className="text-[11px] font-mono text-gray-500 mt-1 truncate">{n.chaveAcesso}</p>}
                     {n.motivoRejeicao && <p className="text-xs text-red-400 mt-1">{n.motivoRejeicao}</p>}
+                    {n.erpEstornoErro && <p className="text-xs text-amber-400 mt-1">Estorno ERP pendente: {n.erpEstornoErro}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {n.chaveAcesso && (
@@ -880,6 +1302,13 @@ export default function FiscalPage() {
                         <Ban className="w-3.5 h-3.5" /> Cancelar
                       </button>
                     )}
+                    {n.status === 'Cancelada' && n.erpEstornoErro && !n.erpEstornadoEm && (
+                      <button onClick={() => reprocessarEstornoErp(n.id)} disabled={reprocessingId === n.id}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-sm text-amber-400">
+                        {reprocessingId === n.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        Reprocessar estorno
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -894,7 +1323,7 @@ export default function FiscalPage() {
           <div className="bg-surface-800 rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
             <h2 className="font-black text-white">Cancelar NFC-e</h2>
             <p className="text-sm text-gray-400">
-              Só é possível cancelar dentro de 30 minutos após a autorização. A justificativa precisa ter pelo menos 15 caracteres.
+              Só é possível cancelar dentro de 30 minutos após a autorização. Estoque, pontos, cashback e crediário não pago serão estornados; dinheiro, Pix e cartão exigem confirmação manual do reembolso.
             </p>
             <textarea
               className="input w-full min-h-[80px]"

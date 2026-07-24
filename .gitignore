@@ -89,6 +89,7 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # Next.js
+.next/
 frontend/.next/
 frontend/out/
 

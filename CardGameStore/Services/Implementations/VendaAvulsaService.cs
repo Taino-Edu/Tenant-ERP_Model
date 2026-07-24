@@ -77,8 +77,17 @@ public class VendaAvulsaService : IVendaAvulsaService
         }
 
         // ── 2. Decrementar estoque no PostgreSQL (única transação relacional) ────
-        var vendaItems = new List<VendaAvulsaItem>();
-        var total      = 0;
+        var strategy = _db.Database.CreateExecutionStrategy();
+        VendaAvulsa venda = null!;
+        NotaFiscalEmitida? nota = null;
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            _db.ChangeTracker.Clear();
+            await using var transaction = await _db.Database.BeginTransactionAsync();
+
+            var vendaItems = new List<VendaAvulsaItem>();
+            var total      = 0;
 
         foreach (var reqItem in request.Items)
         {
@@ -150,6 +159,11 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         // Valor cobrado pelo método principal (total menos a parcela do segundo método)
         var primaryAmt = finalTotal - secondAmt;
+        var pointsDebitedAtSale = 0;
+        var cashbackDebitedAtSale = 0;
+        var pointsAwardedAtSale = 0;
+        Guid? crediarioIdAtSale = null;
+        var crediarioAmountAtSale = 0;
 
         // ── 3. Persistir evento de caixa (PostgreSQL) ──────────────────────────────
         // Resolve nome do cliente: prioriza nome explícito, depois busca no banco pelo userId
@@ -160,7 +174,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             clientNameResolved = usr?.Name;
         }
 
-        var venda = new VendaAvulsa
+        venda = new VendaAvulsa
         {
             Items                      = vendaItems,
             TotalInCents               = finalTotal,
@@ -175,33 +189,11 @@ public class VendaAvulsaService : IVendaAvulsaService
             SoldAt                     = DateTime.UtcNow,
             SoldByAdminId              = adminId,
             SoldByAdminName            = adminName,
+            FiscalEffectsCapturedAt    = DateTime.UtcNow,
         };
 
         _db.VendasAvulsas.Add(venda);
         await _db.SaveChangesAsync();
-
-        // Emite a NFC-e referente a esta venda avulsa — só quando o admin escolheu
-        // explicitamente emitir no fechamento (a loja não quer nota emitida sem antes
-        // perguntar). Aguarda o resultado (em vez de fire-and-forget) pra devolver o status
-        // pro caixa na hora e permitir abrir o cupom automaticamente quando autorizar — a
-        // chamada nunca lança exceção (garantia do NfceEmissionService). Se não marcou,
-        // nenhuma NotaFiscalEmitida é criada; a emissão pode ser feita depois manualmente
-        // pelo histórico.
-        // Defesa em profundidade: se a loja não contratou o módulo fiscal, ignora a
-        // flag silenciosamente mesmo que um request forjado tente forçar EmitirNotaFiscal=true.
-        NotaFiscalEmitida? nota = null;
-        if (request.EmitirNotaFiscal && _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
-        {
-            using var scope = _scopeFactory.CreateScope();
-            // O novo escopo tem seu próprio ITenantContext (default = tenant-zero) —
-            // sem propagar o tenant resolvido pela requisição, o AppDbContext deste
-            // escopo conecta no schema errado (nunca acha a venda que acabou de
-            // gravar, ou grava a nota no schema de outro tenant).
-            scope.ServiceProvider.GetRequiredService<ITenantContext>()
-                .Set(_tenantContext.TenantId, _tenantContext.SchemaName, _tenantContext.EnabledModules);
-            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
-            nota = await emissao.EmitirParaVendaAvulsaAsync(venda.Id);
-        }
 
         var paymentSummary = secondPm != null
             ? $"{request.PaymentMethod} + {secondPm} (R$ {secondAmt / 100m:N2})"
@@ -247,6 +239,8 @@ public class VendaAvulsaService : IVendaAvulsaService
                     itensAtuais.AddRange(novosItens);
                     crediarioExistente.ItensJson        = JsonSerializer.Serialize(itensAtuais);
                     crediarioExistente.ValorEmCentavos += primaryAmt;
+                    crediarioIdAtSale = crediarioExistente.Id;
+                    crediarioAmountAtSale = primaryAmt;
                     crediarioExistente.DataVencimento   = vencimento;
                     _logger.LogInformation(
                         "Venda avulsa acumulada no crediário {CredId} do usuário {UserId} — novo total R$ {Valor:N2}",
@@ -267,6 +261,8 @@ public class VendaAvulsaService : IVendaAvulsaService
                         ItensJson        = JsonSerializer.Serialize(novosItens),
                     };
                     _db.Crediarios.Add(crediario);
+                    crediarioIdAtSale = crediario.Id;
+                    crediarioAmountAtSale = primaryAmt;
                     _logger.LogInformation(
                         "Crediário {CredId} criado para usuário {UserId} via venda avulsa — R$ {Valor:N2}",
                         crediario.Id, userId, primaryAmt / 100m);
@@ -286,6 +282,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente. Cliente tem {user.PointsBalance} pts, método principal custa {primaryAmt} pts.");
+                pointsDebitedAtSale += primaryAmt;
                 _logger.LogInformation(
                     "Usuário {UserId} usou {Pts} pontos (principal) em venda avulsa.", userId, primaryAmt);
             }
@@ -299,6 +296,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo insuficiente. Cliente tem R$ {user.BalanceInCents / 100m:N2}, método principal custa R$ {primaryAmt / 100m:N2}.");
+                cashbackDebitedAtSale += primaryAmt;
                 _logger.LogInformation(
                     "Usuário {UserId} usou R$ {Valor:N2} de cashback (principal) em venda avulsa.", userId, primaryAmt / 100m);
             }
@@ -314,6 +312,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo cashback insuficiente para o segundo pagamento. Disponível: R$ {user.BalanceInCents / 100m:N2}.");
+                cashbackDebitedAtSale += secondAmt;
                 _logger.LogInformation("Usuário {UserId} usou R$ {Amt:N2} de cashback como segundo pagamento.", userId, secondAmt / 100m);
             }
             else if (secondPm == PaymentMethod.Pontos)
@@ -326,6 +325,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente para o segundo pagamento. Disponível: {user.PointsBalance} pts.");
+                pointsDebitedAtSale += secondAmt;
                 _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
             }
 
@@ -349,6 +349,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo cashback insuficiente para o segundo pagamento. Disponível: R$ {user.BalanceInCents / 100m:N2}.");
+                cashbackDebitedAtSale += secondAmt;
                 _logger.LogInformation("Usuário {UserId} usou R$ {Amt:N2} de cashback como segundo pagamento.", userId, secondAmt / 100m);
             }
             else if (secondPm == PaymentMethod.Pontos)
@@ -361,6 +362,7 @@ public class VendaAvulsaService : IVendaAvulsaService
                 if (rows == 0)
                     throw new InvalidOperationException(
                         $"Saldo de pontos insuficiente para o segundo pagamento. Disponível: {user.PointsBalance} pts.");
+                pointsDebitedAtSale += secondAmt;
                 _logger.LogInformation("Usuário {UserId} usou {Pts} pontos como segundo pagamento.", userId, secondAmt);
             }
 
@@ -368,6 +370,7 @@ public class VendaAvulsaService : IVendaAvulsaService
             var pontosGanhos = pontosAtivo ? finalTotal / 100 : 0;
             if (pontosGanhos > 0)
             {
+                pointsAwardedAtSale = pontosGanhos;
                 var expirado = user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow;
                 if (expirado)
                     await _db.Users
@@ -389,6 +392,25 @@ public class VendaAvulsaService : IVendaAvulsaService
             }
         }
 
+        venda.PointsDebitedAtSale = pointsDebitedAtSale;
+        venda.CashbackDebitedAtSale = cashbackDebitedAtSale;
+        venda.PointsAwardedAtSale = pointsAwardedAtSale;
+        venda.CrediarioIdAtSale = crediarioIdAtSale;
+        venda.CrediarioAmountAtSale = crediarioAmountAtSale;
+        await _db.SaveChangesAsync();
+
+        await transaction.CommitAsync();
+        });
+
+        if (request.EmitirNotaFiscal && _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+        {
+            using var scope = _scopeFactory.CreateScope();
+            scope.ServiceProvider.GetRequiredService<ITenantContext>()
+                .Set(_tenantContext.TenantId, _tenantContext.SchemaName, _tenantContext.EnabledModules);
+            var emissao = scope.ServiceProvider.GetRequiredService<INfceEmissionService>();
+            nota = await emissao.EmitirParaVendaAvulsaAsync(venda.Id);
+        }
+
         var dto = MapToDto(venda);
         dto.NotaFiscalId             = nota?.Id;
         dto.NotaFiscalStatus         = nota?.Status.ToString();
@@ -398,13 +420,27 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     public async Task<IEnumerable<VendaAvulsaDto>> GetRecentAsync(int limit = 50, DateTime? desde = null)
     {
-        var query = _db.VendasAvulsas.AsNoTracking().AsQueryable();
+        var query = _db.VendasAvulsas.AsNoTracking().Where(v => v.CanceladoEm == null);
         if (desde.HasValue)
             query = query.Where(v => v.SoldAt >= desde.Value);
 
         var vendas = await query
             .OrderByDescending(v => v.SoldAt)
             .Take(limit)
+            .ToListAsync();
+
+        return vendas.Select(MapToDto);
+    }
+
+    public async Task<IEnumerable<VendaAvulsaDto>> GetInPeriodAsync(DateTime inicioUtc, DateTime fimUtc)
+    {
+        // M8: filtro pelo período INTEIRO na query SQL — sem Take(), sem depender de
+        // "os N mais recentes desde o início do mês" cobrirem o período (que falhava
+        // silenciosamente: com >2000 vendas depois do período, o Take(2000) ordenado
+        // por SoldAt DESC era todo consumido por vendas FORA do período, retornando
+        // zero vendas do período pro fechamento financeiro).
+        var vendas = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= inicioUtc && v.SoldAt < fimUtc)
             .ToListAsync();
 
         return vendas.Select(MapToDto);
@@ -417,7 +453,7 @@ public class VendaAvulsaService : IVendaAvulsaService
         var (inicio, fim) = BrazilTime.Dia(date);
 
         var vendas = await _db.VendasAvulsas.AsNoTracking()
-            .Where(v => v.SoldAt >= inicio && v.SoldAt < fim)
+            .Where(v => v.CanceladoEm == null && v.SoldAt >= inicio && v.SoldAt < fim)
             .OrderByDescending(v => v.SoldAt)
             .ToListAsync();
 
@@ -487,6 +523,20 @@ public class VendaAvulsaService : IVendaAvulsaService
         var venda = await _db.VendasAvulsas.FindAsync(id)
             ?? throw new KeyNotFoundException($"Venda avulsa {id} não encontrada.");
 
+        if (venda.CanceladoEm.HasValue)
+            throw new InvalidOperationException("Venda cancelada não pode ser editada.");
+        var possuiDocumentoFiscalImutavel = await _db.NotasFiscaisEmitidas.AnyAsync(n =>
+            n.VendaAvulsaId == id && (n.Status == NotaFiscalStatus.Autorizada ||
+                                      n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+                                      n.Status == NotaFiscalStatus.Cancelada));
+        if (possuiDocumentoFiscalImutavel)
+            throw new InvalidOperationException(
+                "A venda já possui documento fiscal e não pode ter pagamento, cliente ou desconto alterados.");
+        if (venda.PointsDebitedAtSale != 0 || venda.PointsAwardedAtSale != 0 ||
+            venda.CashbackDebitedAtSale != 0 || venda.CrediarioAmountAtSale != 0)
+            throw new InvalidOperationException(
+                "A venda movimentou pontos, cashback ou crediário e exige estorno, não edição direta.");
+
         venda.PaymentMethod              = request.PaymentMethod;
         venda.SecondPaymentMethod        = request.SecondPaymentMethod;
         venda.SecondPaymentAmountInCents = request.SecondPaymentAmountInCents;
@@ -526,6 +576,7 @@ public class VendaAvulsaService : IVendaAvulsaService
         DiscountInReais            = v.DiscountInReais,
         SoldAt                     = v.SoldAt,
         SoldByAdminName            = v.SoldByAdminName,
+        CanceladoEm                = v.CanceladoEm,
         Items                      = v.Items.Select(i => new VendaAvulsaItemDto
         {
             ProductName      = i.ProductName,

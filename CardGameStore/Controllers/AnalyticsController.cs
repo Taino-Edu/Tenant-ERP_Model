@@ -55,7 +55,10 @@ public class AnalyticsController : ControllerBase
             .SumAsync(c => (long)c.TotalInCents);
 
         // ── Vendas avulsas — 60 dias cobre todas as métricas do dashboard ──
-        var vendas60Dias = (await _vendas.GetRecentAsync(5000, ha60Dias)).ToList();
+        // M8: GetInPeriodAsync (sem limite) em vez de GetRecentAsync(5000, ...) — loja com
+        // mais de 5.000 vendas avulsas em 60 dias (~83/dia) tinha "hoje"/"ontem" errados,
+        // já que o corte por "mais recentes" pode ser consumido antes de cobrir todo o período.
+        var vendas60Dias = (await _vendas.GetInPeriodAsync(ha60Dias, DateTime.UtcNow.AddMinutes(5))).ToList();
         var vendasHoje   = vendas60Dias.Where(v => v.SoldAt >= hojeInicio).ToList();
         var vendasOntem  = vendas60Dias.Where(v => v.SoldAt >= ontemInicio && v.SoldAt < hojeInicio).ToList();
         var vendasUlt30  = vendas60Dias.Where(v => v.SoldAt >= ha30Dias).ToList();

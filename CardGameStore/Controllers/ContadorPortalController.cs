@@ -21,6 +21,7 @@
 // GET  /api/contador-portal/clientes/{tenantId}/exportar-xmls → ZIP de XMLs no período
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -161,9 +162,11 @@ public class ContadorPortalController : ControllerBase
 
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        // F11: inicio/fim vêm do query string com Kind=Unspecified — .ToUniversalTime()
+        // assumiria o fuso do SERVIDOR (UTC em container), não o de Brasília.
         var q = db.NotasFiscaisEmitidas.AsQueryable();
-        if (inicio.HasValue) q = q.Where(n => n.CreatedAt >= inicio.Value.ToUniversalTime());
-        if (fim.HasValue)    q = q.Where(n => n.CreatedAt <= fim.Value.ToUniversalTime());
+        if (inicio.HasValue) q = q.Where(n => n.CreatedAt >= BrazilTime.ToUtcFromLocal(inicio.Value));
+        if (fim.HasValue)    q = q.Where(n => n.CreatedAt <= BrazilTime.ToUtcFromLocal(fim.Value));
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<NotaFiscalStatus>(status, out var statusEnum))
             q = q.Where(n => n.Status == statusEnum);
 
@@ -224,12 +227,12 @@ public class ContadorPortalController : ControllerBase
     /// <summary>Baixa um ZIP com os XMLs das notas fiscais emitidas no período.</summary>
     /// <param name="tenantId">Id da loja (precisa ter vínculo Approved com este contador).</param>
     /// <param name="inicio">Início do período.</param>
-    /// <param name="fim">Fim do período — precisa ser depois de <paramref name="inicio"/>.</param>
+    /// <param name="fim">Fim do período (inclusive).</param>
     [HttpGet("clientes/{tenantId:guid}/exportar-xmls")]
     public async Task<IActionResult> ExportarXmls(Guid tenantId, [FromQuery] DateTime inicio, [FromQuery] DateTime fim)
     {
-        if (fim <= inicio)
-            return BadRequest(new { Message = "O período final deve ser depois do inicial." });
+        if (fim.Date < inicio.Date)
+            return BadRequest(new { Message = "O período final não pode ser anterior ao inicial." });
 
         var tenant = await AutorizarEObterTenantAsync(tenantId);
         if (tenant is null) return Forbid();
@@ -239,7 +242,8 @@ public class ContadorPortalController : ControllerBase
         tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
 
         var export = scope.ServiceProvider.GetRequiredService<FiscalXmlExportService>();
-        var zipBytes = await export.GerarZipAsync(inicio.ToUniversalTime(), fim.ToUniversalTime());
+        var (inicioUtc, fimExclusivoUtc) = FiscalXmlExportService.NormalizarPeriodoInclusivo(inicio, fim);
+        var zipBytes = await export.GerarZipAsync(inicioUtc, fimExclusivoUtc);
         var fileName = $"xmls-fiscais-{inicio:yyyy-MM-dd}-a-{fim:yyyy-MM-dd}.zip";
 
         return File(zipBytes, "application/zip", fileName);

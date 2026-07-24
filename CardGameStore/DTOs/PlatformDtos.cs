@@ -21,6 +21,15 @@ public class CreateTenantRequest
     /// cai no default do model (["fiscal"]) — ver TenantProvisioningService.KnownModules pra
     /// lista de nomes aceitos.</summary>
     public string[]? EnabledModules { get; set; }
+
+    /// <summary>Nome do plano contratado (ex: "Mar", "Lagoa", "Personalizado"). Texto livre —
+    /// sem enum fixo, pricing ainda não fechado.</summary>
+    [MaxLength(63)]
+    public string? PlanName { get; set; }
+
+    /// <summary>Limite de usuários com acesso ao painel (Admin+Operator). Null = sem limite.</summary>
+    [Range(1, 10000)]
+    public int? MaxUsers { get; set; }
 }
 
 public class TenantSummaryDto
@@ -34,6 +43,7 @@ public class TenantSummaryDto
     public string PaymentStatus { get; set; } = string.Empty;
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
     public string? CustomDomain { get; set; }
+    public int? MaxUsers { get; set; }
 }
 
 /// <summary>Body de PATCH /api/platform/tenants/{id}/domain. CustomDomain null ou
@@ -50,6 +60,15 @@ public class UpdateTenantStatusRequest
     public string Status { get; set; } = string.Empty;
 }
 
+/// <summary>Body de DELETE /api/platform/tenants/{id}. Exclusão apaga o schema
+/// inteiro do tenant (irreversível) — exigir o slug digitado de volta evita
+/// um clique/confirm acidental derrubando a loja errada.</summary>
+public class DeleteTenantRequest
+{
+    [Required]
+    public string ConfirmSlug { get; set; } = string.Empty;
+}
+
 public class UpdateTenantBillingRequest
 {
     [Required, MaxLength(63)]
@@ -59,6 +78,17 @@ public class UpdateTenantBillingRequest
     public string PaymentStatus { get; set; } = string.Empty;
 
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
+
+    /// <summary>Limite de usuários com acesso ao painel (Admin+Operator). Null e omitido são
+    /// indistinguíveis em JSON — por isso este campo sozinho nunca LIMPA um limite já
+    /// configurado (só define um novo ou é ignorado). Pra remover o limite (virar "sem
+    /// limite"), use <see cref="RemoverMaxUsers"/> explicitamente.</summary>
+    [Range(1, 10000)]
+    public int? MaxUsers { get; set; }
+
+    /// <summary>True para remover o limite de acesso (tenant vira "sem limite"). Sem isso,
+    /// MaxUsers null/omitido preserva o valor já configurado — nunca zera sem querer.</summary>
+    public bool RemoverMaxUsers { get; set; } = false;
 }
 
 public class PlatformOverviewDto

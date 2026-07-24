@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import {
   Info, Tag, Calendar, CheckCircle, Wrench, Zap,
-  BookOpen, ChevronDown, ChevronUp, FileDown,
+  BookOpen, ChevronDown, ChevronUp, FileDown, Rocket,
   LayoutDashboard, ShoppingBag, ShoppingCart, Package,
-  Users, CreditCard, Trophy, BarChart2, Layers, Megaphone, Settings, Keyboard,
+  Users, CreditCard, BarChart2, Layers, Megaphone, Settings, Keyboard,
   Shirt, BookmarkCheck, Store, Hourglass, UserCog, Wallet, Receipt, Bot, MessageSquare, Palette,
+  Puzzle, ArrowRightLeft, Calculator, Globe, Building2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
@@ -123,11 +124,10 @@ const MANUAL_ICONS: Record<string, React.ReactNode> = {
   '04': <Package className="w-4 h-4" />,
   '05': <Users className="w-4 h-4" />,
   '06': <CreditCard className="w-4 h-4" />,
-  '07': <Trophy className="w-4 h-4" />,
-  '07b': <Shirt className="w-4 h-4" />,
-  '07c': <BookmarkCheck className="w-4 h-4" />,
-  '07d': <Store className="w-4 h-4" />,
-  '07e': <Hourglass className="w-4 h-4" />,
+  '07': <Shirt className="w-4 h-4" />,
+  '07b': <BookmarkCheck className="w-4 h-4" />,
+  '07c': <Store className="w-4 h-4" />,
+  '07d': <Hourglass className="w-4 h-4" />,
   '08': <BarChart2 className="w-4 h-4" />,
   '09': <UserCog className="w-4 h-4" />,
   '10': <Megaphone className="w-4 h-4" />,
@@ -139,6 +139,11 @@ const MANUAL_ICONS: Record<string, React.ReactNode> = {
   '16': <Bot className="w-4 h-4" />,
   '17': <MessageSquare className="w-4 h-4" />,
   '18': <Palette className="w-4 h-4" />,
+  '18b': <Puzzle className="w-4 h-4" />,
+  '18c': <ArrowRightLeft className="w-4 h-4" />,
+  '18d': <Calculator className="w-4 h-4" />,
+  '18e': <Globe className="w-4 h-4" />,
+  '18f': <Building2 className="w-4 h-4" />,
 }
 
 function ManualSection({ section }: { section: ManualSectionData }) {
@@ -228,6 +233,12 @@ export default function SobrePage() {
         <div className="ml-auto flex items-center gap-3">
           <Tag className="w-4 h-4 text-brand-400" />
           <span className="text-sm font-mono font-semibold text-brand-400">{version}</span>
+          <Link
+            href="/admin/primeiros-passos"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-accent-green/10 border border-accent-green/20 text-accent-green hover:bg-accent-green/20 transition-colors"
+          >
+            <Rocket className="w-3.5 h-3.5" /> Primeiros Passos
+          </Link>
           <Link
             href="/admin/manual"
             target="_blank"

@@ -103,12 +103,12 @@ function ProductCard({ p, adding, onAdd }: {
             <div className="flex items-center justify-between mt-1 gap-1">
               {p.isOnPromo && p.discountPriceInReais != null && !outOfStock ? (
                 <div className="flex flex-col">
-                  <span className="text-[10px] line-through" style={{ color: C.muted }}>R$ {p.priceInReais.toFixed(2).replace('.', ',')}</span>
+                  <span className="text-[10px] line-through" style={{ color: C.muted }}>R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}</span>
                   <span className="text-sm font-black" style={{ color: '#FF3B3B' }}>R$ {p.discountPriceInReais.toFixed(2).replace('.', ',')}</span>
                 </div>
               ) : (
                 <span className="text-sm font-black" style={{ color: unavailable ? C.muted : C.blue2 }}>
-                  R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+                  R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}
                 </span>
               )}
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
@@ -128,7 +128,7 @@ function ProductCard({ p, adding, onAdd }: {
       {canWaitList && (
         <div className="px-3 pb-3 space-y-1.5">
           <span className="text-sm font-black" style={{ color: C.blue2 }}>
-            R$ {p.priceInReais.toFixed(2).replace('.', ',')}
+            R$ {(p.priceInReais ?? (p.priceInCents / 100)).toFixed(2).replace('.', ',')}
           </span>
           <button
             onClick={handleWaitList}
@@ -540,12 +540,12 @@ export default function ClientePage() {
                       R$ {confirmItem.discountPriceInReais.toFixed(2).replace('.', ',')}
                     </span>
                     <span className="text-sm line-through" style={{ color: C.muted }}>
-                      R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
+                      R$ {(confirmItem.priceInReais ?? (confirmItem.priceInCents / 100)).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
                 ) : (
                   <p className="text-xl font-black mt-1" style={{ color: C.blue2 }}>
-                    R$ {confirmItem.priceInReais.toFixed(2).replace('.', ',')}
+                    R$ {(confirmItem.priceInReais ?? (confirmItem.priceInCents / 100)).toFixed(2).replace('.', ',')}
                   </p>
                 )}
               </div>
