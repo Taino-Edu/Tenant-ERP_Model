@@ -41,6 +41,19 @@ function whatsAppLink(telefone: string): string {
   return `https://wa.me/${withCountry}`
 }
 
+/** O campo "Place ID" guarda dois formatos diferentes dependendo da origem do
+ * lead: "node/123"/"way/123"/"relation/123" quando veio da Prospecção (OSM —
+ * ver ProspectingService.cs), ou um Place ID do Google (ex:
+ * "ChIJN1t_tDeuEmsRUsoyG83frY4") quando digitado manualmente pra um lead
+ * antigo/de outra origem. São sistemas de ID de provedores diferentes — usar
+ * a URL do Google pra um ID do OSM (ou vice-versa) nunca acha o lugar. */
+function mapLink(placeId: string): string {
+  const osmMatch = placeId.match(/^(node|way|relation)\/(\d+)$/)
+  return osmMatch
+    ? `https://www.openstreetmap.org/${osmMatch[1]}/${osmMatch[2]}`
+    : `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`
+}
+
 function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void }) {
   const [notas, setNotas] = useState(lead.notas ?? '')
   const [placeId, setPlaceId] = useState(lead.placeId ?? '')
@@ -125,15 +138,22 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
       <td className="py-3">
         <p className="text-white font-medium">{lead.nome}</p>
         <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-0.5">
-          <a
-            href={whatsAppLink(lead.telefone)}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Abrir conversa no WhatsApp"
-            className="flex items-center gap-1 text-accent-green hover:underline"
-          >
-            <MessageCircle className="w-3.5 h-3.5" /> {lead.telefone}
-          </a>
+          {lead.telefone ? (
+            <a
+              href={whatsAppLink(lead.telefone)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir conversa no WhatsApp"
+              className="flex items-center gap-1 text-accent-green hover:underline"
+            >
+              <MessageCircle className="w-3.5 h-3.5" /> {lead.telefone}
+            </a>
+          ) : (
+            // Leads vindos da Prospecção (OSM) frequentemente não têm telefone
+            // cadastrado no mapa — sem esse fallback, sobrava só o ícone do
+            // WhatsApp com um link quebrado (wa.me/55) e nenhum número visível.
+            <span className="italic text-gray-500">Sem telefone cadastrado</span>
+          )}
           {lead.email && <span>· {lead.email}</span>}
         </div>
         {lead.mensagem && <p className="text-xs text-gray-500 mt-1 max-w-xs">{lead.mensagem}</p>}
@@ -176,9 +196,9 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
             />
             {lead.placeId && (
               <a
-                href={`https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(lead.placeId)}`}
+                href={mapLink(lead.placeId)}
                 target="_blank" rel="noopener noreferrer"
-                title="Abrir no Google Maps"
+                title="Abrir no mapa"
                 className="text-brand-400 hover:text-brand-300 shrink-0"
               >
                 <MapPin className="w-3.5 h-3.5" />
