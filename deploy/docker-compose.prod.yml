@@ -32,7 +32,16 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Monta o DIRETÓRIO, não o arquivo. Bind mount de arquivo único amarra o
+      # inode: o `git pull` SUBSTITUI o nginx.conf (inode novo) e o container
+      # continua enxergando o antigo pra sempre — nem `nginx -s reload` resolve,
+      # porque ele relê o mesmo inode velho. Foi assim que a rota /mcp seguiu
+      # caindo no frontend depois de dois deploys verdes e de um reload
+      # bem-sucedido. Mount de diretório resolve por caminho, então arquivo
+      # trocado aparece na hora. (O arquivo vira conf.d/nginx.conf e é incluído
+      # pelo `include /etc/nginx/conf.d/*.conf` da imagem; montar o diretório
+      # também esconde o default.conf que vem na imagem, que é o que queremos.)
+      - ./nginx:/etc/nginx/conf.d:ro
       - api_uploads:/var/www/uploads:ro
     depends_on:
       - frontend
