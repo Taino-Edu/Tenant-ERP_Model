@@ -325,12 +325,17 @@ builder.Services.AddHttpClient("ibpt", client =>
 // OpenStreetMap (Nominatim + Overpass API) — busca de possíveis clientes
 // (prospecção). Gratuito e sem chave, mas a política de uso deles exige um
 // User-Agent descritivo identificando a aplicação (não o default do HttpClient).
+//
+// Handler força IPv4: este VPS tem rota IPv6 anunciada mas não funcional (mesmo
+// sintoma que já forçou `curl -4` em deploy/setup.sh) — sem isso, metade das
+// chamadas falha com "Network is unreachable" ou trava até o timeout de 25s
+// em vez de cair pro IPv4 que funciona. Ver CardGameStore/Common/SafeOutboundHttp.cs.
 builder.Services.AddHttpClient("osm", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(25);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
     client.DefaultRequestHeaders.Add("User-Agent", "TenantERP-Prospecting/1.0 (contato: suporte@3esysten.com.br)");
-});
+}).ConfigurePrimaryHttpMessageHandler(() => CardGameStore.Common.SafeOutboundHttp.CreateIPv4PreferredHandler());
 
 // Checagem de site de terceiro (classificação de presença digital sem IA) —
 // a URL vem do OpenStreetMap (dado editável por qualquer pessoa, não

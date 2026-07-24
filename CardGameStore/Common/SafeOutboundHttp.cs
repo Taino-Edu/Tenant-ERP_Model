@@ -45,6 +45,36 @@ public static class SafeOutboundHttp
         },
     };
 
+    /// <summary>Handler que força a conexão TCP a usar IPv4, ignorando
+    /// endereços IPv6 quando existir alternativa IPv4. Uso: VPS com IPv6
+    /// "meio configurado" (rota anunciada mas não funcional) faz o .NET tentar
+    /// conectar no endereço IPv6 primeiro e falhar com "Network is
+    /// unreachable" em vez de cair pro IPv4 — mesmo sintoma que já forçou o
+    /// uso de `curl -4` em deploy/setup.sh. Não é sobre segurança (diferente
+    /// de CreatePublicOnlyHandler), só contorna essa rede quebrada.</summary>
+    public static SocketsHttpHandler CreateIPv4PreferredHandler() => new()
+    {
+        ConnectCallback = async (context, cancellationToken) =>
+        {
+            var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, cancellationToken);
+            var target = addresses.FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork)
+                ?? addresses.FirstOrDefault()
+                ?? throw new InvalidOperationException($"Não foi possível resolver: {context.DnsEndPoint.Host}");
+
+            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+            try
+            {
+                await socket.ConnectAsync(target, context.DnsEndPoint.Port, cancellationToken);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        },
+    };
+
     /// <summary>true se a URL é http/https com host bem-formado — checagem
     /// rápida antes mesmo de tentar resolver DNS.</summary>
     public static bool IsPublicHttpUrl(string? url, out Uri? uri)
