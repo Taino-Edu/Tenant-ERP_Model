@@ -147,7 +147,7 @@ export default function InstitucionalPage() {
       <header className={`sticky top-0 z-40 border-b backdrop-blur ${C.header}`}>
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <Link href="/" className={`text-xl font-extrabold tracking-tight ${C.heading}`}>
-            <span className="text-brand-600">2E</span>systen
+            <span className="text-brand-600">3E</span>systen
           </Link>
 
           <nav className="hidden items-center gap-8 md:flex">
@@ -212,7 +212,7 @@ export default function InstitucionalPage() {
           O ERP completo, <span className="text-brand-600">com a cara da sua loja</span>
         </h1>
         <p className={`mt-6 max-w-2xl text-lg ${C.body}`}>
-          Somos a 2Esysten: construímos um sistema de gestão completo — PDV, estoque, fiscal,
+          Somos a 3Esysten: construímos um sistema de gestão completo — PDV, estoque, fiscal,
           crediário e app próprio — que cada lojista pode chamar de seu, sem abrir mão da
           praticidade de uma plataforma pronta.
         </p>
@@ -245,7 +245,7 @@ export default function InstitucionalPage() {
           </div>
           <div className={`space-y-4 ${C.body}`}>
             <p>
-              A 2Esysten começou como o sistema interno de uma loja de card games, construído pra
+              A 3Esysten começou como o sistema interno de uma loja de card games, construído pra
               resolver o dia a dia de quem vende, emite nota, controla estoque e fecha caixa —
               tudo ao mesmo tempo.
             </p>
@@ -384,7 +384,7 @@ export default function InstitucionalPage() {
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer className={`border-t px-6 py-8 ${C.border}`}>
         <div className={`mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm sm:flex-row ${C.muted}`}>
-          <p>© {new Date().getFullYear()} 2Esysten — Sistema de gestão para lojas e varejo.</p>
+          <p>© {new Date().getFullYear()} 3Esysten — Sistema de gestão para lojas e varejo.</p>
           <div className="flex gap-6">
             <Link href="/termos" className="transition hover:text-brand-600">Termos de uso</Link>
             <Link href="/privacidade" className="transition hover:text-brand-600">Privacidade</Link>
