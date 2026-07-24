@@ -258,6 +258,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
             onClick={acessarAdmin}
             disabled={impersonating || tenant.status !== 'Active'}
             title={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
+            aria-label={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
             className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           >
             {impersonating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
@@ -266,6 +267,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
             onClick={toggleStatus}
             disabled={updatingStatus}
             title={tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
+            aria-label={tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
             className={clsx('w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 transition-colors shrink-0',
               tenant.status === 'Active' ? 'text-gray-300 hover:text-red-400 hover:border-surface-400' : 'text-gray-300 hover:text-accent-green hover:border-surface-400')}
           >
@@ -277,6 +279,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
             onClick={baixarBackup}
             disabled={backingUp}
             title="Baixar backup (.sql) desta loja"
+            aria-label="Baixar backup (.sql) desta loja"
             className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white transition-colors shrink-0"
           >
             {backingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -284,6 +287,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
           <button
             onClick={() => setShowDelete(true)}
             title="Apagar esta loja permanentemente"
+            aria-label="Apagar esta loja permanentemente"
             className="w-8 h-8 rounded-lg flex items-center justify-center border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
           >
             <Trash2 className="w-3.5 h-3.5" />
