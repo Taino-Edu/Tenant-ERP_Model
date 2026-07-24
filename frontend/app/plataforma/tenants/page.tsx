@@ -253,42 +253,40 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
         })()}
       </td>
       <td className="py-3 text-right">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1.5">
           <button
             onClick={acessarAdmin}
             disabled={impersonating || tenant.status !== 'Active'}
             title={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
-            className="btn-secondary text-xs py-1 px-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
           >
             {impersonating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
-            Acessar admin
           </button>
           <button
             onClick={toggleStatus}
             disabled={updatingStatus}
-            className={clsx('btn-secondary text-xs py-1 px-2.5',
-              tenant.status === 'Active' ? 'hover:text-red-400' : 'hover:text-accent-green')}
+            title={tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
+            className={clsx('w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 transition-colors shrink-0',
+              tenant.status === 'Active' ? 'text-gray-300 hover:text-red-400 hover:border-surface-400' : 'text-gray-300 hover:text-accent-green hover:border-surface-400')}
           >
             {updatingStatus
               ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
               : tenant.status === 'Active' ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
-            {tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
           </button>
           <button
             onClick={baixarBackup}
             disabled={backingUp}
             title="Baixar backup (.sql) desta loja"
-            className="btn-secondary text-xs py-1 px-2.5"
+            className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white transition-colors shrink-0"
           >
             {backingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            Backup
           </button>
           <button
             onClick={() => setShowDelete(true)}
             title="Apagar esta loja permanentemente"
-            className="text-xs py-1 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
           >
-            <Trash2 className="w-3.5 h-3.5" /> Apagar
+            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </td>
