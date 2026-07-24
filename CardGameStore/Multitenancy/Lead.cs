@@ -54,25 +54,42 @@ public class Lead
     [Column("notas")]
     public string? Notas { get; set; }
 
-    /// <summary>Presença digital do comércio, anotada manualmente pelo dono da
-    /// plataforma ao prospectar (ex: achou no Google Maps sem site). Valores:
-    /// "SemSite", "SiteLegado", "ECommerce". Sem scouting automático ainda —
-    /// isso é preenchido à mão até existir um bot de prospecção.</summary>
+    /// <summary>Presença digital do comércio. Valores: "SemSite", "SiteLegado",
+    /// "ECommerce". Preenchido automaticamente pelo bot de prospecção (checa
+    /// assinaturas de plataforma de e-commerce no HTML do site, se houver) ou
+    /// manualmente pelo dono da plataforma.</summary>
     [MaxLength(20)]
     [Column("digital_presence")]
     public string? DigitalPresence { get; set; }
 
-    /// <summary>Pontuação de oportunidade (0 a 100), anotada manualmente —
-    /// mesma ressalva do campo acima.</summary>
+    /// <summary>Pontuação de oportunidade (0 a 100) — calculada pelo bot de
+    /// prospecção a partir de nota/reviews/categoria/presença de site, ou
+    /// ajustada manualmente pelo dono da plataforma.</summary>
     [Range(0, 100)]
     [Column("opportunity_score")]
     public int? OpportunityScore { get; set; }
 
     /// <summary>Place ID do Google Maps do estabelecimento, se o lead veio de
-    /// prospecção local — permite abrir a ficha do lugar direto.</summary>
-    [MaxLength(255)]
-    [Column("place_id")]
+    /// prospecção local — permite abrir a ficha do lugar direto. Sem limite de
+    /// tamanho fixo: a documentação do Google não define um máximo pro Place
+    /// ID (varia), então um limite arbitrário podia rejeitar/truncar um
+    /// candidato válido.</summary>
+    [Column("place_id", TypeName = "text")]
     public string? PlaceId { get; set; }
+
+    /// <summary>Faixa de faturamento estimado do negócio (ex: "R$10-30k/mês")
+    /// — heurística de porte a partir de categoria+reviews, ou estimativa mais
+    /// fina gerada pela IA quando o dono da plataforma pede enriquecimento.</summary>
+    [MaxLength(60)]
+    [Column("estimated_revenue_range")]
+    public string? EstimatedRevenueRange { get; set; }
+
+    /// <summary>Sugestão de abordagem pra esse lead específico — texto pronto
+    /// por categoria (sem IA) ou gerado sob demanda pela IA. Nunca confundir
+    /// com <see cref="Notas"/>, que é onde o dono da plataforma escreve à mão.</summary>
+    [MaxLength(2000)]
+    [Column("abordagem_sugerida")]
+    public string? AbordagemSugerida { get; set; }
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

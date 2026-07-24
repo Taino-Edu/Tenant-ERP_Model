@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations.Catalog
 {
     [DbContext(typeof(CatalogDbContext))]
-    partial class CatalogDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260724130602_AddLeadProspectingFields")]
+    partial class AddLeadProspectingFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -243,7 +246,8 @@ namespace CardGameStore.Data.Migrations.Catalog
                         .HasColumnName("origem");
 
                     b.Property<string>("PlaceId")
-                        .HasColumnType("text")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
                         .HasColumnName("place_id");
 
                     b.Property<string>("Status")
@@ -266,11 +270,6 @@ namespace CardGameStore.Data.Migrations.Catalog
 
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_leads_created_at");
-
-                    b.HasIndex("PlaceId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_leads_place_id_unique")
-                        .HasFilter("place_id IS NOT NULL");
 
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_leads_status");

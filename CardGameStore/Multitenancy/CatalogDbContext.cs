@@ -118,6 +118,15 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(l => l.CreatedAt)
                   .HasDatabaseName("ix_leads_created_at");
+
+            // Filtrado (só quando PlaceId não é nulo) pra não impedir múltiplos
+            // leads sem PlaceId (form da landing nunca tem PlaceId) — impede o
+            // mesmo negócio do OpenStreetMap virar lead duplicado por busca
+            // repetida/duplo-clique/retry (achado de review, PR #14).
+            entity.HasIndex(l => l.PlaceId)
+                  .IsUnique()
+                  .HasFilter("place_id IS NOT NULL")
+                  .HasDatabaseName("ix_leads_place_id_unique");
         });
 
         modelBuilder.Entity<SupportTicket>(entity =>
