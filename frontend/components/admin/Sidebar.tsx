@@ -99,15 +99,26 @@ const sections = [
 ]
 
 function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules, collapsed = false }: { pathname: string; onClose?: () => void; unreadCount: number; fiscalAlerta: boolean; enabledModules: string[]; collapsed?: boolean }) {
-  const role = getRole()
+  // getRole()/hasPermission() leem cookie — só existe no client. No SSR a role
+  // vem sempre vazia, o que filtra as seções adminOnly fora; no client ela já
+  // chega preenchida no primeiro paint, e o React acusava mismatch de
+  // hidratação (forçando remount da árvore inteira = flash em toda navegação).
+  // Mesmo cuidado que já existia pro `collapsed` logo abaixo, só que faltava
+  // aqui: força o primeiro render do client a bater com o do server.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+  const role = mounted ? getRole() : ''
   const isAdmin = role === 'Admin'
+  // hasPermission() importado também lê cookie direto — mesmo problema do
+  // isAdmin acima, então passa pelo mesmo guard de `mounted`.
+  const checkPerm = (perm: string | null) => perm === null || (mounted && hasPermission(perm))
 
   return (
     <nav className="flex-1 flex flex-col gap-1 px-3 pb-6 overflow-y-auto">
       {sections.map(({ label, items, adminOnly }) => {
         if (adminOnly && !isAdmin) return null
         const visibleItems = items.filter(({ perm, href }) =>
-          (perm === null || hasPermission(perm))
+          checkPerm(perm)
           && (href !== '/admin/fiscal' || enabledModules.includes('fiscal'))
           && (href !== '/admin/reservas' || enabledModules.includes('estoque'))
           && (href !== '/admin/eventos' || enabledModules.includes('eventos'))
@@ -355,7 +366,7 @@ export default function Sidebar() {
 
       {/* Desktop sidebar */}
       <aside className={clsx(
-        'hidden md:flex min-h-screen bg-surface-900 border-r border-surface-500 flex-col shrink-0 relative transition-[width] duration-200',
+        'hidden md:flex h-screen sticky top-0 bg-surface-900 border-r border-surface-500 flex-col shrink-0 relative transition-[width] duration-200',
         collapsed ? 'w-[76px]' : 'w-[260px]',
       )}>
         <div className={clsx('py-7 shrink-0 flex items-center gap-3', collapsed ? 'px-0 justify-center' : 'px-6')}>
