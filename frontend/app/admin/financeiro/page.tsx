@@ -759,10 +759,13 @@ export default function FinanceiroPage() {
                 </div>
               </div>
 
-              <div className={tableView === 'abc' ? 'p-4' : 'overflow-x-auto'}>
+              <div className={tableView === 'abc' ? 'p-4' : ''}>
                 {tableView === 'abc' ? (
                   <CurvaABCSection produtos={topFiltered} targetPct={targetPct} />
                 ) : tableView === 'simples' ? (
+                  <>
+                  {/* ── Desktop: tabela ── */}
+                  <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-surface-800">
                       <tr className="text-left">
@@ -804,7 +807,39 @@ export default function FinanceiroPage() {
                       })}
                     </tbody>
                   </table>
+                  </div>
+
+                  {/* ── Mobile: cards ── */}
+                  <div className="sm:hidden divide-y divide-surface-500">
+                    {topFiltered.map((p, i) => {
+                      const qtdShow     = topOrigemFilter === 'Comanda' ? p.qtdComandas : topOrigemFilter === 'PDV' ? p.qtdAvulsa : p.qtd
+                      const receitaShow = topOrigemFilter === 'Comanda' ? p.receitaComandas : topOrigemFilter === 'PDV' ? p.receitaAvulsa : p.receita
+                      return (
+                        <div key={p.nome} className="p-3 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-medium text-white text-sm truncate flex-1 min-w-0">{i + 1}. {p.nome}</p>
+                            <span className="font-mono text-emerald-400 font-bold text-sm shrink-0">{fmt(receitaShow)}</span>
+                          </div>
+                          {topOrigemFilter === 'Todos' && p.receitaComandas > 0 && p.receitaAvulsa > 0 && (
+                            <p className="text-[10px] text-gray-500 -mt-1">
+                              <span className="text-brand-400/70">{fmt(p.receitaComandas)}</span> · <span className="text-amber-400/70">{fmt(p.receitaAvulsa)}</span>
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 flex-wrap text-xs">
+                            <span className="text-[10px] bg-surface-600 text-gray-300 px-2 py-0.5 rounded-full">{p.categoria || '—'}</span>
+                            <span className="text-gray-300 font-mono font-semibold">{qtdShow}x total</span>
+                            {p.qtdComandas > 0 && <span className="text-brand-400 font-mono">{p.qtdComandas}x cmd</span>}
+                            {p.qtdAvulsa > 0 && <span className="text-amber-400 font-mono">{p.qtdAvulsa}x pdv</span>}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  </>
                 ) : (
+                  <>
+                  {/* ── Desktop: tabela ── */}
+                  <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-surface-800">
                       <tr className="text-left">
@@ -876,6 +911,69 @@ export default function FinanceiroPage() {
                       })}
                     </tbody>
                   </table>
+                  </div>
+
+                  {/* ── Mobile: cards ── */}
+                  <div className="sm:hidden divide-y divide-surface-500">
+                    {topFiltered.map((p, i) => {
+                      const qtdShow    = topOrigemFilter === 'Comanda' ? p.qtdComandas : topOrigemFilter === 'PDV' ? p.qtdAvulsa : p.qtd
+                      const recShow    = topOrigemFilter === 'Comanda' ? p.receitaComandas : topOrigemFilter === 'PDV' ? p.receitaAvulsa : p.receita
+                      const precoMedio  = qtdShow > 0 ? recShow / qtdShow : 0
+                      const custoMedio  = p.qtd > 0 ? p.custo / p.qtd : 0
+                      const margemAtual = precoMedio > 0 && custoMedio > 0
+                        ? ((precoMedio - custoMedio) / precoMedio) * 100
+                        : null
+                      const precoSugerido = custoMedio > 0 ? custoMedio / (1 - targetPct / 100) : null
+                      const diff = precoSugerido !== null ? precoSugerido - precoMedio : null
+                      return (
+                        <div key={p.nome} className="p-3 space-y-2">
+                          <p className="font-medium text-white text-sm truncate">{i + 1}. {p.nome}</p>
+                          <div className="flex items-center gap-2 flex-wrap text-[10px]">
+                            <span className="bg-surface-600 text-gray-400 px-1.5 py-0.5 rounded">{p.categoria || '—'}</span>
+                            <span className="text-gray-400">{qtdShow}x</span>
+                            {p.qtdComandas > 0 && <span className="text-brand-400/70">{p.qtdComandas}x cmd</span>}
+                            {p.qtdAvulsa > 0   && <span className="text-amber-400/70">{p.qtdAvulsa}x pdv</span>}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="text-gray-500 text-[10px]">Preço médio</span>
+                              <p className="font-mono text-gray-200 font-semibold">{precoMedio > 0 ? fmt(precoMedio) : '—'}</p>
+                            </div>
+                            <div>
+                              <span className="text-gray-500 text-[10px]">Custo médio</span>
+                              <p className="font-mono text-red-400">{custoMedio > 0 ? fmt(custoMedio) : '—'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-xs pt-1 border-t border-surface-600">
+                            {margemAtual !== null ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-12 h-1.5 bg-surface-600 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${margemAtual >= targetPct ? 'bg-emerald-500' : margemAtual >= 0 ? 'bg-purple-500' : 'bg-red-500'}`}
+                                    style={{ width: `${Math.min(100, Math.abs(margemAtual))}%` }} />
+                                </div>
+                                <span className={`font-mono font-bold ${margemAtual >= targetPct ? 'text-emerald-400' : margemAtual >= 0 ? 'text-purple-400' : 'text-red-400'}`}>
+                                  {margemAtual.toFixed(0)}%
+                                </span>
+                              </div>
+                            ) : <span className="text-gray-600">—</span>}
+                            {diff !== null ? (
+                              Math.abs(diff) < 0.50 ? (
+                                <span className="flex items-center gap-1 text-emerald-400"><Minus className="w-3 h-3" /> Ok</span>
+                              ) : diff > 0 ? (
+                                <span className="flex items-center gap-1 text-red-400 font-semibold"><ArrowUp className="w-3 h-3" /> +{fmt(diff)}</span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-emerald-400"><ArrowDown className="w-3 h-3" /> {fmt(diff)}</span>
+                              )
+                            ) : <span className="text-gray-600">—</span>}
+                          </div>
+                          {precoSugerido !== null && (
+                            <p className="text-[10px] text-gray-500">Sugestão: <span className="text-brand-400 font-semibold font-mono">{fmt(precoSugerido)}</span></p>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  </>
                 )}
                 {/* Legenda */}
                 <div className="px-4 py-3 border-t border-surface-600 flex flex-wrap gap-4 text-[11px] text-gray-500">

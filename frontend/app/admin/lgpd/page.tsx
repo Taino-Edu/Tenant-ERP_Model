@@ -729,7 +729,7 @@ export default function LgpdAdminPage() {
           {!auditLoading && !auditError && auditData && (
             <>
               <div className="bg-surface-800 rounded-2xl border border-surface-500 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-surface-500 text-xs text-gray-400">
@@ -785,6 +785,35 @@ export default function LgpdAdminPage() {
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* ── Mobile: cards ── */}
+                <div className="sm:hidden divide-y divide-surface-500/50">
+                  {auditData.items.map(log => {
+                    const isFail = log.action === 'LoginFalhou'
+                    return (
+                      <div
+                        key={log.id}
+                        onClick={() => setViewingLog(log)}
+                        className={`p-4 space-y-1.5 cursor-pointer active:bg-surface-700/50 transition-colors ${isFail ? 'bg-red-500/5' : ''}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`font-medium text-xs ${isFail ? 'text-red-400' : log.action === 'LoginSucesso' ? 'text-green-400' : 'text-brand-400'}`}>
+                            {isFail ? '⚠ ' : log.action === 'LoginSucesso' ? '✓ ' : ''}{log.action}
+                          </span>
+                          <SeverityBadge severity={log.severity} />
+                        </div>
+                        <p className="text-xs text-gray-400 truncate">{summarizeAuditDetails(log.details)}</p>
+                        <div className="flex items-center justify-between gap-2 text-[10px] text-gray-500">
+                          <span>
+                            {log.actorUserName ?? <span className="italic">anônimo</span>}
+                            {' · '}{log.entityType}
+                          </span>
+                          <span className="whitespace-nowrap">{fmtDateTime(log.createdAt)}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 
