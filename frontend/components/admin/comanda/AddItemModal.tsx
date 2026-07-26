@@ -4,9 +4,10 @@ import { comandaApi, productApi, Product, ComandaDto, ProductVariant, getErrorMe
 import toast from 'react-hot-toast'
 import CameraScanner from '@/components/CameraScanner'
 import VariantPicker from '@/components/admin/VariantPicker'
-import { XCircle, Search, ScanBarcode, Camera, Loader2, Plus } from 'lucide-react'
+import { Search, ScanBarcode, Camera, Loader2, Plus } from 'lucide-react'
 import clsx from 'clsx'
 import { fmt } from './shared'
+import Modal from '@/components/admin/ui/Modal'
 
 // ── Modal: adicionar item a uma comanda ───────────────────────────────────────
 
@@ -114,15 +115,7 @@ export function AddItemModal({
         onClose={() => setCameraOpen(false)}
       />
     )}
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface-700 border border-surface-500 rounded-2xl w-full max-w-md max-h-[75vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-surface-500">
-          <h3 className="font-semibold text-white">Adicionar produto à comanda</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
-            <XCircle className="w-5 h-5" />
-          </button>
-        </div>
-
+    <Modal onClose={onClose} maxWidth="md" surface="surface-700" title="Adicionar produto à comanda" scrollable={false} className="flex flex-col max-h-[75vh]">
         {/* Tabs busca / barcode */}
         <div className="flex border-b border-surface-500">
           <button
@@ -239,8 +232,7 @@ export function AddItemModal({
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
 
     {/* Seletor de variante (tamanho/cor) */}
     {variantPickerProduct && (

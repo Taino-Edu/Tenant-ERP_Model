@@ -30,16 +30,23 @@ interface ModalProps {
   /** `max-h` + `overflow-y-auto` no painel inteiro. Desliga se o modal já
    * controla o próprio scroll interno (lista com header/footer fixos). */
   scrollable?: boolean
+  /** Pra modal que abre por cima de outro modal (ex. escolher conta de
+   * crediário durante o fechamento de comanda) — z-index maior e overlay um
+   * pouco mais escuro, senão fica indistinguível do modal de baixo. */
+  stacked?: boolean
 }
 
 /** Shell padrão de modal do admin — overlay + painel centralizado, clique fora
  * fecha. Extraído do mesmo bloco `fixed inset-0 z-50 ... bg-black/NN` que
  * estava copiado à mão em 13+ componentes (comanda/*, financeiro/*,
  * CobrancaPixModal, AuditLogDetailModal, blocos inline em várias páginas). */
-export default function Modal({ onClose, maxWidth = 'md', surface = 'surface-800', title, icon: Icon, children, className, scrollable = true }: ModalProps) {
+export default function Modal({ onClose, maxWidth = 'md', surface = 'surface-800', title, icon: Icon, children, className, scrollable = true, stacked = false }: ModalProps) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className={clsx(
+        'fixed inset-0 flex items-center justify-center p-4 backdrop-blur-sm',
+        stacked ? 'z-[70] bg-black/75' : 'z-50 bg-black/60',
+      )}
       onClick={onClose}
     >
       <div

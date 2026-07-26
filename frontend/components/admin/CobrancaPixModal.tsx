@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Loader2, X, QrCode, Copy, CheckCircle, AlertTriangle } from 'lucide-react'
 import { PixCobrancaDto } from '@/lib/api'
+import Modal from '@/components/admin/ui/Modal'
 
 const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 
@@ -83,8 +84,7 @@ export function CobrancaPixModal({ clienteNome, gerar, verificar, onClose, onSuc
   }, [pix])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
+    <Modal onClose={onClose} maxWidth="md">
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
           <div>
             <h2 className="font-bold text-white text-lg flex items-center gap-2">
@@ -170,7 +170,6 @@ export function CobrancaPixModal({ clienteNome, gerar, verificar, onClose, onSuc
             }
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

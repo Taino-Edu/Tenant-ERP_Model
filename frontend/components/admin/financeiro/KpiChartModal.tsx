@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { fmtShort, type Preset } from './financeiro-shared'
+import Modal from '@/components/admin/ui/Modal'
 
 export interface ChartPoint { label: string; value: number }
 
@@ -42,11 +43,7 @@ export function KpiChartModal({
   const barW   = Math.max(6, chartW / (points.length || 1) - 3)
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto shadow-2xl">
+    <Modal onClose={onClose} maxWidth="lg">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600 sticky top-0 bg-surface-800">
           <h3 className="font-semibold text-white">{title}</h3>
@@ -116,8 +113,7 @@ export function KpiChartModal({
           {/* Extra (breakdown) */}
           {extra}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

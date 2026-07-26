@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { ComandaDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import { CheckCircle, X, Receipt } from 'lucide-react'
 import { fmt, printComandaReceiptPDF } from './shared'
+import Modal from '@/components/admin/ui/Modal'
 
 /** Resumo da comanda recém-fechada + botão de imprimir comprovante — some
  * sozinho, não bloqueia nada; só existe pra sempre sobrar algum papel/PDF
@@ -23,11 +24,9 @@ export function ComandaReceiptModal({ comanda, siteName, onClose }: {
   }, [onClose])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-2xl">
+    <Modal onClose={onClose} maxWidth="sm">
+        {/* Ícone verde (sucesso) não cabe no cabeçalho padrão do Modal, que é
+            sempre na cor de marca — mantido como cabeçalho próprio. */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600 sticky top-0 bg-surface-800">
           <h3 className="font-semibold text-white flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-emerald-400" /> Comanda fechada
@@ -62,7 +61,6 @@ export function ComandaReceiptModal({ comanda, siteName, onClose }: {
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

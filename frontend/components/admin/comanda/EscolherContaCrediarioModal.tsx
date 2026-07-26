@@ -4,6 +4,7 @@ import { CrediariosDto } from '@/lib/api'
 import { CreditCard, X, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
 import { fmt } from './shared'
+import Modal from '@/components/admin/ui/Modal'
 
 // ── Modal: escolher conta de crediário ───────────────────────────────────────
 
@@ -33,11 +34,7 @@ export function EscolherContaCrediarioModal({
   }, [onCancel])
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
-      onClick={e => { if (e.target === e.currentTarget) onCancel() }}
-    >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl">
+    <Modal onClose={onCancel} maxWidth="md" stacked>
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-surface-600 sticky top-0 bg-surface-800">
           <div>
@@ -129,7 +126,6 @@ export function EscolherContaCrediarioModal({
             <CheckCircle className="w-4 h-4" /> Confirmar
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

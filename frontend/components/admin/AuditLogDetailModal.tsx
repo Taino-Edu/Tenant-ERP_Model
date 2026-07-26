@@ -10,6 +10,7 @@ import { X, Monitor, Smartphone, MapPin, Hash, Copy, Check, Radio, Cpu } from 'l
 import { AuditLogDto, PlatformAuditLogDto } from '@/lib/api'
 import { parseAuditDetails, fieldLabel, formatAuditValue } from '@/lib/auditFormat'
 import SeverityBadge from './SeverityBadge'
+import Modal from '@/components/admin/ui/Modal'
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -52,11 +53,7 @@ export function AuditLogDetailModal({
   const hasContext = !!(ua?.browser || ua?.os || geo?.city || geo?.country)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
-      <div
-        className="bg-surface-800 rounded-2xl shadow-2xl border border-surface-500 w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
+    <Modal onClose={onClose} maxWidth="lg" className="p-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-lg font-bold text-white">{log.action}</h3>
@@ -166,7 +163,6 @@ export function AuditLogDetailModal({
             </pre>
           </details>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }

@@ -5,6 +5,7 @@ import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { CreditCard, QrCode, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
 import { SECOND_PAYMENT_METHODS } from './shared'
+import Modal from '@/components/admin/ui/Modal'
 
 // ── Modal: selecionar pagamento ao fechar comanda ────────────────────────────
 
@@ -63,8 +64,7 @@ export function CloseComandaModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
-      <div className="bg-surface-700 border border-surface-500 rounded-2xl w-full max-w-sm p-6 space-y-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+    <Modal onClose={onCancel} maxWidth="sm" surface="surface-700" scrollable={false} className="p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <div>
           <h3 className="font-semibold text-white text-lg">Fechar comanda</h3>
           <p className="text-gray-400 text-sm mt-1">
@@ -323,7 +323,6 @@ export function CloseComandaModal({
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

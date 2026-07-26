@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { FinanceiroDto } from '@/lib/api'
 import { fmt } from './financeiro-shared'
+import Modal from '@/components/admin/ui/Modal'
 
 export function DayDetailModal({ day, onClose }: {
   day: FinanceiroDto['diaDia'][0]
@@ -35,11 +36,7 @@ export function DayDetailModal({ day, onClose }: {
   })()
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto shadow-2xl">
+    <Modal onClose={onClose} maxWidth="sm">
         {/* Header */}
         <div className="px-5 py-4 border-b border-surface-600 bg-gradient-to-r from-brand-600/10 to-transparent flex items-center justify-between sticky top-0">
           <div>
@@ -125,8 +122,7 @@ export function DayDetailModal({ day, onClose }: {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
