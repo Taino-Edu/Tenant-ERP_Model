@@ -5,8 +5,9 @@ import { supportApi, SupportTicketDto, SupportTicketStatus, getErrorMessage } fr
 import PageHeader from '@/components/admin/PageHeader'
 import ImageUpload from '@/components/admin/ImageUpload'
 import toast from 'react-hot-toast'
-import { LifeBuoy, Loader2, Plus, X } from 'lucide-react'
+import { LifeBuoy, Loader2, Plus } from 'lucide-react'
 import clsx from 'clsx'
+import Modal from '@/components/admin/ui/Modal'
 
 const STATUS_STYLES: Record<SupportTicketStatus, string> = {
   Aberto:      'bg-red-500/10 text-red-400 border-red-500/30',
@@ -41,14 +42,7 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
-          <h2 className="font-bold text-white text-lg flex items-center gap-2">
-            <LifeBuoy className="w-5 h-5 text-brand-400" /> Novo chamado
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-        </div>
+    <Modal onClose={onClose} closeOnBackdrop={false} title="Novo chamado" icon={LifeBuoy}>
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <div>
             <label className="label">Assunto *</label>
@@ -66,8 +60,7 @@ function NewTicketModal({ onClose, onCreated }: { onClose: () => void; onCreated
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

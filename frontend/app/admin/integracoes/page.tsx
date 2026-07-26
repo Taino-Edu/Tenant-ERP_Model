@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { api, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
+import Modal from '@/components/admin/ui/Modal'
 import {
   Plug, CheckCircle, XCircle, Settings, Loader2, RefreshCw,
   Upload, Info, AlertTriangle, ExternalLink, X, Save,
@@ -339,8 +340,7 @@ export default function IntegracoesPage() {
 
       {/* Modal de configuração */}
       {configModal && cfgInfo && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-800 rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
+        <Modal onClose={() => setConfigModal(null)} closeOnBackdrop={false} className="p-6 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h2 className="font-black text-white">{cfgInfo.icon} {cfgInfo.label}</h2>
               <button onClick={() => setConfigModal(null)} className="text-gray-400 hover:text-white">
@@ -451,8 +451,7 @@ export default function IntegracoesPage() {
                 Salvar
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { api, productApi, waitListApi, Product, WaitListEntry, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
+import Modal from '@/components/admin/ui/Modal'
 import {
   Clock, CheckCircle, XCircle, Package, User as UserIcon,
   ShoppingBag, LayoutList, RefreshCw, Loader2, ChevronLeft, ChevronRight,
@@ -582,8 +583,7 @@ export default function ReservasPage() {
 
       {/* Modal de Homologação — Lista de Espera */}
       {wlModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-800 rounded-2xl w-full max-w-md p-6 flex flex-col gap-5">
+        <Modal onClose={() => setWlModal(null)} closeOnBackdrop={false} className="p-6 flex flex-col gap-5">
             <div>
               <h2 className="text-lg font-black text-white">Vender da fila de espera</h2>
               <p className="text-sm text-gray-400 mt-0.5">
@@ -651,14 +651,12 @@ export default function ReservasPage() {
                 {wlMode === 'pdv' ? 'Ir para o PDV' : 'Adicionar à Comanda'}
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal de Homologação */}
       {homModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-800 rounded-2xl w-full max-w-md p-6 flex flex-col gap-5">
+        <Modal onClose={() => setHomModal(null)} closeOnBackdrop={false} className="p-6 flex flex-col gap-5">
             <div>
               <h2 className="text-lg font-black text-white">Homologar reserva</h2>
               <p className="text-sm text-gray-400 mt-0.5">
@@ -754,8 +752,7 @@ export default function ReservasPage() {
                 Confirmar
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

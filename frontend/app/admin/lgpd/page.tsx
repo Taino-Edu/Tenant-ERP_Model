@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
+import Modal from '@/components/admin/ui/Modal'
 
 const EXPORTS = [
   { key: 'produtos',  label: 'Produtos',           desc: 'Catálogo completo (ativos e inativos)', icon: Package },
@@ -293,8 +294,7 @@ function RespondModal({
   const isReadOnly = request.status === 'Concluido' || request.status === 'Negado'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="bg-surface-800 rounded-2xl shadow-2xl border border-surface-500 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+    <Modal onClose={onClose} closeOnBackdrop={false} maxWidth="lg" scrollable={false} className="p-6 max-h-[90vh] overflow-y-auto">
         <h3 className="text-lg font-bold text-white mb-1">
           {isReadOnly ? 'Ver Resposta' : 'Responder Solicitação'}
         </h3>
@@ -412,8 +412,7 @@ function RespondModal({
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

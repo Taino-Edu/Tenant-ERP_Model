@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { api, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
+import Modal from '@/components/admin/ui/Modal'
 import {
   Wallet, Plus, Upload, RefreshCw, Loader2,
   ChevronLeft, ChevronRight, CheckCircle, Clock,
@@ -145,8 +146,7 @@ function TransactionModal({ initial, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-800 rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
+    <Modal onClose={onClose} closeOnBackdrop={false} className="p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="font-black text-white">{initial ? 'Editar lançamento' : 'Novo lançamento'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
@@ -212,8 +212,7 @@ function TransactionModal({ initial, onClose, onSaved }: {
             Salvar
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

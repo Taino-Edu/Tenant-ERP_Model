@@ -2,10 +2,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { eventosApi, EventoDto, EventoEntradaDto, EventoStatus, SaveEventoRequest, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
+import Modal from '@/components/admin/ui/Modal'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 import {
-  PartyPopper, Plus, Loader2, X, Calendar, Users, DollarSign, Check, Ban,
+  PartyPopper, Plus, Loader2, Calendar, Users, DollarSign, Check, Ban,
   Ticket, ChevronLeft,
 } from 'lucide-react'
 
@@ -80,14 +81,7 @@ function EventoFormModal({ evento, onClose, onSaved }: { evento: EventoDto | nul
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
-          <h2 className="font-bold text-white text-lg flex items-center gap-2">
-            <PartyPopper className="w-5 h-5 text-brand-400" /> {evento ? 'Editar Evento' : 'Novo Evento'}
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-        </div>
+    <Modal onClose={onClose} closeOnBackdrop={false} title={evento ? 'Editar Evento' : 'Novo Evento'} icon={PartyPopper}>
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <div>
             <label className="label">Nome *</label>
@@ -127,8 +121,7 @@ function EventoFormModal({ evento, onClose, onSaved }: { evento: EventoDto | nul
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

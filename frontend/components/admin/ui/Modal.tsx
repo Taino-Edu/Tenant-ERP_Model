@@ -34,20 +34,24 @@ interface ModalProps {
    * crediário durante o fechamento de comanda) — z-index maior e overlay um
    * pouco mais escuro, senão fica indistinguível do modal de baixo. */
   stacked?: boolean
+  /** Desliga fechar ao clicar fora — pros formulários de cadastro
+   * (usuarios/page.tsx) onde um clique sem querer no fundo não pode derrubar
+   * dado já digitado. Só X/Cancelar fecham nesse caso. */
+  closeOnBackdrop?: boolean
 }
 
 /** Shell padrão de modal do admin — overlay + painel centralizado, clique fora
  * fecha. Extraído do mesmo bloco `fixed inset-0 z-50 ... bg-black/NN` que
  * estava copiado à mão em 13+ componentes (comanda/*, financeiro/*,
  * CobrancaPixModal, AuditLogDetailModal, blocos inline em várias páginas). */
-export default function Modal({ onClose, maxWidth = 'md', surface = 'surface-800', title, icon: Icon, children, className, scrollable = true, stacked = false }: ModalProps) {
+export default function Modal({ onClose, maxWidth = 'md', surface = 'surface-800', title, icon: Icon, children, className, scrollable = true, stacked = false, closeOnBackdrop = true }: ModalProps) {
   return (
     <div
       className={clsx(
         'fixed inset-0 flex items-center justify-center p-4 backdrop-blur-sm',
         stacked ? 'z-[70] bg-black/75' : 'z-50 bg-black/60',
       )}
-      onClick={onClose}
+      onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
         className={clsx(

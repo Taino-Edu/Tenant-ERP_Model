@@ -4,6 +4,7 @@ import { userApi, crediarioApi, analyticsApi, perfisApi, CrediariosDto, UserSumm
 import toast from 'react-hot-toast'
 import { Users, Search, Star, Plus, CreditCard, Clock, AlertCircle, Loader2, Wallet, Minus, UserPlus, KeyRound, X, UserX, History, ShoppingBag, ShoppingCart, ChevronDown, ChevronUp, ChevronLeft, TrendingUp, UserCog, Shield } from 'lucide-react'
 import PageHeader from '@/components/admin/PageHeader'
+import Modal from '@/components/admin/ui/Modal'
 import Link from 'next/link'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
@@ -64,14 +65,7 @@ function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
-          <h2 className="font-bold text-white text-lg flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-brand-400" /> Novo Cliente
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-        </div>
+    <Modal onClose={onClose} closeOnBackdrop={false} title="Novo Cliente" icon={UserPlus}>
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <div>
             <label className="label">Nome completo *</label>
@@ -103,8 +97,7 @@ function NovoClienteModal({ onClose, onSuccess }: { onClose: () => void; onSucce
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -144,14 +137,7 @@ function NovoOperadorModal({ onClose, onSuccess }: { onClose: () => void; onSucc
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
-          <h2 className="font-bold text-white text-lg flex items-center gap-2">
-            <UserCog className="w-5 h-5 text-brand-400" /> Novo Operador
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-        </div>
+    <Modal onClose={onClose} closeOnBackdrop={false} title="Novo Operador" icon={UserCog}>
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <div>
             <label className="label">Nome completo *</label>
@@ -184,8 +170,7 @@ function NovoOperadorModal({ onClose, onSuccess }: { onClose: () => void; onSucc
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -243,15 +228,7 @@ function EditarOperadorModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
-          <h2 className="font-bold text-white text-lg flex items-center gap-2">
-            <UserCog className="w-5 h-5 text-brand-400" /> Editar Operador
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-        </div>
-
+    <Modal onClose={onClose} closeOnBackdrop={false} title="Editar Operador" icon={UserCog}>
         <div className="px-6 py-4 space-y-4">
           <div>
             <p className="text-white font-semibold">{op.name}</p>
@@ -324,8 +301,7 @@ function EditarOperadorModal({
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -352,14 +328,7 @@ function RedefinirSenhaModal({ user, onClose }: { user: UserSummary; onClose: ()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-sm shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-500">
-          <h2 className="font-bold text-white text-lg flex items-center gap-2">
-            <KeyRound className="w-5 h-5 text-brand-400" /> Redefinir Senha
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-white"><X className="w-5 h-5" /></button>
-        </div>
+    <Modal onClose={onClose} closeOnBackdrop={false} maxWidth="sm" title="Redefinir Senha" icon={KeyRound}>
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
           <p className="text-sm text-gray-400">Definindo nova senha para <strong className="text-white">{user.name}</strong>.</p>
           <div>
@@ -377,8 +346,7 @@ function RedefinirSenhaModal({ user, onClose }: { user: UserSummary; onClose: ()
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   )
 }
 

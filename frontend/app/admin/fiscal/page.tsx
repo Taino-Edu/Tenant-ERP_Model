@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { fiscalApi, FiscalConfigDto, FiscalSaudeDto, IbptStatusDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
+import Modal from '@/components/admin/ui/Modal'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
   Plus, Trash2, Download, ShieldCheck, Star, RefreshCw, Ban, ScrollText, Printer,
@@ -1319,8 +1320,7 @@ export default function FiscalPage() {
 
       {/* Modal de cancelamento */}
       {cancelModalId && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface-800 rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
+        <Modal onClose={() => { setCancelModalId(null); setCancelJustificativa('') }} closeOnBackdrop={false} className="p-6 flex flex-col gap-4">
             <h2 className="font-black text-white">Cancelar NFC-e</h2>
             <p className="text-sm text-gray-400">
               Só é possível cancelar dentro de 30 minutos após a autorização. Estoque, pontos, cashback e crediário não pago serão estornados; dinheiro, Pix e cartão exigem confirmação manual do reembolso.
@@ -1342,8 +1342,7 @@ export default function FiscalPage() {
                 Confirmar cancelamento
               </button>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )
