@@ -1,8 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { userApi, UserSummary } from '@/lib/api'
-import { FolderOpen, XCircle, Search, Loader2, CheckCircle } from 'lucide-react'
+import { FolderOpen, Search, Loader2, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
+import Modal from '@/components/admin/ui/Modal'
+import Button from '@/components/admin/ui/Button'
 
 // ── Modal: Admin abre comanda por um cliente ──────────────────────────────────
 
@@ -38,15 +40,7 @@ export function AdminOpenModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onCancel}>
-      <div className="bg-surface-700 border border-surface-500 rounded-2xl w-full max-w-sm flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-surface-500">
-          <h3 className="font-semibold text-white flex items-center gap-2">
-            <FolderOpen className="w-4 h-4 text-brand-400" /> Abrir Comanda
-          </h3>
-          <button onClick={onCancel} className="text-gray-500 hover:text-gray-300"><XCircle className="w-5 h-5" /></button>
-        </div>
-
+    <Modal onClose={onCancel} maxWidth="sm" surface="surface-700" title="Abrir Comanda" icon={FolderOpen} scrollable={false} className="flex flex-col max-h-[80vh]">
         <div className="p-3 border-b border-surface-500">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -101,17 +95,12 @@ export function AdminOpenModal({
                 onChange={e => setTable(e.target.value)}
               />
             </div>
-            <button
-              onClick={handleConfirm}
-              disabled={saving}
-              className="btn-primary w-full justify-center"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}
+            <Button onClick={handleConfirm} loading={saving} full>
+              {!saving && <FolderOpen className="w-4 h-4" />}
               Abrir para {selected.name.split(' ')[0]}
-            </button>
+            </Button>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }

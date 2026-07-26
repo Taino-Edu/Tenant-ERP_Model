@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { variantApi, ProductVariant } from '@/lib/api'
 import { X, Package } from 'lucide-react'
 import clsx from 'clsx'
+import Modal from '@/components/admin/ui/Modal'
 
 interface Props {
   productId: string
@@ -56,15 +57,14 @@ export default function VariantPicker({ productId, productName, onConfirm, onClo
   const flatList = !hasColors
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-      <div className="bg-[var(--surface)] rounded-2xl w-full max-w-sm shadow-2xl border border-[var(--border)]">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
+    <Modal onClose={onClose} maxWidth="sm">
+        {/* Header — título de duas linhas, não cabe no cabeçalho padrão do Modal */}
+        <div className="flex items-center justify-between p-4 border-b border-surface-500">
           <div>
             <p className="text-xs text-[var(--text-muted)]">Selecionar variante</p>
             <h3 className="font-semibold text-[var(--text-primary)] truncate max-w-[240px]">{productName}</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[var(--surface-600)] text-[var(--text-muted)]">
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-600 text-[var(--text-muted)]">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -95,8 +95,8 @@ export default function VariantPicker({ productId, productName, onConfirm, onClo
                             selColor === color
                               ? 'bg-violet-600 border-violet-500 text-white'
                               : hasStk
-                              ? 'border-[var(--border)] text-[var(--text-primary)] hover:border-violet-500'
-                              : 'border-[var(--border)] text-[var(--text-muted)] opacity-40 cursor-not-allowed line-through'
+                              ? 'border-surface-500 text-[var(--text-primary)] hover:border-violet-500'
+                              : 'border-surface-500 text-[var(--text-muted)] opacity-40 cursor-not-allowed line-through'
                           )}
                         >
                           {color}
@@ -127,8 +127,8 @@ export default function VariantPicker({ productId, productName, onConfirm, onClo
                             selVariant?.id === v.id
                               ? 'bg-violet-600 border-violet-500 text-white'
                               : inStock
-                              ? 'border-[var(--border)] text-[var(--text-primary)] hover:border-violet-500'
-                              : 'border-[var(--border)] text-[var(--text-muted)] opacity-40 cursor-not-allowed'
+                              ? 'border-surface-500 text-[var(--text-primary)] hover:border-violet-500'
+                              : 'border-surface-500 text-[var(--text-muted)] opacity-40 cursor-not-allowed'
                           )}
                           title={inStock ? `${v.stockQuantity} em estoque` : 'Sem estoque'}
                         >
@@ -162,8 +162,8 @@ export default function VariantPicker({ productId, productName, onConfirm, onClo
                             selVariant?.id === v.id
                               ? 'bg-violet-600 border-violet-500 text-white'
                               : inStock
-                              ? 'border-[var(--border)] text-[var(--text-primary)] hover:border-violet-500'
-                              : 'border-[var(--border)] text-[var(--text-muted)] opacity-40 cursor-not-allowed line-through'
+                              ? 'border-surface-500 text-[var(--text-primary)] hover:border-violet-500'
+                              : 'border-surface-500 text-[var(--text-muted)] opacity-40 cursor-not-allowed line-through'
                           )}
                         >
                           {v.color}
@@ -185,7 +185,7 @@ export default function VariantPicker({ productId, productName, onConfirm, onClo
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 p-4 border-t border-[var(--border)]">
+        <div className="flex gap-2 p-4 border-t border-surface-500">
           <button onClick={onClose} className="flex-1 btn-secondary py-2 text-sm">
             Cancelar
           </button>
@@ -197,7 +197,6 @@ export default function VariantPicker({ productId, productName, onConfirm, onClo
             Confirmar
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   )
 }

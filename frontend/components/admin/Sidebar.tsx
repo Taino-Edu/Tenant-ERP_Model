@@ -148,7 +148,7 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
                   onClick={onClose}
                   title={collapsed ? itemLabel : undefined}
                   className={clsx(
-                    'flex items-center w-full py-3 rounded-xl font-medium text-sm transition-all duration-150 group nav-item',
+                    'flex items-center w-full py-3 rounded-xl font-medium text-sm transition-all duration-150 group',
                     collapsed ? 'justify-center px-0' : 'gap-4 px-4',
                     active ? 'nav-item-active' : 'text-gray-500 hover:bg-surface-700 hover:text-white'
                   )}

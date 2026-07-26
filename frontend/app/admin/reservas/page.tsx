@@ -74,7 +74,11 @@ function progressPct(reservedAt: string, expiresAt: string) {
   return Math.min(100, Math.max(0, (elapsed / total) * 100))
 }
 
-function StatCard({ icon, label, value, tint }: {
+// Nome distinto de propósito: existe um StatCard compartilhado em
+// components/admin/StatCard.tsx com API diferente (tone fixo, sem "tint"
+// arbitrário) — essa versão local usa cores (azul/roxo) fora da paleta de
+// tone do componente compartilhado, então não dava pra só trocar pelo import.
+function ReservaStatCard({ icon, label, value, tint }: {
   icon: React.ReactNode; label: string; value: number | string; tint: string
 }) {
   return (
@@ -303,28 +307,28 @@ export default function ReservasPage() {
       <Toaster />
 
       {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="p-2 rounded-xl bg-brand-500/10">
+      <div className="flex items-center gap-3 flex-wrap mb-5">
+        <div className="p-2 rounded-xl bg-brand-500/10 shrink-0">
           <LayoutList className="w-5 h-5 text-brand-400" />
         </div>
-        <div>
+        <div className="min-w-0">
           <h1 className="text-xl font-black text-white">Pré-vendas</h1>
           <p className="text-xs text-gray-500 mt-0.5">Reservas antecipadas e fila de espera de produtos</p>
         </div>
         <button
           onClick={refreshAll}
-          className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-500 transition-colors text-gray-400">
+          className="ml-auto p-2 rounded-xl bg-surface-700 hover:bg-surface-500 transition-colors text-gray-400 shrink-0">
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
 
       {/* Faixa de stats */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <StatCard icon={<Hourglass className="w-4.5 h-4.5 text-blue-400" />} tint="bg-blue-500/10"
+        <ReservaStatCard icon={<Hourglass className="w-4.5 h-4.5 text-blue-400" />} tint="bg-blue-500/10"
           label="Aguardando" value={activeCount} />
-        <StatCard icon={<Users className="w-4.5 h-4.5 text-purple-400" />} tint="bg-purple-500/10"
+        <ReservaStatCard icon={<Users className="w-4.5 h-4.5 text-purple-400" />} tint="bg-purple-500/10"
           label="Em fila" value={wlLoading ? '…' : totalNaFila} />
-        <StatCard icon={<Sparkles className="w-4.5 h-4.5 text-amber-400" />} tint="bg-amber-500/10"
+        <ReservaStatCard icon={<Sparkles className="w-4.5 h-4.5 text-amber-400" />} tint="bg-amber-500/10"
           label="Pré-vendas" value={wlLoading ? '…' : wlProducts.length} />
       </div>
 
