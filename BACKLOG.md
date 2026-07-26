@@ -1,5 +1,53 @@
 # Backlog — Tenant-ERP
 
+## Design system + responsividade do admin — 2026-07-25/26 (em andamento)
+
+Pedido do usuário: componentizar/padronizar o admin, mais opções de
+personalização de site, e responsividade real (nunca ficar sem visão ou
+quebrado em nenhum tamanho de tela — mobile pode reorganizar o layout, mas
+mantendo a ordem lógica). Prioridade combinada: base do design system +
+responsividade primeiro, personalização de site fica pra depois.
+
+**Feito:**
+- `components/admin/ui/`: `Modal`, `Button`, `EmptyState`, `Spinner`, `Badge`
+  — extraídos de padrões duplicados (auditoria achou 13+ shells de modal
+  copiados à mão, ~20 usos crus de `Loader2`, ~15 blocos de empty state,
+  `.btn-*`/`.badge-*` sem componente React por trás). Só `ConfirmModal` e
+  `AdminOpenModal` (comanda) foram migrados como exemplo — resto das ~28
+  páginas ainda usa HTML/Tailwind cru.
+- 3 bugs pontuais: `VariantPicker.tsx` usava tokens CSS inválidos
+  (`var(--surface)`/`var(--border)`, provável causa de modal sem fundo/borda
+  visível); `.nav-item` classe órfã no `Sidebar.tsx`; `StatCard` duplicado
+  com nome colidindo em `reservas/page.tsx` (renomeado `ReservaStatCard`).
+- Responsividade: header do `qrcodes` sem wrap, tabela de categorias
+  (`estoque`) e de solicitações (`lgpd`) sem fallback mobile (aplicado
+  `hidden sm:block`/`sm:hidden`, copiando o padrão que a tabela de produtos
+  do próprio `estoque` já tinha), headers de `perfis`/`reservas` sem wrap,
+  `AiChatWidget` com largura fixa que podia estourar em ~320px, grid fixo de
+  3 colunas no mini-dashboard fiscal.
+
+**Não verificado visualmente em mobile real** — `resize_window` (ferramenta
+de automação de browser) não teve efeito nesse ambiente (Wayland/GNOME não
+aplicou o resize, confirmado via `window.innerWidth` parado em 1366 mesmo
+depois do "sucesso" reportado pela tool). Os padrões aplicados são cópia
+exata de implementações já existentes e funcionando no mesmo repo — mas vale
+o usuário conferir no celular de verdade assim que puder.
+
+**Falta (registrado, não começado):**
+- Migrar as ~28 páginas restantes pros componentes novos (`Modal`/`Button`/
+  `EmptyState`/`Spinner`/`Badge`) — hoje só 2 modais usam `Modal`.
+- Tabelas de `financeiro/page.tsx` (2, com cálculo de margem/sugestão de
+  preço) e a trilha de auditoria do `lgpd/page.tsx` — deferidas por
+  complexidade e risco de mexer em exibição de dado financeiro sob prazo
+  apertado. Já têm `overflow-x-auto`, não quebram, só não têm card mobile.
+- Sistema de variantes tipado (CVA ou equivalente) — hoje `Button`/`Badge`
+  usam `Record<Tone, string>` na mão, funciona mas não escala tão bem quanto
+  CVA pra combinações tamanho×variante.
+- Mais opções de personalização de site pro lojista (pedido original, ainda
+  nem começado — perguntar escopo específico antes de atacar).
+- Adoção de `StatCard`/`PageHeader` (já existem, adoção de ~35% das páginas)
+  nas páginas que ainda escrevem header/card à mão.
+
 ## Pacote fiscal de homologação — 2026-07-21
 
 - **CNPJ vai mudar de contrato/modelagem.** Não criar constraint, índice funcional ou
