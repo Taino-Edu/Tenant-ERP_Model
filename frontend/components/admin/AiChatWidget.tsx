@@ -252,7 +252,7 @@ export default function AiChatWidget() {
     <>
       {/* ── Painel ─────────────────────────────────────────────────────────── */}
       {open && (
-        <div className="fixed z-50 flex flex-col w-[340px] sm:w-[400px] rounded-2xl shadow-2xl overflow-hidden"
+        <div className="fixed z-50 flex flex-col w-[340px] sm:w-[400px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl overflow-hidden"
              style={{ ...panelStyle, background: '#111117', border: '1px solid #303040', maxHeight: '72vh' }}>
 
           {/* Cabeçalho */}

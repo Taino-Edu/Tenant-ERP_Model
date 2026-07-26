@@ -664,7 +664,7 @@ export default function FiscalPage() {
           </div>
 
           {/* Últimas 24h */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <div className="rounded-lg bg-white/5 p-3 text-center">
               <div className="text-lg font-black text-green-400">{saude.notas.autorizadas24h}</div>
               <div className="text-xs text-gray-500">Autorizadas 24h</div>

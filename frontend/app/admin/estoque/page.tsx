@@ -1144,7 +1144,9 @@ function EstoqueContent() {
             <p className="text-gray-400 text-sm mt-1">Crie categorias para organizar os produtos</p>
           </div>
         ) : (
-          <div className="card p-0 overflow-hidden">
+          <>
+          {/* ── Desktop: tabela ── */}
+          <div className="hidden sm:block card p-0 overflow-hidden">
             <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[460px]">
               <thead className="bg-surface-800 border-b border-surface-500">
@@ -1196,6 +1198,41 @@ function EstoqueContent() {
             </table>
             </div>
           </div>
+
+          {/* ── Mobile: cards ── */}
+          <div className="sm:hidden space-y-2">
+            {categories.map(c => (
+              <div key={c.id} className="card p-3 flex items-center gap-3">
+                <span className="text-2xl shrink-0">{c.emoji ?? '—'}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-white text-sm truncate">{c.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={c.isActive
+                      ? 'badge bg-accent-green/10 text-accent-green border-accent-green/30 text-[10px]'
+                      : 'badge bg-surface-600 text-gray-500 border-surface-500 text-[10px]'}>
+                      {c.isActive ? 'Ativa' : 'Inativa'}
+                    </span>
+                    <span className="text-[10px] text-gray-500">Ordem {c.displayOrder}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => setCategoriaModal(c)}
+                    className="p-1.5 rounded hover:bg-brand-600/20 text-gray-500 hover:text-brand-400 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCategoria(c.id, c.name)}
+                    className="p-1.5 rounded hover:bg-red-600/20 text-gray-500 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
         )
       )}
 

@@ -543,7 +543,8 @@ export default function LgpdAdminPage() {
                   Nenhuma solicitação encontrada.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-surface-500 text-xs text-gray-400">
@@ -627,6 +628,59 @@ export default function LgpdAdminPage() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* ── Mobile: cards ── */}
+                <div className="sm:hidden divide-y divide-surface-500/50">
+                  {requests.map(req => (
+                    <div key={req.id} className={`p-4 space-y-2 ${req.isOverdue ? 'bg-red-900/10' : req.isUrgent ? 'bg-yellow-900/10' : ''}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            {req.isOverdue && <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" aria-label="Prazo vencido" />}
+                            {!req.isOverdue && req.isUrgent && <AlertTriangle className="w-3.5 h-3.5 text-yellow-400 shrink-0" aria-label="Prazo urgente" />}
+                            <span className="font-mono text-xs text-gray-400 truncate">{req.id}</span>
+                          </div>
+                          <p className="text-white font-medium text-sm mt-0.5 truncate">{req.requesterName}</p>
+                          <p className="text-xs text-gray-400 truncate">{req.requesterEmail}</p>
+                        </div>
+                        <StatusBadge status={req.status} />
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-300">{req.requestType}</span>
+                        <span className={req.isOverdue ? 'text-red-400 font-medium' : req.isUrgent ? 'text-yellow-400 font-medium' : 'text-gray-400'}>
+                          Prazo: {fmtDate(req.deadline)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 pt-1">
+                        <button
+                          onClick={() => setResponding(req)}
+                          className="text-xs text-brand-400 hover:text-brand-300 font-medium transition-colors"
+                        >
+                          {req.status === 'Concluido' || req.status === 'Negado' ? 'Ver resposta' : 'Responder'}
+                        </button>
+                        {(req.requestType === 'Acesso' || req.requestType === 'Portabilidade') && (
+                          <Link
+                            href={`/admin/lgpd/documento/${req.id}`}
+                            target="_blank"
+                            className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                          >
+                            <FileDown className="w-3 h-3" /> Gerar relatório
+                          </Link>
+                        )}
+                        {req.temAnexo && (
+                          <a
+                            href={`/api/lgpd/requests/${req.id}/attachment`}
+                            target="_blank"
+                            className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-300 transition-colors"
+                          >
+                            <Paperclip className="w-3 h-3" /> {req.anexoNome ?? 'Anexo'}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                </>
               )}
             </div>
           )}
