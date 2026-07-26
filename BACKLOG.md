@@ -1,6 +1,6 @@
 # Backlog — Tenant-ERP
 
-## Design system + responsividade do admin — 2026-07-25/26 (em andamento)
+## Design system + responsividade do admin — 2026-07-25/26 (2 rodadas feitas)
 
 Pedido do usuário: componentizar/padronizar o admin, mais opções de
 personalização de site, e responsividade real (nunca ficar sem visão ou
@@ -8,23 +8,35 @@ quebrado em nenhum tamanho de tela — mobile pode reorganizar o layout, mas
 mantendo a ordem lógica). Prioridade combinada: base do design system +
 responsividade primeiro, personalização de site fica pra depois.
 
-**Feito:**
+**Feito (rodada 1, 25/07):**
 - `components/admin/ui/`: `Modal`, `Button`, `EmptyState`, `Spinner`, `Badge`
   — extraídos de padrões duplicados (auditoria achou 13+ shells de modal
   copiados à mão, ~20 usos crus de `Loader2`, ~15 blocos de empty state,
-  `.btn-*`/`.badge-*` sem componente React por trás). Só `ConfirmModal` e
-  `AdminOpenModal` (comanda) foram migrados como exemplo — resto das ~28
-  páginas ainda usa HTML/Tailwind cru.
+  `.btn-*`/`.badge-*` sem componente React por trás).
 - 3 bugs pontuais: `VariantPicker.tsx` usava tokens CSS inválidos
   (`var(--surface)`/`var(--border)`, provável causa de modal sem fundo/borda
   visível); `.nav-item` classe órfã no `Sidebar.tsx`; `StatCard` duplicado
   com nome colidindo em `reservas/page.tsx` (renomeado `ReservaStatCard`).
 - Responsividade: header do `qrcodes` sem wrap, tabela de categorias
-  (`estoque`) e de solicitações (`lgpd`) sem fallback mobile (aplicado
-  `hidden sm:block`/`sm:hidden`, copiando o padrão que a tabela de produtos
-  do próprio `estoque` já tinha), headers de `perfis`/`reservas` sem wrap,
-  `AiChatWidget` com largura fixa que podia estourar em ~320px, grid fixo de
-  3 colunas no mini-dashboard fiscal.
+  (`estoque`) e de solicitações (`lgpd`) sem fallback mobile, headers de
+  `perfis`/`reservas` sem wrap, `AiChatWidget` com largura fixa que podia
+  estourar em ~320px, grid fixo de 3 colunas no mini-dashboard fiscal.
+
+**Feito (rodada 2, 26/07):**
+- Fallback mobile nas 2 tabelas do `financeiro/page.tsx` (view simples e
+  análise, com cálculo de margem/preço sugerido) e na trilha de auditoria do
+  `lgpd/page.tsx` — formulas copiadas exatas do desktop, mesmo padrão já
+  usado em `estoque`.
+- Migração de mais 8 modais pro `Modal` (`CobrancaPixModal`,
+  `AuditLogDetailModal`, `financeiro/DayDetailModal`,
+  `financeiro/KpiChartModal`, `comanda/AddItemModal`,
+  `comanda/CloseComandaModal`, `comanda/ComandaReceiptModal`,
+  `comanda/EscolherContaCrediarioModal`). `Modal` ganhou prop `stacked`
+  (z-index maior) pra suportar modal-sobre-modal.
+- `comanda/EditarComandaModal` deixado de fora de propósito: usa
+  `items-end sm:items-center` (bottom-sheet no mobile) e z-index próprio,
+  padrão que o `Modal` genérico ainda não cobre — migrar ali seria
+  regressão de UX, não economia de código.
 
 **Não verificado visualmente em mobile real** — `resize_window` (ferramenta
 de automação de browser) não teve efeito nesse ambiente (Wayland/GNOME não
@@ -34,12 +46,13 @@ exata de implementações já existentes e funcionando no mesmo repo — mas val
 o usuário conferir no celular de verdade assim que puder.
 
 **Falta (registrado, não começado):**
-- Migrar as ~28 páginas restantes pros componentes novos (`Modal`/`Button`/
-  `EmptyState`/`Spinner`/`Badge`) — hoje só 2 modais usam `Modal`.
-- Tabelas de `financeiro/page.tsx` (2, com cálculo de margem/sugestão de
-  preço) e a trilha de auditoria do `lgpd/page.tsx` — deferidas por
-  complexidade e risco de mexer em exibição de dado financeiro sob prazo
-  apertado. Já têm `overflow-x-auto`, não quebram, só não têm card mobile.
+- Migrar os shells de modal inline escritos direto nas páginas (não em
+  arquivo `*Modal.tsx` separado) pro `Modal`: `usuarios/page.tsx` (5 modais
+  no mesmo arquivo!), `contas-receber`, `eventos`, `fiscal`, `integracoes`,
+  `lgpd`, `timer`, `reservas`, `suporte`. Deixado de fora por ser refatoração
+  mecânica de baixo valor (não corrige bug nem UX).
+- Migrar `Button`/`EmptyState`/`Spinner`/`Badge` nas ~28 páginas que ainda
+  escrevem esses padrões cru.
 - Sistema de variantes tipado (CVA ou equivalente) — hoje `Button`/`Badge`
   usam `Record<Tone, string>` na mão, funciona mas não escala tão bem quanto
   CVA pra combinações tamanho×variante.
