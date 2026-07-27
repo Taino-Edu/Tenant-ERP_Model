@@ -4,13 +4,14 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { isPlatformOwner, clearAuth } from '@/lib/auth'
 import { Toaster } from 'react-hot-toast'
-import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search } from 'lucide-react'
+import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
 
 const NAV_ITEMS = [
   { href: '/plataforma',            label: 'Visão Geral', icon: LayoutDashboard },
   { href: '/plataforma/tenants',    label: 'Tenants',      icon: Building2 },
+  { href: '/plataforma/financeiro', label: 'Financeiro',   icon: Wallet },
   { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus },
   { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search },
   { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy },

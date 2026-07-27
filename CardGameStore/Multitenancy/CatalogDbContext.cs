@@ -23,6 +23,7 @@ public class CatalogDbContext : DbContext
     public DbSet<Lead> Leads { get; set; }
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
+    public DbSet<TenantCharge> TenantCharges { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -156,6 +157,39 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(m => m.TicketId)
                   .HasDatabaseName("ix_support_ticket_messages_ticket_id");
+        });
+
+        modelBuilder.Entity<TenantCharge>(entity =>
+        {
+            entity.Property(c => c.Kind).HasConversion<string>().HasMaxLength(20);
+
+            // FK com Cascade: excluir um tenant leva as cobranças dele junto.
+            // Coerente com a exclusão permanente de tenant que já existe no
+            // painel (PlatformController faz DROP SCHEMA) — deixar cobrança
+            // órfã apontando pra tenant inexistente só sujaria os relatórios.
+            entity.HasOne<Tenant>()
+                  .WithMany()
+                  .HasForeignKey(c => c.TenantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            // A garantia central de integridade do billing: um tenant não pode
+            // ter duas cobranças do mesmo tipo pra mesma competência. É isso
+            // que torna o gerador de mensalidades idempotente — rodar duas
+            // vezes no mesmo mês (ou clicar duas vezes no botão) não duplica a
+            // cobrança, o banco recusa. Sem essa index, cobrança em duplicidade
+            // seria só uma questão de tempo, e é o tipo de erro que o cliente
+            // descobre antes da gente.
+            entity.HasIndex(c => new { c.TenantId, c.Kind, c.ReferenceMonth })
+                  .IsUnique()
+                  .HasDatabaseName("ix_tenant_charges_tenant_kind_competencia");
+
+            // Relatório mensal (quanto entrou em X) varre por competência;
+            // cobranças em aberto/vencidas varrem por vencimento.
+            entity.HasIndex(c => c.ReferenceMonth)
+                  .HasDatabaseName("ix_tenant_charges_reference_month");
+
+            entity.HasIndex(c => c.DueDate)
+                  .HasDatabaseName("ix_tenant_charges_due_date");
         });
     }
 }

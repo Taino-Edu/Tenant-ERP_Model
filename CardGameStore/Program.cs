@@ -389,6 +389,7 @@ builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddScoped<IProspectingService,  ProspectingService>();
+builder.Services.AddScoped<IPlatformBillingService, PlatformBillingService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
 builder.Services.AddScoped<IFinanceiroCalculoService, FinanceiroCalculoService>();
 builder.Services.AddHostedService<FechamentoBackgroundService>();

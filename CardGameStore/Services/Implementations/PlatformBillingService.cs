@@ -1,0 +1,219 @@
+// =============================================================================
+// PlatformBillingService.cs — O financeiro DA PLATAFORMA: o que cobramos de
+// cada loja e o que efetivamente entrou.
+//
+// Não confundir com FinanceiroCalculoService, que é o financeiro DE DENTRO de
+// uma loja e opera no schema do tenant. Este aqui só toca o catálogo (schema
+// "public") e só o dono da plataforma alcança.
+// =============================================================================
+
+using CardGameStore.DTOs;
+using CardGameStore.Multitenancy;
+using CardGameStore.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
+
+namespace CardGameStore.Services.Implementations;
+
+public class PlatformBillingService : IPlatformBillingService
+{
+    private readonly CatalogDbContext _catalog;
+    private readonly ILogger<PlatformBillingService> _logger;
+
+    public PlatformBillingService(CatalogDbContext catalog, ILogger<PlatformBillingService> logger)
+    {
+        _catalog = catalog;
+        _logger  = logger;
+    }
+
+    /// <summary>Reduz qualquer data ao dia 1 do mês, 00:00 UTC. Toda competência
+    /// passa por aqui: sem isso, "março" gravado como dia 3 e como dia 17 viram
+    /// duas competências diferentes e a unique index que impede cobrança
+    /// duplicada deixa de proteger.</summary>
+    private static DateTime NormalizarCompetencia(DateTime data) =>
+        new(data.Year, data.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    /// <summary>Vencimento da competência, preservando o dia que o cliente já
+    /// conhece e sem estourar em mês curto: dia 31 vira 28 (ou 29) em fevereiro,
+    /// 30 em abril. Sem esse clamp, gerar a competência de fevereiro pra um
+    /// cliente que assinou dia 31 lançaria ArgumentOutOfRangeException e
+    /// derrubaria a geração do mês INTEIRO, não só a daquele cliente.</summary>
+    private static DateTime VencimentoNaCompetencia(DateTime competencia, int diaDesejado)
+    {
+        var ultimoDia = DateTime.DaysInMonth(competencia.Year, competencia.Month);
+        var dia = Math.Min(diaDesejado, ultimoDia);
+        return new DateTime(competencia.Year, competencia.Month, dia, 0, 0, 0, DateTimeKind.Utc);
+    }
+
+    public async Task<GerarMensalidadesResultDto> GerarMensalidadesAsync(DateTime competencia)
+    {
+        var comp = NormalizarCompetencia(competencia);
+        var fimDaCompetencia = comp.AddMonths(1);
+
+        // Elegíveis: loja ativa, com mensalidade definida, e que já entrou em
+        // cobrança dentro (ou antes) desta competência. BillingStartsOn é o que
+        // implementa o "primeiro mês de acesso grátis" — quem assinou neste mês
+        // tem BillingStartsOn no mês que vem e simplesmente não aparece aqui.
+        var elegiveis = await _catalog.Tenants
+            .AsNoTracking()
+            .Where(t => t.Status == TenantStatus.Active
+                     && t.MonthlyPrice > 0
+                     && t.BillingStartsOn != null
+                     && t.BillingStartsOn < fimDaCompetencia)
+            .Select(t => new { t.Id, t.MonthlyPrice, t.BillingStartsOn })
+            .ToListAsync();
+
+        var ativasTotal = await _catalog.Tenants.CountAsync(t => t.Status == TenantStatus.Active);
+
+        // Uma consulta só pra saber o que já existe, em vez de perguntar ao
+        // banco por tenant dentro do laço.
+        var jaCobrados = await _catalog.TenantCharges
+            .AsNoTracking()
+            .Where(c => c.Kind == TenantChargeKind.Mensalidade && c.ReferenceMonth == comp)
+            .Select(c => c.TenantId)
+            .ToListAsync();
+
+        var jaCobradosSet = jaCobrados.ToHashSet();
+
+        var novas = new List<TenantCharge>();
+        foreach (var t in elegiveis)
+        {
+            if (jaCobradosSet.Contains(t.Id)) continue;
+
+            novas.Add(new TenantCharge
+            {
+                TenantId       = t.Id,
+                Kind           = TenantChargeKind.Mensalidade,
+                // Cópia do preço vigente AGORA. Reajuste futuro não reescreve
+                // esta linha — ver comentário em TenantCharge.Amount.
+                Amount         = t.MonthlyPrice,
+                ReferenceMonth = comp,
+                DueDate        = VencimentoNaCompetencia(comp, t.BillingStartsOn!.Value.Day),
+            });
+        }
+
+        if (novas.Count > 0)
+        {
+            _catalog.TenantCharges.AddRange(novas);
+            await _catalog.SaveChangesAsync();
+        }
+
+        var resultado = new GerarMensalidadesResultDto
+        {
+            Competencia    = comp,
+            Criadas        = novas.Count,
+            JaExistiam     = elegiveis.Count - novas.Count,
+            ForaDeCobranca = ativasTotal - elegiveis.Count,
+            TotalGerado    = novas.Sum(c => c.Amount),
+        };
+
+        _logger.LogInformation(
+            "Mensalidades da competência {Competencia:yyyy-MM}: {Criadas} criadas, {JaExistiam} já existiam, {Fora} fora de cobrança (total R$ {Total}).",
+            comp, resultado.Criadas, resultado.JaExistiam, resultado.ForaDeCobranca, resultado.TotalGerado);
+
+        return resultado;
+    }
+
+    public async Task<BillingResumoDto> ObterResumoAsync(DateTime competencia)
+    {
+        var comp  = NormalizarCompetencia(competencia);
+        var hoje  = DateTime.UtcNow.Date;
+
+        var ativas = await _catalog.Tenants
+            .AsNoTracking()
+            .Where(t => t.Status == TenantStatus.Active)
+            .Select(t => t.MonthlyPrice)
+            .ToListAsync();
+
+        var doMes = await _catalog.TenantCharges
+            .AsNoTracking()
+            .Where(c => c.ReferenceMonth == comp)
+            .Select(c => new { c.Amount, c.PaidAt, c.DueDate })
+            .ToListAsync();
+
+        // Vencido acumulado varre TODAS as competências de propósito: dívida de
+        // março continua sendo dívida em maio. Um resumo que só olhasse o mês
+        // corrente mostraria inadimplência zero logo depois da virada, o que é
+        // exatamente o oposto da verdade.
+        var vencidoAcumulado = await _catalog.TenantCharges
+            .AsNoTracking()
+            .Where(c => c.PaidAt == null && c.DueDate < hoje)
+            .SumAsync(c => (decimal?)c.Amount) ?? 0m;
+
+        return new BillingResumoDto
+        {
+            Competencia      = comp,
+            MrrContratado    = ativas.Sum(),
+            LojasPagantes    = ativas.Count(p => p > 0),
+            LojasSemCobranca = ativas.Count(p => p <= 0),
+            Faturado         = doMes.Sum(c => c.Amount),
+            Recebido         = doMes.Where(c => c.PaidAt != null).Sum(c => c.Amount),
+            EmAberto         = doMes.Where(c => c.PaidAt == null).Sum(c => c.Amount),
+            VencidoAcumulado = vencidoAcumulado,
+            QtdCobrancas     = doMes.Count,
+            QtdVencidas      = doMes.Count(c => c.PaidAt == null && c.DueDate < hoje),
+        };
+    }
+
+    public async Task<List<TenantChargeDto>> ListarPorCompetenciaAsync(DateTime competencia)
+    {
+        var comp = NormalizarCompetencia(competencia);
+
+        return await MapearAsync(_catalog.TenantCharges
+            .AsNoTracking()
+            .Where(c => c.ReferenceMonth == comp)
+            .OrderBy(c => c.DueDate));
+    }
+
+    public async Task<List<TenantChargeDto>> ListarPorTenantAsync(Guid tenantId)
+    {
+        return await MapearAsync(_catalog.TenantCharges
+            .AsNoTracking()
+            .Where(c => c.TenantId == tenantId)
+            .OrderByDescending(c => c.ReferenceMonth)
+            .ThenBy(c => c.Kind));
+    }
+
+    public async Task<TenantChargeDto> DefinirPagamentoAsync(Guid chargeId, DateTime? pagoEm)
+    {
+        var cobranca = await _catalog.TenantCharges.FirstOrDefaultAsync(c => c.Id == chargeId)
+            ?? throw new InvalidOperationException("Cobrança não encontrada.");
+
+        // Data futura é quase sempre erro de digitação (ano errado), e uma baixa
+        // com data futura envenena o relatório de recebidos sem deixar rastro.
+        if (pagoEm.HasValue && pagoEm.Value.Date > DateTime.UtcNow.Date)
+            throw new InvalidOperationException("A data de pagamento não pode ser futura.");
+
+        cobranca.PaidAt = pagoEm;
+        await _catalog.SaveChangesAsync();
+
+        var lista = await MapearAsync(_catalog.TenantCharges.AsNoTracking().Where(c => c.Id == chargeId));
+        return lista[0];
+    }
+
+    /// <summary>Junta com Tenant pra trazer nome/slug e calcula "vencida" no
+    /// servidor — a regra de vencimento vive num lugar só.</summary>
+    private async Task<List<TenantChargeDto>> MapearAsync(IQueryable<TenantCharge> query)
+    {
+        var hoje = DateTime.UtcNow.Date;
+
+        return await query
+            .Join(_catalog.Tenants.AsNoTracking(),
+                  c => c.TenantId,
+                  t => t.Id,
+                  (c, t) => new TenantChargeDto
+                  {
+                      Id          = c.Id,
+                      TenantId    = c.TenantId,
+                      TenantNome  = t.DisplayName ?? t.Slug,
+                      TenantSlug  = t.Slug,
+                      Tipo        = c.Kind.ToString(),
+                      Valor       = c.Amount,
+                      Competencia = c.ReferenceMonth,
+                      Vencimento  = c.DueDate,
+                      PagoEm      = c.PaidAt,
+                      Observacao  = c.Notes,
+                      Vencida     = c.PaidAt == null && c.DueDate < hoje,
+                  })
+            .ToListAsync();
+    }
+}

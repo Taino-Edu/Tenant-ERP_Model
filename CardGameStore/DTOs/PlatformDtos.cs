@@ -44,6 +44,16 @@ public class TenantSummaryDto
     public string[] EnabledModules { get; set; } = Array.Empty<string>();
     public string? CustomDomain { get; set; }
     public int? MaxUsers { get; set; }
+
+    /// <summary>Mensalidade cobrada desta loja. Zero = cortesia/piloto.</summary>
+    public decimal MonthlyPrice { get; set; }
+
+    /// <summary>Taxa de implantação cobrada na contratação.</summary>
+    public decimal SetupFee { get; set; }
+
+    /// <summary>Data da primeira mensalidade devida (encoda o mês de acesso
+    /// grátis). Null = billing não definido — tenant criado antes do campo existir.</summary>
+    public DateTime? BillingStartsOn { get; set; }
 }
 
 /// <summary>Body de PATCH /api/platform/tenants/{id}/domain. CustomDomain null ou
@@ -89,6 +99,20 @@ public class UpdateTenantBillingRequest
     /// <summary>True para remover o limite de acesso (tenant vira "sem limite"). Sem isso,
     /// MaxUsers null/omitido preserva o valor já configurado — nunca zera sem querer.</summary>
     public bool RemoverMaxUsers { get; set; } = false;
+
+    /// <summary>Mensalidade negociada com esta loja. Nullable pelo mesmo motivo de
+    /// MaxUsers: omitido preserva o valor atual, em vez de zerar a mensalidade de
+    /// um cliente pagante porque a tela mandou o body sem o campo. Pra tornar uma
+    /// loja cortesia, mande 0 explicitamente.</summary>
+    [Range(0, 1_000_000)]
+    public decimal? MonthlyPrice { get; set; }
+
+    /// <summary>Taxa de implantação. Mesma regra de omitido-preserva.</summary>
+    [Range(0, 1_000_000)]
+    public decimal? SetupFee { get; set; }
+
+    /// <summary>Data da primeira mensalidade devida. Mesma regra de omitido-preserva.</summary>
+    public DateTime? BillingStartsOn { get; set; }
 }
 
 public class PlatformOverviewDto
