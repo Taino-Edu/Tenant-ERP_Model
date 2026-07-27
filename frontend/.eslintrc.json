@@ -1,0 +1,10 @@
+{
+  "extends": ["next/core-web-vitals"],
+  "plugins": ["@typescript-eslint"],
+  "ignorePatterns": ["node_modules/", ".next/", "out/", "scripts/", "public/"],
+  "rules": {
+    "react-hooks/exhaustive-deps": "warn",
+    "@next/next/no-img-element": "off",
+    "react/no-unescaped-entities": ["error", { "forbid": [">", "}"] }]
+  }
+}
