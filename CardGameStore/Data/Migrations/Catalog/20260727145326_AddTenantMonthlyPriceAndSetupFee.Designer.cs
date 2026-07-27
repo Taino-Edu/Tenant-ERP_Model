@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations.Catalog
 {
     [DbContext(typeof(CatalogDbContext))]
-    partial class CatalogDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260727145326_AddTenantMonthlyPriceAndSetupFee")]
+    partial class AddTenantMonthlyPriceAndSetupFee
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -581,64 +584,6 @@ namespace CardGameStore.Data.Migrations.Catalog
                     b.ToTable("tenants");
                 });
 
-            modelBuilder.Entity("CardGameStore.Multitenancy.TenantCharge", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<decimal>("Amount")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("amount");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<DateTime>("DueDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("due_date");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("notes");
-
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("paid_at");
-
-                    b.Property<DateTime>("ReferenceMonth")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("reference_month");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tenant_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DueDate")
-                        .HasDatabaseName("ix_tenant_charges_due_date");
-
-                    b.HasIndex("ReferenceMonth")
-                        .HasDatabaseName("ix_tenant_charges_reference_month");
-
-                    b.HasIndex("TenantId", "Kind", "ReferenceMonth")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tenant_charges_tenant_kind_competencia");
-
-                    b.ToTable("tenant_charges");
-                });
-
             modelBuilder.Entity("CardGameStore.Multitenancy.ContadorAviso", b =>
                 {
                     b.HasOne("CardGameStore.Multitenancy.ContadorTenantLink", null)
@@ -677,15 +622,6 @@ namespace CardGameStore.Data.Migrations.Catalog
                     b.HasOne("CardGameStore.Multitenancy.SupportTicket", null)
                         .WithMany("Messages")
                         .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("CardGameStore.Multitenancy.TenantCharge", b =>
-                {
-                    b.HasOne("CardGameStore.Multitenancy.Tenant", null)
-                        .WithMany()
-                        .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

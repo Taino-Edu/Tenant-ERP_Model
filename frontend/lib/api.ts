@@ -902,6 +902,60 @@ export interface CreateProspectLeadRequest {
   estimatedRevenueRange?: string; abordagemSugerida?: string
 }
 
+// ── Financeiro da plataforma (o que cobramos das lojas) ───────────────────────
+
+export interface TenantChargeDto {
+  id: string
+  tenantId: string
+  tenantNome: string
+  tenantSlug: string
+  tipo: 'Implantacao' | 'Mensalidade'
+  valor: number
+  competencia: string
+  vencimento: string
+  pagoEm: string | null
+  observacao: string | null
+  /** Em aberto e já passou do vencimento — calculado no servidor pra a tela
+   *  não reimplementar (e divergir da) regra. */
+  vencida: boolean
+}
+
+export interface BillingResumoDto {
+  competencia: string
+  /** Receita recorrente contratada: soma da mensalidade das lojas ativas. */
+  mrrContratado: number
+  lojasPagantes: number
+  lojasSemCobranca: number
+  faturado: number
+  recebido: number
+  emAberto: number
+  /** Inadimplência de TODAS as competências, não só a atual. */
+  vencidoAcumulado: number
+  qtdCobrancas: number
+  qtdVencidas: number
+}
+
+export interface GerarMensalidadesResultDto {
+  competencia: string
+  criadas: number
+  jaExistiam: number
+  foraDeCobranca: number
+  totalGerado: number
+}
+
+export const platformBillingApi = {
+  resumo: (competencia: string) =>
+    api.get<BillingResumoDto>('/api/platform/billing/resumo', { params: { competencia } }),
+  cobrancas: (competencia: string) =>
+    api.get<TenantChargeDto[]>('/api/platform/billing/cobrancas', { params: { competencia } }),
+  porTenant: (tenantId: string) =>
+    api.get<TenantChargeDto[]>(`/api/platform/billing/cobrancas/tenant/${tenantId}`),
+  gerarMensalidades: (competencia: string) =>
+    api.post<GerarMensalidadesResultDto>('/api/platform/billing/gerar-mensalidades', { competencia }),
+  definirPagamento: (id: string, pagoEm: string | null) =>
+    api.put<TenantChargeDto>(`/api/platform/billing/cobrancas/${id}/pagamento`, { pagoEm }),
+}
+
 export const prospectingApi = {
   search: (categoria: string, cidade: string) =>
     api.post<ProspectCandidateDto[]>('/api/platform/prospecting/search', { categoria, cidade }),

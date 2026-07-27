@@ -69,6 +69,9 @@ public class PlatformController : ControllerBase
         EnabledModules = t.EnabledModules,
         CustomDomain   = t.CustomDomain,
         MaxUsers       = t.MaxUsers,
+        MonthlyPrice    = t.MonthlyPrice,
+        SetupFee        = t.SetupFee,
+        BillingStartsOn = t.BillingStartsOn,
     };
 
     /// <summary>Lista todos os tenants cadastrados na plataforma, mais recente primeiro.
@@ -148,6 +151,13 @@ public class PlatformController : ControllerBase
         tenant.PlanName       = request.PlanName;
         tenant.PaymentStatus  = paymentStatus;
         tenant.EnabledModules = request.EnabledModules;
+
+        // Mesma regra de MaxUsers logo abaixo: omitido preserva. Zerar a
+        // mensalidade de um cliente pagante porque a tela não mandou o campo
+        // seria erro silencioso e caro — sumiria do MRR sem ninguém notar.
+        if (request.MonthlyPrice.HasValue)    tenant.MonthlyPrice    = request.MonthlyPrice.Value;
+        if (request.SetupFee.HasValue)        tenant.SetupFee        = request.SetupFee.Value;
+        if (request.BillingStartsOn.HasValue) tenant.BillingStartsOn = request.BillingStartsOn.Value;
         // A tela de edição de tenant hoje só manda planName/paymentStatus/enabledModules
         // (sem maxUsers) — atribuição direta zeraria um limite já configurado toda vez
         // que o dono só ajusta plano/pagamento. Preserva o valor atual quando omitido;

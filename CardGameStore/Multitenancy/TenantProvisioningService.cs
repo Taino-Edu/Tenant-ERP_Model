@@ -22,6 +22,30 @@ public class TenantProvisioningService : ITenantProvisioningService
     /// no request viraria um módulo fantasma, sem RequireModule nenhum lendo aquele nome).</summary>
     public static readonly string[] KnownModules = ["fiscal", "estoque", "pontos", "contador", "ia", "eventos"];
 
+    /// <summary>Tabela de preços vigente (decidida em 2026-07-27, ver BACKLOG e a
+    /// const PLANOS de frontend/app/institucional/page.tsx, que é o que o cliente
+    /// vê). Serve só como PONTO DE PARTIDA do billing de um tenant novo — o valor
+    /// real vive em Tenant.MonthlyPrice e é editável, porque desconto negociado
+    /// caso a caso é regra nesse estágio, não exceção.
+    ///
+    /// Duplicação com o frontend é consciente: são públicos diferentes (página de
+    /// venda vs. provisionamento) e unificar exigiria um endpoint de tabela de
+    /// preços que nada consome ainda. Ao mudar preço, mudar nos dois — está
+    /// anotado no BACKLOG.</summary>
+    private static readonly Dictionary<string, decimal> TabelaPrecos = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Essencial"] = 120m,
+        ["Completo"]  = 269m,
+        ["Avançado"]  = 487m,
+    };
+
+    /// <summary>Preço de tabela do plano, ou 0 se o nome não está na tabela
+    /// (PlanName é texto livre: cortesia, piloto, plano legado ou typo). Zero é
+    /// deliberado — chutar um valor infla o MRR com número que parece certo e que
+    /// ninguém vai conferir depois.</summary>
+    private static decimal PrecoMensalDoPlano(string planName) =>
+        TabelaPrecos.TryGetValue(planName.Trim(), out var preco) ? preco : 0m;
+
     // Provisionamento (criar schema + rodar migrations + admin inicial) não
     // tinha nenhuma trava de concorrência: dois cadastros de tenant no mesmo
     // instante podiam interferir um no outro. Ação rara/admin-only, então um
@@ -108,6 +132,18 @@ public class TenantProvisioningService : ITenantProvisioningService
             tenant.PlanName = planName.Trim();
         if (maxUsers.HasValue)
             tenant.MaxUsers = maxUsers.Value;
+
+        // Billing: preenche a partir da tabela vigente e das regras comerciais
+        // (implantação = 2 mensalidades, primeiro mês de acesso sem mensalidade).
+        // Fica editável depois no painel — a tabela é o ponto de partida, não uma
+        // amarra: cliente que fechar por valor negociado tem o campo ajustado.
+        //
+        // Plano fora da tabela (nome livre, cortesia, piloto) entra com preço 0 em
+        // vez de chutar um valor: MRR errado pra cima é pior que MRR incompleto,
+        // porque parece certo e ninguém vai conferir.
+        tenant.MonthlyPrice     = PrecoMensalDoPlano(tenant.PlanName);
+        tenant.SetupFee         = tenant.MonthlyPrice * 2;
+        tenant.BillingStartsOn  = tenant.CreatedAt.AddMonths(1);
 
         _catalog.Tenants.Add(tenant);
         await _catalog.SaveChangesAsync();

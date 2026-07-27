@@ -12,8 +12,65 @@ const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
 const NAV_LINKS = [
   { href: '#quem-somos',    label: 'Quem somos' },
   { href: '#o-que-fazemos', label: 'O que fazemos' },
+  { href: '#planos',        label: 'Planos' },
   { href: '#clientes',      label: 'Clientes' },
   { href: '#contato',       label: 'Contato' },
+]
+
+// Planos derivados dos módulos que o sistema realmente tem hoje (ver
+// Tenant.EnabledModules: fiscal, estoque, pontos, contador, ia, eventos) e do
+// limite de usuários por plano (Tenant.MaxUsers, enforçado em
+// UserService.AdminCreateUserAsync). Nada aqui promete recurso que não existe.
+//
+// Os valores são uma PROPOSTA de partida, não pricing fechado — o Tenant já
+// trata PlanName como texto livre justamente porque o pricing não estava
+// definido. Ajustar aqui e no billing do tenant ao mesmo tempo.
+const PLANOS = [
+  {
+    nome: 'Essencial',
+    preco: 120,
+    publico: 'Pra loja que quer sair da planilha e do caderno.',
+    destaque: false,
+    usuarios: '2 usuários no painel',
+    inclui: [
+      'PDV e comanda',
+      'Emissão de NFC-e (fiscal completo)',
+      'Controle de estoque com variantes',
+      'Vitrine própria com subdomínio seu',
+      'App instalável no celular (PWA), com sua marca',
+      'Relatórios básicos de venda',
+    ],
+  },
+  {
+    nome: 'Completo',
+    preco: 269,
+    publico: 'A operação que já vende todo dia e precisa de controle.',
+    destaque: true,
+    usuarios: '6 usuários no painel',
+    inclui: [
+      'Tudo do Essencial',
+      'Crediário e contas a receber',
+      'Financeiro completo, com fechamento de caixa',
+      'Programa de fidelidade por pontos',
+      'Portal do contador (ele acessa direto, sem você exportar nada)',
+      'Gestão de eventos com cobrança de entrada',
+      'Perfis de acesso por funcionário',
+    ],
+  },
+  {
+    nome: 'Avançado',
+    preco: 487,
+    publico: 'Pra quem tem mais de um ponto ou quer automatizar.',
+    destaque: false,
+    usuarios: 'Usuários ilimitados',
+    inclui: [
+      'Tudo do Completo',
+      'Assistente de IA no painel (pergunte em português sobre sua loja)',
+      'Domínio próprio (suamarca.com.br)',
+      'Reservas e agendamento',
+      'Prioridade no suporte',
+    ],
+  },
 ]
 
 const PILARES = [
@@ -282,8 +339,103 @@ export default function InstitucionalPage() {
         </div>
       </section>
 
+      {/* ── Planos ───────────────────────────────────────────────────────── */}
+      <section id="planos" className={`scroll-mt-20 border-y ${C.border} ${C.section}`}>
+        <div className="mx-auto max-w-6xl px-6 py-20">
+          <h2 className="text-sm font-bold uppercase tracking-widest text-brand-600">
+            Planos
+          </h2>
+          <p className={`mt-3 max-w-2xl text-2xl font-bold sm:text-3xl ${C.heading}`}>
+            Escolha pelo tamanho da sua operação, não por uma tabela de recursos confusa.
+          </p>
+          <p className={`mt-4 max-w-2xl ${C.body}`}>
+            Todos os planos incluem seu espaço isolado no banco, sua marca no sistema
+            e o primeiro mês de acesso sem mensalidade.
+          </p>
+
+          <div className="mt-12 grid items-start gap-6 lg:grid-cols-3">
+            {PLANOS.map(({ nome, preco, publico, destaque, usuarios, inclui }) => (
+              <div
+                key={nome}
+                className={`relative flex h-full flex-col rounded-2xl border p-8 transition ${
+                  destaque
+                    ? 'border-brand-500 shadow-xl shadow-brand-500/10 lg:-mt-4 lg:pb-12'
+                    : C.card
+                } ${destaque && isDark ? 'bg-[#1A1A1F]' : ''} ${destaque && !isDark ? 'bg-white' : ''}`}
+              >
+                {destaque && (
+                  <span className="absolute -top-3 left-8 rounded-full bg-brand-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
+                    Mais escolhido
+                  </span>
+                )}
+
+                <h3 className={`text-xl font-extrabold ${C.heading}`}>{nome}</h3>
+                <p className={`mt-2 min-h-[2.5rem] text-sm ${C.muted}`}>{publico}</p>
+
+                <div className="mt-6 flex items-baseline gap-1">
+                  <span className={`text-sm font-semibold ${C.muted}`}>R$</span>
+                  <span className={`text-4xl font-extrabold tabular-nums ${C.heading}`}>{preco}</span>
+                  <span className={`text-sm font-medium ${C.muted}`}>/mês</span>
+                </div>
+
+                {/* Implantação calculada do próprio preço (2 mensalidades), nunca
+                    escrita à mão: valor digitado separado desalinha do plano na
+                    primeira vez que o preço muda — e preço de tabela errado numa
+                    página de vendas é problema comercial, não bug de UI. */}
+                <p className={`mt-1 text-xs ${C.muted}`}>
+                  + R$ {preco * 2} de implantação, uma única vez
+                </p>
+
+                <p className={`mt-3 text-xs font-semibold ${C.body}`}>{usuarios}</p>
+
+                <ul className="mt-6 flex-1 space-y-3">
+                  {inclui.map(item => (
+                    <li key={item} className={`flex gap-2.5 text-sm ${C.body}`}>
+                      <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-brand-600" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <a
+                  href="#contato"
+                  className={`mt-8 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition ${
+                    destaque
+                      ? 'bg-brand-600 text-white hover:bg-brand-700'
+                      : `border ${C.outline}`
+                  }`}
+                >
+                  Falar sobre este plano
+                  <ArrowRight size={15} />
+                </a>
+              </div>
+            ))}
+          </div>
+
+          {/* Letra pequena — condições comerciais. Fica junto dos planos de
+              propósito: taxa de implantação escondida no rodapé ou só no
+              contrato é o tipo de surpresa que queima a venda na primeira
+              conversa. */}
+          <div className={`mt-10 rounded-xl border border-dashed p-6 ${C.border}`}>
+            <p className={`text-xs leading-relaxed ${C.muted}`}>
+              <strong className={C.body}>Como funciona a cobrança:</strong>{' '}
+              na contratação é cobrada uma <strong className={C.body}>taxa de implantação
+              equivalente a 2 mensalidades do plano escolhido</strong>, que cobre a
+              configuração da loja, a personalização com a sua marca, o cadastro
+              inicial e o acompanhamento na virada.{' '}
+              <strong className={C.body}>O primeiro mês de acesso não tem mensalidade</strong> —
+              a cobrança mensal começa a partir do segundo mês de uso. Sem
+              fidelidade e sem multa para cancelar: você avisa e o acesso segue
+              até o fim do período já pago. Valores em reais, por loja.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ── Clientes ─────────────────────────────────────────────────────── */}
-      <section id="clientes" className={`scroll-mt-20 border-y ${C.border} ${C.section}`}>
+      {/* Fundo neutro (não C.section) pra alternar com a faixa tingida de Planos
+          logo acima — duas seções tingidas coladas viravam um bloco só. */}
+      <section id="clientes" className="scroll-mt-20">
         <div className="mx-auto max-w-6xl px-6 py-20">
           <h2 className="text-sm font-bold uppercase tracking-widest text-brand-600">
             Quem já usa
