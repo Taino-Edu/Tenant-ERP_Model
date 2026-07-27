@@ -1,5 +1,47 @@
 # Backlog — Tenant-ERP
 
+## Visibilidade de falha (error boundaries + lint + log por tenant) — 2026-07-27
+
+Auditoria de boas práticas pedida pelo usuário. Os três itens atacados juntos
+tinham a mesma causa: quando algo quebrava, ninguém ficava sabendo.
+
+**Feito:**
+- **Error boundaries do Next.js** — não existia NENHUM nos 67 arquivos de
+  `app/`. Exceção de render virava tela branca. Criados `app/global-error.tsx`
+  (estilo inline: substitui o root layout, então não tem o globals.css),
+  `app/error.tsx`, `app/admin/error.tsx` (renderiza dentro do `<main>`, Sidebar
+  preservada) e `app/not-found.tsx`. Os quatro validados no navegador com rota
+  descartável que lançava exceção.
+- **ESLint** — o script `next lint` existia no `package.json` mas o eslint não
+  estava instalado (nem no lockfile), então nunca rodou e os
+  `// eslint-disable` espalhados pelo código eram decorativos. Instalados
+  `eslint` 8, `eslint-config-next` e o plugin/parser `@typescript-eslint`
+  (o config-next não os traz sozinho). `.eslintrc.json` com
+  `react/no-unescaped-entities` restrita a `>` e `}` — a regra cheia acusava
+  ~20 aspas de texto em português que renderizam sem problema. Step de lint
+  adicionado ao CI.
+- **Log com identidade do tenant** — não havia `BeginScope` em lugar nenhum:
+  40 controllers logando sem dizer de qual loja. `TenantResolutionMiddleware`
+  agora abre escopo com `TenantSchema`/`TenantId` no único ponto por onde toda
+  requisição passa, e `Logging:Console:IncludeScopes` foi ligado (sem isso o
+  .NET descarta escopo silenciosamente). `docker compose logs api | grep
+  TenantSchema:<schema>` isola uma loja.
+
+**Bug achado pelo lint recém-instalado:** `admin/comanda/page.tsx` chamava
+`fetchHistory(histData)` dentro do handler `ComandaClosed` do SignalR, com
+`histData` fora das dependências do effect — o handler congelava a data do
+mount. Fechar uma comanda em outro caixa recarregava o histórico de HOJE
+enquanto o filtro na tela mostrava outra data. Corrigido com `histDataRef`,
+mesmo padrão que o arquivo já usava no `siteNameRef` logo acima.
+
+**Falta:**
+- 2 avisos de `react-hooks/exhaustive-deps` ainda abertos
+  (`admin/estoque/page.tsx:255`, `components/admin/TimerAlarmOverlay.tsx:115`).
+  Ambos parecem benignos, mas não foram investigados a fundo. Enquanto
+  existirem, o CI não pode usar `--max-warnings=0`.
+- Nenhum boundary específico pra `/plataforma` e `/cliente` — caem no
+  `app/error.tsx` da raiz, que funciona mas perde o layout da área.
+
 ## Design system + responsividade do admin — 2026-07-25/26 (2 rodadas feitas)
 
 Pedido do usuário: componentizar/padronizar o admin, mais opções de
