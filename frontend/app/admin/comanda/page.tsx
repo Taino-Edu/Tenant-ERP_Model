@@ -33,6 +33,12 @@ export default function ComandaPage() {
   const [comandas, setComandas]   = useState<ComandaDto[]>([])
   const [history, setHistory]     = useState<ComandaDto[]>([])
   const [histData, setHistData]   = useState(() => brToday())
+  // Mesmo motivo do siteNameRef acima: os handlers do SignalR são registrados
+  // uma vez só (o effect não depende de histData) e congelariam a data do
+  // mount. Sem o ref, fechar uma comanda em outro caixa recarregava o
+  // histórico do dia de hoje enquanto o filtro na tela mostrava outra data.
+  const histDataRef = useRef(histData)
+  useEffect(() => { histDataRef.current = histData }, [histData])
   const [loading, setLoading]     = useState(true)
   const [histLoading, setHistLoad]= useState(false)
   const [connected, setConnected] = useState(false)
@@ -124,7 +130,7 @@ export default function ComandaPage() {
 
       hub.on('ComandaClosed', () => {
         fetchComandas()
-        fetchHistory(histData)
+        fetchHistory(histDataRef.current)
         tocarSom('fechada')
       })
       hub.onclose(() => setConnected(false))

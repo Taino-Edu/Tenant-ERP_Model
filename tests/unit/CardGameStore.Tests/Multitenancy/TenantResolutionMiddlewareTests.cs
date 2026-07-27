@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CardGameStore.Tests.Multitenancy;
 
@@ -59,7 +60,11 @@ public class TenantResolutionMiddlewareTests
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(rootDomain is null ? [] : new Dictionary<string, string?> { ["Multitenancy:RootDomain"] = rootDomain })
             .Build();
-        return new TenantResolutionMiddleware(next, new MemoryCache(new MemoryCacheOptions()), config);
+        return new TenantResolutionMiddleware(
+            next,
+            new MemoryCache(new MemoryCacheOptions()),
+            config,
+            NullLogger<TenantResolutionMiddleware>.Instance);
     }
 
     [Fact]

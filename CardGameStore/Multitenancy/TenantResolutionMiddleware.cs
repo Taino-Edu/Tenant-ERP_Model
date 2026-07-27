@@ -24,13 +24,19 @@ public class TenantResolutionMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<TenantResolutionMiddleware> _logger;
     private readonly string? _rootDomain;
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(30);
 
-    public TenantResolutionMiddleware(RequestDelegate next, IMemoryCache cache, IConfiguration config)
+    public TenantResolutionMiddleware(
+        RequestDelegate next,
+        IMemoryCache cache,
+        IConfiguration config,
+        ILogger<TenantResolutionMiddleware> logger)
     {
         _next       = next;
         _cache      = cache;
+        _logger     = logger;
         _rootDomain = config["Multitenancy:RootDomain"];
     }
 
@@ -95,14 +101,49 @@ public class TenantResolutionMiddleware
                 return;
             }
 
-            tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
-            await _next(context);
+            await SetTenantAndContinue(context, tenantContext, tenant.Id, tenant.SchemaName, tenant.EnabledModules);
             return;
         }
 
         // Nada reconhecido (slug e domínio próprio) — tenant-zero.
-        tenantContext.Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
-        await _next(context);
+        await SetTenantAndContinue(
+            context, tenantContext,
+            TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
+    }
+
+    /// <summary>
+    /// Popula o ITenantContext e segue o pipeline dentro de um escopo de log que
+    /// carrega a identidade do tenant.
+    ///
+    /// O escopo é o ponto: sem ele, NENHUMA linha de log do sistema dizia de qual
+    /// loja ela veio — 40 controllers logando "erro ao salvar" sem jeito de saber
+    /// o dono do problema quando um lojista específico reclama. Como o escopo
+    /// nasce aqui, no único lugar por onde toda requisição passa, todo log emitido
+    /// daqui pra frente herda os campos sem precisar tocar em serviço nenhum.
+    ///
+    /// Só aparece na saída com Logging:Console:IncludeScopes = true
+    /// (appsettings.json) — o padrão do .NET é descartar escopos.
+    /// </summary>
+    private async Task SetTenantAndContinue(
+        HttpContext context,
+        ITenantContext tenantContext,
+        Guid tenantId,
+        string schemaName,
+        string[] enabledModules)
+    {
+        tenantContext.Set(tenantId, schemaName, enabledModules);
+
+        // Template de mensagem (e não um Dictionary) de propósito: o formatter
+        // do console renderiza o escopo chamando ToString() nele, e
+        // Dictionary.ToString() devolve "System.Collections.Generic.Dictionary`2
+        // [System.String,System.Object]" — o escopo aparecia no log sem nenhum
+        // dos valores. Com o template sai legível ("TenantSchema:loja_x ...") e
+        // os placeholders nomeados continuam virando propriedades estruturadas
+        // se um dia entrar um sink que as consuma.
+        using (_logger.BeginScope("TenantSchema:{TenantSchema} TenantId:{TenantId}", schemaName, tenantId))
+        {
+            await _next(context);
+        }
     }
 
     private sealed record TenantLookup(Guid Id, string SchemaName, TenantStatus Status, string[] EnabledModules);

@@ -76,6 +76,13 @@ jobs:
       - name: Install
         run: npm ci
 
+      # --max-warnings=0 falharia hoje: existem 3 avisos de
+      # react-hooks/exhaustive-deps herdados (ver BACKLOG). O lint entra
+      # barrando ERRO desde já — o zero-warning fica pra quando a dívida
+      # estiver quitada, senão o CI nasce vermelho e todo mundo ignora.
+      - name: Lint
+        run: npm run lint
+
       - name: Build
         run: npm run build
 
