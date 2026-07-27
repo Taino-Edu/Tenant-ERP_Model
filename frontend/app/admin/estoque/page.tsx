@@ -445,6 +445,8 @@ function ProductModal({
     ? naturezas.find(n => n.id === form.naturezaOperacaoId)
     : naturezas.find(n => n.isPadrao)
   const cestObrigatorio = ['201', '202', '203', '500'].includes(naturezaSelecionada?.csosn ?? '')
+  const ncmIncompleto   = (form.ncm?.length ?? 0) > 0 && form.ncm!.length < 8
+  const cestIncompleto  = (form.cest?.length ?? 0) > 0 && form.cest!.length < 7
 
   async function handleCameraDetected(code: string) {
     setCameraOpen(false)
@@ -482,9 +484,18 @@ function ProductModal({
     // Validação em JS (e não `required` no input): campo obrigatório dentro do <details>
     // fechado é invisível pro browser, que aborta o submit sem mostrar nada — a tela
     // "não fazia nada" ao clicar em Salvar.
+    if (ncmIncompleto) {
+      toast.error(`NCM precisa de 8 dígitos — você digitou ${form.ncm!.length}. Ex.: 1905.90.90 é 19059090.`)
+      return
+    }
     if (cestObrigatorio && !form.cest) {
       setFiscalAberto(true)
       toast.error(`CEST é obrigatório para o CSOSN ${naturezaSelecionada?.csosn}. Abra "Classificação e transparência tributária".`)
+      return
+    }
+    if (cestIncompleto) {
+      setFiscalAberto(true)
+      toast.error(`CEST precisa de 7 dígitos — você digitou ${form.cest!.length}.`)
       return
     }
     setSaving(true)
@@ -547,13 +558,17 @@ function ProductModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">NCM</label>
-              {/* Só dígitos: o placeholder pontuado + maxLength 8 travava a digitação no
-                  meio ("8471.30.") e o backend rejeitava o NCM incompleto. */}
-              <input className="input" inputMode="numeric" value={form.ncm ?? ''}
+              {/* Sem maxLength de propósito: o browser corta o texto colado ANTES do
+                  onChange, então colar "1905.90.90" (10 caracteres) virava "1905.90." e
+                  sobravam 6 dígitos. Quem limita a 8 é o slice sobre os dígitos. */}
+              <input className={`input ${ncmIncompleto ? 'border-amber-500' : ''}`} inputMode="numeric"
+                     value={form.ncm ?? ''}
                      onChange={e => set('ncm', e.target.value.replace(/\D/g, '').slice(0, 8) || null)}
-                     placeholder="00000000" maxLength={8} />
-              <p className="text-xs text-gray-400 mt-1">
-                8 dígitos, só números (pode colar com pontos — a gente limpa). Obrigatório pra emitir NFC-e deste produto.
+                     placeholder="00000000" />
+              <p className={`text-xs mt-1 ${ncmIncompleto ? 'text-amber-400' : 'text-gray-400'}`}>
+                {ncmIncompleto
+                  ? `NCM tem 8 dígitos — faltam ${8 - (form.ncm?.length ?? 0)}. Ex.: 1905.90.90 vira 19059090.`
+                  : '8 dígitos, só números (pode colar com pontos — a gente limpa). Obrigatório pra emitir NFC-e deste produto.'}
               </p>
             </div>
             <div>
@@ -586,13 +601,18 @@ function ProductModal({
                 <label className="label">CEST {cestObrigatorio ? '*' : '(quando aplicavel)'}</label>
                 {/* Sem `required`: obrigatoriedade é checada em handleSubmit, porque este
                     bloco pode estar recolhido e o browser não valida campo escondido. */}
-                <input className="input" inputMode="numeric" value={form.cest ?? ''}
+                {/* Sem maxLength pelo mesmo motivo do NCM: colar "17.083.00" seria cortado
+                    em 7 caracteres e perderia dígitos. */}
+                <input className={`input ${cestIncompleto ? 'border-amber-500' : ''}`} inputMode="numeric"
+                  value={form.cest ?? ''}
                   onChange={e => set('cest', e.target.value.replace(/\D/g, '').slice(0, 7) || null)}
-                  placeholder="0000000" maxLength={7} />
-                <p className="text-xs text-gray-400 mt-1">
-                  {cestObrigatorio
-                    ? `Obrigatorio para o CSOSN ${naturezaSelecionada?.csosn}. Consulte o contador.`
-                    : 'Preencha somente se o produto possuir CEST.'}
+                  placeholder="0000000" />
+                <p className={`text-xs mt-1 ${cestIncompleto ? 'text-amber-400' : 'text-gray-400'}`}>
+                  {cestIncompleto
+                    ? `CEST tem 7 dígitos — faltam ${7 - (form.cest?.length ?? 0)}.`
+                    : cestObrigatorio
+                      ? `Obrigatorio para o CSOSN ${naturezaSelecionada?.csosn}. Consulte o contador.`
+                      : 'Preencha somente se o produto possuir CEST.'}
                 </p>
               </div>
               {/* Deixados opcionais de propósito: com NCM preenchido o IBPT completa esses
