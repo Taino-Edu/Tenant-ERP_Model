@@ -27,11 +27,26 @@ namespace CardGameStore.Services.Implementations;
 public class ProspectingService : IProspectingService
 {
     private const string NominatimUrl = "https://nominatim.openstreetmap.org/search";
-    // Alias "-latest" em vez de modelo fixo (ver comentário em GeminiChatService):
-    // versões específicas são aposentadas sem aviso e viram 404. Aqui é a linha
-    // Pro, não Flash — o enriquecimento roda só sob clique explícito (volume
-    // baixo), então vale pagar mais por uma análise melhor do lead.
-    private const string GeminiUrl    = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:generateContent";
+
+    // Modelos tentados em ordem, com fallback: o Google já aposentou modelo duas
+    // vezes na vida deste repo (gemini-2.5-flash virou 404 e derrubou o
+    // assistente inteiro, ver commit 2c25f09), e um alias morto aqui quebrava o
+    // enriquecimento por completo — era exatamente o "Falha ao enriquecer com
+    // IA" que o usuário reportava. Com a cadeia, aposentar um modelo degrada a
+    // qualidade da análise em vez de derrubar a feature.
+    //
+    // Pro primeiro de propósito: o enriquecimento roda só sob clique explícito
+    // (volume baixo), então vale pagar mais por uma análise melhor do lead.
+    // Flash é a rede de segurança — é o alias já comprovado em produção pelo
+    // GeminiChatService.
+    private static readonly string[] GeminiModels =
+    [
+        "gemini-pro-latest",
+        "gemini-flash-latest",
+    ];
+
+    private static string GeminiUrlFor(string model) =>
+        $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
 
     // A instância pública principal (overpass-api.de) é gratuita mas sofre
     // rate-limiting e quedas com frequência — sem SLA nenhuma. Mirrors
@@ -389,25 +404,9 @@ public class ProspectingService : IProspectingService
             {"estimatedRevenueRange": "faixa curta tipo 'R$20-50k/mês' (máximo 50 caracteres, SEM explicação junto)", "abordagemSugerida": "2-3 frases de como abordar esse lead especificamente, mencionando o que a plataforma resolveria pra esse tipo de negócio"}
             """;
 
-        var client = _factory.CreateClient("gemini");
-        var body = JsonSerializer.Serialize(new
-        {
-            contents = new[] { new { parts = new[] { new { text = prompt } } } },
-        });
+        var rawJson = await CallGeminiWithFallbackAsync(prompt, apiKey);
 
-        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, GeminiUrl)
-        {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
-        };
-        requestMessage.Headers.Add("x-goog-api-key", apiKey);
-        var response = await client.SendAsync(requestMessage);
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogError("Gemini (prospecção) retornou {Status}", response.StatusCode);
-            throw new InvalidOperationException("Falha ao gerar enriquecimento por IA.");
-        }
-
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var doc = JsonDocument.Parse(rawJson);
         var text = doc.RootElement
             .GetProperty("candidates")[0]
             .GetProperty("content")
@@ -444,4 +443,66 @@ public class ProspectingService : IProspectingService
             throw new InvalidOperationException("A IA retornou uma resposta em formato inesperado — tenta de novo.");
         }
     }
+
+    /// <summary>
+    /// Chama o Gemini percorrendo <see cref="GeminiModels"/> até um responder, e
+    /// devolve o JSON cru da resposta.
+    ///
+    /// Loga o CORPO do erro, não só o status: a versão anterior logava apenas
+    /// "Gemini (prospecção) retornou {Status}" e descartava a resposta, que é
+    /// justamente onde o Google explica o motivo ("model not found",
+    /// "quota exceeded", "API key not valid"). Sem isso a feature falhava com
+    /// um toast genérico e zero pista no log — foi o que travou o diagnóstico.
+    ///
+    /// A chave nunca entra em log: vai no header (x-goog-api-key), não na URL,
+    /// e o corpo de erro do Google não a devolve.
+    /// </summary>
+    private async Task<string> CallGeminiWithFallbackAsync(string prompt, string apiKey)
+    {
+        var client = _factory.CreateClient("gemini");
+        var body = JsonSerializer.Serialize(new
+        {
+            contents = new[] { new { parts = new[] { new { text = prompt } } } },
+        });
+
+        var falhas = new List<string>();
+
+        foreach (var model in GeminiModels)
+        {
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, GeminiUrlFor(model))
+            {
+                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            };
+            requestMessage.Headers.Add("x-goog-api-key", apiKey);
+
+            var response = await client.SendAsync(requestMessage);
+            var conteudo = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Só registra quando NÃO foi o preferido: o log serve pra
+                // perceber que o modelo de cima morreu, sem ruído no caso normal.
+                if (model != GeminiModels[0])
+                    _logger.LogWarning(
+                        "Enriquecimento de lead caiu no modelo de fallback {Model} — o preferido falhou.", model);
+
+                return conteudo;
+            }
+
+            _logger.LogError(
+                "Gemini (prospecção) recusou o modelo {Model}: {Status} — {Corpo}",
+                model, (int)response.StatusCode, Truncar(conteudo, 500));
+
+            falhas.Add($"{model}: {(int)response.StatusCode}");
+        }
+
+        // Mensagem com os status por modelo: o dono da plataforma é quem usa esta
+        // tela, e "todos os modelos recusaram, 404 nos dois" é acionável de
+        // imediato — bem diferente do "Falha ao enriquecer com IA" anterior.
+        throw new InvalidOperationException(
+            $"A IA de enriquecimento não respondeu ({string.Join("; ", falhas)}). Confira a chave e o log da API.");
+    }
+
+    private static string Truncar(string texto, int max) =>
+        texto.Length <= max ? texto : texto[..max] + "…";
 }
