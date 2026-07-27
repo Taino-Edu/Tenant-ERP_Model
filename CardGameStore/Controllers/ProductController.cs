@@ -109,9 +109,15 @@ public class ProductController : ControllerBase
     [HttpPost]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(Product), 201)]
+    [ProducesResponseType(400)]
     public async Task<IActionResult> Create([FromBody] Product product)
     {
-        var created = await _service.CreateAsync(product);
+        Product created;
+        // NCM/CEST/percentuais inválidos são erro do usuário — sem o catch a exceção subia
+        // pro handler global e virava 500 "Erro interno", escondendo o que estava errado.
+        try { created = await _service.CreateAsync(product); }
+        catch (ArgumentException ex) { return BadRequest(new { Message = ex.Message }); }
+
         await _ibpt.TentarSincronizarProdutoAsync(created.Id, HttpContext.RequestAborted);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
@@ -122,10 +128,16 @@ public class ProductController : ControllerBase
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
     [ProducesResponseType(typeof(Product), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> Update(Guid id, [FromBody] Product product)
     {
         product.Id = id;
-        var updated = await _service.UpdateAsync(product);
+        Product updated;
+        try { updated = await _service.UpdateAsync(product); }
+        catch (ArgumentException ex)     { return BadRequest(new { Message = ex.Message }); }
+        catch (KeyNotFoundException ex)  { return NotFound(new { Message = ex.Message }); }
+
         await _ibpt.TentarSincronizarProdutoAsync(updated.Id, HttpContext.RequestAborted);
         return Ok(await _service.GetByIdAsync(updated.Id));
     }

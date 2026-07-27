@@ -437,6 +437,7 @@ function ProductModal({
 }) {
   const [form, setForm]         = useState<Partial<Product>>(product ?? { stockQuantity: 0, minimumStock: 5, priceInCents: 0, costPriceInCents: 0 })
   const [saving, setSaving]     = useState(false)
+  const [fiscalAberto, setFiscalAberto] = useState(false)
   const [barcodeScanning, setBarcodeScanning] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
   const set = (k: keyof Product, v: unknown) => setForm(f => ({ ...f, [k]: v }))
@@ -477,7 +478,16 @@ function ProductModal({
   }
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true)
+    e.preventDefault()
+    // Validação em JS (e não `required` no input): campo obrigatório dentro do <details>
+    // fechado é invisível pro browser, que aborta o submit sem mostrar nada — a tela
+    // "não fazia nada" ao clicar em Salvar.
+    if (cestObrigatorio && !form.cest) {
+      setFiscalAberto(true)
+      toast.error(`CEST é obrigatório para o CSOSN ${naturezaSelecionada?.csosn}. Abra "Classificação e transparência tributária".`)
+      return
+    }
+    setSaving(true)
     try { await onSave(form) } finally { setSaving(false) }
   }
 
@@ -537,9 +547,14 @@ function ProductModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">NCM</label>
-              <input className="input" value={form.ncm ?? ''} onChange={e => set('ncm', e.target.value || null)}
-                     placeholder="0000.00.00" maxLength={8} />
-              <p className="text-xs text-gray-400 mt-1">Obrigatório pra emitir NFC-e deste produto.</p>
+              {/* Só dígitos: o placeholder pontuado + maxLength 8 travava a digitação no
+                  meio ("8471.30.") e o backend rejeitava o NCM incompleto. */}
+              <input className="input" inputMode="numeric" value={form.ncm ?? ''}
+                     onChange={e => set('ncm', e.target.value.replace(/\D/g, '').slice(0, 8) || null)}
+                     placeholder="00000000" maxLength={8} />
+              <p className="text-xs text-gray-400 mt-1">
+                8 dígitos, só números (pode colar com pontos — a gente limpa). Obrigatório pra emitir NFC-e deste produto.
+              </p>
             </div>
             <div>
               <label className="label">Natureza de Operação</label>
@@ -553,9 +568,11 @@ function ProductModal({
             </div>
           </div>
 
-          <details className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3" open={cestObrigatorio}>
+          <details className="rounded-lg bg-surface-700/60 border border-surface-600 px-4 py-3"
+                   open={fiscalAberto || cestObrigatorio}
+                   onToggle={e => setFiscalAberto((e.currentTarget as HTMLDetailsElement).open)}>
             <summary className="cursor-pointer text-sm font-semibold text-gray-300">
-              Classificacao e transparencia tributaria
+              Classificação e transparência tributária <span className="font-normal text-gray-500">(opcional)</span>
             </summary>
             <div className="mt-3 space-y-3">
               {form.tributosPreenchidosAutomaticamente && (
@@ -567,42 +584,48 @@ function ProductModal({
               )}
               <div>
                 <label className="label">CEST {cestObrigatorio ? '*' : '(quando aplicavel)'}</label>
+                {/* Sem `required`: obrigatoriedade é checada em handleSubmit, porque este
+                    bloco pode estar recolhido e o browser não valida campo escondido. */}
                 <input className="input" inputMode="numeric" value={form.cest ?? ''}
                   onChange={e => set('cest', e.target.value.replace(/\D/g, '').slice(0, 7) || null)}
-                  placeholder="0000000" maxLength={7} required={cestObrigatorio} />
+                  placeholder="0000000" maxLength={7} />
                 <p className="text-xs text-gray-400 mt-1">
                   {cestObrigatorio
                     ? `Obrigatorio para o CSOSN ${naturezaSelecionada?.csosn}. Consulte o contador.`
                     : 'Preencha somente se o produto possuir CEST.'}
                 </p>
               </div>
+              {/* Deixados opcionais de propósito: com NCM preenchido o IBPT completa esses
+                  campos sozinho, e a emissão da NFC-e já barra produto sem transparência
+                  com mensagem própria. Exigir aqui impedia o cadastro de qualquer produto. */}
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="label">Federal % *</label>
-                  <input className="input" type="number" min="0" max="100" step="0.0001" required
+                  <label className="label">Federal %</label>
+                  <input className="input" type="number" min="0" max="100" step="0.0001"
                     value={form.percentualTributosFederais ?? ''}
                     onChange={e => set('percentualTributosFederais', e.target.value === '' ? null : Number(e.target.value))} />
                 </div>
                 <div>
-                  <label className="label">Estadual % *</label>
-                  <input className="input" type="number" min="0" max="100" step="0.0001" required
+                  <label className="label">Estadual %</label>
+                  <input className="input" type="number" min="0" max="100" step="0.0001"
                     value={form.percentualTributosEstaduais ?? ''}
                     onChange={e => set('percentualTributosEstaduais', e.target.value === '' ? null : Number(e.target.value))} />
                 </div>
                 <div>
-                  <label className="label">Municipal % *</label>
-                  <input className="input" type="number" min="0" max="100" step="0.0001" required
+                  <label className="label">Municipal %</label>
+                  <input className="input" type="number" min="0" max="100" step="0.0001"
                     value={form.percentualTributosMunicipais ?? ''}
                     onChange={e => set('percentualTributosMunicipais', e.target.value === '' ? null : Number(e.target.value))} />
                 </div>
               </div>
               <div>
-                <label className="label">Fonte e versao *</label>
-                <input className="input" required maxLength={100} value={form.fonteTributos ?? ''}
+                <label className="label">Fonte e versao</label>
+                <input className="input" maxLength={100} value={form.fonteTributos ?? ''}
                   onChange={e => set('fonteTributos', e.target.value || null)}
                   placeholder="Ex.: IBPT 26.1.A / tabela validada pelo contador" />
                 <p className="text-xs text-amber-400 mt-1">
-                  Use os percentuais e a fonte fornecidos pelo contador; o sistema nao inventa aliquotas.
+                  Deixe em branco para o IBPT preencher sozinho (precisa do NCM). Se preencher à mão,
+                  use os percentuais e a fonte do contador — o sistema não inventa alíquotas.
                 </p>
               </div>
             </div>
