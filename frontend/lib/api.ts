@@ -24,12 +24,21 @@ export const api = axios.create({
  * Extrai a mensagem de erro real de uma falha de requisição — o backend sempre
  * devolve `{ message }` (erro de negócio tratado pelo controller, ou o
  * middleware global de exceção não tratada, que também inclui `traceId`).
+ * Também entende o ValidationProblemDetails que o ASP.NET gera sozinho quando o
+ * body viola um DataAnnotation (`{ errors: { Campo: ["msg"] } }`) — sem isso o
+ * usuário via só o fallback genérico e não sabia qual campo estava errado.
  * Cai no `fallback` só quando não tem body nenhum pra ler (rede caiu, CORS,
  * timeout) — nesses casos não existe mensagem real pra mostrar de qualquer jeito.
  */
 export function getErrorMessage(err: unknown, fallback: string): string {
-  const data = (err as { response?: { data?: { message?: string; traceId?: string } } })?.response?.data
-  if (!data?.message) return fallback
+  const data = (err as {
+    response?: { data?: { message?: string; traceId?: string; errors?: Record<string, string[]> } }
+  })?.response?.data
+
+  if (!data?.message) {
+    const validacao = Object.values(data?.errors ?? {}).flat().filter(Boolean)
+    return validacao.length > 0 ? validacao.join(' ') : fallback
+  }
   return data.traceId ? `${data.message} (ref: ${data.traceId})` : data.message
 }
 

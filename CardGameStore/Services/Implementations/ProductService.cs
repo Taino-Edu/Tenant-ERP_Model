@@ -165,9 +165,11 @@ public class ProductService : IProductService
             : product.FonteTributos.Trim();
 
         if (product.Ncm is not null && product.Ncm.Length != 8)
-            throw new ArgumentException("NCM deve conter exatamente 8 digitos.");
+            throw new ArgumentException(
+                $"NCM deve conter exatamente 8 digitos — foram informados {product.Ncm.Length}. Digite so os numeros, sem pontos.");
         if (product.Cest is not null && product.Cest.Length != 7)
-            throw new ArgumentException("CEST deve conter exatamente 7 digitos.");
+            throw new ArgumentException(
+                $"CEST deve conter exatamente 7 digitos — foram informados {product.Cest.Length}. Digite so os numeros, sem pontos.");
 
         ValidarPercentual(product.PercentualTributosFederais, "tributos federais");
         ValidarPercentual(product.PercentualTributosEstaduais, "tributos estaduais");
@@ -180,10 +182,12 @@ public class ProductService : IProductService
         return new string(valor.Where(char.IsDigit).ToArray());
     }
 
+    // ArgumentException (e nao ArgumentOutOfRangeException) porque a mensagem vai direto
+    // pro usuario no 400 do controller — sem o sufixo "(Parameter 'percentual')".
     private static void ValidarPercentual(decimal? percentual, string campo)
     {
         if (percentual is < 0 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(percentual), $"Percentual de {campo} deve ficar entre 0 e 100.");
+            throw new ArgumentException($"Percentual de {campo} deve ficar entre 0 e 100.");
     }
 
     private static void LimparMetadadosIbpt(Product product)
