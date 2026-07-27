@@ -6,6 +6,7 @@
 
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Multitenancy;
 
@@ -89,4 +90,46 @@ public class Tenant
     [MaxLength(253)]
     [Column("custom_domain")]
     public string? CustomDomain { get; set; }
+
+    // ── Billing da plataforma ────────────────────────────────────────────────
+    // Tabela vigente (decidida em 2026-07-27, ver BACKLOG): Essencial R$120,
+    // Completo R$269, Avançado R$487; implantação = 2 mensalidades do plano;
+    // primeiro mês de acesso sem mensalidade.
+    //
+    // O valor fica NO TENANT, não numa tabela de planos, de propósito: PlanName
+    // já é texto livre e desconto negociado caso a caso é regra, não exceção
+    // nesse estágio. Derivar o preço do nome do plano quebraria no primeiro
+    // cliente que fechar por um valor diferente da tabela.
+
+    /// <summary>Mensalidade efetivamente cobrada deste tenant, em reais. Zero =
+    /// não cobra (cortesia, piloto, tenant-zero da própria plataforma). É a base
+    /// do MRR: somar isto nos tenants Active dá a receita contratada.</summary>
+    // [Precision] em vez de TypeName = "decimal(10,2)": esta app roda em SQLite
+    // (dev) e Postgres (produção), e nome de tipo cravado só vale num deles — no
+    // Postgres o tipo é `numeric`, e passar "decimal(10,2)" fazia o Npgsql cair
+    // no caminho de mapeamento de coleção e estourar IndexOutOfRangeException ao
+    // gerar migration. [Precision] é agnóstico: cada provider escolhe o tipo.
+    [Precision(10, 2)]
+    [Column("monthly_price")]
+    public decimal MonthlyPrice { get; set; }
+
+    /// <summary>Taxa de implantação cobrada na contratação, em reais.
+    /// Persistida em vez de calculada (2 × <see cref="MonthlyPrice"/>) porque é
+    /// fato histórico: se a política ou o preço do plano mudar amanhã, o que foi
+    /// cobrado deste cliente não pode mudar retroativamente.</summary>
+    [Precision(10, 2)]
+    [Column("setup_fee")]
+    public decimal SetupFee { get; set; }
+
+    /// <summary>Data da PRIMEIRA mensalidade devida. É assim que o "primeiro mês
+    /// de acesso grátis" fica registrado — na provisão vira CreatedAt + 1 mês, em
+    /// vez de uma flag booleana "primeiroMesGratis" que desalinha da realidade no
+    /// instante em que alguém edita a data à mão. Null = billing ainda não
+    /// definido (tenant provisionado antes deste campo existir).
+    ///
+    /// O dia do vencimento é o dia desta data — não há campo separado de propósito,
+    /// pra não criar duas fontes de verdade pro mesmo dado. Vencimento configurável
+    /// independente da data de início é refinamento futuro, se algum cliente pedir.</summary>
+    [Column("billing_starts_on")]
+    public DateTime? BillingStartsOn { get; set; }
 }
