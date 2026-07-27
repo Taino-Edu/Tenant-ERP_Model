@@ -1,5 +1,34 @@
 # Backlog — Tenant-ERP
 
+## Pricing da plataforma — decidido em 2026-07-27
+
+Tabela fechada pelo dono da plataforma (fonte de verdade: `PLANOS` em
+`frontend/app/institucional/page.tsx`):
+
+| Plano | Mensal | Implantação (2 mensalidades) | Usuários |
+|---|---|---|---|
+| Essencial | R$ 120 | R$ 240 | 2 |
+| Completo | R$ 269 | R$ 538 | 6 |
+| Avançado | R$ 487 | R$ 974 | ilimitado |
+
+Primeiro mês de acesso sem mensalidade; cobrança começa no 2º mês. Sem
+fidelidade, sem multa de cancelamento. Valores por loja.
+
+**Sugestões apresentadas e a decisão de cada uma:**
+- Implantação **fixa** em vez de escalonada (o serviço de implantação é o mesmo
+  nos 3 planos, e R$974 de entrada é barreira justo no plano de maior margem) —
+  **recusada**, mantida escalonada por decisão comercial.
+- **Plano anual** ("pague 10 leve 12") pra melhorar caixa e derrubar churn —
+  **adiada**, não entra agora. Fica registrada aqui como próximo passo natural
+  da página de planos.
+- Usar a implantação como **moeda de fechamento** ("fecha anual e a implantação
+  sai pela metade") em vez de objeção — depende do anual, adiada junto.
+- **Teto de usuários no Avançado** (hoje "ilimitado"): risco de margem, porque
+  cada usuário no comanda mantém conexão SignalR aberta. `Tenant.MaxUsers` já é
+  nullable, então dá pra pôr teto sem tocar em código — só no valor do campo.
+  Não decidido.
+- Charm pricing inconsistente (120 redondo vs 269/487 calculados) — não alterado.
+
 ## Visibilidade de falha (error boundaries + lint + log por tenant) — 2026-07-27
 
 Auditoria de boas práticas pedida pelo usuário. Os três itens atacados juntos
