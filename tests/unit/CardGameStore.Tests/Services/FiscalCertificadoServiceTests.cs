@@ -88,9 +88,12 @@ public class FiscalCertificadoServiceTests
     // Formato padrão do e-CNPJ A1: "RAZAO SOCIAL:CNPJ" no CN.
     [InlineData("CN=EMPRESA TESTE LTDA:11222333000181, OU=Certificado Digital, O=ICP-Brasil, C=BR", "11222333000181")]
     // Ordem invertida do Subject (varia por AC).
-    [InlineData("C=BR, O=ICP-Brasil, CN=OUTRA EMPRESA:44555666000172", "44555666000172")]
+    [InlineData("C=BR, O=ICP-Brasil, CN=OUTRA EMPRESA:44555666000181", "44555666000181")]
     // CNPJ sozinho, sem razão social junto.
     [InlineData("CN=11222333000181", "11222333000181")]
+    // Número de série de 14 dígitos antes do CNPJ real: tem que pular o que não
+    // passa no dígito verificador em vez de casar com o primeiro que aparecer.
+    [InlineData("CN=EMPRESA:99999999999998, SERIALNUMBER=11222333000181", "11222333000181")]
     public void ExtrairCnpj_SubjectComCnpj_DeveDevolverOsQuatorzeDigitos(string subject, string esperado)
     {
         FiscalCertificadoService.ExtrairCnpj(subject).Should().Be(esperado);
@@ -103,9 +106,25 @@ public class FiscalCertificadoServiceTests
     [InlineData("CN=FULANO DE TAL:12345678901, O=ICP-Brasil, C=BR")]
     // Sequência de 15+ dígitos não pode virar um "quase CNPJ" truncado.
     [InlineData("CN=EMPRESA:112223330001812, O=ICP-Brasil")]
+    // 14 dígitos com dígito verificador errado não é CNPJ.
+    [InlineData("CN=EMPRESA:11222333000199, O=ICP-Brasil")]
+    // Todos os dígitos iguais fecham a conta do módulo 11 mas não existem.
+    [InlineData("CN=EMPRESA:00000000000000, O=ICP-Brasil")]
     public void ExtrairCnpj_SemCnpjValido_DeveDevolverNull(string? subject)
     {
         FiscalCertificadoService.ExtrairCnpj(subject).Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("11222333000181", true)]
+    [InlineData("44555666000181", true)]
+    [InlineData("11222333000199", false)]  // DV errado
+    [InlineData("11111111111111", false)]  // repetido
+    [InlineData("1122233300018",  false)]  // 13 dígitos
+    [InlineData("1122233300018a", false)]  // não numérico
+    public void CnpjTemDigitoValido_DeveConferirOsDoisDigitos(string cnpj, bool esperado)
+    {
+        FiscalCertificadoService.CnpjTemDigitoValido(cnpj).Should().Be(esperado);
     }
 
     [Fact]

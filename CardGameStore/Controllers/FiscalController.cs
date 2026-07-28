@@ -252,21 +252,22 @@ public class FiscalController : ControllerBase
             cfg.RegimeTributario = regime;
         }
 
+        var ambienteFinal = cfg.Ambiente;
         if (req.Ambiente is not null &&
             Enum.TryParse<AmbienteFiscal>(req.Ambiente, out var ambiente))
+            ambienteFinal = ambiente;
+
+        // Homologação não tem valor fiscal, então só Produção precisa de guarda:
+        // é onde a nota existe de verdade e emitir com certificado de outra
+        // empresa vira uso indevido. Cobre as duas portas — ligar Produção, e
+        // trocar o CNPJ com Produção já ligada (cfg.Cnpj acima já é o novo).
+        if (ambienteFinal == AmbienteFiscal.Producao &&
+            (cfg.Ambiente != AmbienteFiscal.Producao || req.Cnpj is not null))
         {
-            // Homologação não tem valor fiscal, então só a virada pra Produção
-            // precisa de guarda. Aqui a nota passa a existir de verdade: se o
-            // certificado for de outra empresa, a loja emitiria documento fiscal
-            // em nome de terceiro. Revalida porque o CNPJ pode ter sido trocado
-            // depois do upload do certificado.
-            if (ambiente == AmbienteFiscal.Producao && cfg.Ambiente != AmbienteFiscal.Producao)
-            {
-                var erro = ValidarTitularidadeDoCertificado(cfg);
-                if (erro is not null) return erro;
-            }
-            cfg.Ambiente = ambiente;
+            var erro = ValidarTitularidadeDoCertificado(cfg);
+            if (erro is not null) return erro;
         }
+        cfg.Ambiente = ambienteFinal;
 
         if (req.FormasPagamentoAutoEmissao is not null)
         {
@@ -342,10 +343,23 @@ public class FiscalController : ControllerBase
         // loja tiver sido preenchido com o do dono do certificado — a loja emite
         // nota fiscal real em nome de terceiro. Barra antes de guardar o .pfx.
         var cnpjLoja = SomenteDigitos(cfg.Cnpj);
-        if (info.Cnpj is { Length: 14 } cnpjCert && cnpjLoja.Length == 14 && cnpjCert != cnpjLoja)
+        var emProducao = cfg.Ambiente == AmbienteFiscal.Producao;
+
+        // Em Produção falha fechada: trocar o certificado por um de titular
+        // desconhecido não pode ser um jeito de contornar a guarda do ambiente.
+        // Em Homologação (onde a nota não tem valor fiscal) só barra o que dá pra
+        // afirmar que está errado, pra não travar quem ainda vai preencher o CNPJ.
+        if (emProducao && info.Cnpj is null)
             return BadRequest(new
             {
-                Message = $"O certificado pertence ao CNPJ {FormatarCnpj(cnpjCert)}, mas a loja está " +
+                Message = "Não foi possível identificar o CNPJ do titular no certificado. " +
+                          "Com a loja em Produção, só é aceito certificado e-CNPJ A1 do próprio emitente."
+            });
+
+        if (info.Cnpj is not null && cnpjLoja.Length == 14 && info.Cnpj != cnpjLoja)
+            return BadRequest(new
+            {
+                Message = $"O certificado pertence ao CNPJ {FormatarCnpj(info.Cnpj)}, mas a loja está " +
                           $"configurada como {FormatarCnpj(cnpjLoja)}. Envie o certificado do próprio " +
                           "emitente — assinar NFC-e com certificado de outra empresa é uso indevido e a " +
                           "SEFAZ rejeita a nota."
@@ -411,10 +425,20 @@ public class FiscalController : ControllerBase
         if (cnpjLoja.Length != 14)
             return BadRequest(new { Message = "Configure o CNPJ da loja antes de ligar o ambiente de Produção." });
 
-        if (info.Cnpj is { Length: 14 } cnpjCert && cnpjCert != cnpjLoja)
+        // Falha fechada: se não dá pra dizer de quem é o certificado (e-CPF, Subject
+        // fora do padrão da ICP-Brasil), a titularidade não foi provada — e provar a
+        // titularidade é a única razão desta checagem existir.
+        if (info.Cnpj is null)
             return BadRequest(new
             {
-                Message = $"O certificado instalado é do CNPJ {FormatarCnpj(cnpjCert)} e a loja emite como " +
+                Message = "Não foi possível identificar o CNPJ do titular no certificado. " +
+                          "Produção exige um certificado e-CNPJ A1 do próprio emitente."
+            });
+
+        if (info.Cnpj != cnpjLoja)
+            return BadRequest(new
+            {
+                Message = $"O certificado instalado é do CNPJ {FormatarCnpj(info.Cnpj)} e a loja emite como " +
                           $"{FormatarCnpj(cnpjLoja)}. Em Produção a nota tem valor fiscal — emitir com " +
                           "certificado de outra empresa é uso indevido. Instale o certificado do emitente."
             });

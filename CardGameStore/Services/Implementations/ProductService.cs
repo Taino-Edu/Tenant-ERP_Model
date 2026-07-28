@@ -174,6 +174,12 @@ public class ProductService : IProductService
             throw new ArgumentException("Estoque nao pode ser negativo.");
         if (product.MinimumStock < 0)
             throw new ArgumentException("Estoque minimo nao pode ser negativo.");
+        // Teto do estoque: sem ele um produto podia nascer com int.MaxValue e o
+        // primeiro ajuste de +1 estourava o `integer` do Postgres do mesmo jeito.
+        if (product.StockQuantity > MaxEstoque)
+            throw new ArgumentException($"Estoque limitado a {MaxEstoque:N0} unidades.");
+        if (product.MinimumStock > MaxEstoque)
+            throw new ArgumentException($"Estoque minimo limitado a {MaxEstoque:N0} unidades.");
     }
 
     private static void NormalizarDadosFiscais(Product product)
@@ -281,6 +287,10 @@ public class ProductService : IProductService
     /// que subia como 500 generico em vez de erro de validacao.</summary>
     private const int MaxAjusteEstoque = 1_000_000;
 
+    /// <summary>Teto do estoque de um produto. Com este teto e o do ajuste, a soma
+    /// `estoque + delta` nunca chega perto de int.MaxValue.</summary>
+    internal const int MaxEstoque = 100_000_000;
+
     public async Task<bool> AdjustStockAsync(Guid id, int quantityDelta)
     {
         if (quantityDelta == 0) return true;
@@ -288,13 +298,38 @@ public class ProductService : IProductService
             throw new ArgumentException(
                 $"Ajuste de estoque limitado a {MaxAjusteEstoque:N0} unidades por vez — valor informado: {quantityDelta:N0}.");
 
+        // Os dois limites viram comparação contra um valor já calculado aqui, em
+        // vez de somar dentro do SQL: `estoque + delta` no WHERE é justamente a
+        // conta que estourava o `integer` do Postgres antes de qualquer filtro.
+        // Com o WHERE garantindo estoque <= teto - delta, a soma do SET nunca
+        // passa de MaxEstoque.
+        var estoqueMinimoNecessario = -(long)quantityDelta;   // estoque + delta >= 0
+        var estoqueMaximoPermitido  = MaxEstoque - (long)quantityDelta;
+
         // UPDATE atômico — garante que estoque nunca fica negativo mesmo sob carga concorrente.
         // Retorna 0 rows se o produto não existe, não está ativo ou o delta resultaria em negativo.
         var rows = await _db.Products
-            .Where(p => p.Id == id && p.IsActive && p.StockQuantity + quantityDelta >= 0)
+            .Where(p => p.Id == id && p.IsActive &&
+                        p.StockQuantity >= estoqueMinimoNecessario &&
+                        p.StockQuantity <= estoqueMaximoPermitido)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(p => p.StockQuantity, p => p.StockQuantity + quantityDelta)
                 .SetProperty(p => p.UpdatedAt, DateTime.UtcNow));
+
+        // 0 linhas engloba "não existe", "estoque insuficiente" e "passou do teto",
+        // e quem chama traduz tudo pra "Estoque insuficiente" — que seria mentira no
+        // caso do teto. A leitura extra só acontece nesse caminho de falha.
+        if (rows == 0 && quantityDelta > 0)
+        {
+            var estoqueAtual = await _db.Products
+                .Where(p => p.Id == id && p.IsActive)
+                .Select(p => (int?)p.StockQuantity)
+                .FirstOrDefaultAsync();
+
+            if (estoqueAtual is int atual && atual > estoqueMaximoPermitido)
+                throw new ArgumentException(
+                    $"Estoque ficaria em {atual + (long)quantityDelta:N0}, acima do limite de {MaxEstoque:N0} unidades.");
+        }
 
         return rows > 0;
     }

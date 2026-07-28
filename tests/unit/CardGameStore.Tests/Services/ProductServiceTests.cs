@@ -475,6 +475,50 @@ public class ProductServiceTests
     }
 
     [Fact]
+    public async Task AdjustStock_EstoqueNoTeto_NaoEstouraOInteger()
+    {
+        // Antes do teto no cadastro, o produto podia nascer com int.MaxValue e um
+        // ajuste de +1 estourava o `integer` do Postgres mesmo com delta pequeno.
+        var db      = CreateDb(nameof(AdjustStock_EstoqueNoTeto_NaoEstouraOInteger));
+        var service = CreateService(db);
+        var p       = MakeProduct();
+        p.StockQuantity = int.MaxValue;   // dado legado, antes da validação existir
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        var act = () => service.AdjustStockAsync(p.Id, 1);
+
+        // "Estoque insuficiente" seria mentira aqui — o problema é o teto.
+        (await act.Should().ThrowAsync<ArgumentException>()).WithMessage("*limite*");
+        var salvo = await db.Products.AsNoTracking().FirstAsync(x => x.Id == p.Id);
+        salvo.StockQuantity.Should().Be(int.MaxValue);
+    }
+
+    [Fact]
+    public async Task AdjustStock_ProdutoInexistente_NaoViraErroDeTeto()
+    {
+        // O caminho de falha com leitura extra não pode confundir "não existe"
+        // com "passou do teto".
+        var db      = CreateDb(nameof(AdjustStock_ProdutoInexistente_NaoViraErroDeTeto));
+        var service = CreateService(db);
+
+        (await service.AdjustStockAsync(Guid.NewGuid(), 5)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Create_EstoqueAcimaDoTeto_DeveRejeitar()
+    {
+        var db      = CreateDb(nameof(Create_EstoqueAcimaDoTeto_DeveRejeitar));
+        var service = CreateService(db);
+        var p       = MakeProduct();
+        p.StockQuantity = int.MaxValue;
+
+        var act = () => service.CreateAsync(p);
+
+        (await act.Should().ThrowAsync<ArgumentException>()).WithMessage("*Estoque limitado*");
+    }
+
+    [Fact]
     public async Task AdjustStock_DentroDoTeto_ContinuaFuncionando()
     {
         var db      = CreateDb(nameof(AdjustStock_DentroDoTeto_ContinuaFuncionando));
