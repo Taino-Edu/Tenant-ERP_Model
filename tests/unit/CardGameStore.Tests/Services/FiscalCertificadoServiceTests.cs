@@ -121,10 +121,46 @@ public class FiscalCertificadoServiceTests
     [InlineData("11222333000199", false)]  // DV errado
     [InlineData("11111111111111", false)]  // repetido
     [InlineData("1122233300018",  false)]  // 13 dígitos
-    [InlineData("1122233300018a", false)]  // não numérico
+    [InlineData("1122233300018a", false)]  // DV não numérico
     public void CnpjTemDigitoValido_DeveConferirOsDoisDigitos(string cnpj, bool esperado)
     {
         FiscalCertificadoService.CnpjTemDigitoValido(cnpj).Should().Be(esperado);
+    }
+
+    // ── CNPJ alfanumérico (IN RFB 2.229/2024, a partir de 31/07/2026) ─────────
+    // 12 posições alfanuméricas + 2 DV numéricos. Mesmo módulo 11, mas o valor de
+    // cada caractere é o ASCII menos 48 ('A'=17). Os CNPJs numéricos já existentes
+    // não mudam, então os dois formatos convivem.
+
+    [Theory]
+    // Exemplo publicado pela Receita/Serpro no material do cálculo do DV.
+    [InlineData("12ABC34501DE35", true)]
+    [InlineData("ABCDEFGH123432", true)]
+    [InlineData("12ABC34501DE34", false)]  // DV errado
+    [InlineData("12ABC34501DEX5", false)]  // DV tem que ser numérico
+    [InlineData("12abc34501de35", false)]  // minúscula não é o formato oficial
+    [InlineData("12ABC-4501DE35", false)]  // caractere fora de [0-9A-Z]
+    public void CnpjTemDigitoValido_Alfanumerico_DeveSeguirOModuloOnzeComAscii(string cnpj, bool esperado)
+    {
+        FiscalCertificadoService.CnpjTemDigitoValido(cnpj).Should().Be(esperado);
+    }
+
+    [Fact]
+    public void ExtrairCnpj_SubjectComCnpjAlfanumerico_DeveReconhecer()
+    {
+        // Sem isto o titular de um CNPJ novo ficaria "não identificado" — e, com a
+        // guarda de Produção falhando fechada, a loja não conseguiria emitir.
+        FiscalCertificadoService
+            .ExtrairCnpj("CN=EMPRESA NOVA LTDA:12ABC34501DE35, OU=Certificado Digital, O=ICP-Brasil, C=BR")
+            .Should().Be("12ABC34501DE35");
+    }
+
+    [Fact]
+    public void ExtrairCnpj_SubjectComCnpjAlfanumericoMinusculo_DeveNormalizar()
+    {
+        FiscalCertificadoService
+            .ExtrairCnpj("CN=empresa nova:12abc34501de35, O=ICP-Brasil")
+            .Should().Be("12ABC34501DE35");
     }
 
     [Fact]
