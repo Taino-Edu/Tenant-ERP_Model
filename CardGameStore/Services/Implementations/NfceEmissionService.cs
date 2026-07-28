@@ -1296,11 +1296,13 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     /// <summary>
-    /// Monta um detPag. Para cartão de crédito/débito, a SEFAZ exige o grupo `card`
+    /// Monta um detPag. Para cartão de crédito/débito E Pix, a SEFAZ exige o grupo `card`
     /// (rejeição observada em homologação: "Não informados os dados do cartão de
-    /// crédito/débito"). O sistema não integra com maquininha/TEF — não há CNPJ da
-    /// credenciadora, bandeira nem autorização pra informar — então o grupo é enviado
-    /// só com `tpIntegra = Não integrado`, que é o mínimo aceito pela SEFAZ nesse caso.
+    /// crédito/débito" — a mesma rejeição aparece pra Pix, não só cartão; a validação
+    /// da SEFAZ trata todo pagamento eletrônico igual, não só tPag 03/04). O sistema
+    /// não integra com maquininha/TEF nem gateway de Pix — não há CNPJ da credenciadora,
+    /// bandeira nem autorização pra informar — então o grupo é enviado só com
+    /// `tpIntegra = Não integrado`, que é o mínimo aceito pela SEFAZ nesse caso.
     ///
     /// Crediário, Pontos e Cashback não têm código próprio no layout da NFC-e — caem
     /// em tPag=99 ("Outros"), e a SEFAZ rejeita esse código sem uma descrição em xPag
@@ -1311,7 +1313,7 @@ public class NfceEmissionService : INfceEmissionService
     {
         var tPag = MapFormaPagamento(formaPagamento);
         var pag = new detPag { tPag = tPag, vPag = valor };
-        if (formaPagamento is PaymentMethod.CartaoCredito or PaymentMethod.CartaoDebito)
+        if (formaPagamento is PaymentMethod.CartaoCredito or PaymentMethod.CartaoDebito or PaymentMethod.Pix)
             pag.card = new card { tpIntegra = TipoIntegracaoPagamento.TipNaoIntegrado };
         if (tPag == FormaPagamento.fpOutro)
             pag.xPag = DescricaoFormaPagamentoOutro(formaPagamento);
