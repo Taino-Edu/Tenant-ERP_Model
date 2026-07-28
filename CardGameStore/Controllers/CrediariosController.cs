@@ -284,9 +284,13 @@ public class CrediariosController : ControllerBase
             "Crediário {Id} quitado pelo admin {AdminId} — R$ {Valor:N2}",
             id, adminId, crediario.ValorEmReais);
 
-        // Envia email de confirmação (não bloqueia)
+        // Envia email de confirmação. Awaited -- ver comentário em RegistrarPagamento
+        // sobre por que fire-and-forget contra o DbContext da request é perigoso;
+        // mesmo aqui já sendo depois do SaveChangesAsync, um fire-and-forget não
+        // esperado corre risco do DbContext ser descartado (fim da request) antes
+        // do envio terminar.
         if (!string.IsNullOrWhiteSpace(crediario.User?.Email))
-            _ = _email.SendCrediarioPagoAsync(
+            await _email.SendCrediarioPagoAsync(
                 crediario.User.Email, crediario.User.Name, crediario.ValorEmReais);
 
         return Ok(MapToDto(crediario));
@@ -424,7 +428,8 @@ public class CrediariosController : ControllerBase
         }
 
         // Quita automaticamente se saldo chegou a zero (tolerância de 1 centavo para arredondamentos)
-        if (crediario.SaldoRestanteEmCentavos <= 1)
+        var quitouAgora = crediario.SaldoRestanteEmCentavos <= 1;
+        if (quitouAgora)
         {
             crediario.Status         = CrediariosStatus.Pago;
             crediario.DataPagamento  = DateTime.UtcNow;
@@ -433,10 +438,6 @@ public class CrediariosController : ControllerBase
             _logger.LogInformation(
                 "Crediário {Id} quitado via pagamento parcial pelo admin {AdminId} — R$ {Valor:N2}",
                 id, adminId, crediario.ValorEmReais);
-
-            if (!string.IsNullOrWhiteSpace(crediario.User?.Email))
-                _ = _email.SendCrediarioPagoAsync(
-                    crediario.User.Email, crediario.User.Name, crediario.ValorEmReais);
         }
         else
         {
@@ -464,6 +465,14 @@ public class CrediariosController : ControllerBase
                 .FirstAsync(c => c.Id == id);
             return Ok(MapToDto(atual));
         }
+
+        // Só depois do SaveChangesAsync -- antes disso o envio (fire-and-forget)
+        // corria contra o mesmo DbContext da request e o EF Core derrubava a
+        // segunda operação concorrente com InvalidOperationException, virando
+        // 500 bem no pagamento que quita o crediário.
+        if (quitouAgora && !string.IsNullOrWhiteSpace(crediario.User?.Email))
+            await _email.SendCrediarioPagoAsync(
+                crediario.User.Email, crediario.User.Name, crediario.ValorEmReais);
 
         return Ok(MapToDto(crediario));
     }
@@ -580,20 +589,27 @@ public class CrediariosController : ControllerBase
                 });
                 crediario.ValorPagoEmCentavos += valorPagar;
 
-                if (crediario.SaldoRestanteEmCentavos <= 1)
+                var quitouAgora = crediario.SaldoRestanteEmCentavos <= 1;
+                if (quitouAgora)
                 {
                     crediario.Status         = CrediariosStatus.Pago;
                     crediario.DataPagamento  = DateTime.UtcNow;
                     crediario.PagoPorAdminId = adminId;
-
-                    if (!string.IsNullOrWhiteSpace(crediario.User?.Email))
-                        _ = _email.SendCrediarioPagoAsync(
-                            crediario.User.Email, crediario.User.Name, crediario.ValorEmReais);
                 }
 
                 _logger.LogInformation(
                     "Cobrança Pix {TxId} confirmada — pagamento de R$ {Valor:N2} registrado no crediário {CrediarioId}",
                     txid, valorPagar / 100m, crediario.Id);
+
+                await _db.SaveChangesAsync();
+
+                // Só depois do SaveChangesAsync -- ver comentário em RegistrarPagamento
+                // sobre a corrida de fire-and-forget contra o mesmo DbContext.
+                if (quitouAgora && !string.IsNullOrWhiteSpace(crediario.User?.Email))
+                    await _email.SendCrediarioPagoAsync(
+                        crediario.User.Email, crediario.User.Name, crediario.ValorEmReais);
+
+                return Ok(new { pix.TxId, pix.Status, PagoEm = pix.PagoEm });
             }
         }
 
