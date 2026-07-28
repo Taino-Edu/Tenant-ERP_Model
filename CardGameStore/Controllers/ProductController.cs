@@ -162,7 +162,10 @@ public class ProductController : ControllerBase
     [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> AdjustStock(Guid id, [FromBody] StockAdjustRequest req)
     {
-        var ok = await _service.AdjustStockAsync(id, req.Delta);
+        bool ok;
+        try { ok = await _service.AdjustStockAsync(id, req.Delta); }
+        catch (ArgumentException ex) { return BadRequest(new { Message = ex.Message }); }
+
         return ok ? Ok(new { Message = "Estoque ajustado." }) : BadRequest(new { Message = "Estoque insuficiente." });
     }
 }

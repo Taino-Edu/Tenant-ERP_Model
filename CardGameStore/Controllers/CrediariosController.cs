@@ -368,6 +368,21 @@ public class CrediariosController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
+        // A venda avulsa já validava a forma de pagamento contra PaymentMethod.All,
+        // mas aqui qualquer string entrava e virava uma linha fantasma no relatório
+        // financeiro agrupado por forma de pagamento.
+        if (!PaymentMethod.IsValid(request.FormaPagamento))
+            return BadRequest(new
+            {
+                Message = $"Forma de pagamento inválida. Use: {string.Join(", ", PaymentMethod.All)}"
+            });
+        if (!string.IsNullOrWhiteSpace(request.SecondFormaPagamento) &&
+            !PaymentMethod.IsValid(request.SecondFormaPagamento))
+            return BadRequest(new
+            {
+                Message = $"Segunda forma de pagamento inválida. Use: {string.Join(", ", PaymentMethod.All)}"
+            });
+
         var adminId   = GetUserId();
         var crediario = await _db.Crediarios
             .Include(c => c.User)

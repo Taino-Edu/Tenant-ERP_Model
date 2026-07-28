@@ -400,4 +400,136 @@ public class ProductServiceTests
 
         result.Should().BeNull("produto inativo não deve ser retornado");
     }
+
+    // ── Validação comercial (dinheiro e estoque) ──────────────────────────────
+    // A API aceitava preço negativo e a venda avulsa registrava total negativo
+    // no caixa. O frontend avisava, mas import/MCP/integração passavam reto.
+
+    [Theory]
+    [InlineData(-1, 0, 0, 0, "Preco de venda")]
+    [InlineData(100, -1, 0, 0, "Preco de custo")]
+    [InlineData(100, 0, -1, 0, "Estoque")]
+    [InlineData(100, 0, 0, -1, "Estoque minimo")]
+    public async Task Create_ValorNegativo_DeveRejeitar(
+        int preco, int custo, int estoque, int estoqueMinimo, string campoEsperado)
+    {
+        var db      = CreateDb($"Create_Negativo_{campoEsperado.Replace(" ", "")}");
+        var service = CreateService(db);
+        var p       = MakeProduct();
+        p.PriceInCents     = preco;
+        p.CostPriceInCents = custo;
+        p.StockQuantity    = estoque;
+        p.MinimumStock     = estoqueMinimo;
+
+        var act = () => service.CreateAsync(p);
+
+        (await act.Should().ThrowAsync<ArgumentException>()).WithMessage($"*{campoEsperado}*");
+    }
+
+    [Fact]
+    public async Task Create_PrecoPromocionalNegativo_DeveRejeitar()
+    {
+        var db      = CreateDb(nameof(Create_PrecoPromocionalNegativo_DeveRejeitar));
+        var service = CreateService(db);
+        var p       = MakeProduct();
+        p.DiscountPriceInCents = -1;
+
+        var act = () => service.CreateAsync(p);
+
+        (await act.Should().ThrowAsync<ArgumentException>()).WithMessage("*promocional*");
+    }
+
+    [Fact]
+    public async Task Update_PrecoNegativo_DeveRejeitar()
+    {
+        var db      = CreateDb(nameof(Update_PrecoNegativo_DeveRejeitar));
+        var service = CreateService(db);
+        var p       = MakeProduct();
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        p.PriceInCents = -500;
+        var act = () => service.UpdateAsync(p);
+
+        (await act.Should().ThrowAsync<ArgumentException>()).WithMessage("*Preco de venda*");
+    }
+
+    // ── Ajuste de estoque: teto contra overflow ───────────────────────────────
+    // stock_quantity é integer no Postgres: delta perto de int.MaxValue estourava
+    // a soma ("22003: integer out of range") e virava 500 genérico.
+
+    [Fact]
+    public async Task AdjustStock_DeltaAlemDoTeto_DeveRejeitarSemEstourarOBanco()
+    {
+        var db      = CreateDb(nameof(AdjustStock_DeltaAlemDoTeto_DeveRejeitarSemEstourarOBanco));
+        var service = CreateService(db);
+        var p       = MakeProduct(stock: 10);
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        var act = () => service.AdjustStockAsync(p.Id, int.MaxValue);
+
+        await act.Should().ThrowAsync<ArgumentException>();
+        var salvo = await db.Products.AsNoTracking().FirstAsync(x => x.Id == p.Id);
+        salvo.StockQuantity.Should().Be(10, "o ajuste inválido não pode ter alterado o estoque");
+    }
+
+    [Fact]
+    public async Task AdjustStock_EstoqueNoTeto_NaoEstouraOInteger()
+    {
+        // Antes do teto no cadastro, o produto podia nascer com int.MaxValue e um
+        // ajuste de +1 estourava o `integer` do Postgres mesmo com delta pequeno.
+        var db      = CreateDb(nameof(AdjustStock_EstoqueNoTeto_NaoEstouraOInteger));
+        var service = CreateService(db);
+        var p       = MakeProduct();
+        p.StockQuantity = int.MaxValue;   // dado legado, antes da validação existir
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        var act = () => service.AdjustStockAsync(p.Id, 1);
+
+        // "Estoque insuficiente" seria mentira aqui — o problema é o teto.
+        (await act.Should().ThrowAsync<ArgumentException>()).WithMessage("*limite*");
+        var salvo = await db.Products.AsNoTracking().FirstAsync(x => x.Id == p.Id);
+        salvo.StockQuantity.Should().Be(int.MaxValue);
+    }
+
+    [Fact]
+    public async Task AdjustStock_ProdutoInexistente_NaoViraErroDeTeto()
+    {
+        // O caminho de falha com leitura extra não pode confundir "não existe"
+        // com "passou do teto".
+        var db      = CreateDb(nameof(AdjustStock_ProdutoInexistente_NaoViraErroDeTeto));
+        var service = CreateService(db);
+
+        (await service.AdjustStockAsync(Guid.NewGuid(), 5)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Create_EstoqueAcimaDoTeto_DeveRejeitar()
+    {
+        var db      = CreateDb(nameof(Create_EstoqueAcimaDoTeto_DeveRejeitar));
+        var service = CreateService(db);
+        var p       = MakeProduct();
+        p.StockQuantity = int.MaxValue;
+
+        var act = () => service.CreateAsync(p);
+
+        (await act.Should().ThrowAsync<ArgumentException>()).WithMessage("*Estoque limitado*");
+    }
+
+    [Fact]
+    public async Task AdjustStock_DentroDoTeto_ContinuaFuncionando()
+    {
+        var db      = CreateDb(nameof(AdjustStock_DentroDoTeto_ContinuaFuncionando));
+        var service = CreateService(db);
+        var p       = MakeProduct(stock: 10);
+        db.Products.Add(p);
+        await db.SaveChangesAsync();
+
+        (await service.AdjustStockAsync(p.Id, 5)).Should().BeTrue();
+
+        var salvo = await db.Products.AsNoTracking().FirstAsync(x => x.Id == p.Id);
+        salvo.StockQuantity.Should().Be(15);
+    }
 }
