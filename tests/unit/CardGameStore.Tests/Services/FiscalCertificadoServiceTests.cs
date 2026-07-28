@@ -78,4 +78,45 @@ public class FiscalCertificadoServiceTests
 
         act.Should().Throw<CertificadoInvalidoException>().WithMessage("*ainda não é válido*");
     }
+
+    // ── Titular do certificado ────────────────────────────────────────────────
+    // É o CNPJ do Subject que impede a loja de assinar NFC-e com certificado de
+    // outra empresa (uso indevido + rejeição na SEFAZ), então o parser precisa
+    // ser previsível nos formatos que as ACs da ICP-Brasil emitem.
+
+    [Theory]
+    // Formato padrão do e-CNPJ A1: "RAZAO SOCIAL:CNPJ" no CN.
+    [InlineData("CN=EMPRESA TESTE LTDA:11222333000181, OU=Certificado Digital, O=ICP-Brasil, C=BR", "11222333000181")]
+    // Ordem invertida do Subject (varia por AC).
+    [InlineData("C=BR, O=ICP-Brasil, CN=OUTRA EMPRESA:44555666000172", "44555666000172")]
+    // CNPJ sozinho, sem razão social junto.
+    [InlineData("CN=11222333000181", "11222333000181")]
+    public void ExtrairCnpj_SubjectComCnpj_DeveDevolverOsQuatorzeDigitos(string subject, string esperado)
+    {
+        FiscalCertificadoService.ExtrairCnpj(subject).Should().Be(esperado);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    // e-CPF: 11 dígitos, não é CNPJ.
+    [InlineData("CN=FULANO DE TAL:12345678901, O=ICP-Brasil, C=BR")]
+    // Sequência de 15+ dígitos não pode virar um "quase CNPJ" truncado.
+    [InlineData("CN=EMPRESA:112223330001812, O=ICP-Brasil")]
+    public void ExtrairCnpj_SemCnpjValido_DeveDevolverNull(string? subject)
+    {
+        FiscalCertificadoService.ExtrairCnpj(subject).Should().BeNull();
+    }
+
+    [Fact]
+    public void Validar_CertificadoSemCnpjNoSubject_NaoQuebra()
+    {
+        // O self-signed dos testes tem CN sem CNPJ — Validar deve seguir normal
+        // e só deixar Cnpj nulo, que é o caso "não consegui identificar".
+        var pfxBytes = CreateSelfSignedPfx(Senha, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        var info = new FiscalCertificadoService().Validar(pfxBytes, Senha);
+
+        info.Cnpj.Should().BeNull();
+    }
 }

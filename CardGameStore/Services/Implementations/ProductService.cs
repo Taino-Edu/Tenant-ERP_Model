@@ -80,6 +80,7 @@ public class ProductService : IProductService
 
     public async Task<Product> CreateAsync(Product product)
     {
+        ValidarDadosComerciais(product);
         NormalizarDadosFiscais(product);
         LimparMetadadosIbpt(product);
         _db.Products.Add(product);
@@ -89,6 +90,7 @@ public class ProductService : IProductService
 
     public async Task<Product> UpdateAsync(Product updated)
     {
+        ValidarDadosComerciais(updated);
         NormalizarDadosFiscais(updated);
         var existing = await _db.Products.FindAsync(updated.Id)
             ?? throw new KeyNotFoundException($"Produto {updated.Id} não encontrado.");
@@ -154,6 +156,24 @@ public class ProductService : IProductService
         }
 
         return existing;
+    }
+
+    // Sem isto a API aceitava preco negativo e a venda avulsa registrava um total
+    // negativo no caixa (produto de -R$ 999 vendido => totalInCents -99900). O
+    // frontend ja avisava, mas quem chama a API direto (import, MCP, integracao)
+    // passava reto.
+    private static void ValidarDadosComerciais(Product product)
+    {
+        if (product.PriceInCents < 0)
+            throw new ArgumentException("Preco de venda nao pode ser negativo.");
+        if (product.CostPriceInCents < 0)
+            throw new ArgumentException("Preco de custo nao pode ser negativo.");
+        if (product.DiscountPriceInCents is < 0)
+            throw new ArgumentException("Preco promocional nao pode ser negativo.");
+        if (product.StockQuantity < 0)
+            throw new ArgumentException("Estoque nao pode ser negativo.");
+        if (product.MinimumStock < 0)
+            throw new ArgumentException("Estoque minimo nao pode ser negativo.");
     }
 
     private static void NormalizarDadosFiscais(Product product)
@@ -255,9 +275,18 @@ public class ProductService : IProductService
     public async Task<Product?> GetByBarcodeAsync(string barcode) =>
         await _db.Products.FirstOrDefaultAsync(p => p.IsActive && p.Barcode == barcode);
 
+    /// <summary>Teto do ajuste manual de estoque numa unica chamada. Existe pra
+    /// evitar que `stock_quantity + delta` estoure o `integer` do Postgres: com
+    /// delta perto de int.MaxValue a soma virava "22003: integer out of range",
+    /// que subia como 500 generico em vez de erro de validacao.</summary>
+    private const int MaxAjusteEstoque = 1_000_000;
+
     public async Task<bool> AdjustStockAsync(Guid id, int quantityDelta)
     {
         if (quantityDelta == 0) return true;
+        if (Math.Abs((long)quantityDelta) > MaxAjusteEstoque)
+            throw new ArgumentException(
+                $"Ajuste de estoque limitado a {MaxAjusteEstoque:N0} unidades por vez — valor informado: {quantityDelta:N0}.");
 
         // UPDATE atômico — garante que estoque nunca fica negativo mesmo sob carga concorrente.
         // Retorna 0 rows se o produto não existe, não está ativo ou o delta resultaria em negativo.

@@ -5,6 +5,7 @@
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text.RegularExpressions;
 
 namespace CardGameStore.Services.Implementations;
 
@@ -37,7 +38,7 @@ public class FiscalCertificadoService
             // X509Certificate2.NotBefore/NotAfter vêm com Kind=Local (conversão do .NET a
             // partir do UTC original do certificado) — Npgsql rejeita gravar DateTime não-UTC
             // em timestamptz. ToUniversalTime() converte preservando o instante real.
-            return new CertificadoInfo(cert.Subject, validoDe, validoAte);
+            return new CertificadoInfo(cert.Subject, validoDe, validoAte, ExtrairCnpj(cert.Subject));
         }
         catch (CryptographicException ex)
         {
@@ -45,9 +46,22 @@ public class FiscalCertificadoService
                 $"Senha incorreta ou arquivo de certificado inválido. Detalhe técnico: {ex.Message}", ex);
         }
     }
+
+    /// <summary>
+    /// Tira o CNPJ do titular do Subject do certificado. Num A1 e-CNPJ da
+    /// ICP-Brasil o CN vem como "RAZAO SOCIAL:00000000000000" — o CNPJ é a
+    /// sequência de 14 dígitos. Devolve null quando não acha (e-CPF, formato
+    /// fora do padrão), e nesse caso quem chama decide o que fazer.
+    /// </summary>
+    public static string? ExtrairCnpj(string? subject)
+    {
+        if (string.IsNullOrWhiteSpace(subject)) return null;
+        var m = Regex.Match(subject, @"(?<!\d)(\d{14})(?!\d)");
+        return m.Success ? m.Groups[1].Value : null;
+    }
 }
 
-public record CertificadoInfo(string Subject, DateTime NotBefore, DateTime NotAfter);
+public record CertificadoInfo(string Subject, DateTime NotBefore, DateTime NotAfter, string? Cnpj = null);
 
 public class CertificadoInvalidoException : Exception
 {

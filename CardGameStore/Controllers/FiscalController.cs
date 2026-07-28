@@ -254,7 +254,19 @@ public class FiscalController : ControllerBase
 
         if (req.Ambiente is not null &&
             Enum.TryParse<AmbienteFiscal>(req.Ambiente, out var ambiente))
+        {
+            // Homologação não tem valor fiscal, então só a virada pra Produção
+            // precisa de guarda. Aqui a nota passa a existir de verdade: se o
+            // certificado for de outra empresa, a loja emitiria documento fiscal
+            // em nome de terceiro. Revalida porque o CNPJ pode ter sido trocado
+            // depois do upload do certificado.
+            if (ambiente == AmbienteFiscal.Producao && cfg.Ambiente != AmbienteFiscal.Producao)
+            {
+                var erro = ValidarTitularidadeDoCertificado(cfg);
+                if (erro is not null) return erro;
+            }
             cfg.Ambiente = ambiente;
+        }
 
         if (req.FormasPagamentoAutoEmissao is not null)
         {
@@ -325,6 +337,20 @@ public class FiscalController : ControllerBase
 
         var cfg = await GetOrCreateConfigAsync();
 
+        // A NFC-e é assinada com este certificado e o emitente do XML é o CNPJ da
+        // loja. Se forem CNPJs diferentes, ou a SEFAZ rejeita, ou — se o CNPJ da
+        // loja tiver sido preenchido com o do dono do certificado — a loja emite
+        // nota fiscal real em nome de terceiro. Barra antes de guardar o .pfx.
+        var cnpjLoja = SomenteDigitos(cfg.Cnpj);
+        if (info.Cnpj is { Length: 14 } cnpjCert && cnpjLoja.Length == 14 && cnpjCert != cnpjLoja)
+            return BadRequest(new
+            {
+                Message = $"O certificado pertence ao CNPJ {FormatarCnpj(cnpjCert)}, mas a loja está " +
+                          $"configurada como {FormatarCnpj(cnpjLoja)}. Envie o certificado do próprio " +
+                          "emitente — assinar NFC-e com certificado de outra empresa é uso indevido e a " +
+                          "SEFAZ rejeita a nota."
+            });
+
         cfg.CertificadoPfxEncrypted        = _enc.Encrypt(Convert.ToBase64String(pfxBytes));
         cfg.CertificadoSenhaEncrypted      = _enc.Encrypt(senha);
         cfg.CertificadoValidade            = info.NotAfter;
@@ -354,6 +380,55 @@ public class FiscalController : ControllerBase
 
         return Ok(naturezas);
     }
+
+    /// <summary>
+    /// Confere se o certificado guardado é do mesmo CNPJ da loja. Reabre o .pfx
+    /// em vez de guardar o CNPJ numa coluna: a virada de ambiente é rara e assim
+    /// não precisa de migration nem de manter dado derivado sincronizado.
+    /// </summary>
+    private BadRequestObjectResult? ValidarTitularidadeDoCertificado(FiscalConfig cfg)
+    {
+        if (string.IsNullOrWhiteSpace(cfg.CertificadoPfxEncrypted) ||
+            string.IsNullOrWhiteSpace(cfg.CertificadoSenhaEncrypted))
+            return BadRequest(new
+            {
+                Message = "Envie o certificado digital A1 antes de ligar o ambiente de Produção."
+            });
+
+        CertificadoInfo info;
+        try
+        {
+            info = _certificado.Validar(
+                Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted)),
+                _enc.Decrypt(cfg.CertificadoSenhaEncrypted));
+        }
+        catch (CertificadoInvalidoException ex)
+        {
+            return BadRequest(new { Message = $"Certificado inválido para Produção: {ex.Message}" });
+        }
+
+        var cnpjLoja = SomenteDigitos(cfg.Cnpj);
+        if (cnpjLoja.Length != 14)
+            return BadRequest(new { Message = "Configure o CNPJ da loja antes de ligar o ambiente de Produção." });
+
+        if (info.Cnpj is { Length: 14 } cnpjCert && cnpjCert != cnpjLoja)
+            return BadRequest(new
+            {
+                Message = $"O certificado instalado é do CNPJ {FormatarCnpj(cnpjCert)} e a loja emite como " +
+                          $"{FormatarCnpj(cnpjLoja)}. Em Produção a nota tem valor fiscal — emitir com " +
+                          "certificado de outra empresa é uso indevido. Instale o certificado do emitente."
+            });
+
+        return null;
+    }
+
+    private static string SomenteDigitos(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) ? string.Empty : new string(valor.Where(char.IsDigit).ToArray());
+
+    private static string FormatarCnpj(string digitos) =>
+        digitos.Length == 14
+            ? $"{digitos[..2]}.{digitos[2..5]}.{digitos[5..8]}/{digitos[8..12]}-{digitos[12..]}"
+            : digitos;
 
     private static readonly string[] CsosnSuportados =
         { "101", "102", "103", "201", "202", "203", "300", "400", "500", "900" };
