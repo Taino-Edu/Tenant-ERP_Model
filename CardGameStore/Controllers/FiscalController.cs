@@ -197,7 +197,7 @@ public class FiscalController : ControllerBase
         var cfg = await GetOrCreateConfigAsync();
 
         if (req.Cnpj is not null)
-            cfg.Cnpj = NormalizarCnpj(req.Cnpj);
+            cfg.Cnpj = Cnpj.Normalizar(req.Cnpj);
         if (req.RazaoSocial       is not null) cfg.RazaoSocial       = req.RazaoSocial;
         if (req.InscricaoEstadual is not null) cfg.InscricaoEstadual = req.InscricaoEstadual;
         if (req.EmailContador     is not null) cfg.EmailContador     = req.EmailContador;
@@ -342,7 +342,7 @@ public class FiscalController : ControllerBase
         // loja. Se forem CNPJs diferentes, ou a SEFAZ rejeita, ou — se o CNPJ da
         // loja tiver sido preenchido com o do dono do certificado — a loja emite
         // nota fiscal real em nome de terceiro. Barra antes de guardar o .pfx.
-        var cnpjLoja = NormalizarCnpj(cfg.Cnpj);
+        var cnpjLoja = Cnpj.Normalizar(cfg.Cnpj);
         var emProducao = cfg.Ambiente == AmbienteFiscal.Producao;
 
         // Em Produção falha fechada: trocar o certificado por um de titular
@@ -359,8 +359,8 @@ public class FiscalController : ControllerBase
         if (info.Cnpj is not null && cnpjLoja.Length == 14 && info.Cnpj != cnpjLoja)
             return BadRequest(new
             {
-                Message = $"O certificado pertence ao CNPJ {FormatarCnpj(info.Cnpj)}, mas a loja está " +
-                          $"configurada como {FormatarCnpj(cnpjLoja)}. Envie o certificado do próprio " +
+                Message = $"O certificado pertence ao CNPJ {Cnpj.Formatar(info.Cnpj)}, mas a loja está " +
+                          $"configurada como {Cnpj.Formatar(cnpjLoja)}. Envie o certificado do próprio " +
                           "emitente — assinar NFC-e com certificado de outra empresa é uso indevido e a " +
                           "SEFAZ rejeita a nota."
             });
@@ -421,7 +421,7 @@ public class FiscalController : ControllerBase
             return BadRequest(new { Message = $"Certificado inválido para Produção: {ex.Message}" });
         }
 
-        var cnpjLoja = NormalizarCnpj(cfg.Cnpj);
+        var cnpjLoja = Cnpj.Normalizar(cfg.Cnpj);
         if (cnpjLoja.Length != 14)
             return BadRequest(new { Message = "Configure o CNPJ da loja antes de ligar o ambiente de Produção." });
 
@@ -438,26 +438,13 @@ public class FiscalController : ControllerBase
         if (info.Cnpj != cnpjLoja)
             return BadRequest(new
             {
-                Message = $"O certificado instalado é do CNPJ {FormatarCnpj(info.Cnpj)} e a loja emite como " +
-                          $"{FormatarCnpj(cnpjLoja)}. Em Produção a nota tem valor fiscal — emitir com " +
+                Message = $"O certificado instalado é do CNPJ {Cnpj.Formatar(info.Cnpj)} e a loja emite como " +
+                          $"{Cnpj.Formatar(cnpjLoja)}. Em Produção a nota tem valor fiscal — emitir com " +
                           "certificado de outra empresa é uso indevido. Instale o certificado do emitente."
             });
 
         return null;
     }
-
-    /// <summary>Tira a máscara do CNPJ preservando letras — a partir de 31/07/2026
-    /// as 12 primeiras posições podem ser alfanuméricas (IN RFB 2.229/2024), então
-    /// filtrar só dígitos mutilaria o CNPJ novo.</summary>
-    private static string NormalizarCnpj(string? valor) =>
-        string.IsNullOrWhiteSpace(valor)
-            ? string.Empty
-            : new string(valor.ToUpperInvariant().Where(char.IsAsciiLetterOrDigit).ToArray());
-
-    private static string FormatarCnpj(string cnpj) =>
-        cnpj.Length == 14
-            ? $"{cnpj[..2]}.{cnpj[2..5]}.{cnpj[5..8]}/{cnpj[8..12]}-{cnpj[12..]}"
-            : cnpj;
 
     private static readonly string[] CsosnSuportados =
         { "101", "102", "103", "201", "202", "203", "300", "400", "500", "900" };

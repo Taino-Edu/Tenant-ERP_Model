@@ -91,7 +91,7 @@ public class NfceEmissionServiceTests
         var comanda = await SeedComandaFechadaAsync(db);
 
         // Config existe mas sem certificado/endereço — deve cair no caminho "não configurado".
-        db.FiscalConfigs.Add(new FiscalConfig { Cnpj = "12345678000100" });
+        db.FiscalConfigs.Add(new FiscalConfig { Cnpj = "12345678000195" });
         await db.SaveChangesAsync();
 
         var service = CreateService(db);
@@ -124,7 +124,7 @@ public class NfceEmissionServiceTests
 
         db.FiscalConfigs.Add(new FiscalConfig
         {
-            Cnpj                      = "12345678000100",
+            Cnpj                      = "12345678000195",
             RazaoSocial                = "Loja Teste LTDA",
             InscricaoEstadual          = "110042490114",
             Logradouro                 = "Rua Teste",
@@ -158,7 +158,7 @@ public class NfceEmissionServiceTests
 
         db.FiscalConfigs.Add(new FiscalConfig
         {
-            Cnpj                      = "12345678000100",
+            Cnpj                      = "12345678000195",
             RazaoSocial                = "Loja Teste LTDA",
             InscricaoEstadual          = "110042490114",
             Logradouro                 = "Rua Teste",
@@ -229,19 +229,33 @@ public class NfceEmissionServiceTests
     }
 
     [Theory]
-    [InlineData("12.345.678/0001-90", "12345678000190")]
-    [InlineData("12345678000190", "12345678000190")]
+    // CNPJ numérico — segue sendo o caso de praticamente toda a base: os CNPJs
+    // existentes não mudam nem têm o DV recalculado.
+    [InlineData("12.345.678/0001-95", "12345678000195")]
+    [InlineData("12345678000195", "12345678000195")]
+    // CNPJ alfanumérico (IN RFB 2.229/2024) — a SEFAZ recebe documentos nesse
+    // formato desde 01/07/2026 (NT 2026.004).
+    [InlineData("12ABC34501DE35", "12ABC34501DE35")]
+    [InlineData("12.ABC.345/01DE-35", "12ABC34501DE35")]
+    [InlineData("12abc34501de35", "12ABC34501DE35")]
     public void NormalizarCnpjParaSefaz_CentralizaFormatoDaFronteira(string entrada, string esperado)
     {
         NfceEmissionService.NormalizarCnpjParaSefaz(entrada).Should().Be(esperado);
     }
 
-    [Fact]
-    public void NormalizarCnpjParaSefaz_FormatoIncompativel_ExplicaContrato()
+    [Theory]
+    [InlineData("identificador-futuro")]      // nem parece CNPJ
+    [InlineData("12345678000199")]            // 14 dígitos, DV errado
+    [InlineData("12ABC34501DE34")]            // alfanumérico, DV errado
+    [InlineData("1234567800019")]             // 13 posições
+    [InlineData("")]
+    public void NormalizarCnpjParaSefaz_FormatoIncompativel_ExplicaContrato(string entrada)
     {
-        var act = () => NfceEmissionService.NormalizarCnpjParaSefaz("identificador-futuro");
+        // Antes só o tamanho era conferido: um CNPJ com DV errado seguia pra SEFAZ
+        // e só voltava como rejeição, sem o lojista saber o que corrigir.
+        var act = () => NfceEmissionService.NormalizarCnpjParaSefaz(entrada);
 
-        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*identificador fiscal*");
+        act.Should().Throw<FiscalNaoConfiguradoException>().WithMessage("*CNPJ*");
     }
 
     [Theory]

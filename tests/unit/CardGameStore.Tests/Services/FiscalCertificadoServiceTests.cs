@@ -138,7 +138,9 @@ public class FiscalCertificadoServiceTests
     [InlineData("ABCDEFGH123432", true)]
     [InlineData("12ABC34501DE34", false)]  // DV errado
     [InlineData("12ABC34501DEX5", false)]  // DV tem que ser numérico
-    [InlineData("12abc34501de35", false)]  // minúscula não é o formato oficial
+    // Minúscula é aceita e normalizada pra maiúscula: o formato oficial é em
+    // caixa alta, mas recusar quem digitou minúsculo seria só atrito.
+    [InlineData("12abc34501de35", true)]
     [InlineData("12ABC-4501DE35", false)]  // caractere fora de [0-9A-Z]
     public void CnpjTemDigitoValido_Alfanumerico_DeveSeguirOModuloOnzeComAscii(string cnpj, bool esperado)
     {
