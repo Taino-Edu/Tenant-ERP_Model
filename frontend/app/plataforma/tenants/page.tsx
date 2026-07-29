@@ -14,6 +14,7 @@ import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import toast from 'react-hot-toast'
 import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle } from 'lucide-react'
 import clsx from 'clsx'
+import { PLANOS, PLANO_PERSONALIZADO, acharPlano, taxaImplantacao, formatarReais } from '@/lib/planos'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -147,16 +148,52 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
   const [backingUp, setBackingUp] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showModules, setShowModules] = useState(false)
+  const [mensalidade, setMensalidade] = useState(String(tenant.monthlyPrice ?? 0))
+
+  /** Trocar de plano aplica o preço de tabela junto — era exatamente isso que
+   *  faltava: o nome mudava e o valor ficava para trás. Personalizado preserva
+   *  o valor atual, porque ali quem manda é o negociado. */
+  function aplicarPlano(nome: string) {
+    const plano = acharPlano(nome)
+    if (!plano) { saveBilling({ planName: PLANO_PERSONALIZADO }); return }
+    setMensalidade(String(plano.preco))
+    saveBilling({
+      planName:       plano.nome,
+      monthlyPrice:   plano.preco,
+      setupFee:       taxaImplantacao(plano.preco),
+      enabledModules: plano.modules,
+    })
+  }
+
+  function salvarMensalidade() {
+    const valor = Number(mensalidade)
+    if (!Number.isFinite(valor) || valor < 0) { setMensalidade(String(tenant.monthlyPrice)); return }
+    if (valor === tenant.monthlyPrice) return
+    // Mexer no valor à mão descola da tabela — o plano vira Personalizado pra
+    // não ficar escrito "Completo" numa loja que paga outro preço.
+    saveBilling({
+      planName:     acharPlano(planName) && valor !== acharPlano(planName)!.preco ? PLANO_PERSONALIZADO : planName,
+      monthlyPrice: valor,
+      setupFee:     taxaImplantacao(valor),
+    })
+  }
 
   useEffect(() => { setPlanName(tenant.planName) }, [tenant.planName])
+  useEffect(() => { setMensalidade(String(tenant.monthlyPrice ?? 0)) }, [tenant.monthlyPrice])
 
-  async function saveBilling(next: Partial<{ planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[] }>) {
+  // Plano que não está na tabela (cortesia, piloto, legado como "Mar"/"Lagoa")
+  // aparece como Personalizado em vez de sumir do select.
+  const planoSelecionado = acharPlano(planName)?.nome ?? PLANO_PERSONALIZADO
+
+  async function saveBilling(next: Partial<{ planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]; monthlyPrice: number; setupFee: number }>) {
     setSavingBilling(true)
     try {
       await platformApi.updateTenantBilling(tenant.id, {
         planName:       next.planName       ?? planName,
         paymentStatus:  next.paymentStatus  ?? tenant.paymentStatus,
         enabledModules: next.enabledModules ?? tenant.enabledModules,
+        monthlyPrice:   next.monthlyPrice,
+        setupFee:       next.setupFee,
       })
       toast.success('Billing atualizado.')
       onChanged()
@@ -232,14 +269,37 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
           {tenant.status === 'Active' ? 'Ativo' : 'Suspenso'}
         </Badge>
       </td>
+      {/* Plano deixou de ser texto livre: o nome tem que bater com a tabela de
+          preços do backend, senão a loja fica com mensalidade 0 e some do MRR.
+          Escolher um plano já aplica o valor de tabela; "Personalizado" existe
+          pro preço negociado, que aí é digitado ao lado. */}
       <td className="py-3">
-        <input
-          className="input text-xs py-1 w-28"
-          value={planName}
-          onChange={e => setPlanName(e.target.value)}
-          onBlur={() => { if (planName.trim() && planName !== tenant.planName) saveBilling({ planName: planName.trim() }) }}
+        <select
+          className="input text-xs py-1 w-32"
+          value={planoSelecionado}
           disabled={savingBilling}
-        />
+          onChange={e => aplicarPlano(e.target.value)}
+        >
+          {PLANOS.map(p => <option key={p.nome} value={p.nome}>{p.nome}</option>)}
+          <option value={PLANO_PERSONALIZADO}>{PLANO_PERSONALIZADO}</option>
+        </select>
+      </td>
+      <td className="py-3">
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-gray-500">R$</span>
+          <input
+            className="input text-xs py-1 w-20 tabular-nums"
+            type="number" min="0" step="0.01"
+            value={mensalidade}
+            onChange={e => setMensalidade(e.target.value)}
+            onBlur={salvarMensalidade}
+            disabled={savingBilling}
+            title="Mensalidade cobrada desta loja"
+          />
+        </div>
+        <p className="text-[10px] text-gray-500 mt-0.5">
+          implantação {formatarReais(tenant.setupFee)}
+        </p>
       </td>
       <td className="py-3">
         <StatusPillSelect
@@ -454,6 +514,7 @@ export default function PlataformaTenantsPage() {
                 <th className="py-2 font-medium">Slug</th>
                 <th className="py-2 font-medium">Status</th>
                 <th className="py-2 font-medium">Plano</th>
+                <th className="py-2 font-medium">Mensalidade</th>
                 <th className="py-2 font-medium">Pagamento</th>
                 <th className="py-2 font-medium">Módulos</th>
                 <th className="py-2 font-medium">Criado em</th>

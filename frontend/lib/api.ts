@@ -711,6 +711,10 @@ export interface TenantSummary {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
   customDomain: string | null
   maxUsers: number | null
+  /** Mensalidade cobrada desta loja. Zero = cortesia/piloto. */
+  monthlyPrice: number
+  /** Taxa de implantação cobrada na contratação. */
+  setupFee: number
 }
 
 export interface CreateTenantRequest {
@@ -729,26 +733,16 @@ export const TENANT_MODULES = [
   { value: 'eventos',  label: 'Gestão de Eventos',    description: 'Cadastro de eventos e cobrança de entrada' },
 ] as const
 
-/** Presets de plano pro painel de criação de tenant — só pré-marcam os
- * módulos e o limite de acesso; o dono da plataforma ainda pode ajustar
- * manualmente antes de criar (módulos personalizados continuam possíveis). */
-export const TENANT_PLAN_PRESETS = [
-  {
-    name: 'Mar',
-    description: 'Plano completo — todos os módulos',
-    modules: TENANT_MODULES.map(m => m.value) as string[],
-    maxUsers: null as number | null,
-  },
-  {
-    name: 'Lagoa',
-    description: 'Plano base — sem IA, eventos, contador ou estoque avançado',
-    modules: ['fiscal', 'pontos'] as string[],
-    maxUsers: 4 as number | null,
-  },
-] as const
+/** O catálogo de planos vive em `lib/planos.ts` — um só, compartilhado com o
+ * site institucional. Os presets que existiam aqui ("Mar", "Lagoa") não tinham
+ * preço nem correspondiam a nada que o site vendesse. */
 
 export interface UpdateTenantBillingRequest {
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
+  /** Omitidos preservam o valor atual. O backend ja aceitava desde a PR #25 —
+   *  era o frontend que nunca mandava, e por isso loja ficava com R$ 0. */
+  monthlyPrice?: number
+  setupFee?: number
   /** Omitido/null preserva o limite atual — para remover de vez, use removerMaxUsers. */
   maxUsers?: number | null
   removerMaxUsers?: boolean

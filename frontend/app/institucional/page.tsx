@@ -6,6 +6,7 @@ import {
   ArrowRight, CheckCircle2, Sun, Moon, Menu, X, Loader2,
 } from 'lucide-react'
 import { publicDirectoryApi, PublicTenantDto, leadsApi, getErrorMessage } from '@/lib/api'
+import { PLANOS, taxaImplantacao } from '@/lib/planos'
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
 
@@ -19,59 +20,10 @@ const NAV_LINKS = [
 
 // Planos derivados dos módulos que o sistema realmente tem hoje (ver
 // Tenant.EnabledModules: fiscal, estoque, pontos, contador, ia, eventos) e do
-// limite de usuários por plano (Tenant.MaxUsers, enforçado em
-// UserService.AdminCreateUserAsync). Nada aqui promete recurso que não existe.
-//
-// Os valores são uma PROPOSTA de partida, não pricing fechado — o Tenant já
-// trata PlanName como texto livre justamente porque o pricing não estava
-// definido. Ajustar aqui e no billing do tenant ao mesmo tempo.
-const PLANOS = [
-  {
-    nome: 'Essencial',
-    preco: 120,
-    publico: 'Pra loja que quer sair da planilha e do caderno.',
-    destaque: false,
-    usuarios: '2 usuários no painel',
-    inclui: [
-      'PDV e comanda',
-      'Emissão de NFC-e (fiscal completo)',
-      'Controle de estoque com variantes',
-      'Vitrine própria com subdomínio seu',
-      'App instalável no celular (PWA), com sua marca',
-      'Relatórios básicos de venda',
-    ],
-  },
-  {
-    nome: 'Completo',
-    preco: 269,
-    publico: 'A operação que já vende todo dia e precisa de controle.',
-    destaque: true,
-    usuarios: '6 usuários no painel',
-    inclui: [
-      'Tudo do Essencial',
-      'Crediário e contas a receber',
-      'Financeiro completo, com fechamento de caixa',
-      'Programa de fidelidade por pontos',
-      'Portal do contador (ele acessa direto, sem você exportar nada)',
-      'Gestão de eventos com cobrança de entrada',
-      'Perfis de acesso por funcionário',
-    ],
-  },
-  {
-    nome: 'Avançado',
-    preco: 487,
-    publico: 'Pra quem tem mais de um ponto ou quer automatizar.',
-    destaque: false,
-    usuarios: 'Usuários ilimitados',
-    inclui: [
-      'Tudo do Completo',
-      'Assistente de IA no painel (pergunte em português sobre sua loja)',
-      'Domínio próprio (suamarca.com.br)',
-      'Reservas e agendamento',
-      'Prioridade no suporte',
-    ],
-  },
-]
+// O catálogo de planos mora em `lib/planos.ts`, compartilhado com o painel
+// gerenciador. Antes ele estava duplicado aqui e o painel oferecia outros
+// nomes ("Mar", "Lagoa") — loja cadastrada por lá nascia com mensalidade 0,
+// porque o nome não batia com a tabela de preços do backend.
 
 const PILARES = [
   {
@@ -383,7 +335,7 @@ export default function InstitucionalPage() {
                     primeira vez que o preço muda — e preço de tabela errado numa
                     página de vendas é problema comercial, não bug de UI. */}
                 <p className={`mt-1 text-xs ${C.muted}`}>
-                  + R$ {preco * 2} de implantação, uma única vez
+                  + R$ {taxaImplantacao(preco)} de implantação, uma única vez
                 </p>
 
                 <p className={`mt-3 text-xs font-semibold ${C.body}`}>{usuarios}</p>

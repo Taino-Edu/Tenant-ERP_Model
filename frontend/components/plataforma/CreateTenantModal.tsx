@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
-import { platformApi, getErrorMessage, TENANT_MODULES, TENANT_PLAN_PRESETS } from '@/lib/api'
+import { platformApi, getErrorMessage, TENANT_MODULES } from '@/lib/api'
+import { PLANOS, PLANO_PERSONALIZADO, taxaImplantacao, formatarReais, type Plano } from '@/lib/planos'
 import toast from 'react-hot-toast'
 import { Building2, Plus, Loader2, X, Check } from 'lucide-react'
 import clsx from 'clsx'
@@ -19,14 +20,18 @@ export default function CreateTenantModal({
   // Fiscal vem marcado por padrão — mesmo default que o backend já aplicava
   // antes desse seletor existir (Tenant.EnabledModules = ["fiscal"]).
   const [modules, setModules]   = useState<string[]>(['fiscal'])
-  const [planName, setPlanName] = useState('Personalizado')
+  const [planName, setPlanName] = useState<string>(PLANO_PERSONALIZADO)
   const [maxUsers, setMaxUsers] = useState<number | ''>('')
   const [loading, setLoading]   = useState(false)
 
-  function applyPreset(preset: typeof TENANT_PLAN_PRESETS[number]) {
-    setPlanName(preset.name)
-    setModules([...preset.modules])
-    setMaxUsers(preset.maxUsers ?? '')
+  // O nome precisa bater EXATAMENTE com a tabela de preços do backend
+  // (TenantProvisioningService.TabelaPrecos) — é dela que sai o MonthlyPrice do
+  // tenant novo. Nome fora da tabela entra com mensalidade 0, que foi o que
+  // aconteceu com os presets antigos ("Mar", "Lagoa").
+  function aplicarPlano(plano: Plano) {
+    setPlanName(plano.nome)
+    setModules([...plano.modules])
+    setMaxUsers(plano.maxUsers ?? '')
   }
 
   // Qualquer ajuste manual depois de escolher um preset deixa de ser
@@ -34,7 +39,7 @@ export default function CreateTenantModal({
   // os módulos já não batem mais com o preset original.
   function toggleModule(value: string) {
     setModules(prev => prev.includes(value) ? prev.filter(m => m !== value) : [...prev, value])
-    setPlanName('Personalizado')
+    setPlanName(PLANO_PERSONALIZADO)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -92,21 +97,28 @@ export default function CreateTenantModal({
           <div>
             <label className="label">Plano</label>
             <div className="flex flex-col sm:flex-row gap-2 mt-1">
-              {TENANT_PLAN_PRESETS.map(preset => (
+              {PLANOS.map(plano => (
                 <button
-                  key={preset.name} type="button" onClick={() => applyPreset(preset)}
+                  key={plano.nome} type="button" onClick={() => aplicarPlano(plano)}
                   className={clsx(
                     'flex-1 px-3 py-2 rounded-lg border text-left transition-colors',
-                    planName === preset.name ? 'border-brand-500 bg-brand-600/10' : 'border-surface-500 hover:border-surface-400',
+                    planName === plano.nome ? 'border-brand-500 bg-brand-600/10' : 'border-surface-500 hover:border-surface-400',
                   )}
                 >
-                  <span className="block text-sm font-bold text-white">{preset.name}</span>
-                  <span className="block text-xs text-gray-400">{preset.description}</span>
+                  <span className="block text-sm font-bold text-white">{plano.nome}</span>
+                  <span className="block text-sm font-semibold text-brand-300 tabular-nums">
+                    {formatarReais(plano.preco)}<span className="text-xs font-normal text-gray-500">/mês</span>
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    + {formatarReais(taxaImplantacao(plano.preco))} de implantação
+                  </span>
                 </button>
               ))}
             </div>
-            {planName === 'Personalizado' && (
-              <p className="text-xs text-gray-500 mt-1">Nenhum preset selecionado — ajuste os módulos manualmente abaixo.</p>
+            {planName === PLANO_PERSONALIZADO && (
+              <p className="text-xs text-amber-400 mt-1">
+                Sem plano de tabela, a loja nasce com mensalidade R$ 0 — defina o valor no painel depois de criar.
+              </p>
             )}
           </div>
           <div>
