@@ -737,6 +737,14 @@ public class FiscalController : ControllerBase
                 nota.ErpEstornoErro,
             });
         }
+        // FiscalNaoConfiguradoException herda de Exception, não de
+        // InvalidOperationException — sem este catch, loja mal configurada (CNPJ
+        // inválido, por exemplo) recebia 500 "Erro interno" em vez de saber o que
+        // corrigir. Vale pra emissão, cancelamento e inutilização.
+        catch (FiscalNaoConfiguradoException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { Message = ex.Message });
@@ -762,6 +770,10 @@ public class FiscalController : ControllerBase
                 registro.Protocolo,
                 registro.InutilizadoEm,
             });
+        }
+        catch (FiscalNaoConfiguradoException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {
