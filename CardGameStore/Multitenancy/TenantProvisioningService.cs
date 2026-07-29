@@ -28,11 +28,13 @@ public class TenantProvisioningService : ITenantProvisioningService
     /// real vive em Tenant.MonthlyPrice e é editável, porque desconto negociado
     /// caso a caso é regra nesse estágio, não exceção.
     ///
-    /// Duplicação com o frontend é consciente: são públicos diferentes (página de
-    /// venda vs. provisionamento) e unificar exigiria um endpoint de tabela de
-    /// preços que nada consome ainda. Ao mudar preço, mudar nos dois — está
-    /// anotado no BACKLOG.</summary>
-    private static readonly Dictionary<string, decimal> TabelaPrecos = new(StringComparer.OrdinalIgnoreCase)
+    /// A cópia no frontend (frontend/lib/planos.ts) continua existindo de
+    /// propósito: a página de vendas não pode depender da API estar de pé pra
+    /// mostrar preço — API fora do ar viraria plano sem valor na hora da venda.
+    /// O que era risco real ("mudar num lugar e esquecer do outro") deixou de
+    /// existir por outro caminho: TabelaPrecosSincronizadaTests compara os dois
+    /// arquivos e quebra o CI se divergirem.</summary>
+    internal static readonly Dictionary<string, decimal> TabelaPrecos = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Essencial"] = 120m,
         ["Completo"]  = 269m,
