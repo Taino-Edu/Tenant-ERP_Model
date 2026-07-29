@@ -24,6 +24,7 @@ public class CatalogDbContext : DbContext
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
     public DbSet<TenantCharge> TenantCharges { get; set; }
+    public DbSet<PlatformIntegration> PlatformIntegrations { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
