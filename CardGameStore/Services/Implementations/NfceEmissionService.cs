@@ -150,16 +150,22 @@ public class NfceEmissionService : INfceEmissionService
         return FuncoesXml.ClasseParaXmlString(processo);
     }
 
-    /// <summary>Adaptador de fronteira para o identificador atual do estabelecimento.
-    /// A origem/modelagem do CNPJ mudará; toda dependência do formato exigido pela
-    /// SEFAZ deve permanecer concentrada aqui.</summary>
+    /// <summary>Adaptador de fronteira para o identificador do estabelecimento.
+    /// Toda dependência do formato exigido pela SEFAZ fica concentrada aqui.
+    ///
+    /// Aceita os dois modelos de CNPJ: o numérico de sempre e o alfanumérico que
+    /// a Receita passou a emitir (IN RFB 2.229/2024), com o ambiente nacional de
+    /// NF-e/NFC-e recebendo documentos nesse formato desde 01/07/2026 (NT
+    /// 2026.004). Passou a conferir o dígito verificador também — antes qualquer
+    /// sequência de 14 dígitos seguia pra SEFAZ e só voltava como rejeição.</summary>
     internal static string NormalizarCnpjParaSefaz(string? identificadorAtual)
     {
-        var digitos = new string((identificadorAtual ?? string.Empty).Where(char.IsDigit).ToArray());
-        if (digitos.Length != 14)
+        var cnpj = Cnpj.Normalizar(identificadorAtual);
+        if (!Cnpj.EhValido(cnpj))
             throw new FiscalNaoConfiguradoException(
-                "O identificador fiscal do estabelecimento ainda não fornece um CNPJ de 14 dígitos válido para a SEFAZ.");
-        return digitos;
+                "O identificador fiscal do estabelecimento não é um CNPJ válido para a SEFAZ. " +
+                "Informe as 14 posições do CNPJ da loja (numérico ou alfanumérico).");
+        return cnpj;
     }
 
     internal static string? NormalizarCpfOpcionalParaSefaz(string? cpf)
