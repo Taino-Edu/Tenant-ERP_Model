@@ -409,13 +409,20 @@ export default function PlataformaTenantsPage() {
   const [filtro, setFiltro] = useState<TenantFiltro>('todos')
   const [filtroTexto, setFiltroTexto] = useState('')
 
-  const fetchTenants = useCallback(() => {
-    setLoading(true)
+  /// `loading` só vale pra primeira carga. Recarregar depois de uma edição
+  /// inline tem que ser silencioso: com KPIs, busca e tabela atrás de
+  /// `!loading`, ligar o spinner a cada toggle apagaria a página inteira e
+  /// desmontaria a linha — o que fecharia o modal de módulos a cada clique.
+  const fetchTenants = useCallback((silencioso = false) => {
+    if (!silencioso) setLoading(true)
     platformApi.listTenants()
       .then(r => setTenants(r.data))
       .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar tenants')))
-      .finally(() => setLoading(false))
+      .finally(() => { if (!silencioso) setLoading(false) })
   }, [])
+
+  /// Passado às linhas: recarrega o dado sem piscar a tela.
+  const recarregarSilencioso = useCallback(() => fetchTenants(true), [fetchTenants])
 
   const fetchOverview = useCallback(() => {
     // Falha aqui não pode derrubar a tabela de tenants — só a coluna de
@@ -524,14 +531,14 @@ export default function PlataformaTenantsPage() {
             </thead>
             <tbody>
               {tenantsVisiveis.map(t => (
-                <TenantRow key={t.id} tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={fetchTenants} />
+                <TenantRow key={t.id} tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={recarregarSilencioso} />
               ))}
             </tbody>
           </table>
         )}
       </div>
 
-      {showCreate && <CreateTenantModal onClose={() => setShowCreate(false)} onCreated={fetchTenants} />}
+      {showCreate && <CreateTenantModal onClose={() => setShowCreate(false)} onCreated={() => fetchTenants()} />}
     </div>
   )
 }
