@@ -108,11 +108,12 @@ export default function TimerAlarmOverlay() {
   }, [startAlarm, stopAlarm])
 
   useEffect(() => {
+    const stopFns = stopFnsRef.current
     poll()
     const id = setInterval(poll, 5000)
     return () => {
       clearInterval(id)
-      stopFnsRef.current.forEach(fn => fn())
+      stopFns.forEach(fn => fn())
     }
   }, [poll])
 

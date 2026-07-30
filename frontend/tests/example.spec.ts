@@ -1,18 +1,17 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test'
 
-test('has title', async ({ page }) => {
-  await page.goto('https://playwright.dev/');
+test.describe('Smoke HTTP de produção', () => {
+  test('página de termos responde e contém o conteúdo principal', async ({ request }) => {
+    const response = await request.get('/termos', { timeout: 15_000 })
 
-  // Expect a title "to contain" a substring.
-  await expect(page).toHaveTitle(/Playwright/);
-});
+    expect(response.ok()).toBeTruthy()
+    await expect(response.text()).resolves.toContain('Termos de Uso')
+  })
 
-test('get started link', async ({ page }) => {
-  await page.goto('https://playwright.dev/');
+  test('página de privacidade responde e contém o conteúdo principal', async ({ request }) => {
+    const response = await request.get('/privacidade', { timeout: 15_000 })
 
-  // Click the get started link.
-  await page.getByRole('link', { name: 'Get started' }).click();
-
-  // Expects page to have a heading with the name of Installation.
-  await expect(page.getByRole('heading', { name: 'Installation' })).toBeVisible();
-});
+    expect(response.ok()).toBeTruthy()
+    await expect(response.text()).resolves.toContain('Política de Privacidade')
+  })
+})

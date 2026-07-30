@@ -48,9 +48,8 @@ public class MensageriaController : ControllerBase
     // ── Segmentos pré-definidos ────────────────────────────────────────────────
 
     [HttpGet("segments")]
-    public async Task<IActionResult> GetSegments()
+    public IActionResult GetSegments()
     {
-        var now = DateTime.UtcNow;
         return Ok(new[]
         {
             new { id = "all",         label = "Todos os clientes" },

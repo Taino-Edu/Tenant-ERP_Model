@@ -35,12 +35,13 @@ namespace CardGameStore.Tests;
 public static class TestDbFactory
 {
     private const string DefaultConnString =
-        "Host=127.0.0.1;Port=5433;Database=tenant_erp_test;Username=tenant_test;Password=tenant_test_pw";
+        "Host=127.0.0.1;Port=5433;Database=tenant_erp_test;Username=tenant_test;Password=tenant_test_pw;Timeout=3";
 
     private static readonly string PgConnString =
         Environment.GetEnvironmentVariable("TEST_POSTGRES_CONNECTION") is { Length: > 0 } env
             ? env
             : DefaultConnString;
+    private static readonly Lazy<bool> DatabaseAvailable = new(CheckDatabaseAvailable);
 
     /// <summary>Connection string do Postgres de teste — exposta pra testes que
     /// precisam montar o próprio DbContext (ex: TenantIsolationTests, que usa o
@@ -51,6 +52,7 @@ public static class TestDbFactory
     /// que Create() faz, exposto pra testes que gerenciam o próprio contexto.</summary>
     public static void ResetSchema(string schema)
     {
+        _ = DatabaseAvailable.Value;
         using var setup = new NpgsqlConnection(PgConnString);
         setup.Open();
         using var cmd = setup.CreateCommand();
@@ -67,6 +69,7 @@ public static class TestDbFactory
     /// vez de só documentar).</summary>
     public static AppDbContext Create(string testName = "")
     {
+        _ = DatabaseAvailable.Value;
         var schema = "test_" + Sanitize(string.IsNullOrWhiteSpace(testName) ? Guid.NewGuid().ToString("N") : testName);
         // Trunca — identificador de schema no Postgres tem limite de 63 bytes.
         if (schema.Length > 60) schema = schema[..60];
@@ -117,6 +120,35 @@ public static class TestDbFactory
 
     private static string Sanitize(string s) =>
         Regex.Replace(s, "[^a-zA-Z0-9_]", "_").ToLowerInvariant();
+
+    private static bool CheckDatabaseAvailable()
+    {
+        Exception? lastException = null;
+        for (var attempt = 1; attempt <= 6; attempt++)
+        {
+            try
+            {
+                using var connection = new NpgsqlConnection(PgConnString);
+                connection.Open();
+                return true;
+            }
+            catch (Exception exception) when (attempt < 6)
+            {
+                lastException = exception;
+                Thread.Sleep(TimeSpan.FromMilliseconds(500));
+            }
+            catch (Exception exception)
+            {
+                lastException = exception;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "O PostgreSQL de testes não está acessível. Execute " +
+            "'docker compose -f tests/docker-compose.yml up -d --wait' " +
+            "ou configure TEST_POSTGRES_CONNECTION antes de rodar a suíte.",
+            lastException);
+    }
 }
 
 /// <summary>Fixa o search_path pro schema deste teste em toda conexão física

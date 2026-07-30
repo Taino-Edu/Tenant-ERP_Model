@@ -24,6 +24,7 @@ public class TenantResolutionMiddlewareTests
     [Theory]
     [InlineData("loja-maikon.3esysten.com.br", "3esysten.com.br", "loja-maikon")]
     [InlineData("3esysten.com.br",             "3esysten.com.br", null)]        // domínio raiz — sem slug
+    [InlineData("www.3esysten.com.br",         "3esysten.com.br", null)]        // www pertence à plataforma
     [InlineData("a.b.3esysten.com.br",         "3esysten.com.br", null)]        // multi-nível — não é slug válido
     [InlineData("179.197.67.64",               "3esysten.com.br", null)]        // IP puro
     [InlineData("localhost",                   "3esysten.com.br", null)]
@@ -55,10 +56,16 @@ public class TenantResolutionMiddlewareTests
         return (httpContext, new TenantContext());
     }
 
-    private static TenantResolutionMiddleware CreateMiddleware(RequestDelegate next, string? rootDomain = null)
+    private static TenantResolutionMiddleware CreateMiddleware(
+        RequestDelegate next, string? rootDomain = null, bool rejectUnknownHosts = false)
     {
+        var values = new Dictionary<string, string?>
+        {
+            ["Multitenancy:RootDomain"] = rootDomain,
+            ["Multitenancy:RejectUnknownHosts"] = rejectUnknownHosts.ToString(),
+        };
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(rootDomain is null ? [] : new Dictionary<string, string?> { ["Multitenancy:RootDomain"] = rootDomain })
+            .AddInMemoryCollection(values)
             .Build();
         return new TenantResolutionMiddleware(
             next,
@@ -161,5 +168,68 @@ public class TenantResolutionMiddlewareTests
         ctx.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
         nextChamado.Should().BeFalse("a requisição não pode seguir o pipeline servindo o tenant-zero");
         tenantContext.TenantId.Should().Be(TenantConstants.TenantZeroId, "o contexto não deve ter sido alterado para nenhum tenant real");
+    }
+
+    [Fact]
+    public async Task InvokeAsync_HostDesconhecido_ComRejeicaoAtiva_Retorna404()
+    {
+        var catalog = CreateCatalogDb();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("host-forjado.example", services);
+        ctx.Response.Body = new MemoryStream();
+
+        var nextChamado = false;
+        var middleware = CreateMiddleware(
+            _ => { nextChamado = true; return Task.CompletedTask; },
+            rootDomain: "3esysten.com.br",
+            rejectUnknownHosts: true);
+
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        ctx.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        nextChamado.Should().BeFalse();
+        tenantContext.IsExplicitlySet.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_HealthcheckInterno_ComHostLocal_PermiteTenantZero()
+    {
+        var catalog = CreateCatalogDb();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("localhost:5000", services);
+        ctx.Request.Path = "/health";
+
+        var nextChamado = false;
+        var middleware = CreateMiddleware(
+            _ => { nextChamado = true; return Task.CompletedTask; },
+            rootDomain: "3esysten.com.br",
+            rejectUnknownHosts: true);
+
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        nextChamado.Should().BeTrue();
+        tenantContext.TenantId.Should().Be(TenantConstants.TenantZeroId);
+        tenantContext.IsExplicitlySet.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("3esysten.com.br")]
+    [InlineData("www.3esysten.com.br")]
+    public async Task InvokeAsync_HostDaPlataforma_ComRejeicaoAtiva_UsaTenantZero(string host)
+    {
+        var catalog = CreateCatalogDb();
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext(host, services);
+
+        var middleware = CreateMiddleware(
+            _ => Task.CompletedTask,
+            rootDomain: "3esysten.com.br",
+            rejectUnknownHosts: true);
+
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        tenantContext.TenantId.Should().Be(TenantConstants.TenantZeroId);
+        tenantContext.SchemaName.Should().Be(TenantConstants.TenantZeroSchema);
+        tenantContext.IsExplicitlySet.Should().BeTrue();
     }
 }

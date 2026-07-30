@@ -82,7 +82,7 @@ public class ComandaService : IComandaService
         _logger.LogInformation("Comanda {Id} aberta para usuário {UserId}", comanda.Id, userId);
 
         // Notifica o cliente (User_{userId}) que a comanda foi aberta pelo admin
-        await _hub.Clients.Group(ComandaHub.GetUserGroup(userId))
+        await _hub.Clients.Group(ComandaHub.GetUserGroup(_tenant.TenantId, userId))
             .SendAsync("ComandaOpened", new { ComandaId = comanda.Id, TableIdentifier = comanda.TableIdentifier });
 
         // Notifica o admin (dashboard)
@@ -274,7 +274,7 @@ public class ComandaService : IComandaService
                     await transaction.CommitAsync();
                 });
 
-                await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+                await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
                     .SendAsync("ItemAddedByAdmin", new { ItemName = existing.ItemNameSnapshot, NewTotalInReais = comanda.TotalInReais });
                 await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
@@ -322,7 +322,7 @@ public class ComandaService : IComandaService
         });
 
         // Notifica o cliente na comanda que o admin adicionou um item
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ItemAddedByAdmin", new
             {
                 ItemName        = item.ItemNameSnapshot,
@@ -396,7 +396,7 @@ public class ComandaService : IComandaService
 
         var dto = MapToDto(comanda);
         // Notifica cliente e admin da remoção
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
@@ -475,7 +475,7 @@ public class ComandaService : IComandaService
 
         var dto = MapToDto(comanda);
         // Notifica cliente e admin da atualização de quantidade
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
@@ -786,7 +786,7 @@ public class ComandaService : IComandaService
         dto.NotaFiscalStatus          = nota?.Status.ToString();
         dto.NotaFiscalMotivoRejeicao  = nota?.MotivoRejeicao;
         // Notifica o cliente que a comanda foi fechada
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaClosed", new { ComandaId = comandaId, PaymentMethod = paymentMethod });
         // Notifica o admin
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
@@ -868,7 +868,7 @@ public class ComandaService : IComandaService
             comandaId, comanda.Items.Count(i => i.ProductId.HasValue));
 
         // Notifica o cliente que a comanda foi cancelada
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaCancelled", new { ComandaId = comandaId });
         // Notifica o admin
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
@@ -1011,7 +1011,7 @@ public class ComandaService : IComandaService
         var dto = MapToDto(comanda);
 
         // Notifica o cliente que os pontos foram removidos
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
         // Notifica o admin (dashboard)
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))

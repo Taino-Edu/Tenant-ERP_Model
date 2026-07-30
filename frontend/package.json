@@ -6,7 +6,10 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
+    "start:standalone": "node scripts/start-standalone.js",
     "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "node scripts/smoke-standalone.js",
     "generate-qrcodes": "node scripts/generate-qrcodes.js",
     "postinstall": "node scripts/patch-next.js"
   },

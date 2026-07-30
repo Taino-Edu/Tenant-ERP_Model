@@ -108,13 +108,13 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
                 "ITenantContext.Set(...) nunca foi chamado neste escopo antes de abrir uma conexão — " +
                 "provável bug de propagação de tenant (CreateScope() sem Set() antes de resolver o AppDbContext).");
 
-        var schema = _tenantContext.SchemaName;
+        var schema = TenantSchemaName.Validate(_tenantContext.SchemaName);
 
         // O nome do schema só vem do catálogo de tenants ou da constante de
         // tenant-zero — nunca de input livre de usuário. Ainda assim validamos o
         // formato antes de interpolar no SQL, porque search_path não aceita
         // parâmetro bind (é uma configuração de sessão, não uma query parametrizável).
-        if (!IsValidSchemaName(schema))
+        if (!TenantSchemaName.IsValid(schema))
             throw new InvalidOperationException($"Nome de schema de tenant inválido: '{schema}'.");
 
         return schema;
@@ -135,9 +135,4 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         }
     }
 
-    private static bool IsValidSchemaName(string name) =>
-        !string.IsNullOrWhiteSpace(name)
-        && name.Length <= 63
-        && !char.IsDigit(name[0])
-        && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
 }

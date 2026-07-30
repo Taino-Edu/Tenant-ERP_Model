@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Cliente - Comanda UI', () => {
+  test.skip(
+    !process.env.RUN_BACKEND_E2E,
+    'requer RUN_BACKEND_E2E=1 e backend de teste na porta 5000',
+  )
   // Configuração simulada antes de cada teste
   test.beforeEach(async ({ page }) => {
     // Como os testes de frontend não dependem do banco de dados real em execução,

@@ -113,13 +113,13 @@ if [ ! -f "$APP_DIR/.env" ]; then
 # Gerado por setup.sh em $(date)
 # Edite este arquivo e preencha GEMINI_API_KEY e SMTP_PASSWORD
 
-# --- Acesso (sem domínio ainda — teste por IP direto, sem HTTPS) ---
-# ATENÇÃO: quando configurar domínio + Cloudflare, você PRECISA trocar as
-# duas linhas abaixo: APP_URL pra https://seu-dominio.com e COOKIE_SECURE
-# pra true. Esquecer isso deixa os cookies JWT trafegando sem o flag Secure
-# em produção. A API loga um warning todo boot enquanto isso não for feito.
-APP_URL=http://${PUBLIC_IP}
-COOKIE_SECURE=false
+# --- Acesso oficial em produção ---
+# O acesso por IP é rejeitado para impedir fallback de Host para tenant-zero.
+APP_URL=https://3esysten.com.br
+COOKIE_SECURE=true
+# Obrigatório em Production. Mantém a resolução de subdomínios isolada e
+# impede fallback silencioso para tenant-zero.
+MULTITENANCY_ROOT_DOMAIN=3esysten.com.br
 
 # --- PostgreSQL ---
 POSTGRES_DB=cardgamestore
