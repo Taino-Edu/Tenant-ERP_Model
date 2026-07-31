@@ -11,14 +11,16 @@
 // Setup (uma vez só, container fica de pé indefinidamente):
 //   docker compose -f tests/docker-compose.yml up -d --wait
 //
-// Suba SEMPRE por esse compose, não com um `docker run` cru: o servidor precisa
-// de max_locks_per_transaction bem acima do default (64). Cada DROP SCHEMA
-// CASCADE desta fábrica pega um lock por objeto — ~60 tabelas mais índices — e
-// com o default a tabela de locks do cluster estoura sob concorrência, deixando
-// schemas pela metade e fazendo testes aleatórios morrerem com
-// "42P01: relation does not exist". Ver o comentário em tests/docker-compose.yml.
-// A checagem em CheckDatabaseAvailable() avisa se o servidor estiver abaixo do
-// mínimo, pra ninguém perder tempo caçando isso de novo.
+// Suba pelo compose, não com um `docker run` cru: ele já vem com folga de locks
+// (cada DROP SCHEMA CASCADE daqui derruba ~134 objetos) e sem fsync, o que
+// acelera muito o DDL da suíte. CheckDatabaseAvailable() avisa se o servidor
+// estiver abaixo do mínimo, em vez de deixar isso virar erro obscuro mais tarde.
+//
+// O isolamento entre DUAS EXECUÇÕES SIMULTÂNEAS da suíte não vem daí, e sim do
+// RunId por processo em IsolatedSchemaName: sem ele, dois processos usando o
+// mesmo banco geravam os mesmos nomes de schema e um dropava o schema que o
+// outro estava usando — testes aleatórios morriam com "42P01: relation does not
+// exist" e o sintoma apontava pro código, não pra concorrência entre processos.
 //
 // Rodar os testes (com o container acima já no ar):
 //   dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
@@ -28,8 +30,6 @@
 // =============================================================================
 
 using System.Data.Common;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
@@ -51,11 +51,40 @@ public static class TestDbFactory
             ? env
             : DefaultConnString;
     private static readonly Lazy<bool> DatabaseAvailable = new(CheckDatabaseAvailable);
+    // Duas execuções locais da suíte podem compartilhar o mesmo PostgreSQL.
+    // Sem um prefixo por processo, ambas dropavam schemas com o mesmo nome e
+    // provocavam falhas aleatórias uma na outra.
+    private static readonly string RunId =
+        $"{Environment.ProcessId:x}_{Guid.NewGuid():N}"[..12];
+    private static int SchemaSequence;
+
+    static TestDbFactory()
+    {
+        // Os schemas exclusivos evitam colisão entre processos, mas não devem
+        // se acumular no banco local depois de uma execução normal da suíte.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => CleanupRunSchemas();
+    }
 
     /// <summary>Connection string do Postgres de teste — exposta pra testes que
     /// precisam montar o próprio DbContext (ex: TenantIsolationTests, que usa o
     /// TenantConnectionInterceptor real de produção em vez do TestSchemaInterceptor).</summary>
     public static string ConnectionString => PgConnString;
+
+    /// <summary>Nome de schema legível e único entre chamadas e processos
+    /// concorrentes da suíte.
+    ///
+    /// A unicidade mora no PREFIXO (RunId + sequência), e é isso que torna a
+    /// truncagem segura: identificador no Postgres tem limite de 63 bytes, e o
+    /// corte em 60 descarta só a cauda descritiva. Um esquema em que o nome do
+    /// teste viesse primeiro colidiria aqui — dois testes com o mesmo prefixo
+    /// longo virariam o MESMO schema, e o DROP CASCADE de um apagaria as tabelas
+    /// do outro no meio da execução.</summary>
+    public static string IsolatedSchemaName(string logicalName)
+    {
+        var sequence = Interlocked.Increment(ref SchemaSequence);
+        var schema = $"test_{RunId}_{sequence:x}_{Sanitize(logicalName)}";
+        return schema.Length > 60 ? schema[..60] : schema;
+    }
 
     /// <summary>Dropa e recria um schema vazio no banco de teste — mesmo preparo
     /// que Create() faz, exposto pra testes que gerenciam o próprio contexto.</summary>
@@ -79,7 +108,8 @@ public static class TestDbFactory
     public static AppDbContext Create(string testName = "")
     {
         _ = DatabaseAvailable.Value;
-        var schema = SchemaNameFor(testName);
+        var schema = IsolatedSchemaName(
+            string.IsNullOrWhiteSpace(testName) ? Guid.NewGuid().ToString("N") : testName);
 
         // DROP/CREATE roda numa conexão descartável, fechada logo em seguida —
         // não pode ser a mesma conexão do DbContext (ver comentário abaixo).
@@ -125,48 +155,29 @@ public static class TestDbFactory
         return db;
     }
 
-    /// <summary>
-    /// Nome do schema deste teste. Determinístico de propósito: o mesmo teste
-    /// reaproveita o mesmo schema entre execuções (ele é dropado e recriado),
-    /// então o total de schemas no banco de teste converge pro número de testes
-    /// em vez de crescer sem parar — catálogo inchado deixa o DDL da suíte
-    /// progressivamente mais lento.
-    ///
-    /// Nomes longos exigem cuidado: identificador no Postgres tem limite de 63
-    /// bytes, e o corte seco em 60 caracteres que existia aqui fazia dois nomes
-    /// de teste com o mesmo prefixo virarem O MESMO schema — aí o DROP CASCADE
-    /// de um apagava as tabelas do outro. O corte agora carrega um hash do nome
-    /// completo, então nomes diferentes continuam diferentes depois de truncados.
-    ///
-    /// (A causa das falhas intermitentes de "42P01: relation does not exist" que
-    /// a suíte teve não era esta, e sim `max_locks_per_transaction` no servidor —
-    /// ver tests/docker-compose.yml. Mas a colisão por truncagem era real e
-    /// produzia exatamente o mesmo sintoma, então fica corrigida.)
-    /// </summary>
-    private static string SchemaNameFor(string testName)
-    {
-        var name = "test_" + Sanitize(
-            string.IsNullOrWhiteSpace(testName) ? Guid.NewGuid().ToString("N") : testName);
-
-        const int max = 60;
-        if (name.Length <= max) return name;
-
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(name)))[..8].ToLowerInvariant();
-        return name[..(max - hash.Length - 1)] + "_" + hash;
-    }
-
     private static string Sanitize(string s) =>
         Regex.Replace(s, "[^a-zA-Z0-9_]", "_").ToLowerInvariant();
 
-    /// <summary>Mínimo de locks por transação exigido do servidor de teste. Cada
-    /// DROP SCHEMA CASCADE aqui derruba ~60 tabelas mais índices e sequences, e a
-    /// tabela de locks é compartilhada pelo cluster inteiro
-    /// (max_locks_per_transaction × max_connections). Com o default 64 do
-    /// Postgres, o DROP/CREATE falha no meio sob concorrência e o teste seguinte
-    /// morre com "42P01: relation does not exist" — sintoma que aponta pro código
-    /// e não pro servidor, e que já custou uma investigação inteira.</summary>
+    /// <summary>Folga de locks exigida do servidor de teste. Cada DROP SCHEMA
+    /// CASCADE aqui derruba ~134 objetos (tabelas, índices e sequences do
+    /// AppDbContext) e pega um lock por objeto. O parâmetro dimensiona a tabela
+    /// de locks compartilhada do cluster (max_locks_per_transaction ×
+    /// max_connections), então o default de 64 não limita uma transação sozinha
+    /// — mas manter o teto por transação abaixo do que a operação mais pesada da
+    /// suíte usa de fato é deixar uma armadilha armada para o dia em que a
+    /// concorrência aumentar.</summary>
     private const int MinLocksPerTransaction = 512;
 
+    /// <summary>
+    /// AVISO, nunca falha. A suíte roda bem com o default do Postgres — inclusive
+    /// no CI, cujo service container não aceita override de configuração — porque
+    /// max_locks_per_transaction dimensiona a tabela de locks COMPARTILHADA
+    /// (valor × max_connections), e não o teto de uma transação sozinha. Isto aqui
+    /// só sinaliza que a folga está menor do que a operação mais pesada da suíte
+    /// usa, o que costuma significar container local criado antes do ajuste no
+    /// compose (ou por um 'docker run' cru) — e portanto também sem fsync=off,
+    /// que é de onde vem a maior parte do ganho de tempo.
+    /// </summary>
     private static void EnsureLockCapacity(NpgsqlConnection connection)
     {
         using var cmd = connection.CreateCommand();
@@ -174,13 +185,10 @@ public static class TestDbFactory
         if (!int.TryParse(cmd.ExecuteScalar() as string, out var locks) || locks >= MinLocksPerTransaction)
             return;
 
-        throw new InvalidOperationException(
-            $"O PostgreSQL de testes está com max_locks_per_transaction={locks}, abaixo do mínimo " +
-            $"de {MinLocksPerTransaction}. Nessa configuração a suíte falha de forma intermitente e " +
-            "enganosa: alguns testes morrem com \"42P01: relation does not exist\" porque o " +
-            "DROP SCHEMA CASCADE deles esgotou a tabela de locks do cluster. " +
-            "Recrie o container pelo compose, que já traz o ajuste: " +
-            "'docker compose -f tests/docker-compose.yml up -d --force-recreate --wait'.");
+        Console.Error.WriteLine(
+            $"[TestDbFactory] max_locks_per_transaction={locks} (recomendado: {MinLocksPerTransaction}). " +
+            "A suíte roda assim mesmo; só está sem a folga e sem o fsync=off do compose. " +
+            "Local, recrie com: docker compose -f tests/docker-compose.yml up -d --force-recreate --wait");
     }
 
     private static bool CheckDatabaseAvailable()
@@ -192,17 +200,15 @@ public static class TestDbFactory
             {
                 using var connection = new NpgsqlConnection(PgConnString);
                 connection.Open();
-                // Fora do retry: um servidor mal configurado não fica bom esperando,
-                // e a mensagem dele é específica — não pode virar "banco inacessível".
                 EnsureLockCapacity(connection);
                 return true;
             }
-            catch (Exception exception) when (exception is not InvalidOperationException && attempt < 6)
+            catch (Exception exception) when (attempt < 6)
             {
                 lastException = exception;
                 Thread.Sleep(TimeSpan.FromMilliseconds(500));
             }
-            catch (Exception exception) when (exception is not InvalidOperationException)
+            catch (Exception exception)
             {
                 lastException = exception;
             }
@@ -213,6 +219,40 @@ public static class TestDbFactory
             "'docker compose -f tests/docker-compose.yml up -d --wait' " +
             "ou configure TEST_POSTGRES_CONNECTION antes de rodar a suíte.",
             lastException);
+    }
+
+    private static void CleanupRunSchemas()
+    {
+        try
+        {
+            using var connection = new NpgsqlConnection(PgConnString);
+            connection.Open();
+
+            using var list = connection.CreateCommand();
+            list.CommandText = """
+                SELECT schema_name
+                FROM information_schema.schemata
+                WHERE left(schema_name, length(@prefix)) = @prefix
+                """;
+            list.Parameters.AddWithValue("prefix", $"test_{RunId}_");
+
+            var schemas = new List<string>();
+            using (var reader = list.ExecuteReader())
+                while (reader.Read()) schemas.Add(reader.GetString(0));
+
+            foreach (var schema in schemas)
+            {
+                using var drop = connection.CreateCommand();
+                var quotedSchema = new NpgsqlCommandBuilder().QuoteIdentifier(schema);
+                drop.CommandText = $"DROP SCHEMA IF EXISTS {quotedSchema} CASCADE;";
+                drop.ExecuteNonQuery();
+            }
+        }
+        catch
+        {
+            // Limpeza de melhor esforço durante a saída do testhost: nunca
+            // esconde o resultado real da suíte se o PostgreSQL já caiu.
+        }
     }
 }
 

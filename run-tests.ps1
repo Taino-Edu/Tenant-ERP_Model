@@ -40,7 +40,10 @@ if ((Get-LocksPerTransaction) -lt $minLocks) {
 
 $locks = Get-LocksPerTransaction
 if ($locks -lt $minLocks) {
-    throw "max_locks_per_transaction=$locks, abaixo do mínimo de $minLocks. Confira o command: em $composeFile."
+    # Aviso, não erro: a suíte roda com os defaults do Postgres (é o que o CI
+    # faz). Só significa que este container ficou sem a folga e sem o fsync=off
+    # do compose, de onde vem a maior parte do ganho de tempo.
+    Write-Host "Aviso: max_locks_per_transaction=$locks (recomendado $minLocks). Confira o command: em $composeFile." -ForegroundColor Yellow
 }
 
 dotnet test $testProject @args
