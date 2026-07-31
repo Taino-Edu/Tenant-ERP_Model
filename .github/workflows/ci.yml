@@ -149,3 +149,6 @@ jobs:
             && echo "Site respondendo 200 após o deploy."
           curl -fsS -o /dev/null "https://dev-swagger.3esysten.com.br/swagger/index.html" \
             && echo "Swagger público respondendo após o deploy."
+          curl -fsS "https://3esysten.com.br/api/push/vapid-public-key" \
+            | grep -q '"publicKey"' \
+            && echo "Push VAPID configurado após o deploy."

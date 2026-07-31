@@ -63,7 +63,12 @@ $COMPOSE build --build-arg CACHEBUST="$(date +%s)"
 # sem elas o PushService é um no-op silencioso: o usuário concede permissão de
 # notificação no navegador e nunca recebe nada. Gera uma única vez, aqui, com a
 # imagem recém-buildada; execuções seguintes viram no-op.
-if ! grep -q '^VAPID_PRIVATE_KEY=.\+' "$APP_DIR/.env" 2>/dev/null; then
+# Não basta a variável existir: instalações antigas podem ter placeholder
+# (${VAPID_PRIVATE_KEY}), aspas vazias ou valor curto/corrompido. O Compose
+# avisa "variable is not set", mas o grep antigo tratava o placeholder como
+# chave válida e pulava a geração para sempre.
+if ! grep -Eq '^VAPID_PRIVATE_KEY=[A-Za-z0-9_-]{40,}$' "$APP_DIR/.env" 2>/dev/null \
+   || ! grep -Eq '^VAPID_PUBLIC_KEY=[A-Za-z0-9_-]{80,}$' "$APP_DIR/.env" 2>/dev/null; then
     echo -e "${YELLOW}🔑 Gerando chaves VAPID (push do navegador) — ausentes no .env...${NC}"
     if vapid=$(docker run --rm cardgamestore_api:latest gen-vapid 2>/dev/null | grep -E '^VAPID_[A-Z_]+='); then
         # Linhas VAPID_ vazias antigas precisam sair: o compose usa a PRIMEIRA
