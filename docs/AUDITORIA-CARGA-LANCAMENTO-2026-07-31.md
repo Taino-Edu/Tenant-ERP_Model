@@ -27,6 +27,22 @@ O script idempotente `tests/performance/seed-load.sql` criou no schema isolado:
 
 Tempo de carga: **59,85 s**. O banco cresceu de 17 MB para 109 MB.
 
+Um segundo estágio ampliou a mesma massa, sem duplicar registros existentes:
+
+| Entidade | Quantidade ampliada |
+| --- | ---: |
+| Clientes | 25.000 |
+| Produtos | 50.000 |
+| Comandas | 150.000 |
+| Itens de comanda | 600.000 |
+| Vendas avulsas | 150.000 |
+
+O delta entrou em **89,09 s** e o banco chegou a 311 MB. Nessa escala, comandas
+fechadas em 30 dias levaram 16,5 ms, o top de produtos sobre 600 mil itens levou
+164 ms e as primeiras 50 linhas do catálogo ordenado levaram 0,30 ms. A matriz
+`pgbench` continuou com zero falhas: leitura chegou a 786 TPS em c=16; o
+dashboard atingiu 9,52 TPS em c=4 e passou a saturar a CPU acima desse ponto.
+
 ## Banco de dados
 
 As consultas críticas foram medidas com `EXPLAIN (ANALYZE, BUFFERS)` e com
@@ -59,6 +75,8 @@ devolvia 20 mil registros em uma resposta JSON de **10,65 MB** sem compressão.
 - apenas os campos escalares das vendas do dia são materializados;
 - o top 5 de produtos é calculado em uma consulta PostgreSQL parametrizada;
 - respostas JSON agora aceitam Brotli/Gzip no nível mais rápido;
+- o catálogo público é projetado diretamente para `ProductPublicDto` no banco
+  e serializado de forma assíncrona, sem criar uma lista de entidades completas;
 - os indicadores do dashboard foram comparados campo a campo e permaneceram
   idênticos aos valores anteriores na mesma massa.
 
@@ -79,6 +97,12 @@ Resultados observados após a correção:
 | Catálogo, 4 simultâneas | 4/4 HTTP 200; 1,90 req/s |
 | Working set após a rampa | ~381 MB (antes ~673 MB) |
 
+Na massa ampliada, o JSON bruto do catálogo chegou a 26,63 MB e foi reduzido a
+2,60 MB por gzip. Antes do streaming, uma chamada já levou a API a ~413 MB e a
+rampa foi cancelada antes de c=2 por falta de memória global. Depois da projeção
+e streaming, c=1, c=2 e c=4 concluíram com 7/7 HTTP 200; em c=4 o working set
+ficou em ~356 MB, mesmo servindo 50 mil produtos.
+
 O throughput do dashboard começou a estabilizar entre 16 e 64 chamadas
 simultâneas, coerente com a CPU de dois núcleos. A rampa foi interrompida em 64
 quando a memória livre global chegou a 0,48 GB, antes de causar paginação
@@ -93,8 +117,8 @@ A fábrica de testes agora inclui um identificador único por processo em todos 
 schemas, inclusive nos testes diretos do interceptor multi-tenant. Assim,
 auditorias paralelas deixam de interferir entre si.
 
-Gate final em PostgreSQL real: **412 aprovados, 0 falhas, 0 ignorados**, em
-1 min 48 s. O teste de auditoria que dependia de uma tolerância fixa de cinco
+Gate final em PostgreSQL real: **413 aprovados, 0 falhas, 0 ignorados**, em
+57 s. O teste de auditoria que dependia de uma tolerância fixa de cinco
 segundos também passou a validar o timestamp entre o início e o fim da operação,
 eliminando falso negativo quando o notebook está sob carga. Uma execução
 isolada adicional confirmou que a limpeza automática não deixou novos schemas.
@@ -102,9 +126,9 @@ isolada adicional confirmou que a limpeza automática não deixou novos schemas.
 ## Risco residual e próximas ações
 
 O contrato atual dos endpoints de catálogo ainda retorna a coleção completa.
-A compressão reduz fortemente a rede, mas servidor e navegador ainda precisam
-materializar todos os produtos. Paginação exige mudança coordenada nas telas de
-loja, estoque, comanda, reservas e relatórios; deve ser entregue em alteração
+A compressão e o streaming reduziram rede e memória do servidor, mas o navegador
+ainda precisa materializar todos os produtos. Paginação exige mudança coordenada
+nas telas de loja, estoque, comanda, reservas e relatórios; deve ser entregue em alteração
 separada e testada de ponta a ponta para não quebrar o fluxo de venda antes do
 lançamento.
 

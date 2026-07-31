@@ -11,6 +11,14 @@ Massa inicial recomendada para notebook de 2 núcleos:
 - 4 itens por comanda (200.000 itens);
 - 50.000 vendas avulsas.
 
+Segundo estágio usado para validar crescimento de volume no mesmo notebook:
+
+- 25.000 usuários;
+- 50.000 produtos;
+- 150.000 comandas;
+- 4 itens por comanda (600.000 itens);
+- 150.000 vendas avulsas.
+
 O `seed-load.sql` é idempotente e identifica tudo por `LOAD_` e UUIDs derivados
 de `load-*`. Os workloads cobrem catálogo, histórico por cliente e as consultas
 mais caras do dashboard administrativo.
@@ -24,6 +32,10 @@ docker exec qa_erp_pg psql -U qa -d qa_erp `
   -v orders=50000 -v items_per_order=4 -v sales=50000 `
   -f /tmp/seed-load.sql
 ```
+
+Para ampliar uma massa existente, repita o comando com os valores do segundo
+estágio. Os UUIDs determinísticos e `ON CONFLICT DO NOTHING` fazem o script
+inserir somente o delta.
 
 Os relatórios gerados pela auditoria ficam fora do Git quando contêm logs brutos;
 o resumo reproduzível e os achados confirmados devem ser documentados no PR.
