@@ -83,6 +83,9 @@ public class AppDbContext : DbContext
     public DbSet<Evento>         Eventos        { get; set; }
     public DbSet<EventoEntrada>  EventoEntradas { get; set; }
 
+    // Restaurante: somente entidades novas do módulo opcional.
+    public DbSet<RestaurantProductionArea> RestaurantProductionAreas { get; set; }
+
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
     // -------------------------------------------------------------------------
@@ -567,6 +570,19 @@ public class AppDbContext : DbContext
         {
             entity.HasIndex(e => e.EventoId)
                   .HasDatabaseName("ix_evento_entradas_evento_id");
+        });
+
+        // =====================================================================
+        // RESTAURANTE (módulo opcional, sem dependência das comandas atuais)
+        // =====================================================================
+        modelBuilder.Entity<RestaurantProductionArea>(entity =>
+        {
+            entity.HasIndex(area => area.Name)
+                  .IsUnique()
+                  .HasDatabaseName("ix_restaurant_production_areas_name");
+
+            entity.HasIndex(area => new { area.IsActive, area.DisplayOrder })
+                  .HasDatabaseName("ix_restaurant_production_areas_active_order");
         });
     }
 }

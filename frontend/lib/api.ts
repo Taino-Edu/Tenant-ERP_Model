@@ -731,6 +731,7 @@ export const TENANT_MODULES = [
   { value: 'contador', label: 'Portal do Contador',   description: 'Acesso cross-tenant do contador da loja' },
   { value: 'ia',       label: 'Assistente de IA',     description: 'Chat com IA (Gemini) sobre estoque e devedores' },
   { value: 'eventos',  label: 'Gestão de Eventos',    description: 'Cadastro de eventos e cobrança de entrada' },
+  { value: 'restaurante', label: 'Restaurante',        description: 'Recursos adicionais de cozinha, salão e produção — opcional' },
 ] as const
 
 /** O catálogo de planos vive em `lib/planos.ts` — um só, compartilhado com o
@@ -1699,4 +1700,35 @@ export const eventosApi = {
     api.post<EventoEntradaDto>(`/api/eventos/${eventoId}/entradas/${entradaId}/checkin`),
   cancelarEntrada: (eventoId: string, entradaId: string) =>
     api.delete(`/api/eventos/${eventoId}/entradas/${entradaId}`),
+}
+
+// ── Restaurante (módulo opcional por tenant) ────────────────────────────────
+
+export interface RestaurantProductionAreaDto {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  displayOrder: number
+  isActive: boolean
+}
+
+export interface SaveRestaurantProductionAreaRequest {
+  name: string
+  description?: string | null
+  color: string
+  displayOrder: number
+}
+
+export const restaurantApi = {
+  listProductionAreas: (includeInactive = false) =>
+    api.get<RestaurantProductionAreaDto[]>('/api/restaurante/areas-producao', { params: { includeInactive } }),
+  createProductionArea: (body: SaveRestaurantProductionAreaRequest) =>
+    api.post<RestaurantProductionAreaDto>('/api/restaurante/areas-producao', body),
+  updateProductionArea: (id: string, body: SaveRestaurantProductionAreaRequest) =>
+    api.put<RestaurantProductionAreaDto>(`/api/restaurante/areas-producao/${id}`, body),
+  deactivateProductionArea: (id: string) =>
+    api.delete(`/api/restaurante/areas-producao/${id}`),
+  reactivateProductionArea: (id: string) =>
+    api.post<RestaurantProductionAreaDto>(`/api/restaurante/areas-producao/${id}/reativar`),
 }

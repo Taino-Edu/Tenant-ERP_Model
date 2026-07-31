@@ -76,7 +76,9 @@ export const PLANOS: Plano[] = [
     destaque: false,
     usuarios: 'Usuários ilimitados',
     maxUsers: null,
-    modules: TENANT_MODULES.map(m => m.value),
+    // Restaurante é adicional opt-in: nem o plano mais alto o liga sozinho.
+    // O dono da plataforma precisa habilitá-lo explicitamente por tenant.
+    modules: TENANT_MODULES.filter(m => m.value !== 'restaurante').map(m => m.value),
     inclui: [
       'Tudo do Completo',
       'Assistente de IA no painel (pergunte em português sobre sua loja)',
