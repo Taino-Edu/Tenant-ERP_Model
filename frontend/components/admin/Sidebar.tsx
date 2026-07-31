@@ -10,7 +10,7 @@ import {
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
   Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy, Mail,
-  ChevronsLeft, ChevronsRight, Rocket, PartyPopper, Sparkles,
+  ChevronsLeft, ChevronsRight, Rocket, PartyPopper, Sparkles, UtensilsCrossed,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -40,6 +40,7 @@ const sections = [
       { href: '/admin/site',        label: 'Personalizar Site', icon: Palette, perm: null },
       { href: '/admin/email',      label: 'E-mail',           icon: Mail,    perm: null },
       { href: '/admin/ia-config',  label: 'Assistente de IA', icon: Sparkles, perm: null },
+      { href: '/admin/restaurante', label: 'Restaurante', icon: UtensilsCrossed, perm: null },
       { href: '/admin/suporte',     label: 'Suporte',          icon: LifeBuoy, perm: null },
     ],
   },
@@ -123,6 +124,7 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
           && (href !== '/admin/reservas' || enabledModules.includes('estoque'))
           && (href !== '/admin/eventos' || enabledModules.includes('eventos'))
           && (href !== '/admin/ia-config' || enabledModules.includes('ia'))
+          && (href !== '/admin/restaurante' || enabledModules.includes('restaurante'))
         )
         if (visibleItems.length === 0) return null
         return (
