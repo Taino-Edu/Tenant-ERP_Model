@@ -147,3 +147,5 @@ jobs:
           sleep 20
           curl -fsS -o /dev/null "http://$HOST/" \
             && echo "Site respondendo 200 após o deploy."
+          curl -fsS -o /dev/null "https://dev-swagger.3esysten.com.br/swagger/index.html" \
+            && echo "Swagger público respondendo após o deploy."

@@ -757,8 +757,9 @@ app.Use(async (context, next) =>
     context.Response.Headers["Referrer-Policy"]         = "no-referrer";
     context.Response.Headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()";
     // CSP: API retorna apenas JSON/binários — bloquear todo conteúdo ativo.
-    // Exceção: /swagger (só existe em Development) precisa carregar seu próprio
-    // CSS/JS/imagens — mesma origem, sem CDN externo — pra sequer renderizar.
+    // Exceção: /swagger precisa carregar seu próprio CSS/JS/imagens — mesma
+    // origem, sem CDN externo. Em produção a rota só é publicada pelo host
+    // dedicado do Nginx quando Swagger:Enabled estiver ligado.
     context.Response.Headers["Content-Security-Policy"] =
         context.Request.Path.StartsWithSegments("/swagger")
             ? "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
@@ -766,13 +767,11 @@ app.Use(async (context, next) =>
     await next();
 });
 
-// Resolve o tenant da requisição (por Host) antes de qualquer coisa que possa
-// tocar o AppDbContext — o schema que o TenantConnectionInterceptor usa vem
-// do ITenantContext que este middleware popula.
-app.UseTenantResolution();
-
-// Swagger apenas em desenvolvimento — evita expor a estrutura da API em produção
-if (app.Environment.IsDevelopment())
+// O host dedicado dev-swagger.<RootDomain> não é um tenant. Por isso a
+// documentação precisa entrar no pipeline antes da resolução por subdomínio;
+// o Nginx limita esse host a /swagger e não o transforma numa porta para a API.
+var swaggerEnabled = app.Configuration.GetValue("Swagger:Enabled", app.Environment.IsDevelopment());
+if (swaggerEnabled)
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
@@ -782,6 +781,11 @@ if (app.Environment.IsDevelopment())
         c.DocumentTitle = "Tenant-ERP API";
     });
 }
+
+// Resolve o tenant da requisição (por Host) antes de qualquer coisa que possa
+// tocar o AppDbContext — o schema que o TenantConnectionInterceptor usa vem
+// do ITenantContext que este middleware popula.
+app.UseTenantResolution();
 
 // SSL gerenciado pelo reverse proxy (Nginx/Cloudflare) — não redirecionar aqui
 app.UseTenantUploadGuard();
