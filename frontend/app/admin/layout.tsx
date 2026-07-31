@@ -9,7 +9,7 @@ import { Toaster } from 'react-hot-toast'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
-import { saveAuth, clearAuth, getImpersonatingOwnerName } from '@/lib/auth'
+import { saveAuth, clearAuth, getImpersonatingOwnerName, getRole, hasPermission } from '@/lib/auth'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 // Aplica o último ramp de cor de marca cacheado ANTES da hidratação — evita
@@ -24,9 +24,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   const { site } = useSiteConfig()
   const [impersonatingOwner, setImpersonatingOwner] = useState<string | null>(null)
+  const [canUseAi, setCanUseAi] = useState(false)
 
   useEffect(() => {
     setImpersonatingOwner(getImpersonatingOwnerName())
+    setCanUseAi(getRole() === 'Admin' || hasPermission('ia'))
   }, [])
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         />
         {children}
       </main>
-      {site.enabledModules.includes('ia') && <AiChatWidget />}
+      {site.enabledModules.includes('ia') && canUseAi ? <AiChatWidget /> : null}
       <KeyboardShortcutsOverlay />
       <TimerAlarmOverlay />
     </div>

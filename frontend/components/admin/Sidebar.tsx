@@ -36,12 +36,18 @@ const sections = [
     items: [
       { href: '/admin/perfis',      label: 'Perfis de Acesso', icon: UserCog, perm: null },
       { href: '/admin/integracoes', label: 'Integrações',      icon: Plug,    perm: null },
-      { href: '/admin/fiscal',      label: 'Fiscal',           icon: Receipt, perm: null },
       { href: '/admin/site',        label: 'Personalizar Site', icon: Palette, perm: null },
       { href: '/admin/email',      label: 'E-mail',           icon: Mail,    perm: null },
       { href: '/admin/ia-config',  label: 'Assistente de IA', icon: Sparkles, perm: null },
-      { href: '/admin/restaurante', label: 'Restaurante', icon: UtensilsCrossed, perm: null },
-      { href: '/admin/suporte',     label: 'Suporte',          icon: LifeBuoy, perm: null },
+    ],
+  },
+  {
+    label: 'Módulos',
+    items: [
+      { href: '/admin/fiscal',      label: 'Fiscal',            icon: Receipt,            perm: 'fiscal' },
+      { href: '/admin/eventos',     label: 'Gestão de Eventos', icon: PartyPopper,       perm: 'eventos' },
+      { href: '/admin/restaurante', label: 'Restaurante',       icon: UtensilsCrossed,     perm: 'restaurante' },
+      { href: '/admin/suporte',     label: 'Suporte',           icon: LifeBuoy,            perm: 'suporte' },
     ],
   },
   {
@@ -59,15 +65,6 @@ const sections = [
     ],
   },
   {
-    label: 'Eventos',
-    // EventosController é [Authorize(Policy = "AdminOnly")] — sem isso, Operator
-    // via o link e recebia 403 (perm: null só pula o filtro de perfil, não o de role).
-    adminOnly: true,
-    items: [
-      { href: '/admin/eventos', label: 'Gestão de Eventos', icon: PartyPopper, perm: null },
-    ],
-  },
-  {
     label: 'Financeiro',
     items: [
       { href: '/admin/financeiro',     label: 'Financeiro',        icon: TrendingUp,    perm: 'financeiro' },
@@ -80,7 +77,7 @@ const sections = [
     items: [
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,     perm: 'anuncios' },
       { href: '/admin/mensageria', label: 'Mensageria',   icon: MessageSquare,  perm: 'anuncios' },
-      { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: null },
+      { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: 'timers' },
     ],
   },
   {

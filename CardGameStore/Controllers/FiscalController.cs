@@ -6,6 +6,7 @@
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -21,6 +22,7 @@ namespace CardGameStore.Controllers;
 [Route("api/fiscal")]
 [Authorize(Policy = "AdminOnly")]
 [RequireModule("fiscal")]
+[RequireOperatorPermission(Permissao.Fiscal)]
 [Produces("application/json")]
 public class FiscalController : ControllerBase
 {

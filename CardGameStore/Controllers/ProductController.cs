@@ -9,6 +9,7 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -20,6 +21,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Estoque)]
 public class ProductController : ControllerBase
 {
     private readonly IProductService _service;

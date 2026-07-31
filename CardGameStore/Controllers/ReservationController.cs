@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
@@ -13,6 +14,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/reservations")]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Estoque)]
 public class ReservationController : ControllerBase
 {
     private readonly AppDbContext        _db;

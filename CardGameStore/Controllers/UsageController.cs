@@ -7,6 +7,7 @@
 
 using System.Security.Claims;
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +18,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/usage")]
 [Authorize(Policy = "AdminOnly")]
+[OperatorSelfService]
 [EnableRateLimiting("api")]
 public class UsageController : ControllerBase
 {

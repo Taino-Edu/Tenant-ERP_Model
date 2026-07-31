@@ -8,6 +8,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
@@ -21,6 +22,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/products/{productId:guid}/waitlist")]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Estoque)]
 public class ProductWaitListController : ControllerBase
 {
     private readonly AppDbContext _db;

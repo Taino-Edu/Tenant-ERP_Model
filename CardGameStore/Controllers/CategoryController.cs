@@ -4,6 +4,7 @@
 // DELETE /api/category/{id}  → remove (Admin)
 
 using System.ComponentModel.DataAnnotations;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +22,7 @@ public record CategoryRequest(
 [ApiController]
 [Route("api/category")]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Categorias)]
 public class CategoryController : ControllerBase
 {
     private readonly ICategoryService _service;

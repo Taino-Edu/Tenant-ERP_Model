@@ -1,11 +1,16 @@
-using CardGameStore.Models.PostgreSQL;
 using System.Security.Claims;
+using System.Text.Json;
+using CardGameStore.Data;
+using CardGameStore.Models.PostgreSQL;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Middleware;
 
 /// <summary>
-/// Verifica se um Operator tem a permissão necessária para acessar uma rota.
-/// Admin sempre passa. Customer é bloqueado nas rotas admin.
+/// Autoriza Operator pela metadata do endpoint e pelas permissões atuais no banco.
+/// Não confia no claim do JWT: remover um perfil/permissão passa a valer na próxima
+/// requisição, sem aguardar renovação ou expiração do token.
 /// </summary>
 public class OperatorPermissionMiddleware
 {
@@ -14,77 +19,97 @@ public class OperatorPermissionMiddleware
 
     public OperatorPermissionMiddleware(RequestDelegate next, ILogger<OperatorPermissionMiddleware> logger)
     {
-        _next   = next;
+        _next = next;
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, AppDbContext db)
     {
-        var path = context.Request.Path.Value?.ToLowerInvariant() ?? "";
-
-        // Só verificar rotas /api/ (exceto auth e health)
-        if (!path.StartsWith("/api/") || path.StartsWith("/api/auth") || path == "/health")
+        var path = context.Request.Path.Value ?? string.Empty;
+        if (!path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
             return;
         }
 
         var user = context.User;
-        if (!user.Identity?.IsAuthenticated == true)
+        if (user.Identity?.IsAuthenticated != true || !user.IsInRole(UserRole.Operator))
         {
             await _next(context);
             return;
         }
 
-        var role = user.FindFirst(ClaimTypes.Role)?.Value;
-
-        // Admin passa sempre
-        if (role == UserRole.Admin)
+        var endpoint = context.GetEndpoint();
+        if (endpoint is null || endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
         {
             await _next(context);
             return;
         }
 
-        // Operator: verifica permissões
-        if (role == UserRole.Operator)
+        // Endpoint sem Authorize é público. Um usuário autenticado não deve perder
+        // acesso a uma rota pública apenas por carregar o papel Operator.
+        if (endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Count == 0)
         {
-            var permissionsClaim = user.FindFirst("permissions")?.Value;
-            if (string.IsNullOrEmpty(permissionsClaim))
-            {
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new { Message = "Operador sem permissões configuradas." });
-                return;
-            }
+            await _next(context);
+            return;
+        }
 
-            string[] permissions;
-            try { permissions = System.Text.Json.JsonSerializer.Deserialize<string[]>(permissionsClaim) ?? []; }
-            catch { permissions = []; }
+        if (endpoint.Metadata.GetMetadata<OperatorSelfServiceAttribute>() is not null)
+        {
+            await _next(context);
+            return;
+        }
 
-            var hasAccess = false;
-            foreach (var (permissao, prefixos) in Permissao.RotasPrefixo)
-            {
-                if (!permissions.Contains(permissao)) continue;
-                if (prefixos.Any(p => path.StartsWith(p.ToLowerInvariant())))
-                {
-                    hasAccess = true;
-                    break;
-                }
-            }
+        if (endpoint.Metadata.GetMetadata<OperatorForbiddenAttribute>() is not null)
+        {
+            await DenyAsync(context, "endpoint deliberadamente restrito a Admin");
+            return;
+        }
 
-            // Sempre permite rotas genéricas de leitura própria
-            if (path.StartsWith("/api/user/me") || path.StartsWith("/api/comanda/mesa"))
-                hasAccess = true;
+        var requirement = endpoint.Metadata.GetMetadata<RequireOperatorPermissionAttribute>();
+        if (requirement is null || requirement.Permissions.Count == 0)
+        {
+            await DenyAsync(context, "endpoint autenticado sem classificação de Operator");
+            return;
+        }
 
-            if (!hasAccess)
-            {
-                _logger.LogWarning("Operator {UserId} sem permissão para {Path}", user.FindFirst("sub")?.Value, path);
-                context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                await context.Response.WriteAsJsonAsync(new { Message = "Sem permissão para esta ação." });
-                return;
-            }
+        var sub = user.FindFirst("sub")?.Value ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!Guid.TryParse(sub, out var userId))
+        {
+            await DenyAsync(context, "identificador de usuário inválido");
+            return;
+        }
+
+        var current = await db.Users.AsNoTracking()
+            .Where(item => item.Id == userId && item.IsActive && item.Role == UserRole.Operator)
+            .Select(item => new { item.PerfilId, PermissoesJson = item.Perfil == null ? null : item.Perfil.PermissoesJson })
+            .FirstOrDefaultAsync(context.RequestAborted);
+
+        if (current?.PerfilId is null || string.IsNullOrWhiteSpace(current.PermissoesJson))
+        {
+            await DenyAsync(context, "operador sem perfil ativo");
+            return;
+        }
+
+        string[] permissions;
+        try { permissions = JsonSerializer.Deserialize<string[]>(current.PermissoesJson) ?? []; }
+        catch { permissions = []; }
+
+        if (!requirement.Permissions.Any(required => permissions.Contains(required, StringComparer.OrdinalIgnoreCase)))
+        {
+            await DenyAsync(context, $"requer {string.Join(" ou ", requirement.Permissions)}");
+            return;
         }
 
         await _next(context);
+    }
+
+    private async Task DenyAsync(HttpContext context, string reason)
+    {
+        _logger.LogWarning("Operator {UserId} negado em {Method} {Path}: {Reason}",
+            context.User.FindFirst("sub")?.Value, context.Request.Method, context.Request.Path, reason);
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { Message = "Sem permissão para esta ação." });
     }
 }
 

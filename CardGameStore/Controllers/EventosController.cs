@@ -15,6 +15,7 @@
 
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
@@ -28,6 +29,7 @@ namespace CardGameStore.Controllers;
 [Route("api/eventos")]
 [Authorize(Policy = "AdminOnly")]
 [RequireModule("eventos")]
+[RequireOperatorPermission(Permissao.Eventos)]
 [Produces("application/json")]
 public class EventosController : ControllerBase
 {

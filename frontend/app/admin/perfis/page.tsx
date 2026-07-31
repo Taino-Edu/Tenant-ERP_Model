@@ -17,6 +17,12 @@ const PERMISSOES_LABELS: Record<string, string> = {
   anuncios:    'Anúncios',
   qrcodes:     'QR Codes',
   lgpd:        'LGPD & Auditoria',
+  fiscal:      'Fiscal',
+  eventos:     'Gestão de Eventos',
+  timers:      'Timers',
+  suporte:     'Suporte',
+  ia:          'Assistente de IA',
+  restaurante: 'Restaurante',
 }
 
 const ALL_PERMS = Object.keys(PERMISSOES_LABELS)
