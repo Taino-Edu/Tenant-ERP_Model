@@ -45,7 +45,9 @@ no processo atual e use o runner HTTP. O teste faz login, dispara lotes realment
 concorrentes e resume throughput, status e tamanho médio das respostas:
 
 ```powershell
-$env:LOAD_TEST_PASSWORD = Read-Host -MaskInput
+$securePassword = Read-Host "Senha do usuário QA" -AsSecureString
+$credential = New-Object System.Management.Automation.PSCredential('load-test', $securePassword)
+$env:LOAD_TEST_PASSWORD = $credential.GetNetworkCredential().Password
 .\tests\performance\http-load.ps1 -Concurrency 8 -Iterations 3 -Compressed
 Remove-Item Env:LOAD_TEST_PASSWORD
 ```

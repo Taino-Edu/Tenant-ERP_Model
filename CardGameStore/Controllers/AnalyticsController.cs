@@ -134,11 +134,13 @@ public class AnalyticsController : ControllerBase
         var topProdutos = await _db.Database.SqlQuery<TopProductDto>($"""
             WITH itens_vendidos AS (
                 SELECT
-                    item_name_snapshot AS nome,
-                    quantity AS quantidade,
-                    (unit_price_in_cents * quantity)::bigint AS receita_centavos
-                FROM comanda_items
-                WHERE added_at >= {ha30Dias}
+                    item.item_name_snapshot AS nome,
+                    item.quantity AS quantidade,
+                    (item.unit_price_in_cents * item.quantity)::bigint AS receita_centavos
+                FROM comanda_items AS item
+                INNER JOIN comandas AS comanda ON comanda.id = item.comanda_id
+                WHERE comanda.status = 'Fechada'
+                  AND comanda.closed_at >= {ha30Dias}
 
                 UNION ALL
 

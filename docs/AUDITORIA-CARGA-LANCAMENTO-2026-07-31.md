@@ -38,10 +38,11 @@ Um segundo estágio ampliou a mesma massa, sem duplicar registros existentes:
 | Vendas avulsas | 150.000 |
 
 O delta entrou em **89,09 s** e o banco chegou a 311 MB. Nessa escala, comandas
-fechadas em 30 dias levaram 16,5 ms, o top de produtos sobre 600 mil itens levou
-164 ms e as primeiras 50 linhas do catálogo ordenado levaram 0,30 ms. A matriz
-`pgbench` continuou com zero falhas: leitura chegou a 786 TPS em c=16; o
-dashboard atingiu 9,52 TPS em c=4 e passou a saturar a CPU acima desse ponto.
+fechadas em 30 dias levaram 15,29 ms, o top de produtos corrigido sobre 600 mil
+itens levou 438,30 ms e as primeiras 50 linhas do catálogo ordenado levaram
+0,06 ms com cache aquecido. A matriz `pgbench` continuou com zero falhas:
+leitura chegou a 786 TPS em c=16; o dashboard corrigido atingiu 7,74 TPS em c=4
+e passou a saturar a CPU acima desse ponto.
 
 ## Banco de dados
 
@@ -51,14 +52,20 @@ As consultas críticas foram medidas com `EXPLAIN (ANALYZE, BUFFERS)` e com
 | Cenário | Antes | Depois | Resultado |
 | --- | ---: | ---: | ---: |
 | Comandas fechadas, 30 dias | 27,8 ms | 6,27 ms | 4,4x mais rápida |
-| Top produtos, 200 mil itens | 230 ms | 112–113 ms | ~2x mais rápida |
+| Top produtos, 200 mil itens (consulta anterior) | 230 ms | 112–113 ms | ~2x mais rápida |
 | Catálogo, `pgbench` c=8 | 66,72 TPS | 916,69 TPS | 13,7x mais throughput |
-| Dashboard, `pgbench` c=4 | 6,28 TPS | 16,58 TPS | 2,6x mais throughput |
-| Dashboard, `pgbench` c=4 | 637,44 ms | 241,21 ms | 62% menos latência |
+| Dashboard final corrigido, `pgbench` c=4 | 6,28 TPS | 7,74 TPS | 1,23x mais throughput |
+| Dashboard final corrigido, `pgbench` c=4 | 637,44 ms | 516,66 ms | 19% menos latência |
 
 Todos os degraus de `pgbench` concluíram com **zero transações falhas**.
 Foram adicionados índices compostos para os filtros reais de clientes,
 catálogo e comandas, além do intervalo temporal dos itens de comanda.
+
+A revisão final corrigiu a janela do top de produtos: ela agora considera
+somente comandas com status `Fechada` e usa `closed_at`, em vez de inferir a
+venda pela data de inclusão do item. Por isso, os números finais dessa consulta
+não são diretamente comparáveis com a medição anterior, que processava outra
+semântica.
 
 ## API
 

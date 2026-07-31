@@ -1,5 +1,19 @@
 \set ON_ERROR_STOP on
 
+\if :{?expected_database}
+\else
+\set expected_database qa_erp
+\endif
+
+SELECT current_database() = :'expected_database' AS is_expected_database \gset
+\if :is_expected_database
+\else
+\echo 'RECUSADO: seed-load.sql so pode executar no banco QA configurado.'
+DO $$ BEGIN
+    RAISE EXCEPTION 'Banco atual nao corresponde ao QA configurado.';
+END $$;
+\endif
+
 -- Massa sintética determinística. Todos os registros usam prefixo LOAD_ ou
 -- UUID derivado de "load-*", permitindo repetir a carga sem duplicar dados.
 SET search_path TO :"schema";

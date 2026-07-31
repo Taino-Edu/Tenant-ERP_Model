@@ -264,7 +264,7 @@ public class AppDbContext : DbContext
             entity.HasIndex(i => i.ComandaId)
                   .HasDatabaseName("ix_comanda_items_comanda");
 
-            // Top produtos do dashboard restringe os itens à janela de 30 dias.
+            // Consultas temporais de itens usadas pela IA e pelas ferramentas MCP.
             entity.HasIndex(i => i.AddedAt)
                   .HasDatabaseName("ix_comanda_items_added_at");
 
