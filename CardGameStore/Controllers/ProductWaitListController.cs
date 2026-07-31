@@ -25,11 +25,10 @@ public class ProductWaitListController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IEmailService _email;
-    private readonly IConfiguration _config;
     private readonly ILogger<ProductWaitListController> _logger;
 
-    public ProductWaitListController(AppDbContext db, IEmailService email, IConfiguration config, ILogger<ProductWaitListController> logger)
-    { _db = db; _email = email; _config = config; _logger = logger; }
+    public ProductWaitListController(AppDbContext db, IEmailService email, ILogger<ProductWaitListController> logger)
+    { _db = db; _email = email; _logger = logger; }
 
     private Guid? TryGetUserId()
     {
@@ -216,8 +215,10 @@ public class ProductWaitListController : ControllerBase
         var product = await _db.Products.FindAsync(productId);
         if (product == null) return NotFound(new { Message = "Produto não encontrado." });
 
-        var appUrl  = _config["EmailSettings:AppUrl"] ?? "https://tenant-erp.local";
-        var url     = $"{appUrl}/produtos/{productId}";
+        // _email.AppUrl, não _config: este lugar lia "EmailSettings:AppUrl", chave
+        // que nada mais popula — o link do e-mail saía sempre pro placeholder
+        // https://tenant-erp.local, domínio que não existe.
+        var url     = $"{_email.AppUrl}/produtos/{productId}";
         var email   = entry.User?.Email ?? string.Empty;
         var name    = entry.Name;
 

@@ -2,15 +2,21 @@
 // EmailService.cs — Envio de emails via SMTP
 //
 // Configuração (appsettings.json ou variáveis de ambiente):
-//   EmailSettings__Host     → smtp.gmail.com  (ou smtp.sendgrid.net etc.)
-//   EmailSettings__Port     → 587
-//   EmailSettings__User     → seu@email.com
-//   EmailSettings__Password → senha-de-app ou api-key
-//   EmailSettings__From     → noreply@tenant-erp.local
-//   EmailSettings__AppUrl   → https://seudominio.com.br (para montar o link de reset)
+//   SmtpSettings__Host      → smtp.gmail.com  (ou smtp.resend.com etc.)
+//   SmtpSettings__Port      → 587
+//   SmtpSettings__Username  → seu@email.com
+//   SmtpSettings__Password  → senha-de-app ou api-key
+//   SmtpSettings__FromEmail → noreply@tenant-erp.local
+//   SmtpSettings__FromName  → nome exibido no remetente (default: SiteConfig.SiteName)
+//   SmtpSettings__AppUrl    → https://seudominio.com.br (base dos links dos e-mails)
+//
+// ATENÇÃO: este cabeçalho já documentou um prefixo "EmailSettings__" que NENHUMA
+// linha de código lia — quem configurava seguindo a doc não enviava e-mail nenhum
+// e não via erro. Os nomes acima são os lidos de fato em ResolveSmtpSettingsAsync
+// e GetAppUrl; se mudar um, mude os dois lugares.
 //
 // Para Gmail: ative "Senhas de app" nas configurações da conta Google.
-// Para SendGrid: use smtp.sendgrid.net:587, usuário "apikey", senha = API Key.
+// Para Resend: use smtp.resend.com:587, usuário "resend", senha = API Key.
 //
 // Nome da loja/contato/endereço vêm de SiteConfig (singleton), não são hardcoded —
 // assim o mesmo template serve qualquer tenant sem precisar editar código.
@@ -80,8 +86,11 @@ public class EmailService : IEmailService
         return new SmtpSettings(host, port, user!, password, from, fromName);
     }
 
+    /// <inheritdoc />
+    public string AppUrl => GetAppUrl();
+
     private string GetAppUrl() =>
-        (_config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://tenant-erp.local").TrimEnd('/');
+        (_config["SmtpSettings:AppUrl"] ?? "https://tenant-erp.local").TrimEnd('/');
 
     public async Task SendPasswordResetAsync(string toEmail, string toName, string resetToken)
     {

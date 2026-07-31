@@ -6,6 +6,17 @@ namespace CardGameStore.Services.Interfaces;
 
 public interface IEmailService
 {
+    // ── Base dos links ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// URL base pública da instalação (sem barra no fim), usada pra montar
+    /// qualquer link que saia dentro de um e-mail. Fonte única de verdade:
+    /// cada consumidor que reimplementava essa leitura acabava lendo a chave
+    /// de configuração errada e mandando link apontando pro placeholder
+    /// https://tenant-erp.local, que não existe.
+    /// </summary>
+    string AppUrl { get; }
+
     // ── Autenticação ──────────────────────────────────────────────────────────
 
     /// <summary>Envia email de recuperação de senha com link contendo o token.</summary>

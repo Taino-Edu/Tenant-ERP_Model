@@ -104,11 +104,10 @@ public class Tenant
     /// <summary>Mensalidade efetivamente cobrada deste tenant, em reais. Zero =
     /// não cobra (cortesia, piloto, tenant-zero da própria plataforma). É a base
     /// do MRR: somar isto nos tenants Active dá a receita contratada.</summary>
-    // [Precision] em vez de TypeName = "decimal(10,2)": esta app roda em SQLite
-    // (dev) e Postgres (produção), e nome de tipo cravado só vale num deles — no
-    // Postgres o tipo é `numeric`, e passar "decimal(10,2)" fazia o Npgsql cair
-    // no caminho de mapeamento de coleção e estourar IndexOutOfRangeException ao
-    // gerar migration. [Precision] é agnóstico: cada provider escolhe o tipo.
+    // [Precision] em vez de TypeName = "decimal(10,2)": no Postgres o tipo é
+    // `numeric`, e passar "decimal(10,2)" fazia o Npgsql cair no caminho de
+    // mapeamento de coleção e estourar IndexOutOfRangeException ao gerar
+    // migration. [Precision] deixa o provider escolher o tipo certo.
     [Precision(10, 2)]
     [Column("monthly_price")]
     public decimal MonthlyPrice { get; set; }

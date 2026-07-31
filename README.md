@@ -140,23 +140,57 @@ ADMIN_SEED_PASSWORD=senha_forte_admin_loja_padrao
 # --- Serviços Externos ---
 GEMINI_API_KEY=chave_do_google_ai_studio
 SMTP_PASSWORD=chave_de_envio_do_resend
+
+# --- Push do navegador (VAPID) ---
+# Geradas automaticamente por setup.sh (deploy novo) e por update.sh (instalação
+# já existente). Sem elas o push é um no-op silencioso: o usuário concede a
+# permissão de notificação e nunca recebe nada.
+# Para gerar à mão: docker run --rm cardgamestore_api:latest gen-vapid
+# ⚠️ Não regenere sem necessidade — trocar o par invalida todas as subscrições
+#    já salvas e cada cliente precisa reativar o push.
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:contato@seudominio.com.br
+
+# --- Referência da API ---
+# Publica o Swagger UI em dev-swagger.<seu domínio> (ver deploy/nginx/dev-swagger.conf).
+# false desliga a documentação por completo.
+SWAGGER_ENABLED=true
 ```
+
+> **Nomes de SMTP:** a configuração lida pela API é `SmtpSettings__*`
+> (`Host`, `Port`, `Username`, `Password`, `FromEmail`, `FromName`, `AppUrl`) — o
+> compose faz a ponte a partir das `SMTP_*` acima. Um bloco `EmailSettings` com
+> outros nomes já existiu no `appsettings.json` e **nenhum código o lia**: quem
+> configurava por ele não enviava e-mail nenhum e não via erro. Foi removido.
 
 ---
 
 ## Como Executar Localmente
 
 ### Pré-requisitos
-- .NET 8 SDK e Node.js 20+.
+- .NET 8 SDK, Node.js 20+ e Docker (só pro PostgreSQL).
 
 ### Passos
-1. Backend — sem configurar `ConnectionStrings:PostgreSQL`, o sistema cai sozinho pra SQLite local (zero setup):
+1. PostgreSQL — não há mais fallback pra SQLite; a API não sobe sem banco. Use o
+   mesmo container da suíte de testes:
+   ```bash
+   docker compose -f tests/docker-compose.yml up -d
+   ```
+   `appsettings.Development.json` já aponta pra ele (porta 5433). O motivo de não
+   existir modo "zero setup": o multi-tenant inteiro é schema + `search_path`,
+   que o SQLite não tem — o caminho SQLite não exercitava nada do que importa e
+   ainda escondia bug real (ele aceita `DateTime` com `Kind=Unspecified` onde o
+   Postgres recusa, o que já quebrou o fechamento financeiro em produção sem a
+   suíte acusar nada).
+2. Backend:
    ```bash
    cd CardGameStore
    dotnet run
    ```
-   API em `http://localhost:5000`, Swagger em `http://localhost:5000/swagger` (só em ambiente Development).
-2. Frontend:
+   API em `http://localhost:5000`, Swagger em `http://localhost:5000/swagger`
+   (ligado por padrão em Development; fora dele exige `Swagger__Enabled=true`).
+3. Frontend:
    ```bash
    cd frontend
    npm install
@@ -185,6 +219,22 @@ bash /opt/tenant-erp/deploy/update.sh
 ```bash
 bash /opt/tenant-erp/deploy/backup.sh   # manual, ou agendado via cron (instruções no próprio script)
 ```
+
+### Referência da API (Swagger)
+Publicada num host dedicado: **`dev-swagger.3esysten.com.br`** — já coberto pelo
+wildcard DNS existente, sem registro novo.
+
+Por que host separado e não `/swagger` no domínio principal: qualquer subdomínio
+de `*.3esysten.com.br` é lido como **slug de loja** pelo `TenantResolutionMiddleware`,
+e "dev-swagger" não é tenant nenhum. Por isso a API registra o Swagger *antes* da
+resolução de tenant e o nginx encaminha só `/swagger` nesse host — `/api`, `/hubs`,
+`/mcp` e o frontend respondem 404 lá (`deploy/nginx/dev-swagger.conf`).
+
+⚠️ O host é **público**: a doc lista todos os endpoints e campos da API. Não dá
+acesso a dado nenhum (todo endpoint segue exigindo o mesmo JWT), mas é um mapa da
+superfície de ataque. Para fechar com usuário/senha, descomente as duas linhas
+`auth_basic` em `deploy/nginx/dev-swagger.conf` e crie o `.htpasswd-swagger`
+(comando no cabeçalho do arquivo). Para desligar de vez: `SWAGGER_ENABLED=false`.
 
 ### Limpar espaço em disco (build cache acumula rápido)
 ```bash

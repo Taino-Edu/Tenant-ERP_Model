@@ -82,6 +82,16 @@ O backend emite os tokens como cookies **HttpOnly** (invisíveis ao JavaScript):
 - .NET 8 SDK instalado (`dotnet --version`)
 - Docker com Compose (o banco de testes é PostgreSQL 16 real)
 
+> **Suba o banco sempre pelo compose** (`tests/docker-compose.yml`), nunca com um
+> `docker run` cru. O servidor precisa de `max_locks_per_transaction` bem acima
+> do default de 64: cada teste dropa e recria o próprio schema, e um
+> `DROP SCHEMA CASCADE` de ~60 tabelas estoura a tabela de locks do cluster sob
+> concorrência. Quando isso acontece o schema fica pela metade e testes
+> aleatórios falham com `42P01: relation ... does not exist` — parece bug de
+> isolamento entre testes, mas é configuração do servidor. `run-tests.ps1`
+> detecta um container antigo e o recria sozinho; a `TestDbFactory` aborta com
+> mensagem explícita se o servidor estiver abaixo do mínimo.
+
 ### Comandos
 
 ```bash

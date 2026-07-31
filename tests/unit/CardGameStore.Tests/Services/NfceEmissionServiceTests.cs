@@ -6,6 +6,7 @@
 // como PendenteEmissao quando a emissão não pode ser concluída.
 // =============================================================================
 
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using CardGameStore.Data;
@@ -27,7 +28,14 @@ namespace CardGameStore.Tests.Services;
 
 public class NfceEmissionServiceTests
 {
-    private static AppDbContext CreateDb() => TestDbFactory.Create(nameof(NfceEmissionServiceTests));
+    // [CallerMemberName] preenche com o nome do MÉTODO DE TESTE que chamou —
+    // antes ia nameof(NfceEmissionServiceTests), o nome da CLASSE, e os 82
+    // testes daqui dividiam um schema só, enquanto todas as outras classes já
+    // isolavam por método. Um schema por teste alinha esta classe ao resto e
+    // deixa o schema de um teste que falhou identificável pelo nome. Não custa
+    // nada nas chamadas: o compilador injeta o nome, elas seguem `CreateDb()`.
+    private static AppDbContext CreateDb([CallerMemberName] string testName = "") =>
+        TestDbFactory.Create($"{nameof(NfceEmissionServiceTests)}_{testName}");
 
     private static EncryptionService CreateEncryptionService()
     {

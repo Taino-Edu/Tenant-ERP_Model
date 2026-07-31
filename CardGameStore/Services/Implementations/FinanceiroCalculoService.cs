@@ -44,8 +44,9 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
                 c.SecondPaymentMethod == filterPaymentMethod);
 
         // ── Receita de comandas ───────────────────────────────────────────────
-        // Sum() traduzido pro SQL precisa ser (long), não (decimal) — SQLite (dev
-        // local sem Postgres) não sabe agregar decimal no banco, só Postgres sabe.
+        // Sum() traduzido pro SQL precisa ser (long), não (decimal): o valor é
+        // armazenado em centavos (int) e a soma de muitas linhas estoura int32 —
+        // o cast promove a agregação pra bigint no próprio banco.
         // Divide por 100m depois, em memória, sem perder precisão.
         var receitaComandas = await comandasBaseQ
             .SumAsync(c => (long)c.TotalInCents) / 100m;
@@ -104,7 +105,7 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
 
         // ── Crediários em aberto ──────────────────────────────────────────────
-        // Mesmo motivo do Sum de receita acima: (long), não (decimal), pra traduzir no SQLite.
+        // Mesmo motivo do Sum de receita acima: (long), não (decimal), pra somar em bigint.
         var crediarios = await _db.Crediarios
             .Where(c => c.Status == CrediariosStatus.Aberto)
             .SumAsync(c => (long)(c.ValorEmCentavos - c.ValorPagoEmCentavos)) / 100m;

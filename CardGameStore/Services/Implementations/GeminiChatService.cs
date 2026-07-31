@@ -168,8 +168,8 @@ public class GeminiChatService : IAiChatService
         var ha30Dias   = hoje.AddDays(-30);
 
         // ── Vendas hoje ───────────────────────────────────────────────────────
-        // (long), não (decimal) — SQLite (dev local sem Postgres) não sabe agregar
-        // decimal no banco, só Postgres sabe traduzir esse Sum().
+        // (long), não (decimal) — o valor é armazenado em centavos (int) e a soma
+        // de muitas linhas estoura int32; o cast agrega em bigint no banco.
         var vendasHojeComanda = await _db.Comandas
             .Where(c => c.ClosedAt >= hoje && c.Status == ComandaStatus.Fechada)
             .SumAsync(c => (long)c.TotalInCents);

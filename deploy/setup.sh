@@ -185,6 +185,51 @@ docker compose -f docker-compose.prod.yml build --no-cache
 ok "Imagens buildadas com sucesso"
 
 # =============================================================================
+# 6b. Chaves VAPID (push do navegador)
+# =============================================================================
+# Precisa rodar DEPOIS do build: quem gera o par é a própria API
+# (WebPush.VapidHelper, via `gen-vapid`), então a imagem tem que existir.
+# Sem estas chaves o push do navegador é um no-op silencioso — a feature
+# inteira já esteve implementada ponta a ponta e nunca funcionou em produção
+# exatamente porque ninguém gravava as chaves em lugar nenhum.
+ensure_vapid_keys() {
+    local env_file="$1"
+
+    if grep -q '^VAPID_PRIVATE_KEY=.\+' "$env_file" 2>/dev/null; then
+        ok "Chaves VAPID já configuradas"
+        return 0
+    fi
+
+    local generated
+    if ! generated=$(docker run --rm cardgamestore_api:latest gen-vapid 2>/dev/null | grep -E '^VAPID_[A-Z_]+='); then
+        warn "Não consegui gerar as chaves VAPID — push do navegador ficará desativado."
+        warn "  Gere depois com: docker run --rm cardgamestore_api:latest gen-vapid"
+        warn "  e cole a saída no fim de $env_file"
+        return 0
+    fi
+
+    # Remove linhas VAPID_ vazias de uma instalação anterior antes de anexar,
+    # senão o docker compose lê a PRIMEIRA ocorrência (vazia) e ignora a nova.
+    if grep -q '^VAPID_' "$env_file" 2>/dev/null; then
+        sed -i '/^VAPID_/d' "$env_file"
+    fi
+
+    {
+        echo ""
+        echo "# --- Push do navegador (VAPID) — gerado automaticamente em $(date) ---"
+        echo "# Não regenere sem necessidade: trocar o par invalida todas as"
+        echo "# subscrições já salvas e os clientes precisam reativar o push."
+        echo "$generated"
+    } >> "$env_file"
+
+    ok "Chaves VAPID geradas e gravadas no .env"
+}
+
+step "6b" "Gerando chaves VAPID (push do navegador)..."
+ensure_vapid_keys "$APP_DIR/.env"
+cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
+
+# =============================================================================
 # 7. Subir os containers
 # =============================================================================
 step 7 "Iniciando containers..."
