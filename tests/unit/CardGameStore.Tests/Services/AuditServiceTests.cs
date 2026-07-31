@@ -231,11 +231,13 @@ public class AuditServiceTests
         var service = CreateService(db, MockAccessorWithIp("172.16.0.1"));
 
         // Act
+        var antesDoLog = DateTime.UtcNow;
         await service.LogAsync(
             action:     "Exportou",
             entityType: "User",
             entityId:   "abc-456",
             details:    "{\"campo\": \"valor\"}");
+        var depoisDoLog = DateTime.UtcNow;
 
         // Assert
         var log = await db.AuditLogs.FirstOrDefaultAsync();
@@ -244,7 +246,8 @@ public class AuditServiceTests
         log.EntityType.Should().Be("User");
         log.EntityId.Should().Be("abc-456");
         log.Details.Should().Contain("campo");
-        log.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        log.CreatedAt.Should().BeOnOrAfter(antesDoLog)
+            .And.BeOnOrBefore(depoisDoLog);
     }
 
     [Fact]
