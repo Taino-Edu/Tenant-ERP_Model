@@ -21,6 +21,10 @@ async function login(page: Page) {
 }
 
 test.describe('Fiscal — pré-voo (Visão Geral)', () => {
+  test.skip(
+    !process.env.RUN_BACKEND_E2E,
+    'requer RUN_BACKEND_E2E=1 e backend fiscal de teste configurado',
+  )
   test('mostra status, checklist e próxima ação consistentes com a configuração atual', async ({ page }) => {
     await login(page)
     await page.goto('/admin/fiscal')

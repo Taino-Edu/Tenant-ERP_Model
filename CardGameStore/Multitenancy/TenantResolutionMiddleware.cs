@@ -26,6 +26,7 @@ public class TenantResolutionMiddleware
     private readonly IMemoryCache _cache;
     private readonly ILogger<TenantResolutionMiddleware> _logger;
     private readonly string? _rootDomain;
+    private readonly bool _rejectUnknownHosts;
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(30);
 
     public TenantResolutionMiddleware(
@@ -38,6 +39,7 @@ public class TenantResolutionMiddleware
         _cache      = cache;
         _logger     = logger;
         _rootDomain = config["Multitenancy:RootDomain"];
+        _rejectUnknownHosts = config.GetValue("Multitenancy:RejectUnknownHosts", false);
     }
 
     public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext, CatalogDbContext catalog)
@@ -105,7 +107,20 @@ public class TenantResolutionMiddleware
             return;
         }
 
-        // Nada reconhecido (slug e domínio próprio) — tenant-zero.
+        // Em produção, Host arbitrário não pode cair silenciosamente no
+        // tenant-zero. Isso evita servir dados públicos do schema "public" por
+        // IP direto, domínio de terceiro ou Host forjado. O domínio raiz e www
+        // continuam sendo os Hosts legítimos da plataforma.
+        if (_rejectUnknownHosts
+            && !IsPlatformHost(host, _rootDomain)
+            && !context.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            await context.Response.WriteAsJsonAsync(new { Message = "Endereço não reconhecido." });
+            return;
+        }
+
+        // Nada reconhecido, mas Host de plataforma permitido — tenant-zero.
         await SetTenantAndContinue(
             context, tenantContext,
             TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
@@ -165,8 +180,17 @@ public class TenantResolutionMiddleware
 
         var slug = host[..^suffix.Length];
         // Subdomínio de nível único apenas — "a.b.dominio.com" não é um slug válido.
-        return slug.Length > 0 && !slug.Contains('.') ? slug.ToLowerInvariant() : null;
+        return slug.Length > 0
+            && !slug.Contains('.')
+            && !slug.Equals("www", StringComparison.OrdinalIgnoreCase)
+                ? slug.ToLowerInvariant()
+                : null;
     }
+
+    internal static bool IsPlatformHost(string host, string? rootDomain) =>
+        !string.IsNullOrWhiteSpace(rootDomain)
+        && (host.Equals(rootDomain, StringComparison.OrdinalIgnoreCase)
+            || host.Equals($"www.{rootDomain}", StringComparison.OrdinalIgnoreCase));
 }
 
 public static class TenantResolutionMiddlewareExtensions

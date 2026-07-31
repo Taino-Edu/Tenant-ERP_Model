@@ -117,6 +117,7 @@ public class TenantProvisioningService : ITenantProvisioningService
         }
 
         var schemaName = "tenant_" + slug.Replace('-', '_');
+        TenantSchemaName.Validate(schemaName);
 
         var tenant = new Tenant
         {

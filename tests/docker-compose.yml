@@ -1,0 +1,16 @@
+services:
+  postgres-tests:
+    image: postgres:16-alpine
+    container_name: tenant-erp-test-db
+    environment:
+      POSTGRES_USER: tenant_test
+      POSTGRES_PASSWORD: tenant_test_pw
+      POSTGRES_DB: tenant_erp_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenant_test -d tenant_erp_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped

@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState, Suspense } from 'react'
+import { useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { productApi, variantApi, categoryApi, waitListApi, fiscalApi, Product, ProductCategory, ProductVariant, WaitListEntry, NaturezaOperacaoDto, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
@@ -246,13 +246,13 @@ function VariantsPanel({ productId }: { productId: string }) {
   const [editId, setEditId]           = useState<string | null>(null)
   const [editQty, setEditQty]         = useState(0)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try { const { data } = await variantApi.list(productId); setVariants(data) }
     catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar variantes')) }
     finally { setLoading(false) }
-  }
+  }, [productId])
 
-  useEffect(() => { load() }, [productId])
+  useEffect(() => { load() }, [load])
 
   const toggleSize  = (s: string) => setSelSizes(p  => p.includes(s) ? p.filter(x => x !== s) : [...p, s])
   const toggleColor = (c: string) => setSelColors(p => p.includes(c) ? p.filter(x => x !== c) : [...p, c])

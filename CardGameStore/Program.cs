@@ -433,6 +433,13 @@ var corsOrigins = (builder.Configuration["CorsSettings:AllowedOrigins"] ?? "http
 // acima (IP de teste, domínio raiz) — nenhuma substitui a outra.
 var corsRootDomain = builder.Configuration["Multitenancy:RootDomain"];
 
+if (builder.Environment.IsProduction() && string.IsNullOrWhiteSpace(corsRootDomain))
+{
+    throw new InvalidOperationException(
+        "Multitenancy:RootDomain é obrigatório em produção. " +
+        "Configure MULTITENANCY_ROOT_DOMAIN antes de iniciar a API.");
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
@@ -759,6 +766,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // SSL gerenciado pelo reverse proxy (Nginx/Cloudflare) — não redirecionar aqui
+app.UseTenantUploadGuard();
 app.UseStaticFiles(); // serve wwwroot/uploads/* como arquivos estáticos
 app.UseCors("FrontendPolicy");
 app.UseRateLimiter();

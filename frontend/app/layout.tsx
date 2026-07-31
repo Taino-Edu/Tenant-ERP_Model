@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next'
-import { Nunito } from 'next/font/google'
 import { headers } from 'next/headers'
+import Script from 'next/script'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
@@ -8,13 +8,6 @@ import Footer from '@/components/Footer'
 import VLibrasController from '@/components/VLibrasController'
 import ClientProviders from '@/components/ClientProviders'
 import { getTenantIconsForHost, withCacheBust } from '@/lib/serverSiteConfig'
-
-const nunito = Nunito({
-  subsets: ['latin'],
-  variable: '--font-nunito',
-  display: 'swap',
-  weight: ['400', '500', '600', '700', '800', '900'],
-})
 
 export const viewport: Viewport = {
   themeColor: '#42B6EE',
@@ -55,7 +48,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={nunito.variable} suppressHydrationWarning>
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
         {/* iOS Safari PWA meta tags */}
         <meta name="mobile-web-app-capable" content="yes" />
@@ -63,11 +56,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* apple-touch-icon já vem de generateMetadata (icons.apple) — link estático
             removido daqui pra não duplicar/entrar em conflito com o dinâmico. */}
         {/* Aplica o tema salvo antes do primeiro render para evitar flash */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.remove('light')}else{document.documentElement.classList.add('light');if(!t)localStorage.setItem('theme','light')}}catch(e){document.documentElement.classList.add('light')}})();`
-          }}
-        />
+        <Script id="initial-theme" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.remove('light')}else{document.documentElement.classList.add('light');if(!t)localStorage.setItem('theme','light')}}catch(e){document.documentElement.classList.add('light')}})();`}
+        </Script>
       </head>
       <body>
         <ClientProviders>
@@ -81,17 +72,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="vw-plugin-top-wrapper"></div>
           </div>
         </div>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
+        <Script id="vlibras-loader" strategy="afterInteractive">
+          {`
               window.VLibras = window.VLibras || {};
               var script = document.createElement('script');
               script.src = 'https://vlibras.gov.br/app/vlibras-plugin.js';
               script.onload = function() { new window.VLibras.Widget('https://vlibras.gov.br/app'); };
               document.body.appendChild(script);
-            `
-          }}
-        />
+            `}
+        </Script>
         <VLibrasController />
         {children}
         {/* Rodapé com links legais (LGPD) — não aparece no painel admin */}

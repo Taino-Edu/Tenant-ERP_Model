@@ -33,7 +33,7 @@ public class ComandaHub : Hub
     // os tenants — qualquer admin conectado em qualquer loja recebia as
     // atualizações de comanda em tempo real de todas as outras lojas também
     // (vazamento cross-tenant). Agora é escopada por tenant.
-    public static string GetAdminGroup(Guid tenantId) => $"AdminDashboard_{tenantId}";
+    public static string GetAdminGroup(Guid tenantId) => $"Tenant_{tenantId:N}_Admin";
 
     public ComandaHub(IComandaService comandaService, ITenantContext tenant, ILogger<ComandaHub> logger)
     {
@@ -63,12 +63,12 @@ public class ComandaHub : Hub
         else
         {
             // Cliente SEMPRE entra no grupo pessoal — recebe ComandaOpened mesmo sem comanda
-            await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroup(userId));
+            await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroup(_tenant.TenantId, userId));
 
             // Se já tem comanda ativa, entra no grupo dela também
             var comandaId = await _comandaService.GetActiveComandaIdByUserAsync(userId);
             if (comandaId.HasValue)
-                await Groups.AddToGroupAsync(Context.ConnectionId, GetComandaGroup(comandaId.Value));
+                await Groups.AddToGroupAsync(Context.ConnectionId, GetComandaGroup(_tenant.TenantId, comandaId.Value));
         }
 
         await base.OnConnectedAsync();
@@ -152,7 +152,7 @@ public class ComandaHub : Hub
         var comanda = await _comandaService.GetByIdAsync(comandaId);
         if (comanda != null && comanda.UserId == userId)
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, GetComandaGroup(comandaId));
+            await Groups.AddToGroupAsync(Context.ConnectionId, GetComandaGroup(_tenant.TenantId, comandaId));
             _logger.LogInformation("Cliente {UserId} entrou no grupo Comanda_{ComandaId}", userId, comandaId);
         }
     }
@@ -173,8 +173,11 @@ public class ComandaHub : Hub
     private string GetUserRole() =>
         Context.User?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? "Customer";
 
-    public static string GetComandaGroup(Guid comandaId) => $"Comanda_{comandaId}";
-    public static string GetUserGroup(Guid userId)       => $"User_{userId}";
+    public static string GetComandaGroup(Guid tenantId, Guid comandaId) =>
+        $"Tenant_{tenantId:N}_Comanda_{comandaId:N}";
+
+    public static string GetUserGroup(Guid tenantId, Guid userId) =>
+        $"Tenant_{tenantId:N}_User_{userId:N}";
 }
 
 // =============================================================================

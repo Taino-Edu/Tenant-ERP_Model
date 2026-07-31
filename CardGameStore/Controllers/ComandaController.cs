@@ -36,17 +36,20 @@ public class ComandaController : ControllerBase
     private readonly AppDbContext     _db;
     private readonly InterSyncService _inter;
     private readonly IHubContext<ComandaHub> _hub;
+    private readonly ITenantContext _tenant;
     private readonly IPushService     _push;
     private readonly ILogger<ComandaController> _logger;
 
     public ComandaController(
         IComandaService service, AppDbContext db, InterSyncService inter,
-        IHubContext<ComandaHub> hub, IPushService push, ILogger<ComandaController> logger)
+        IHubContext<ComandaHub> hub, ITenantContext tenant,
+        IPushService push, ILogger<ComandaController> logger)
     {
         _service = service;
         _db      = db;
         _inter   = inter;
         _hub     = hub;
+        _tenant  = tenant;
         _push    = push;
         _logger  = logger;
     }
@@ -323,7 +326,7 @@ public class ComandaController : ControllerBase
             // no navegador se o site estiver fechado. Falha aqui nunca desfaz a cobrança.
             try
             {
-                await _hub.Clients.Group(ComandaHub.GetComandaGroup(comanda.Id))
+                await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comanda.Id))
                     .SendAsync("PixCobrancaCriada", PixDto(pix));
 
                 await _push.SendAsync(

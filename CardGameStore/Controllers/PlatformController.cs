@@ -259,7 +259,8 @@ public class PlatformController : ControllerBase
             // schemaName só contém [a-z0-9_] (validado na criação — ver
             // TenantProvisioningService), então a interpolação é segura; nome de
             // schema é identificador, não dá pra parametrizar via ExecuteSqlAsync.
-            await _catalog.Database.ExecuteSqlRawAsync($"DROP SCHEMA IF EXISTS \"{tenant.SchemaName}\" CASCADE");
+            var schemaName = TenantSchemaName.Validate(tenant.SchemaName);
+            await _catalog.Database.ExecuteSqlRawAsync($"DROP SCHEMA IF EXISTS \"{schemaName}\" CASCADE");
 #pragma warning restore EF1002
 
             _catalog.Tenants.Remove(tenant);
