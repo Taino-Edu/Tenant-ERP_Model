@@ -79,14 +79,29 @@ export default function NotificationBell() {
   async function registerPush() {
     if (typeof window === 'undefined') return
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+
+    // A chave VAPID vem ANTES de pedir permissão, de propósito. Na ordem
+    // inversa (permissão primeiro) o usuário concedia a permissão e só então
+    // descobríamos que o servidor não tem push configurado — a chamada morria
+    // num catch vazio e ele ficava com a permissão dada esperando notificação
+    // que nunca chegaria. Sem chave, não incomoda o usuário e não faz nada.
+    let publicKey: string
+    try {
+      const { data } = await pushApi.publicKey()
+      if (!data?.publicKey) return
+      publicKey = data.publicKey
+    } catch {
+      // 404 = servidor sem VAPID configurado (push desativado nesta instalação).
+      return
+    }
+
     try {
       const reg  = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
       const perm = await Notification.requestPermission()
       if (perm !== 'granted') return
-      const { data } = await pushApi.publicKey()
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(data.publicKey),
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
       })
       const json = sub.toJSON()
       await pushApi.subscribe({
@@ -94,8 +109,12 @@ export default function NotificationBell() {
         p256dh:   json.keys?.p256dh   ?? '',
         auth:     json.keys?.auth     ?? '',
       })
-    } catch {
-      // Push não disponível ou negado pelo usuário — sem impacto
+    } catch (err) {
+      // Permissão negada é o caso normal e não merece ruído; qualquer outra
+      // falha (SW não registrou, subscribe rejeitado, POST falhou) some sem
+      // rastro se não logar — foi assim que o push ficou quebrado sem ninguém
+      // perceber.
+      if (Notification.permission !== 'denied') console.warn('Push não pôde ser ativado:', err)
     }
   }
 

@@ -9,9 +9,18 @@
 // suíte inteira, 100% em SQLite, nunca teria pego.
 //
 // Setup (uma vez só, container fica de pé indefinidamente):
-//   podman run -d --name tenant-erp-test-db -e POSTGRES_USER=tenant_test \
-//     -e POSTGRES_PASSWORD=tenant_test_pw -e POSTGRES_DB=tenant_erp_test \
-//     -p 5433:5432 docker.io/library/postgres:16-alpine
+//   docker compose -f tests/docker-compose.yml up -d --wait
+//
+// Suba pelo compose, não com um `docker run` cru: ele já vem com folga de locks
+// (cada DROP SCHEMA CASCADE daqui derruba ~134 objetos) e sem fsync, o que
+// acelera muito o DDL da suíte. CheckDatabaseAvailable() avisa se o servidor
+// estiver abaixo do mínimo, em vez de deixar isso virar erro obscuro mais tarde.
+//
+// O isolamento entre DUAS EXECUÇÕES SIMULTÂNEAS da suíte não vem daí, e sim do
+// RunId por processo em IsolatedSchemaName: sem ele, dois processos usando o
+// mesmo banco geravam os mesmos nomes de schema e um dropava o schema que o
+// outro estava usando — testes aleatórios morriam com "42P01: relation does not
+// exist" e o sintoma apontava pro código, não pra concorrência entre processos.
 //
 // Rodar os testes (com o container acima já no ar):
 //   dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
@@ -62,7 +71,14 @@ public static class TestDbFactory
     public static string ConnectionString => PgConnString;
 
     /// <summary>Nome de schema legível e único entre chamadas e processos
-    /// concorrentes da suíte.</summary>
+    /// concorrentes da suíte.
+    ///
+    /// A unicidade mora no PREFIXO (RunId + sequência), e é isso que torna a
+    /// truncagem segura: identificador no Postgres tem limite de 63 bytes, e o
+    /// corte em 60 descarta só a cauda descritiva. Um esquema em que o nome do
+    /// teste viesse primeiro colidiria aqui — dois testes com o mesmo prefixo
+    /// longo virariam o MESMO schema, e o DROP CASCADE de um apagaria as tabelas
+    /// do outro no meio da execução.</summary>
     public static string IsolatedSchemaName(string logicalName)
     {
         var sequence = Interlocked.Increment(ref SchemaSequence);
@@ -142,6 +158,39 @@ public static class TestDbFactory
     private static string Sanitize(string s) =>
         Regex.Replace(s, "[^a-zA-Z0-9_]", "_").ToLowerInvariant();
 
+    /// <summary>Folga de locks exigida do servidor de teste. Cada DROP SCHEMA
+    /// CASCADE aqui derruba ~134 objetos (tabelas, índices e sequences do
+    /// AppDbContext) e pega um lock por objeto. O parâmetro dimensiona a tabela
+    /// de locks compartilhada do cluster (max_locks_per_transaction ×
+    /// max_connections), então o default de 64 não limita uma transação sozinha
+    /// — mas manter o teto por transação abaixo do que a operação mais pesada da
+    /// suíte usa de fato é deixar uma armadilha armada para o dia em que a
+    /// concorrência aumentar.</summary>
+    private const int MinLocksPerTransaction = 512;
+
+    /// <summary>
+    /// AVISO, nunca falha. A suíte roda bem com o default do Postgres — inclusive
+    /// no CI, cujo service container não aceita override de configuração — porque
+    /// max_locks_per_transaction dimensiona a tabela de locks COMPARTILHADA
+    /// (valor × max_connections), e não o teto de uma transação sozinha. Isto aqui
+    /// só sinaliza que a folga está menor do que a operação mais pesada da suíte
+    /// usa, o que costuma significar container local criado antes do ajuste no
+    /// compose (ou por um 'docker run' cru) — e portanto também sem fsync=off,
+    /// que é de onde vem a maior parte do ganho de tempo.
+    /// </summary>
+    private static void EnsureLockCapacity(NpgsqlConnection connection)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SHOW max_locks_per_transaction";
+        if (!int.TryParse(cmd.ExecuteScalar() as string, out var locks) || locks >= MinLocksPerTransaction)
+            return;
+
+        Console.Error.WriteLine(
+            $"[TestDbFactory] max_locks_per_transaction={locks} (recomendado: {MinLocksPerTransaction}). " +
+            "A suíte roda assim mesmo; só está sem a folga e sem o fsync=off do compose. " +
+            "Local, recrie com: docker compose -f tests/docker-compose.yml up -d --force-recreate --wait");
+    }
+
     private static bool CheckDatabaseAvailable()
     {
         Exception? lastException = null;
@@ -151,6 +200,7 @@ public static class TestDbFactory
             {
                 using var connection = new NpgsqlConnection(PgConnString);
                 connection.Open();
+                EnsureLockCapacity(connection);
                 return true;
             }
             catch (Exception exception) when (attempt < 6)

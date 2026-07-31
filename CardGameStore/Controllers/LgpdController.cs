@@ -35,7 +35,6 @@ public class LgpdController : ControllerBase
     private readonly IEmailService  _email;
     private readonly IAuditService  _audit;
     private readonly ILogger<LgpdController> _logger;
-    private readonly IConfiguration _config;
     private readonly string         _ipSalt;
 
     public LgpdController(
@@ -49,15 +48,14 @@ public class LgpdController : ControllerBase
         _email  = email;
         _audit  = audit;
         _logger = logger;
-        _config = configuration;
         _ipSalt = configuration["Security:IpHashSalt"] ?? "tenant-erp-ip-salt-dev";
     }
 
     private async Task<SiteConfig> GetSiteConfigAsync() =>
         await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
 
-    private string GetAppUrl() =>
-        (_config["SmtpSettings:AppUrl"] ?? _config["EmailSettings:AppUrl"] ?? "https://tenant-erp.local").TrimEnd('/');
+    // Delega pro IEmailService: a base dos links de e-mail tem uma fonte só.
+    private string GetAppUrl() => _email.AppUrl;
 
     // =========================================================================
     // PÚBLICO — Abertura de solicitação

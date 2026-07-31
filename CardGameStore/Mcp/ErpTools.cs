@@ -53,8 +53,9 @@ public sealed class ErpTools
     {
         var hoje = DateTime.UtcNow.Date;
 
-        // (long) no Sum: o provider SQLite usado em dev não agrega decimal —
-        // só o Postgres traduz. Mantém a mesma escolha do GeminiChatService.
+        // (long) no Sum, não (decimal): o valor é armazenado em centavos (int) e
+        // a soma de muitas linhas estoura int32 — o cast promove a agregação pra
+        // bigint no próprio banco. Converte pra reais depois, em memória.
         var totalComandas = await db.Comandas
             .Where(c => c.ClosedAt >= hoje && c.Status == ComandaStatus.Fechada)
             .SumAsync(c => (long)c.TotalInCents, ct);
