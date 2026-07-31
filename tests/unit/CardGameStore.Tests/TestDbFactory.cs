@@ -42,11 +42,33 @@ public static class TestDbFactory
             ? env
             : DefaultConnString;
     private static readonly Lazy<bool> DatabaseAvailable = new(CheckDatabaseAvailable);
+    // Duas execuções locais da suíte podem compartilhar o mesmo PostgreSQL.
+    // Sem um prefixo por processo, ambas dropavam schemas com o mesmo nome e
+    // provocavam falhas aleatórias uma na outra.
+    private static readonly string RunId =
+        $"{Environment.ProcessId:x}_{Guid.NewGuid():N}"[..12];
+    private static int SchemaSequence;
+
+    static TestDbFactory()
+    {
+        // Os schemas exclusivos evitam colisão entre processos, mas não devem
+        // se acumular no banco local depois de uma execução normal da suíte.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => CleanupRunSchemas();
+    }
 
     /// <summary>Connection string do Postgres de teste — exposta pra testes que
     /// precisam montar o próprio DbContext (ex: TenantIsolationTests, que usa o
     /// TenantConnectionInterceptor real de produção em vez do TestSchemaInterceptor).</summary>
     public static string ConnectionString => PgConnString;
+
+    /// <summary>Nome de schema legível e único entre chamadas e processos
+    /// concorrentes da suíte.</summary>
+    public static string IsolatedSchemaName(string logicalName)
+    {
+        var sequence = Interlocked.Increment(ref SchemaSequence);
+        var schema = $"test_{RunId}_{sequence:x}_{Sanitize(logicalName)}";
+        return schema.Length > 60 ? schema[..60] : schema;
+    }
 
     /// <summary>Dropa e recria um schema vazio no banco de teste — mesmo preparo
     /// que Create() faz, exposto pra testes que gerenciam o próprio contexto.</summary>
@@ -70,9 +92,8 @@ public static class TestDbFactory
     public static AppDbContext Create(string testName = "")
     {
         _ = DatabaseAvailable.Value;
-        var schema = "test_" + Sanitize(string.IsNullOrWhiteSpace(testName) ? Guid.NewGuid().ToString("N") : testName);
-        // Trunca — identificador de schema no Postgres tem limite de 63 bytes.
-        if (schema.Length > 60) schema = schema[..60];
+        var schema = IsolatedSchemaName(
+            string.IsNullOrWhiteSpace(testName) ? Guid.NewGuid().ToString("N") : testName);
 
         // DROP/CREATE roda numa conexão descartável, fechada logo em seguida —
         // não pode ser a mesma conexão do DbContext (ver comentário abaixo).
@@ -148,6 +169,40 @@ public static class TestDbFactory
             "'docker compose -f tests/docker-compose.yml up -d --wait' " +
             "ou configure TEST_POSTGRES_CONNECTION antes de rodar a suíte.",
             lastException);
+    }
+
+    private static void CleanupRunSchemas()
+    {
+        try
+        {
+            using var connection = new NpgsqlConnection(PgConnString);
+            connection.Open();
+
+            using var list = connection.CreateCommand();
+            list.CommandText = """
+                SELECT schema_name
+                FROM information_schema.schemata
+                WHERE left(schema_name, length(@prefix)) = @prefix
+                """;
+            list.Parameters.AddWithValue("prefix", $"test_{RunId}_");
+
+            var schemas = new List<string>();
+            using (var reader = list.ExecuteReader())
+                while (reader.Read()) schemas.Add(reader.GetString(0));
+
+            foreach (var schema in schemas)
+            {
+                using var drop = connection.CreateCommand();
+                var quotedSchema = new NpgsqlCommandBuilder().QuoteIdentifier(schema);
+                drop.CommandText = $"DROP SCHEMA IF EXISTS {quotedSchema} CASCADE;";
+                drop.ExecuteNonQuery();
+            }
+        }
+        catch
+        {
+            // Limpeza de melhor esforço durante a saída do testhost: nunca
+            // esconde o resultado real da suíte se o PostgreSQL já caiu.
+        }
     }
 }
 

@@ -2,6 +2,7 @@
 // IProductService.cs — Interface do CRUD de Produtos (estoque físico)
 // =============================================================================
 
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 
 namespace CardGameStore.Services.Interfaces;
@@ -9,6 +10,8 @@ namespace CardGameStore.Services.Interfaces;
 /// <summary>Contrato para gestão do estoque físico da loja.</summary>
 public interface IProductService
 {
+    IAsyncEnumerable<ProductPublicDto> StreamAllActivePublicAsync(string? category = null);
+    IAsyncEnumerable<ProductPublicDto> StreamAllStorePublicAsync();
     Task<IEnumerable<Product>> GetAllActiveAsync();
     Task<IEnumerable<Product>> GetAllForAdminAsync();
     Task<IEnumerable<Product>> GetByCategoryAsync(string category);

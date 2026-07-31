@@ -54,47 +54,70 @@ public class AnalyticsController : ControllerBase
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ontemInicio && c.ClosedAt < hojeInicio)
             .SumAsync(c => (long)c.TotalInCents);
 
-        // ── Vendas avulsas — 60 dias cobre todas as métricas do dashboard ──
-        // M8: GetInPeriodAsync (sem limite) em vez de GetRecentAsync(5000, ...) — loja com
-        // mais de 5.000 vendas avulsas em 60 dias (~83/dia) tinha "hoje"/"ontem" errados,
-        // já que o corte por "mais recentes" pode ser consumido antes de cobrir todo o período.
-        var vendas60Dias = (await _vendas.GetInPeriodAsync(ha60Dias, DateTime.UtcNow.AddMinutes(5))).ToList();
-        var vendasHoje   = vendas60Dias.Where(v => v.SoldAt >= hojeInicio).ToList();
-        var vendasOntem  = vendas60Dias.Where(v => v.SoldAt >= ontemInicio && v.SoldAt < hojeInicio).ToList();
-        var vendasUlt30  = vendas60Dias.Where(v => v.SoldAt >= ha30Dias).ToList();
-        var vendasAnt30  = vendas60Dias.Where(v => v.SoldAt >= ha60Dias && v.SoldAt < ha30Dias).ToList();
+        // O dashboard antigo materializava até 60 dias de VendaAvulsaDto, incluindo
+        // o JSON completo de itens, nomes e metadados, em toda requisição. Em uma
+        // massa de 50 mil vendas isso adicionava centenas de MB sob concorrência.
+        // Cada métrica simples agora é agregada no PostgreSQL; só as vendas de hoje
+        // (necessárias para a curva horária) retornam como projeção escalar pequena.
+        var vendasHoje = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= hojeInicio && v.SoldAt < hojeInicio.AddDays(1))
+            .Select(v => new { v.SoldAt, v.TotalInCents, v.PaymentMethod })
+            .ToListAsync();
+
+        var vendasOntemTotal = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= ontemInicio && v.SoldAt < hojeInicio)
+            .SumAsync(v => (long)v.TotalInCents);
+
+        var vendasUlt30Stats = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= ha30Dias && v.SoldAt < DateTime.UtcNow.AddMinutes(5) && v.TotalInCents > 0)
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Sum(v => (long)v.TotalInCents), Count = g.Count() })
+            .FirstOrDefaultAsync();
+
+        var vendasAnt30Stats = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= ha60Dias && v.SoldAt < ha30Dias && v.TotalInCents > 0)
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Sum(v => (long)v.TotalInCents), Count = g.Count() })
+            .FirstOrDefaultAsync();
 
         var totalHoje  = (comandasHoje.Sum(c => c.TotalInCents) + vendasHoje.Sum(v => v.TotalInCents)) / 100m;
-        var totalOntem = (comandasOntem + vendasOntem.Sum(v => (long)v.TotalInCents)) / 100m;
+        var totalOntem = (comandasOntem + vendasOntemTotal) / 100m;
         var variacao   = totalOntem == 0 ? 0m : Math.Round((totalHoje - totalOntem) / totalOntem * 100, 1);
 
         // ── Ticket médio (últimos 30 dias — comandas + vendas avulsas) ────────────
-        var ticketsRecentes = await _db.Comandas
+        var ticketsComandaRecentes = await _db.Comandas
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ha30Dias && c.TotalInCents > 0)
-            .Select(c => (decimal)c.TotalInCents)
-            .ToListAsync();
-        ticketsRecentes.AddRange(vendasUlt30.Where(v => v.TotalInCents > 0).Select(v => (decimal)v.TotalInCents));
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Sum(c => (long)c.TotalInCents), Count = g.Count() })
+            .FirstOrDefaultAsync();
 
-        var ticketsAnteriores = await _db.Comandas
+        var ticketsComandaAnteriores = await _db.Comandas
             .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ha60Dias && c.ClosedAt < ha30Dias && c.TotalInCents > 0)
-            .Select(c => (decimal)c.TotalInCents)
-            .ToListAsync();
-        ticketsAnteriores.AddRange(vendasAnt30.Where(v => v.TotalInCents > 0).Select(v => (decimal)v.TotalInCents));
+            .GroupBy(_ => 1)
+            .Select(g => new { Total = g.Sum(c => (long)c.TotalInCents), Count = g.Count() })
+            .FirstOrDefaultAsync();
 
-        var ticketMedio    = ticketsRecentes.Count > 0 ? ticketsRecentes.Average() / 100m : 0;
-        var ticketAnterior = ticketsAnteriores.Count > 0 ? ticketsAnteriores.Average() / 100m : 0;
+        var totalTicketsRecentes = (ticketsComandaRecentes?.Total ?? 0) + (vendasUlt30Stats?.Total ?? 0);
+        var qtdTicketsRecentes = (ticketsComandaRecentes?.Count ?? 0) + (vendasUlt30Stats?.Count ?? 0);
+        var totalTicketsAnteriores = (ticketsComandaAnteriores?.Total ?? 0) + (vendasAnt30Stats?.Total ?? 0);
+        var qtdTicketsAnteriores = (ticketsComandaAnteriores?.Count ?? 0) + (vendasAnt30Stats?.Count ?? 0);
+
+        var ticketMedio = qtdTicketsRecentes > 0
+            ? totalTicketsRecentes / (decimal)qtdTicketsRecentes / 100m
+            : 0;
+        var ticketAnterior = qtdTicketsAnteriores > 0
+            ? totalTicketsAnteriores / (decimal)qtdTicketsAnteriores / 100m
+            : 0;
 
         // ── Clientes ──────────────────────────────────────────────────────────
         var totalClientes    = await _db.Users.CountAsync(u => u.IsActive && u.Role == UserRole.Customer);
         var novosClientesMes = await _db.Users.CountAsync(u => u.IsActive && u.Role == UserRole.Customer && u.CreatedAt >= inicioMes);
 
-        var ultimasVisitas = await _db.Comandas
-            .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt != null)
-            .GroupBy(c => c.UserId)
-            .Select(g => new { UserId = g.Key, Ultima = g.Max(c => c.ClosedAt) })
-            .ToListAsync();
-
-        var clientesAtivos   = ultimasVisitas.Count(v => v.Ultima >= ha30Dias);
+        var clientesAtivos = await _db.Comandas
+            .Where(c => c.Status == ComandaStatus.Fechada && c.ClosedAt >= ha30Dias)
+            .Select(c => c.UserId)
+            .Distinct()
+            .CountAsync();
         var clientesInativos = Math.Max(0, totalClientes - clientesAtivos);
 
         // ── Curva horária do dia ──────────────────────────────────────────────
@@ -108,39 +131,38 @@ public class AnalyticsController : ControllerBase
         }).ToList();
 
         // ── Top produtos (últimos 30 dias — comandas + vendas avulsas) ───────────
-        var topComandaItens = await _db.ComandaItems
-            .Where(i => i.AddedAt >= ha30Dias)
-            .GroupBy(i => i.ItemNameSnapshot)
-            .Select(g => new TopProductDto
-            {
-                Nome         = g.Key,
-                QuantVendida = g.Sum(i => i.Quantity),
-                Receita      = g.Sum(i => i.UnitPriceInCents * i.Quantity) / 100m,
-            })
-            .ToListAsync();
+        var topProdutos = await _db.Database.SqlQuery<TopProductDto>($"""
+            WITH itens_vendidos AS (
+                SELECT
+                    item.item_name_snapshot AS nome,
+                    item.quantity AS quantidade,
+                    (item.unit_price_in_cents * item.quantity)::bigint AS receita_centavos
+                FROM comanda_items AS item
+                INNER JOIN comandas AS comanda ON comanda.id = item.comanda_id
+                WHERE comanda.status = 'Fechada'
+                  AND comanda.closed_at >= {ha30Dias}
 
-        var topAvulsaItens = vendasUlt30
-            .SelectMany(v => v.Items)
-            .GroupBy(i => i.ProductName)
-            .Select(g => new TopProductDto
-            {
-                Nome         = g.Key,
-                QuantVendida = g.Sum(i => i.Quantity),
-                Receita      = Math.Round(g.Sum(i => (decimal)i.Quantity * i.UnitPriceInReais), 2),
-            })
-            .ToList();
+                UNION ALL
 
-        var topProdutos = topComandaItens.Concat(topAvulsaItens)
-            .GroupBy(t => t.Nome)
-            .Select(g => new TopProductDto
-            {
-                Nome         = g.Key,
-                QuantVendida = g.Sum(t => t.QuantVendida),
-                Receita      = Math.Round(g.Sum(t => t.Receita), 2),
-            })
-            .OrderByDescending(t => t.QuantVendida)
-            .Take(5)
-            .ToList();
+                SELECT
+                    item ->> 'ProductName' AS nome,
+                    COALESCE((item ->> 'Quantity')::integer, 0) AS quantidade,
+                    (COALESCE((item ->> 'UnitPriceInCents')::integer, 0)
+                        * COALESCE((item ->> 'Quantity')::integer, 0))::bigint AS receita_centavos
+                FROM vendas_avulsas AS venda
+                CROSS JOIN LATERAL jsonb_array_elements(venda.items_json) AS item
+                WHERE venda.sold_at >= {ha30Dias}
+            )
+            SELECT
+                nome AS "Nome",
+                SUM(quantidade)::integer AS "QuantVendida",
+                ROUND(SUM(receita_centavos)::numeric / 100, 2) AS "Receita"
+            FROM itens_vendidos
+            WHERE nome IS NOT NULL AND nome <> ''
+            GROUP BY nome
+            ORDER BY SUM(quantidade) DESC
+            LIMIT 5
+            """).ToListAsync();
 
         // ── Formas de pagamento (vendas avulsas + comandas hoje) ─────────────────
         var pix      = vendasHoje.Count(v => v.PaymentMethod == PaymentMethod.Pix)

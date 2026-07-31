@@ -108,6 +108,10 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(u => u.WhatsApp)
                   .HasDatabaseName("ix_users_whatsapp");
+
+            // Dashboard: total de clientes ativos e novos clientes no mês.
+            entity.HasIndex(u => new { u.IsActive, u.Role, u.CreatedAt })
+                  .HasDatabaseName("ix_users_active_role_created_at");
         });
 
         // =====================================================================
@@ -142,6 +146,11 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(p => p.NaturezaOperacaoId)
                   .HasDatabaseName("ix_products_natureza_operacao");
+
+            // Catálogo público: filtro fixo e ordenação por nome. O índice simples
+            // em IsActive não evitava sort nem a varredura do catálogo inteiro.
+            entity.HasIndex(p => new { p.IsActive, p.ShowOnMarketplace, p.Name })
+                  .HasDatabaseName("ix_products_marketplace_active_name");
 
             entity.HasOne(p => p.NaturezaOperacao)
                   .WithMany(n => n.Products)
@@ -232,6 +241,15 @@ public class AppDbContext : DbContext
             entity.HasIndex(c => c.Status)
                   .HasDatabaseName("ix_comandas_status");
 
+            // Analytics filtra por status + janela de fechamento em praticamente
+            // todas as métricas de receita e ticket médio.
+            entity.HasIndex(c => new { c.Status, c.ClosedAt })
+                  .HasDatabaseName("ix_comandas_status_closed_at");
+
+            // Histórico do cliente filtra por usuário e ordena por abertura.
+            entity.HasIndex(c => new { c.UserId, c.OpenedAt })
+                  .HasDatabaseName("ix_comandas_user_opened_at");
+
             entity.HasOne(c => c.User)
                   .WithMany(u => u.Comandas)
                   .HasForeignKey(c => c.UserId)
@@ -245,6 +263,10 @@ public class AppDbContext : DbContext
         {
             entity.HasIndex(i => i.ComandaId)
                   .HasDatabaseName("ix_comanda_items_comanda");
+
+            // Consultas temporais de itens usadas pela IA e pelas ferramentas MCP.
+            entity.HasIndex(i => i.AddedAt)
+                  .HasDatabaseName("ix_comanda_items_added_at");
 
             entity.HasOne(i => i.Comanda)
                   .WithMany(c => c.Items)

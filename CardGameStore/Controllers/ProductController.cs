@@ -36,26 +36,24 @@ public class ProductController : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<ProductPublicDto>), 200)]
-    public async Task<IActionResult> GetAll([FromQuery] string? category)
+    public IActionResult GetAll([FromQuery] string? category)
     {
-        var products = category != null
-            ? await _service.GetByCategoryAsync(category)
-            : await _service.GetAllActiveAsync();
         // M12: entidade completa vazava CostPriceInCents/MinimumStock (custo/margem interna)
         // pra qualquer visitante anônimo — endpoint público só devolve o DTO sem esses campos.
-        return Ok(products.Select(ProductPublicDto.FromEntity));
+        // Projeção no banco + serialização assíncrona: o contrato continua
+        // sendo um array JSON, sem materializar o catálogo inteiro no servidor.
+        return Ok(_service.StreamAllActivePublicAsync(category));
     }
 
     /// <summary>Lista todos os produtos ativos para comanda do cliente (sem filtro de marketplace).</summary>
     [HttpGet("store")]
     [Authorize]
     [ProducesResponseType(typeof(IEnumerable<ProductPublicDto>), 200)]
-    public async Task<IActionResult> GetAllStore()
+    public IActionResult GetAllStore()
     {
-        var products = await _service.GetAllForAdminAsync();
         // M12: usado pela comanda do CLIENTE (app/cliente) — mesmo motivo do GetAll acima,
         // Customer não pode ver custo/margem. Admin/Operator usam GetAllAdmin (entidade completa).
-        return Ok(products.Select(ProductPublicDto.FromEntity));
+        return Ok(_service.StreamAllStorePublicAsync());
     }
 
     /// <summary>Lista TODOS os produtos ativos (incluindo ocultos do site). Só Admin/Operator.</summary>

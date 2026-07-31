@@ -4,6 +4,7 @@
 // =============================================================================
 
 using System.Net;
+using System.IO.Compression;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -17,6 +18,7 @@ using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -503,6 +505,21 @@ builder.Services.AddSwaggerGen(c =>
 
 builder.Services.AddControllers();
 
+// Respostas JSON grandes (catálogo, relatórios e exportações) atravessavam o
+// proxy sem compressão. Em tenant com 20 mil produtos o catálogo público tinha
+// mais de 10 MB por request. Brotli/Gzip reduzem banda e tempo de transferência;
+// Fastest evita trocar o gargalo de rede por CPU no servidor.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+    options.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+    options.Level = CompressionLevel.Fastest);
+
 // ---------------------------------------------------------------------------
 // 14. BUILD
 // ---------------------------------------------------------------------------
@@ -729,6 +746,7 @@ forwardedOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetw
 forwardedOptions.KnownProxies.Add(IPAddress.Loopback);
 forwardedOptions.KnownProxies.Add(IPAddress.IPv6Loopback);
 app.UseForwardedHeaders(forwardedOptions);
+app.UseResponseCompression();
 
 // Headers de segurança HTTP em todas as respostas
 app.Use(async (context, next) =>
