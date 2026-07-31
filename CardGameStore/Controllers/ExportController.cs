@@ -15,6 +15,7 @@
 
 using CardGameStore.Common;
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -26,6 +27,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/export")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Lgpd)]
 [Produces("application/json")]
 public class ExportController : ControllerBase
 {

@@ -1,4 +1,5 @@
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -13,6 +14,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/contas-receber")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Financeiro)]
 [Produces("application/json")]
 public class ContasReceberController : ControllerBase
 {

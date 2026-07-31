@@ -11,6 +11,7 @@
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -22,6 +23,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/relatorios")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Relatorios)]
 public class RelatoriosController : ControllerBase
 {
     private readonly AppDbContext _db;

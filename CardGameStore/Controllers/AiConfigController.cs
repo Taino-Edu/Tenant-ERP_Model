@@ -7,6 +7,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -21,6 +22,7 @@ namespace CardGameStore.Controllers;
 [Produces("application/json")]
 [Authorize(Policy = "AdminOnly")]
 [RequireModule("ia")]
+[OperatorForbidden]
 public class AiConfigController : ControllerBase
 {
     private readonly AppDbContext _db;

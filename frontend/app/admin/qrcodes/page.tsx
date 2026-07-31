@@ -4,6 +4,8 @@ import QRCode from 'qrcode'
 import toast from 'react-hot-toast'
 import { QrCode, Download, Printer, Plus, Trash2, Table2 } from 'lucide-react'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import { getRole, hasPermission } from '@/lib/auth'
+import { useRouter } from 'next/navigation'
 
 interface Mesa { id: string; nome: string; url: string; qrDataUrl: string }
 
@@ -16,19 +18,29 @@ function useBaseUrl() {
 }
 
 export default function QRCodesPage() {
+  const router = useRouter()
   const { site }  = useSiteConfig()
   const baseUrl   = useBaseUrl()
   const [mesas, setMesas]     = useState<Mesa[]>([])
   const [newNome, setNewNome] = useState('')
   const [loading, setLoading] = useState(true)
   const printRef = useRef<HTMLDivElement>(null)
+  const [authorized, setAuthorized] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  useEffect(() => {
+    const allowed = getRole() === 'Admin' || hasPermission('qrcodes')
+    setAuthorized(allowed)
+    setAuthChecked(true)
+    if (!allowed) router.replace('/admin/dashboard')
+  }, [router])
 
   // Gera os QR codes ao montar ou quando baseUrl muda
   useEffect(() => {
-    if (!baseUrl) return
+    if (!baseUrl || !authorized) return
     generateAll(DEFAULT_MESAS)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseUrl])
+  }, [baseUrl, authorized])
 
   async function generateAll(nomes: string[]) {
     setLoading(true)
@@ -105,6 +117,8 @@ export default function QRCodesPage() {
     w.focus()
     setTimeout(() => w.print(), 500)
   }
+
+  if (!authChecked || !authorized) return null
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">

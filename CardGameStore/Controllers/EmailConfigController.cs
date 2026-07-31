@@ -6,6 +6,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using Microsoft.AspNetCore.Authorization;
@@ -18,6 +19,7 @@ namespace CardGameStore.Controllers;
 [Route("api/email-config")]
 [Produces("application/json")]
 [Authorize(Policy = "AdminOnly")]
+[OperatorForbidden]
 public class EmailConfigController : ControllerBase
 {
     private readonly AppDbContext _db;

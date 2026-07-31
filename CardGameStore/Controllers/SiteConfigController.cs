@@ -6,6 +6,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.Authorization;
@@ -56,6 +57,7 @@ public class SiteConfigController : ControllerBase
     /// <param name="req">Campos a atualizar (nome, textos, cores, ícones, toggle de pontos etc.). Campos omitidos/nulos não são alterados.</param>
     [HttpPut]
     [Authorize(Policy = "AdminOnly")]
+    [OperatorForbidden]
     public async Task<IActionResult> Save([FromBody] SaveSiteConfigRequest req)
     {
         var cfg = await GetOrCreateConfigAsync();

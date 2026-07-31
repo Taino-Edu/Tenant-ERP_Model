@@ -15,6 +15,7 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -29,6 +30,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[RequireOperatorPermission(Permissao.Comandas)]
 [Produces("application/json")]
 public class ComandaController : ControllerBase
 {

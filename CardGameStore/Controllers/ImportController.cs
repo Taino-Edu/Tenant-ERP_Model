@@ -18,6 +18,7 @@
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using CardGameStore.Validation;
@@ -31,6 +32,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/import")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Lgpd)]
 [Produces("application/json")]
 public class ImportController : ControllerBase
 {

@@ -17,6 +17,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -29,6 +30,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Lgpd)]
 public class LgpdController : ControllerBase
 {
     private readonly AppDbContext   _db;

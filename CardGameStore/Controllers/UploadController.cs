@@ -7,6 +7,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using CardGameStore.Multitenancy;
+using CardGameStore.Middleware;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using System.Security.Claims;
 
@@ -58,6 +60,7 @@ public class UploadController : ControllerBase
     /// </summary>
     [HttpPost("image")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireOperatorPermission(Permissao.Estoque)]
     [RequestSizeLimit(6 * 1024 * 1024)] // margem acima do limite de negócio
     [ProducesResponseType(typeof(UploadImageResponse), 200)]
     [ProducesResponseType(typeof(ErrorResponse), 400)]
@@ -72,6 +75,7 @@ public class UploadController : ControllerBase
     /// </summary>
     [HttpPost("marketplace-image")]
     [Authorize]
+    [RequireOperatorPermission(Permissao.Estoque)]
     [RequestSizeLimit(6 * 1024 * 1024)]
     [ProducesResponseType(typeof(UploadImageResponse), 200)]
     public Task<IActionResult> UploadMarketplaceImage(IFormFile? file)
@@ -83,6 +87,7 @@ public class UploadController : ControllerBase
     /// </summary>
     [HttpPost("profile-image")]
     [Authorize]
+    [OperatorSelfService]
     [RequestSizeLimit(6 * 1024 * 1024)]
     public async Task<IActionResult> UploadProfileImage(IFormFile? file)
     {

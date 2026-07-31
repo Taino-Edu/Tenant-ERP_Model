@@ -8,6 +8,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +20,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/notifications")]
 [Authorize]
+[OperatorSelfService]
 [Produces("application/json")]
 public class NotificationsController : ControllerBase
 {

@@ -6,6 +6,7 @@ using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Middleware;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/analytics")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Dashboard)]
 public class AnalyticsController : ControllerBase
 {
     private readonly AppDbContext              _db;
@@ -263,6 +265,7 @@ public class AnalyticsController : ControllerBase
     /// <param name="fim">Fim do período, inclusive (data local, padrão: hoje).</param>
     /// <param name="filterPaymentMethod">Filtra o cálculo por uma forma de pagamento específica (ex: "Pix").</param>
     [HttpGet("financeiro")]
+    [RequireOperatorPermission(Permissao.Financeiro)]
     public async Task<ActionResult<FinanceiroDto>> GetFinanceiro(
         [FromQuery] DateTime? inicio,
         [FromQuery] DateTime? fim,
@@ -288,6 +291,7 @@ public class AnalyticsController : ControllerBase
     /// <param name="inicio">Primeiro dia da janela.</param>
     /// <param name="fim">Último dia da janela.</param>
     [HttpGet("fechamentos")]
+    [RequireOperatorPermission(Permissao.Financeiro)]
     public async Task<ActionResult<FechamentoPeriodoDto>> GetFechamento(
         [FromQuery] string   tipo,
         [FromQuery] DateTime inicio,
@@ -315,6 +319,7 @@ public class AnalyticsController : ControllerBase
     /// janela já fechada recalcula e sobrescreve; é upsert por Tipo/DataInicio/DataFim).
     /// </summary>
     [HttpPost("fechamentos/fechar-agora")]
+    [RequireOperatorPermission(Permissao.Financeiro)]
     public async Task<ActionResult<FechamentoPeriodoDto>> FecharAgora([FromBody] FecharJanelaRequest request)
     {
         if (!Enum.TryParse<TipoFechamento>(request.Tipo, ignoreCase: true, out var tipoEnum))

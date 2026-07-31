@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
@@ -17,6 +18,7 @@ namespace CardGameStore.Controllers;
 [Route("api/restaurante")]
 [Authorize(Policy = "AdminOnly")]
 [RequireModule("restaurante")]
+[RequireOperatorPermission(Permissao.Restaurante)]
 [Produces("application/json")]
 public class RestaurantController : ControllerBase
 {

@@ -51,33 +51,17 @@ public static class Permissao
     public const string Anuncios    = "anuncios";
     public const string QrCodes     = "qrcodes";
     public const string Lgpd        = "lgpd";
+    public const string Fiscal      = "fiscal";
+    public const string Eventos     = "eventos";
+    public const string Timers      = "timers";
+    public const string Suporte     = "suporte";
+    public const string Ia          = "ia";
+    public const string Restaurante = "restaurante";
 
     public static readonly string[] Todos = [
         Dashboard, Pdv, Comandas, Estoque, Categorias,
         Usuarios, Crediario, Financeiro,
         Relatorios, Anuncios, QrCodes, Lgpd,
+        Fiscal, Eventos, Timers, Suporte, Ia, Restaurante,
     ];
-
-    /// <summary>Mapeamento de permissão → prefixos de rota da API que ela protege.</summary>
-    public static readonly Dictionary<string, string[]> RotasPrefixo = new()
-    {
-        [Dashboard]   = ["/api/analytics", "/api/relatorios/dashboard"],
-        [Pdv]         = ["/api/venda-avulsa"],
-        [Comandas]    = ["/api/comanda"],
-        [Estoque]     = ["/api/product"],
-        [Categorias]  = ["/api/category"],
-        [Usuarios]    = ["/api/user"],
-        [Crediario]   = ["/api/crediarios"],
-        [Financeiro]  = ["/api/analytics/financeiro", "/api/relatorios/financeiro", "/api/relatorios/pdv"],
-        [Relatorios]  = ["/api/relatorios"],
-        [Anuncios]    = ["/api/announcements"],
-        [QrCodes]     = ["/api/qrcode"],
-        // M13: "/api/audit" removido daqui — AuditController é deliberadamente "Somente Admin"
-        // (diffs de produtos/vendas/usuários, hash de IP: dado operacional sensível, não
-        // relacionado a LGPD). Com o prefixo antigo, qualquer Operator com a permissão "lgpd"
-        // (pensada só pra atender solicitações de titular de dados) lia todos os audit logs —
-        // contradizia o próprio comentário do controller. Nenhuma outra permissão cobre
-        // "/api/audit" de propósito: só Admin acessa.
-        [Lgpd]        = ["/api/lgpd"],
-    };
 }

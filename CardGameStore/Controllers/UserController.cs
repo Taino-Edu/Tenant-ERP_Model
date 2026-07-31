@@ -17,6 +17,7 @@ using System.Text.Json;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -31,6 +32,7 @@ namespace CardGameStore.Controllers;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Usuarios)]
 public class UserController : ControllerBase
 {
     private readonly IUserService        _service;
@@ -84,6 +86,7 @@ public class UserController : ControllerBase
 
     /// <summary>Perfil completo do usuário logado (pontos, dados pessoais).</summary>
     [HttpGet("me")]
+    [OperatorSelfService]
     [ProducesResponseType(typeof(UserProfileDto), 200)]
     [ProducesResponseType(404)]
     public async Task<IActionResult> GetMe()
@@ -100,6 +103,7 @@ public class UserController : ControllerBase
     /// <param name="request">Campos a corrigir (nome, e-mail, WhatsApp etc.).</param>
     [HttpPut("me")]
     [Authorize(Policy = "CustomerOrAdmin")]
+    [OperatorSelfService]
     [ProducesResponseType(typeof(UserProfileDto), 200)]
     [ProducesResponseType(400)]
     public async Task<IActionResult> UpdateMe([FromBody] UpdateMeRequest request)
@@ -131,6 +135,7 @@ public class UserController : ControllerBase
     /// </summary>
     [HttpDelete("me")]
     [Authorize(Policy = "CustomerOrAdmin")]
+    [OperatorSelfService]
     [ProducesResponseType(204)]
     public async Task<IActionResult> DeleteMe()
     {
@@ -425,6 +430,7 @@ public class UserController : ControllerBase
 
     /// <summary>Retorna as preferências do usuário logado.</summary>
     [HttpGet("me/preferences")]
+    [OperatorSelfService]
     [ProducesResponseType(typeof(UserPreferencesDto), 200)]
     public async Task<IActionResult> GetPreferences()
     {
@@ -442,6 +448,7 @@ public class UserController : ControllerBase
     /// <summary>Salva as preferências do usuário logado.</summary>
     /// <param name="request">Preferências completas (substitui as anteriores).</param>
     [HttpPut("me/preferences")]
+    [OperatorSelfService]
     [ProducesResponseType(typeof(UserPreferencesDto), 200)]
     public async Task<IActionResult> UpdatePreferences([FromBody] UpdatePreferencesRequest request)
     {
