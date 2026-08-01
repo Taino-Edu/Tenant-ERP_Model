@@ -94,6 +94,8 @@ step 5 "Configurando .env de produção..."
 if [ ! -f "$APP_DIR/.env" ]; then
     # Gera segredos automaticamente
     POSTGRES_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    POSTGRES_APP_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    TENANT_DB_KEY=$(openssl rand -hex 32)
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
     IP_SALT=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -base64 32)
@@ -123,8 +125,11 @@ MULTITENANCY_ROOT_DOMAIN=3esysten.com.br
 
 # --- PostgreSQL ---
 POSTGRES_DB=cardgamestore
-POSTGRES_USER=cardgame_user
+POSTGRES_USER=cardgame_owner
 POSTGRES_PASSWORD=${POSTGRES_PASS}
+POSTGRES_APP_USER=cardgame_catalog
+POSTGRES_APP_PASSWORD=${POSTGRES_APP_PASS}
+TENANT_DB_CREDENTIAL_KEY=${TENANT_DB_KEY}
 
 # --- JWT (não altere após primeiro deploy) ---
 JWT_SECRET=${JWT_SECRET}

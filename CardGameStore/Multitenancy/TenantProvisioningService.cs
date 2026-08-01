@@ -57,15 +57,18 @@ public class TenantProvisioningService : ITenantProvisioningService
 
     private readonly CatalogDbContext     _catalog;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TenantDatabaseAdmin  _databaseAdmin;
     private readonly ILogger<TenantProvisioningService> _logger;
 
     public TenantProvisioningService(
         CatalogDbContext catalog,
         IServiceScopeFactory scopeFactory,
+        TenantDatabaseAdmin databaseAdmin,
         ILogger<TenantProvisioningService> logger)
     {
         _catalog      = catalog;
         _scopeFactory = scopeFactory;
+        _databaseAdmin = databaseAdmin;
         _logger       = logger;
     }
 
@@ -157,16 +160,14 @@ public class TenantProvisioningService : ITenantProvisioningService
             // contém [a-z0-9_] (validado acima via SlugPattern + prefixo fixo),
             // então a interpolação abaixo é segura — identificadores (nome de
             // schema) não podem ser parametrizados via ExecuteSqlAsync de qualquer forma.
-#pragma warning disable EF1002
-            await _catalog.Database.ExecuteSqlRawAsync($"CREATE SCHEMA IF NOT EXISTS \"{schemaName}\"");
-#pragma warning restore EF1002
+            await _databaseAdmin.CreateAndMigrateTenantAsync(
+                tenant.Id, schemaName, tenant.EnabledModules);
 
             using var scope = _scopeFactory.CreateScope();
             var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
             tenantContext.Set(tenant.Id, schemaName, tenant.EnabledModules);
 
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await db.Database.MigrateAsync();
 
             db.Users.Add(new User
             {

@@ -100,7 +100,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
       # Banco de dados
-      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_USER:-cardgame_user};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_APP_USER:-cardgame_catalog};Password=${POSTGRES_APP_PASSWORD}"
+      ConnectionStrings__PostgreSQLAdmin: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_USER:-cardgame_owner};Password=${POSTGRES_PASSWORD}"
+      Database__CatalogRole: "${POSTGRES_APP_USER:-cardgame_catalog}"
+      Database__TenantCredentialKey: "${TENANT_DB_CREDENTIAL_KEY}"
       # JWT
       JwtSettings__SecretKey: "${JWT_SECRET}"
       JwtSettings__Issuer: "${APP_URL:-http://localhost}"
@@ -164,6 +167,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      database-security-init:
+        condition: service_completed_successfully
     networks:
       - cardgame_network
     restart: unless-stopped
@@ -192,10 +197,13 @@ services:
     container_name: cardgamestore_postgres
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-cardgamestore}
-      POSTGRES_USER:     ${POSTGRES_USER:-cardgame_user}
+      POSTGRES_USER:     ${POSTGRES_USER:-cardgame_owner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-cardgame_catalog}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     networks:
       - cardgame_network
     restart: unless-stopped
@@ -210,10 +218,32 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cardgame_user} -d ${POSTGRES_DB:-cardgamestore}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cardgame_owner} -d ${POSTGRES_DB:-cardgamestore}"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Idempotente e executado também em volumes já existentes. Cria somente o
+  # papel restrito usado pela API; migrations/grants por schema ficam com o
+  # TenantDatabaseAdmin durante o boot.
+  database-security-init:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-cardgamestore}
+      POSTGRES_USER: ${POSTGRES_USER:-cardgame_owner}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-cardgame_catalog}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
+    volumes:
+      - ./postgres-init:/scripts:ro
+    command: ["/scripts/10-runtime-role.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cardgame_network
+    restart: "no"
 
   # ---------------------------------------------------------------------------
   # EVOLUTION API — WhatsApp por tenant (feature premium). NÃO SOBE POR PADRÃO.
