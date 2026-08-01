@@ -49,7 +49,7 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
         }}
       />
       <header className="border-b border-surface-600 bg-surface-800">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-white font-bold">
             <ShieldCheck className="w-5 h-5 text-brand-400" />
             Painel Gerenciador Octus
@@ -61,7 +61,7 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
             </button>
           </div>
         </div>
-        <nav className="max-w-5xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
+        <nav className="max-w-7xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const active = href === '/plataforma' ? pathname === href : pathname.startsWith(href)
             return (
@@ -81,7 +81,7 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
           })}
         </nav>
       </header>
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-6 py-8">
         {children}
       </main>
     </div>
