@@ -29,9 +29,17 @@ public class PlatformControllerDomainTests
 
     private static PlatformController CreateController(CatalogDbContext catalog, string? rootDomain = "3esysten.com.br")
     {
+        var settings = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:PostgreSQLAdmin"] = "Host=localhost;Database=unused;Username=unused;Password=unused",
+            ["Database:TenantCredentialKey"] = new string('k', 32),
+        };
+        if (rootDomain is not null) settings["Multitenancy:RootDomain"] = rootDomain;
+
         var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(rootDomain is null ? [] : new Dictionary<string, string?> { ["Multitenancy:RootDomain"] = rootDomain })
+            .AddInMemoryCollection(settings)
             .Build();
+        var databaseAdmin = new TenantDatabaseAdmin(config, new TenantDatabaseCredentials(config));
 
         return new PlatformController(
             catalog,
@@ -39,6 +47,7 @@ public class PlatformControllerDomainTests
             NullLogger<PlatformController>.Instance,
             new Mock<IServiceScopeFactory>().Object,
             new MemoryCache(new MemoryCacheOptions()),
+            databaseAdmin,
             config);
     }
 

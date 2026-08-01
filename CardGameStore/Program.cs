@@ -23,6 +23,7 @@ using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 
 // Comando utilitário: dotnet run -- gen-key  →  imprime nova chave AES-256 em Base64
 if (args.Contains("gen-key"))
@@ -82,6 +83,22 @@ if (string.IsNullOrWhiteSpace(pgConnStr))
         "variável de ambiente ConnectionStrings__PostgreSQL — em dev, suba o Postgres da " +
         "suíte com 'docker compose -f tests/docker-compose.yml up -d'.");
 
+// Credencial de runtime (acima) não tem DDL nem acesso a outros schemas — só
+// migrations/provisionamento (TenantDatabaseAdmin) usam a credencial admin.
+var pgAdminConnStr = builder.Configuration.GetConnectionString("PostgreSQLAdmin");
+if (string.IsNullOrWhiteSpace(pgAdminConnStr))
+    throw new InvalidOperationException(
+        "ConnectionStrings:PostgreSQLAdmin é obrigatória. A aplicação não usa mais a credencial administrativa em requests.");
+
+var runtimeUser = new NpgsqlConnectionStringBuilder(pgConnStr!).Username;
+var adminUser   = new NpgsqlConnectionStringBuilder(pgAdminConnStr).Username;
+if (string.Equals(runtimeUser, adminUser, StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException(
+        "PostgreSQL e PostgreSQLAdmin devem usar usuários diferentes (runtime sem privilégios vs. migração/provisionamento).");
+
+builder.Services.AddSingleton<TenantDatabaseAdmin>();
+builder.Services.AddSingleton<TenantDatabaseCredentials>();
+
 // ITenantContext é scoped — cada request (ou cada escopo manual criado por um
 // hosted service) tem sua própria instância, com o valor padrão já apontando
 // pro tenant-zero (schema "public").
@@ -99,7 +116,8 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
     // provisionamento de tenant novo com "relation does not exist".
     var tenantSchemaForHistory = sp.GetRequiredService<ITenantContext>().SchemaName;
     options.UseNpgsql(
-        pgConnStr,
+        sp.GetRequiredService<TenantDatabaseCredentials>()
+            .ConnectionStringFor(sp.GetRequiredService<ITenantContext>().TenantId),
         npgsqlOptions => npgsqlOptions
             .EnableRetryOnFailure(maxRetryCount: 5)
             .MigrationsHistoryTable("__EFMigrationsHistory", tenantSchemaForHistory)
@@ -626,7 +644,6 @@ using (var scope = app.Services.CreateScope())
         .Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
 
     var db      = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var catalog = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
     var logger  = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     try
@@ -641,14 +658,18 @@ using (var scope = app.Services.CreateScope())
         // schema de tenant, e só uma vez, na criação). Sem o loop abaixo, qualquer
         // tabela/coluna nova do AppDbContext (ex: FechamentoPeriodo, os ícones novos
         // do SiteConfig) nunca chega em tenants como loja-final/loja-teste3 — bug
-        // real, confirmado em produção.
-        await catalog.Database.MigrateAsync();
-        await db.Database.MigrateAsync();
+        // real, confirmado em produção. Migrations e grants passam pela credencial
+        // admin (TenantDatabaseAdmin) — o AppDbContext/CatalogDbContext resolvidos
+        // por request usam só a credencial de runtime, sem DDL.
+        var databaseAdmin = scope.ServiceProvider.GetRequiredService<TenantDatabaseAdmin>();
+        await databaseAdmin.MigrateCatalogAsync();
+        await databaseAdmin.MigrateTenantAsync(
+            TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
 
-        var tenantsParaMigrar = await catalog.Tenants
+        var tenantsParaMigrar = (await databaseAdmin.ListTenantsAsync())
             .Where(t => t.Status == TenantStatus.Active)
             .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
-            .ToListAsync();
+            .ToList();
 
         // C4 (parcial — VPS único por enquanto, sem lock/processo migrador separado):
         // antes o catch abaixo só logava por tenant e o resumo final dizia sempre
@@ -662,12 +683,8 @@ using (var scope = app.Services.CreateScope())
         {
             try
             {
-                using var tenantScope = app.Services.CreateScope();
-                var tenantContext = tenantScope.ServiceProvider.GetRequiredService<ITenantContext>();
-                tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
-
-                var tenantDb = tenantScope.ServiceProvider.GetRequiredService<AppDbContext>();
-                await tenantDb.Database.MigrateAsync();
+                await databaseAdmin.MigrateTenantAsync(
+                    tenant.Id, tenant.SchemaName, tenant.EnabledModules);
             }
             catch (Exception ex)
             {

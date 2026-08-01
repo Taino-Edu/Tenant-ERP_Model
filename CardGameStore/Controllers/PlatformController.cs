@@ -34,6 +34,7 @@ public class PlatformController : ControllerBase
     private readonly Microsoft.Extensions.Caching.Memory.IMemoryCache _cache;
     private readonly string? _rootDomain;
     private readonly string? _connectionString;
+    private readonly TenantDatabaseAdmin _databaseAdmin;
 
     // Formato básico de domínio (labels alfanuméricos/hífen, pelo menos um ponto) — não
     // valida se o domínio existe/resolve de verdade, só barra lixo óbvio antes de gravar.
@@ -46,6 +47,7 @@ public class PlatformController : ControllerBase
         ILogger<PlatformController> logger,
         IServiceScopeFactory scopeFactory,
         Microsoft.Extensions.Caching.Memory.IMemoryCache cache,
+        TenantDatabaseAdmin databaseAdmin,
         IConfiguration configuration)
     {
         _catalog      = catalog;
@@ -53,6 +55,7 @@ public class PlatformController : ControllerBase
         _logger       = logger;
         _scopeFactory = scopeFactory;
         _cache            = cache;
+        _databaseAdmin    = databaseAdmin;
         _rootDomain       = configuration["Multitenancy:RootDomain"];
         _connectionString = configuration.GetConnectionString("PostgreSQL");
     }
@@ -255,13 +258,8 @@ public class PlatformController : ControllerBase
             if (!string.IsNullOrWhiteSpace(tenant.CustomDomain))
                 _cache.Remove($"tenant-domain:{tenant.CustomDomain.ToLowerInvariant()}");
 
-#pragma warning disable EF1002
-            // schemaName só contém [a-z0-9_] (validado na criação — ver
-            // TenantProvisioningService), então a interpolação é segura; nome de
-            // schema é identificador, não dá pra parametrizar via ExecuteSqlAsync.
             var schemaName = TenantSchemaName.Validate(tenant.SchemaName);
-            await _catalog.Database.ExecuteSqlRawAsync($"DROP SCHEMA IF EXISTS \"{schemaName}\" CASCADE");
-#pragma warning restore EF1002
+            await _databaseAdmin.DropTenantSchemaAsync(schemaName);
 
             _catalog.Tenants.Remove(tenant);
             await _catalog.SaveChangesAsync();
