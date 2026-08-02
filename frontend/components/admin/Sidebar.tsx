@@ -117,6 +117,7 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
         if (adminOnly && !isAdmin) return null
         const visibleItems = items.filter(({ perm, href }) =>
           checkPerm(perm)
+          && (href !== '/admin/comanda' || enabledModules.includes('restaurante'))
           && (href !== '/admin/fiscal' || enabledModules.includes('fiscal'))
           && (href !== '/admin/reservas' || enabledModules.includes('estoque'))
           && (href !== '/admin/eventos' || enabledModules.includes('eventos'))

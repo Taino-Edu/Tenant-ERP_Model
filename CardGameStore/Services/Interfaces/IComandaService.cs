@@ -50,6 +50,9 @@ public interface IComandaService
     /// <summary>Atualiza a quantidade de um item. Quantity=0 remove o item.</summary>
     Task<ComandaDto> UpdateItemAsync(Guid comandaId, Guid itemId, int newQuantity, Guid adminId);
 
+    /// <summary>Atualiza a observação operacional de uma comanda.</summary>
+    Task<ComandaDto> UpdateNotesAsync(Guid comandaId, Guid requestingUserId, string? notes);
+
     /// <summary>Aplica pontos do cliente à comanda, abatendo do total a pagar.</summary>
     Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points);
 

@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorConfigDto, AvisoContadorDto, getErrorMessage } from '@/lib/api'
+import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorConfigDto, ContadorProdutoDto, AvisoContadorDto, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
-import { Calculator, Download, Loader2, FileText, Building2, ChevronLeft, Clock, Plus, AlertTriangle, Send, MessageSquare } from 'lucide-react'
+import { Calculator, Download, Loader2, FileText, Building2, ChevronLeft, Clock, Plus, AlertTriangle, Send, MessageSquare, Package, Save } from 'lucide-react'
 import clsx from 'clsx'
 
 const fmt = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
@@ -168,6 +168,8 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
   const [notas, setNotas]       = useState<ContadorNotaDto[]>([])
   const [loading, setLoading]   = useState(true)
   const [exporting, setExporting] = useState(false)
+  const [produtos, setProdutos] = useState<ContadorProdutoDto[]>([])
+  const [loadingProdutos, setLoadingProdutos] = useState(true)
 
   const [avisos, setAvisos] = useState<AvisoContadorDto[]>([])
   const [loadingAvisos, setLoadingAvisos] = useState(true)
@@ -193,6 +195,14 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
 
   useEffect(() => {
     contadorApi.getConfig(cliente.tenantId).then(r => setConfig(r.data)).catch(() => {})
+  }, [cliente.tenantId])
+
+  useEffect(() => {
+    setLoadingProdutos(true)
+    contadorApi.listProdutos(cliente.tenantId)
+      .then(r => setProdutos(r.data))
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar estoque')))
+      .finally(() => setLoadingProdutos(false))
   }, [cliente.tenantId])
 
   const loadAvisos = useCallback(() => {
@@ -347,6 +357,26 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
       </div>
 
       <div className="card space-y-3">
+        <div>
+          <h3 className="font-bold text-white flex items-center gap-2">
+            <Package className="w-4 h-4 text-brand-400" /> Estoque e classificação fiscal
+          </h3>
+          <p className="text-xs text-gray-500 mt-1">A quantidade é somente leitura. Você pode atualizar NCM, CEST e tributos.</p>
+        </div>
+        {loadingProdutos ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
+        ) : produtos.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">Nenhum produto cadastrado.</p>
+        ) : (
+          <div className="space-y-2">
+            {produtos.map(produto => (
+              <ProdutoFiscalRow key={produto.id} tenantId={cliente.tenantId} produto={produto} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card space-y-3">
         <h3 className="font-bold text-white flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-brand-400" /> Avisos
         </h3>
@@ -377,6 +407,58 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
           </button>
         </form>
       </div>
+    </div>
+  )
+}
+
+function ProdutoFiscalRow({ tenantId, produto }: { tenantId: string; produto: ContadorProdutoDto }) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    ncm: produto.ncm ?? '', cest: produto.cest ?? '',
+    federal: produto.percentualTributosFederais?.toString() ?? '',
+    estadual: produto.percentualTributosEstaduais?.toString() ?? '',
+    municipal: produto.percentualTributosMunicipais?.toString() ?? '',
+    fonte: produto.fonteTributos ?? '',
+  })
+  const numberOrNull = (value: string) => value.trim() === '' ? null : Number(value.replace(',', '.'))
+
+  async function salvar() {
+    setSaving(true)
+    try {
+      await contadorApi.updateProdutoFiscal(tenantId, produto.id, {
+        ncm: form.ncm || null, cest: form.cest || null,
+        percentualTributosFederais: numberOrNull(form.federal),
+        percentualTributosEstaduais: numberOrNull(form.estadual),
+        percentualTributosMunicipais: numberOrNull(form.municipal),
+        fonteTributos: form.fonte || null,
+      })
+      toast.success(`Classificação fiscal de ${produto.name} atualizada.`)
+      setOpen(false)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar classificação fiscal'))
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="rounded-xl border border-surface-700 bg-surface-800/40 p-3">
+      <button onClick={() => setOpen(v => !v)} className="w-full flex justify-between gap-3 text-left">
+        <div><p className="text-sm font-medium text-white">{produto.name}</p><p className="text-xs text-gray-500">{produto.category} · NCM {produto.ncm || 'pendente'}</p></div>
+        <span className="text-xs whitespace-nowrap text-gray-400">Estoque: <strong className="text-white">{produto.stockQuantity}</strong></span>
+      </button>
+      {open && (
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mt-3 pt-3 border-t border-surface-700">
+          <input className="input text-sm" placeholder="NCM (8 dígitos)" maxLength={10} value={form.ncm} onChange={e => setForm({ ...form, ncm: e.target.value })} />
+          <input className="input text-sm" placeholder="CEST (7 dígitos)" maxLength={9} value={form.cest} onChange={e => setForm({ ...form, cest: e.target.value })} />
+          <input className="input text-sm" inputMode="decimal" placeholder="Federal %" value={form.federal} onChange={e => setForm({ ...form, federal: e.target.value })} />
+          <input className="input text-sm" inputMode="decimal" placeholder="Estadual %" value={form.estadual} onChange={e => setForm({ ...form, estadual: e.target.value })} />
+          <input className="input text-sm" inputMode="decimal" placeholder="Municipal %" value={form.municipal} onChange={e => setForm({ ...form, municipal: e.target.value })} />
+          <input className="input text-sm" placeholder="Fonte (ex.: IBPT)" maxLength={100} value={form.fonte} onChange={e => setForm({ ...form, fonte: e.target.value })} />
+          <button onClick={salvar} disabled={saving} className="btn-primary justify-center col-span-2 md:col-span-6">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar dados fiscais
+          </button>
+        </div>
+      )}
     </div>
   )
 }

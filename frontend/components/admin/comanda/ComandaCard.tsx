@@ -6,6 +6,7 @@ import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
 import {
   TableProperties, Clock, ChevronDown, ChevronUp, Plus, CheckCircle, XCircle,
   Trash2, Star, Loader2,
+  MessageSquare, Save,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { fmt, elapsedLabel, elapsedColor } from './shared'
@@ -37,6 +38,8 @@ export function ComandaCard({
   const [removingItem, setRemovingItem]   = useState<string | null>(null)
   const [updatingItem, setUpdatingItem]   = useState<string | null>(null)
   const [removingPts,  setRemovingPts]    = useState(false)
+  const [notes, setNotes]                  = useState(comanda.notes ?? '')
+  const [savingNotes, setSavingNotes]      = useState(false)
   const [, forceRender]           = useState(0)
 
   // Atualiza o tempo exibido a cada minuto
@@ -103,6 +106,20 @@ export function ComandaCard({
       toast.error(getErrorMessage(err, 'Erro ao atualizar quantidade.'))
     } finally {
       setUpdatingItem(null)
+    }
+  }
+
+  async function handleSaveNotes() {
+    setSavingNotes(true)
+    try {
+      const { data } = await comandaApi.updateNotes(comanda.id, notes.trim() || null)
+      onUpdate(data)
+      setNotes(data.notes ?? '')
+      toast.success('Comentário salvo.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar comentário.'))
+    } finally {
+      setSavingNotes(false)
     }
   }
 
@@ -271,6 +288,33 @@ export function ComandaCard({
             <div className="border-t border-surface-500 pt-1.5 flex justify-between text-sm font-semibold">
               <span className="text-gray-300">Total</span>
               <span className="text-accent-gold">{fmt(netTotal)}</span>
+            </div>
+          </div>
+        )}
+
+
+        {expanded && (
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+              <MessageSquare className="w-3.5 h-3.5" /> Comentário da comanda
+            </label>
+            <div className="flex gap-2 items-end">
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                maxLength={500}
+                rows={2}
+                className="input flex-1 resize-none text-sm"
+                placeholder="Ex.: sem cebola, cliente aguardando no balcão..."
+              />
+              <button
+                onClick={handleSaveNotes}
+                disabled={savingNotes || notes.trim() === (comanda.notes ?? '')}
+                className="btn-secondary px-3 py-2 disabled:opacity-40"
+                title="Salvar comentário"
+              >
+                {savingNotes ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              </button>
             </div>
           </div>
         )}

@@ -57,7 +57,7 @@ public class Tenant
     public TenantPaymentStatus PaymentStatus { get; set; } = TenantPaymentStatus.Pago;
 
     /// <summary>Módulos pagos habilitados pra este tenant — hoje "fiscal", "estoque",
-    /// "pontos" (fidelidade), "contador" (portal cross-tenant), "ia" (assistente Gemini)
+    /// "restaurante" (comandas), "pontos" (fidelidade), "contador" (portal cross-tenant), "ia" (assistente Gemini)
     /// e "eventos" (gestão de eventos com cobrança de entrada). Ver RequireModuleAttribute
     /// e, pro portal do contador, o gate manual em ContadorPortalController.AutorizarEObterTenantAsync.</summary>
     [Column("enabled_modules")]

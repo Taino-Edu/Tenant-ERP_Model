@@ -1309,6 +1309,25 @@ public class ComandaService : IComandaService
         return MapToDto(updated);
     }
 
+    public async Task<ComandaDto> UpdateNotesAsync(Guid comandaId, Guid requestingUserId, string? notes)
+    {
+        var comanda = await _db.Comandas
+            .Include(c => c.User)
+            .Include(c => c.Items)
+            .FirstOrDefaultAsync(c => c.Id == comandaId)
+            ?? throw new KeyNotFoundException("Comanda não encontrada.");
+
+        var solicitante = await _db.Users.FindAsync(requestingUserId);
+        if (solicitante?.Role != UserRole.Admin && comanda.UserId != requestingUserId)
+            throw new UnauthorizedAccessException("Você não pode alterar esta comanda.");
+        if (comanda.Status is ComandaStatus.Fechada or ComandaStatus.Cancelada)
+            throw new InvalidOperationException("A observação de uma comanda encerrada não pode ser alterada por aqui.");
+
+        comanda.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        await _db.SaveChangesAsync();
+        return MapToDto(comanda);
+    }
+
     private static ComandaDto MapToDto(Comanda comanda) => new()
     {
         Id                         = comanda.Id,
@@ -1324,6 +1343,7 @@ public class ComandaService : IComandaService
         PaymentMethod              = comanda.PaymentMethod,
         SecondPaymentMethod        = comanda.SecondPaymentMethod,
         SecondPaymentAmountInCents = comanda.SecondPaymentAmountInCents,
+        Notes                      = comanda.Notes,
         UserPointsBalance          = comanda.User?.PointsBalance  ?? 0,
         UserBalanceInCents         = comanda.User?.BalanceInCents ?? 0,
         ProfileImageUrl            = comanda.User?.ProfileImageUrl,
