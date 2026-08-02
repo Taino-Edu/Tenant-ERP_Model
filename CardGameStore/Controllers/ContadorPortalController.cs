@@ -224,6 +224,76 @@ public class ContadorPortalController : ControllerBase
         });
     }
 
+    /// <summary>Estoque da loja para conferência e manutenção da classificação fiscal.</summary>
+    [HttpGet("clientes/{tenantId:guid}/produtos")]
+    public async Task<IActionResult> ListProdutos(Guid tenantId)
+    {
+        var tenant = await AutorizarEObterTenantAsync(tenantId);
+        if (tenant is null) return Forbid();
+
+        using var scope = _scopeFactory.CreateScope();
+        scope.ServiceProvider.GetRequiredService<ITenantContext>()
+            .Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var produtos = await db.Products.AsNoTracking()
+            .OrderBy(p => p.Name)
+            .Select(p => new
+            {
+                p.Id, p.Name, p.Category, p.Barcode, p.StockQuantity, p.IsActive,
+                p.Ncm, p.Cest, p.PercentualTributosFederais,
+                p.PercentualTributosEstaduais, p.PercentualTributosMunicipais,
+                p.FonteTributos, p.TributosAtualizadosEm,
+            })
+            .ToListAsync();
+        return Ok(produtos);
+    }
+
+    /// <summary>Altera somente NCM, CEST e tributos; quantidade e dados comerciais ficam protegidos.</summary>
+    [HttpPut("clientes/{tenantId:guid}/produtos/{produtoId:guid}/fiscal")]
+    public async Task<IActionResult> UpdateProdutoFiscal(
+        Guid tenantId, Guid produtoId, [FromBody] ContadorProdutoFiscalRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var tenant = await AutorizarEObterTenantAsync(tenantId);
+        if (tenant is null) return Forbid();
+
+        static string? Digitos(string? valor) => string.IsNullOrWhiteSpace(valor)
+            ? null : new string(valor.Where(char.IsDigit).ToArray());
+        var ncm = Digitos(request.Ncm);
+        var cest = Digitos(request.Cest);
+        if (ncm is not null && ncm.Length != 8)
+            return BadRequest(new { Message = "NCM deve conter 8 dígitos." });
+        if (cest is not null && cest.Length != 7)
+            return BadRequest(new { Message = "CEST deve conter 7 dígitos." });
+
+        using var scope = _scopeFactory.CreateScope();
+        scope.ServiceProvider.GetRequiredService<ITenantContext>()
+            .Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var produto = await db.Products.FindAsync(produtoId);
+        if (produto is null) return NotFound(new { Message = "Produto não encontrado." });
+
+        produto.Ncm = ncm;
+        produto.Cest = cest;
+        produto.PercentualTributosFederais = request.PercentualTributosFederais;
+        produto.PercentualTributosEstaduais = request.PercentualTributosEstaduais;
+        produto.PercentualTributosMunicipais = request.PercentualTributosMunicipais;
+        produto.FonteTributos = string.IsNullOrWhiteSpace(request.FonteTributos) ? null : request.FonteTributos.Trim();
+        produto.TributosPreenchidosAutomaticamente = false;
+        produto.TributosAtualizadosEm = DateTime.UtcNow;
+        produto.TributosVigenciaInicio = null;
+        produto.TributosVigenciaFim = null;
+        produto.IbptVersao = null;
+        produto.IbptChave = null;
+        produto.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        _logger.LogInformation("Contador {ContadorId} atualizou dados fiscais do produto {ProdutoId} no tenant {TenantId}",
+            GetContadorId(), produtoId, tenantId);
+        return Ok(new { Message = "Dados fiscais atualizados." });
+    }
+
     /// <summary>Baixa um ZIP com os XMLs das notas fiscais emitidas no período.</summary>
     /// <param name="tenantId">Id da loja (precisa ter vínculo Approved com este contador).</param>
     /// <param name="inicio">Início do período.</param>

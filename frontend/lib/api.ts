@@ -113,6 +113,7 @@ export interface ComandaDto {
   secondPaymentMethod: string | null
   secondPaymentAmountInCents: number
   items: ComandaItemDto[]
+  notes: string | null
   /** Saldo de pontos do cliente (para exibir na modal de fechamento). */
   userPointsBalance: number
   /** Saldo de cashback/crédito do cliente em centavos. */
@@ -361,6 +362,7 @@ export const comandaApi = {
   addItem:      (id: string, item: { productId?: string; cardCacheId?: string; variantId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
+  updateNotes:  (id: string, notes: string | null) => api.put<ComandaDto>(`/api/comanda/${id}/notes`, { notes }),
   updateItem:   (id: string, itemId: string, quantity: number) =>
     api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
   close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0, emitirNotaFiscal = false) =>
@@ -727,6 +729,7 @@ export interface CreateTenantRequest {
 export const TENANT_MODULES = [
   { value: 'fiscal',   label: 'Fiscal',              description: 'Emissão de NFC-e' },
   { value: 'estoque',  label: 'Estoque',              description: 'Variantes, reservas e lista de espera (pré-venda)' },
+  { value: 'restaurante', label: 'Restaurante',        description: 'Comandas, mesas e pedidos em tempo real' },
   { value: 'pontos',   label: 'Fidelidade (Pontos)',  description: 'Programa de pontos/cashback dos clientes' },
   { value: 'contador', label: 'Portal do Contador',   description: 'Acesso cross-tenant do contador da loja' },
   { value: 'ia',       label: 'Assistente de IA',     description: 'Chat com IA (Gemini) sobre estoque e devedores' },
@@ -1500,6 +1503,15 @@ export interface ContadorConfigDto {
   regimeTributario: string
 }
 
+export interface ContadorProdutoDto {
+  id: string; name: string; category: string; barcode?: string
+  stockQuantity: number; isActive: boolean
+  ncm?: string; cest?: string
+  percentualTributosFederais?: number; percentualTributosEstaduais?: number
+  percentualTributosMunicipais?: number; fonteTributos?: string
+  tributosAtualizadosEm?: string
+}
+
 export interface SolicitacaoContadorDto {
   linkId: string; name: string; email: string
   status: 'Pending' | 'Approved'; createdAt: string
@@ -1514,6 +1526,12 @@ export const contadorApi = {
   exportarXmls: (tenantId: string, inicio: string, fim: string) =>
     api.get(`/api/contador-portal/clientes/${tenantId}/exportar-xmls`, { params: { inicio, fim }, responseType: 'blob' }),
   getConfig: (tenantId: string) => api.get<ContadorConfigDto>(`/api/contador-portal/clientes/${tenantId}/config`),
+  listProdutos: (tenantId: string) => api.get<ContadorProdutoDto[]>(`/api/contador-portal/clientes/${tenantId}/produtos`),
+  updateProdutoFiscal: (tenantId: string, produtoId: string, data: {
+    ncm: string | null; cest: string | null
+    percentualTributosFederais: number | null; percentualTributosEstaduais: number | null
+    percentualTributosMunicipais: number | null; fonteTributos: string | null
+  }) => api.put<{ message: string }>(`/api/contador-portal/clientes/${tenantId}/produtos/${produtoId}/fiscal`, data),
   listAvisos: (tenantId: string) => api.get<AvisoContadorDto[]>(`/api/contador-portal/clientes/${tenantId}/avisos`),
   postAviso: (tenantId: string, mensagem: string) =>
     api.post<{ message: string }>(`/api/contador-portal/clientes/${tenantId}/avisos`, { mensagem }),

@@ -41,7 +41,7 @@ export const PLANOS: Plano[] = [
     destaque: false,
     usuarios: '2 usuários no painel',
     maxUsers: 2,
-    modules: ['fiscal', 'estoque'],
+    modules: ['fiscal', 'estoque', 'restaurante'],
     inclui: [
       'PDV e comanda',
       'Emissão de NFC-e (fiscal completo)',
@@ -58,7 +58,7 @@ export const PLANOS: Plano[] = [
     destaque: true,
     usuarios: '6 usuários no painel',
     maxUsers: 6,
-    modules: ['fiscal', 'estoque', 'pontos', 'contador', 'eventos'],
+    modules: ['fiscal', 'estoque', 'restaurante', 'pontos', 'contador', 'eventos'],
     inclui: [
       'Tudo do Essencial',
       'Crediário e contas a receber',

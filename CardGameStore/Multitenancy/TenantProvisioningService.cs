@@ -20,7 +20,7 @@ public class TenantProvisioningService : ITenantProvisioningService
     /// pra montar os checkboxes de criação/edição de tenant (ver lib/api.ts TENANT_MODULES).
     /// Módulo desconhecido na criação é rejeitado em vez de gravado silenciosamente (typo
     /// no request viraria um módulo fantasma, sem RequireModule nenhum lendo aquele nome).</summary>
-    public static readonly string[] KnownModules = ["fiscal", "estoque", "pontos", "contador", "ia", "eventos"];
+    public static readonly string[] KnownModules = ["fiscal", "estoque", "restaurante", "pontos", "contador", "ia", "eventos"];
 
     /// <summary>Tabela de preços vigente (decidida em 2026-07-27, ver BACKLOG e a
     /// const PLANOS de frontend/app/institucional/page.tsx, que é o que o cliente

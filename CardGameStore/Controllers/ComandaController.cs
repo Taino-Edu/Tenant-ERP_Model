@@ -29,6 +29,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[RequireModule("restaurante")]
 [Produces("application/json")]
 public class ComandaController : ControllerBase
 {
@@ -171,6 +172,20 @@ public class ComandaController : ControllerBase
         {
             return BadRequest(new { Message = ex.Message });
         }
+    }
+
+    /// <summary>Adiciona ou altera uma observação enquanto a comanda está aberta.</summary>
+    [HttpPut("{id:guid}/notes")]
+    [ProducesResponseType(typeof(ComandaDto), 200)]
+    public async Task<IActionResult> UpdateNotes(Guid id, [FromBody] UpdateComandaNotesRequest request)
+    {
+        try
+        {
+            return Ok(await _service.UpdateNotesAsync(id, GetUserId(), request.Notes));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
     }
 
     /// <summary>Fecha uma comanda (pagamento recebido). Apenas Admin.</summary>

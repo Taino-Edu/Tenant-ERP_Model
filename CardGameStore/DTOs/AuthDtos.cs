@@ -129,6 +129,17 @@ public record AvisoContadorRequest(
     Guid? LinkId = null
 );
 
+/// <summary>Campos fiscais que o contador pode manter no cadastro do produto.</summary>
+public class ContadorProdutoFiscalRequest
+{
+    public string? Ncm { get; set; }
+    public string? Cest { get; set; }
+    [Range(typeof(decimal), "0", "100")] public decimal? PercentualTributosFederais { get; set; }
+    [Range(typeof(decimal), "0", "100")] public decimal? PercentualTributosEstaduais { get; set; }
+    [Range(typeof(decimal), "0", "100")] public decimal? PercentualTributosMunicipais { get; set; }
+    [MaxLength(100)] public string? FonteTributos { get; set; }
+}
+
 /// <summary>Resposta da busca por CPF.</summary>
 public record CpfLookupResponse(
     string Name,
