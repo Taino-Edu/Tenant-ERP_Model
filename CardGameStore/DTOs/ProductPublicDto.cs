@@ -35,6 +35,19 @@ public class ProductPublicDto
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
+    // Espelham as propriedades computadas de Product (preço em reais/promoção) —
+    // não são dado sensível, é o mesmo PriceInCents/DiscountPriceInCents já
+    // acima só em outra unidade. Faltavam aqui desde a criação deste DTO (M12),
+    // que só copiou os campos "brutos" e não os computados: o frontend
+    // (lib/api.ts `Product`) sempre esperou PriceInReais/DiscountPriceInReais/
+    // IsOnPromo prontos do backend, então toda página pública de produto
+    // quebrava em fmt(undefined).toFixed() — achado testando localmente.
+    // CostPriceInReais/MarginInReais/MarginPercent/IsLowStock continuam de
+    // fora de propósito: esses sim revelam custo/margem/estoque mínimo.
+    public decimal PriceInReais { get; set; }
+    public decimal? DiscountPriceInReais { get; set; }
+    public bool IsOnPromo { get; set; }
+
     public static ProductPublicDto FromEntity(Product p) => new()
     {
         Id                  = p.Id,
@@ -57,5 +70,8 @@ public class ProductPublicDto
         HasVariants         = p.HasVariants,
         CreatedAt           = p.CreatedAt,
         UpdatedAt           = p.UpdatedAt,
+        PriceInReais        = p.PriceInReais,
+        DiscountPriceInReais = p.DiscountPriceInReais,
+        IsOnPromo           = p.IsOnPromo,
     };
 }

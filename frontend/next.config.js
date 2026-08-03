@@ -11,6 +11,19 @@ const nextConfig = {
   // não faz nada fora de dev, isso só desativa o próprio double-invoke.
   reactStrictMode: false,
 
+  // Cada tenant usa um subdomínio local (ex.: loja.localhost:3000). NÃO dá
+  // pra declarar isso como 'allowedDevOrigins: [\'*.localhost\']' nessa versão
+  // (14.2.35): o matcher de wildcard do Next (block-cross-site.js/
+  // csrf-protection.js) trata QUALQUER segmento '*' como padrão inválido e
+  // devolve bloqueio (403) em vez de liberar — bug/limitação confirmada lendo
+  // o código-fonte do pacote, não erro de sintaxe. Pior: setar
+  // allowedDevOrigins (mesmo "errado") muda o modo de "warn" pra "block" no
+  // block-cross-site.js, transformando um aviso inofensivo em bloqueio real
+  // dos chunks JS — foi isso que quebrou o teste local com subdomínio.
+  // Sem essa chave, cai no modo "warn" (só loga no console, não bloqueia).
+  // Reavaliar ao atualizar o Next: se uma versão futura corrigir o matcher de
+  // wildcard, essa config volta a fazer sentido.
+
   // Permite imagens de CDNs de TCG (Pokémon, Magic, etc.)
   images: {
     remotePatterns: [

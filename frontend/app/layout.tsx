@@ -15,11 +15,11 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
-// Ícone/favicon por tenant, resolvido pelo Host da requisição — o resto dos
-// metadados (nome, descrição) continua fixo/genérico de propósito (fora de
-// escopo aqui; o nome real da loja já é renderizado no client via
-// useSiteConfig() em outros pontos da página). Fallback pros ícones estáticos
-// de sempre em qualquer falha — getTenantIconsForHost nunca lança.
+// Favicon + título/descrição por tenant, resolvidos pelo Host da requisição.
+// Páginas públicas (Home, /cadastro, /login etc.) não têm generateMetadata
+// própria, então herdam esse default — é ele quem aparece na aba do
+// navegador e no snippet do Google pra cada loja. Fallback genérico
+// ("Minha Loja") em qualquer falha — getTenantIconsForHost nunca lança.
 export async function generateMetadata(): Promise<Metadata> {
   const host = headers().get('host')
   const icons = await getTenantIconsForHost(host)
@@ -28,9 +28,12 @@ export async function generateMetadata(): Promise<Metadata> {
     ? withCacheBust(icons.faviconUrl, icons.updatedAt)
     : '/icon.svg'
 
+  const siteName = icons?.siteName || 'Minha Loja'
+  const description = icons?.heroSubtitle || 'Sistema de gestão para lojas e varejo'
+
   return {
-    title: { default: 'Minha Loja', template: '%s — Minha Loja' },
-    description: 'Sistema de gestão para lojas e varejo',
+    title: { default: siteName, template: `%s — ${siteName}` },
+    description,
     icons: {
       icon: [
         { url: iconUrl, type: icons?.faviconUrl ? undefined : 'image/svg+xml' },
@@ -41,7 +44,19 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: {
       capable: true,
       statusBarStyle: 'black-translucent',
-      title: 'Minha Loja',
+      title: siteName,
+    },
+    openGraph: {
+      title: siteName,
+      description,
+      siteName,
+      locale: 'pt_BR',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary',
+      title: siteName,
+      description,
     },
   }
 }
