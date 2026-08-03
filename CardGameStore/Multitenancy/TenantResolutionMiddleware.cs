@@ -148,6 +148,22 @@ public class TenantResolutionMiddleware
     {
         tenantContext.Set(tenantId, schemaName, enabledModules);
 
+        // Cópia do tenant no HttpContext, além do ITenantContext: o SignalR cria
+        // um escopo de DI PRÓPRIO por invocação de hub e não herda o escopo desta
+        // requisição, então o ITenantContext que o hub recebe nasce no default
+        // (tenant-zero) e o middleware nunca chega nele. O HttpContext do
+        // handshake, ao contrário, continua acessível pela vida da conexão via
+        // HubCallerContext.GetHttpContext() — é por ele que o TenantHubFilter
+        // reidrata o tenant antes de qualquer método do hub rodar.
+        //
+        // Sem isso, um admin de loja.dominio entrava no grupo da tenant-zero
+        // enquanto os eventos da loja iam pro grupo dela: conectado e surdo, sem
+        // erro nenhum. E toda conexão de cliente estourava, porque o
+        // OnConnectedAsync dele toca o banco e o TenantConnectionInterceptor tem
+        // fail-fast pra escopo sem Set().
+        context.Items[TenantHubFilter.HttpContextItemKey] =
+            new TenantSnapshot(tenantId, schemaName, enabledModules);
+
         // Template de mensagem (e não um Dictionary) de propósito: o formatter
         // do console renderiza o escopo chamando ToString() nele, e
         // Dictionary.ToString() devolve "System.Collections.Generic.Dictionary`2
