@@ -169,7 +169,18 @@ export default function InstitucionalPage() {
       </header>
 
       <section className={`relative isolate min-h-[690px] overflow-hidden border-b ${theme.border}`}>
-        {!isDark && <Image src="/institutional/octus-hero-waves.png" alt="" fill priority sizes="100vw" className="-z-10 object-cover object-right opacity-[0.55] sm:opacity-100" />}
+        <Image
+          src="/institutional/octus-hero-waves.png"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className={`-z-10 object-cover object-right transition duration-500 ${
+            isDark
+              ? 'opacity-40 invert hue-rotate-180 brightness-50 saturate-150'
+              : 'opacity-[0.55] sm:opacity-100'
+          }`}
+        />
         <div className="mx-auto flex min-h-[690px] max-w-7xl items-center px-5 py-20 lg:px-8">
           <div className="max-w-3xl">
             <p className="mb-5 text-sm font-extrabold uppercase tracking-[0.22em] text-blue-600">Octus · gestão que veste a sua marca</p>
