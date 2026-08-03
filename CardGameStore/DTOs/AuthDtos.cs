@@ -58,9 +58,21 @@ public record QuickLoginRequest(
     [MaxLength(50)]             string? TableIdentifier = null
 );
 
-/// <summary>Renovação de token usando o Refresh Token.</summary>
+/// <summary>
+/// Renovação de token. O caminho normal é o cookie HttpOnly — o corpo existe só
+/// como alternativa pra cliente que não seja navegador.
+///
+/// O campo é OPCIONAL de propósito, e isso não é descuido: o frontend chama
+/// POST /api/auth/refresh com corpo vazio ({}), porque o token vai no cookie.
+/// Com [Required] — ou mesmo só com `string` não-anulável, que o ASP.NET trata
+/// como obrigatório sozinho — a validação automática do [ApiController] rejeitava
+/// esse corpo com 400 ANTES da action rodar, e a linha que lê o cookie nunca era
+/// alcançada. Efeito: renovação de sessão nunca funcionou, e todo usuário era
+/// deslogado quando o access token expirava. Se voltar a marcar como obrigatório,
+/// o sistema inteiro volta a derrubar sessão de hora em hora.
+/// </summary>
 public record RefreshTokenRequest(
-    [Required] string RefreshToken
+    string? RefreshToken = null
 );
 
 /// <summary>"Não achei minha conta aqui, procurar em outro lugar" — mesmo e-mail/senha

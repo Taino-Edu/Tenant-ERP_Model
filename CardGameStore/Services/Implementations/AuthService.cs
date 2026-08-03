@@ -188,6 +188,12 @@ public class AuthService : IAuthService
     // =========================================================================
     public async Task<AuthResponse> RefreshTokenAsync(RefreshTokenRequest request)
     {
+        // O DTO aceita null porque o token normalmente vem do cookie, não do corpo
+        // (ver RefreshTokenRequest). Quem chama aqui já resolveu de onde veio; se
+        // chegou vazio, é sessão sem credencial — mesmo desfecho de token inválido.
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+            throw new UnauthorizedAccessException("Refresh token inválido ou expirado.");
+
         var hashedToken = HashRefreshToken(request.RefreshToken);
         var user = await _db.Users.FirstOrDefaultAsync(
             u => u.RefreshToken == hashedToken && u.IsActive

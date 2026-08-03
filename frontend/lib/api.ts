@@ -69,13 +69,22 @@ api.interceptors.response.use(
         return api(original)
       } catch {
         // Refresh falhou — redireciona de acordo com o tipo de página:
-        //   /admin/*  → /login   (painel de gestão)
-        //   /cliente/* → /entrar (área do cliente)
-        //   demais    → limpa cookies e fica na página (QR code, campeonatos, etc.)
+        //   /admin/*      → /login   (painel de gestão da loja)
+        //   /plataforma/* → /login   (painel da plataforma; é pra lá que o
+        //                   PlatformOwner é mandado depois do login)
+        //   /cliente/*    → /entrar  (área do cliente)
+        //   demais        → limpa cookies e fica na página (QR code, vitrine, etc.)
+        //
+        // /plataforma estava fora desta lista e caía no ramo das páginas
+        // públicas: em vez de ir pro login, o dono da plataforma ficava numa
+        // página que PARECIA logada — a tabela já renderizada, o menu no lugar —
+        // e toda escrita falhava com um toast genérico. Um delete de tenant foi
+        // clicado quatro vezes em sete minutos por causa disso, porque nada na
+        // tela dizia que a sessão tinha morrido.
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           const path = window.location.pathname
           clearAuth()
-          if (path.startsWith('/admin')) {
+          if (path.startsWith('/admin') || path.startsWith('/plataforma')) {
             window.location.href = '/login'
           } else if (path.startsWith('/cliente')) {
             window.location.href = '/entrar'
