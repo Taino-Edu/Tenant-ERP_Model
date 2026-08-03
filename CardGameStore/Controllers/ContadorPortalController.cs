@@ -27,6 +27,7 @@ using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
+using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -189,6 +190,66 @@ public class ContadorPortalController : ControllerBase
             .ToListAsync();
 
         return Ok(new { items = itens, total, totalPages = (int)Math.Ceiling(total / (double)pageSize) });
+    }
+
+    /// <summary>NF-e de entrada encontradas para o CNPJ, incluindo a situação do recebimento físico.</summary>
+    [HttpGet("clientes/{tenantId:guid}/notas-recebidas")]
+    public async Task<IActionResult> ListNotasRecebidas(
+        Guid tenantId, [FromQuery] DateTime? inicio = null, [FromQuery] DateTime? fim = null)
+    {
+        var tenant = await AutorizarEObterTenantAsync(tenantId);
+        if (tenant is null) return Forbid();
+
+        using var scope = _scopeFactory.CreateScope();
+        scope.ServiceProvider.GetRequiredService<ITenantContext>()
+            .Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var q = db.NotasDestinadas.AsNoTracking();
+        if (inicio.HasValue)
+        {
+            var iniUtc = BrazilTime.DateToUtcStart(inicio.Value);
+            q = q.Where(n => (n.DataEmissao ?? n.CreatedAt) >= iniUtc);
+        }
+        if (fim.HasValue)
+        {
+            var fimUtc = BrazilTime.DateToUtcStart(fim.Value.Date.AddDays(1));
+            q = q.Where(n => (n.DataEmissao ?? n.CreatedAt) < fimUtc);
+        }
+
+        var items = await q.OrderByDescending(n => n.DataEmissao ?? n.CreatedAt)
+            .Take(300)
+            .Select(n => new
+            {
+                n.Id, n.ChaveAcesso, n.EmitenteCnpj, n.EmitenteNome, n.Valor,
+                n.DataEmissao, n.Status, n.Situacao, n.ContasGeradas,
+                n.EstoqueRecebidoEm, n.ItensEstoqueRecebidos, n.Erro,
+            })
+            .ToListAsync();
+        return Ok(items);
+    }
+
+    /// <summary>DRE gerencial por competência, usando o mesmo cálculo exibido ao lojista.</summary>
+    [HttpGet("clientes/{tenantId:guid}/dre")]
+    public async Task<IActionResult> GetDre(
+        Guid tenantId, [FromQuery] DateTime inicio, [FromQuery] DateTime fim)
+    {
+        if (fim.Date < inicio.Date)
+            return BadRequest(new { Message = "O período final não pode ser anterior ao inicial." });
+        var tenant = await AutorizarEObterTenantAsync(tenantId);
+        if (tenant is null) return Forbid();
+
+        using var scope = _scopeFactory.CreateScope();
+        scope.ServiceProvider.GetRequiredService<ITenantContext>()
+            .Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+        var financeiro = scope.ServiceProvider.GetRequiredService<IFinanceiroCalculoService>();
+        var inicioBr = inicio.Date;
+        var fimBr = fim.Date;
+        var dto = await financeiro.CalcularAsync(
+            BrazilTime.DateToUtcStart(inicioBr),
+            BrazilTime.DateToUtcStart(fimBr.AddDays(1)),
+            inicioBr, fimBr);
+        return Ok(dto);
     }
 
     /// <summary>

@@ -63,6 +63,9 @@ public class AppDbContext : DbContext
 
     // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
     public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
+    public DbSet<NfeReceiptItem>     NfeReceiptItems      { get; set; }
+    public DbSet<SupplierProductLink> SupplierProductLinks { get; set; }
+    public DbSet<StockMovement>      StockMovements       { get; set; }
 
     // ── Personalização da landing page ─────────────────────────────────────────
     public DbSet<SiteConfig>         SiteConfigs          { get; set; }
@@ -539,6 +542,66 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(n => n.Status)
                   .HasDatabaseName("ix_notas_destinadas_status");
+        });
+
+        modelBuilder.Entity<NfeReceiptItem>(entity =>
+        {
+            entity.HasIndex(i => new { i.NotaDestinadaId, i.ItemNumber })
+                  .IsUnique()
+                  .HasDatabaseName("ix_nfe_receipt_items_note_number");
+
+            entity.HasOne(i => i.NotaDestinada)
+                  .WithMany(n => n.ReceiptItems)
+                  .HasForeignKey(i => i.NotaDestinadaId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(i => i.Product)
+                  .WithMany()
+                  .HasForeignKey(i => i.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(i => i.ProductVariant)
+                  .WithMany()
+                  .HasForeignKey(i => i.ProductVariantId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SupplierProductLink>(entity =>
+        {
+            entity.HasIndex(l => new { l.SupplierCnpj, l.SupplierProductCode })
+                  .IsUnique()
+                  .HasDatabaseName("ix_supplier_product_links_supplier_code");
+
+            entity.HasOne(l => l.Product)
+                  .WithMany()
+                  .HasForeignKey(l => l.ProductId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(l => l.ProductVariant)
+                  .WithMany()
+                  .HasForeignKey(l => l.ProductVariantId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<StockMovement>(entity =>
+        {
+            entity.HasIndex(m => new { m.NfeKey, m.SourceItemNumber })
+                  .IsUnique()
+                  .HasFilter("nfe_key IS NOT NULL AND source_item_number IS NOT NULL")
+                  .HasDatabaseName("ix_stock_movements_nfe_item");
+
+            entity.HasIndex(m => new { m.ProductId, m.OccurredAt })
+                  .HasDatabaseName("ix_stock_movements_product_date");
+
+            entity.HasOne(m => m.Product)
+                  .WithMany()
+                  .HasForeignKey(m => m.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(m => m.ProductVariant)
+                  .WithMany()
+                  .HasForeignKey(m => m.ProductVariantId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
 
         // =====================================================================

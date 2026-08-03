@@ -1197,12 +1197,23 @@ export interface FormaPagamentoTotalDto {
 }
 
 export interface FinanceiroDto {
+  receitaBruta: number
+  deducoes: number
   receita: number
+  impostosSobreVendas: number
+  receitaLiquidaDre: number
   receitaComandas: number
   receitaAvulsa: number
   custo: number
   margem: number
   margemPercent: number
+  despesasOperacionais: number
+  resultadoOperacional: number
+  resultadoFinanceiro: number
+  impostosSobreLucro: number
+  resultadoLiquido: number
+  lancamentosNaoClassificados: number
+  despesasPorCategoria: { categoria: string; valor: number }[]
   crediarios: number
   recebidoCrediario: number
   diaDia: DiaFinanceiroDto[]
@@ -1553,6 +1564,12 @@ export interface ContadorNotaDto {
   emitidoEm?: string; canceladoEm?: string; createdAt: string
 }
 
+export interface ContadorNotaRecebidaDto {
+  id: string; chaveAcesso: string; emitenteCnpj?: string; emitenteNome?: string
+  valor: number; dataEmissao?: string; status: string; situacao: number
+  contasGeradas: number; estoqueRecebidoEm?: string; itensEstoqueRecebidos: number; erro?: string
+}
+
 export interface ContadorConfigDto {
   cnpj?: string; razaoSocial?: string; inscricaoEstadual?: string
   logradouro?: string; numero?: string; complemento?: string; bairro?: string
@@ -1580,6 +1597,10 @@ export const contadorApi = {
     api.post<{ message: string }>('/api/contador-portal/solicitar-acesso', { tenantSlug }),
   listNotas: (tenantId: string, params?: { inicio?: string; fim?: string; status?: string; page?: number; pageSize?: number }) =>
     api.get<{ items: ContadorNotaDto[]; total: number; totalPages: number }>(`/api/contador-portal/clientes/${tenantId}/notas`, { params }),
+  listNotasRecebidas: (tenantId: string, params?: { inicio?: string; fim?: string }) =>
+    api.get<ContadorNotaRecebidaDto[]>(`/api/contador-portal/clientes/${tenantId}/notas-recebidas`, { params }),
+  getDre: (tenantId: string, inicio: string, fim: string) =>
+    api.get<FinanceiroDto>(`/api/contador-portal/clientes/${tenantId}/dre`, { params: { inicio, fim } }),
   exportarXmls: (tenantId: string, inicio: string, fim: string) =>
     api.get(`/api/contador-portal/clientes/${tenantId}/exportar-xmls`, { params: { inicio, fim }, responseType: 'blob' }),
   getConfig: (tenantId: string) => api.get<ContadorConfigDto>(`/api/contador-portal/clientes/${tenantId}/config`),

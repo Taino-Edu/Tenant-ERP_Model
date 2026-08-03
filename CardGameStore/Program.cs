@@ -444,6 +444,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddSingleton<OfxParserService>();
 builder.Services.AddScoped<SefazNfeService>();
+builder.Services.AddScoped<NfeReceivingService>();
 builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddScoped<InterSyncService>();
 builder.Services.AddHostedService<InterSyncBackgroundService>();

@@ -1,11 +1,12 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
-import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorConfigDto, ContadorProdutoDto, AvisoContadorDto, getErrorMessage } from '@/lib/api'
+import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorNotaRecebidaDto, ContadorConfigDto, ContadorProdutoDto, AvisoContadorDto, FinanceiroDto, getErrorMessage } from '@/lib/api'
 import toast from 'react-hot-toast'
 import { Calculator, Download, Loader2, FileText, Building2, ChevronLeft, Clock, Plus, AlertTriangle, Send, MessageSquare, Package, Save } from 'lucide-react'
 import clsx from 'clsx'
 
 const fmt = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
+const fmtReais = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
 
 function diasAte(dataIso?: string): number | null {
@@ -166,6 +167,8 @@ export default function ContadorPage() {
 function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; onVoltar: () => void }) {
   const [config, setConfig]     = useState<ContadorConfigDto | null>(null)
   const [notas, setNotas]       = useState<ContadorNotaDto[]>([])
+  const [notasRecebidas, setNotasRecebidas] = useState<ContadorNotaRecebidaDto[]>([])
+  const [dre, setDre] = useState<FinanceiroDto | null>(null)
   const [loading, setLoading]   = useState(true)
   const [exporting, setExporting] = useState(false)
   const [produtos, setProdutos] = useState<ContadorProdutoDto[]>([])
@@ -185,9 +188,17 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
 
   const fetchNotas = useCallback(() => {
     setLoading(true)
-    contadorApi.listNotas(cliente.tenantId, { inicio, fim, pageSize: 100 })
-      .then(r => setNotas(r.data.items))
-      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar notas fiscais')))
+    Promise.all([
+      contadorApi.listNotas(cliente.tenantId, { inicio, fim, pageSize: 100 }),
+      contadorApi.listNotasRecebidas(cliente.tenantId, { inicio, fim }),
+      contadorApi.getDre(cliente.tenantId, inicio, fim),
+    ])
+      .then(([saidas, entradas, resultado]) => {
+        setNotas(saidas.data.items)
+        setNotasRecebidas(entradas.data)
+        setDre(resultado.data)
+      })
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar o fechamento fiscal')))
       .finally(() => setLoading(false))
   }, [cliente.tenantId, inicio, fim])
 
@@ -253,6 +264,30 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
     }
   }
 
+  function exportarDreCsv() {
+    if (!dre) return
+    const rows: Array<[string, number]> = [
+      ['Receita bruta', dre.receitaBruta],
+      ['(-) Descontos e abatimentos', -dre.deducoes],
+      ['(-) Impostos sobre vendas', -dre.impostosSobreVendas],
+      ['Receita líquida', dre.receitaLiquidaDre],
+      ['(-) CMV', -dre.custo],
+      ['Lucro bruto', dre.receitaLiquidaDre - dre.custo],
+      ...dre.despesasPorCategoria.map(item => [`(-) ${item.categoria}`, -item.valor] as [string, number]),
+      ['Resultado operacional', dre.resultadoOperacional],
+      ['(+/-) Resultado financeiro', dre.resultadoFinanceiro],
+      ['(-) IRPJ / CSLL', -dre.impostosSobreLucro],
+      ['Resultado líquido', dre.resultadoLiquido],
+    ]
+    const csv = '\uFEFFLinha;Valor (R$)\r\n' + rows.map(([label, value]) => `${label};${value.toFixed(2).replace('.', ',')}`).join('\r\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `dre-${cliente.slug}-${inicio}-a-${fim}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
@@ -279,6 +314,56 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
           </div>
         </div>
       )}
+
+      {dre && (
+        <section className="card p-0 overflow-hidden">
+          <div className="px-5 py-4 border-b border-surface-600 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-white flex items-center gap-2"><Calculator className="w-4 h-4 text-brand-400" /> DRE gerencial</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Competência de {inicio.split('-').reverse().join('/')} a {fim.split('-').reverse().join('/')}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] rounded-full border border-brand-500/30 bg-brand-500/10 text-brand-300 px-2 py-1">Mesma base da loja</span>
+              <button onClick={exportarDreCsv} className="btn-secondary py-1.5 px-2.5 text-xs"><Download className="w-3.5 h-3.5" /> CSV</button>
+            </div>
+          </div>
+          <div className="p-5 space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-gray-400">Receita bruta</span><strong className="font-mono text-white">{fmtReais(dre.receitaBruta)}</strong></div>
+            {dre.deducoes > 0 ? <div className="flex justify-between"><span className="text-gray-400">(−) Descontos e abatimentos</span><span className="font-mono text-red-400">({fmtReais(dre.deducoes)})</span></div> : null}
+            {dre.impostosSobreVendas > 0 ? <div className="flex justify-between"><span className="text-gray-400">(−) Impostos sobre vendas</span><span className="font-mono text-red-400">({fmtReais(dre.impostosSobreVendas)})</span></div> : null}
+            <div className="flex justify-between border-t border-surface-700 pt-2"><span className="font-semibold text-gray-200">Receita líquida</span><strong className="font-mono text-emerald-400">{fmtReais(dre.receitaLiquidaDre)}</strong></div>
+            <div className="flex justify-between"><span className="text-gray-400">(−) CMV</span><span className="font-mono text-red-400">({fmtReais(dre.custo)})</span></div>
+            <div className="flex justify-between border-t border-surface-700 pt-2"><span className="font-semibold text-gray-200">Lucro bruto</span><strong className="font-mono text-brand-300">{fmtReais(dre.receitaLiquidaDre - dre.custo)}</strong></div>
+            {dre.despesasPorCategoria.map(item => (
+              <div key={item.categoria} className="flex justify-between pl-3"><span className="text-gray-500">(−) {item.categoria}</span><span className="font-mono text-red-400">({fmtReais(item.valor)})</span></div>
+            ))}
+            <div className="flex justify-between border-t-2 border-surface-500 pt-3 text-base">
+              <strong className="text-white">Resultado operacional</strong>
+              <strong className={clsx('font-mono', dre.resultadoOperacional >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmtReais(dre.resultadoOperacional)}</strong>
+            </div>
+            {dre.resultadoFinanceiro !== 0 ? <div className="flex justify-between"><span className="text-gray-400">(+/−) Resultado financeiro</span><span className="font-mono text-white">{fmtReais(dre.resultadoFinanceiro)}</span></div> : null}
+            {dre.impostosSobreLucro > 0 ? <div className="flex justify-between"><span className="text-gray-400">(−) IRPJ / CSLL</span><span className="font-mono text-red-400">({fmtReais(dre.impostosSobreLucro)})</span></div> : null}
+            <div className="flex justify-between border-t-2 border-surface-500 pt-3 text-base"><strong className="text-white">Resultado líquido</strong><strong className={clsx('font-mono', dre.resultadoLiquido >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmtReais(dre.resultadoLiquido)}</strong></div>
+            {dre.lancamentosNaoClassificados > 0 ? <p className="text-xs text-amber-400">{fmtReais(dre.lancamentosNaoClassificados)} aguardam classificação contábil e não entraram no resultado.</p> : null}
+            <p className="text-[11px] text-gray-500 pt-1">Compras de mercadoria formam estoque e entram no resultado pelo CMV conforme a venda; extrato bancário permanece na conciliação de caixa.</p>
+          </div>
+        </section>
+      )}
+
+      <section className="card">
+        <h3 className="font-bold text-white mb-3">Checklist do fechamento</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+          <div className={clsx('rounded-xl border p-3', produtos.filter(p => !p.ncm).length ? 'border-amber-500/30 bg-amber-500/5' : 'border-green-500/20 bg-green-500/5')}>
+            <p className="text-gray-400">Produtos sem NCM</p><strong className="text-white text-lg">{produtos.filter(p => !p.ncm).length}</strong>
+          </div>
+          <div className={clsx('rounded-xl border p-3', notasRecebidas.filter(n => !n.estoqueRecebidoEm && n.status !== 'cancelada').length ? 'border-amber-500/30 bg-amber-500/5' : 'border-green-500/20 bg-green-500/5')}>
+            <p className="text-gray-400">Entradas sem conferência</p><strong className="text-white text-lg">{notasRecebidas.filter(n => !n.estoqueRecebidoEm && n.status !== 'cancelada').length}</strong>
+          </div>
+          <div className={clsx('rounded-xl border p-3', (dre?.lancamentosNaoClassificados ?? 0) > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-green-500/20 bg-green-500/5')}>
+            <p className="text-gray-400">Sem classificação na DRE</p><strong className="text-white text-lg">{fmtReais(dre?.lancamentosNaoClassificados ?? 0)}</strong>
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="card p-4">
@@ -355,6 +440,37 @@ function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; on
           </div>
         )}
       </div>
+
+      <section className="card space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-white flex items-center gap-2"><Package className="w-4 h-4 text-brand-400" /> NF-e de entrada</h3>
+            <p className="text-xs text-gray-500 mt-1">Documentos de fornecedores, contas geradas e conferência física do estoque.</p>
+          </div>
+          <span className="text-xs text-gray-400">{notasRecebidas.length} no período</span>
+        </div>
+        {notasRecebidas.length === 0 ? (
+          <p className="text-sm text-gray-500 text-center py-6">Nenhuma NF-e de entrada no período.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px] text-sm">
+              <thead><tr className="text-left text-gray-500 border-b border-surface-600">
+                <th className="py-2 font-medium">Emissão</th><th className="py-2 font-medium">Fornecedor</th>
+                <th className="py-2 font-medium">Financeiro</th><th className="py-2 font-medium">Estoque</th><th className="py-2 font-medium text-right">Valor</th>
+              </tr></thead>
+              <tbody>{notasRecebidas.map(nota => (
+                <tr key={nota.id} className="border-b border-surface-700 last:border-0">
+                  <td className="py-3 text-gray-400">{nota.dataEmissao ? new Date(nota.dataEmissao).toLocaleDateString('pt-BR') : '—'}</td>
+                  <td className="py-3"><p className="text-white">{nota.emitenteNome ?? 'Fornecedor'}</p><p className="text-[10px] text-gray-600 font-mono">{nota.chaveAcesso.slice(0, 6)}…{nota.chaveAcesso.slice(-8)}</p></td>
+                  <td className="py-3 text-gray-400">{nota.contasGeradas > 0 ? `${nota.contasGeradas} conta(s)` : 'Pendente'}</td>
+                  <td className="py-3">{nota.estoqueRecebidoEm ? <span className="text-emerald-400">✓ {nota.itensEstoqueRecebidos} un.</span> : <span className="text-amber-400">Aguardando conferência</span>}</td>
+                  <td className="py-3 text-right font-mono text-white">{fmtReais(nota.valor)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <div className="card space-y-3">
         <div>

@@ -50,6 +50,11 @@ public class ExternalTransaction
     [Column("category")]
     public string? Category { get; set; }
 
+    /// <summary>Classificação contábil usada na DRE; separada da categoria amigável da tela.</summary>
+    [Required, MaxLength(30)]
+    [Column("dre_group")]
+    public string DreGroup { get; set; } = DreGroups.Unclassified;
+
     [MaxLength(200)]
     [Column("supplier")]
     public string? Supplier { get; set; }
@@ -68,4 +73,28 @@ public class ExternalTransaction
 
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public static class DreGroups
+{
+    public const string Unclassified = "unclassified";
+    public const string OperatingExpense = "operating_expense";
+    public const string InventoryPurchase = "inventory_purchase";
+    public const string SalesTax = "sales_tax";
+    public const string Financial = "financial";
+    public const string IncomeTax = "income_tax";
+    public const string FixedAsset = "fixed_asset";
+
+    public static readonly string[] All =
+        [Unclassified, OperatingExpense, InventoryPurchase, SalesTax, Financial, IncomeTax, FixedAsset];
+
+    public static string Infer(string? category) => category switch
+    {
+        "Fornecedor" or "Compras para estoque" => InventoryPurchase,
+        "Equipamento" or "Imobilizado" => FixedAsset,
+        "Imposto sobre venda" => SalesTax,
+        "Juros e tarifas" => Financial,
+        "IRPJ/CSLL" => IncomeTax,
+        _ => OperatingExpense,
+    };
 }

@@ -29,6 +29,24 @@ public class TenantConnectionInterceptor : DbConnectionInterceptor
         _logger        = logger;
     }
 
+    public override InterceptionResult ConnectionOpening(
+        DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
+    {
+        // Valida antes de o provider tentar alcançar o PostgreSQL. Além de impedir
+        // que um identificador inválido chegue ao SQL, isso preserva o fail-fast
+        // mesmo quando o servidor está indisponível ou o pool está sob pressão.
+        ValidateSchemaName();
+        return base.ConnectionOpening(connection, eventData, result);
+    }
+
+    public override ValueTask<InterceptionResult> ConnectionOpeningAsync(
+        DbConnection connection, ConnectionEventData eventData, InterceptionResult result,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateSchemaName();
+        return base.ConnectionOpeningAsync(connection, eventData, result, cancellationToken);
+    }
+
     public override async Task ConnectionOpenedAsync(
         DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
     {

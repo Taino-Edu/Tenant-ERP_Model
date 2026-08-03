@@ -57,12 +57,23 @@ export default function FinanceiroPage() {
   // comparação"), não um bug.
   function fechamentoToFinanceiro(f: FechamentoPeriodoDto): FinanceiroDto {
     return {
+      receitaBruta: f.receita,
+      deducoes: 0,
       receita: f.receita,
+      impostosSobreVendas: 0,
+      receitaLiquidaDre: f.receita,
       receitaComandas: f.receitaComandas,
       receitaAvulsa: f.receitaAvulsa,
       custo: f.custo,
       margem: f.margem,
-      margemPercent: f.custo > 0 ? Math.round((f.margem / f.custo) * 100 * 10) / 10 : 0,
+      margemPercent: f.receita > 0 ? Math.round((f.margem / f.receita) * 100 * 10) / 10 : 0,
+      despesasOperacionais: 0,
+      resultadoOperacional: f.margem,
+      resultadoFinanceiro: 0,
+      impostosSobreLucro: 0,
+      resultadoLiquido: f.margem,
+      lancamentosNaoClassificados: 0,
+      despesasPorCategoria: [],
       crediarios: 0,
       recebidoCrediario: 0,
       diaDia: [],
@@ -466,7 +477,7 @@ export default function FinanceiroPage() {
           </div>
 
           {/* ── DRE ─────────────────────────────────────────────────────── */}
-          {d.receita > 0 && (
+          {(d.receita > 0 || d.despesasOperacionais > 0 || d.impostosSobreVendas > 0 || d.impostosSobreLucro > 0 || d.lancamentosNaoClassificados > 0) && (
             <div className="card p-0 overflow-hidden">
               <div className="px-5 py-4 border-b border-surface-500 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -486,12 +497,28 @@ export default function FinanceiroPage() {
                       <span className="text-xs text-gray-500">Avulsas: <span className="text-gray-300">{fmt(d.receitaAvulsa)}</span></span>
                     </div>
                   </div>
-                  <span className="text-emerald-400 font-bold font-mono text-lg">{fmt(d.receita)}</span>
+                  <span className="text-emerald-400 font-bold font-mono text-lg">{fmt(d.receitaBruta)}</span>
+                </div>
+
+                {d.deducoes > 0 && (
+                  <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
+                    <p className="text-sm text-gray-400">(−) Descontos e abatimentos</p>
+                    <span className="text-red-400 font-mono">({fmt(d.deducoes)})</span>
+                  </div>
+                )}
+                {d.impostosSobreVendas > 0 && (
+                  <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
+                    <p className="text-sm text-gray-400">(−) Impostos sobre vendas</p>
+                    <span className="text-red-400 font-mono">({fmt(d.impostosSobreVendas)})</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between py-2.5 border-b border-surface-600 bg-surface-800/30 px-2 -mx-2">
+                  <p className="text-sm font-semibold text-gray-200">Receita Líquida</p>
+                  <span className="text-emerald-400 font-semibold font-mono">{fmt(d.receitaLiquidaDre)}</span>
                 </div>
 
                 {/* CMV */}
-                {d.custo > 0 ? (
-                  <>
+                <>
                     <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
                       <p className="text-sm text-gray-400">(−) CMV — Custo das Mercadorias Vendidas</p>
                       <span className="text-red-400 font-mono">({fmt(d.custo)})</span>
@@ -501,27 +528,49 @@ export default function FinanceiroPage() {
                     <div className="flex items-center justify-between py-3 border-b-2 border-surface-400">
                       <p className="text-base font-black text-white">LUCRO BRUTO</p>
                       <div className="text-right">
-                        <span className={`font-black font-mono text-xl ${d.margem >= 0 ? 'text-brand-400' : 'text-red-400'}`}>
-                          {fmt(d.margem)}
+                        <span className={`font-black font-mono text-xl ${d.receitaLiquidaDre - d.custo >= 0 ? 'text-brand-400' : 'text-red-400'}`}>
+                          {fmt(d.receitaLiquidaDre - d.custo)}
                         </span>
-                        <span className="text-xs text-gray-500 ml-2 font-mono">({d.margemPercent.toFixed(1)}%)</span>
+                        <span className="text-xs text-gray-500 ml-2 font-mono">({d.receitaLiquidaDre > 0 ? (((d.receitaLiquidaDre - d.custo) / d.receitaLiquidaDre) * 100).toFixed(1) : '0.0'}%)</span>
                       </div>
                     </div>
 
-                    {/* Crediários */}
-                    {d.crediarios > 0 && (
-                      <>
-                        <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
-                          <p className="text-sm text-gray-400">(−) Crediários em Aberto</p>
-                          <span className="text-amber-400 font-mono">({fmt(d.crediarios)})</span>
-                        </div>
-                        <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
-                          <p className="text-sm text-gray-300">Resultado Estimado</p>
-                          <span className={`font-semibold font-mono ${d.margem - d.crediarios >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {fmt(d.margem - d.crediarios)}
-                          </span>
-                        </div>
-                      </>
+                    {d.despesasPorCategoria.map(item => (
+                      <div key={item.categoria} className="flex items-center justify-between py-2 border-b border-surface-700 pl-3">
+                        <p className="text-sm text-gray-400">(−) {item.categoria}</p>
+                        <span className="text-red-400 font-mono">({fmt(item.valor)})</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between gap-4 py-3 border-b-2 border-surface-400">
+                      <div>
+                        <p className="text-base font-black text-white">RESULTADO OPERACIONAL</p>
+                        <p className="text-[11px] text-gray-500">Despesas manuais por competência; compras de estoque ficam no CMV.</p>
+                      </div>
+                      <span className={`font-black font-mono text-xl ${d.resultadoOperacional >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {fmt(d.resultadoOperacional)}
+                      </span>
+                    </div>
+                    {d.custo === 0 && d.receita > 0 && (
+                      <p className="py-2 text-xs text-yellow-400/80">CMV zerado: confira se os produtos vendidos possuem custo cadastrado.</p>
+                    )}
+                    {d.resultadoFinanceiro !== 0 && (
+                      <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
+                        <p className="text-sm text-gray-400">(+/−) Resultado financeiro</p>
+                        <span className={`font-mono ${d.resultadoFinanceiro >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(d.resultadoFinanceiro)}</span>
+                      </div>
+                    )}
+                    {d.impostosSobreLucro > 0 && (
+                      <div className="flex items-center justify-between py-2.5 border-b border-surface-600">
+                        <p className="text-sm text-gray-400">(−) IRPJ / CSLL</p>
+                        <span className="font-mono text-red-400">({fmt(d.impostosSobreLucro)})</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between py-3 bg-brand-500/8 px-3 -mx-1 rounded-xl mt-2">
+                      <p className="text-base font-black text-white">RESULTADO LÍQUIDO</p>
+                      <span className={`font-black font-mono text-xl ${d.resultadoLiquido >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmt(d.resultadoLiquido)}</span>
+                    </div>
+                    {d.lancamentosNaoClassificados > 0 && (
+                      <p className="text-xs text-amber-400 mt-2">Há {fmt(d.lancamentosNaoClassificados)} em lançamentos sem classificação contábil; eles não foram somados à DRE.</p>
                     )}
 
                     {/* Projeção */}
@@ -536,12 +585,7 @@ export default function FinanceiroPage() {
                         <span className="font-black font-mono text-brand-400 text-lg">{fmt(d.projecao.valorProjetado)}</span>
                       </div>
                     )}
-                  </>
-                ) : (
-                  <p className="py-3 text-xs text-yellow-400/80">
-                    Cadastre o preço de custo nos produtos para ver Lucro Bruto e CMV.
-                  </p>
-                )}
+                </>
               </div>
             </div>
           )}

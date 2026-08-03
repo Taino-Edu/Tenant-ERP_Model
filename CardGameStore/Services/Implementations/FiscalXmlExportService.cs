@@ -33,7 +33,7 @@ public class FiscalXmlExportService
             BrazilTime.DateToUtcStart(fim.Date.AddDays(1)));
     }
 
-    /// <summary>Gera um .zip em memória com os XMLs autorizados e cancelados emitidos no período [inicio, fimExclusivo).</summary>
+    /// <summary>Gera um .zip com saídas (NFC-e/eventos) e entradas (NF-e de fornecedores) do período.</summary>
     public async Task<byte[]> GerarZipAsync(DateTime inicio, DateTime fimExclusivo)
     {
         var notas = await _db.NotasFiscaisEmitidas
@@ -43,6 +43,12 @@ public class FiscalXmlExportService
                      && n.XmlAutorizado != null)
             .OrderBy(n => n.EmitidoEm)
             .ToListAsync();
+        var entradas = await _db.NotasDestinadas.AsNoTracking()
+            .Where(n => n.XmlProc != null &&
+                        (n.DataEmissao ?? n.CreatedAt) >= inicio &&
+                        (n.DataEmissao ?? n.CreatedAt) < fimExclusivo)
+            .OrderBy(n => n.DataEmissao ?? n.CreatedAt)
+            .ToListAsync();
 
         using var ms = new MemoryStream();
         using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
@@ -50,7 +56,7 @@ public class FiscalXmlExportService
             foreach (var nota in notas)
             {
                 var nomeBase = !string.IsNullOrWhiteSpace(nota.ChaveAcesso) ? nota.ChaveAcesso : nota.Id.ToString();
-                var fileName = $"{nomeBase}-{nota.Status}.xml";
+                var fileName = $"saidas/{nomeBase}-{nota.Status}.xml";
                 var entry    = zip.CreateEntry(fileName, CompressionLevel.Optimal);
 
                 await using (var entryStream = entry.Open())
@@ -59,11 +65,21 @@ public class FiscalXmlExportService
 
                 if (nota.Status == NotaFiscalStatus.Cancelada && !string.IsNullOrWhiteSpace(nota.XmlEventoCancelamento))
                 {
-                    var eventoEntry = zip.CreateEntry($"{nomeBase}-cancelamento-procEvento.xml", CompressionLevel.Optimal);
+                    var eventoEntry = zip.CreateEntry($"saidas/{nomeBase}-cancelamento-procEvento.xml", CompressionLevel.Optimal);
                     await using (var eventoStream = eventoEntry.Open())
                     await using (var eventoWriter = new StreamWriter(eventoStream))
                         await eventoWriter.WriteAsync(nota.XmlEventoCancelamento);
                 }
+            }
+
+            foreach (var entrada in entradas)
+            {
+                var entry = zip.CreateEntry(
+                    $"entradas/{entrada.ChaveAcesso}-entrada-{entrada.Status}.xml",
+                    CompressionLevel.Optimal);
+                await using var entryStream = entry.Open();
+                await using var writer = new StreamWriter(entryStream);
+                await writer.WriteAsync(entrada.XmlProc);
             }
         }
 

@@ -51,7 +51,7 @@ const INTEGRACAO_INFO: Record<string, {
     label: 'SEFAZ NF-e',
     icon:  '📋',
     desc:  'Consulta NF-e emitidas contra o CNPJ via SEFAZ DFe Distribuição. Requer certificado A1 (DFe.NET).',
-    fields: ['cnpj'],
+    fields: [],
   },
 }
 
@@ -124,7 +124,7 @@ export default function IntegracoesPage() {
       const payload: any = {}
       if (configModal.clientId)     payload.clientId     = configModal.clientId
       if (configModal.clientSecret) payload.clientSecret = configModal.clientSecret
-      if (configModal.cnpj)         payload.cnpj         = configModal.cnpj
+      if (configModal.source !== 'sefaz' && configModal.cnpj) payload.cnpj = configModal.cnpj
       if (configModal.pixKey)       payload.pixKey       = configModal.pixKey
       payload.isActive = true
 
@@ -213,7 +213,7 @@ export default function IntegracoesPage() {
           {integracoes.map(int => {
             const info = INTEGRACAO_INFO[int.source]
             if (!info) return null
-            const isReady = int.source === 'sefaz' ? sefazOk && !!int.cnpj : int.isConnected
+            const isReady = int.source === 'sefaz' ? sefazOk && int.isActive : int.isConnected
             return (
               <div key={int.source} className={clsx(
                 'card p-5 flex gap-4',
@@ -252,6 +252,11 @@ export default function IntegracoesPage() {
                       <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                       Requer certificado A1 e CNPJ/UF configurados em Admin → Fiscal.
                     </div>
+                  )}
+                  {int.source === 'sefaz' && sefazOk && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Usa automaticamente o CNPJ, a UF, o ambiente e o certificado configurados em Fiscal.
+                    </p>
                   )}
                   {int.source === 'sefaz' && sefazOk && !int.isActive && (
                     <div className="flex items-center gap-2 mt-2 text-amber-400 text-xs bg-amber-500/10 rounded-lg p-2">
@@ -349,6 +354,12 @@ export default function IntegracoesPage() {
             </div>
 
             <p className="text-sm text-gray-400">{cfgInfo.desc}</p>
+
+            {configModal.source === 'sefaz' && (
+              <div className="rounded-xl border border-brand-500/25 bg-brand-500/10 p-3 text-sm text-gray-300">
+                Nenhum dado precisa ser digitado novamente. Ao salvar, você apenas ativa a busca automática de NF-e usando a configuração de <strong className="text-white">Fiscal</strong>.
+              </div>
+            )}
 
             <div className="flex flex-col gap-3">
               {cfgInfo.fields.includes('cnpj') && (
@@ -448,7 +459,7 @@ export default function IntegracoesPage() {
                 className="flex-1 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 disabled:opacity-50
                            text-white text-sm font-bold transition-colors flex items-center justify-center gap-2">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Salvar
+                {configModal.source === 'sefaz' ? 'Ativar busca automática' : 'Salvar'}
               </button>
             </div>
         </Modal>

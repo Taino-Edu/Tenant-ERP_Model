@@ -102,7 +102,53 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
 
         var custo = custoComandas + custoAvulsa;
         var margem        = receita - custo;
-        var margemPercent = custo > 0 ? Math.Round(margem / custo * 100, 1) : 0;
+        // Margem bruta usa receita líquida como denominador. Dividir pelo custo
+        // mede markup, não margem — a UI antiga rotulava os dois como iguais.
+        var margemPercent = receita > 0 ? Math.Round(margem / receita * 100, 1) : 0;
+
+        IQueryable<ComandaItem> grossComandaQuery = _db.ComandaItems
+            .Where(i => i.Comanda!.ClosedAt >= ini && i.Comanda.ClosedAt < end &&
+                        i.Comanda.Status == ComandaStatus.Fechada);
+        if (hasPmFilter)
+            grossComandaQuery = grossComandaQuery.Where(i =>
+                i.Comanda!.PaymentMethod == filterPaymentMethod ||
+                i.Comanda.SecondPaymentMethod == filterPaymentMethod);
+        var receitaBrutaComandas = await grossComandaQuery
+            .SumAsync(i => (long)i.UnitPriceInCents * i.Quantity) / 100m;
+        var receitaBrutaAvulsa = avulsasList.SelectMany(v => v.Items)
+            .Sum(i => i.UnitPriceInReais * i.Quantity);
+        var receitaBruta = Math.Max(receita, receitaBrutaComandas + receitaBrutaAvulsa);
+        var deducoes = Math.Max(0, receitaBruta - receita);
+
+        // Classificação contábil explícita: compra de mercadoria e imobilizado não
+        // viram despesa operacional; extratos sem classificação também não são
+        // presumidos, evitando dupla contagem com contas já lançadas.
+        var dreTransactions = _db.ExternalTransactions.AsNoTracking()
+            .Where(t => t.Status != "cancelled" &&
+                        (t.DueDate ?? t.CreatedAt) >= ini && (t.DueDate ?? t.CreatedAt) < end);
+        var despesasPorCategoria = await dreTransactions
+            .Where(t => t.Type == "expense" && t.DreGroup == DreGroups.OperatingExpense)
+            .GroupBy(t => t.Category ?? "Sem categoria")
+            .Select(g => new DreCategoriaDto { Categoria = g.Key, Valor = g.Sum(t => t.Amount) })
+            .OrderByDescending(x => x.Valor)
+            .ToListAsync();
+        var despesasOperacionais = despesasPorCategoria.Sum(x => x.Valor);
+        var impostosSobreVendas = await dreTransactions
+            .Where(t => t.Type == "expense" && t.DreGroup == DreGroups.SalesTax)
+            .SumAsync(t => t.Amount);
+        var resultadoFinanceiro = await dreTransactions
+            .Where(t => t.DreGroup == DreGroups.Financial)
+            .SumAsync(t => t.Type == "income" ? t.Amount : -t.Amount);
+        var impostosSobreLucro = await dreTransactions
+            .Where(t => t.Type == "expense" && t.DreGroup == DreGroups.IncomeTax)
+            .SumAsync(t => t.Amount);
+        var naoClassificados = await dreTransactions
+            .Where(t => t.DreGroup == DreGroups.Unclassified)
+            .SumAsync(t => t.Amount);
+        var receitaLiquidaDre = receita - impostosSobreVendas;
+        var lucroBrutoDre = receitaLiquidaDre - custo;
+        var resultadoOperacional = lucroBrutoDre - despesasOperacionais;
+        var resultadoLiquido = resultadoOperacional + resultadoFinanceiro - impostosSobreLucro;
 
         // ── Crediários em aberto ──────────────────────────────────────────────
         // Mesmo motivo do Sum de receita acima: (long), não (decimal), pra somar em bigint.
@@ -324,12 +370,23 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
 
         return new FinanceiroDto
         {
+            ReceitaBruta               = Math.Round(receitaBruta, 2),
+            Deducoes                   = Math.Round(deducoes, 2),
             Receita                    = Math.Round(receita, 2),
+            ImpostosSobreVendas        = Math.Round(impostosSobreVendas, 2),
+            ReceitaLiquidaDre          = Math.Round(receitaLiquidaDre, 2),
             ReceitaComandas            = Math.Round(receitaComandas, 2),
             ReceitaAvulsa              = Math.Round(receitaAvulsa, 2),
             Custo                      = Math.Round(custo, 2),
             Margem                     = Math.Round(margem, 2),
             MargemPercent              = margemPercent,
+            DespesasOperacionais       = Math.Round(despesasOperacionais, 2),
+            ResultadoOperacional       = Math.Round(resultadoOperacional, 2),
+            ResultadoFinanceiro        = Math.Round(resultadoFinanceiro, 2),
+            ImpostosSobreLucro          = Math.Round(impostosSobreLucro, 2),
+            ResultadoLiquido           = Math.Round(resultadoLiquido, 2),
+            LancamentosNaoClassificados = Math.Round(naoClassificados, 2),
+            DespesasPorCategoria       = despesasPorCategoria,
             Crediarios                 = Math.Round(crediarios, 2),
             RecebidoCrediario          = Math.Round(recebidoCrediario, 2),
             DiaDia                     = diaDia,

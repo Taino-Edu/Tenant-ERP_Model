@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260803151801_AddNfeReceivingAndStockLedger")]
+    partial class AddNfeReceivingAndStockLedger
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -648,12 +651,6 @@ namespace CardGameStore.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("description");
-
-                    b.Property<string>("DreGroup")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("dre_group");
 
                     b.Property<DateTime?>("DueDate")
                         .HasColumnType("timestamp with time zone")
@@ -2718,6 +2715,10 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<bool>("IsPlatformPrimaryOwner")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_platform_primary_owner");
+
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_login_at");
@@ -2743,6 +2744,15 @@ namespace CardGameStore.Data.Migrations
                     b.Property<Guid?>("PerfilId")
                         .HasColumnType("uuid")
                         .HasColumnName("perfil_id");
+
+                    b.Property<string>("PlatformAccessProfile")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("platform_access_profile");
+
+                    b.Property<string>("PlatformPermissionsJson")
+                        .HasColumnType("text")
+                        .HasColumnName("platform_permissions_json");
 
                     b.Property<int>("PointsBalance")
                         .HasColumnType("integer")
@@ -2774,6 +2784,10 @@ namespace CardGameStore.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("role");
+
+                    b.Property<int>("SessionVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("session_version");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
