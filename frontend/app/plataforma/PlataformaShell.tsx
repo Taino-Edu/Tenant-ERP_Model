@@ -2,20 +2,21 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { isPlatformOwner, clearAuth } from '@/lib/auth'
+import { isPlatformOwner, clearAuth, hasPlatformPermission } from '@/lib/auth'
 import { Toaster } from 'react-hot-toast'
-import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet } from 'lucide-react'
+import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet, Users } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
 
 const NAV_ITEMS = [
-  { href: '/plataforma',            label: 'Visão Geral', icon: LayoutDashboard },
-  { href: '/plataforma/tenants',    label: 'Tenants',      icon: Building2 },
-  { href: '/plataforma/financeiro', label: 'Financeiro',   icon: Wallet },
-  { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus },
-  { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search },
-  { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy },
-  { href: '/plataforma/logs',       label: 'Logs',         icon: History },
+  { href: '/plataforma',            label: 'Visão Geral', icon: LayoutDashboard, permission: 'platform.dashboard' },
+  { href: '/plataforma/tenants',    label: 'Tenants',      icon: Building2, permission: 'platform.tenants.read' },
+  { href: '/plataforma/financeiro', label: 'Financeiro',   icon: Wallet, permission: 'platform.finance.read' },
+  { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus, permission: 'platform.leads' },
+  { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search, permission: 'platform.leads' },
+  { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy, permission: 'platform.support' },
+  { href: '/plataforma/logs',       label: 'Logs',         icon: History, permission: 'platform.logs' },
+  { href: '/plataforma/equipe',     label: 'Equipe',       icon: Users, permission: 'platform.team' },
 ]
 
 export default function PlataformaShell({ children }: { children: React.ReactNode }) {
@@ -62,7 +63,7 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
           </div>
         </div>
         <nav className="max-w-7xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {NAV_ITEMS.filter(item => hasPlatformPermission(item.permission)).map(({ href, label, icon: Icon }) => {
             const active = href === '/plataforma' ? pathname === href : pathname.startsWith(href)
             return (
               <Link

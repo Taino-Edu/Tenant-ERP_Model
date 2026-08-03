@@ -15,6 +15,7 @@ using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
+using CardGameStore.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -80,6 +81,7 @@ public class PlatformController : ControllerBase
     /// <summary>Lista todos os tenants cadastrados na plataforma, mais recente primeiro.
     /// Somente o dono da plataforma.</summary>
     [HttpGet("tenants")]
+    [RequirePlatformPermission(PlatformPermission.TenantsRead)]
     public async Task<IActionResult> ListTenants()
     {
         var tenants = await _catalog.Tenants
@@ -93,6 +95,7 @@ public class PlatformController : ControllerBase
     /// migrations e cria o admin inicial. Somente o dono da plataforma.</summary>
     /// <param name="request">Slug da loja e credenciais do admin inicial.</param>
     [HttpPost("tenants")]
+    [RequirePlatformPermission(PlatformPermission.TenantsManage)]
     public async Task<IActionResult> CreateTenant([FromBody] CreateTenantRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -120,6 +123,7 @@ public class PlatformController : ControllerBase
     /// <param name="id">Id do tenant.</param>
     /// <param name="request">Novo status ("Active" ou "Suspended").</param>
     [HttpPatch("tenants/{id:guid}/status")]
+    [RequirePlatformPermission(PlatformPermission.TenantsManage)]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] UpdateTenantStatusRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -141,6 +145,7 @@ public class PlatformController : ControllerBase
     /// <param name="id">Id do tenant.</param>
     /// <param name="request">Nome do plano, status de pagamento e lista de módulos habilitados.</param>
     [HttpPatch("tenants/{id:guid}/billing")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
     public async Task<IActionResult> UpdateBilling(Guid id, [FromBody] UpdateTenantBillingRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -177,6 +182,7 @@ public class PlatformController : ControllerBase
     /// a qualquer momento, inclusive antes de uma exclusão.</summary>
     /// <param name="id">Id do tenant.</param>
     [HttpGet("tenants/{id:guid}/backup")]
+    [RequirePlatformPermission(PlatformPermission.TenantsManage)]
     public async Task<IActionResult> DownloadTenantBackup(Guid id)
     {
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
@@ -238,6 +244,7 @@ public class PlatformController : ControllerBase
     /// <param name="id">Id do tenant.</param>
     /// <param name="request">Slug do tenant, pra confirmar a exclusão.</param>
     [HttpDelete("tenants/{id:guid}")]
+    [RequirePlatformPermission(PlatformPermission.TenantsDelete)]
     public async Task<IActionResult> DeleteTenant(Guid id, [FromBody] DeleteTenantRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -285,6 +292,7 @@ public class PlatformController : ControllerBase
     /// <param name="id">Id do tenant.</param>
     /// <param name="request">Domínio a cadastrar, ou null/vazio pra remover.</param>
     [HttpPatch("tenants/{id:guid}/domain")]
+    [RequirePlatformPermission(PlatformPermission.TenantsManage)]
     public async Task<IActionResult> UpdateCustomDomain(Guid id, [FromBody] UpdateTenantDomainRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -335,6 +343,7 @@ public class PlatformController : ControllerBase
     // (último login + última venda) — não é telemetria de verdade (não existe
     // nada disso hoje), só reaproveita dado que já é gravado em cada venda/login.
     [HttpGet("overview")]
+    [RequirePlatformPermission(PlatformPermission.Dashboard)]
     public async Task<IActionResult> GetOverview()
     {
         var tenants = await _catalog.Tenants.ToListAsync();
@@ -411,6 +420,7 @@ public class PlatformController : ControllerBase
     /// de um tenant. Nunca inclui hash de senha nem tokens.</summary>
     /// <param name="id">Id do tenant.</param>
     [HttpGet("tenants/{id:guid}/staff")]
+    [RequirePlatformPermission(PlatformPermission.TenantsRead)]
     public async Task<IActionResult> GetTenantStaff(Guid id)
     {
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
@@ -451,6 +461,7 @@ public class PlatformController : ControllerBase
     /// <param name="userId">Id do funcionário/admin dentro do schema do tenant.</param>
     /// <param name="request">Nova senha.</param>
     [HttpPost("tenants/{id:guid}/staff/{userId:guid}/reset-password")]
+    [RequirePlatformPermission(PlatformPermission.TenantsManage)]
     [ProducesResponseType(204)]
     [ProducesResponseType(400)]
     [ProducesResponseType(404)]
@@ -512,6 +523,7 @@ public class PlatformController : ControllerBase
     /// <param name="page">Número da página (base 1, padrão 1).</param>
     /// <param name="pageSize">Registros por página (padrão 50, máximo 200).</param>
     [HttpGet("tenants/{id:guid}/customers")]
+    [RequirePlatformPermission(PlatformPermission.TenantsRead)]
     public async Task<IActionResult> GetTenantCustomers(Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         page     = Math.Max(1, page);
@@ -570,6 +582,7 @@ public class PlatformController : ControllerBase
     /// <param name="entityType">Filtro por tipo de entidade (ex: "User").</param>
     /// <param name="action">Filtro por ação (ex: "Create", "Update", "Delete").</param>
     [HttpGet("tenants/{id:guid}/audit-logs")]
+    [RequirePlatformPermission(PlatformPermission.Logs)]
     public async Task<IActionResult> GetTenantAuditLogs(
         Guid id,
         [FromQuery] int page = 1,
@@ -640,6 +653,7 @@ public class PlatformController : ControllerBase
     /// <param name="de">Início do período (padrão: 7 dias atrás).</param>
     /// <param name="ate">Fim do período (padrão: agora).</param>
     [HttpGet("tenants/{id:guid}/usage")]
+    [RequirePlatformPermission(PlatformPermission.TenantsRead)]
     public async Task<IActionResult> GetTenantUsage(Guid id, [FromQuery] DateTime? de = null, [FromQuery] DateTime? ate = null)
     {
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
@@ -692,6 +706,7 @@ public class PlatformController : ControllerBase
     /// Custo aceitável no volume atual de tenants — se crescer muito isso vira
     /// um job agregador, não uma query on-demand.</summary>
     [HttpGet("audit-logs")]
+    [RequirePlatformPermission(PlatformPermission.Logs)]
     public async Task<IActionResult> GetAggregatedAuditLogs()
     {
         var tenants = await _catalog.Tenants.Where(t => t.Status == TenantStatus.Active).ToListAsync();
@@ -750,6 +765,7 @@ public class PlatformController : ControllerBase
     // pra onde o ticket é trocado por uma sessão de verdade. Não é o token em si:
     // o token só nasce como cookie já no domínio certo da loja, no redeem.
     [HttpPost("tenants/{id:guid}/impersonate")]
+    [RequirePlatformPermission(PlatformPermission.Impersonate)]
     public async Task<IActionResult> Impersonate(Guid id)
     {
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
@@ -816,6 +832,7 @@ public class PlatformController : ControllerBase
     /// Somente o dono da plataforma.</summary>
     /// <param name="status">Filtro opcional por status ("Novo", "Contatado", "Convertido", "Perdido").</param>
     [HttpGet("leads")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> ListLeads([FromQuery] string? status = null)
     {
         var query = _catalog.Leads.AsQueryable();
@@ -835,6 +852,7 @@ public class PlatformController : ControllerBase
     /// pelo dono da plataforma (ver ProspectingController.Search) — distinto do
     /// POST /api/leads público (form da landing), que não tem PlaceId/score/etc.</summary>
     [HttpPost("leads/prospeccao")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> CreateProspectLead([FromBody] CreateProspectLeadRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -876,6 +894,7 @@ public class PlatformController : ControllerBase
     /// <param name="id">Id do lead.</param>
     /// <param name="request">Novo status, anotações e (opcional) id do tenant gerado.</param>
     [HttpPatch("leads/{id:guid}")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> UpdateLead(Guid id, [FromBody] UpdateLeadRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -934,6 +953,7 @@ public class PlatformController : ControllerBase
     /// <param name="status">Filtro opcional por status.</param>
     /// <param name="tenantId">Filtro opcional por tenant.</param>
     [HttpGet("support-tickets")]
+    [RequirePlatformPermission(PlatformPermission.Support)]
     public async Task<IActionResult> ListSupportTickets([FromQuery] string? status = null, [FromQuery] Guid? tenantId = null)
     {
         var query = _catalog.SupportTickets.Include(t => t.Messages).AsQueryable();
@@ -957,6 +977,7 @@ public class PlatformController : ControllerBase
     /// <summary>Detalha um chamado de qualquer loja, com todas as mensagens.</summary>
     /// <param name="id">Id do chamado.</param>
     [HttpGet("support-tickets/{id:guid}")]
+    [RequirePlatformPermission(PlatformPermission.Support)]
     public async Task<IActionResult> GetSupportTicket(Guid id)
     {
         var ticket = await _catalog.SupportTickets.Include(t => t.Messages).FirstOrDefaultAsync(t => t.Id == id);
@@ -981,6 +1002,7 @@ public class PlatformController : ControllerBase
     /// <param name="id">Id do chamado.</param>
     /// <param name="request">Texto da mensagem.</param>
     [HttpPost("support-tickets/{id:guid}/messages")]
+    [RequirePlatformPermission(PlatformPermission.Support)]
     public async Task<IActionResult> ReplySupportTicket(Guid id, [FromBody] CreateSupportMessageRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -1017,6 +1039,7 @@ public class PlatformController : ControllerBase
     /// <param name="id">Id do chamado.</param>
     /// <param name="request">Novo status.</param>
     [HttpPatch("support-tickets/{id:guid}/status")]
+    [RequirePlatformPermission(PlatformPermission.Support)]
     public async Task<IActionResult> UpdateSupportTicketStatus(Guid id, [FromBody] UpdateSupportTicketStatusRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);

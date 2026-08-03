@@ -6,6 +6,7 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
+using CardGameStore.Security;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -248,6 +249,12 @@ public class AuthService : IAuthService
                 catch { permissions = []; }
             }
         }
+        else if (user.Role == UserRole.PlatformOwner)
+        {
+            permissions = user.IsPlatformPrimaryOwner
+                ? [PlatformPermission.All]
+                : PlatformAccessProfiles.Deserialize(user.PlatformPermissionsJson);
+        }
 
         var accessToken  = GenerateJwt(user, permissions);
         var refreshToken = GenerateRefreshToken();
@@ -284,7 +291,7 @@ public class AuthService : IAuthService
     }
 
     private string GenerateJwt(User user, string[]? permissions = null) =>
-        GenerateJwt(user.Id, user.Name, user.Email, user.Role, permissions);
+        GenerateJwt(user.Id, user.Name, user.Email, user.Role, permissions, sessionVersion: user.SessionVersion);
 
     /// <summary>
     /// Sessão de impersonação pro dono da plataforma acessar o admin de um tenant
@@ -342,7 +349,7 @@ public class AuthService : IAuthService
 
     private string GenerateJwt(
         Guid id, string name, string? email, string role, string[]? permissions = null,
-        IEnumerable<Claim>? extraClaims = null, TimeSpan? expiresIn = null)
+        IEnumerable<Claim>? extraClaims = null, TimeSpan? expiresIn = null, int sessionVersion = 0)
     {
         var key     = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwt.SecretKey));
         var creds   = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -362,6 +369,9 @@ public class AuthService : IAuthService
 
         if (!string.IsNullOrEmpty(email))
             claims.Add(new(JwtRegisteredClaimNames.Email, email));
+
+        if (role == UserRole.PlatformOwner)
+            claims.Add(new("session_version", sessionVersion.ToString()));
 
         if (permissions != null && permissions.Length > 0)
             claims.Add(new("permissions", System.Text.Json.JsonSerializer.Serialize(permissions)));
@@ -394,6 +404,9 @@ public class AuthService : IAuthService
     /// O token bruto trafega apenas no cookie HttpOnly.
     /// </summary>
     private static string HashRefreshToken(string token) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    internal static string HashOpaqueToken(string token) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
     // =========================================================================
@@ -493,7 +506,7 @@ public class AuthService : IAuthService
         if (user != null)
         {
             var token = NovoToken();
-            user.PasswordResetToken       = token;
+            user.PasswordResetToken       = HashOpaqueToken(token);
             user.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(2);
             user.UpdatedAt                = DateTime.UtcNow;
             await _db.SaveChangesAsync();
@@ -507,7 +520,7 @@ public class AuthService : IAuthService
         if (conta != null)
         {
             var token = NovoToken();
-            conta.PasswordResetToken       = token;
+            conta.PasswordResetToken       = HashOpaqueToken(token);
             conta.PasswordResetTokenExpiry = DateTime.UtcNow.AddHours(2);
             conta.UpdatedAt                = DateTime.UtcNow;
             await _catalog.SaveChangesAsync();
@@ -522,8 +535,9 @@ public class AuthService : IAuthService
 
     public async Task ResetPasswordAsync(ResetPasswordRequest request)
     {
+        var hashedToken = HashOpaqueToken(request.Token);
         var user = await _db.Users.FirstOrDefaultAsync(u =>
-            u.PasswordResetToken == request.Token &&
+            (u.PasswordResetToken == hashedToken || u.PasswordResetToken == request.Token) &&
             u.PasswordResetTokenExpiry > DateTime.UtcNow &&
             u.IsActive);
 
@@ -534,6 +548,7 @@ public class AuthService : IAuthService
             user.PasswordResetTokenExpiry = null;
             user.RefreshToken             = null; // invalida sessões ativas
             user.RefreshTokenExpiry       = null;
+            user.SessionVersion++;
             user.UpdatedAt                = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
@@ -542,7 +557,7 @@ public class AuthService : IAuthService
         }
 
         var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c =>
-            c.PasswordResetToken == request.Token &&
+            (c.PasswordResetToken == hashedToken || c.PasswordResetToken == request.Token) &&
             c.PasswordResetTokenExpiry > DateTime.UtcNow);
 
         if (conta == null)
