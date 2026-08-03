@@ -60,3 +60,9 @@ export function hasPermission(perm: string): boolean {
   if (isAdmin()) return true
   return getPermissions().includes(perm)
 }
+
+export function hasPlatformPermission(perm: string): boolean {
+  if (!isPlatformOwner()) return false
+  const permissions = getPermissions()
+  return permissions.includes('platform.*') || permissions.includes(perm)
+}
