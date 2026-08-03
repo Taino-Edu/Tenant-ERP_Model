@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
@@ -16,6 +16,15 @@ export default function ContadorCadastroPage() {
   const [confirm, setConfirm]   = useState('')
   const [tenantSlug, setTenantSlug] = useState('')
   const [loading, setLoading]   = useState(false)
+
+  useEffect(() => {
+    const invitedTenantSlug = new URLSearchParams(window.location.search)
+      .get('tenantSlug')
+      ?.trim()
+      .toLowerCase()
+
+    if (invitedTenantSlug) setTenantSlug(invitedTenantSlug)
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -70,7 +79,9 @@ export default function ContadorCadastroPage() {
             <input id="contador-slug" type="text" required value={tenantSlug} onChange={e => setTenantSlug(e.target.value)}
                    className="input pl-9" placeholder="slug-da-loja" />
           </div>
-          <p className="text-xs text-gray-500 mt-1">Peça este código ao lojista.</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {tenantSlug ? 'Loja preenchida pelo link do convite.' : 'Peça este código ao lojista.'}
+          </p>
         </div>
         <div>
           <label htmlFor="contador-senha" className="label">Senha</label>

@@ -10,7 +10,7 @@ import Modal from '@/components/admin/ui/Modal'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
   Plus, Trash2, Download, ShieldCheck, Star, RefreshCw, Ban, ScrollText, Printer,
-  Calculator, UserPlus, Check, Clock, CalendarClock, Send, MessageSquare, X,
+  Calculator, UserPlus, Check, Clock, CalendarClock, Send, MessageSquare, X, Copy,
 } from 'lucide-react'
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
@@ -186,6 +186,8 @@ export default function FiscalPage() {
   // Contador — convite e aprovação de solicitações de acesso
   const [convidarEmail, setConvidarEmail] = useState('')
   const [convidando, setConvidando] = useState(false)
+  const [conviteLink, setConviteLink] = useState('')
+  const [conviteLinkCopiado, setConviteLinkCopiado] = useState(false)
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoContadorDto[]>([])
   const [loadingSolicitacoes, setLoadingSolicitacoes] = useState(true)
   const [aprovandoId, setAprovandoId] = useState<string | null>(null)
@@ -243,12 +245,28 @@ export default function FiscalPage() {
     try {
       const { data } = await fiscalApi.convidarContador(convidarEmail.trim())
       toast.success(data.message)
+      setConviteLink(data.invitationPath
+        ? new URL(data.invitationPath, window.location.origin).toString()
+        : '')
+      setConviteLinkCopiado(false)
       setConvidarEmail('')
       loadSolicitacoes()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao convidar contador'))
     } finally {
       setConvidando(false)
+    }
+  }
+
+  async function copiarConviteContador() {
+    if (!conviteLink) return
+
+    try {
+      await navigator.clipboard.writeText(conviteLink)
+      setConviteLinkCopiado(true)
+      toast.success('Link do convite copiado!')
+    } catch {
+      toast.error('Não consegui copiar automaticamente. Selecione o link e copie manualmente.')
     }
   }
 
@@ -1151,6 +1169,25 @@ export default function FiscalPage() {
             Convidar
           </button>
         </form>
+
+        {conviteLink && (
+          <div className="mb-4 rounded-xl border border-brand-500/25 bg-brand-500/5 p-3">
+            <p className="mb-2 text-xs font-semibold text-brand-300">Link pronto para enviar ao contador</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                readOnly
+                value={conviteLink}
+                aria-label="Link de cadastro do contador"
+                className="input flex-1 text-xs"
+                onFocus={event => event.currentTarget.select()}
+              />
+              <button type="button" onClick={copiarConviteContador} className="btn-secondary justify-center">
+                {conviteLinkCopiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {conviteLinkCopiado ? 'Copiado' : 'Copiar link'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {loadingSolicitacoes ? (
           <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>

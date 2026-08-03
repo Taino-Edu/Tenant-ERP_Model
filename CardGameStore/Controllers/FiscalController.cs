@@ -843,6 +843,16 @@ public class FiscalController : ControllerBase
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var email = request.Email.Trim().ToLowerInvariant();
+        var tenantSlug = await _catalog.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == _tenant.TenantId)
+            .Select(t => t.Slug)
+            .SingleOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(tenantSlug))
+            return Problem("Não foi possível identificar o link público desta loja.");
+
+        var invitationPath = $"/contador/cadastro?tenantSlug={Uri.EscapeDataString(tenantSlug)}";
         var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c => c.Email == email);
 
         // Convite cego: contador ainda não tem conta. Guarda o convite — quando
@@ -862,7 +872,9 @@ public class FiscalController : ControllerBase
             });
             await _catalog.SaveChangesAsync();
 
-            return Ok(new { Message = "Convite registrado — quando esse e-mail se cadastrar no portal do contador (/contador/cadastro), o acesso a esta loja é liberado automaticamente." });
+            return Ok(new ConvidarContadorResponse(
+                "Convite registrado — envie o link de cadastro ao contador. Quando ele usar o e-mail convidado, o acesso a esta loja será liberado automaticamente.",
+                invitationPath));
         }
 
         var jaVinculado = await _catalog.ContadorTenantLinks
@@ -878,7 +890,9 @@ public class FiscalController : ControllerBase
         });
         await _catalog.SaveChangesAsync();
 
-        return Ok(new { Message = $"Contador {conta.Name} vinculado com sucesso." });
+        return Ok(new ConvidarContadorResponse(
+            $"Contador {conta.Name} vinculado com sucesso.",
+            null));
     }
 
     /// <summary>Lista os vínculos de contador desta loja (aprovados e pendentes de

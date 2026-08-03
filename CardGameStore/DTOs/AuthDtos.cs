@@ -123,6 +123,13 @@ public record ConvidarContadorRequest(
     [Required, EmailAddress] string Email
 );
 
+/// <summary>Confirma o convite e, quando o contador ainda não tem conta, devolve
+/// o caminho de cadastro já associado à loja. O link não carrega e-mail nem segredo.</summary>
+public record ConvidarContadorResponse(
+    string Message,
+    string? InvitationPath
+);
+
 /// <summary>Aviso trocado entre contador e lojista, preso a um ContadorTenantLink.</summary>
 public record AvisoContadorRequest(
     [Required, MaxLength(2000)] string Mensagem,

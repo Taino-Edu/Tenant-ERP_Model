@@ -1540,7 +1540,7 @@ export const fiscalApi = {
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/venda-avulsa/${vendaId}`),
 
   convidarContador: (email: string) =>
-    api.post<{ message: string }>('/api/fiscal/contador/convidar', { email }),
+    api.post<{ message: string; invitationPath: string | null }>('/api/fiscal/contador/convidar', { email }),
   listSolicitacoesContador: () =>
     api.get<SolicitacaoContadorDto[]>('/api/fiscal/contador/solicitacoes'),
   aprovarSolicitacaoContador: (linkId: string) =>
