@@ -53,6 +53,14 @@ const FAQS = [
 
 type ChatMessage = { role: 'assistant' | 'user'; text: string }
 
+const CHAT_FALLBACK_MESSAGE = 'Não consegui responder agora. Nosso Marketing pode te ajudar pelo WhatsApp.'
+
+function normalizeAssistantReply(reply: unknown): string {
+  return typeof reply === 'string' && reply.trim().length > 0
+    ? reply.trim()
+    : CHAT_FALLBACK_MESSAGE
+}
+
 export default function InstitucionalPage() {
   const [isDark, setIsDark] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -79,7 +87,11 @@ export default function InstitucionalPage() {
     return () => document.body.classList.remove('institucional-page')
   }, [])
 
-  useEffect(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages, chatLoading])
+  useEffect(() => {
+    // Não devolver o resultado de scrollIntoView: o React trata qualquer retorno
+    // não vazio de um efeito como função de limpeza na próxima renderização.
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length, chatLoading])
 
   const toggleTheme = () => {
     const next = !isDark
@@ -113,11 +125,14 @@ export default function InstitucionalPage() {
     setChatLoading(true)
     try {
       const response = await publicAssistantApi.ask(message)
-      setMessages(current => [...current, { role: 'assistant', text: response.data.reply }])
+      setMessages(current => [...current, {
+        role: 'assistant',
+        text: normalizeAssistantReply(response.data?.reply),
+      }])
     } catch {
       setMessages(current => [...current, {
         role: 'assistant',
-        text: 'Não consegui responder agora. Nosso Marketing pode te ajudar pelo WhatsApp.',
+        text: CHAT_FALLBACK_MESSAGE,
       }])
     } finally {
       setChatLoading(false)
