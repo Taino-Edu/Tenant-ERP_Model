@@ -43,6 +43,9 @@ public class SiteConfigController : ControllerBase
     public async Task<IActionResult> Get()
     {
         var cfg = await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
+        // Converte somente o placeholder histórico. Qualquer nome escolhido pelo
+        // tenant continua tendo prioridade absoluta sobre a marca padrão Octus.
+        cfg.SiteName = SiteConfig.ResolveSiteName(cfg.SiteName);
         // Inofensivo expor via endpoint público: só diz quais módulos pagos a loja
         // habilitou, não vaza dado sensível nenhum (mesmo espírito de expor a cor/nome
         // da loja aqui, que já é público).

@@ -51,8 +51,8 @@ public class PlatformBillingService : IPlatformBillingService
 
         // Elegíveis: loja ativa, com mensalidade definida, e que já entrou em
         // cobrança dentro (ou antes) desta competência. BillingStartsOn é o que
-        // implementa o "primeiro mês de acesso grátis" — quem assinou neste mês
-        // tem BillingStartsOn no mês que vem e simplesmente não aparece aqui.
+        // implementa os 15 dias grátis. Dependendo do dia da assinatura, a
+        // primeira cobrança pode cair ainda nesta competência ou na seguinte.
         var elegiveis = await _catalog.Tenants
             .AsNoTracking()
             .Where(t => t.Status == TenantStatus.Active

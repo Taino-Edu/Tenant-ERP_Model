@@ -119,7 +119,7 @@ function drawKpis(doc: any, y: number, kpis: { label: string; value: string; col
 export async function gerarRelatorioOperacional(
   products: Product[],
   _categories: ProductCategory[],
-  siteName = 'Minha Loja',
+  siteName = 'Octus',
 ) {
   const JsPDF = await getJsPDF()
   const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any
@@ -222,7 +222,7 @@ export async function gerarRelatorioOperacional(
 export async function gerarRelatorioGerencial(
   products: Product[],
   _categories: ProductCategory[],
-  siteName = 'Minha Loja',
+  siteName = 'Octus',
 ) {
   const JsPDF = await getJsPDF()
   const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any

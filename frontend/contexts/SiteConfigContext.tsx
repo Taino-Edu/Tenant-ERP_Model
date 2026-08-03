@@ -6,7 +6,7 @@ import { siteConfigApi, SiteConfigDto } from '@/lib/api'
 // Espelha os defaults do backend (SiteConfig.cs) — usado até a config real
 // carregar, e como base pra qualquer tenant que não tenha personalizado nada.
 export const DEFAULT_SITE_CONFIG: SiteConfigDto = {
-  siteName: 'Minha Loja',
+  siteName: 'Octus',
   heroSubtitle: 'Produtos e a melhor experiência de atendimento da região. Acumule pontos e compre direto na mesa.',
   addressLine: 'Sua Cidade — UF',
   contactPersonName: 'Atendimento',
@@ -58,7 +58,7 @@ export function SiteConfigProvider({ children }: { children: ReactNode }) {
       .catch((err: unknown) => {
         // TenantResolutionMiddleware já bloqueia TODA chamada de API com 403
         // pra tenant suspenso e com 404 pra subdomínio inexistente — em vez de
-        // deixar a página carregar com o DEFAULT_SITE_CONFIG (uma "Minha Loja"
+        // deixar a página carregar com o DEFAULT_SITE_CONFIG (a marca Octus
         // genérica e vazia, que confunde o visitante), redireciona pra uma tela
         // clara. Não mexe no painel /admin (o lojista já sabe do status por
         // /plataforma, e mandar ele pra uma tela de cliente seria confuso).

@@ -50,7 +50,9 @@ public class PublicDirectoryController : ControllerBase
             .Select(t => new PublicTenantDto
             {
                 Slug        = t.Slug,
-                DisplayName = t.DisplayName ?? t.Slug,
+                DisplayName = t.DisplayName == SiteConfig.LegacyDefaultSiteName
+                    ? SiteConfig.DefaultSiteName
+                    : t.DisplayName ?? t.Slug,
                 LogoUrl     = t.LogoUrl,
             })
             .ToListAsync();
@@ -98,7 +100,7 @@ public class PublicDirectoryController : ControllerBase
         {
             FaviconUrl   = cfg?.FaviconUrl,
             PwaIconUrl   = cfg?.PwaIconUrl,
-            SiteName     = cfg?.SiteName,
+            SiteName     = SiteConfig.ResolveSiteName(cfg?.SiteName),
             HeroSubtitle = cfg?.HeroSubtitle,
             AddressLine  = cfg?.AddressLine,
             UpdatedAt    = cfg?.UpdatedAt,

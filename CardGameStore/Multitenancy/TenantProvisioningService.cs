@@ -34,17 +34,26 @@ public class TenantProvisioningService : ITenantProvisioningService
     /// anotado no BACKLOG.</summary>
     private static readonly Dictionary<string, decimal> TabelaPrecos = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Essencial"] = 120m,
-        ["Completo"]  = 269m,
-        ["Avançado"]  = 487m,
+        ["Lagoa"] = 129m,
+        ["Rio"]   = 269m,
+        ["Mar"]   = 487m,
     };
 
     /// <summary>Preço de tabela do plano, ou 0 se o nome não está na tabela
     /// (PlanName é texto livre: cortesia, piloto, plano legado ou typo). Zero é
     /// deliberado — chutar um valor infla o MRR com número que parece certo e que
     /// ninguém vai conferir depois.</summary>
-    private static decimal PrecoMensalDoPlano(string planName) =>
+    internal static decimal PrecoMensalDoPlano(string planName) =>
         TabelaPrecos.TryGetValue(planName.Trim(), out var preco) ? preco : 0m;
+
+    internal static void ApplyCommercialTerms(Tenant tenant)
+    {
+        tenant.MonthlyPrice = PrecoMensalDoPlano(tenant.PlanName);
+        tenant.SetupFee = tenant.PlanName.Equals("Mar", StringComparison.OrdinalIgnoreCase)
+            ? 0m
+            : tenant.MonthlyPrice * 2;
+        tenant.BillingStartsOn = tenant.CreatedAt.AddDays(15);
+    }
 
     // Provisionamento (criar schema + rodar migrations + admin inicial) não
     // tinha nenhuma trava de concorrência: dois cadastros de tenant no mesmo
@@ -138,16 +147,14 @@ public class TenantProvisioningService : ITenantProvisioningService
             tenant.MaxUsers = maxUsers.Value;
 
         // Billing: preenche a partir da tabela vigente e das regras comerciais
-        // (implantação = 2 mensalidades, primeiro mês de acesso sem mensalidade).
+        // (Lagoa/Rio: implantação = 2 mensalidades; Mar: gratuita; 15 dias grátis).
         // Fica editável depois no painel — a tabela é o ponto de partida, não uma
         // amarra: cliente que fechar por valor negociado tem o campo ajustado.
         //
         // Plano fora da tabela (nome livre, cortesia, piloto) entra com preço 0 em
         // vez de chutar um valor: MRR errado pra cima é pior que MRR incompleto,
         // porque parece certo e ninguém vai conferir.
-        tenant.MonthlyPrice     = PrecoMensalDoPlano(tenant.PlanName);
-        tenant.SetupFee         = tenant.MonthlyPrice * 2;
-        tenant.BillingStartsOn  = tenant.CreatedAt.AddMonths(1);
+        ApplyCommercialTerms(tenant);
 
         _catalog.Tenants.Add(tenant);
         await _catalog.SaveChangesAsync();

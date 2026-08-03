@@ -1,6 +1,6 @@
 {
-  "name": "Minha Loja",
-  "short_name": "Minha Loja",
+  "name": "Octus",
+  "short_name": "Octus",
   "description": "Sistema de gestão para lojas e varejo",
   "start_url": "/",
   "display": "standalone",
