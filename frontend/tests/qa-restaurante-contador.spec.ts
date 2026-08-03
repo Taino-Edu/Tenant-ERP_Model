@@ -4,6 +4,7 @@ const tenantBase = process.env.QA_TENANT_URL
 const tenantSlug = process.env.QA_TENANT_SLUG
 const adminEmail = process.env.QA_ADMIN_EMAIL
 const adminPassword = process.env.QA_ADMIN_PASSWORD
+const platformBase = process.env.QA_ROOT_URL ?? 'http://localhost:3000'
 
 test.describe('QA funcional — restaurante, comanda e contador', () => {
   test.skip(!tenantBase || !tenantSlug || !adminEmail || !adminPassword,
@@ -79,7 +80,7 @@ test.describe('QA funcional — restaurante, comanda e contador', () => {
     const contador = await contadorContext.newPage()
     watch(contador)
     const contadorEmail = `contador.qa.${suffix}@example.test`
-    await contador.goto('http://localhost:3000/contador/cadastro')
+    await contador.goto(`${platformBase}/contador/cadastro`)
     await contador.getByLabel('Nome completo').fill(`Contador QA ${suffix}`)
     await contador.getByLabel('E-mail').fill(contadorEmail)
     await contador.getByLabel('Slug da loja').fill(tenantSlug!)
@@ -114,13 +115,13 @@ test.describe('QA funcional — restaurante, comanda e contador', () => {
     await expect(contador.getByText(/Classificação fiscal.*atualizada/)).toBeVisible()
 
     // O ID do tenant não vem no cadastro do produto; usa a lista autorizada do portal.
-    const clientesResponse = await contadorContext.request.get('http://localhost:3000/api/contador-portal/clientes')
+    const clientesResponse = await contadorContext.request.get(`${platformBase}/api/contador-portal/clientes`)
     expect(clientesResponse.ok()).toBeTruthy()
     const clientes = await clientesResponse.json()
     const tenantId = clientes.find((c: { slug: string }) => c.slug === tenantSlug)?.tenantId
     expect(tenantId).toBeTruthy()
     const fiscalResponse = await contadorContext.request.get(
-      `http://localhost:3000/api/contador-portal/clientes/${tenantId}/produtos`)
+      `${platformBase}/api/contador-portal/clientes/${tenantId}/produtos`)
     expect(fiscalResponse.ok()).toBeTruthy()
     const fiscalProducts = await fiscalResponse.json()
     const fiscalProduct = fiscalProducts.find((p: { id: string }) => p.id === product.id)
@@ -131,10 +132,10 @@ test.describe('QA funcional — restaurante, comanda e contador', () => {
     })
 
     const stockMutation = await contadorContext.request.patch(
-      `http://localhost:3000/api/product/${product.id}/stock`, { data: { delta: 99 } })
+      `${platformBase}/api/product/${product.id}/stock`, { data: { delta: 99 } })
     expect(stockMutation.status()).toBe(403)
     const crossTenant = await contadorContext.request.get(
-      `http://localhost:3000/api/contador-portal/clientes/00000000-0000-0000-0000-000000000099/produtos`)
+      `${platformBase}/api/contador-portal/clientes/00000000-0000-0000-0000-000000000099/produtos`)
     expect(crossTenant.status()).toBe(403)
 
     // Evita esconder falhas reais de runtime. 401/403 esperados não entram aqui.
