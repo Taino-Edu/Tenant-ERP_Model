@@ -20,6 +20,7 @@ using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -329,6 +330,7 @@ builder.Services.AddRequestTimeouts(options =>
 // ---------------------------------------------------------------------------
 // 8. SIGNALR — Comunicação em tempo real (comandas → dashboard)
 // ---------------------------------------------------------------------------
+builder.Services.AddSingleton<TenantHubFilter>();
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors      = builder.Environment.IsDevelopment();
@@ -337,6 +339,11 @@ builder.Services.AddSignalR(options =>
     options.KeepAliveInterval         = TimeSpan.FromSeconds(10);
     // Se não receber resposta em 20s, considera desconectado (padrão: 30s)
     options.ClientTimeoutInterval     = TimeSpan.FromSeconds(20);
+
+    // O SignalR não herda o escopo de DI da requisição, então o ITenantContext
+    // que o hub recebe nasce no default (tenant-zero) — este filtro reidrata o
+    // tenant do handshake antes de cada método do hub. Ver TenantHubFilter.
+    options.AddFilter<TenantHubFilter>();
 });
 
 // ---------------------------------------------------------------------------
