@@ -799,11 +799,15 @@ app.Use(async (context, next) =>
     }
 });
 
-// ForwardedHeaders — lê X-Forwarded-For/Proto do proxy reverso (nginx/Cloudflare)
-// de forma controlada pelo runtime, eliminando leitura manual do header nos serviços
+// ForwardedHeaders — lê For/Proto/Host do proxy reverso. X-Forwarded-Host é
+// necessário no dev: o rewrite do Next chama a API em localhost:5000 e preserva
+// o host original nesse header, permitindo resolver loja.localhost corretamente.
+// Só proxies explicitamente confiáveis abaixo podem sobrescrever esses valores.
 var forwardedOptions = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor
+        | ForwardedHeaders.XForwardedProto
+        | ForwardedHeaders.XForwardedHost,
 };
 // Aceita proxy da rede Docker interna (172.16.0.0/12) e loopback
 forwardedOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("172.16.0.0"), 12));

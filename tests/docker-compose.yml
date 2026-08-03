@@ -41,6 +41,8 @@ services:
       POSTGRES_DB: tenant_erp_test
     ports:
       - "127.0.0.1:5433:5432"
+    volumes:
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/01-runtime-role.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tenant_test -d tenant_erp_test"]
       interval: 2s

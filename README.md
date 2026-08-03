@@ -177,7 +177,8 @@ SWAGGER_ENABLED=true
    ```bash
    docker compose -f tests/docker-compose.yml up -d
    ```
-   `appsettings.Development.json` já aponta pra ele (porta 5433). O motivo de não
+   `appsettings.Development.json` já aponta pra ele (porta 5433) e o script de
+   inicialização cria a credencial restrita usada em runtime. O motivo de não
    existir modo "zero setup": o multi-tenant inteiro é schema + `search_path`,
    que o SQLite não tem — o caminho SQLite não exercitava nada do que importa e
    ainda escondia bug real (ele aceita `DateTime` com `Kind=Unspecified` onde o

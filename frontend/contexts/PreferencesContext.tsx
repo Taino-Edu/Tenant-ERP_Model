@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { userApi, UserPreferences, DEFAULT_PREFERENCES, DEFAULT_DASHBOARD_PANELS } from '@/lib/api'
-import { isLoggedIn } from '@/lib/auth'
+import { isContador, isLoggedIn } from '@/lib/auth'
 
 const LOCAL_KEY = 'user-preferences'
 
@@ -42,7 +42,9 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       try { setPrefs(mergeWithDefaults(JSON.parse(cached))) } catch {}
     }
 
-    if (!isLoggedIn()) {
+    // Contador vive no catálogo global, não em users do tenant; suas
+    // preferências ficam locais e não devem chamar /api/user/me/preferences.
+    if (!isLoggedIn() || isContador()) {
       setLoading(false)
       return
     }
@@ -61,6 +63,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     setPrefs(next)
     localStorage.setItem(LOCAL_KEY, JSON.stringify(next))
     setSaving(true)
+    if (isContador()) { setSaving(false); return }
     try {
       await userApi.updatePreferences(next)
     } catch {}
@@ -71,6 +74,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     setPrefs(current => {
       const next = mergeWithDefaults({ ...current, ...patch })
       localStorage.setItem(LOCAL_KEY, JSON.stringify(next))
+      if (isContador()) return next
       setSaving(true)
       userApi.updatePreferences(next)
         .catch(() => {})

@@ -193,11 +193,16 @@ export default function Sidebar() {
   const [mobileOpen,   setMobileOpen]   = useState(false)
   const [unreadCount,  setUnreadCount]  = useState(0)
   const [fiscalAlerta, setFiscalAlerta] = useState(false)
+  // Cookies de metadados só existem no navegador. O primeiro render precisa
+  // repetir o SSR; nome/role reais entram depois da hidratação.
+  const [mounted, setMounted] = useState(false)
   // Sempre começa expandida (igual no server e no primeiro render do client) —
   // ler localStorage direto no initializer causaria mismatch de hidratação
   // sempre que o valor salvo fosse "recolhida". O valor real só é aplicado
   // depois, via useEffect (client-only) — mesmo padrão de usePersistentPanel.
   const [collapsed,    setCollapsed]    = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     try {
@@ -251,7 +256,8 @@ export default function Sidebar() {
     router.push('/login')
   }
 
-  const role = getRole()
+  const role = mounted ? getRole() : ''
+  const userName = mounted ? getUserName() : 'Admin'
   const roleLabel = role === 'Admin' ? 'Admin' : role === 'Operator' ? 'Operador' : role
 
   function renderFooter(isCollapsed: boolean) {
@@ -261,7 +267,7 @@ export default function Sidebar() {
       return (
         <div className="px-3 py-4 border-t border-surface-500 flex flex-col items-center gap-2">
           <div
-            title={`${getUserName() || 'Admin'} (${roleLabel})`}
+            title={`${userName} (${roleLabel})`}
             className="w-10 h-10 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0"
           >
             <User className="w-5 h-5 text-brand-400" />
@@ -290,7 +296,7 @@ export default function Sidebar() {
             <User className="w-5 h-5 text-brand-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{getUserName() || 'Admin'}</p>
+            <p className="text-sm font-semibold text-white truncate">{userName}</p>
             <span className="badge-admin text-[10px]">{roleLabel}</span>
           </div>
         </div>
