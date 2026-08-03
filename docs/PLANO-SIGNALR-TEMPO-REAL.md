@@ -1,7 +1,7 @@
 # Plano — tempo real (SignalR) não entrega eventos fora da tenant-zero
 
-**Status:** diagnóstico com causa provável identificada, **falta um passo de
-confirmação**. Correção não implementada.
+**Status:** **causa CONFIRMADA em produção** (evidência abaixo). Correção não
+implementada.
 **Sintoma:** no painel de comandas o cliente abre comanda pelo QR code ou altera
 itens e nada aparece para o admin sem F5 ou sem forçar pelo botão.
 
@@ -9,7 +9,7 @@ Este documento é só o plano. Nada aqui foi alterado no código.
 
 ---
 
-## A causa provável
+## A causa
 
 Os grupos do SignalR são nomeados por tenant:
 
@@ -58,33 +58,32 @@ Nunca exercita o hub nem checa em qual grupo alguém realmente entrou.
 
 ---
 
-## O que ainda falta confirmar
+## Confirmação em produção
 
-Os logs de produção mostram o admin conectando e desconectando, **sem exceção de
-tenant** — mas isso não refuta nada: o caminho do Admin não toca no banco, então
-nunca dispararia aquela exceção. E o alterna conecta/desconecta é compatível com
-os próprios F5 do operador.
+Um cliente abriu comanda pelo QR code numa loja real. O log da API:
 
-Antes de corrigir, fechar assim (qualquer um dos dois basta):
+```
+info: CardGameStore.Hubs.ComandaHub[0]
+      Usuário 924f3b9d-… (Customer) conectado ao ComandaHub
+System.InvalidOperationException: ITenantContext.Set(...) nunca foi chamado neste
+escopo antes de abrir uma conexão — provável bug de propagação de tenant
+(CreateScope() sem Set() antes de resolver o AppDbContext).
+   at CardGameStore.Hubs.ComandaHub.OnConnectedAsync() in /src/Hubs/ComandaHub.cs:line 69
+```
 
-1. **Sem mexer em código:** um cliente abre comanda pelo QR code numa loja real
-   e, em seguida, no VPS:
+A linha 69 é exatamente o `GetActiveComandaIdByUserAsync` do ramo do Customer —
+o primeiro ponto do `OnConnectedAsync` que toca o banco. **Toda conexão de cliente
+estoura**, de forma reproduzível: o padrão se repete em todas as conexões de
+Customer da janela, sempre no mesmo lugar.
 
-   ```bash
-   cd /opt/tenant-erp/deploy && docker compose -f docker-compose.prod.yml logs api --since 15m \
-     | grep -E "nunca foi chamado|ComandaHub"
-   ```
+E o contraste fecha o outro lado do diagnóstico: nas mesmas linhas de log, as
+conexões de **Admin aparecem sem exceção nenhuma**. É o previsto — o ramo do Admin
+não toca o banco, então nada falha; ele entra calado no grupo da tenant-zero e
+deixa de receber os eventos da própria loja.
 
-   Se aparecer `ITenantContext.Set(...) nunca foi chamado neste escopo`, está provado.
-
-2. **Com uma linha de log temporária** em `OnConnectedAsync`, imprimindo
-   `_tenant.TenantId` e `_tenant.SchemaName`. Conectando de `loja.dominio`, se sair
-   `00000000-0000-0000-0000-000000000000` / `public`, está provado.
-
-**O que descartaria o diagnóstico:** se o tenant sair correto nas duas checagens.
-Nesse caso a investigação vira para entrega de mensagem — transporte caindo para
-long polling, `stopHub()` corrida com `startHub()`, ou múltiplas conexões
-concorrentes na mesma aba.
+Detalhe menor: a exceção aparece três vezes por conexão. É a política de retry do
+Npgsql (`EnableRetryOnFailure`) tentando de novo antes de desistir — não são três
+clientes distintos.
 
 ---
 
