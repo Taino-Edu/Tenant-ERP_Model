@@ -113,6 +113,21 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, $"Redefinição de senha — {cfg.SiteName}", body);
     }
 
+    public async Task SendPlatformOwnerInviteAsync(string toEmail, string toName, string profileName, string inviteToken)
+    {
+        var safeName = WebUtility.HtmlEncode(toName);
+        var safeProfile = WebUtility.HtmlEncode(profileName);
+        var link = $"{GetAppUrl()}/reset-password?token={Uri.EscapeDataString(inviteToken)}&invite=platform";
+        var body = $"""
+            <p>Olá, <strong>{safeName}</strong>!</p>
+            <p>Você foi convidado para integrar a equipe de gestão do <strong>Octus</strong> com o perfil <strong>{safeProfile}</strong>.</p>
+            <p><a href="{link}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Criar minha senha</a></p>
+            <p style="color:#888;font-size:12px;">Este convite expira em 7 dias e só pode ser utilizado uma vez.</p>
+            """;
+
+        await SendAsync(toEmail, toName, "Convite para a equipe Octus", body);
+    }
+
     public async Task SendWelcomeAsync(string toEmail, string toName)
     {
         var cfg  = await GetSiteConfigAsync();

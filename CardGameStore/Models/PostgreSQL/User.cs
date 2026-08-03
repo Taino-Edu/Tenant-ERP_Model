@@ -182,6 +182,33 @@ public class User
     public Perfil? Perfil { get; set; }
 
     // -------------------------------------------------------------------------
+    // Equipe da plataforma (somente Role == PlatformOwner)
+    // -------------------------------------------------------------------------
+
+    /// <summary>Perfil de acesso no painel da plataforma (socio, comercial, financeiro...).</summary>
+    [MaxLength(40)]
+    [Column("platform_access_profile")]
+    public string? PlatformAccessProfile { get; set; }
+
+    /// <summary>Permissões efetivas do dono da plataforma, serializadas como array JSON.</summary>
+    [Column("platform_permissions_json")]
+    public string? PlatformPermissionsJson { get; set; }
+
+    /// <summary>
+    /// Identifica a conta raiz. Apenas ela gerencia a equipe e nunca pode ser
+    /// desativada pelo painel, evitando que os sócios se tranquem para fora.
+    /// </summary>
+    [Column("is_platform_primary_owner")]
+    public bool IsPlatformPrimaryOwner { get; set; }
+
+    /// <summary>
+    /// Incrementado quando acesso, senha ou perfil muda. O JWT leva a versão
+    /// emitida e o middleware recusa imediatamente sessões antigas.
+    /// </summary>
+    [Column("session_version")]
+    public int SessionVersion { get; set; } = 1;
+
+    // -------------------------------------------------------------------------
     // Navegação (relacionamentos)
     // -------------------------------------------------------------------------
 

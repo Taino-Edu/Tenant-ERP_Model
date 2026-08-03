@@ -33,7 +33,7 @@ public class LeadsController : ControllerBase
     /// Público — sem login, é o formulário do site institucional.</summary>
     /// <param name="request">Nome e telefone (obrigatórios), e-mail e mensagem (opcionais).</param>
     [HttpPost]
-    [EnableRateLimiting("api")]
+    [EnableRateLimiting("public-lead")]
     public async Task<IActionResult> Create([FromBody] CreateLeadRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);

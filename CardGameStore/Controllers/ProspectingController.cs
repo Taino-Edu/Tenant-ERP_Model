@@ -6,6 +6,7 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Security;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,6 +16,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/platform/prospecting")]
 [Authorize(Policy = "PlatformOwnerOnly")]
+[RequirePlatformPermission(PlatformPermission.Leads)]
 public class ProspectingController : ControllerBase
 {
     private readonly IProspectingService _prospecting;

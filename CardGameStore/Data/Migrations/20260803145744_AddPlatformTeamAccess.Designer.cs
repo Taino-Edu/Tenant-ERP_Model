@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260803145744_AddPlatformTeamAccess")]
+    partial class AddPlatformTeamAccess
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -649,12 +652,6 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("description");
 
-                    b.Property<string>("DreGroup")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("dre_group");
-
                     b.Property<DateTime?>("DueDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("due_date");
@@ -1256,74 +1253,6 @@ namespace CardGameStore.Data.Migrations
                     b.ToTable("naturezas_operacao");
                 });
 
-            modelBuilder.Entity("CardGameStore.Models.PostgreSQL.NfeReceiptItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("description");
-
-                    b.Property<string>("IgnoreReason")
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)")
-                        .HasColumnName("ignore_reason");
-
-                    b.Property<bool>("Ignored")
-                        .HasColumnType("boolean")
-                        .HasColumnName("ignored");
-
-                    b.Property<int>("ItemNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("item_number");
-
-                    b.Property<Guid>("NotaDestinadaId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("nota_destinada_id");
-
-                    b.Property<Guid?>("ProductId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("product_id");
-
-                    b.Property<Guid?>("ProductVariantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("product_variant_id");
-
-                    b.Property<int>("Quantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("quantity");
-
-                    b.Property<string>("SupplierProductCode")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("supplier_product_code");
-
-                    b.Property<int>("UnitCostInCents")
-                        .HasColumnType("integer")
-                        .HasColumnName("unit_cost_in_cents");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("ProductVariantId");
-
-                    b.HasIndex("NotaDestinadaId", "ItemNumber")
-                        .IsUnique()
-                        .HasDatabaseName("ix_nfe_receipt_items_note_number");
-
-                    b.ToTable("nfe_receipt_items");
-                });
-
             modelBuilder.Entity("CardGameStore.Models.PostgreSQL.NotaDestinada", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1372,14 +1301,6 @@ namespace CardGameStore.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("erro");
-
-                    b.Property<DateTime?>("EstoqueRecebidoEm")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("estoque_recebido_em");
-
-                    b.Property<int>("ItensEstoqueRecebidos")
-                        .HasColumnType("integer")
-                        .HasColumnName("itens_estoque_recebidos");
 
                     b.Property<long>("Nsu")
                         .HasColumnType("bigint")
@@ -2488,147 +2409,6 @@ namespace CardGameStore.Data.Migrations
                     b.ToTable("site_config");
                 });
 
-            modelBuilder.Entity("CardGameStore.Models.PostgreSQL.StockMovement", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("MovementType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("movement_type");
-
-                    b.Property<string>("NfeKey")
-                        .HasMaxLength(44)
-                        .HasColumnType("character varying(44)")
-                        .HasColumnName("nfe_key");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("notes");
-
-                    b.Property<DateTime>("OccurredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("occurred_at");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("product_id");
-
-                    b.Property<Guid?>("ProductVariantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("product_variant_id");
-
-                    b.Property<int>("QuantityDelta")
-                        .HasColumnType("integer")
-                        .HasColumnName("quantity_delta");
-
-                    b.Property<Guid?>("ReferenceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reference_id");
-
-                    b.Property<string>("ReferenceType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("reference_type");
-
-                    b.Property<int?>("SourceItemNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("source_item_number");
-
-                    b.Property<int>("StockAfter")
-                        .HasColumnType("integer")
-                        .HasColumnName("stock_after");
-
-                    b.Property<int>("StockBefore")
-                        .HasColumnType("integer")
-                        .HasColumnName("stock_before");
-
-                    b.Property<int>("UnitCostInCents")
-                        .HasColumnType("integer")
-                        .HasColumnName("unit_cost_in_cents");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductVariantId");
-
-                    b.HasIndex("NfeKey", "SourceItemNumber")
-                        .IsUnique()
-                        .HasDatabaseName("ix_stock_movements_nfe_item")
-                        .HasFilter("nfe_key IS NOT NULL AND source_item_number IS NOT NULL");
-
-                    b.HasIndex("ProductId", "OccurredAt")
-                        .HasDatabaseName("ix_stock_movements_product_date");
-
-                    b.ToTable("stock_movements");
-                });
-
-            modelBuilder.Entity("CardGameStore.Models.PostgreSQL.SupplierProductLink", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Gtin")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("gtin");
-
-                    b.Property<int>("LastUnitCostInCents")
-                        .HasColumnType("integer")
-                        .HasColumnName("last_unit_cost_in_cents");
-
-                    b.Property<Guid>("ProductId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("product_id");
-
-                    b.Property<Guid?>("ProductVariantId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("product_variant_id");
-
-                    b.Property<string>("SupplierCnpj")
-                        .IsRequired()
-                        .HasMaxLength(14)
-                        .HasColumnType("character varying(14)")
-                        .HasColumnName("supplier_cnpj");
-
-                    b.Property<string>("SupplierDescription")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("supplier_description");
-
-                    b.Property<string>("SupplierProductCode")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("supplier_product_code");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProductId");
-
-                    b.HasIndex("ProductVariantId");
-
-                    b.HasIndex("SupplierCnpj", "SupplierProductCode")
-                        .IsUnique()
-                        .HasDatabaseName("ix_supplier_product_links_supplier_code");
-
-                    b.ToTable("supplier_product_links");
-                });
-
             modelBuilder.Entity("CardGameStore.Models.PostgreSQL.TimerEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3003,31 +2783,6 @@ namespace CardGameStore.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("CardGameStore.Models.PostgreSQL.NfeReceiptItem", b =>
-                {
-                    b.HasOne("CardGameStore.Models.PostgreSQL.NotaDestinada", "NotaDestinada")
-                        .WithMany("ReceiptItems")
-                        .HasForeignKey("NotaDestinadaId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CardGameStore.Models.PostgreSQL.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("CardGameStore.Models.PostgreSQL.ProductVariant", "ProductVariant")
-                        .WithMany()
-                        .HasForeignKey("ProductVariantId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("NotaDestinada");
-
-                    b.Navigation("Product");
-
-                    b.Navigation("ProductVariant");
-                });
-
             modelBuilder.Entity("CardGameStore.Models.PostgreSQL.Notification", b =>
                 {
                     b.HasOne("CardGameStore.Models.PostgreSQL.User", "User")
@@ -3141,42 +2896,6 @@ namespace CardGameStore.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("CardGameStore.Models.PostgreSQL.StockMovement", b =>
-                {
-                    b.HasOne("CardGameStore.Models.PostgreSQL.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("CardGameStore.Models.PostgreSQL.ProductVariant", "ProductVariant")
-                        .WithMany()
-                        .HasForeignKey("ProductVariantId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Product");
-
-                    b.Navigation("ProductVariant");
-                });
-
-            modelBuilder.Entity("CardGameStore.Models.PostgreSQL.SupplierProductLink", b =>
-                {
-                    b.HasOne("CardGameStore.Models.PostgreSQL.Product", "Product")
-                        .WithMany()
-                        .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CardGameStore.Models.PostgreSQL.ProductVariant", "ProductVariant")
-                        .WithMany()
-                        .HasForeignKey("ProductVariantId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Product");
-
-                    b.Navigation("ProductVariant");
-                });
-
             modelBuilder.Entity("CardGameStore.Models.PostgreSQL.User", b =>
                 {
                     b.HasOne("CardGameStore.Models.PostgreSQL.Perfil", "Perfil")
@@ -3200,11 +2919,6 @@ namespace CardGameStore.Data.Migrations
             modelBuilder.Entity("CardGameStore.Models.PostgreSQL.NaturezaOperacao", b =>
                 {
                     b.Navigation("Products");
-                });
-
-            modelBuilder.Entity("CardGameStore.Models.PostgreSQL.NotaDestinada", b =>
-                {
-                    b.Navigation("ReceiptItems");
                 });
 
             modelBuilder.Entity("CardGameStore.Models.PostgreSQL.Perfil", b =>

@@ -828,6 +828,16 @@ export interface TenantUsageDto {
   totalHoras: number; usuariosAtivos: number; topPaths: TenantUsagePathDto[]
 }
 
+export interface PlatformTeamMemberDto {
+  id: string; name: string; email: string; profileKey: string; profileName: string
+  permissions: string[]; isPrimaryOwner: boolean; isActive: boolean
+  invitationPending: boolean; lastLoginAt: string | null; createdAt: string
+}
+
+export interface PlatformAccessProfileDto {
+  key: string; name: string; description: string; permissions: string[]
+}
+
 export const platformApi = {
   listTenants: () =>
     api.get<TenantSummary[]>('/api/platform/tenants'),
@@ -871,6 +881,13 @@ export const platformApi = {
     api.post<void>(`/api/platform/support-tickets/${id}/messages`, { body, imageUrl }),
   updateSupportTicketStatus: (id: string, status: SupportTicketStatus) =>
     api.patch<{ id: string; status: SupportTicketStatus }>(`/api/platform/support-tickets/${id}/status`, { status }),
+  listTeam: () => api.get<PlatformTeamMemberDto[]>('/api/platform/team'),
+  listTeamProfiles: () => api.get<PlatformAccessProfileDto[]>('/api/platform/team/profiles'),
+  inviteTeamMember: (req: { name: string; email: string; profileKey: string }) =>
+    api.post<{ member: PlatformTeamMemberDto; emailSent: boolean; message: string }>('/api/platform/team/invitations', req),
+  updateTeamMember: (id: string, req: { name: string; profileKey: string; isActive: boolean }) =>
+    api.patch<PlatformTeamMemberDto>(`/api/platform/team/${id}`, req),
+  resendTeamInvite: (id: string) => api.post(`/api/platform/team/${id}/resend-invite`, {}),
 }
 
 // ── Paginação genérica ──────────────────────────────────────────────────────────

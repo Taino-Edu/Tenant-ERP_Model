@@ -17,6 +17,7 @@ using CardGameStore.Middleware;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
+using CardGameStore.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -288,6 +289,19 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit           = 0,
             }));
 
+    // Formulário institucional: evita spam e crescimento artificial da tabela
+    // de leads. Turnstile será a segunda camada quando as chaves forem ativadas.
+    options.AddPolicy("public-lead", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientIp(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(15),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
     // "locate-account" → bem mais apertado que "auth": cada chamada testa a
     // senha contra TODO tenant ativo (um schema por vez), bem mais caro que um
     // login normal (uma query só). 5/hora por IP é suficiente pro uso real
@@ -500,9 +514,10 @@ builder.Services.AddCors(options =>
                 if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
                     return false;
 
-                var host = originUri.Host;
-                return host.Equals(corsRootDomain, StringComparison.OrdinalIgnoreCase)
-                    || host.EndsWith("." + corsRootDomain, StringComparison.OrdinalIgnoreCase);
+                // Cada frontend fala com a API na própria origem pelo nginx.
+                // Liberar todos os subdomínios com AllowCredentials permitiria
+                // que um tenant comprometido enviasse requests autenticados a outro.
+                return originUri.Host.Equals(corsRootDomain, StringComparison.OrdinalIgnoreCase);
             })
             .AllowAnyHeader()
             .AllowAnyMethod()
@@ -767,12 +782,32 @@ using (var scope = app.Services.CreateScope())
                 Email        = platformOwnerEmail,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(ownerPassword),
                 Role         = CardGameStore.Models.PostgreSQL.UserRole.PlatformOwner,
+                PlatformAccessProfile = PlatformAccessProfiles.Primary,
+                PlatformPermissionsJson = PlatformAccessProfiles.Serialize([PlatformPermission.All]),
+                IsPlatformPrimaryOwner = true,
+                SessionVersion = 1,
                 IsActive     = true,
                 CreatedAt    = DateTime.UtcNow,
                 UpdatedAt    = DateTime.UtcNow
             });
             await db.SaveChangesAsync();
             logger.LogInformation("Usuário dono da plataforma criado com sucesso.");
+        }
+
+        // A conta indicada pelo ambiente é a raiz também em instalações antigas.
+        if (!string.IsNullOrWhiteSpace(platformOwnerEmail))
+        {
+            var primaryOwner = await db.Users.FirstOrDefaultAsync(u =>
+                u.Email == platformOwnerEmail &&
+                u.Role == CardGameStore.Models.PostgreSQL.UserRole.PlatformOwner);
+            if (primaryOwner is not null && !primaryOwner.IsPlatformPrimaryOwner)
+            {
+                primaryOwner.IsPlatformPrimaryOwner = true;
+                primaryOwner.PlatformAccessProfile = PlatformAccessProfiles.Primary;
+                primaryOwner.PlatformPermissionsJson = PlatformAccessProfiles.Serialize([PlatformPermission.All]);
+                primaryOwner.SessionVersion++;
+                await db.SaveChangesAsync();
+            }
         }
     }
     catch (Exception ex)
@@ -906,8 +941,10 @@ app.UseCors("FrontendPolicy");
 app.UseRateLimiter();
 app.UseRequestTimeouts();
 app.UseAuthentication();
+app.UseBrowserRequestGuard();
 app.UseTenantClaimGuard();
 app.UseAuthorization();
+app.UsePlatformAccess();
 app.UseOperatorPermissions();
 
 app.MapControllers();

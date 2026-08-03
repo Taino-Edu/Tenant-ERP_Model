@@ -8,6 +8,7 @@
 
 using CardGameStore.DTOs;
 using CardGameStore.Services.Interfaces;
+using CardGameStore.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,6 +17,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/platform/billing")]
 [Authorize(Policy = "PlatformOwnerOnly")]
+[RequirePlatformPermission(PlatformPermission.FinanceRead)]
 public class PlatformBillingController : ControllerBase
 {
     private readonly IPlatformBillingService _billing;
@@ -47,6 +49,7 @@ public class PlatformBillingController : ControllerBase
     /// (tenant, tipo, competência) impede duplicar, então clicar duas vezes é
     /// inofensivo e o resultado diz quantas já existiam.</summary>
     [HttpPost("gerar-mensalidades")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
     public async Task<IActionResult> GerarMensalidades([FromBody] GerarMensalidadesRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -57,6 +60,7 @@ public class PlatformBillingController : ControllerBase
 
     /// <summary>Dá baixa numa cobrança (ou reabre, mandando pagoEm null).</summary>
     [HttpPut("cobrancas/{id:guid}/pagamento")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
     public async Task<IActionResult> DefinirPagamento(Guid id, [FromBody] DefinirPagamentoRequest request)
     {
         try
