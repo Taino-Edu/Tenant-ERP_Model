@@ -12,6 +12,8 @@
 // =============================================================================
 
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using CardGameStore.Data;
@@ -32,6 +34,18 @@ public class GeminiChatService : IAiChatService
     // Contrapartida: a resposta pode mudar quando o Google promove um modelo novo.
     private const string GEMINI_URL =
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+    private const string GEMINI_STREAM_URL =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent";
+
+    // 600 cortava respostas um pouco mais longas no meio da frase (PT-BR com
+    // acento gasta mais tokens por caractere que inglês) — achado ao vivo numa
+    // pergunta sobre permissões do assistente, que terminou em "...no" cortado.
+    private const int MAX_OUTPUT_TOKENS = 1200;
+
+    // Maior marcador possível ([NAV:/admin/configuracoes]) tem ~28 caracteres —
+    // 30 de folga garante que nenhum pedaço de marcador escape pro delta que já
+    // foi enviado ao cliente antes da checagem final de NavMarker/WizardMarker.
+    private const int MARKER_HOLDBACK = 30;
 
     private readonly AppDbContext              _db;
     private readonly IVendaAvulsaService       _vendas;
@@ -92,7 +106,7 @@ public class GeminiChatService : IAiChatService
                 generationConfig = new
                 {
                     temperature     = 0.3,
-                    maxOutputTokens = 600,
+                    maxOutputTokens = MAX_OUTPUT_TOKENS,
                 }
             };
 
@@ -143,6 +157,133 @@ public class GeminiChatService : IAiChatService
                 Success = false,
             };
         }
+    }
+
+    public async IAsyncEnumerable<AiStreamEvent> ChatStreamAsync(
+        string userMessage, [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var apiKey = await ResolveApiKeyAsync();
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            _logger.LogWarning("GeminiChatService: nenhuma chave Gemini configurada (nem própria do tenant, nem global).");
+            yield return new AiStreamEvent
+            {
+                Delta = "O assistente IA não está configurado. Peça ao administrador para adicionar a chave do Gemini.",
+                Done  = true,
+            };
+            yield break;
+        }
+
+        var contexto = await BuildContextAsync();
+        var prompt   = BuildPrompt(userMessage, contexto);
+        var client   = _http.CreateClient("gemini");
+        var url      = $"{GEMINI_STREAM_URL}?alt=sse&key={apiKey}";
+
+        var payload = new
+        {
+            contents = new[]
+            {
+                new { role = "user", parts = new[] { new { text = prompt } } }
+            },
+            generationConfig = new
+            {
+                temperature     = 0.3,
+                maxOutputTokens = MAX_OUTPUT_TOKENS,
+            }
+        };
+
+        // yield não pode viver dentro de um catch — captura o erro numa variável
+        // e só decide sair (yield break) depois do try/catch fechar.
+        HttpResponseMessage? response = null;
+        try
+        {
+            response = await client.SendAsync(
+                new HttpRequestMessage(HttpMethod.Post, url) { Content = JsonContent.Create(payload) },
+                HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GeminiChatService: erro inesperado ao chamar API (stream).");
+        }
+
+        if (response is null)
+        {
+            yield return new AiStreamEvent { Delta = "Ocorreu um erro ao processar sua pergunta. Tente novamente.", Done = true };
+            yield break;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogError("Gemini API erro {Status}: {Body}", response.StatusCode, err);
+            yield return new AiStreamEvent { Delta = "Não consegui obter resposta do assistente agora. Tente novamente em instantes.", Done = true };
+            yield break;
+        }
+
+        // Segura os últimos MARKER_HOLDBACK caracteres antes de mandar como delta,
+        // pra nunca deixar escapar um pedaço de [NAV:...]/[WIZARD] na tela antes da
+        // checagem final abaixo. Assume (mesma premissa do ChatAsync não-streaming)
+        // que o marcador só aparece no finalzinho da resposta, como o prompt pede.
+        var fullText   = new StringBuilder();
+        var sentLength = 0;
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+
+        while (!reader.EndOfStream)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("data:")) continue;
+
+            var jsonPart = line["data:".Length..].Trim();
+            if (jsonPart.Length == 0) continue;
+
+            string? delta = null;
+            try
+            {
+                using var chunkDoc = JsonDocument.Parse(jsonPart);
+                delta = chunkDoc.RootElement
+                    .GetProperty("candidates")[0]
+                    .GetProperty("content")
+                    .GetProperty("parts")[0]
+                    .GetProperty("text")
+                    .GetString();
+            }
+            catch
+            {
+                continue; // evento SSE sem texto (ex: metadata de finalização) — ignora
+            }
+
+            if (string.IsNullOrEmpty(delta)) continue;
+            fullText.Append(delta);
+
+            var safeLength = fullText.Length - MARKER_HOLDBACK;
+            if (safeLength > sentLength)
+            {
+                yield return new AiStreamEvent { Delta = fullText.ToString(sentLength, safeLength - sentLength) };
+                sentLength = safeLength;
+            }
+        }
+
+        var raw = fullText.ToString();
+        AiAction? action = null;
+
+        var navMatch = NavMarker.Match(raw);
+        if (navMatch.Success)
+        {
+            action = new AiAction { Type = "navigate", Route = navMatch.Groups[1].Value };
+            raw    = NavMarker.Replace(raw, "");
+        }
+        else if (WizardMarker.IsMatch(raw))
+        {
+            action = new AiAction { Type = "openWizard" };
+            raw    = WizardMarker.Replace(raw, "");
+        }
+
+        // TrimEnd só no restante (não a string inteira): o prefixo já foi mandado
+        // ao cliente, mexer nele desalinharia o texto já exibido.
+        var remaining = sentLength < raw.Length ? raw[sentLength..].TrimEnd() : "";
+        yield return new AiStreamEvent { Delta = remaining.Length > 0 ? remaining : null, Done = true, Action = action };
     }
 
     /// <summary>Usa a chave própria do tenant (BYOK) se ele tiver uma salva e

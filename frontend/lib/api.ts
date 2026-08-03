@@ -697,9 +697,66 @@ export interface AiChatResponse {
   action?: { type: 'navigate' | 'openWizard'; route?: string }
 }
 
+export interface AiStreamEvent {
+  delta?:  string
+  done?:   boolean
+  action?: { type: 'navigate' | 'openWizard'; route?: string }
+}
+
 export const aiApi = {
   chat: (message: string) =>
     api.post<AiChatResponse>('/api/ai/chat', { message }),
+}
+
+/**
+ * Chat da IA em streaming (SSE) — usa fetch() puro em vez do axios (`api`)
+ * porque o axios não expõe leitura incremental do corpo da resposta no
+ * browser de um jeito confiável entre navegadores; fetch + ReadableStream sim.
+ * `credentials: 'include'` reproduz o `withCredentials` do axios (cookies
+ * HttpOnly de auth), já que essa chamada não passa pelo interceptor de refresh
+ * do `api` — se o accessToken já tiver expirado, o stream cai no evento de
+ * erro genérico e o usuário só precisa tentar de novo (refresh terá rodado
+ * numa chamada comum antes disso, na prática).
+ */
+export async function* streamAiChat(
+  message: string,
+  signal?: AbortSignal
+): AsyncGenerator<AiStreamEvent> {
+  const res = await fetch('/api/ai/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ message }),
+    signal,
+  })
+
+  if (!res.body) throw new Error('Resposta sem corpo de stream.')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+  const reader  = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() ?? ''
+
+    for (const part of parts) {
+      const line = part.trim()
+      if (!line.startsWith('data:')) continue
+      const jsonStr = line.slice('data:'.length).trim()
+      if (!jsonStr) continue
+      try {
+        yield JSON.parse(jsonStr) as AiStreamEvent
+      } catch {
+        // linha malformada — ignora esse evento, não derruba o stream inteiro
+      }
+    }
+  }
 }
 
 // ── Painel do dono da plataforma (gestão de tenants) ──────────────────────────
