@@ -2,8 +2,7 @@
 // planos.ts — O catálogo de planos, em UM lugar só.
 //
 // Antes existiam dois, e eles divergiram: o site institucional vendia
-// "Essencial / Completo / Avançado" com preço, e o painel oferecia presets
-// chamados "Mar" e "Lagoa" sem valor nenhum. O resultado em produção foi loja
+// nomes comerciais e preços diferentes dos presets do painel. O resultado em produção foi loja
 // cadastrada como plano "Mar" com mensalidade zero — o financeiro da
 // plataforma calcula MRR a partir de MonthlyPrice, então esse tenant
 // simplesmente não existia na receita.
@@ -20,6 +19,8 @@ export interface Plano {
   preco: number
   publico: string
   destaque: boolean
+  /** Valor único da implantação; zero significa implantação gratuita. */
+  taxaImplantacao: number
   /** Texto do limite de usuários, pro site. */
   usuarios: string
   /** Limite real gravado no Tenant.MaxUsers — null = ilimitado. */
@@ -29,16 +30,18 @@ export interface Plano {
   inclui: string[]
 }
 
-/** Implantação é sempre 2 mensalidades — a regra está escrita no site, então
- *  fica derivada aqui em vez de digitada de novo e sujeita a divergir. */
-export const taxaImplantacao = (precoMensal: number) => precoMensal * 2
+/** Planos personalizados continuam partindo de duas mensalidades; nos planos
+ * de tabela o valor vem do próprio catálogo porque o Mar é gratuito. */
+export const taxaImplantacao = (planoOuPreco: Plano | number) =>
+  typeof planoOuPreco === 'number' ? planoOuPreco * 2 : planoOuPreco.taxaImplantacao
 
 export const PLANOS: Plano[] = [
   {
-    nome: 'Essencial',
-    preco: 120,
+    nome: 'Lagoa',
+    preco: 129,
     publico: 'Pra loja que quer sair da planilha e do caderno.',
     destaque: false,
+    taxaImplantacao: 258,
     usuarios: '2 usuários no painel',
     maxUsers: 2,
     modules: ['fiscal', 'estoque', 'restaurante'],
@@ -52,15 +55,16 @@ export const PLANOS: Plano[] = [
     ],
   },
   {
-    nome: 'Completo',
+    nome: 'Rio',
     preco: 269,
     publico: 'A operação que já vende todo dia e precisa de controle.',
     destaque: true,
+    taxaImplantacao: 538,
     usuarios: '6 usuários no painel',
     maxUsers: 6,
     modules: ['fiscal', 'estoque', 'restaurante', 'pontos', 'contador', 'eventos'],
     inclui: [
-      'Tudo do Essencial',
+      'Tudo do Lagoa',
       'Crediário e contas a receber',
       'Financeiro completo, com fechamento de caixa',
       'Programa de fidelidade por pontos',
@@ -70,17 +74,18 @@ export const PLANOS: Plano[] = [
     ],
   },
   {
-    nome: 'Avançado',
+    nome: 'Mar',
     preco: 487,
     publico: 'Pra quem tem mais de um ponto ou quer automatizar.',
     destaque: false,
+    taxaImplantacao: 0,
     usuarios: 'Usuários ilimitados',
     maxUsers: null,
     // Restaurante é adicional opt-in: nem o plano mais alto o liga sozinho.
     // O dono da plataforma precisa habilitá-lo explicitamente por tenant.
     modules: TENANT_MODULES.filter(m => m.value !== 'restaurante').map(m => m.value),
     inclui: [
-      'Tudo do Completo',
+      'Tudo do Rio',
       'Assistente de IA no painel (pergunte em português sobre sua loja)',
       'Domínio próprio (suamarca.com.br)',
       'Reservas e agendamento',

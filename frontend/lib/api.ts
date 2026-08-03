@@ -1691,6 +1691,15 @@ export const publicDirectoryApi = {
   listTenants: () => api.get<PublicTenantDto[]>('/api/public/tenants'),
 }
 
+export interface PublicAssistantResponse {
+  reply: string
+  marketingWhatsappUrl: string
+}
+
+export const publicAssistantApi = {
+  ask: (message: string) => api.post<PublicAssistantResponse>('/api/public/assistant', { message }),
+}
+
 // ── Notificações in-app ───────────────────────────────────────────────────────
 
 export interface AppNotification {

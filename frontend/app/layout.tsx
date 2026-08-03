@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 // Páginas públicas (Home, /cadastro, /login etc.) não têm generateMetadata
 // própria, então herdam esse default — é ele quem aparece na aba do
 // navegador e no snippet do Google pra cada loja. Fallback genérico
-// ("Minha Loja") em qualquer falha — getTenantIconsForHost nunca lança.
+// ("Octus") em qualquer falha — getTenantIconsForHost nunca lança.
 export async function generateMetadata(): Promise<Metadata> {
   const host = headers().get('host')
   const icons = await getTenantIconsForHost(host)
@@ -28,7 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
     ? withCacheBust(icons.faviconUrl, icons.updatedAt)
     : '/icon.svg'
 
-  const siteName = icons?.siteName || 'Minha Loja'
+  const siteName = icons?.siteName || 'Octus'
   const description = icons?.heroSubtitle || 'Sistema de gestão para lojas e varejo'
 
   return {

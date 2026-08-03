@@ -80,7 +80,7 @@ function checkPageBreak(doc: any, y: number, needed = 30): number {
 export async function gerarRelatorioPDF(
   d: FinanceiroDto,
   periodo: { inicio: string; fim: string },
-  siteName = 'Minha Loja',
+  siteName = 'Octus',
 ) {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

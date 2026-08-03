@@ -20,7 +20,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     ? withCacheBust(tenantIcons.pwaIconUrl, tenantIcons.updatedAt)
     : null
 
-  const name = tenantIcons?.siteName || 'Minha Loja'
+  const name = tenantIcons?.siteName || 'Octus'
 
   return {
     name,

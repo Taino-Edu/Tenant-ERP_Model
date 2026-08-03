@@ -97,7 +97,7 @@ function addFooters(doc: any, siteName: string) {
 // =============================================================================
 // 1. RELATÓRIO DE CLIENTES
 // =============================================================================
-export async function gerarRelatorioClientes(clientes: ClienteInsightDto[], siteName = 'Minha Loja') {
+export async function gerarRelatorioClientes(clientes: ClienteInsightDto[], siteName = 'Octus') {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (JsPDF as any)({ orientation: 'landscape', unit: 'mm', format: 'a4' }) as any
@@ -175,7 +175,7 @@ export async function gerarRelatorioClientes(clientes: ClienteInsightDto[], site
 export async function gerarRelatorioPDV(
   data: FinanceiroDto,
   periodo: { inicio: string; fim: string; dias: number },
-  siteName = 'Minha Loja',
+  siteName = 'Octus',
 ) {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -276,7 +276,7 @@ export async function gerarRelatorioPDV(
 // =============================================================================
 // 3. RELATÓRIO DE COMANDAS ABERTAS
 // =============================================================================
-export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: number, siteName = 'Minha Loja') {
+export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: number, siteName = 'Octus') {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (JsPDF as any)({ orientation: 'landscape', unit: 'mm', format: 'a4' }) as any
@@ -350,7 +350,7 @@ export async function gerarRelatorioComandas(comandas: ComandaDto[], dias: numbe
 // =============================================================================
 const MESES_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
-export async function gerarRelatorioCrediario(data: RelatorioCrediarioDto, siteName = 'Minha Loja') {
+export async function gerarRelatorioCrediario(data: RelatorioCrediarioDto, siteName = 'Octus') {
   const JsPDF = await getJsPDF()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doc = new (JsPDF as any)({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as any

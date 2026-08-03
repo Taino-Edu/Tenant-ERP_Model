@@ -275,6 +275,18 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit           = 10;
     });
 
+    // Assistente comercial público: limite baixo por IP para controlar custo e abuso.
+    options.AddPolicy("public-ai", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientIp(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit          = 10,
+                Window               = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit           = 0,
+            }));
+
     // "locate-account" → bem mais apertado que "auth": cada chamada testa a
     // senha contra TODO tenant ativo (um schema por vez), bem mais caro que um
     // login normal (uma query só). 5/hora por IP é suficiente pro uso real
@@ -355,7 +367,7 @@ builder.Services.AddHttpClient("gemini", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
+}).RemoveAllLoggers();
 
 // IBPT — token vai na query string por exigência do contrato legado da API.
 // Remove os loggers do HttpClient para a credencial nunca aparecer em logs de URL.
@@ -411,6 +423,7 @@ builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
+builder.Services.AddScoped<IPublicSalesAssistantService, PublicSalesAssistantService>();
 builder.Services.AddScoped<IProspectingService,  ProspectingService>();
 builder.Services.AddScoped<IPlatformBillingService, PlatformBillingService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
