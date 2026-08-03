@@ -81,7 +81,9 @@ public sealed class PublicSalesAssistantService : IPublicSalesAssistantService
                         parts = new[] { new { text = normalizedMessage } }
                     }
                 },
-                generationConfig = new { temperature = 0.2, maxOutputTokens = 320 }
+                // 320 cortava a resposta no meio da palavra na página de vendas —
+                // ver GeminiLimits, que é onde este número mora agora.
+                generationConfig = new { temperature = 0.2, maxOutputTokens = GeminiLimits.MaxOutputTokens }
             };
 
             var client = _httpClientFactory.CreateClient("gemini");

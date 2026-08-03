@@ -40,7 +40,9 @@ public class GeminiChatService : IAiChatService
     // 600 cortava respostas um pouco mais longas no meio da frase (PT-BR com
     // acento gasta mais tokens por caractere que inglês) — achado ao vivo numa
     // pergunta sobre permissões do assistente, que terminou em "...no" cortado.
-    private const int MAX_OUTPUT_TOKENS = 1200;
+    // O valor mora em GeminiLimits desde que o mesmo defeito apareceu no
+    // assistente público, que tinha um número próprio e ficou de fora da correção.
+    private const int MAX_OUTPUT_TOKENS = GeminiLimits.MaxOutputTokens;
 
     // Maior marcador possível ([NAV:/admin/configuracoes]) tem ~28 caracteres —
     // 30 de folga garante que nenhum pedaço de marcador escape pro delta que já
