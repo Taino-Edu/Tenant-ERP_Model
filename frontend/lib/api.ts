@@ -828,7 +828,45 @@ export interface TenantUsageDto {
   totalHoras: number; usuariosAtivos: number; topPaths: TenantUsagePathDto[]
 }
 
+/** Estado de uma integração da plataforma. Nenhum campo de segredo trafega de
+ *  volta — o servidor devolve só flags `tem*` e a lista de pendências pronta. */
+export interface PlatformIntegrationDto {
+  provider: string
+  nome: string
+  configurado: boolean
+  isActive: boolean
+  operacional: boolean
+  clientId: string | null
+  temClientSecret: boolean
+  temCertificado: boolean
+  contaCorrente: string | null
+  pixKey: string | null
+  pendencias: string[]
+  lastSyncAt: string | null
+  lastError: string | null
+  updatedAt: string | null
+}
+
+/** Campos de segredo em branco = "mantém o que está salvo". Nunca mande string
+ *  vazia esperando apagar — pra remover, use `removeIntegracao`. */
+export interface SalvarPlatformIntegrationRequest {
+  clientId?: string
+  clientSecret?: string
+  certificateCrt?: string
+  certificateKey?: string
+  contaCorrente?: string
+  pixKey?: string
+  isActive?: boolean
+}
+
 export const platformApi = {
+  listIntegracoes: () =>
+    api.get<PlatformIntegrationDto[]>('/api/platform/integracoes'),
+  salvarIntegracao: (provider: string, req: SalvarPlatformIntegrationRequest) =>
+    api.put<PlatformIntegrationDto>(`/api/platform/integracoes/${provider}`, req),
+  removerIntegracao: (provider: string) =>
+    api.delete(`/api/platform/integracoes/${provider}`),
+
   listTenants: () =>
     api.get<TenantSummary[]>('/api/platform/tenants'),
   createTenant: (req: CreateTenantRequest) =>
