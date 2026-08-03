@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@microsoft/signalr": "^8.0.7",
-    "axios": "^1.7.3",
+    "axios": "^1.19.0",
     "clsx": "^2.1.1",
     "js-cookie": "^3.0.5",
     "jspdf": "^4.2.1",
@@ -28,7 +28,7 @@
     "react-hot-toast": "^2.4.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.62.1",
     "@types/js-cookie": "^3.0.6",
     "@types/node": "^22.1.0",
     "@types/qrcode": "^1.5.5",
@@ -36,10 +36,10 @@
     "@types/react-dom": "^18.3.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
-    "autoprefixer": "^10.4.20",
+    "autoprefixer": "^10.5.4",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.35",
-    "postcss": "^8.4.41",
+    "postcss": "^8.5.25",
     "tailwindcss": "^3.4.9",
     "typescript": "^5.5.4"
   }
