@@ -1455,6 +1455,15 @@ export interface NaturezaOperacaoDto {
   ibsCbsCst: string
   ibsCbsClassTrib: string
   isPadrao: boolean; isActive: boolean
+  // Regime normal (Lucro Presumido/Real) — convivem com os campos de CSOSN
+  // acima; a emissão escolhe o par certo pelo CRT da loja.
+  cst?: string
+  percentualReducaoBc?: number
+  aliquotaFcp?: number
+  baseStRetidaEmCentavos?: number
+  valorStRetidoEmCentavos?: number
+  cstPis?: string; cstCofins?: string
+  aliquotaPis?: number; aliquotaCofins?: number
 }
 
 export interface SaveNaturezaFiscalBody {
@@ -1463,6 +1472,13 @@ export interface SaveNaturezaFiscalBody {
   percentualReducaoBcSt?: number; aliquotaIcmsSt?: number; aliquotaIcmsProprio?: number
   aliquotaFcpSt?: number; baseStFixaEmCentavos?: number
   ibsCbsCst: string; ibsCbsClassTrib: string; isPadrao: boolean
+  cst?: string
+  percentualReducaoBc?: number
+  aliquotaFcp?: number
+  baseStRetidaEmCentavos?: number
+  valorStRetidoEmCentavos?: number
+  cstPis?: string; cstCofins?: string
+  aliquotaPis?: number; aliquotaCofins?: number
 }
 
 export interface NotaFiscalDto {
@@ -1478,19 +1494,79 @@ export interface NotaFiscalDto {
   createdAt: string
 }
 
-export interface CupomItemDto {
-  nome: string; quantidade: number; precoUnitarioCentavos: number; subtotalCentavos: number
-  tributosAproximadosCentavos: number
+// ── DANFE NFC-e — derivado exclusivamente do XML fiscal ──────────────────────
+// Contrato espelha CardGameStore/DTOs/DanfeFiscalDtos.cs. Nenhum campo aqui tem
+// fallback para cadastro: o que não veio no XML chega ausente e a tela decide
+// como mostrar a ausência.
+
+export interface DanfeEnderecoDto {
+  logradouro?: string; numero?: string; complemento?: string; bairro?: string
+  municipio?: string; uf?: string; cep?: string
+  linha: string
 }
 
-export interface CupomDto {
-  razaoSocial: string; cnpj: string; endereco: string
-  chaveAcesso?: string; protocolo?: string; emitidoEm?: string
-  serie: number; numero: number; status: string
-  itens: CupomItemDto[]; descontoTotalCentavos: number; valorTotalCentavos: number; formaPagamento: string
-  tributosFederaisCentavos: number; tributosEstaduaisCentavos: number; tributosMunicipaisCentavos: number
-  fontesTributos?: string
+export interface DanfeEmitenteDto {
+  cnpj?: string; razaoSocial?: string; nomeFantasia?: string
+  inscricaoEstadual?: string; endereco: DanfeEnderecoDto
+}
+
+export interface DanfeConsumidorDto {
+  cpf?: string; cnpj?: string; nome?: string; endereco?: DanfeEnderecoDto
+  identificado: boolean
+}
+
+export interface DanfeItemDto {
+  numero: number
+  codigo?: string; descricao?: string; ncm?: string; cfop?: string
+  unidadeComercial?: string
+  quantidade: number; valorUnitario: number; valorTotal: number; desconto: number
+  gtin?: string
+  tributosAproximados?: number
+}
+
+export interface DanfeTotaisDto {
+  quantidadeItens: number
+  valorProdutos: number; valorDesconto: number; valorTotal: number
+  tributosAproximados?: number
+}
+
+export interface DanfePagamentoDto {
+  codigoTPag: string; valor: number
+  descricaoXPag?: string; bandeira?: string; autorizacao?: string
+}
+
+export interface DanfeProtocoloDto {
+  numero?: string; dataHora?: string; status?: string; motivo?: string
+}
+
+export interface DanfeContingenciaDto { dataHora?: string; justificativa?: string }
+
+/** 1 = Produção, 2 = Homologação. */
+export type DanfeAmbiente = 'Producao' | 'Homologacao'
+export type DanfeTipoEmissao = 'Normal' | 'ContingenciaOffline' | 'Outra'
+export type DanfeSituacao = 'Autorizada' | 'ContingenciaSemProtocolo' | 'Cancelada'
+
+export interface DanfeFiscalDto {
+  chaveAcesso?: string
+  ambiente: DanfeAmbiente
+  tipoEmissao: DanfeTipoEmissao
+  situacao: DanfeSituacao
+  serie: number; numero: number
+  emitidoEm?: string
+  naturezaOperacao?: string
+  emitente: DanfeEmitenteDto
+  consumidor: DanfeConsumidorDto
+  itens: DanfeItemDto[]
+  totais: DanfeTotaisDto
+  pagamentos: DanfePagamentoDto[]
+  troco?: number
+  protocolo?: DanfeProtocoloDto
+  contingencia?: DanfeContingenciaDto
+  informacoesComplementares?: string
   qrCodeUrl?: string
+  urlConsultaChave?: string
+  exigeAvisoSemValorFiscal: boolean
+  emContingencia: boolean
 }
 
 export const fiscalApi = {
@@ -1541,7 +1617,7 @@ export const fiscalApi = {
   }>('/api/fiscal/inutilizacoes', body),
   reprocessarEstornoErp: (id: string) =>
     api.post<{ id: string; erpEstornadoEm?: string; erpEstornoErro?: string }>(`/api/fiscal/notas/${id}/reprocessar-estorno-erp`),
-  obterCupom: (id: string) => api.get<CupomDto>(`/api/fiscal/notas/${id}/cupom`),
+  obterCupom: (id: string) => api.get<DanfeFiscalDto>(`/api/fiscal/notas/${id}/cupom`),
 
   emitirNotaComanda: (comandaId: string) =>
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/comanda/${comandaId}`),
@@ -1569,7 +1645,7 @@ export interface MinhaNotaDto {
 
 export const minhasNotasApi = {
   list: () => api.get<MinhaNotaDto[]>('/api/minhas-notas'),
-  obterCupom: (id: string) => api.get<CupomDto>(`/api/minhas-notas/${id}/cupom`),
+  obterCupom: (id: string) => api.get<DanfeFiscalDto>(`/api/minhas-notas/${id}/cupom`),
 }
 
 // ── Portal do contador (cross-tenant — uma conta, vários clientes) ────────────
@@ -1599,8 +1675,85 @@ export interface ContadorNotaRecebidaDto {
 export interface ContadorConfigDto {
   cnpj?: string; razaoSocial?: string; inscricaoEstadual?: string
   logradouro?: string; numero?: string; complemento?: string; bairro?: string
-  municipio?: string; uf?: string; cep?: string
+  codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
   regimeTributario: string
+  ambiente: string
+  serieNfce: number; proximoNumeroNfce: number
+  emailContador?: string
+  cscConfigurado: boolean; cscId?: string
+  certificadoConfigurado: boolean; certificadoValidade?: string; diasParaVencer?: number
+  formasPagamentoAutoEmissao: string[]
+  ibptConfigurado: boolean; ibptAutoSyncEnabled: boolean
+  ibptUltimaSincronizacao?: string; ibptUltimaVersao?: string; ibptUltimoErro?: string
+  // Parâmetros de apuração (comparativo Simples x Presumido)
+  anexoSimples: string
+  folhaPagamento12mEmCentavos: number
+  folhaPagamentoMensalEmCentavos: number
+  percentualPresuncaoIrpj: number
+  percentualPresuncaoCsll: number
+  aliquotaIcmsPercentual: number
+  aliquotaIssPercentual: number
+}
+
+/** Update parcial — campo omitido mantém o valor atual (mesmo contrato do /admin/fiscal). */
+export interface ContadorConfigUpdate {
+  cnpj?: string; razaoSocial?: string; inscricaoEstadual?: string
+  logradouro?: string; numero?: string; complemento?: string; bairro?: string
+  codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
+  regimeTributario?: string; ambiente?: string
+  serieNfce?: number; emailContador?: string
+  cscId?: string; cscToken?: string
+  anexoSimples?: string
+  folhaPagamento12mEmCentavos?: number
+  folhaPagamentoMensalEmCentavos?: number
+  percentualPresuncaoIrpj?: number
+  percentualPresuncaoCsll?: number
+  aliquotaIcmsPercentual?: number
+  aliquotaIssPercentual?: number
+}
+
+export interface ReceitaMensalDto {
+  ano: number; mes: number; competencia: string; receitaBruta: number
+}
+
+export interface TributoLinhaDto {
+  tributo: string; base: number; aliquota: number; valor: number; observacao?: string
+}
+
+export interface ApuracaoTributariaDto {
+  periodoInicio: string; periodoFim: string; mesesNoPeriodo: number
+  receitaBrutaPeriodo: number
+  rbt12: number; rbt12Parcial: boolean; mesesComReceita: number
+  historicoReceita: ReceitaMensalDto[]
+  folhaPagamento12m: number; folhaPagamentoMensal: number
+  simples: {
+    anexoConfigurado: string; anexoAplicado: string; fatorR?: number
+    faixa: number; aliquotaNominal: number; parcelaDeduzir: number
+    aliquotaEfetiva: number; valorDas: number
+    excedeuLimite: boolean; excedeuSublimite: boolean
+    linhas: TributoLinhaDto[]
+  }
+  presumido: {
+    baseIrpj: number; irpj: number; adicionalIrpj: number
+    baseCsll: number; csll: number; pis: number; cofins: number
+    icms: number; iss: number; inssPatronal: number
+    total: number; aliquotaEfetiva: number
+    linhas: TributoLinhaDto[]
+  }
+  regimeMaisEconomico: string; economia: number; regimeAtual: string
+  alertas: string[]
+}
+
+export interface FechamentoMensalDto {
+  id: string; ano: number; mes: number; competencia: string
+  periodoInicio: string; periodoFim: string
+  receitaBruta: number; deducoes: number; impostosSobreVendas: number
+  receitaLiquida: number; custoMercadoriaVendida: number; despesasOperacionais: number
+  resultadoOperacional: number; resultadoLiquido: number
+  notasAutorizadas: number; notasCanceladas: number; valorNotasAutorizadas: number
+  notasEntrada: number; valorNotasEntrada: number
+  regimeApurado: string; impostoApurado: number; aliquotaEfetiva: number
+  observacao?: string; fechadoPorNome?: string; fechadoEm: string
 }
 
 export interface ContadorProdutoDto {
@@ -1630,6 +1783,26 @@ export const contadorApi = {
   exportarXmls: (tenantId: string, inicio: string, fim: string) =>
     api.get(`/api/contador-portal/clientes/${tenantId}/exportar-xmls`, { params: { inicio, fim }, responseType: 'blob' }),
   getConfig: (tenantId: string) => api.get<ContadorConfigDto>(`/api/contador-portal/clientes/${tenantId}/config`),
+  updateConfig: (tenantId: string, data: ContadorConfigUpdate) =>
+    api.put<ContadorConfigDto>(`/api/contador-portal/clientes/${tenantId}/config`, data),
+  uploadCertificado: (tenantId: string, file: File, senha: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('senha', senha)
+    return api.post<{ message: string; validade: string; diasRestantes: number }>(
+      `/api/contador-portal/clientes/${tenantId}/certificado`, form,
+      { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  getApuracao: (tenantId: string, inicio: string, fim: string) =>
+    api.get<ApuracaoTributariaDto>(`/api/contador-portal/clientes/${tenantId}/apuracao`, { params: { inicio, fim } }),
+  listFechamentos: (tenantId: string) =>
+    api.get<FechamentoMensalDto[]>(`/api/contador-portal/clientes/${tenantId}/fechamentos`),
+  fecharCompetencia: (tenantId: string, data: { ano: number; mes: number; observacao?: string }) =>
+    api.post<FechamentoMensalDto>(`/api/contador-portal/clientes/${tenantId}/fechamentos`, data),
+  reabrirCompetencia: (tenantId: string, fechamentoId: string) =>
+    api.delete<{ message: string }>(`/api/contador-portal/clientes/${tenantId}/fechamentos/${fechamentoId}`),
+  baixarPacoteMensal: (tenantId: string, ano: number, mes: number) =>
+    api.get(`/api/contador-portal/clientes/${tenantId}/pacote-mensal`, { params: { ano, mes }, responseType: 'blob' }),
   listProdutos: (tenantId: string) => api.get<ContadorProdutoDto[]>(`/api/contador-portal/clientes/${tenantId}/produtos`),
   updateProdutoFiscal: (tenantId: string, produtoId: string, data: {
     ncm: string | null; cest: string | null

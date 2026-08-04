@@ -46,6 +46,39 @@ const CSOSN_OPCOES = [
   { value: '900', label: '900 — Outros' },
 ]
 
+// CST de ICMS — usado por quem está fora do Simples (CRT=3). O par do CSOSN:
+// mesma natureza, código diferente conforme o regime da loja.
+const CST_OPCOES = [
+  { value: '',   label: '— Nenhum —' },
+  { value: '00', label: '00 — Tributada integralmente (mais comum)' },
+  { value: '60', label: '60 — ICMS já cobrado antes por substituição tributária' },
+  { value: '20', label: '20 — Com redução de base de cálculo' },
+  { value: '40', label: '40 — Isenta' },
+  { value: '41', label: '41 — Não tributada' },
+  { value: '50', label: '50 — Suspensão' },
+  { value: '10', label: '10 — Tributada e com cobrança de ICMS-ST' },
+  { value: '30', label: '30 — Isenta e com cobrança de ICMS-ST' },
+  { value: '70', label: '70 — Com redução de base e cobrança de ICMS-ST' },
+  { value: '90', label: '90 — Outras' },
+]
+
+// CSTs de PIS/COFINS que aparecem em venda no varejo. Vazio = padrão do regime
+// (01 tributável, com a alíquota cumulativa ou não-cumulativa conforme o caso).
+const CST_PIS_COFINS_OPCOES = [
+  { value: '',   label: '— Padrão do regime —' },
+  { value: '01', label: '01 — Tributável, alíquota básica' },
+  { value: '02', label: '02 — Tributável, alíquota diferenciada' },
+  { value: '04', label: '04 — Monofásico, alíquota zero' },
+  { value: '06', label: '06 — Alíquota zero' },
+  { value: '07', label: '07 — Isenta' },
+  { value: '08', label: '08 — Sem incidência' },
+  { value: '09', label: '09 — Com suspensão' },
+  { value: '49', label: '49 — Outras operações de saída' },
+]
+
+/** CSTs em que a própria loja recolhe o ST (o 60 é ST já retido pelo fornecedor). */
+const CST_COM_ST = ['10', '30', '70']
+
 function fmtDate(d?: string) {
   if (!d) return '—'
   return new Date(d).toLocaleDateString('pt-BR')
@@ -106,6 +139,8 @@ export default function FiscalPage() {
   const [razaoSocial, setRazaoSocial]     = useState('')
   const [ie, setIe]                       = useState('')
   const [regime, setRegime]               = useState('SimplesNacional')
+  // Fora do Simples a natureza usa CST (não CSOSN) e destaca PIS/COFINS por item.
+  const regimeNormal = regime !== 'SimplesNacional'
   const [ambiente, setAmbiente]           = useState('Homologacao')
   const [serieNfce, setSerieNfce]         = useState(1)
   const [emailContador, setEmailContador] = useState('')
@@ -159,6 +194,16 @@ export default function FiscalPage() {
   const [novoIbsCbsClassTrib, setNovoIbsCbsClassTrib] = useState('000001')
   const [novoPadrao, setNovoPadrao]       = useState(false)
   const [savingNatureza, setSavingNatureza] = useState(false)
+  // Regime normal (Lucro Presumido/Real): CST no lugar do CSOSN e PIS/COFINS
+  // destacados por item. Ficam guardados junto dos campos do Simples — a mesma
+  // natureza continua válida se a empresa trocar de regime.
+  const [novoCst, setNovoCst] = useState('')
+  const [novaReducaoBc, setNovaReducaoBc] = useState('0')
+  const [novaAliquotaFcp, setNovaAliquotaFcp] = useState('0')
+  const [novoCstPis, setNovoCstPis] = useState('')
+  const [novoCstCofins, setNovoCstCofins] = useState('')
+  const [novaAliquotaPis, setNovaAliquotaPis] = useState('')
+  const [novaAliquotaCofins, setNovaAliquotaCofins] = useState('')
 
   // Exportação de XMLs
   const [inicio, setInicio] = useState('')
@@ -542,7 +587,8 @@ export default function FiscalPage() {
         csosn: novoCsosn || undefined,
         percentualCreditoSn: ['101', '201'].includes(novoCsosn) && novoPercentualCredito ? Number(novoPercentualCredito) : undefined,
         origemMercadoria: Number(novaOrigemMercadoria),
-        modalidadeBcSt: ['201', '202', '203'].includes(novoCsosn) ? Number(novaModalidadeBcSt) : undefined,
+        modalidadeBcSt: ['201', '202', '203'].includes(novoCsosn) || CST_COM_ST.includes(novoCst)
+          ? Number(novaModalidadeBcSt) : undefined,
         percentualMvaSt: novaModalidadeBcSt === '4' ? numero(novoMvaSt) : undefined,
         percentualReducaoBcSt: numero(novaReducaoBcSt),
         aliquotaIcmsSt: numero(novaAliquotaIcmsSt),
@@ -553,11 +599,20 @@ export default function FiscalPage() {
         ibsCbsCst: novoIbsCbsCst,
         ibsCbsClassTrib: novoIbsCbsClassTrib,
         isPadrao: novoPadrao,
+        cst: novoCst || undefined,
+        percentualReducaoBc: ['20', '70'].includes(novoCst) ? numero(novaReducaoBc) : undefined,
+        aliquotaFcp: numero(novaAliquotaFcp),
+        cstPis: novoCstPis || undefined,
+        cstCofins: novoCstCofins || undefined,
+        aliquotaPis: numero(novaAliquotaPis),
+        aliquotaCofins: numero(novaAliquotaCofins),
       })
       setNovaDescricao(''); setNovoCfop(''); setNovoCsosn(''); setNovoPercentualCredito(''); setNovoPadrao(false)
       setNovaOrigemMercadoria('0'); setNovaModalidadeBcSt('4'); setNovoMvaSt('')
       setNovaReducaoBcSt('0'); setNovaAliquotaIcmsSt(''); setNovaAliquotaIcmsProprio('')
       setNovaAliquotaFcpSt('0'); setNovaBaseStFixa(''); setNovoIbsCbsCst('000'); setNovoIbsCbsClassTrib('000001')
+      setNovoCst(''); setNovaReducaoBc('0'); setNovaAliquotaFcp('0')
+      setNovoCstPis(''); setNovoCstCofins(''); setNovaAliquotaPis(''); setNovaAliquotaCofins('')
       toast.success('Natureza de operação criada!')
       load()
     } catch (err) {
@@ -975,9 +1030,19 @@ export default function FiscalPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{n.descricao}</p>
                 <p className="text-xs text-gray-500">
-                  CFOP {n.cfop}{n.csosn ? ` · CSOSN ${n.csosn}` : ''}
+                  CFOP {n.cfop}
+                  {n.csosn ? ` · CSOSN ${n.csosn}` : ''}
+                  {n.cst ? ` · CST ${n.cst}` : ''}
                   {n.csosn === '101' && n.percentualCreditoIcmsSn != null && ` (${n.percentualCreditoIcmsSn}% crédito)`}
                 </p>
+                {/* Sem o código do regime em que a loja está, a natureza não é
+                    utilizável na emissão — avisa aqui e não na hora da venda. */}
+                {regimeNormal && !n.cst && (
+                  <p className="text-xs text-amber-400">Sem CST — não emite fora do Simples.</p>
+                )}
+                {!regimeNormal && !n.csosn && (
+                  <p className="text-xs text-amber-400">Sem CSOSN — usará 102 na emissão.</p>
+                )}
               </div>
               <button onClick={() => removeNatureza(n.id)} className="text-gray-500 hover:text-red-400 p-1">
                 <Trash2 className="w-4 h-4" />
@@ -1000,15 +1065,48 @@ export default function FiscalPage() {
             <input value={novoCfop} onChange={e => setNovoCfop(e.target.value)} placeholder="5102" className="input w-full" />
           </div>
           <div>
-            <label className="text-xs text-gray-400 font-semibold mb-1 block">CSOSN</label>
-            <select value={novoCsosn} onChange={e => setNovoCsosn(e.target.value)} className="input w-full">
-              {CSOSN_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            {/* O campo segue o regime da loja: CSOSN no Simples, CST fora dele.
+                Mostrar os dois ao mesmo tempo só produziria o par errado no XML. */}
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">
+              {regimeNormal ? 'CST de ICMS' : 'CSOSN'}
+            </label>
+            {regimeNormal ? (
+              <select value={novoCst} onChange={e => setNovoCst(e.target.value)} className="input w-full">
+                {CST_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ) : (
+              <select value={novoCsosn} onChange={e => setNovoCsosn(e.target.value)} className="input w-full">
+                {CSOSN_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            )}
           </div>
           <button onClick={addNatureza} disabled={savingNatureza} className="btn-primary justify-center">
             {savingNatureza ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           </button>
         </div>
+
+        {regimeNormal && ['00', '10', '20', '70', '90'].includes(novoCst) && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+            <div>
+              <label className="text-xs text-gray-400 font-semibold mb-1 block">Alíquota ICMS (%)</label>
+              <input type="number" min={0} max={100} step={0.01} value={novaAliquotaIcmsProprio}
+                     onChange={e => setNovaAliquotaIcmsProprio(e.target.value)} className="input w-full" />
+            </div>
+            {['20', '70'].includes(novoCst) && (
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Redução da BC (%)</label>
+                <input type="number" min={0} max={100} step={0.01} value={novaReducaoBc}
+                       onChange={e => setNovaReducaoBc(e.target.value)} className="input w-full" />
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-gray-400 font-semibold mb-1 block">FCP (%)</label>
+              <input type="number" min={0} max={100} step={0.01} value={novaAliquotaFcp}
+                     onChange={e => setNovaAliquotaFcp(e.target.value)} className="input w-full" />
+            </div>
+          </div>
+        )}
+
         {['101', '201'].includes(novoCsosn) && (
           <div className="mt-2 max-w-[200px]">
             <label className="text-xs text-gray-400 font-semibold mb-1 block">% de crédito de ICMS</label>
@@ -1044,7 +1142,41 @@ export default function FiscalPage() {
             </div>
           </div>
 
-          {['201', '202', '203'].includes(novoCsosn) && (
+          {regimeNormal && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 border-t border-surface-600 pt-3">
+              <div className="col-span-2 sm:col-span-4">
+                <p className="text-xs font-semibold text-gray-300">PIS / COFINS</p>
+                <p className="text-xs text-gray-500">
+                  Fora do Simples cada item destaca PIS e COFINS. Em branco, o sistema usa a alíquota
+                  do regime da loja: {regime === 'LucroReal' ? '1,65% e 7,6% (não-cumulativo)' : '0,65% e 3% (cumulativo)'}.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">CST PIS</label>
+                <select value={novoCstPis} onChange={e => setNovoCstPis(e.target.value)} className="input w-full">
+                  {CST_PIS_COFINS_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Alíquota PIS (%)</label>
+                <input type="number" min={0} max={100} step={0.01} value={novaAliquotaPis}
+                       onChange={e => setNovaAliquotaPis(e.target.value)} placeholder="padrão do regime" className="input w-full" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">CST COFINS</label>
+                <select value={novoCstCofins} onChange={e => setNovoCstCofins(e.target.value)} className="input w-full">
+                  {CST_PIS_COFINS_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Alíquota COFINS (%)</label>
+                <input type="number" min={0} max={100} step={0.01} value={novaAliquotaCofins}
+                       onChange={e => setNovaAliquotaCofins(e.target.value)} placeholder="padrão do regime" className="input w-full" />
+              </div>
+            </div>
+          )}
+
+          {(['201', '202', '203'].includes(novoCsosn) || CST_COM_ST.includes(novoCst)) && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 border-t border-surface-600 pt-3">
               <div>
                 <label className="text-xs text-gray-400 font-semibold mb-1 block">Modalidade BC-ST</label>

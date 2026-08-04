@@ -715,6 +715,127 @@ namespace CardGameStore.Data.Migrations
                     b.ToTable("external_transactions");
                 });
 
+            modelBuilder.Entity("CardGameStore.Models.PostgreSQL.FechamentoFiscalMensal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("AliquotaEfetiva")
+                        .HasColumnType("numeric(7,4)")
+                        .HasColumnName("aliquota_efetiva");
+
+                    b.Property<int>("Ano")
+                        .HasColumnType("integer")
+                        .HasColumnName("ano");
+
+                    b.Property<decimal>("CustoMercadoriaVendida")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("custo_mercadoria_vendida");
+
+                    b.Property<decimal>("Deducoes")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("deducoes");
+
+                    b.Property<decimal>("DespesasOperacionais")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("despesas_operacionais");
+
+                    b.Property<DateTime>("FechadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fechado_em");
+
+                    b.Property<Guid?>("FechadoPorContadorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("fechado_por_contador_id");
+
+                    b.Property<string>("FechadoPorNome")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("fechado_por_nome");
+
+                    b.Property<decimal>("ImpostoApurado")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("imposto_apurado");
+
+                    b.Property<decimal>("ImpostosSobreVendas")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("impostos_sobre_vendas");
+
+                    b.Property<int>("Mes")
+                        .HasColumnType("integer")
+                        .HasColumnName("mes");
+
+                    b.Property<int>("NotasAutorizadas")
+                        .HasColumnType("integer")
+                        .HasColumnName("notas_autorizadas");
+
+                    b.Property<int>("NotasCanceladas")
+                        .HasColumnType("integer")
+                        .HasColumnName("notas_canceladas");
+
+                    b.Property<int>("NotasEntrada")
+                        .HasColumnType("integer")
+                        .HasColumnName("notas_entrada");
+
+                    b.Property<string>("Observacao")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("observacao");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload_json");
+
+                    b.Property<DateTime>("PeriodoFim")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("periodo_fim");
+
+                    b.Property<DateTime>("PeriodoInicio")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("periodo_inicio");
+
+                    b.Property<decimal>("ReceitaBruta")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("receita_bruta");
+
+                    b.Property<decimal>("ReceitaLiquida")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("receita_liquida");
+
+                    b.Property<string>("RegimeApurado")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("regime_apurado");
+
+                    b.Property<decimal>("ResultadoLiquido")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("resultado_liquido");
+
+                    b.Property<decimal>("ResultadoOperacional")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("resultado_operacional");
+
+                    b.Property<decimal>("ValorNotasAutorizadas")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("valor_notas_autorizadas");
+
+                    b.Property<decimal>("ValorNotasEntrada")
+                        .HasColumnType("numeric(14,2)")
+                        .HasColumnName("valor_notas_entrada");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Ano", "Mes")
+                        .IsUnique()
+                        .HasDatabaseName("ix_fechamentos_fiscais_competencia");
+
+                    b.ToTable("fechamentos_fiscais_mensais");
+                });
+
             modelBuilder.Entity("CardGameStore.Models.PostgreSQL.FechamentoPeriodo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -776,10 +897,23 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal>("AliquotaIcmsPercentual")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("aliquota_icms_percentual");
+
+                    b.Property<decimal>("AliquotaIssPercentual")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("aliquota_iss_percentual");
+
                     b.Property<string>("Ambiente")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("ambiente");
+
+                    b.Property<string>("AnexoSimples")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("anexo_simples");
 
                     b.Property<string>("Bairro")
                         .HasMaxLength(100)
@@ -849,6 +983,14 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("email_contador");
 
+                    b.Property<long>("FolhaPagamento12mEmCentavos")
+                        .HasColumnType("bigint")
+                        .HasColumnName("folha_pagamento12m_em_centavos");
+
+                    b.Property<long>("FolhaPagamentoMensalEmCentavos")
+                        .HasColumnType("bigint")
+                        .HasColumnName("folha_pagamento_mensal_em_centavos");
+
                     b.Property<string>("FormasPagamentoAutoEmissao")
                         .IsRequired()
                         .HasColumnType("text")
@@ -903,6 +1045,14 @@ namespace CardGameStore.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("numero");
+
+                    b.Property<decimal>("PercentualPresuncaoCsll")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("percentual_presuncao_csll");
+
+                    b.Property<decimal>("PercentualPresuncaoIrpj")
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("percentual_presuncao_irpj");
 
                     b.Property<int>("ProximoNumeroNfce")
                         .HasColumnType("integer")
@@ -1162,6 +1312,14 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal?>("AliquotaCofins")
+                        .HasColumnType("numeric")
+                        .HasColumnName("aliquota_cofins");
+
+                    b.Property<decimal?>("AliquotaFcp")
+                        .HasColumnType("numeric")
+                        .HasColumnName("aliquota_fcp");
+
                     b.Property<decimal?>("AliquotaFcpSt")
                         .HasColumnType("numeric")
                         .HasColumnName("aliquota_fcp_st");
@@ -1174,9 +1332,17 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("numeric")
                         .HasColumnName("aliquota_icms_st");
 
+                    b.Property<decimal?>("AliquotaPis")
+                        .HasColumnType("numeric")
+                        .HasColumnName("aliquota_pis");
+
                     b.Property<int?>("BaseStFixaEmCentavos")
                         .HasColumnType("integer")
                         .HasColumnName("base_st_fixa_centavos");
+
+                    b.Property<int?>("BaseStRetidaEmCentavos")
+                        .HasColumnType("integer")
+                        .HasColumnName("base_st_retida_centavos");
 
                     b.Property<string>("Cfop")
                         .IsRequired()
@@ -1192,6 +1358,21 @@ namespace CardGameStore.Data.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)")
                         .HasColumnName("csosn");
+
+                    b.Property<string>("Cst")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)")
+                        .HasColumnName("cst");
+
+                    b.Property<string>("CstCofins")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)")
+                        .HasColumnName("cst_cofins");
+
+                    b.Property<string>("CstPis")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)")
+                        .HasColumnName("cst_pis");
 
                     b.Property<string>("Descricao")
                         .IsRequired()
@@ -1235,6 +1416,10 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("numeric")
                         .HasColumnName("percentual_mva_st");
 
+                    b.Property<decimal?>("PercentualReducaoBc")
+                        .HasColumnType("numeric")
+                        .HasColumnName("percentual_reducao_bc");
+
                     b.Property<decimal?>("PercentualReducaoBcSt")
                         .HasColumnType("numeric")
                         .HasColumnName("percentual_reducao_bc_st");
@@ -1242,6 +1427,10 @@ namespace CardGameStore.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<int?>("ValorStRetidoEmCentavos")
+                        .HasColumnType("integer")
+                        .HasColumnName("valor_st_retido_centavos");
 
                     b.HasKey("Id");
 

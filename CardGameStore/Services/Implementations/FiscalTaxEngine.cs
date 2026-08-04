@@ -1,3 +1,4 @@
+using CardGameStore.Models.PostgreSQL;
 using NFe.Classes.Informacoes.Detalhe;
 using IbsCbsTotal = NFe.Classes.Informacoes.Total.IbsCbs.IBSCBSTot;
 
@@ -10,7 +11,9 @@ namespace CardGameStore.Services.Implementations;
 /// </summary>
 internal interface IFiscalTaxEngine
 {
-    det MontarItem(NfceEmissionService.ItemFiscal item, int numero, int descontoCentavos, bool incluirIbsCbs);
+    det MontarItem(
+        NfceEmissionService.ItemFiscal item, int numero, int descontoCentavos, bool incluirIbsCbs,
+        RegimeTributario regime);
     NfceEmissionService.TotaisIcms SomarTotaisIcms(IEnumerable<det> itens);
     IbsCbsTotal MontarTotaisIbsCbs2026(IEnumerable<det> itens);
 }
@@ -18,8 +21,9 @@ internal interface IFiscalTaxEngine
 internal sealed class ConfigurableFiscalTaxEngine : IFiscalTaxEngine
 {
     public det MontarItem(
-        NfceEmissionService.ItemFiscal item, int numero, int descontoCentavos, bool incluirIbsCbs) =>
-        NfceEmissionService.MontarItem(item, numero, descontoCentavos, incluirIbsCbs);
+        NfceEmissionService.ItemFiscal item, int numero, int descontoCentavos, bool incluirIbsCbs,
+        RegimeTributario regime) =>
+        NfceEmissionService.MontarItem(item, numero, descontoCentavos, incluirIbsCbs, regime);
 
     public NfceEmissionService.TotaisIcms SomarTotaisIcms(IEnumerable<det> itens) =>
         NfceEmissionService.SomarTotaisIcms(itens);

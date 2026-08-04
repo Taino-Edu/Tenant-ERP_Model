@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  O MESMO documento de nfce-contingencia.xml, transmitido depois que a SEFAZ
+  voltou. Conteudo identico, agora com protNFe. A reimpressao precisa continuar
+  mostrando dhEmi/dhCont/xJust originais e acrescentar o protocolo — nunca
+  reescrever o documento que o consumidor ja levou.
+-->
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe>
+    <infNFe Id="NFe99260800000000000191650010000000199123456789" versao="4.00">
+      <ide>
+        <cUF>99</cUF>
+        <cNF>12345678</cNF>
+        <natOp>VENDA AO CONSUMIDOR</natOp>
+        <mod>65</mod>
+        <serie>1</serie>
+        <nNF>19</nNF>
+        <dhEmi>2026-08-04T20:05:00-03:00</dhEmi>
+        <tpNF>1</tpNF>
+        <idDest>1</idDest>
+        <cMunFG>9999999</cMunFG>
+        <tpImp>4</tpImp>
+        <tpEmis>9</tpEmis>
+        <cDV>9</cDV>
+        <tpAmb>1</tpAmb>
+        <finNFe>1</finNFe>
+        <indFinal>1</indFinal>
+        <indPres>1</indPres>
+        <dhCont>2026-08-04T20:04:30-03:00</dhCont>
+        <xJust>Falha de comunicacao com a SEFAZ durante o atendimento</xJust>
+      </ide>
+      <emit>
+        <CNPJ>00000000000191</CNPJ>
+        <xNome>LOJA FIXTURE DE TESTE LTDA</xNome>
+        <enderEmit>
+          <xLgr>Rua das Fixtures</xLgr>
+          <nro>100</nro>
+          <xBairro>Centro</xBairro>
+          <cMun>9999999</cMun>
+          <xMun>Cidade Fixture</xMun>
+          <UF>SP</UF>
+          <CEP>00000000</CEP>
+        </enderEmit>
+        <IE>000000000000</IE>
+        <CRT>1</CRT>
+      </emit>
+      <det nItem="1">
+        <prod>
+          <cProd>SKU-0004</cProd>
+          <cEAN>SEM GTIN</cEAN>
+          <xProd>Deck box offline</xProd>
+          <NCM>39269090</NCM>
+          <CFOP>5102</CFOP>
+          <uCom>UN</uCom>
+          <qCom>1.0000</qCom>
+          <vUnCom>40.0000000000</vUnCom>
+          <vProd>40.00</vProd>
+          <indTot>1</indTot>
+        </prod>
+        <imposto>
+          <vTotTrib>6.00</vTotTrib>
+        </imposto>
+      </det>
+      <total>
+        <ICMSTot>
+          <vBC>0.00</vBC>
+          <vICMS>0.00</vICMS>
+          <vProd>40.00</vProd>
+          <vDesc>0.00</vDesc>
+          <vNF>40.00</vNF>
+          <vTotTrib>6.00</vTotTrib>
+        </ICMSTot>
+      </total>
+      <pag>
+        <detPag>
+          <tPag>01</tPag>
+          <vPag>40.00</vPag>
+        </detPag>
+      </pag>
+    </infNFe>
+    <infNFeSupl>
+      <qrCode>https://www.nfce.fazenda.sp.gov.br/qrcode?p=99260800000000000191650010000000199123456789|2|1|1|abcdef</qrCode>
+      <urlChave>https://www.nfce.fazenda.sp.gov.br/consulta</urlChave>
+    </infNFeSupl>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt>
+      <tpAmb>1</tpAmb>
+      <chNFe>99260800000000000191650010000000199123456789</chNFe>
+      <dhRecbto>2026-08-04T21:10:00-03:00</dhRecbto>
+      <nProt>999260000009075410</nProt>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso da NF-e</xMotivo>
+    </infProt>
+  </protNFe>
+</nfeProc>

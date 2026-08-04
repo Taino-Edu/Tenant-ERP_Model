@@ -43,10 +43,10 @@ public class FiscalXmlExportServiceTests
         var foraDoPeriodo    = new DateTime(2026, 5, 15, 12, 0, 0, DateTimeKind.Utc);
 
         db.NotasFiscaisEmitidas.AddRange(
-            new NotaFiscalEmitida { Status = NotaFiscalStatus.Autorizada, EmitidoEm = dentroDoPeriodo, ChaveAcesso = "CHAVE-AUTORIZADA", XmlAutorizado = "<xml>autorizada</xml>" },
-            new NotaFiscalEmitida { Status = NotaFiscalStatus.Cancelada,  EmitidoEm = dentroDoPeriodo, ChaveAcesso = "CHAVE-CANCELADA",  XmlAutorizado = "<xml>cancelada</xml>", XmlEventoCancelamento = "<procEventoNFe />" },
+            new NotaFiscalEmitida { Status = NotaFiscalStatus.Autorizada, EmitidoEm = dentroDoPeriodo, Serie = 1, Numero = 123, ChaveAcesso = "CHAVE-AUTORIZADA", XmlAutorizado = "<xml>autorizada</xml>" },
+            new NotaFiscalEmitida { Status = NotaFiscalStatus.Cancelada,  EmitidoEm = dentroDoPeriodo, Serie = 1, Numero = 124, ChaveAcesso = "CHAVE-CANCELADA",  XmlAutorizado = "<xml>cancelada</xml>", XmlEventoCancelamento = "<procEventoNFe />" },
             new NotaFiscalEmitida { Status = NotaFiscalStatus.PendenteEmissao, EmitidoEm = dentroDoPeriodo, XmlAutorizado = null },
-            new NotaFiscalEmitida { Status = NotaFiscalStatus.Autorizada, EmitidoEm = foraDoPeriodo, ChaveAcesso = "CHAVE-FORA", XmlAutorizado = "<xml>fora</xml>" }
+            new NotaFiscalEmitida { Status = NotaFiscalStatus.Autorizada, EmitidoEm = foraDoPeriodo, Serie = 1, Numero = 99, ChaveAcesso = "CHAVE-FORA", XmlAutorizado = "<xml>fora</xml>" }
         );
         await db.SaveChangesAsync();
 
@@ -55,11 +55,84 @@ public class FiscalXmlExportServiceTests
 
         using var ms  = new MemoryStream(zipBytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        var nomes = zip.Entries.Select(e => e.Name).ToList();
 
         zip.Entries.Should().HaveCount(3);
-        zip.Entries.Select(e => e.Name).Should().Contain(n => n.StartsWith("CHAVE-AUTORIZADA"));
-        zip.Entries.Select(e => e.Name).Should().Contain(n => n.StartsWith("CHAVE-CANCELADA"));
-        zip.Entries.Select(e => e.Name).Should().Contain("CHAVE-CANCELADA-cancelamento-procEvento.xml");
-        zip.Entries.Select(e => e.Name).Should().NotContain(n => n.StartsWith("CHAVE-FORA"));
+        nomes.Should().Contain(n => n.Contains("CHAVE-AUTORIZADA"));
+        nomes.Should().Contain(n => n.Contains("CHAVE-CANCELADA") && n.Contains("procEventoCancelamento"));
+        nomes.Should().NotContain(n => n.Contains("CHAVE-FORA"));
+    }
+
+    [Fact]
+    public async Task GerarZipAsync_NomeDoArquivo_TrazDataSerieNumeroEStatus()
+    {
+        // O contador acha a nota pelo NOME do arquivo, sem abrir o XML — a chave
+        // de 44 dígitos sozinha (nome antigo) não permitia isso. A data usada é a
+        // de Brasília: 12:00 UTC do dia 15 é 09:00 do dia 15 aqui, e uma emissão
+        // de madrugada não pode aparecer no arquivo com a data do dia seguinte.
+        using var db = CreateDb();
+
+        db.NotasFiscaisEmitidas.AddRange(
+            new NotaFiscalEmitida
+            {
+                Status = NotaFiscalStatus.Autorizada,
+                EmitidoEm = new DateTime(2026, 6, 15, 12, 0, 0, DateTimeKind.Utc),
+                Serie = 1, Numero = 123, ChaveAcesso = "CHAVE-COM-NUMERO",
+                XmlAutorizado = "<xml/>",
+            },
+            // 01:30 UTC do dia 16 ainda é 22:30 do dia 15 em Brasília.
+            new NotaFiscalEmitida
+            {
+                Status = NotaFiscalStatus.Autorizada,
+                EmitidoEm = new DateTime(2026, 6, 16, 1, 30, 0, DateTimeKind.Utc),
+                Serie = 2, Numero = 7, ChaveAcesso = "CHAVE-VIRADA",
+                XmlAutorizado = "<xml/>",
+            });
+        await db.SaveChangesAsync();
+
+        var service = new FiscalXmlExportService(db);
+        var zipBytes = await service.GerarZipAsync(
+            new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        using var ms  = new MemoryStream(zipBytes);
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        var nomes = zip.Entries.Select(e => e.FullName).ToList();
+
+        nomes.Should().Contain("saidas/2026-06-15_NFCe-001-000123_Autorizada_CHAVE-COM-NUMERO.xml");
+        nomes.Should().Contain("saidas/2026-06-15_NFCe-002-000007_Autorizada_CHAVE-VIRADA.xml");
+    }
+
+    [Fact]
+    public async Task GerarPacoteMensalAsync_JuntaXmlsERelatorios()
+    {
+        using var db = CreateDb();
+        db.NotasFiscaisEmitidas.Add(new NotaFiscalEmitida
+        {
+            Status = NotaFiscalStatus.Autorizada,
+            EmitidoEm = new DateTime(2026, 6, 15, 12, 0, 0, DateTimeKind.Utc),
+            Serie = 1, Numero = 5, ChaveAcesso = "CHAVE-PACOTE", XmlAutorizado = "<xml/>",
+        });
+        await db.SaveChangesAsync();
+
+        var service = new FiscalXmlExportService(db);
+        var zipBytes = await service.GerarPacoteMensalAsync(
+            new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+            new[] { ("dre.csv", "Linha;Valor\r\nReceita bruta;100,00") });
+
+        using var ms  = new MemoryStream(zipBytes);
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
+        var nomes = zip.Entries.Select(e => e.FullName).ToList();
+
+        nomes.Should().Contain(n => n.StartsWith("saidas/") && n.Contains("CHAVE-PACOTE"));
+        nomes.Should().Contain("relatorios/dre.csv");
+
+        // O CSV precisa sair com BOM: sem ele o Excel em pt-BR come os acentos,
+        // e é nele que o contador vai abrir o relatório.
+        using var relatorio = zip.GetEntry("relatorios/dre.csv")!.Open();
+        using var buffer = new MemoryStream();
+        await relatorio.CopyToAsync(buffer);
+        buffer.ToArray().Take(3).Should().Equal(0xEF, 0xBB, 0xBF);
     }
 }

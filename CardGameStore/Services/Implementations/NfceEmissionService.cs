@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NfceEmissionService.cs — Motor de emissão de NFC-e via DFe.NET
 //
 // Monta o objeto NFe (ide/emit/dest/det/total/pag), assina com o certificado
@@ -345,62 +345,52 @@ public class NfceEmissionService : INfceEmissionService
         return await _db.NotasFiscaisEmitidas.FindAsync(notaId) ?? nota;
     }
 
-    public async Task<CupomDto?> ObterCupomAsync(Guid notaId)
+    /// <summary>
+    /// Representação do DANFE NFC-e, montada SOMENTE a partir do XML fiscal
+    /// persistido (DFE-001 do plano de go-live).
+    ///
+    /// A versão anterior remontava o cupom relendo a comanda e a FiscalConfig
+    /// atuais. O resultado parecia certo na tela, mas corrigir o endereço da
+    /// loja ou renomear um produto mudava a reimpressão de uma venda antiga — o
+    /// papel passava a divergir do documento que a SEFAZ autorizou. Agora nada
+    /// aqui consulta cadastro ou venda: o XML é a única fonte.
+    ///
+    /// Nota sem XML (pendente, rejeitada, ou em contingência antes de RES-002
+    /// persistir o XML assinado offline) devolve null — documento sem
+    /// autorização não pode ser apresentado como DANFE válido (DFE-007).
+    /// </summary>
+    public async Task<DanfeFiscalDto?> ObterCupomAsync(Guid notaId)
     {
-        var nota = await _db.NotasFiscaisEmitidas.FindAsync(notaId);
+        var nota = await _db.NotasFiscaisEmitidas
+            .AsNoTracking()
+            .FirstOrDefaultAsync(n => n.Id == notaId);
         if (nota is null) return null;
 
-        var dados = nota.Origem == NotaFiscalOrigem.Comanda
-            ? await CarregarDadosComandaAsync(nota.ComandaId!.Value, permitirCancelada: true)
-            : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value, permitirCancelada: true);
-
-        var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
-        var endereco = cfg is null ? "" : $"{cfg.Logradouro}, {cfg.Numero} - {cfg.Bairro} - {cfg.Municipio}/{cfg.Uf}";
-
-        var descontos = DistribuirDesconto(dados.Itens, dados.DescontoTotalCentavos);
-        var tributosItens = ObterTributosItensDoSnapshot(nota, dados.Itens, descontos);
-
-        return new CupomDto(
-            RazaoSocial: cfg?.RazaoSocial ?? "",
-            Cnpj:        cfg?.Cnpj ?? "",
-            Endereco:    endereco,
-            ChaveAcesso: nota.ChaveAcesso,
-            Protocolo:   nota.Protocolo,
-            EmitidoEm:   nota.EmitidoEm,
-            Serie:       nota.Serie ?? 0,
-            Numero:      nota.Numero ?? 0,
-            Status:      nota.Status.ToString(),
-            Itens:       dados.Itens.Select((i, indice) => new CupomItemDto(
-                i.Nome, i.Quantidade, i.PrecoUnitarioCentavos, i.SubtotalCentavos,
-                tributosItens.ElementAtOrDefault(indice))).ToList(),
-            DescontoTotalCentavos: dados.DescontoTotalCentavos,
-            ValorTotalCentavos: nota.ValorTotalEmCentavos,
-            FormaPagamento: dados.FormaPagamento,
-            TributosFederaisCentavos: nota.TributosFederaisEmCentavos,
-            TributosEstaduaisCentavos: nota.TributosEstaduaisEmCentavos,
-            TributosMunicipaisCentavos: nota.TributosMunicipaisEmCentavos,
-            FontesTributos: nota.FontesTributos,
-            QrCodeUrl:   nota.UrlQrCode);
-    }
-
-    private static List<int> ObterTributosItensDoSnapshot(
-        NotaFiscalEmitida nota, IReadOnlyList<ItemFiscal> itens, IReadOnlyList<int> descontos)
-    {
-        if (!string.IsNullOrWhiteSpace(nota.TributosItensJson))
+        if (string.IsNullOrWhiteSpace(nota.XmlAutorizado))
         {
-            try
-            {
-                var snapshot = JsonSerializer.Deserialize<List<int>>(nota.TributosItensJson);
-                if (snapshot is { Count: > 0 }) return snapshot;
-            }
-            catch (JsonException)
-            {
-                // Notas antigas ou snapshot corrompido usam o calculo atual como fallback visual.
-            }
+            _logger.LogInformation(
+                "DANFE não gerado para a nota {NotaId}: status {Status} sem XML fiscal persistido.",
+                notaId, nota.Status);
+            return null;
         }
 
-        return itens.Select((item, indice) =>
-            DecimalParaCentavos(CalcularTributosAproximados(item, descontos[indice]).Total)).ToList();
+        try
+        {
+            var danfe = DanfeXmlParser.Parse(nota.XmlAutorizado);
+
+            // O cancelamento é um evento posterior, fora do XML de autorização —
+            // é o único dado da representação que precisa vir do registro local.
+            return nota.Status == NotaFiscalStatus.Cancelada
+                ? danfe with { Situacao = DanfeSituacao.Cancelada }
+                : danfe;
+        }
+        catch (DanfeXmlInvalidoException ex)
+        {
+            // XML corrompido em repouso é problema de guarda, não de venda: falha
+            // de forma visível em vez de cair no cadastro e mascarar a perda.
+            _logger.LogError(ex, "XML fiscal da nota {NotaId} não pôde ser lido para gerar o DANFE.", notaId);
+            return null;
+        }
     }
 
     // ── Orquestração ──────────────────────────────────────────────────────────
@@ -789,7 +779,15 @@ public class NfceEmissionService : INfceEmissionService
         decimal? PercentualTributosMunicipais = null,
         string? FonteTributos = null,
         bool TributosPreenchidosAutomaticamente = false,
-        DateTime? TributosVigenciaFim = null);
+        DateTime? TributosVigenciaFim = null,
+        // ── Regime normal (Lucro Presumido/Real) ─────────────────────────────
+        string? Cst = null,
+        decimal? PercentualReducaoBc = null,
+        decimal? AliquotaFcp = null,
+        int? BaseStRetidaEmCentavos = null,
+        int? ValorStRetidoEmCentavos = null,
+        string? CstPis = null, string? CstCofins = null,
+        decimal? AliquotaPis = null, decimal? AliquotaCofins = null);
 
     private record DadosEmissao(
         List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
@@ -909,7 +907,16 @@ public class NfceEmissionService : INfceEmissionService
         PercentualTributosMunicipais: product.PercentualTributosMunicipais,
         FonteTributos: product.FonteTributos,
         TributosPreenchidosAutomaticamente: product.TributosPreenchidosAutomaticamente,
-        TributosVigenciaFim: product.TributosVigenciaFim);
+        TributosVigenciaFim: product.TributosVigenciaFim,
+        Cst: regra?.Cst,
+        PercentualReducaoBc: regra?.PercentualReducaoBc,
+        AliquotaFcp: regra?.AliquotaFcp,
+        BaseStRetidaEmCentavos: regra?.BaseStRetidaEmCentavos,
+        ValorStRetidoEmCentavos: regra?.ValorStRetidoEmCentavos,
+        CstPis: regra?.CstPis,
+        CstCofins: regra?.CstCofins,
+        AliquotaPis: regra?.AliquotaPis,
+        AliquotaCofins: regra?.AliquotaCofins);
 
     // ── Montagem, assinatura e transmissão ─────────────────────────────────────
 
@@ -936,9 +943,25 @@ public class NfceEmissionService : INfceEmissionService
             throw new FiscalNaoConfiguradoException("CSC (identificador e token) não configurado em Admin > Fiscal.");
         if (cfg.SerieNfce is < 1 or > 999 || cfg.ProximoNumeroNfce < 1)
             throw new FiscalNaoConfiguradoException("Série ou próximo número da NFC-e inválido.");
+        // A montagem de itens fora do Simples já existe (CST 00 a 90, PIS/COFINS
+        // por regime), mas os TOTALIZADORES do documento ainda não somam esses
+        // grupos: SomarTotaisIcms só conhece ICMSSN201/202 e o ICMSTot manda vBC,
+        // vICMS, vFCP, vPIS e vCOFINS fixos em zero. Emitir assim produz um XML
+        // cujos totais divergem dos itens — rejeição certa, com numeração
+        // queimada e um erro que parece bug do sistema para o lojista.
+        //
+        // Por isso a guarda volta aqui, no pré-voo, antes de reservar número. O
+        // CADASTRO do regime continua livre: o contador precisa registrar a
+        // realidade do cliente para apuração, DRE e fechamento funcionarem. O que
+        // está bloqueado é emitir. Reabrir exige fechar REG-001 (seções 24.2 e
+        // 25 do plano de go-live): totalizadores completos, XML validado no XSD e
+        // aprovação fiscal por CST.
         if (cfg.RegimeTributario != RegimeTributario.SimplesNacional)
             throw new FiscalNaoConfiguradoException(
-                "O motor fiscal atual suporta somente Simples Nacional. Lucro Presumido/Real ainda não podem emitir.");
+                $"A loja está cadastrada como {cfg.RegimeTributario} e a emissão de NFC-e ainda não está " +
+                "certificada fora do Simples Nacional — os totalizadores do documento não consolidam os " +
+                "tributos destacados nos itens. Apuração, DRE, fechamento e exportação de XMLs continuam " +
+                "funcionando normalmente.");
         _ = SanitizarCep(cfg.Cep);
         if (new string(cfg.CodigoMunicipioIbge.Where(char.IsDigit).ToArray()).Length != 7)
             throw new FiscalNaoConfiguradoException("Código IBGE do município deve ter 7 dígitos.");
@@ -1019,7 +1042,8 @@ public class NfceEmissionService : INfceEmissionService
 
         var descontosPorItem = DistribuirDesconto(dados.Itens, dados.DescontoTotalCentavos);
         var detItens = dados.Itens
-            .Select((item, idx) => _taxEngine.MontarItem(item, idx + 1, descontosPorItem[idx], incluirIbsCbs))
+            .Select((item, idx) => _taxEngine.MontarItem(
+                item, idx + 1, descontosPorItem[idx], incluirIbsCbs, cfg.RegimeTributario))
             .ToList();
         if (ambiente == TipoAmbiente.Homologacao && detItens.Count > 0)
             detItens[0].prod.xProd = ProdutoHomologacao;
@@ -1398,10 +1422,12 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     internal static det MontarItem(
-        ItemFiscal item, int numero, int descontoCentavos = 0, bool incluirIbsCbs = false)
+        ItemFiscal item, int numero, int descontoCentavos = 0, bool incluirIbsCbs = false,
+        RegimeTributario regime = RegimeTributario.SimplesNacional)
     {
-        var calculoSt = CsosnTemIcmsSt(item.Csosn)
-            ? CalcularIcmsStInclusoNoPreco(item, descontoCentavos)
+        var regimeNormal = regime != RegimeTributario.SimplesNacional;
+        var calculoSt = ItemTemIcmsSt(item, regimeNormal)
+            ? CalcularIcmsStInclusoNoPreco(item, descontoCentavos, regimeNormal)
             : null;
         var desconto = descontoCentavos / 100m;
         // Em ST o preço do cadastro é final ao consumidor. Separamos o imposto sem
@@ -1409,9 +1435,11 @@ public class NfceEmissionService : INfceEmissionService
         var valorProduto = calculoSt is null
             ? item.SubtotalCentavos / 100m
             : calculoSt.ValorOperacaoLiquido + desconto;
+        // Mesma base para IBS/CBS e para PIS/COFINS: valor do produto menos o
+        // desconto incondicional do item.
         var baseIbsCbs = Math.Max(0, valorProduto - desconto);
         var tributosAproximados = CalcularTributosAproximados(item, descontoCentavos);
-        var cest = SanitizarCest(item.Cest, CsosnExigeCest(item.Csosn));
+        var cest = SanitizarCest(item.Cest, regimeNormal ? CstExigeCest(item.Cst) : CsosnExigeCest(item.Csosn));
 
         return new det
         {
@@ -1438,9 +1466,14 @@ public class NfceEmissionService : INfceEmissionService
             imposto = new imposto
             {
                 vTotTrib = tributosAproximados.Total,
-                ICMS   = new ICMS { TipoICMS = MontarIcmsSimplesNacional(item, descontoCentavos, calculoSt) },
-                PIS    = new PIS    { TipoPIS    = new PISOutr    { CST = CSTPIS.pis99,    vBC = 0, pPIS    = 0, vPIS    = 0 } },
-                COFINS = new COFINS { TipoCOFINS = new COFINSOutr { CST = CSTCOFINS.cofins99, vBC = 0, pCOFINS = 0, vCOFINS = 0 } },
+                ICMS   = new ICMS
+                {
+                    TipoICMS = regimeNormal
+                        ? MontarIcmsRegimeNormal(item, descontoCentavos, calculoSt)
+                        : MontarIcmsSimplesNacional(item, descontoCentavos, calculoSt),
+                },
+                PIS    = new PIS    { TipoPIS    = MontarPis(item, regime, baseIbsCbs) },
+                COFINS = new COFINS { TipoCOFINS = MontarCofins(item, regime, baseIbsCbs) },
                 IBSCBS = incluirIbsCbs ? MontarIbsCbs2026(item, baseIbsCbs) : null,
             },
         };
@@ -1489,6 +1522,122 @@ public class NfceEmissionService : INfceEmissionService
 
     private static bool CsosnExigeCest(string? csosn) =>
         csosn is "201" or "202" or "203" or "500";
+
+    /// <summary>Os CSTs que envolvem ST (próprio ou já retido) exigem CEST no item.</summary>
+    private static bool CstExigeCest(string? cst) =>
+        cst is "10" or "30" or "60" or "70";
+
+    // ── PIS/COFINS ────────────────────────────────────────────────────────────
+    //
+    // No Simples Nacional os dois estão dentro do DAS: o XML sai com CST 99
+    // ("Outras Operações") e valor zero — é o que a SEFAZ espera de CRT=1, e é o
+    // que este motor sempre fez. Fora do Simples cada item precisa de CST e
+    // alíquota reais, e a alíquota depende do regime de apuração:
+    //
+    //   Lucro Presumido → cumulativo:     PIS 0,65%  COFINS 3,00%
+    //   Lucro Real      → não-cumulativo: PIS 1,65%  COFINS 7,60%
+    //
+    // A natureza de operação pode sobrescrever CST e alíquota (venda com
+    // alíquota zero, monofásico, isenta) — o padrão do regime é só o ponto de
+    // partida pra quem não configurou nada.
+
+    private const decimal PisCumulativo       = 0.65m;
+    private const decimal CofinsCumulativo    = 3.00m;
+    private const decimal PisNaoCumulativo    = 1.65m;
+    private const decimal CofinsNaoCumulativo = 7.60m;
+
+    /// <summary>CSTs de PIS/COFINS que não têm base nem alíquota (isenta, alíquota zero, suspensão…).</summary>
+    private static bool CstFederalSemTributo(string cst) =>
+        cst is "04" or "05" or "06" or "07" or "08" or "09";
+
+    internal static PISBasico MontarPis(ItemFiscal item, RegimeTributario regime, decimal baseCalculo)
+    {
+        if (regime == RegimeTributario.SimplesNacional)
+            return new PISOutr { CST = CSTPIS.pis99, vBC = 0, pPIS = 0, vPIS = 0 };
+
+        var cst = NormalizarCstFederal(item.CstPis, "01");
+        var aliquota = item.AliquotaPis ?? (regime == RegimeTributario.LucroReal
+            ? PisNaoCumulativo
+            : PisCumulativo);
+
+        if (CstFederalSemTributo(cst))
+            return new PISNT { CST = MapCstPis(cst) };
+
+        // CST 49..99 é o grupo "Outras Operações": aceita base e alíquota, mas
+        // não entra no grupo de alíquota básica do leiaute.
+        if (cst is not ("01" or "02"))
+            return new PISOutr
+            {
+                CST = MapCstPis(cst),
+                vBC = ArredondarTributo(baseCalculo),
+                pPIS = aliquota,
+                vPIS = ArredondarTributo(baseCalculo * aliquota / 100m),
+            };
+
+        return new PISAliq
+        {
+            CST  = MapCstPis(cst),
+            vBC  = ArredondarTributo(baseCalculo),
+            pPIS = aliquota,
+            vPIS = ArredondarTributo(baseCalculo * aliquota / 100m),
+        };
+    }
+
+    internal static COFINSBasico MontarCofins(ItemFiscal item, RegimeTributario regime, decimal baseCalculo)
+    {
+        if (regime == RegimeTributario.SimplesNacional)
+            return new COFINSOutr { CST = CSTCOFINS.cofins99, vBC = 0, pCOFINS = 0, vCOFINS = 0 };
+
+        var cst = NormalizarCstFederal(item.CstCofins, "01");
+        var aliquota = item.AliquotaCofins ?? (regime == RegimeTributario.LucroReal
+            ? CofinsNaoCumulativo
+            : CofinsCumulativo);
+
+        if (CstFederalSemTributo(cst))
+            return new COFINSNT { CST = MapCstCofins(cst) };
+
+        if (cst is not ("01" or "02"))
+            return new COFINSOutr
+            {
+                CST = MapCstCofins(cst),
+                vBC = ArredondarTributo(baseCalculo),
+                pCOFINS = aliquota,
+                vCOFINS = ArredondarTributo(baseCalculo * aliquota / 100m),
+            };
+
+        return new COFINSAliq
+        {
+            CST     = MapCstCofins(cst),
+            vBC     = ArredondarTributo(baseCalculo),
+            pCOFINS = aliquota,
+            vCOFINS = ArredondarTributo(baseCalculo * aliquota / 100m),
+        };
+    }
+
+    private static string NormalizarCstFederal(string? cst, string padrao)
+    {
+        if (string.IsNullOrWhiteSpace(cst)) return padrao;
+        var limpo = new string(cst.Where(char.IsDigit).ToArray());
+        return limpo.Length switch
+        {
+            0 => padrao,
+            1 => "0" + limpo,
+            2 => limpo,
+            _ => throw new FiscalNaoConfiguradoException($"CST de PIS/COFINS \"{cst}\" inválido — use dois dígitos."),
+        };
+    }
+
+    private static CSTPIS MapCstPis(string cst) =>
+        Enum.TryParse<CSTPIS>($"pis{cst}", out var valor)
+            ? valor
+            : throw new FiscalNaoConfiguradoException(
+                $"CST de PIS \"{cst}\" não existe no leiaute da NFC-e.");
+
+    private static CSTCOFINS MapCstCofins(string cst) =>
+        Enum.TryParse<CSTCOFINS>($"cofins{cst}", out var valor)
+            ? valor
+            : throw new FiscalNaoConfiguradoException(
+                $"CST de COFINS \"{cst}\" não existe no leiaute da NFC-e.");
 
     /// <summary>
     /// Tributação integral usada na fase de testes de 2026. Pela regra UB16-10 da
@@ -1596,18 +1745,36 @@ public class NfceEmissionService : INfceEmissionService
     private static bool CsosnTemIcmsSt(string? csosn) => csosn is "201" or "202" or "203";
 
     /// <summary>
+    /// CSTs em que a LOJA é a substituta e recolhe o ST — o 60 fica de fora de
+    /// propósito: nele o ST já foi retido pelo fornecedor, não há o que calcular.
+    /// No 90 ("Outras") o ST é opcional: só entra se a natureza trouxer alíquota.
+    /// </summary>
+    private static bool CstTemIcmsSt(ItemFiscal item) =>
+        item.Cst is "10" or "30" or "70" ||
+        (item.Cst == "90" && item.AliquotaIcmsSt is > 0);
+
+    /// <summary>Se este item recolhe ST, considerando o regime da loja.</summary>
+    private static bool ItemTemIcmsSt(ItemFiscal item, bool regimeNormal) =>
+        regimeNormal ? CstTemIcmsSt(item) : CsosnTemIcmsSt(item.Csosn);
+
+    /// <summary>
     /// Decompõe o preço final já cobrado do consumidor em operação + ICMS-ST + FCP-ST.
     /// A fórmula segue a orientação nacional: ST = ICMS sobre BC-ST menos ICMS próprio.
+    /// Serve aos dois regimes — o que muda entre eles é o código informado no XML
+    /// (CSOSN 201/202/203 ou CST 10/30/70/90), não a conta.
     /// </summary>
-    internal static CalculoIcmsSt CalcularIcmsStInclusoNoPreco(ItemFiscal item, int descontoCentavos = 0)
+    internal static CalculoIcmsSt CalcularIcmsStInclusoNoPreco(
+        ItemFiscal item, int descontoCentavos = 0, bool regimeNormal = false)
     {
-        if (!CsosnTemIcmsSt(item.Csosn))
-            throw new ArgumentException("O item não usa CSOSN com ICMS-ST.", nameof(item));
+        if (!ItemTemIcmsSt(item, regimeNormal))
+            throw new ArgumentException("O item não usa código de tributação com ICMS-ST.", nameof(item));
+
+        var codigo = regimeNormal ? $"CST {item.Cst}" : $"CSOSN {item.Csosn}";
         if (item.ModalidadeBcSt is null || item.ModalidadeBcSt is < 0 or > 6)
-            throw new FiscalNaoConfiguradoException($"CSOSN {item.Csosn}: informe a modalidade da BC-ST (0 a 6).");
+            throw new FiscalNaoConfiguradoException($"{codigo}: informe a modalidade da BC-ST (0 a 6).");
         if (item.AliquotaIcmsSt is null or <= 0 || item.AliquotaIcmsProprio is null or < 0)
             throw new FiscalNaoConfiguradoException(
-                $"CSOSN {item.Csosn}: informe as alíquotas do ICMS-ST e da operação própria.");
+                $"{codigo}: informe as alíquotas do ICMS-ST e da operação própria.");
 
         var modalidade = (DeterminacaoBaseIcmsSt)item.ModalidadeBcSt.Value;
         var reducao = Math.Clamp(item.PercentualReducaoBcSt ?? 0, 0, 100) / 100m;
@@ -1623,7 +1790,7 @@ public class NfceEmissionService : INfceEmissionService
         if (modalidade == DeterminacaoBaseIcmsSt.DbisMargemValorAgregado)
         {
             if (item.PercentualMvaSt is null or < 0)
-                throw new FiscalNaoConfiguradoException($"CSOSN {item.Csosn}: informe o percentual de MVA-ST.");
+                throw new FiscalNaoConfiguradoException($"{codigo}: informe o percentual de MVA-ST.");
             mva = item.PercentualMvaSt.Value;
             var fatorBase = (1 + mva.Value / 100m) * (1 - reducao);
             var fatorTotal = 1 + fatorBase * aliquotaSt - aliquotaPropria + fatorBase * aliquotaFcp;
@@ -1645,7 +1812,7 @@ public class NfceEmissionService : INfceEmissionService
         {
             if (item.BaseStFixaEmCentavos is null or <= 0)
                 throw new FiscalNaoConfiguradoException(
-                    $"CSOSN {item.Csosn}: esta modalidade exige base/pauta ST fixa por unidade.");
+                    $"{codigo}: esta modalidade exige base/pauta ST fixa por unidade.");
             baseSt = item.BaseStFixaEmCentavos.Value / 100m * item.Quantidade * (1 - reducao);
             var impostoFixo = baseSt * (aliquotaSt + aliquotaFcp);
             operacao = (precoFinal - impostoFixo) / (1 - aliquotaPropria);
@@ -1700,6 +1867,251 @@ public class NfceEmissionService : INfceEmissionService
                 $"CSOSN \"{item.Csosn}\" não é suportado pelo provedor Simples Nacional."),
         };
     }
+
+    /// <summary>
+    /// Monta o ICMS de quem está FORA do Simples (CRT=3): CST no lugar do CSOSN.
+    ///
+    /// A diferença de fundo em relação ao Simples é que aqui o ICMS da operação
+    /// própria é destacado no XML (vBC/pICMS/vICMS) em vez de ficar embutido no
+    /// DAS. O cálculo do ST, quando existe, é o MESMO do Simples — a decomposição
+    /// do preço final ao consumidor já estava pronta e é reaproveitada inteira.
+    /// </summary>
+    internal static ICMSBasico MontarIcmsRegimeNormal(
+        ItemFiscal item, int descontoCentavos = 0, CalculoIcmsSt? calculoSt = null)
+    {
+        if (item.OrigemMercadoria is < 0 or > 8)
+            throw new FiscalNaoConfiguradoException("Origem da mercadoria deve estar entre 0 e 8.");
+        var origem = (OrigemMercadoria)item.OrigemMercadoria;
+
+        var cst = string.IsNullOrWhiteSpace(item.Cst) ? null : item.Cst.Trim();
+        if (cst is null)
+            throw new FiscalNaoConfiguradoException(
+                $"A loja está fora do Simples Nacional e a natureza de operação do item \"{item.Nome}\" " +
+                "não tem CST de ICMS. Cadastre o CST em Admin > Fiscal > Naturezas de operação.");
+
+        var baseCheia = Math.Max(0, item.SubtotalCentavos - descontoCentavos) / 100m;
+
+        // Nos CSTs com ST, o preço de cadastro já é o final ao consumidor: a
+        // operação própria é o que sobra depois de separar ST e FCP-ST.
+        var valorOperacao = calculoSt?.ValorOperacaoLiquido ?? baseCheia;
+
+        decimal AliquotaPropria()
+        {
+            if (item.AliquotaIcmsProprio is null or < 0)
+                throw new FiscalNaoConfiguradoException(
+                    $"CST {cst}: informe a alíquota de ICMS da operação própria na natureza de operação.");
+            return item.AliquotaIcmsProprio.Value;
+        }
+
+        return cst switch
+        {
+            "00" => MontarIcms00(item, origem, valorOperacao, AliquotaPropria()),
+            "20" => MontarIcms20(item, origem, valorOperacao, AliquotaPropria()),
+            // Isenta, não tributada e suspensão compartilham o mesmo grupo no XML.
+            "40" or "41" or "50" => new ICMS40 { orig = origem, CST = MapCst(cst) },
+            "60" => MontarIcms60(item, origem),
+            "10" => MontarIcms10(item, origem, ExigirSt(item, cst, calculoSt), AliquotaPropria()),
+            "30" => MontarIcms30(item, origem, ExigirSt(item, cst, calculoSt)),
+            "70" => MontarIcms70(item, origem, ExigirSt(item, cst, calculoSt), AliquotaPropria()),
+            "90" => MontarIcms90(item, origem, valorOperacao, calculoSt),
+            // 51 (diferimento) é operação de indústria/atacado; numa venda a
+            // consumidor final por NFC-e ela não aparece, e implementar sem caso
+            // de uso real seria código não exercitado no lugar mais sensível.
+            "51" => throw new FiscalNaoConfiguradoException(
+                "CST 51 (diferimento) não é aplicável a venda a consumidor final por NFC-e."),
+            _ => throw new FiscalNaoConfiguradoException(
+                $"CST de ICMS \"{cst}\" não é suportado pelo motor fiscal. " +
+                "Use 00, 10, 20, 30, 40, 41, 50, 60, 70 ou 90."),
+        };
+    }
+
+    private static CalculoIcmsSt ExigirSt(ItemFiscal item, string cst, CalculoIcmsSt? calculoSt) =>
+        calculoSt ?? CalcularIcmsStInclusoNoPreco(item, 0, regimeNormal: true);
+
+    private static ICMS00 MontarIcms00(
+        ItemFiscal item, OrigemMercadoria origem, decimal baseCalculo, decimal aliquota)
+    {
+        var vbc = ArredondarTributo(baseCalculo);
+        return new ICMS00
+        {
+            orig  = origem,
+            CST   = Csticms.Cst00,
+            modBC = DeterminacaoBaseIcms.DbiValorOperacao,
+            vBC   = vbc,
+            pICMS = aliquota,
+            vICMS = ArredondarTributo(vbc * aliquota / 100m),
+        };
+    }
+
+    private static ICMS20 MontarIcms20(
+        ItemFiscal item, OrigemMercadoria origem, decimal baseCheia, decimal aliquota)
+    {
+        var reducao = Math.Clamp(item.PercentualReducaoBc ?? 0, 0, 100);
+        if (reducao <= 0)
+            throw new FiscalNaoConfiguradoException(
+                "CST 20 exige o percentual de redução da base de cálculo na natureza de operação.");
+
+        var vbc = ArredondarTributo(baseCheia * (1 - reducao / 100m));
+        var icms = new ICMS20
+        {
+            orig   = origem,
+            CST    = Csticms.Cst20,
+            modBC  = DeterminacaoBaseIcms.DbiValorOperacao,
+            pRedBC = reducao,
+            vBC    = vbc,
+            pICMS  = aliquota,
+            vICMS  = ArredondarTributo(vbc * aliquota / 100m),
+        };
+        AplicarFcpProprio(item, vbc, valor => { icms.vBCFCP = vbc; icms.pFCP = item.AliquotaFcp; icms.vFCP = valor; });
+        return icms;
+    }
+
+    private static ICMS60 MontarIcms60(ItemFiscal item, OrigemMercadoria origem) => new()
+    {
+        orig = origem,
+        CST  = Csticms.Cst60,
+        // Retenção anterior é informativa e boa parte do varejo não recebe esse
+        // dado do fornecedor — só vai ao XML quando o contador cadastrou.
+        vBCSTRet    = item.BaseStRetidaEmCentavos is > 0 ? item.BaseStRetidaEmCentavos.Value / 100m : null,
+        vICMSSTRet  = item.ValorStRetidoEmCentavos is > 0 ? item.ValorStRetidoEmCentavos.Value / 100m : null,
+    };
+
+    private static ICMS10 MontarIcms10(
+        ItemFiscal item, OrigemMercadoria origem, CalculoIcmsSt c, decimal aliquota)
+    {
+        var vbc = ArredondarTributo(c.ValorOperacaoLiquido);
+        var icms = new ICMS10
+        {
+            orig    = origem,
+            CST     = Csticms.Cst10,
+            modBC   = DeterminacaoBaseIcms.DbiValorOperacao,
+            vBC     = vbc,
+            pICMS   = aliquota,
+            vICMS   = ArredondarTributo(vbc * aliquota / 100m),
+            modBCST = c.Modalidade,
+            pMVAST  = c.Mva,
+            pRedBCST = c.Reducao,
+            vBCST   = c.BaseSt,
+            pICMSST = c.AliquotaSt,
+            vICMSST = c.ValorSt,
+        };
+        if (c.ValorFcpSt.HasValue)
+        {
+            icms.vBCFCPST = c.BaseFcpSt;
+            icms.pFCPST   = c.AliquotaFcpSt;
+            icms.vFCPST   = c.ValorFcpSt;
+        }
+        return icms;
+    }
+
+    private static ICMS30 MontarIcms30(ItemFiscal item, OrigemMercadoria origem, CalculoIcmsSt c)
+    {
+        var icms = new ICMS30
+        {
+            orig    = origem,
+            CST     = Csticms.Cst30,
+            modBCST = c.Modalidade,
+            pMVAST  = c.Mva,
+            pRedBCST = c.Reducao,
+            vBCST   = c.BaseSt,
+            pICMSST = c.AliquotaSt,
+            vICMSST = c.ValorSt,
+        };
+        if (c.ValorFcpSt.HasValue)
+        {
+            icms.vBCFCPST = c.BaseFcpSt;
+            icms.pFCPST   = c.AliquotaFcpSt;
+            icms.vFCPST   = c.ValorFcpSt;
+        }
+        return icms;
+    }
+
+    private static ICMS70 MontarIcms70(
+        ItemFiscal item, OrigemMercadoria origem, CalculoIcmsSt c, decimal aliquota)
+    {
+        var reducao = Math.Clamp(item.PercentualReducaoBc ?? 0, 0, 100);
+        if (reducao <= 0)
+            throw new FiscalNaoConfiguradoException(
+                "CST 70 exige o percentual de redução da base de cálculo da operação própria.");
+
+        var vbc = ArredondarTributo(c.ValorOperacaoLiquido * (1 - reducao / 100m));
+        var icms = new ICMS70
+        {
+            orig    = origem,
+            CST     = Csticms.Cst70,
+            modBC   = DeterminacaoBaseIcms.DbiValorOperacao,
+            pRedBC  = reducao,
+            vBC     = vbc,
+            pICMS   = aliquota,
+            vICMS   = ArredondarTributo(vbc * aliquota / 100m),
+            modBCST = c.Modalidade,
+            pMVAST  = c.Mva,
+            pRedBCST = c.Reducao,
+            vBCST   = c.BaseSt,
+            pICMSST = c.AliquotaSt,
+            vICMSST = c.ValorSt,
+        };
+        if (c.ValorFcpSt.HasValue)
+        {
+            icms.vBCFCPST = c.BaseFcpSt;
+            icms.pFCPST   = c.AliquotaFcpSt;
+            icms.vFCPST   = c.ValorFcpSt;
+        }
+        return icms;
+    }
+
+    private static ICMS90 MontarIcms90(
+        ItemFiscal item, OrigemMercadoria origem, decimal valorOperacao, CalculoIcmsSt? c)
+    {
+        var aliquota = item.AliquotaIcmsProprio ?? 0;
+        var reducao = Math.Clamp(item.PercentualReducaoBc ?? 0, 0, 100);
+        var vbc = ArredondarTributo(valorOperacao * (1 - reducao / 100m));
+
+        var icms = new ICMS90
+        {
+            orig   = origem,
+            CST    = Csticms.Cst90,
+            modBC  = DeterminacaoBaseIcms.DbiValorOperacao,
+            pRedBC = reducao > 0 ? reducao : null,
+            vBC    = vbc,
+            pICMS  = aliquota,
+            vICMS  = ArredondarTributo(vbc * aliquota / 100m),
+        };
+
+        if (c is not null)
+        {
+            icms.modBCST = c.Modalidade;
+            icms.pMVAST  = c.Mva;
+            icms.pRedBCST = c.Reducao;
+            icms.vBCST   = c.BaseSt;
+            icms.pICMSST = c.AliquotaSt;
+            icms.vICMSST = c.ValorSt;
+            if (c.ValorFcpSt.HasValue)
+            {
+                icms.vBCFCPST = c.BaseFcpSt;
+                icms.pFCPST   = c.AliquotaFcpSt;
+                icms.vFCPST   = c.ValorFcpSt;
+            }
+        }
+        return icms;
+    }
+
+    /// <summary>FCP da operação própria — só entra no XML quando a natureza traz alíquota.</summary>
+    private static void AplicarFcpProprio(ItemFiscal item, decimal baseCalculo, Action<decimal> aplicar)
+    {
+        var aliquota = Math.Clamp(item.AliquotaFcp ?? 0, 0, 100);
+        if (aliquota <= 0) return;
+        aplicar(ArredondarTributo(baseCalculo * aliquota / 100m));
+    }
+
+    private static Csticms MapCst(string cst) => cst switch
+    {
+        "00" => Csticms.Cst00, "10" => Csticms.Cst10, "20" => Csticms.Cst20,
+        "30" => Csticms.Cst30, "40" => Csticms.Cst40, "41" => Csticms.Cst41,
+        "50" => Csticms.Cst50, "51" => Csticms.Cst51, "60" => Csticms.Cst60,
+        "70" => Csticms.Cst70, "90" => Csticms.Cst90,
+        _ => throw new FiscalNaoConfiguradoException($"CST de ICMS \"{cst}\" inválido."),
+    };
 
     private static ICMSSN201 MontarIcmsSn201(ItemFiscal item, CalculoIcmsSt c, OrigemMercadoria origem)
     {

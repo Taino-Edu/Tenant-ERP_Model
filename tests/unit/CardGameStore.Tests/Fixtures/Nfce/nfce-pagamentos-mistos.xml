@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Consumidor identificado por CPF, desconto no item e três meios de pagamento:
+  Pix (17), crediário próprio (05) e cashback/fidelidade (19), mais troco.
+  É o cenário que o cupom agregado atual não consegue representar: hoje ele
+  mostra uma única forma de pagamento e nenhum troco.
+-->
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe>
+    <infNFe Id="NFe99260800000000000191650010000000181123456789" versao="4.00">
+      <ide>
+        <cUF>99</cUF>
+        <cNF>12345678</cNF>
+        <natOp>VENDA AO CONSUMIDOR</natOp>
+        <mod>65</mod>
+        <serie>1</serie>
+        <nNF>18</nNF>
+        <dhEmi>2026-08-04T18:20:00-03:00</dhEmi>
+        <tpNF>1</tpNF>
+        <idDest>1</idDest>
+        <cMunFG>9999999</cMunFG>
+        <tpImp>4</tpImp>
+        <tpEmis>1</tpEmis>
+        <cDV>9</cDV>
+        <tpAmb>1</tpAmb>
+        <finNFe>1</finNFe>
+        <indFinal>1</indFinal>
+        <indPres>1</indPres>
+      </ide>
+      <emit>
+        <CNPJ>00000000000191</CNPJ>
+        <xNome>LOJA FIXTURE DE TESTE LTDA</xNome>
+        <enderEmit>
+          <xLgr>Rua das Fixtures</xLgr>
+          <nro>100</nro>
+          <xCpl>Sala 2</xCpl>
+          <xBairro>Centro</xBairro>
+          <cMun>9999999</cMun>
+          <xMun>Cidade Fixture</xMun>
+          <UF>SP</UF>
+          <CEP>00000000</CEP>
+        </enderEmit>
+        <IE>000000000000</IE>
+        <CRT>1</CRT>
+      </emit>
+      <dest>
+        <CPF>00000000191</CPF>
+        <xNome>CONSUMIDOR FIXTURE</xNome>
+        <indIEDest>9</indIEDest>
+      </dest>
+      <det nItem="1">
+        <prod>
+          <cProd>SKU-0003</cProd>
+          <cEAN>7891234567901</cEAN>
+          <xProd>Booster box colecao teste</xProd>
+          <NCM>95044000</NCM>
+          <CFOP>5102</CFOP>
+          <uCom>CX</uCom>
+          <qCom>1.0000</qCom>
+          <vUnCom>500.0000000000</vUnCom>
+          <vProd>500.00</vProd>
+          <vDesc>50.00</vDesc>
+          <cEANTrib>7891234567901</cEANTrib>
+          <indTot>1</indTot>
+        </prod>
+        <imposto>
+          <vTotTrib>67.50</vTotTrib>
+        </imposto>
+      </det>
+      <total>
+        <ICMSTot>
+          <vBC>0.00</vBC>
+          <vICMS>0.00</vICMS>
+          <vProd>500.00</vProd>
+          <vDesc>50.00</vDesc>
+          <vNF>450.00</vNF>
+          <vTotTrib>67.50</vTotTrib>
+        </ICMSTot>
+      </total>
+      <pag>
+        <detPag>
+          <tPag>17</tPag>
+          <vPag>200.00</vPag>
+        </detPag>
+        <detPag>
+          <tPag>05</tPag>
+          <vPag>200.00</vPag>
+          <xPag>Crediario proprio da loja</xPag>
+        </detPag>
+        <detPag>
+          <tPag>19</tPag>
+          <vPag>60.00</vPag>
+          <xPag>Cashback saldo da loja</xPag>
+        </detPag>
+        <vTroco>10.00</vTroco>
+      </pag>
+    </infNFe>
+    <infNFeSupl>
+      <qrCode>https://www.nfce.fazenda.sp.gov.br/qrcode?p=99260800000000000191650010000000181123456789|2|1|1|abcdef</qrCode>
+      <urlChave>https://www.nfce.fazenda.sp.gov.br/consulta</urlChave>
+    </infNFeSupl>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt>
+      <tpAmb>1</tpAmb>
+      <chNFe>99260800000000000191650010000000181123456789</chNFe>
+      <dhRecbto>2026-08-04T18:20:04-03:00</dhRecbto>
+      <nProt>999260000009075409</nProt>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso da NF-e</xMotivo>
+    </infProt>
+  </protNFe>
+</nfeProc>

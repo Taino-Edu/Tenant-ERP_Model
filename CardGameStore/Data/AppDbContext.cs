@@ -82,6 +82,9 @@ public class AppDbContext : DbContext
     // ── Financeiro: fechamentos formais de período (dia/semana/mês) ───────────
     public DbSet<FechamentoPeriodo>  FechamentosPeriodo   { get; set; }
 
+    // ── Fiscal: fechamento contábil da competência, travado pelo contador ─────
+    public DbSet<FechamentoFiscalMensal> FechamentosFiscaisMensais { get; set; }
+
     // ── Eventos: cadastro de evento + venda/check-in de entradas ──────────────
     public DbSet<Evento>         Eventos        { get; set; }
     public DbSet<EventoEntrada>  EventoEntradas { get; set; }
@@ -172,9 +175,26 @@ public class AppDbContext : DbContext
         {
             entity.Property(f => f.RegimeTributario).HasConversion<string>();
             entity.Property(f => f.Ambiente).HasConversion<string>();
+            entity.Property(f => f.AnexoSimples).HasConversion<string>();
+            entity.Property(f => f.PercentualPresuncaoIrpj).HasColumnType("numeric(5,2)");
+            entity.Property(f => f.PercentualPresuncaoCsll).HasColumnType("numeric(5,2)");
+            entity.Property(f => f.AliquotaIcmsPercentual).HasColumnType("numeric(5,2)");
+            entity.Property(f => f.AliquotaIssPercentual).HasColumnType("numeric(5,2)");
 
             entity.HasIndex(f => f.Cnpj)
                   .HasDatabaseName("ix_fiscal_config_cnpj");
+        });
+
+        // =====================================================================
+        // FECHAMENTO FISCAL MENSAL
+        // =====================================================================
+        modelBuilder.Entity<FechamentoFiscalMensal>(entity =>
+        {
+            // Uma competência só pode ter um fechamento — é o que faz o snapshot
+            // ser "travado": gravar de novo esbarra na unique, não sobrescreve.
+            entity.HasIndex(f => new { f.Ano, f.Mes })
+                  .IsUnique()
+                  .HasDatabaseName("ix_fechamentos_fiscais_competencia");
         });
 
         // =====================================================================

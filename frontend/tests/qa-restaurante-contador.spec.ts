@@ -101,6 +101,8 @@ test.describe('QA funcional — restaurante, comanda e contador', () => {
 
     await contador.reload()
     await contador.getByRole('button', { name: new RegExp(tenantSlug!) }).click()
+    // A classificação fiscal do estoque agora fica numa aba do cliente.
+    await contador.getByRole('button', { name: 'Estoque e NCM' }).click()
     await expect(contador.getByText('Estoque e classificação fiscal')).toBeVisible()
     const productRow = contador.locator('.rounded-xl').filter({ hasText: `Produto QA ${suffix}` }).first()
     await expect(productRow).toContainText('Estoque: 12')

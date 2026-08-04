@@ -34,4 +34,9 @@
     <ProjectReference Include="..\..\..\CardGameStore\CardGameStore.csproj" />
   </ItemGroup>
 
+  <!-- XMLs de NFC-e sintéticos usados pelos testes do DANFE (ver Fixtures/Nfce/LEIA-ME.md) -->
+  <ItemGroup>
+    <Content Include="Fixtures\Nfce\*.xml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -187,6 +187,47 @@ public class NfceEmissionServiceTests
         nota.Numero.Should().BeNull(); // nunca chegou a reservar número
     }
 
+    [Theory]
+    [InlineData(RegimeTributario.LucroPresumido)]
+    [InlineData(RegimeTributario.LucroReal)]
+    public async Task EmitirParaComandaAsync_ForaDoSimples_BloqueiaAntesDeReservarNumero(RegimeTributario regime)
+    {
+        // A montagem de itens por CST existe, mas os totalizadores do documento
+        // ainda não somam esses grupos (REG-001): emitir produziria XML com
+        // totais divergentes dos itens — rejeição certa e numeração queimada.
+        // Enquanto REG-001 não fechar, o pré-voo barra. O CADASTRO do regime
+        // segue livre; o que está bloqueado é emitir.
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        var enc     = CreateEncryptionService();
+        var pfxBytes = CreateSelfSignedPfx(SenhaCertificadoTeste, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        db.FiscalConfigs.Add(new FiscalConfig
+        {
+            Cnpj                      = "12345678000195",
+            RazaoSocial                = "Loja Teste LTDA",
+            InscricaoEstadual          = "110042490114",
+            Logradouro                 = "Rua Teste",
+            CodigoMunicipioIbge        = "3550308",
+            Uf                         = "SP",
+            Cep                        = "01001000",
+            CscId                      = "000001",
+            CscTokenEncrypted          = enc.Encrypt(Guid.NewGuid().ToString()),
+            CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
+            CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
+            RegimeTributario           = regime,
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var nota = await service.EmitirParaComandaAsync(comanda.Id);
+
+        nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
+        nota.MotivoRejeicao.Should().Contain("Simples Nacional");
+        nota.Numero.Should().BeNull("bloqueio de pré-voo não pode consumir numeração");
+        nota.ChaveAcesso.Should().BeNull();
+    }
+
     [Fact]
     public async Task EmitirParaComandaAsync_Repetido_ReutilizaMesmaNota()
     {
