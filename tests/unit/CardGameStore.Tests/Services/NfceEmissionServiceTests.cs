@@ -190,13 +190,12 @@ public class NfceEmissionServiceTests
     [Theory]
     [InlineData(RegimeTributario.LucroPresumido)]
     [InlineData(RegimeTributario.LucroReal)]
-    public async Task EmitirParaComandaAsync_ForaDoSimples_BloqueiaAntesDeReservarNumero(RegimeTributario regime)
+    public async Task EmitirParaComandaAsync_ForaDoSimples_NaoEBloqueadaPeloRegime(RegimeTributario regime)
     {
-        // A montagem de itens por CST existe, mas os totalizadores do documento
-        // ainda não somam esses grupos (REG-001): emitir produziria XML com
-        // totais divergentes dos itens — rejeição certa e numeração queimada.
-        // Enquanto REG-001 não fechar, o pré-voo barra. O CADASTRO do regime
-        // segue livre; o que está bloqueado é emitir.
+        // Com REG-001 fechado (itens por CST + totalizadores consolidados), o
+        // regime deixou de ser barreira de pré-voo. Esta comanda ainda para antes
+        // de transmitir, mas por OUTRO motivo — o produto do seed não tem
+        // transparência tributária. É isso que se afirma aqui.
         using var db = CreateDb();
         var comanda = await SeedComandaFechadaAsync(db);
         var enc     = CreateEncryptionService();
@@ -222,10 +221,9 @@ public class NfceEmissionServiceTests
         var service = CreateService(db);
         var nota = await service.EmitirParaComandaAsync(comanda.Id);
 
-        nota.Status.Should().Be(NotaFiscalStatus.PendenteEmissao);
-        nota.MotivoRejeicao.Should().Contain("Simples Nacional");
-        nota.Numero.Should().BeNull("bloqueio de pré-voo não pode consumir numeração");
-        nota.ChaveAcesso.Should().BeNull();
+        nota.MotivoRejeicao.Should().NotContain("Simples Nacional",
+            "o regime não bloqueia mais a emissão — itens e totais são montados por CST");
+        nota.Numero.Should().BeNull("falha de configuração não pode consumir numeração");
     }
 
     [Fact]

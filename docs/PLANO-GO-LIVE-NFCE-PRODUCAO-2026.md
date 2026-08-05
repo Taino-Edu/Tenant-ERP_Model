@@ -1978,3 +1978,67 @@ um inválido passaria.
 | XML-002 | não iniciado — ligar validação XSD antes de transmitir |
 | CON-001 | não iniciado — conciliação de vendas × documentos |
 | REG-001 | não iniciado — emissão fora do Simples segue bloqueada no pré-voo |
+
+---
+
+## 30. REG-001 concluído — totalizadores do regime normal — 05/08/2026
+
+### 30.1 O defeito
+
+`SomarTotaisIcms` era um `switch` que conhecia apenas `ICMSSN201` e `ICMSSN202`.
+Isso bastava no Simples, onde o CSOSN não destaca ICMS próprio e o `ICMSTot`
+legitimamente fica zerado. Quando o motor passou a montar itens por CST (Lucro
+Presumido/Real), **nenhuma das dez classes novas tinha `case`**: o item destacava
+`vICMS` e o total mandava zero.
+
+Isso é divergência entre a soma dos itens e o totalizador do documento —
+rejeição certa na SEFAZ, com numeração queimada. E o `default` silencioso do
+`switch` não quebrava teste nenhum: o erro só apareceria na primeira venda real.
+
+### 30.2 A correção
+
+Os totais passam a ser calculados com os **getters polimórficos da própria
+biblioteca fiscal** (`NFe.Classes.Informacoes.Detalhe.Tributacao.Extensions`),
+que operam sobre `ICMSBasico` e funcionam para qualquer subtipo:
+
+`GetIcmsBcValue`, `GetIcmsValue`, `GetIcmsDesonValue`, `GetIcmsBcStValue`,
+`GetIcmsStValue`, `GetPisValue`, `GetCofinsValue`.
+
+Não há mais `case` a esquecer — um CST novo entra sozinho. **Isso não economiza
+linhas: elimina a classe inteira de bug.** Era o mesmo padrão que causou o
+defeito original, e mantê-lo (só acrescentando dez `case`) teria deixado a
+armadilha armada para o próximo grupo.
+
+Única exceção: o **FCP** não tem getter na biblioteca e continua lido por tipo,
+isolado em `SomarFcp`, com as classes listadas explicitamente para que a ausência
+de um tipo seja visível ali e não vire zero silencioso no total.
+
+O `ICMSTot` deixou de hardcodear `vBC`, `vICMS`, `vICMSDeson`, `vFCP`, `vPIS` e
+`vCOFINS` em zero — todos vêm da soma dos itens.
+
+### 30.3 Emissão fora do Simples reaberta
+
+Com os totalizadores consolidando os grupos, a guarda de pré-voo por regime foi
+removida: os três regimes montam documento completo.
+
+> **Isto não é aprovação fiscal.** O XML completo fora do Simples ainda precisa
+> passar por XSD (XML-002), homologação na SEFAZ por CST e aceite do contador
+> antes de um tenant real emitir. O que mudou é que o motor deixou de produzir
+> documento internamente inconsistente.
+
+### 30.4 Validação
+
+- `NfceTotalizadoresTests` — 11 casos, incluindo o teste que reproduz o defeito
+  (`Cst00_TotalNaoPodeFicarZeradoQuandoOItemDestacaIcms`), a soma de múltiplos
+  itens, CST 10/20/60 com e sem ST, PIS/COFINS cumulativo e não-cumulativo, e
+  **não-regressão do Simples** (totais continuam zerados, agora por cálculo);
+- `dotnet test` — **572 aprovados, 0 falhas** (eram 561; +11).
+
+### 30.5 Estado dos cartões
+
+| Cartão | Estado |
+|---|---|
+| FIS-002, RES-002, XML-001, DAN-001, REG-001 | concluídos em código |
+| XML-002 | **bloqueado por artefato externo** — a biblioteca tem `ValidarSchemas`/`DiretorioSchemas`, mas os XSDs oficiais não vêm no pacote nem existem no repositório; é preciso baixar e versionar o pacote de schemas |
+| RES-001, CON-001/002 | pendentes |
+| DAN-002, CAD-001, FIS-001/003, OPS, HOM/PRD | dependem de homologação ou do contador |

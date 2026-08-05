@@ -6,13 +6,14 @@ Painel rápido do que já foi feito, do que está em andamento e do que falta.
 plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; aqui
 é só o retrato do progresso.
 
-Última atualização: **05/08/2026** · Alvo de lançamento: **10/08/2026**
+Última atualização: **05/08/2026** (rev. 2) · Alvo de lançamento: **10/08/2026**
 
 ## Legenda
 
 - ✅ **Feito** — código e testes concluídos nesta base
 - 🟡 **Parcial** — parte entregue; falta etapa registrada
 - ⏳ **Pendente** — não iniciado
+- 🚧 **Bloqueado** — depende de artefato ou decisão externa
 - 👤 **Humano** — depende de contador, loja ou homologação física (não é código)
 
 > Nenhum ✅ significa "certificado para produção". O go-live fiscal depende de
@@ -29,9 +30,9 @@ plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; 
 | **DAN-001** — DANFE do XML | ✅ | parser + DTO imutável + HTML no padrão do manual, alimentado só pelo XML; `ObterCupomAsync` lê o XML persistido. 25 testes de parser. | 25.3, 26, 27 |
 | **DAN-002** — verificação física | 👤 | impressão em 58/80 mm, leitura do QR em dois aparelhos, aceite fiscal. | 7 |
 | **RES-001** — resultado incerto | ⏳ | timeout que consulta a chave antes de decidir; tratar duplicidade por reconciliação. | 6 |
-| **XML-002** — validação XSD | ⏳ | ligar `Validador.Valida` com schemas versionados antes de transmitir. | 9 |
+| **XML-002** — validação XSD | 🚧 | **bloqueado por artefato externo**: a lib tem `ValidarSchemas`/`DiretorioSchemas`, mas os XSDs oficiais não vêm no pacote nem existem no repo — é preciso baixar e versionar o pacote de schemas. | 9, 30.5 |
 | **CON-001/002** — conciliação | ⏳ | listar toda venda tributável e classificar (autorizada/pendente/sem nota); alertas. | 8 |
-| **REG-001** — regime normal | 🟡 | montagem de itens por CST e PIS/COFINS feita; **totalizadores ainda não consolidam** esses grupos, então a emissão fora do Simples segue **bloqueada no pré-voo**. Reabrir depende deste cartão. | 24.2 |
+| **REG-001** — regime normal | ✅ | totalizadores consolidam ICMS/ST/FCP/PIS/COFINS dos itens via getters polimórficos da lib; `ICMSTot` sem zeros fixos; emissão fora do Simples reaberta. 11 testes. **Não é aprovação fiscal** — falta XSD, homologação por CST e aceite do contador. | 30 |
 | **CAD-001** — saneamento do catálogo | 👤 | conferência de NCM/CEST/CFOP/CSOSN/CST pelo contador. | 9 |
 | **FIS-001** — escopo assinado | 👤 | UF, IE, credenciamento, série/número, escopo presencial — com o contador. | 4 |
 | **FIS-003** — pontos pré-aplicados | 👤 | decidir se pontos são desconto ou crédito virtual — decisão do contador. | 5 |
@@ -51,11 +52,11 @@ Trabalho anterior à auditoria, já na mesma PR:
 
 ## Onde estamos
 
-**Fechado em código nesta maratona:** FIS-002, RES-002, XML-001, DAN-001.
+**Fechado em código nesta maratona:** FIS-002, RES-002, XML-001, DAN-001, REG-001.
 
-**Próximos deliveráveis em código, sem depender de homologação:** XML-002 (rede de
-segurança do XSD), CON-001 (conciliação, trilha independente), RES-001 (resultado
-incerto). REG-001 é o maior e reabre o Lucro Presumido — a analisar antes de executar.
+**Próximos deliveráveis em código:** CON-001 (conciliação, trilha independente) e
+RES-001 (resultado incerto). XML-002 está bloqueado até o pacote de XSDs oficiais
+ser baixado e versionado no repositório.
 
 **O que só o dia da homologação resolve:** transmissão real (RES-001/002),
 impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do contador
@@ -63,5 +64,5 @@ impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do co
 
 ## Suíte
 
-`dotnet test` — **561 aprovados, 0 falhas** (PostgreSQL descartável de
+`dotnet test` — **572 aprovados, 0 falhas** (PostgreSQL descartável de
 `tests/docker-compose.yml`). Frontend: `npm run build` concluído.
