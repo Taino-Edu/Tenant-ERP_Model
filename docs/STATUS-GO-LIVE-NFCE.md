@@ -6,7 +6,7 @@ Painel rápido do que já foi feito, do que está em andamento e do que falta.
 plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; aqui
 é só o retrato do progresso.
 
-Última atualização: **05/08/2026** (rev. 2) · Alvo de lançamento: **10/08/2026**
+Última atualização: **05/08/2026** (rev. 3) · Alvo de lançamento: **10/08/2026**
 
 ## Legenda
 
@@ -31,7 +31,8 @@ plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; 
 | **DAN-002** — verificação física | 👤 | impressão em 58/80 mm, leitura do QR em dois aparelhos, aceite fiscal. | 7 |
 | **RES-001** — resultado incerto | ⏳ | timeout que consulta a chave antes de decidir; tratar duplicidade por reconciliação. | 6 |
 | **XML-002** — validação XSD | 🚧 | **bloqueado por artefato externo**: a lib tem `ValidarSchemas`/`DiretorioSchemas`, mas os XSDs oficiais não vêm no pacote nem existem no repo — é preciso baixar e versionar o pacote de schemas. | 9, 30.5 |
-| **CON-001/002** — conciliação | ⏳ | listar toda venda tributável e classificar (autorizada/pendente/sem nota); alertas. | 8 |
+| **CON-001** — conciliação | ✅ | serviço parte das VENDAS e acha o documento de cada uma; expõe venda sem nota e divergência de valor; endpoints para lojista e contador + aba no portal. 16 testes. | 31 |
+| **CON-002** — alertas | ⏳ | alertas por severidade/idade, responsável e confirmação de resolução. Inclui registrar quem optou por não emitir (ver 31.4). | 8 |
 | **REG-001** — regime normal | ✅ | totalizadores consolidam ICMS/ST/FCP/PIS/COFINS dos itens via getters polimórficos da lib; `ICMSTot` sem zeros fixos; emissão fora do Simples reaberta. 11 testes. **Não é aprovação fiscal** — falta XSD, homologação por CST e aceite do contador. | 30 |
 | **CAD-001** — saneamento do catálogo | 👤 | conferência de NCM/CEST/CFOP/CSOSN/CST pelo contador. | 9 |
 | **FIS-001** — escopo assinado | 👤 | UF, IE, credenciamento, série/número, escopo presencial — com o contador. | 4 |
@@ -52,11 +53,11 @@ Trabalho anterior à auditoria, já na mesma PR:
 
 ## Onde estamos
 
-**Fechado em código nesta maratona:** FIS-002, RES-002, XML-001, DAN-001, REG-001.
+**Fechado em código nesta maratona:** FIS-002, RES-002, XML-001, DAN-001, REG-001, CON-001.
 
-**Próximos deliveráveis em código:** CON-001 (conciliação, trilha independente) e
-RES-001 (resultado incerto). XML-002 está bloqueado até o pacote de XSDs oficiais
-ser baixado e versionado no repositório.
+**Próximos deliveráveis em código:** RES-001 (resultado incerto após timeout) e
+CON-002 (alertas). XML-002 está bloqueado até o pacote de XSDs oficiais ser
+baixado e versionado no repositório.
 
 **O que só o dia da homologação resolve:** transmissão real (RES-001/002),
 impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do contador
@@ -64,5 +65,5 @@ impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do co
 
 ## Suíte
 
-`dotnet test` — **572 aprovados, 0 falhas** (PostgreSQL descartável de
+`dotnet test` — **588 aprovados, 0 falhas** (PostgreSQL descartável de
 `tests/docker-compose.yml`). Frontend: `npm run build` concluído.

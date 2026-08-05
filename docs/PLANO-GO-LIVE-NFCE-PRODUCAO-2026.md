@@ -2042,3 +2042,65 @@ removida: os três regimes montam documento completo.
 | XML-002 | **bloqueado por artefato externo** — a biblioteca tem `ValidarSchemas`/`DiretorioSchemas`, mas os XSDs oficiais não vêm no pacote nem existem no repositório; é preciso baixar e versionar o pacote de schemas |
 | RES-001, CON-001/002 | pendentes |
 | DAN-002, CAD-001, FIS-001/003, OPS, HOM/PRD | dependem de homologação ou do contador |
+
+---
+
+## 31. CON-001 concluído — conciliação de vendas e documentos — 05/08/2026
+
+### 31.1 O buraco
+
+Emitir NFC-e é uma escolha no fechamento (`EmitirNotaFiscal`), e **essa escolha
+não é persistida em lugar nenhum**. Somado a isso, todo alerta do sistema parte
+de uma `NotaFiscalEmitida` existente e pergunta se ela está bem.
+
+O resultado é que a venda fechada sem emissão **não existe do ponto de vista
+fiscal**: não é erro, não é pendência, não aparece em relatório algum. O
+universo fiscal pode ser menor que o universo de vendas e ninguém percebe.
+
+### 31.2 A inversão
+
+`ConciliacaoFiscalService` parte das **vendas** e procura o documento de cada
+uma — não o contrário. Classifica cada venda tributável do período em:
+
+| Situação | Significado |
+|---|---|
+| `Autorizada` | nota autorizada pela SEFAZ |
+| `EmContingencia` | emitida offline, aguardando retransmissão |
+| `Pendente` | documento criado, sem conclusão |
+| `Rejeitada` | recusada pela SEFAZ (traz o motivo) |
+| `NotaCancelada` | autorizada e cancelada por evento |
+| **`SemDocumento`** | **nenhuma nota foi criada — o caso invisível** |
+| `VendaCancelada` | a venda foi cancelada; não é pendência a cobrar |
+
+Além disso detecta **divergência de valor**: venda editada depois da emissão
+deixa a nota com o valor antigo, e hoje ninguém é avisado.
+
+O relatório **não bloqueia** caixa nem fechamento. A decisão de não emitir
+continua sendo do lojista — o que não pode é ficar invisível.
+
+### 31.3 Entregue
+
+- `ConciliacaoFiscalService` + DTOs, com resumo por situação (inclusive as
+  zeradas — "sem documento: 0" é informação) e lista de pendências;
+- `GET /api/fiscal/conciliacao` (lojista) e
+  `GET /api/contador-portal/clientes/{id}/conciliacao` (contador, com a mesma
+  autorização por vínculo dos demais endpoints);
+- aba **Conciliação** no portal do contador, com destaque para o valor sem
+  documento e tabela de pendências;
+- 16 testes, incluindo o aceite literal do plano.
+
+**Aceite do plano atendido:** *"uma venda fechada com a opção fiscal desmarcada
+aparece no relatório no mesmo dia"* — `VendaFechadaSemNota_ApareceComoSemDocumento`.
+
+### 31.4 O que CON-001 não cobre
+
+O plano também pede **registrar quem escolheu não emitir, quando e por quê**.
+Isso exigiria persistir a decisão no fechamento (coluna nova + mudança no fluxo
+de venda) e não foi feito: a conciliação **detecta a ausência** lendo o estado,
+mas não sabe quem decidiu. Fica como continuação natural, junto de CON-002
+(alertas com responsável e confirmação de resolução).
+
+### 31.5 Validação
+
+`dotnet test` — **588 aprovados, 0 falhas** (eram 572; +16). Frontend:
+`npm run build` concluído.

@@ -352,6 +352,27 @@ public class ContadorPortalController : ControllerBase
         return Ok(await apuracao.ApurarAsync(inicio.Date, fim.Date));
     }
 
+    /// <summary>
+    /// Conciliação entre vendas e documentos fiscais do cliente (CON-001). É a
+    /// visão que mostra a venda fechada sem nota — a que não aparece em nenhum
+    /// relatório que parta das notas emitidas.
+    /// </summary>
+    [HttpGet("clientes/{tenantId:guid}/conciliacao")]
+    public async Task<IActionResult> GetConciliacao(
+        Guid tenantId, [FromQuery] DateTime inicio, [FromQuery] DateTime fim)
+    {
+        if (fim.Date < inicio.Date)
+            return BadRequest(new { Message = "O período final não pode ser anterior ao inicial." });
+
+        var tenant = await AutorizarEObterTenantAsync(tenantId);
+        if (tenant is null) return Forbid();
+
+        using var scope = CriarEscopoDoTenant(tenant);
+        var conciliacao = scope.ServiceProvider.GetRequiredService<IConciliacaoFiscalService>();
+
+        return Ok(await conciliacao.ConciliarAsync(inicio.Date, fim.Date));
+    }
+
     /// <summary>Fechamentos mensais já travados, do mais recente pro mais antigo.</summary>
     [HttpGet("clientes/{tenantId:guid}/fechamentos")]
     public async Task<IActionResult> ListFechamentos(Guid tenantId)

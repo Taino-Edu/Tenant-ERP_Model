@@ -11,11 +11,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   ChevronLeft, LayoutDashboard, CalendarCheck, Scale, Settings2, Package, MessageSquare, Download,
+  ClipboardCheck,
 } from 'lucide-react'
 import clsx from 'clsx'
 import {
   contadorApi, getErrorMessage,
-  type ApuracaoTributariaDto, type ContadorClienteDto, type ContadorConfigDto,
+  type ApuracaoTributariaDto, type ConciliacaoFiscalDto, type ContadorClienteDto, type ContadorConfigDto,
   type ContadorNotaDto, type ContadorNotaRecebidaDto, type ContadorProdutoDto, type FinanceiroDto,
 } from '@/lib/api'
 import Badge from '@/components/admin/ui/Badge'
@@ -24,14 +25,16 @@ import { baixarBlob, brToday, diasAte } from './contador-shared'
 import VisaoGeralTab from './VisaoGeralTab'
 import FechamentoTab from './FechamentoTab'
 import ImpostosTab from './ImpostosTab'
+import ConciliacaoTab from './ConciliacaoTab'
 import ConfigFiscalTab from './ConfigFiscalTab'
 import EstoqueTab from './EstoqueTab'
 import AvisosTab from './AvisosTab'
 
-type AbaId = 'visao' | 'fechamento' | 'impostos' | 'fiscal' | 'estoque' | 'avisos'
+type AbaId = 'visao' | 'conciliacao' | 'fechamento' | 'impostos' | 'fiscal' | 'estoque' | 'avisos'
 
 const ABAS: Array<{ id: AbaId; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'visao',      label: 'Visão geral',       icon: LayoutDashboard },
+  { id: 'conciliacao', label: 'Conciliação',       icon: ClipboardCheck },
   { id: 'fechamento', label: 'Fechamento do mês', icon: CalendarCheck },
   { id: 'impostos',   label: 'Impostos',          icon: Scale },
   { id: 'fiscal',     label: 'Config. fiscal',    icon: Settings2 },
@@ -61,6 +64,7 @@ export default function ClienteWorkspace({ cliente, onVoltar }: {
   const [notas, setNotas] = useState<ContadorNotaDto[]>([])
   const [notasRecebidas, setNotasRecebidas] = useState<ContadorNotaRecebidaDto[]>([])
   const [apuracao, setApuracao] = useState<ApuracaoTributariaDto | null>(null)
+  const [conciliacao, setConciliacao] = useState<ConciliacaoFiscalDto | null>(null)
   const [loadingPeriodo, setLoadingPeriodo] = useState(true)
 
   const [produtos, setProdutos] = useState<ContadorProdutoDto[]>([])
@@ -93,12 +97,14 @@ export default function ClienteWorkspace({ cliente, onVoltar }: {
       contadorApi.listNotasRecebidas(cliente.tenantId, { inicio, fim }),
       contadorApi.getDre(cliente.tenantId, inicio, fim),
       contadorApi.getApuracao(cliente.tenantId, inicio, fim),
+      contadorApi.getConciliacao(cliente.tenantId, inicio, fim),
     ])
-      .then(([saidas, entradas, resultado, tributos]) => {
+      .then(([saidas, entradas, resultado, tributos, conciliado]) => {
         setNotas(saidas.data.items)
         setNotasRecebidas(entradas.data)
         setDre(resultado.data)
         setApuracao(tributos.data)
+        setConciliacao(conciliado.data)
       })
       .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar o fechamento fiscal')))
       .finally(() => setLoadingPeriodo(false))
@@ -213,6 +219,14 @@ export default function ClienteWorkspace({ cliente, onVoltar }: {
           inicio={inicio} fim={fim} onInicio={setInicio} onFim={setFim}
           exportando={exportando}
           onExportarXmls={exportarXmls}
+        />
+      )}
+
+      {aba === 'conciliacao' && (
+        <ConciliacaoTab
+          conciliacao={conciliacao}
+          loading={loadingPeriodo}
+          inicio={inicio} fim={fim} onInicio={setInicio} onFim={setFim}
         />
       )}
 

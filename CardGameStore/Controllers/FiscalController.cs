@@ -37,11 +37,12 @@ public class FiscalController : ControllerBase
     // da config: vivem em FiscalConfigService, compartilhado com o portal do
     // contador (ver o cabeçalho daquele arquivo).
     private readonly FiscalConfigService       _configService;
+    private readonly IConciliacaoFiscalService _conciliacao;
 
     public FiscalController(
         AppDbContext db, FiscalXmlExportService export, INfceEmissionService emissao,
         CatalogDbContext catalog, ITenantContext tenant, IbptTaxService ibpt, IAuditService audit,
-        FiscalConfigService configService)
+        FiscalConfigService configService, IConciliacaoFiscalService conciliacao)
     {
         _db            = db;
         _export        = export;
@@ -51,6 +52,7 @@ public class FiscalController : ControllerBase
         _ibpt          = ibpt;
         _audit         = audit;
         _configService = configService;
+        _conciliacao   = conciliacao;
     }
 
     /// <summary>Agrega configuração, certificado, regra fiscal padrão, produtos e notas das
@@ -687,6 +689,25 @@ public class FiscalController : ControllerBase
     {
         var cupom = await _emissao.ObterCupomAsync(id);
         return cupom is null ? NotFound() : Ok(cupom);
+    }
+
+    /// <summary>
+    /// Conciliação fiscal do período: toda venda tributável com o documento que
+    /// tem — ou a falta dele (CON-001). Diferente dos demais relatórios, parte
+    /// das VENDAS e não das notas, então enxerga a venda fechada sem emissão,
+    /// que hoje não aparece em lugar nenhum.
+    /// </summary>
+    /// <param name="inicio">Data inicial do período (inclusive).</param>
+    /// <param name="fim">Data final do período (inclusive).</param>
+    // ── GET /api/fiscal/conciliacao?inicio=&fim= ──────────────────────────────
+    [HttpGet("conciliacao")]
+    public async Task<IActionResult> GetConciliacao(
+        [FromQuery] DateTime inicio, [FromQuery] DateTime fim)
+    {
+        if (fim.Date < inicio.Date)
+            return BadRequest(new { Message = "O período final não pode ser anterior ao inicial." });
+
+        return Ok(await _conciliacao.ConciliarAsync(inicio.Date, fim.Date));
     }
 
     /// <summary>Gera um .zip com os XMLs de todas as NFC-e emitidas no período, pra

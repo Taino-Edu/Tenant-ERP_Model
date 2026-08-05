@@ -1744,6 +1744,44 @@ export interface ApuracaoTributariaDto {
   alertas: string[]
 }
 
+// ── Conciliação fiscal (CON-001) ─────────────────────────────────────────────
+// Parte das VENDAS e procura o documento de cada uma — por isso enxerga a venda
+// fechada sem nota, que nenhum relatório baseado em NotaFiscalEmitida mostra.
+
+export type SituacaoFiscalVenda =
+  | 'Autorizada' | 'EmContingencia' | 'Pendente' | 'Rejeitada'
+  | 'NotaCancelada' | 'SemDocumento' | 'VendaCancelada'
+
+export interface VendaConciliadaDto {
+  vendaId: string
+  origem: string
+  ocorridaEm: string
+  valorVenda: number
+  situacao: SituacaoFiscalVenda
+  notaId?: string
+  serie?: number
+  numero?: number
+  chaveAcesso?: string
+  valorNota?: number
+  motivoRejeicao?: string
+  valorDivergente: boolean
+  exigeAtencao: boolean
+}
+
+export interface ConciliacaoResumoDto { quantidade: number; valor: number }
+
+export interface ConciliacaoFiscalDto {
+  periodoInicio: string
+  periodoFim: string
+  totalVendas: number
+  valorTotalVendas: number
+  porSituacao: Record<string, ConciliacaoResumoDto>
+  pendencias: VendaConciliadaDto[]
+  vendas: VendaConciliadaDto[]
+  quantidadePendencias: number
+  valorSemDocumento: number
+}
+
 export interface FechamentoMensalDto {
   id: string; ano: number; mes: number; competencia: string
   periodoInicio: string; periodoFim: string
@@ -1795,6 +1833,8 @@ export const contadorApi = {
   },
   getApuracao: (tenantId: string, inicio: string, fim: string) =>
     api.get<ApuracaoTributariaDto>(`/api/contador-portal/clientes/${tenantId}/apuracao`, { params: { inicio, fim } }),
+  getConciliacao: (tenantId: string, inicio: string, fim: string) =>
+    api.get<ConciliacaoFiscalDto>(`/api/contador-portal/clientes/${tenantId}/conciliacao`, { params: { inicio, fim } }),
   listFechamentos: (tenantId: string) =>
     api.get<FechamentoMensalDto[]>(`/api/contador-portal/clientes/${tenantId}/fechamentos`),
   fecharCompetencia: (tenantId: string, data: { ano: number; mes: number; observacao?: string }) =>
