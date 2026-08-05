@@ -355,9 +355,11 @@ public class NfceEmissionService : INfceEmissionService
     /// papel passava a divergir do documento que a SEFAZ autorizou. Agora nada
     /// aqui consulta cadastro ou venda: o XML é a única fonte.
     ///
-    /// Nota sem XML (pendente, rejeitada, ou em contingência antes de RES-002
-    /// persistir o XML assinado offline) devolve null — documento sem
-    /// autorização não pode ser apresentado como DANFE válido (DFE-007).
+    /// Ordem de preferência da fonte: nfeProc autorizado &gt; XML assinado de
+    /// contingência. Nota sem nenhum dos dois (pendente ou rejeitada) devolve
+    /// null — documento sem autorização não pode ser apresentado como DANFE
+    /// válido (DFE-007). A via de contingência é um DANFE legítimo, ainda sem
+    /// protocolo: o próprio parser sinaliza esse estado.
     /// </summary>
     public async Task<DanfeFiscalDto?> ObterCupomAsync(Guid notaId)
     {
@@ -366,7 +368,8 @@ public class NfceEmissionService : INfceEmissionService
             .FirstOrDefaultAsync(n => n.Id == notaId);
         if (nota is null) return null;
 
-        if (string.IsNullOrWhiteSpace(nota.XmlAutorizado))
+        var xml = nota.XmlAutorizado ?? nota.XmlContingencia;
+        if (string.IsNullOrWhiteSpace(xml))
         {
             _logger.LogInformation(
                 "DANFE não gerado para a nota {NotaId}: status {Status} sem XML fiscal persistido.",
@@ -376,7 +379,7 @@ public class NfceEmissionService : INfceEmissionService
 
         try
         {
-            var danfe = DanfeXmlParser.Parse(nota.XmlAutorizado);
+            var danfe = DanfeXmlParser.Parse(xml);
 
             // O cancelamento é um evento posterior, fora do XML de autorização —
             // é o único dado da representação que precisa vir do registro local.
@@ -1022,6 +1025,17 @@ public class NfceEmissionService : INfceEmissionService
 
     private async Task TransmitirAsync(NotaFiscalEmitida nota, DadosEmissao dados)
     {
+        // Retransmissão de contingência (RES-002): se já existe o XML assinado
+        // offline, reenvia EXATAMENTE aquele documento — não remonta a partir da
+        // comanda. A remontagem releria os dados atuais, e uma edição na comanda
+        // entre a venda offline e a retransmissão produziria um documento
+        // diferente com a MESMA chave: divergente do que o consumidor já levou.
+        if (nota.DhContingencia.HasValue && !string.IsNullOrWhiteSpace(nota.XmlContingencia))
+        {
+            await RetransmitirContingenciaAsync(nota);
+            return;
+        }
+
         var (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
 
@@ -1202,15 +1216,18 @@ public class NfceEmissionService : INfceEmissionService
             nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao3);
 
         // O documento offline precisa estar completamente montado antes de ser entregue
-        // ao consumidor. Persistimos a chave e o QR de tpEmis=9 antes de tentar retransmitir.
+        // ao consumidor. Persistimos a chave, o QR e o XML ASSINADO de tpEmis=9 antes de
+        // tentar retransmitir (RES-002): é o documento que o cliente leva, e é ele — não
+        // uma remontagem — que precisa ser reenviado à SEFAZ quando a conexão voltar.
         if (jaEmContingencia)
         {
-            nota.Status         = NotaFiscalStatus.AutorizadaContingencia;
-            nota.Serie          = cfg.SerieNfce;
-            nota.Numero         = numero;
-            nota.ChaveAcesso    = chave.Chave;
-            nota.UrlQrCode      = qrCodeUrl;
-            nota.EmitidoEm    ??= DateTime.UtcNow;
+            nota.Status          = NotaFiscalStatus.AutorizadaContingencia;
+            nota.Serie           = cfg.SerieNfce;
+            nota.Numero          = numero;
+            nota.ChaveAcesso     = chave.Chave;
+            nota.UrlQrCode       = qrCodeUrl;
+            nota.XmlContingencia = FuncoesXml.ClasseParaXmlString(nfe);
+            nota.EmitidoEm     ??= DateTime.UtcNow;
             await _db.SaveChangesAsync();
         }
 
@@ -1266,6 +1283,11 @@ public class NfceEmissionService : INfceEmissionService
             // com o momento da confirmação tardia da SEFAZ.
             nota.EmitidoEm    ??= DateTime.UtcNow;
             nota.XmlAutorizado  = MontarNfeProcXml(nfe, retorno.Retorno!.protNFe);
+            // A partir daqui o documento fiscal é o nfeProc autorizado. O XML de
+            // contingência já cumpriu seu papel (foi entregue e retransmitido) e
+            // deixa de ser fonte do DANFE — mantê-lo seria uma segunda via
+            // possível do mesmo documento.
+            nota.XmlContingencia = null;
             nota.UrlQrCode      = qrCodeUrl;
             nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
             // F13: se esta nota foi Rejeitada antes (número anterior inutilizado
@@ -1296,6 +1318,11 @@ public class NfceEmissionService : INfceEmissionService
                 nota.CnfContingencia           = null;
                 nota.DhContingencia            = null;
                 nota.JustificativaContingencia = null;
+                // A retransmissão foi rejeitada por regra de negócio: aquele
+                // documento offline não vira nota válida. O próximo TransmitirAsync
+                // reserva número novo e monta um documento novo, então o XML antigo
+                // não deve sobreviver como fonte de DANFE.
+                nota.XmlContingencia           = null;
             }
         }
 
@@ -1307,21 +1334,99 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     /// <summary>
+    /// Reenvia à SEFAZ o XML assinado que já foi entregue ao consumidor em
+    /// contingência offline (RES-002). Não remonta nem reassina: desserializa o
+    /// documento persistido e transmite exatamente ele. A chave, o número, o
+    /// dhEmi e o dhCont são os do documento original — a SEFAZ identifica a nota
+    /// pela chave, então isto é a mesma NFC-e, agora buscando autorização.
+    /// </summary>
+    private async Task RetransmitirContingenciaAsync(NotaFiscalEmitida nota)
+    {
+        var (_, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
+        using var _certDispose = certificado;
+
+        NfeDocumento nfe;
+        try
+        {
+            nfe = FuncoesXml.XmlStringParaClasse<NfeDocumento>(nota.XmlContingencia!);
+        }
+        catch (Exception ex)
+        {
+            // XML de contingência corrompido em repouso: não dá pra retransmitir
+            // nem inventar outro. Fica em contingência para tratamento manual —
+            // o documento que o consumidor levou continua válido até o prazo legal.
+            _logger.LogError(ex,
+                "NFC-e {NotaId}: XML de contingência ilegível; retransmissão automática não é possível.", nota.Id);
+            return;
+        }
+
+        using var servico = new ServicosNFe(cfgServico, certificado);
+        RetornoNFeAutorizacao retorno;
+        try
+        {
+            retorno = servico.NFeAutorizacao(1, IndicadorSincronizacao.Sincrono, new List<NfeDocumento> { nfe }, false);
+        }
+        catch (Exception ex) when (EhFalhaDeConectividade(ex))
+        {
+            _logger.LogWarning(ex,
+                "NFC-e {NotaId} (em contingência desde {DhContingencia:o}) ainda não conseguiu retransmitir — " +
+                "SEFAZ continua inalcançável.", nota.Id, nota.DhContingencia);
+            return;
+        }
+
+        var protInfo = retorno.Retorno?.protNFe?.infProt;
+        if (protInfo is not null && protInfo.cStat == 100)
+        {
+            nota.Status          = NotaFiscalStatus.Autorizada;
+            nota.ChaveAcesso     = protInfo.chNFe ?? nota.ChaveAcesso;
+            nota.Protocolo       = protInfo.nProt;
+            nota.AutorizadoEm    = DateTime.UtcNow;
+            // EmitidoEm é o momento real da venda offline — não pisa nele com o
+            // instante da confirmação tardia (mesma regra do caminho normal).
+            nota.EmitidoEm     ??= DateTime.UtcNow;
+            nota.XmlAutorizado   = MontarNfeProcXml(nfe, retorno.Retorno!.protNFe);
+            // O nfeProc autorizado passa a ser a fonte do DANFE; o XML offline
+            // cumpriu seu papel.
+            nota.XmlContingencia = null;
+            nota.MotivoRejeicao  = null;
+        }
+        else
+        {
+            // Rejeição de negócio na retransmissão: o documento offline não vira
+            // nota válida. Limpa os campos de reconstrução de contingência para o
+            // próximo reprocessamento montar um documento novo do zero (mesma
+            // lógica de F5 no caminho normal).
+            nota.Status                    = NotaFiscalStatus.Rejeitada;
+            nota.MotivoRejeicao            = protInfo?.xMotivo ?? retorno.RetornoStr ?? "SEFAZ não retornou motivo.";
+            nota.CnfContingencia           = null;
+            nota.DhContingencia            = null;
+            nota.JustificativaContingencia = null;
+            nota.XmlContingencia           = null;
+        }
+
+        await _db.SaveChangesAsync();
+    }
+
+    private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal) =>
+        MontarDetPag(dados.FormaPagamento, dados.SegundaFormaPagamento, dados.SegundoValorCentavos, valorTotal);
+
+    /// <summary>
     /// Monta um ou dois detPag conforme haja segundo método de pagamento (split).
     /// O valor do primeiro método é o total menos o que foi pago no segundo, pra bater
     /// exatamente com vNF — evita a diferença de centavos ser "engolida" num só método.
     /// </summary>
-    private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal)
+    internal static List<detPag> MontarDetPag(
+        string formaPagamento, string? segundaForma, int segundoValorCentavos, decimal valorTotal)
     {
-        if (string.IsNullOrWhiteSpace(dados.SegundaFormaPagamento) || dados.SegundoValorCentavos <= 0)
-            return new List<detPag> { MontarDetPagUnico(dados.FormaPagamento, valorTotal) };
+        if (string.IsNullOrWhiteSpace(segundaForma) || segundoValorCentavos <= 0)
+            return new List<detPag> { MontarDetPagUnico(formaPagamento, valorTotal) };
 
-        var valorSegundo  = dados.SegundoValorCentavos / 100m;
+        var valorSegundo  = segundoValorCentavos / 100m;
         var valorPrimeiro = valorTotal - valorSegundo;
         return new List<detPag>
         {
-            MontarDetPagUnico(dados.FormaPagamento, valorPrimeiro),
-            MontarDetPagUnico(dados.SegundaFormaPagamento, valorSegundo),
+            MontarDetPagUnico(formaPagamento, valorPrimeiro),
+            MontarDetPagUnico(segundaForma, valorSegundo),
         };
     }
 
@@ -1334,10 +1439,11 @@ public class NfceEmissionService : INfceEmissionService
     /// bandeira nem autorização pra informar — então o grupo é enviado só com
     /// `tpIntegra = Não integrado`, que é o mínimo aceito pela SEFAZ nesse caso.
     ///
-    /// Crediário, Pontos e Cashback não têm código próprio no layout da NFC-e — caem
-    /// em tPag=99 ("Outros"), e a SEFAZ rejeita esse código sem uma descrição em xPag
-    /// (rejeição observada em produção: "Descrição do pagamento obrigatória para meio
-    /// de pagamento 99-outros").
+    /// Crediário (05), pontos e cashback (19) agora usam código próprio e não
+    /// precisam mais de xPag. O xPag fica reservado ao 99 ("Outros"), único
+    /// código que a SEFAZ rejeita sem descrição ("Descrição do pagamento
+    /// obrigatória para meio de pagamento 99-outros" — rejeição observada em
+    /// produção). Se um meio novo cair no fpOutro, a descrição continua saindo.
     /// </summary>
     private static detPag MontarDetPagUnico(string formaPagamento, decimal valor)
     {
@@ -1352,9 +1458,8 @@ public class NfceEmissionService : INfceEmissionService
 
     private static string DescricaoFormaPagamentoOutro(string formaPagamento) => formaPagamento switch
     {
-        PaymentMethod.Crediario => "Crediário próprio da loja",
-        PaymentMethod.Pontos    => "Resgate de pontos de fidelidade",
-        PaymentMethod.Cashback  => "Cashback (saldo da loja)",
+        // Só é chamado quando o meio cai no fpOutro (99). Crediário, pontos e
+        // cashback têm código próprio e não passam mais por aqui.
         _                       => formaPagamento,
     };
 
@@ -2168,12 +2273,35 @@ public class NfceEmissionService : INfceEmissionService
     /// Pontos/Cashback/Crediário não são formas de pagamento reconhecidas pela SEFAZ —
     /// são mecanismos internos da loja, então caem em "Outros" (99).
     /// </summary>
+    /// <summary>
+    /// Traduz o meio comercial do ERP para o código da Tabela de Meios de
+    /// Pagamento (FIS-002 do plano de go-live).
+    ///
+    /// Crediário, pontos e cashback caíam todos em 99 ("Outros"). Existem
+    /// códigos próprios e vigentes para os dois casos, e usar 99 quando há
+    /// código específico degrada a qualidade declaratória — ainda mais numa
+    /// loja onde crediário e fidelidade são o modelo do negócio, não exceção:
+    ///
+    ///   • 05 (fpCartaoDaLoja) — "Cartão da Loja (Private Label), Crediário
+    ///     Digital, Outros Crediários". A descrição foi ampliada pelo Informe
+    ///     Técnico 2024.002, vigente em produção desde 01/07/2024; antes dele o
+    ///     código cobria só o cartão de loja, origem da confusão comum.
+    ///   • 19 (fpProgramadefidelidade) — "Programa de fidelidade, Cashback,
+    ///     Crédito Virtual". Não confundir com 12 (vale-presente) nem com 21
+    ///     (crédito em loja por troca/devolução, que é dinheiro já pago antes).
+    ///
+    /// O mapeamento é responsabilidade nossa: a biblioteca fiscal expõe todos os
+    /// enums lado a lado e não escolhe nenhum.
+    /// </summary>
     private static FormaPagamento MapFormaPagamento(string formaPagamento) => formaPagamento switch
     {
         PaymentMethod.Dinheiro      => FormaPagamento.fpDinheiro,
         PaymentMethod.Pix           => FormaPagamento.fpPagamentoInstantaneoPIXDinamico,
         PaymentMethod.CartaoCredito => FormaPagamento.fpCartaoCredito,
         PaymentMethod.CartaoDebito  => FormaPagamento.fpCartaoDebito,
+        PaymentMethod.Crediario     => FormaPagamento.fpCartaoDaLoja,
+        PaymentMethod.Pontos        => FormaPagamento.fpProgramadefidelidade,
+        PaymentMethod.Cashback      => FormaPagamento.fpProgramadefidelidade,
         _                           => FormaPagamento.fpOutro,
     };
 }

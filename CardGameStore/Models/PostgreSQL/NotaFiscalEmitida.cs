@@ -97,6 +97,21 @@ public class NotaFiscalEmitida
     [Column("xml_autorizado")]
     public string? XmlAutorizado { get; set; }
 
+    /// <summary>
+    /// XML assinado entregue ao consumidor em contingência offline (tpEmis=9),
+    /// SEM protNFe — é o documento que o cliente já levou, antes de a SEFAZ
+    /// voltar. Guardado à parte do XmlAutorizado por dois motivos (RES-002):
+    ///
+    ///   • é o único documento fiscal existente enquanto a retransmissão não
+    ///     acontece, então o DANFE de uma nota em contingência precisa sair
+    ///     daqui — sem isso a via impressa não teria fonte imutável;
+    ///   • a retransmissão tem que enviar exatamente ESTE documento assinado à
+    ///     SEFAZ, não remontar um novo — remontar mudaria a assinatura e a via
+    ///     do consumidor deixaria de conferir com a autorizada.
+    /// </summary>
+    [Column("xml_contingencia")]
+    public string? XmlContingencia { get; set; }
+
     /// <summary>URL do QR Code (com hash do CSC), calculada pela lib fiscal no momento da
     /// autorização e persistida aqui — evita recalcular (e evita fórmula desatualizada) toda
     /// vez que o cupom é exibido.</summary>

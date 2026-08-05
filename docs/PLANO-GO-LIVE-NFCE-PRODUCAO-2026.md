@@ -1854,3 +1854,72 @@ Passos 6 a 10 da seção 26.5, agora sem ambiguidade de canal:
 
 **Fontes:** [Manual de Padrões Técnicos do DANFE NFC-e e QR Code v6.0](https://www.nfe.fazenda.gov.br/PORTAl/exibirArquivo.aspx?conteudo=k%2FIuuaW4YiY%3D)
 e seções 24.11, 25.7 e 26 deste documento.
+
+---
+
+## 28. FIS-002 e RES-002 concluídos — 05/08/2026
+
+Dois cartões P0 fechados no código, cada um com o defeito que motivava e a prova
+que o trava. Nenhum substitui a homologação física.
+
+### 28.1 FIS-002 — códigos de meio de pagamento
+
+Crediário, pontos e cashback caíam todos em `tPag=99` ("Outros"). Passaram a usar
+os códigos próprios e vigentes:
+
+| Meio do ERP | Antes | Agora | Código |
+|---|---|---|---|
+| Crediário | 99 + xPag | `fpCartaoDaLoja` | **05** |
+| Pontos | 99 + xPag | `fpProgramadefidelidade` | **19** |
+| Cashback | 99 + xPag | `fpProgramadefidelidade` | **19** |
+
+- a descrição do `05` foi ampliada pelo Informe Técnico 2024.002 ("Cartão da Loja,
+  Crediário Digital, Outros Crediários"), vigente em produção desde 01/07/2024;
+- `xPag` deixou de ser emitido nesses meios — fica reservado ao `99`, único código
+  que a SEFAZ rejeita sem descrição;
+- não havia teste sobre a montagem do pagamento, e foi por isso que o `99` passou
+  despercebido. `NfcePagamentoTests` agora trava cada código e as combinações de
+  split (12 casos).
+
+Arquivos: `NfceEmissionService.MapFormaPagamento`, `MontarDetPagUnico`;
+`tests/.../Services/NfcePagamentoTests.cs`.
+
+### 28.2 RES-002 — XML assinado da contingência persistido
+
+Antes, uma NFC-e emitida offline guardava só chave e QR; o XML assinado entregue
+ao consumidor não era persistido. Duas consequências, ambas corrigidas:
+
+1. **DANFE de contingência não tinha fonte imutável.** Nova coluna
+   `xml_contingencia` guarda o XML assinado no momento da emissão offline;
+   `ObterCupomAsync` passa a usá-lo quando não há `nfeProc` (nfeProc autorizado
+   tem precedência). Reiniciar a aplicação ou perder cache não altera mais o
+   documento entregue.
+2. **A retransmissão remontava da comanda atual.** Uma edição na comanda entre a
+   venda offline e a retransmissão produziria um documento diferente com a MESMA
+   chave — divergente do que o consumidor levou. `RetransmitirContingenciaAsync`
+   desserializa o XML salvo e reenvia exatamente ele, sem remontar nem reassinar.
+   Ao autorizar, o `nfeProc` vira a fonte e o XML de contingência é descartado.
+
+Cobertura: `NfceContingenciaCupomTests` fixa a fonte do DANFE por estado
+(contingência sem protocolo, autorizada preferindo o nfeProc, cancelada, e sem
+documento → null). Migration `AddXmlContingencia` (coluna nullable, sem backfill).
+
+**Limite de homologação:** o reenvio do XML literal à SEFAZ (`NFeAutorizacao` com o
+`NfeDocumento` desserializado) não pôde ser validado contra o ambiente real nesta
+etapa. A lógica de estado, persistência e escolha de fonte está testada; a
+transmissão em si entra na matriz HOM-001, no cenário de contingência offline →
+reinício do serviço → retransmissão.
+
+### 28.3 Validação
+
+- `dotnet test` — **543 aprovados, 0 falhas** (eram 527; +12 FIS-002, +4 RES-002);
+- `npm run build` no frontend — compilação de produção concluída;
+- migration `AddXmlContingencia` gerada e conferida.
+
+### 28.4 Estado dos cartões após esta rodada
+
+| Cartão | Estado |
+|---|---|
+| FIS-002 | código e testes concluídos; aceite fiscal do XML pendente (HOM-001) |
+| RES-002 | persistência, DANFE de contingência e escolha de fonte concluídos; transmissão real do reenvio pendente (HOM-001) |
+| REG-001 | não iniciado — próximo a analisar; emissão fora do Simples segue bloqueada no pré-voo |
