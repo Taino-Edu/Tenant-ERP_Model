@@ -3,6 +3,12 @@
 Data-base da revisão: **04/08/2026**
 Escopo inicial: **loja física, venda presencial, operação interna e optante pelo Simples Nacional**.
 
+> 📌 **Status de execução:** o progresso de cada cartão (feito / parcial / pendente)
+> vive em um painel à parte — [`STATUS-GO-LIVE-NFCE.md`](STATUS-GO-LIVE-NFCE.md).
+> Este plano permanece intacto como fonte da verdade sobre escopo e critérios; o
+> painel é só o retrato do que já foi entregue. As seções 27 a 29 deste documento
+> registram, em detalhe, o que foi concluído em código.
+
 Este documento organiza a passagem da NFC-e para produção sem transformar o sistema em
 um conjunto de bloqueios desnecessários. Quando for seguro continuar a venda, o sistema deve
 continuar e deixar a pendência explícita, rastreável e conciliável. Regras que afetam a validade
