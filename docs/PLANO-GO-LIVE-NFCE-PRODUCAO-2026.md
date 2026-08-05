@@ -1923,3 +1923,52 @@ reinício do serviço → retransmissão.
 | FIS-002 | código e testes concluídos; aceite fiscal do XML pendente (HOM-001) |
 | RES-002 | persistência, DANFE de contingência e escolha de fonte concluídos; transmissão real do reenvio pendente (HOM-001) |
 | REG-001 | não iniciado — próximo a analisar; emissão fora do Simples segue bloqueada no pré-voo |
+
+---
+
+## 29. XML-001 concluído — identificação do item no XML — 05/08/2026
+
+Três defeitos de identificação do item, todos verificados em código na seção 18
+e agora corrigidos.
+
+### 29.1 O que mudou
+
+| Campo | Antes | Agora |
+|---|---|---|
+| `cProd` | posição do item na nota (`000001`, `000002`…) | Id do produto (`Guid` "N"), identidade estável que cruza com estoque e escrituração |
+| `cEAN` / `cEANTrib` | sempre `SEM GTIN`, ignorando o código de barras cadastrado | GTIN do cadastro **quando válido**; `SEM GTIN` caso contrário |
+| `xProd` | nome cru, sem limite | truncado a 120 caracteres (limite do leiaute), espaços colapsados |
+
+### 29.2 Validação de GTIN — por que na unha
+
+A biblioteca fiscal só oferece consulta ao CCG por **webservice** (`ConsultaGtin`),
+inviável a cada venda. O dígito verificador GS1 (módulo 10) foi implementado
+localmente — algoritmo padrão e bem definido. `SanitizarGtin` aceita apenas
+GTIN-8/12/13/14 com dígito correto; qualquer outra coisa vira `SEM GTIN`.
+
+Isso importa porque **cEAN inválido é rejeição 611** (NT 2021.003): mandar um
+código de barras interno malformado como se fosse GTIN derruba a nota. É melhor
+declarar `SEM GTIN` do que declarar um GTIN que não fecha.
+
+O algoritmo foi validado contra quatro GTINs reais conhecidos (EAN-13, GTIN-8 e
+GTIN-14) — se o cálculo estivesse errado, um produto legítimo perderia o GTIN ou
+um inválido passaria.
+
+### 29.3 Validação
+
+- `NfceIdentificacaoItemTests` — 18 casos (cProd estável, GTIN válido/inválido/
+  malformado, xProd truncado);
+- `dotnet test` — **561 aprovados, 0 falhas** (eram 543; +18);
+- migration não foi necessária: os campos já existiam no `Product` (`Id`, `Barcode`),
+  só não eram usados na montagem do XML.
+
+### 29.4 Estado dos cartões
+
+| Cartão | Estado |
+|---|---|
+| FIS-002 | concluído em código; aceite fiscal na HOM-001 |
+| RES-002 | persistência e DANFE de contingência concluídos; transmissão real na HOM-001 |
+| XML-001 | concluído em código; conferência do XML real na HOM-001 |
+| XML-002 | não iniciado — ligar validação XSD antes de transmitir |
+| CON-001 | não iniciado — conciliação de vendas × documentos |
+| REG-001 | não iniciado — emissão fora do Simples segue bloqueada no pré-voo |

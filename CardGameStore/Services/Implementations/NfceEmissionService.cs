@@ -790,7 +790,13 @@ public class NfceEmissionService : INfceEmissionService
         int? BaseStRetidaEmCentavos = null,
         int? ValorStRetidoEmCentavos = null,
         string? CstPis = null, string? CstCofins = null,
-        decimal? AliquotaPis = null, decimal? AliquotaCofins = null);
+        decimal? AliquotaPis = null, decimal? AliquotaCofins = null,
+        // ── Identificação do produto no XML (XML-001) ────────────────────────
+        // ProdutoId dá ao cProd uma identidade estável (cruza com estoque e
+        // escrituração); Gtin é o código de barras do cadastro, usado no cEAN
+        // só quando é um GTIN válido.
+        Guid? ProdutoId = null,
+        string? Gtin = null);
 
     private record DadosEmissao(
         List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
@@ -919,7 +925,9 @@ public class NfceEmissionService : INfceEmissionService
         CstPis: regra?.CstPis,
         CstCofins: regra?.CstCofins,
         AliquotaPis: regra?.AliquotaPis,
-        AliquotaCofins: regra?.AliquotaCofins);
+        AliquotaCofins: regra?.AliquotaCofins,
+        ProdutoId: product.Id,
+        Gtin: product.Barcode);
 
     // ── Montagem, assinatura e transmissão ─────────────────────────────────────
 
@@ -1484,6 +1492,58 @@ public class NfceEmissionService : INfceEmissionService
         return digitos;
     }
 
+    /// <summary>
+    /// Código do produto no XML (XML-001). Usa o Id do produto — identidade
+    /// estável que cruza com estoque e escrituração —, não a posição do item na
+    /// nota. Antes o cProd era "000001", "000002"… e não dava para relacionar a
+    /// venda ao cadastro. Fallback para a posição só se o item não trouxer Id
+    /// (não deveria acontecer em venda com produto real).
+    /// </summary>
+    internal static string MontarCodigoProduto(ItemFiscal item, int numero) =>
+        item.ProdutoId is { } id ? id.ToString("N") : numero.ToString("D6");
+
+    /// <summary>
+    /// Valida o código de barras como GTIN antes de mandá-lo no cEAN (XML-001 /
+    /// NT 2021.003). A SEFAZ rejeita (611) cEAN que não seja um GTIN válido ou o
+    /// literal "SEM GTIN": mandar um código de barras interno malformado como se
+    /// fosse GTIN derruba a nota. Só passa GTIN-8/12/13/14 com dígito verificador
+    /// correto; qualquer outra coisa vira null e o chamador usa "SEM GTIN".
+    ///
+    /// O cálculo do dígito é o padrão GS1 (módulo 10) — a biblioteca fiscal só
+    /// oferece consulta ao CCG por webservice, inviável a cada venda.
+    /// </summary>
+    internal static string? SanitizarGtin(string? gtin)
+    {
+        if (string.IsNullOrWhiteSpace(gtin)) return null;
+        var digitos = new string(gtin.Where(char.IsDigit).ToArray());
+        if (digitos.Length is not (8 or 12 or 13 or 14)) return null;
+
+        // Dígito verificador GS1: soma ponderada 3/1 da direita para a esquerda,
+        // excluindo o próprio DV; o total arredondado para a próxima dezena menos
+        // a soma é o DV esperado.
+        var soma = 0;
+        for (var i = 0; i < digitos.Length - 1; i++)
+        {
+            var d = digitos[digitos.Length - 2 - i] - '0';
+            soma += i % 2 == 0 ? d * 3 : d;
+        }
+        var dvEsperado = (10 - soma % 10) % 10;
+        return dvEsperado == digitos[^1] - '0' ? digitos : null;
+    }
+
+    /// <summary>
+    /// Descrição do item no XML (XML-001). O leiaute limita xProd a 120
+    /// caracteres; um nome de produto mais longo, mandado cru, é rejeição na
+    /// SEFAZ. Trunca sem quebrar no meio de um caractere multibyte e colapsa
+    /// espaços — o nome comercial completo continua no cadastro.
+    /// </summary>
+    internal static string SanitizarXProd(string nome)
+    {
+        var limpo = string.Join(' ', (nome ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (limpo.Length == 0) return "Item sem descricao";
+        return limpo.Length <= 120 ? limpo : limpo[..120].TrimEnd();
+    }
+
     internal static int SanitizarCfop(string cfop)
     {
         var digitos = new string((cfop ?? string.Empty).Where(char.IsDigit).ToArray());
@@ -1545,16 +1605,17 @@ public class NfceEmissionService : INfceEmissionService
         var baseIbsCbs = Math.Max(0, valorProduto - desconto);
         var tributosAproximados = CalcularTributosAproximados(item, descontoCentavos);
         var cest = SanitizarCest(item.Cest, regimeNormal ? CstExigeCest(item.Cst) : CsosnExigeCest(item.Csosn));
+        var gtin = SanitizarGtin(item.Gtin) ?? "SEM GTIN";
 
         return new det
         {
             nItem = numero,
             prod = new prod
             {
-                cProd      = numero.ToString("D6"),
-                cEAN       = "SEM GTIN",
-                cEANTrib   = "SEM GTIN",
-                xProd      = item.Nome,
+                cProd      = MontarCodigoProduto(item, numero),
+                cEAN       = gtin,
+                cEANTrib   = gtin,
+                xProd      = SanitizarXProd(item.Nome),
                 NCM        = SanitizarNcm(item.Ncm),
                 CEST       = cest,
                 CFOP       = SanitizarCfop(item.Cfop),
