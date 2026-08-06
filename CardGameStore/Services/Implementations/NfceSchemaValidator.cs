@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NfceSchemaValidator.cs — XML-002: valida o documento contra o XSD oficial da
 // SEFAZ antes de transmitir.
 //
@@ -37,6 +37,18 @@ public interface INfceSchemaValidator
     /// <summary>Pacote de liberação em uso — evidência exigida pela seção 17.1 do plano.</summary>
     string? PacoteEmUso { get; }
 
+    /// <summary>
+    /// Pasta dos schemas de EVENTO (cancelamento), ou null se não versionada.
+    ///
+    /// Aqui, diferente da autorização, quem valida é a própria lib: o
+    /// `RecepcaoEventoCancelamento` monta e transmite numa chamada só, sem expor
+    /// o XML antes. E dá para usar o `DiretorioSchemas` dela justamente porque a
+    /// pasta `Evento/` do pacote oficial já é autocontida — tem o seu próprio
+    /// `tiposBasico`, então não existe o conflito de nomes que impediu esse
+    /// caminho na autorização.
+    /// </summary>
+    string? DiretorioEventos { get; }
+
     /// <summary>Erros do documento. Lista vazia = válido (ou validação indisponível).</summary>
     IReadOnlyList<string> Validar(string xmlNfe);
 }
@@ -66,10 +78,31 @@ public sealed class NfceSchemaValidator : INfceSchemaValidator
 
     public bool Disponivel => _schemas.Value is not null;
 
+    /// <summary>
+    /// Só devolve a pasta se o arquivo que a lib efetivamente procura estiver
+    /// lá. Apontar `DiretorioSchemas` para uma pasta sem `envEvento_v1.00.xsd`
+    /// faria a lib falhar por arquivo ausente na hora de cancelar — trocaria uma
+    /// validação que não existe por um cancelamento que não acontece.
+    /// </summary>
+    public string? DiretorioEventos =>
+        File.Exists(Path.Combine(CaminhoDiretorioEventos, ArquivoEnvEvento))
+            ? CaminhoDiretorioEventos
+            : null;
+
     public string? PacoteEmUso => Disponivel ? PacoteLeiaute : null;
 
     internal static string CaminhoPadrao => Path.Combine(
         AppContext.BaseDirectory, "Schemas", PacoteLeiaute, "NFe", "nfe_v4.00.xsd");
+
+    /// <summary>Pacote que traz os schemas de evento e de consulta. Separado do
+    /// leiaute de propósito: os arquivos não são intercambiáveis (ver LEIA-ME).</summary>
+    internal const string PacoteEventos = "PL_010d_v1.03";
+
+    /// <summary>Arquivo que a lib procura para validar o lote de eventos.</summary>
+    private const string ArquivoEnvEvento = "envEvento_v1.00.xsd";
+
+    private static string CaminhoDiretorioEventos => Path.Combine(
+        AppContext.BaseDirectory, "Schemas", PacoteEventos, "Evento");
 
     internal static string CaminhoConfigurado
     {

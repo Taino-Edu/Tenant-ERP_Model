@@ -66,6 +66,7 @@ using NFe.Classes.Servicos.Tipos;
 using NFe.Servicos;
 using NFe.Servicos.Retorno;
 using NFe.Utils;
+using NFe.Utils.Excecoes;
 using NFe.Utils.Consulta;
 using Npgsql;
 using NFe.Utils.InformacoesSuplementares;
@@ -401,11 +402,37 @@ public class NfceEmissionService : INfceEmissionService
         var (cfg, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
 
+        // XML-002 (evento): aqui quem valida é a lib, porque RecepcaoEventoCancelamento
+        // monta e transmite numa chamada só, sem expor o XML antes. E o
+        // DiretorioSchemas dela funciona neste caso justamente porque a pasta
+        // Evento/ do pacote oficial é autocontida — tem o próprio tiposBasico,
+        // então não há o conflito de nomes que impediu esse caminho na autorização.
+        if (_schemaValidator.DiretorioEventos is { } diretorioEventos)
+        {
+            cfgServico.ValidarSchemas   = true;
+            cfgServico.DiretorioSchemas = diretorioEventos;
+        }
+
         using var servico = new ServicosNFe(cfgServico, certificado);
-        var retorno = servico.RecepcaoEventoCancelamento(
-            idlote: 1, sequenciaEvento: 1,
-            protocoloAutorizacao: nota.Protocolo!, chaveNFe: nota.ChaveAcesso!,
-            justificativa: justificativa.Trim(), cpfcnpj: NormalizarCnpjParaSefaz(cfg.Cnpj), dhEvento: AgoraBrasil());
+        RetornoRecepcaoEvento retorno;
+        try
+        {
+            retorno = servico.RecepcaoEventoCancelamento(
+                idlote: 1, sequenciaEvento: 1,
+                protocoloAutorizacao: nota.Protocolo!, chaveNFe: nota.ChaveAcesso!,
+                justificativa: justificativa.Trim(),
+                cpfcnpj: NormalizarCnpjParaSefaz(cfg.Cnpj), dhEvento: AgoraBrasil());
+        }
+        catch (ValidacaoSchemaException ex)
+        {
+            // Mesma conduta da autorização: erro de leiaute não é indisponibilidade
+            // da SEFAZ nem falha transitória. O evento não foi transmitido, a nota
+            // continua autorizada, e reenviar sem corrigir daria no mesmo.
+            _logger.LogError(ex,
+                "Evento de cancelamento da NFC-e {NotaId} reprovado no schema oficial — não transmitido.",
+                nota.Id);
+            throw new SchemaInvalidoException(new[] { ex.Message });
+        }
 
         var infEvento = retorno.Retorno?.retEvento?.FirstOrDefault()?.infEvento;
         if (infEvento is null || infEvento.cStat is not (135 or 136))

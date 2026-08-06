@@ -262,6 +262,7 @@ public class NfceSchemaValidacaoTests
     {
         public bool Disponivel => true;
         public string? PacoteEmUso => "fixture-de-teste";
+        public string? DiretorioEventos => null;
         public IReadOnlyList<string> Validar(string xmlNfe) =>
             new[] { "O elemento 'ide' apresenta conteúdo incompleto (erro sintético de teste)." };
     }
@@ -270,6 +271,7 @@ public class NfceSchemaValidacaoTests
     {
         public bool Disponivel => false;
         public string? PacoteEmUso => null;
+        public string? DiretorioEventos => null;
         public IReadOnlyList<string> Validar(string xmlNfe) => Array.Empty<string>();
     }
 
@@ -342,6 +344,37 @@ public class NfceSchemaValidacaoTests
         validador.Disponivel.Should().BeTrue(
             $"os XSDs precisam ser copiados para a saída do build ({NfceSchemaValidator.CaminhoConfigurado})");
         validador.PacoteEmUso.Should().Be(NfceSchemaValidator.PacoteLeiaute);
+    }
+
+    [Fact]
+    public void ValidadorReal_ExpoeOsSchemasDeEvento()
+    {
+        // O cancelamento é validado pela própria lib, via DiretorioSchemas. Se a
+        // pasta Evento/ não for publicada junto do binário, a propriedade vira
+        // null e o cancelamento volta a sair sem validação nenhuma — em silêncio.
+        var validador = new NfceSchemaValidator(NullLogger<NfceSchemaValidator>.Instance);
+
+        validador.DiretorioEventos.Should().NotBeNull(
+            "a pasta Evento/ precisa ser copiada para a saída do build");
+        File.Exists(Path.Combine(validador.DiretorioEventos!, "envEvento_v1.00.xsd"))
+            .Should().BeTrue("é o arquivo que a lib procura para validar o lote de eventos");
+    }
+
+    [Fact]
+    public void SchemasDeEvento_SaoAutocontidos()
+    {
+        // A razão de o caminho da lib funcionar aqui e não na autorização: a pasta
+        // Evento/ traz o próprio tiposBasico, então não depende de nenhum arquivo
+        // de outra pasta — e é por isso que apontar DiretorioSchemas para ela não
+        // recria o conflito de nomes descrito no LEIA-ME.
+        var validador = new NfceSchemaValidator(NullLogger<NfceSchemaValidator>.Instance);
+        var pasta = validador.DiretorioEventos!;
+
+        foreach (var necessario in new[]
+                 { "envEvento_v1.00.xsd", "leiauteEvento_v1.00.xsd", "tiposBasico_v1.03.xsd",
+                   "tiposBasico_v4.00.xsd", "xmldsig-core-schema_v1.01.xsd" })
+            File.Exists(Path.Combine(pasta, necessario))
+                .Should().BeTrue($"{necessario} faz parte do conjunto autocontido de eventos");
     }
 
     [Fact]
