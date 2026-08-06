@@ -49,6 +49,20 @@ public interface INfceSchemaValidator
     /// </summary>
     string? DiretorioEventos { get; }
 
+    /// <summary>
+    /// Pasta dos schemas de INUTILIZAÇÃO, ou null se não versionada. Mesma
+    /// mecânica do evento: `NfeInutilizacao` monta e transmite numa chamada só,
+    /// então quem valida é a lib.
+    /// </summary>
+    string? DiretorioInutilizacao { get; }
+
+    /// <summary>
+    /// Pasta dos schemas de AUTORIZAÇÃO, para a lib validar o LOTE (`enviNFe`) —
+    /// o envelope que a nossa validação própria não alcança, porque ela vê a
+    /// `&lt;NFe&gt;` e o envelope só existe dentro da lib.
+    /// </summary>
+    string? DiretorioAutorizacao { get; }
+
     /// <summary>Erros do documento. Lista vazia = válido (ou validação indisponível).</summary>
     IReadOnlyList<string> Validar(string xmlNfe);
 }
@@ -89,6 +103,18 @@ public sealed class NfceSchemaValidator : INfceSchemaValidator
             ? CaminhoDiretorioEventos
             : null;
 
+    /// <inheritdoc />
+    public string? DiretorioInutilizacao =>
+        File.Exists(Path.Combine(CaminhoDiretorioInutilizacao, ArquivoInutNfe))
+            ? CaminhoDiretorioInutilizacao
+            : null;
+
+    /// <inheritdoc />
+    public string? DiretorioAutorizacao =>
+        File.Exists(Path.Combine(CaminhoDiretorioAutorizacao, ArquivoEnviNfe))
+            ? CaminhoDiretorioAutorizacao
+            : null;
+
     public string? PacoteEmUso => Disponivel ? PacoteLeiaute : null;
 
     internal static string CaminhoPadrao => Path.Combine(
@@ -98,11 +124,20 @@ public sealed class NfceSchemaValidator : INfceSchemaValidator
     /// leiaute de propósito: os arquivos não são intercambiáveis (ver LEIA-ME).</summary>
     internal const string PacoteEventos = "PL_010d_v1.03";
 
-    /// <summary>Arquivo que a lib procura para validar o lote de eventos.</summary>
+    /// <summary>Arquivos que a lib procura, por serviço. Sondados na própria lib
+    /// (ver NfceSchemaValidacaoTests) — não são convenção adivinhada.</summary>
     private const string ArquivoEnvEvento = "envEvento_v1.00.xsd";
+    private const string ArquivoInutNfe   = "inutNFe_v4.00.xsd";
+    private const string ArquivoEnviNfe   = "enviNFe_v4.00.xsd";
 
     private static string CaminhoDiretorioEventos => Path.Combine(
         AppContext.BaseDirectory, "Schemas", PacoteEventos, "Evento");
+
+    private static string CaminhoDiretorioInutilizacao => Path.Combine(
+        AppContext.BaseDirectory, "Schemas", PacoteEventos, "NFe");
+
+    private static string CaminhoDiretorioAutorizacao => Path.Combine(
+        AppContext.BaseDirectory, "Schemas", PacoteLeiaute, "NFe");
 
     internal static string CaminhoConfigurado
     {

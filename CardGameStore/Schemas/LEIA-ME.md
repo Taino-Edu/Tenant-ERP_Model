@@ -31,6 +31,28 @@ em nenhum deles — o portal publica apenas os arquivos que mudaram. O conjunto 
 `PL_010e_v1.02/NFe/` é autossuficiente para validar uma `<NFe>` assinada, que é o
 que acontece antes de transmitir. Validar o lote exigiria o pacote base.
 
+## Dois arquivos vieram avulsos do SVRS
+
+O portal nacional publica apenas pacotes **incrementais**, e dois arquivos que a
+lib exige não estão em nenhum deles. Foram baixados avulsos em **06/08/2026** do
+espelho da Sefaz Virtual do RS (autoridade oficial, mas **fonte diferente** dos
+outros quatro — registrar isso no dossiê de homologação):
+
+| Arquivo | Origem | Onde ficou |
+|---|---|---|
+| `inutNFe_v4.00.xsd` | `https://dfe-portal.svrs.rs.gov.br/Schemas/PRNFE/inutNFe_v4.00.xsd` | `PL_010d_v1.03/NFe/` |
+| `enviNFe_v4.00.xsd` | `https://dfe-portal.svrs.rs.gov.br/Schemas/PRNFE/enviNFe_v4.00.xsd` | `PL_010e_v1.02/NFe/` |
+
+São **invólucros finos** (≈600 bytes cada): declaram o elemento raiz e incluem o
+leiaute que já estava versionado aqui. Nenhuma regra de validação vem deles — as
+regras continuam nos arquivos oficiais do portal. Por isso o risco de misturar
+versões, que impede combinar pacotes de anos diferentes, praticamente não se
+aplica a estes dois.
+
+Cada um foi posto ao lado do leiaute que inclui, porque o `xs:include` é
+relativo. Ambos compilam contra os arquivos existentes (verificado com
+`XmlSchemaSet`), e a suíte cobre os três caminhos.
+
 ## O que a lib procura, verificado empiricamente
 
 `NFe.Utils.Validacao.Validador` resolve o XSD pelo nome do serviço. Sondado em
@@ -39,16 +61,23 @@ que acontece antes de transmitir. Validar o lote exigiria o pacote base.
 | Serviço | Arquivo procurado | Situação |
 |---|---|---|
 | `RecepcaoEventoCancelmento` (sic, typo da lib) | `envEvento_v1.00.xsd` | ✅ presente em `PL_010d_v1.03/Evento/` — cancelamento é validado |
-| `NfeInutilizacao` | `inutNFe_v4.00.xsd` | ❌ **não publicado em nenhum pacote do portal** |
+| `NfeInutilizacao` | `inutNFe_v4.00.xsd` | ✅ obtido avulso no SVRS (ver acima) — inutilização é validada |
+| `NFeAutorizacao` (lote) | `enviNFe_v4.00.xsd` | ✅ obtido avulso no SVRS (ver acima) — lote é validado |
 | Eventos do RTC (`e112110`, `e211110`, …) | `eNNNNNN_v1.00.xsd` | presentes em `Eventos_RTC/`, para quando esses eventos forem implementados |
 
-Sobre a inutilização: foram conferidos `010e_v1.02`, `010d_v1.03`, `010d_v1.01`
-(o "PL Eventos e Cad Consulta Cadastro CCC"), `Eventos_RTC` e `DistDFe`. Todos
-trazem apenas `leiauteInutNFe_v4.00.xsd` e `procInutNFe_v4.00.xsd`. O arquivo que
-a lib exige simplesmente não é distribuído — não é caso de baixar o pacote certo.
+Foram conferidos `010e_v1.02`, `010d_v1.03`, `010d_v1.01` (o "PL Eventos e Cad
+Consulta Cadastro CCC"), `Eventos_RTC` e `DistDFe`: nenhum traz `inutNFe` ou
+`enviNFe`. Eles existem avulsos no SVRS, como registrado acima.
 
-**Não fabrique esse XSD.** Um schema montado à mão validaria contra uma regra
-que não é a da SEFAZ, e validação fiscal errada é pior do que validação nenhuma.
+**Nunca fabrique um XSD** que esteja faltando — nem transcrevendo o conteúdo de
+uma página. Um schema reconstruído validaria contra uma regra que talvez não seja
+a da SEFAZ, e validação fiscal errada é pior do que validação nenhuma. Baixe o
+arquivo, byte a byte, de fonte oficial.
+
+**Atenção ao testar:** a lib devolve **em silêncio** quando o XML não tem a raiz
+esperada. Um teste com `<x/>` passa mesmo com a validação desligada. Para provar
+que ela roda, use documento com a raiz certa e conteúdo inválido — é o que
+`LibValidaOsTresCaminhosQueConsomemEstadoFiscal` faz.
 
 ## Ao atualizar
 

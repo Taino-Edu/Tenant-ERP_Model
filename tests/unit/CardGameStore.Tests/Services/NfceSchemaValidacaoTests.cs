@@ -263,6 +263,8 @@ public class NfceSchemaValidacaoTests
         public bool Disponivel => true;
         public string? PacoteEmUso => "fixture-de-teste";
         public string? DiretorioEventos => null;
+        public string? DiretorioInutilizacao => null;
+        public string? DiretorioAutorizacao => null;
         public IReadOnlyList<string> Validar(string xmlNfe) =>
             new[] { "O elemento 'ide' apresenta conteúdo incompleto (erro sintético de teste)." };
     }
@@ -272,6 +274,8 @@ public class NfceSchemaValidacaoTests
         public bool Disponivel => false;
         public string? PacoteEmUso => null;
         public string? DiretorioEventos => null;
+        public string? DiretorioInutilizacao => null;
+        public string? DiretorioAutorizacao => null;
         public IReadOnlyList<string> Validar(string xmlNfe) => Array.Empty<string>();
     }
 
@@ -384,21 +388,43 @@ public class NfceSchemaValidacaoTests
                 "a lib precisa achar envEvento_v1.00.xsd na pasta que apontamos");
     }
 
-    [Fact]
-    public void Inutilizacao_ContinuaSemValidacao_PorFaltaDeArtefato()
-    {
-        // Registro executável de uma limitação, não de uma escolha: a lib procura
-        // inutNFe_v4.00.xsd, e esse arquivo não é publicado em nenhum dos pacotes
-        // do portal (conferidos 010e_v1.02, 010d_v1.03, 010d_v1.01, Eventos RTC e
-        // DistDFe — todos trazem só leiauteInutNFe e procInutNFe).
-        //
-        // Se um dia o arquivo aparecer, este teste falha e avisa que dá para
-        // fechar a lacuna — que é melhor do que a lacuna virar folclore.
-        var pasta = Path.Combine(
-            AppContext.BaseDirectory, "Schemas", NfceSchemaValidator.PacoteEventos, "NFe");
+    /// <summary>
+    /// Documento com a raiz certa e conteúdo inválido. É a única forma de provar
+    /// que a validação da lib REALMENTE roda: com um XML sem a raiz esperada
+    /// (`&lt;x/&gt;`), ela devolve em silêncio — o que faria um teste ingênuo passar
+    /// mesmo com a validação desligada.
+    /// </summary>
+    private static string RaizInvalida(string raiz, string versao) =>
+        $"""<{raiz} xmlns="http://www.portalfiscal.inf.br/nfe" versao="{versao}"><lixo/></{raiz}>""";
 
-        File.Exists(Path.Combine(pasta, "inutNFe_v4.00.xsd")).Should().BeFalse(
-            "se este arquivo passou a existir, habilite ValidarSchemas em InutilizarFaixaAsync");
+    [Theory]
+    [InlineData("NfeInutilizacao", "inutNFe", "4.00")]
+    [InlineData("NFeAutorizacao", "enviNFe", "4.00")]
+    [InlineData("RecepcaoEventoCancelmento", "envEvento", "1.00")]
+    public void LibValidaOsTresCaminhosQueConsomemEstadoFiscal(
+        string servico, string raiz, string versaoRaiz)
+    {
+        // Os três caminhos irreversíveis: autorizar (consome numeração),
+        // cancelar (evento registrado na chave) e inutilizar (declara faixa como
+        // nunca usada). Cada um resolve o schema numa pasta diferente, porque os
+        // arquivos oficiais não são intercambiáveis entre elas (ver LEIA-ME).
+        var validador = new NfceSchemaValidator(NullLogger<NfceSchemaValidator>.Instance);
+        var pasta = servico switch
+        {
+            "NfeInutilizacao"           => validador.DiretorioInutilizacao,
+            "NFeAutorizacao"            => validador.DiretorioAutorizacao,
+            _                           => validador.DiretorioEventos,
+        };
+        pasta.Should().NotBeNull($"o schema de {servico} precisa estar publicado junto do binário");
+
+        var act = () => NFe.Utils.Validacao.Validador.Valida(
+            Enum.Parse<NFe.Classes.Servicos.Tipos.ServicoNFe>(servico),
+            DFe.Classes.Flags.VersaoServico.Versao400,
+            RaizInvalida(raiz, versaoRaiz), validarLote: true, pathSchema: pasta!);
+
+        act.Should().Throw<Exception>("documento inválido tem que ser reprovado")
+            .Which.Message.Should().NotContain("localizar o arquivo",
+                "reprovar por schema ausente não é validar — é quebrar a operação");
     }
 
     [Fact]

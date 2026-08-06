@@ -612,10 +612,32 @@ public class NfceEmissionService : INfceEmissionService
 
         var (cfg, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
+
+        // XML-002: inutilizar é declarar à SEFAZ que uma faixa de numeração nunca
+        // será usada — irreversível. Mesma mecânica do evento de cancelamento:
+        // quem valida é a lib, porque NfeInutilizacao monta e transmite numa
+        // chamada só.
+        if (_schemaValidator.DiretorioInutilizacao is { } diretorioInutilizacao)
+        {
+            cfgServico.ValidarSchemas   = true;
+            cfgServico.DiretorioSchemas = diretorioInutilizacao;
+        }
+
         using var servico = new ServicosNFe(cfgServico, certificado);
-        var retorno = servico.NfeInutilizacao(
-            NormalizarCnpjParaSefaz(cfg.Cnpj), ano, ModeloDocumento.NFCe,
-            serie, numeroInicial, numeroFinal, justificativa);
+        RetornoNfeInutilizacao retorno;
+        try
+        {
+            retorno = servico.NfeInutilizacao(
+                NormalizarCnpjParaSefaz(cfg.Cnpj), ano, ModeloDocumento.NFCe,
+                serie, numeroInicial, numeroFinal, justificativa);
+        }
+        catch (ValidacaoSchemaException ex)
+        {
+            _logger.LogError(ex,
+                "Pedido de inutilização da faixa {Inicial}-{Final} (série {Serie}) reprovado no schema " +
+                "oficial — não transmitido.", numeroInicial, numeroFinal, serie);
+            throw new SchemaInvalidoException(new[] { ex.Message });
+        }
         var infInut = retorno.Retorno?.infInut;
         if (infInut is null || infInut.cStat != 102)
             throw new InvalidOperationException(
@@ -1381,6 +1403,15 @@ public class NfceEmissionService : INfceEmissionService
         nfe.infNFeSupl.qrCode = qrCodeUrl;
         nfe.infNFeSupl.urlChave = ExtinfNFeSupl.ObterUrlConsulta(
             nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao3);
+
+        // XML-002 (lote): a nossa validação vê a <NFe>; o envelope enviNFe só
+        // existe dentro da lib. Ligar o ValidarSchemas dela aqui cobre a camada
+        // que falta — idLote, indSinc e a amarração do documento no lote.
+        if (_schemaValidator.DiretorioAutorizacao is { } diretorioAutorizacao)
+        {
+            cfgServico.ValidarSchemas   = true;
+            cfgServico.DiretorioSchemas = diretorioAutorizacao;
+        }
 
         // XML-002: valida contra o schema oficial ANTES de qualquer coisa irreversível.
         // A posição aqui não é arbitrária — é depois de assinar e montar o QR (a
