@@ -10,6 +10,7 @@
 
 using CardGameStore.DTOs;
 using CardGameStore.Middleware;
+using CardGameStore.Multitenancy;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -25,12 +26,73 @@ namespace CardGameStore.Controllers;
 public class ProductController : ControllerBase
 {
     private readonly IProductService _service;
-    private readonly IbptTaxService _ibpt;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ITenantContext _tenant;
+    private readonly ILogger<ProductController> _logger;
 
-    public ProductController(IProductService service, IbptTaxService ibpt)
+    public ProductController(
+        IProductService service, IServiceScopeFactory scopeFactory,
+        ITenantContext tenant, ILogger<ProductController> logger)
     {
-        _service = service;
-        _ibpt = ibpt;
+        _service      = service;
+        _scopeFactory = scopeFactory;
+        _tenant       = tenant;
+        _logger       = logger;
+    }
+
+    /// <summary>
+    /// Dispara o preenchimento automático do IBPT sem segurar a resposta — num
+    /// escopo PRÓPRIO de injeção de dependência.
+    ///
+    /// Duas armadilhas, e o desenho precisa escapar das duas:
+    ///
+    /// <b>1. Não pode ser aguardado.</b> A versão anterior fazia
+    /// `await _ibpt.TentarSincronizarProdutoAsync(...)` dentro do salvamento.
+    /// O HttpClient do IBPT tem timeout de 15s — com a API lenta ou o token
+    /// recusado, salvar um produto ficava travado esperando uma integração que
+    /// é meramente conveniente. O produto já está salvo antes disso; nada
+    /// justifica prender o usuário.
+    ///
+    /// <b>2. Mas não basta jogar num Task.Run.</b> O IbptTaxService é scoped e
+    /// carrega o AppDbContext junto. Disparar em segundo plano com o serviço da
+    /// requisição faz a tarefa operar sobre um DbContext já descartado assim que
+    /// a resposta HTTP sai — o preenchimento nunca aconteceria, e pior: o
+    /// DbContext não é thread-safe, então a tarefa competiria com a própria
+    /// requisição pelo mesmo contexto ("a second operation was started on this
+    /// context instance"), derrubando o SALVAMENTO por um defeito que nada tem a
+    /// ver com o produto.
+    ///
+    /// Daí o escopo próprio, com o tenant reaplicado: sem `Set()`, o
+    /// TenantConnectionInterceptor falha por projeto (IsExplicitlySet), e mesmo
+    /// que não falhasse a consulta iria para o schema errado.
+    /// </summary>
+    private void SincronizarIbptEmSegundoPlano(Guid productId)
+    {
+        // Capturado ANTES de a requisição terminar: depois disso, o
+        // ITenantContext da requisição já não pode ser lido com segurança.
+        var tenantId = _tenant.TenantId;
+        var schema   = _tenant.SchemaName;
+        var modulos  = _tenant.EnabledModules;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                scope.ServiceProvider.GetRequiredService<ITenantContext>()
+                    .Set(tenantId, schema, modulos);
+                await scope.ServiceProvider.GetRequiredService<IbptTaxService>()
+                    .TentarSincronizarProdutoAsync(productId);
+            }
+            catch (Exception ex)
+            {
+                // Melhor-esforço: o produto já está salvo. Mas engolir sem log foi
+                // exatamente o que manteve o defeito acima invisível.
+                _logger.LogWarning(ex,
+                    "Preenchimento automático IBPT falhou para o produto {ProductId} (tenant {TenantId}).",
+                    productId, tenantId);
+            }
+        });
     }
 
     /// <summary>Lista todos os produtos ativos. Acessível por todos.</summary>
@@ -118,7 +180,7 @@ public class ProductController : ControllerBase
         try { created = await _service.CreateAsync(product); }
         catch (ArgumentException ex) { return BadRequest(new { Message = ex.Message }); }
 
-        await _ibpt.TentarSincronizarProdutoAsync(created.Id, HttpContext.RequestAborted);
+        SincronizarIbptEmSegundoPlano(created.Id);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -138,8 +200,11 @@ public class ProductController : ControllerBase
         catch (ArgumentException ex)     { return BadRequest(new { Message = ex.Message }); }
         catch (KeyNotFoundException ex)  { return NotFound(new { Message = ex.Message }); }
 
-        await _ibpt.TentarSincronizarProdutoAsync(updated.Id, HttpContext.RequestAborted);
-        return Ok(await _service.GetByIdAsync(updated.Id));
+        // A leitura final acontece ANTES de disparar o trabalho de fundo: assim
+        // nenhuma tarefa concorre com esta requisição pelo mesmo DbContext.
+        var resposta = await _service.GetByIdAsync(updated.Id);
+        SincronizarIbptEmSegundoPlano(updated.Id);
+        return Ok(resposta);
     }
 
     /// <summary>Desativa um produto (soft delete). Apenas Admin.</summary>
