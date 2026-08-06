@@ -2529,3 +2529,73 @@ registrado ao lado dos outros parâmetros que já estavam lá pela mesma razão.
 ### 35.9 Validação
 
 `dotnet test` — **671 aprovados, 0 falhas** (eram 658; +13).
+
+## 36. Emitir NFC-e depois da venda — o que o sistema faz hoje e o que precisa de decisão — 06/08/2026
+
+Pergunta levantada pelo responsável do produto ao especificar CON-003 ("registrar
+quem optou por não emitir"): *é possível emitir a nota legalmente depois da
+venda, já que a venda aparece na conta do cliente?*
+
+Esta seção registra o **fato técnico verificado**, que não é neutro, e delimita o
+que é decisão do contador. Não é parecer fiscal.
+
+### 36.1 O fato verificado
+
+Na emissão normal, o `dhEmi` do documento é o momento da **transmissão**, não o
+da venda:
+
+```csharp
+var dhEmi = jaEmContingencia
+    ? ParaBrasil(nota.EmitidoEm ?? nota.DhContingencia ?? nota.CreatedAt)
+    : AgoraBrasil();
+```
+
+O motivo do `AgoraBrasil()` é legítimo e está no código: a SEFAZ rejeita
+documento com data de emissão atrasada, e o reprocessamento automático roda
+minutos ou horas depois da venda. Sem isso, todo retry seria rejeitado.
+
+**A consequência, porém, é que emitir dias depois produz um documento que declara
+a data de HOJE para uma operação de ONTEM.** Isso não é "emissão atrasada": é um
+documento com data de operação diferente da real.
+
+O cabeçalho do arquivo afirmava o contrário (`dhEmi usa nota.CreatedAt`) e estava
+desatualizado — corrigido junto desta seção.
+
+### 36.2 Os três caminhos, e o que cada um custa
+
+| Caminho | O que acontece | Custo |
+|---|---|---|
+| **Contingência (tpEmis=9)** | `dhEmi` preserva o instante real da venda; prazo legal de 24h para autorizar | É **o mecanismo previsto** para "não deu para transmitir na hora". Já implementado (RES-002) |
+| **Emitir depois, com `dhEmi` = hoje** | documento autorizado, mas declarando data que não é a da operação | Tecnicamente funciona. Fiscalmente é o sistema afirmando algo que não ocorreu naquela data |
+| **Emitir depois, com `dhEmi` = data real** | caracteriza emissão extemporânea | Sujeito a rejeição por data atrasada, e a tratamento próprio de cada UF |
+
+### 36.3 O que a venda aparecer na conta do cliente NÃO resolve
+
+O registro da venda no ERP e o documento fiscal são coisas distintas. A conta do
+cliente prova que a operação existiu para **o sistema**; ela não substitui, não
+antecipa e não regulariza o documento perante a SEFAZ. Tratar uma como a outra é
+o tipo de confusão que a conciliação (CON-001) existe para desfazer.
+
+### 36.4 O que fica decidido e o que não
+
+**Decidido — o sistema não vai oferecer "emitir depois" como fluxo normal.**
+Expor um botão de emitir dias depois, com `dhEmi` de hoje, seria transformar uma
+irregularidade em funcionalidade. Os endpoints de emissão manual continuam
+existindo para reprocessar o que falhou, não para criar documento novo para venda
+antiga.
+
+**Não decidido — o que fazer com as vendas que já ficaram sem documento.**
+Isso é do contador, dentro de FIS-001: pode ser emissão extemporânea assumindo o
+ônus, pode ser ajuste na apuração, pode ser nada. O sistema não tem como escolher
+por ele.
+
+### 36.5 Consequência para CON-003
+
+Isto **aumenta** a importância de registrar quem optou por não emitir. Se a
+decisão de não emitir não for recuperável, o contador recebe um conjunto de
+vendas sem documento e sem contexto — sem saber se foi escolha do operador,
+falha do sistema ou venda que não devia gerar documento. O registro é o que
+torna a conversa de 36.4 possível.
+
+**Fonte do fato técnico:** `NfceEmissionService.TransmitirAsync`, atribuição de
+`dhEmi`; contingência em RES-002 (seção 28.2).

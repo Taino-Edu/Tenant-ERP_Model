@@ -13,9 +13,14 @@
 //    sentido pra um lojista que NÃO é substituto tributário). 201/202/203
 //    (ICMS-ST como substituto) são bloqueados de propósito — exigem MVA/base
 //    reduzida que ninguém aqui calcula sozinho; ver MontarIcmsSimplesNacional.
-//  - dhEmi usa nota.CreatedAt (momento real da venda/fechamento da comanda),
-//    não o momento da transmissão — importante pro caso comum de retry
-//    automático rodar minutos/horas depois da venda de verdade.
+//  - dhEmi na emissão NORMAL é o momento da TRANSMISSÃO (AgoraBrasil), não o da
+//    venda: a SEFAZ rejeita documento com data de emissão atrasada, então o
+//    retry automático que roda horas depois precisa carimbar o horário atual.
+//    A consequência fiscal disso não é neutra e está registrada na seção 36 do
+//    plano: emitir dias depois produz documento que declara a data de HOJE para
+//    uma operação de ONTEM. Só a contingência (tpEmis=9) preserva o instante
+//    real da venda, e é esse o mecanismo previsto para "não deu para transmitir
+//    na hora".
 //  - Todos os timestamps enviados à SEFAZ usam o fuso America/Sao_Paulo
 //    explicitamente (ParaBrasil/AgoraBrasil), independente do fuso do
 //    servidor onde a API está hospedada.
