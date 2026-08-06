@@ -469,7 +469,11 @@ builder.Services.AddScoped<FiscalConfigService>();
 builder.Services.AddScoped<FiscalXmlExportService>();
 builder.Services.AddScoped<IApuracaoTributariaService, ApuracaoTributariaService>();
 builder.Services.AddScoped<IConciliacaoFiscalService, ConciliacaoFiscalService>();
-builder.Services.AddScoped<IAlertaFiscalService, AlertaFiscalService>();
+builder.Services.AddScoped<IAlertaFiscalService>(sp => new AlertaFiscalService(
+    sp.GetRequiredService<AppDbContext>(),
+    sp.GetRequiredService<IConciliacaoFiscalService>(),
+    sp.GetRequiredService<ILogger<AlertaFiscalService>>(),
+    sp.GetRequiredService<IEmailService>()));
 // XML-002: singleton porque o XmlSchemaSet é compilado uma vez e reusado — recompilar
 // o leiaute 4.00 a cada venda custaria caro à toa.
 builder.Services.AddSingleton<INfceSchemaValidator, NfceSchemaValidator>();

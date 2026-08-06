@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // AlertaFiscalService.cs — CON-002: alertas fiscais por severidade e idade, com
 // responsável e confirmação de resolução.
 //
@@ -48,13 +48,18 @@ public class AlertaFiscalService : IAlertaFiscalService
     private readonly AppDbContext _db;
     private readonly IConciliacaoFiscalService _conciliacao;
     private readonly ILogger<AlertaFiscalService> _logger;
+    private readonly IEmailService? _email;
 
     public AlertaFiscalService(
-        AppDbContext db, IConciliacaoFiscalService conciliacao, ILogger<AlertaFiscalService> logger)
+        AppDbContext db, IConciliacaoFiscalService conciliacao, ILogger<AlertaFiscalService> logger,
+        IEmailService? email = null)
     {
         _db          = db;
         _conciliacao = conciliacao;
         _logger      = logger;
+        // Opcional: sem serviço de e-mail o painel continua funcionando igual —
+        // o canal externo é reforço do alerta, não a fonte dele.
+        _email       = email;
     }
 
     /// <summary>Uma pendência detectada no estado atual, ainda sem vínculo com o
@@ -195,19 +200,41 @@ public class AlertaFiscalService : IAlertaFiscalService
 
         var admins = await _db.Users
             .Where(u => u.Role == UserRole.Admin && u.IsActive)
-            .Select(u => u.Id)
+            .Select(u => new { u.Id, u.Name, u.Email })
             .ToListAsync(ct);
         if (admins.Count == 0) return;
 
         foreach (var alerta in criticos)
-            foreach (var adminId in admins)
+            foreach (var admin in admins)
                 _db.Notifications.Add(new Notification
                 {
-                    UserId = adminId,
+                    UserId = admin.Id,
                     Title  = Truncar(alerta.Titulo, 120),
                     Body   = Truncar(alerta.Detalhe, 500),
                     Link   = alerta.Link ?? "/admin/fiscal",
                 });
+
+        if (_email is null) return;
+
+        // Um e-mail por admin, sobre o alerta mais grave do ciclo — não um por
+        // alerta. Quem recebe cinco e-mails de uma vez para de ler no segundo, e
+        // a mensagem diz quantos há no total para não esconder o resto.
+        var principal = criticos[0];
+        foreach (var admin in admins.Where(a => !string.IsNullOrWhiteSpace(a.Email)))
+        {
+            try
+            {
+                await _email.SendAlertaFiscalCriticoAsync(
+                    admin.Email!, admin.Name, principal.Titulo, principal.Detalhe, criticos.Count);
+            }
+            catch (Exception ex)
+            {
+                // SMTP fora do ar não pode impedir o alerta de ser gravado — o
+                // painel é a fonte, o e-mail é o reforço.
+                _logger.LogWarning(ex,
+                    "Falha ao enviar e-mail de alerta fiscal crítico para {Email}.", admin.Email);
+            }
+        }
     }
 
     // ── Detecções ─────────────────────────────────────────────────────────────

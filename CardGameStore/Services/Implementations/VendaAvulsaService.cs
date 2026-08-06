@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
@@ -402,7 +402,18 @@ public class VendaAvulsaService : IVendaAvulsaService
         await transaction.CommitAsync();
         });
 
-        if (request.EmitirNotaFiscal && _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+        // CON-003 — ver ComandaService.CloseComandaAsync: a escolha é registrada
+        // mesmo (e principalmente) quando é "não emitir".
+        var moduloFiscalAtivo = _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase);
+        if (moduloFiscalAtivo)
+        {
+            venda.FiscalEmissaoEscolhida = request.EmitirNotaFiscal;
+            venda.FiscalDecisaoPorUserId = adminId;
+            venda.FiscalDecisaoEm        = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        if (request.EmitirNotaFiscal && moduloFiscalAtivo)
         {
             using var scope = _scopeFactory.CreateScope();
             scope.ServiceProvider.GetRequiredService<ITenantContext>()

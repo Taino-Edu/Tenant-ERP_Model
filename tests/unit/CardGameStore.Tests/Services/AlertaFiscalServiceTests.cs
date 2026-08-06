@@ -16,6 +16,7 @@ using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
+using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -74,6 +75,95 @@ public class AlertaFiscalServiceTests
         db.Users.Add(admin);
         await db.SaveChangesAsync();
         return admin.Id;
+    }
+
+    // ── Canal externo (CON-002, item 3) ───────────────────────────────────────
+
+    [Fact]
+    public async Task Sincronizar_AlertaCritico_MandaEmailParaAdminsComEndereco()
+    {
+        // Notificação in-app só é vista por quem abre o painel. Um resultado
+        // incerto às 19h de sábado não pode esperar segunda.
+        using var db = CreateDb();
+        var admin = new User
+        {
+            Id = Guid.NewGuid(), Name = "Dona da Loja", Role = UserRole.Admin,
+            IsActive = true, Email = "dona@loja.teste",
+        };
+        var semEmail = new User
+        {
+            Id = Guid.NewGuid(), Name = "Operador Sem Email", Role = UserRole.Admin, IsActive = true,
+        };
+        db.Users.AddRange(admin, semEmail);
+        await db.SaveChangesAsync();
+        await SeedNotaAsync(db, NotaFiscalStatus.ResultadoIncerto, n =>
+            n.ResultadoIncertoEm = DateTime.UtcNow.AddMinutes(-1));
+
+        var email = new Mock<IEmailService>();
+        var service = new AlertaFiscalService(
+            db, new ConciliacaoFiscalService(db), NullLogger<AlertaFiscalService>.Instance, email.Object);
+
+        await service.SincronizarAsync();
+
+        email.Verify(e => e.SendAlertaFiscalCriticoAsync(
+            "dona@loja.teste", "Dona da Loja", It.IsAny<string>(), It.IsAny<string>(), 1), Times.Once);
+        email.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Sincronizar_SegundoCiclo_NaoReenviaEmailDoMesmoAlerta()
+    {
+        // A deduplicação vale para o canal externo também: sem isso, o mesmo
+        // resultado incerto geraria um e-mail a cada 15 minutos até alguém
+        // resolver — e o admin criaria uma regra de filtro para o remetente.
+        using var db = CreateDb();
+        db.Users.Add(new User
+        {
+            Id = Guid.NewGuid(), Name = "Dona", Role = UserRole.Admin,
+            IsActive = true, Email = "dona@loja.teste",
+        });
+        await db.SaveChangesAsync();
+        await SeedNotaAsync(db, NotaFiscalStatus.ResultadoIncerto, n =>
+            n.ResultadoIncertoEm = DateTime.UtcNow.AddMinutes(-1));
+
+        var email = new Mock<IEmailService>();
+        var service = new AlertaFiscalService(
+            db, new ConciliacaoFiscalService(db), NullLogger<AlertaFiscalService>.Instance, email.Object);
+
+        await service.SincronizarAsync();
+        await service.SincronizarAsync();
+
+        email.Verify(e => e.SendAlertaFiscalCriticoAsync(
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()),
+            Times.Once, "o fato continua o mesmo — só a primeira detecção notifica");
+    }
+
+    [Fact]
+    public async Task Sincronizar_SmtpForaDoAr_NaoImpedeOAlertaDeSerGravado()
+    {
+        // O painel é a fonte do alerta; o e-mail é reforço. Deixar a falha de
+        // SMTP derrubar a sincronização apagaria a pendência inteira.
+        using var db = CreateDb();
+        db.Users.Add(new User
+        {
+            Id = Guid.NewGuid(), Name = "Dona", Role = UserRole.Admin,
+            IsActive = true, Email = "dona@loja.teste",
+        });
+        await db.SaveChangesAsync();
+        await SeedNotaAsync(db, NotaFiscalStatus.ResultadoIncerto, n =>
+            n.ResultadoIncertoEm = DateTime.UtcNow.AddMinutes(-1));
+
+        var email = new Mock<IEmailService>();
+        email.Setup(e => e.SendAlertaFiscalCriticoAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>()))
+            .ThrowsAsync(new InvalidOperationException("SMTP indisponível"));
+        var service = new AlertaFiscalService(
+            db, new ConciliacaoFiscalService(db), NullLogger<AlertaFiscalService>.Instance, email.Object);
+
+        var act = async () => await service.SincronizarAsync();
+
+        await act.Should().NotThrowAsync();
+        db.AlertasFiscais.Should().ContainSingle();
     }
 
     // ── Quem é cobrado (e quem não é) ─────────────────────────────────────────

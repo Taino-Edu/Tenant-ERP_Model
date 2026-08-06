@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // EmailService.cs — Envio de emails via SMTP
 //
 // Configuração (appsettings.json ou variáveis de ambiente):
@@ -436,6 +436,31 @@ public class EmailService : IEmailService
     }
 
     // ── Fiscal ────────────────────────────────────────────────────────────────
+
+    public async Task SendAlertaFiscalCriticoAsync(
+        string toEmail, string toName, string titulo, string detalhe, int totalCriticos)
+    {
+        var cfg = await GetSiteConfigAsync();
+        var outros = totalCriticos > 1
+            ? $"<p>Há <strong>{totalCriticos}</strong> pendências críticas abertas no momento.</p>"
+            : string.Empty;
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:520px">
+              <h2 style="color:#dc2626">{cfg.SiteName} — Pendência fiscal crítica</h2>
+              <p>Olá, <strong>{toName}</strong>!</p>
+              <p><strong>{System.Net.WebUtility.HtmlEncode(titulo)}</strong></p>
+              <p>{System.Net.WebUtility.HtmlEncode(detalhe)}</p>
+              {outros}
+              <p>
+                Abra <strong>Admin &gt; Fiscal</strong> para ver a pendência, definir o responsável
+                e registrar a resolução.
+              </p>
+              <p style="color:#888;font-size:12px">{cfg.SiteName} — Sistema de Gestão</p>
+            </div>
+            """;
+
+        await SendAsync(toEmail, toName, $"Pendência fiscal crítica — {cfg.SiteName}", body);
+    }
 
     public async Task SendCertificadoVencendoAsync(string toEmail, string toName, int diasRestantes, DateTime validade)
     {

@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // ConciliacaoFiscalDtos.cs — Cruzamento entre vendas tributáveis e documentos
 // fiscais (CON-001 do plano de go-live).
 //
@@ -58,8 +58,20 @@ public sealed record VendaConciliadaDto(
     int? Numero,
     string? ChaveAcesso,
     decimal? ValorNota,
-    string? MotivoRejeicao)
+    string? MotivoRejeicao,
+    // ── Decisão registrada no fechamento (CON-003) ────────────────────────────
+    // Sem isto, "venda sem documento" é ambíguo: pode ser escolha deliberada do
+    // operador ou falha do sistema, e o contador não tem como distinguir.
+    // Nulo = venda anterior ao registro da decisão — "não sabemos", não "não escolheu".
+    bool? EmissaoEscolhida = null,
+    string? DecididaPor = null,
+    DateTime? DecididaEm = null)
 {
+    /// <summary>Venda que ficou sem documento porque alguém decidiu isso, e há
+    /// registro de quem. Distinto de ausência inexplicada.</summary>
+    public bool SemDocumentoPorEscolha =>
+        Situacao == SituacaoFiscalVenda.SemDocumento && EmissaoEscolhida == false;
+
     /// <summary>
     /// Venda e nota com valores diferentes. Acontece quando a venda é editada
     /// depois da emissão — o documento fiscal fica com o valor antigo e ninguém

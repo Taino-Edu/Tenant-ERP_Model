@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // ConciliacaoFiscalService.cs — Toda venda tributável, com o documento que tem
 // ou a falta dele (CON-001 do plano de go-live).
 //
@@ -40,12 +40,14 @@ public class ConciliacaoFiscalService : IConciliacaoFiscalService
         var comandas = await _db.Comandas.AsNoTracking()
             .Where(c => c.Status == ComandaStatus.Fechada
                      && c.ClosedAt >= iniUtc && c.ClosedAt < fimUtc)
-            .Select(c => new { c.Id, c.ClosedAt, c.TotalInCents })
+            .Select(c => new { c.Id, c.ClosedAt, c.TotalInCents,
+                               c.FiscalEmissaoEscolhida, c.FiscalDecisaoPorUserId, c.FiscalDecisaoEm })
             .ToListAsync();
 
         var vendas = await _db.VendasAvulsas.AsNoTracking()
             .Where(v => v.SoldAt >= iniUtc && v.SoldAt < fimUtc)
-            .Select(v => new { v.Id, v.SoldAt, v.TotalInCents, v.CanceladoEm })
+            .Select(v => new { v.Id, v.SoldAt, v.TotalInCents, v.CanceladoEm,
+                               v.FiscalEmissaoEscolhida, v.FiscalDecisaoPorUserId, v.FiscalDecisaoEm })
             .ToListAsync();
 
         // As notas são buscadas pelos IDs das vendas do período, não por data
@@ -77,6 +79,18 @@ public class ConciliacaoFiscalService : IConciliacaoFiscalService
             .GroupBy(n => n.VendaAvulsaId!.Value)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(n => n.Status == NotaFiscalStatus.Autorizada).First());
 
+        // Nome de quem decidiu, resolvido uma vez só — a conciliação de um mês
+        // pode ter centenas de vendas e um punhado de operadores.
+        var decisores = comandas.Select(c => c.FiscalDecisaoPorUserId)
+            .Concat(vendas.Select(v => v.FiscalDecisaoPorUserId))
+            .Where(id => id.HasValue).Select(id => id!.Value).Distinct().ToList();
+        var nomePorId = decisores.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _db.Users.AsNoTracking()
+                .Where(u => decisores.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.Name);
+        string? NomeDe(Guid? id) => id.HasValue && nomePorId.TryGetValue(id.Value, out var n) ? n : null;
+
         var conciliadas = new List<VendaConciliadaDto>();
 
         foreach (var comanda in comandas)
@@ -90,7 +104,9 @@ public class ConciliacaoFiscalService : IConciliacaoFiscalService
                 vendaCancelada: false,
                 nota: nota is null ? null : new DadosNota(
                     nota.Id, nota.Status, nota.Serie, nota.Numero,
-                    nota.ChaveAcesso, nota.ValorTotalEmCentavos, nota.MotivoRejeicao)));
+                    nota.ChaveAcesso, nota.ValorTotalEmCentavos, nota.MotivoRejeicao),
+                decisao: new DecisaoFiscal(comanda.FiscalEmissaoEscolhida,
+                    NomeDe(comanda.FiscalDecisaoPorUserId), comanda.FiscalDecisaoEm)));
         }
 
         // A venda avulsa cancelada ENTRA no relatório, marcada como tal: ela pode
@@ -106,7 +122,9 @@ public class ConciliacaoFiscalService : IConciliacaoFiscalService
                 vendaCancelada: venda.CanceladoEm.HasValue,
                 nota: nota is null ? null : new DadosNota(
                     nota.Id, nota.Status, nota.Serie, nota.Numero,
-                    nota.ChaveAcesso, nota.ValorTotalEmCentavos, nota.MotivoRejeicao)));
+                    nota.ChaveAcesso, nota.ValorTotalEmCentavos, nota.MotivoRejeicao),
+                decisao: new DecisaoFiscal(venda.FiscalEmissaoEscolhida,
+                    NomeDe(venda.FiscalDecisaoPorUserId), venda.FiscalDecisaoEm)));
         }
 
         var ordenadas = conciliadas.OrderBy(v => v.OcorridaEm).ToList();
@@ -135,9 +153,12 @@ public class ConciliacaoFiscalService : IConciliacaoFiscalService
         Guid Id, NotaFiscalStatus Status, int? Serie, int? Numero,
         string? ChaveAcesso, long ValorTotalEmCentavos, string? MotivoRejeicao);
 
+    /// <summary>Decisão registrada no fechamento (CON-003).</summary>
+    private sealed record DecisaoFiscal(bool? Escolhida, string? Por, DateTime? Em);
+
     private static VendaConciliadaDto Montar(
         Guid vendaId, string origem, DateTime ocorridaEm, int valorVendaCentavos,
-        bool vendaCancelada, DadosNota? nota)
+        bool vendaCancelada, DadosNota? nota, DecisaoFiscal? decisao = null)
     {
         var situacao = ClassificarSituacao(vendaCancelada, nota?.Status);
 
@@ -152,7 +173,10 @@ public class ConciliacaoFiscalService : IConciliacaoFiscalService
             Numero: nota?.Numero,
             ChaveAcesso: nota?.ChaveAcesso,
             ValorNota: nota is null ? null : nota.ValorTotalEmCentavos / 100m,
-            MotivoRejeicao: nota?.MotivoRejeicao);
+            MotivoRejeicao: nota?.MotivoRejeicao,
+            EmissaoEscolhida: decisao?.Escolhida,
+            DecididaPor: decisao?.Por,
+            DecididaEm: decisao?.Em);
     }
 
     /// <summary>

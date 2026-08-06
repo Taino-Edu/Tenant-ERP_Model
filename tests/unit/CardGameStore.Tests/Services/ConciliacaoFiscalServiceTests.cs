@@ -281,4 +281,51 @@ public class ConciliacaoFiscalServiceTests
         resultado.ValorSemDocumento.Should().Be(0m);
         resultado.Pendencias.Should().BeEmpty();
     }
+
+    // ── Decisão registrada no fechamento (CON-003) ────────────────────────────
+
+    [Fact]
+    public async Task Conciliar_VendaSemDocumentoComEscolhaRegistrada_MostraQuemDecidiu()
+    {
+        // O caso que a seção 36.5 do plano diz ser inviável sem registro: o
+        // contador recebe a venda sem documento e precisa saber se foi decisão
+        // de alguém ou falha do sistema.
+        using var db = CreateDb();
+        var operador = new User
+        {
+            Id = Guid.NewGuid(), Name = "Caixa 1", Role = UserRole.Admin, IsActive = true,
+        };
+        db.Users.Add(operador);
+        var comandaId = await SeedComandaFechadaAsync(db, 5000);
+        var comanda = await db.Comandas.FindAsync(comandaId);
+        comanda!.FiscalEmissaoEscolhida = false;
+        comanda.FiscalDecisaoPorUserId  = operador.Id;
+        comanda.FiscalDecisaoEm         = MomentoUtc(Hoje);
+        await db.SaveChangesAsync();
+
+        var resultado = await new ConciliacaoFiscalService(db).ConciliarAsync(Hoje, Hoje);
+
+        var venda = resultado.Vendas.Single(v => v.VendaId == comandaId);
+        venda.Situacao.Should().Be(SituacaoFiscalVenda.SemDocumento);
+        venda.EmissaoEscolhida.Should().BeFalse();
+        venda.DecididaPor.Should().Be("Caixa 1");
+        venda.SemDocumentoPorEscolha.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Conciliar_VendaAntigaSemRegistro_NaoInventaDecisao()
+    {
+        // Nulo é "não sabemos", não "ninguém escolheu". Vendas anteriores ao
+        // registro não podem aparecer como se tivessem sido decididas.
+        using var db = CreateDb();
+        var comandaId = await SeedComandaFechadaAsync(db, 5000);
+
+        var resultado = await new ConciliacaoFiscalService(db).ConciliarAsync(Hoje, Hoje);
+
+        var venda = resultado.Vendas.Single(v => v.VendaId == comandaId);
+        venda.EmissaoEscolhida.Should().BeNull();
+        venda.DecididaPor.Should().BeNull();
+        venda.SemDocumentoPorEscolha.Should().BeFalse(
+            "sem registro não dá para afirmar que alguém escolheu não emitir");
+    }
 }

@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // IEmailService.cs — Contrato de envio de emails do sistema
 // =============================================================================
 
@@ -74,4 +74,12 @@ public interface IEmailService
 
     /// <summary>Envia ao contador o ZIP mensal com os XMLs de NFC-e autorizadas/canceladas.</summary>
     Task SendXmlsMensalContadorAsync(string toEmail, string mesReferencia, byte[] zipBytes, string zipFileName);
+
+    /// <summary>
+    /// Pendência fiscal crítica (CON-002). Vai para os admins do tenant porque
+    /// notificação in-app só é vista por quem abre o painel — e um resultado
+    /// incerto às 19h de sábado não pode esperar segunda-feira.
+    /// </summary>
+    Task SendAlertaFiscalCriticoAsync(
+        string toEmail, string toName, string titulo, string detalhe, int totalCriticos);
 }
