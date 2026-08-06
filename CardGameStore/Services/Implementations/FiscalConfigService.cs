@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // FiscalConfigService.cs — Leitura e escrita da configuração fiscal do tenant.
 //
 // Extraído de FiscalController quando o portal do contador passou a poder
@@ -131,6 +131,14 @@ public class FiscalConfigService
             // e não aqui: é lá que o dado errado causaria dano.
             cfg.RegimeTributario = regime;
         }
+
+        // RTC-001: as duas condições que o regime declarado não revela. Só fazem
+        // sentido para optantes do Simples — fora dele o perfil já é RegimeNormal
+        // e estes campos não são consultados.
+        if (req.ExcedeuSublimiteSimples.HasValue)
+            cfg.ExcedeuSublimiteSimples = req.ExcedeuSublimiteSimples.Value;
+        if (req.OptouRegimeRegularIbsCbs.HasValue)
+            cfg.OptouRegimeRegularIbsCbs = req.OptouRegimeRegularIbsCbs.Value;
 
         // ── Parâmetros de apuração (não entram no XML) ────────────────────────
         if (req.AnexoSimples is not null)
@@ -322,6 +330,9 @@ public class FiscalConfigService
             CscConfigurado = !string.IsNullOrWhiteSpace(cfg.CscId) && !string.IsNullOrWhiteSpace(cfg.CscTokenEncrypted),
             cfg.CscId, // não sensível isoladamente; o token nunca é retornado
             RegimeTributario = cfg.RegimeTributario.ToString(),
+            cfg.ExcedeuSublimiteSimples,
+            cfg.OptouRegimeRegularIbsCbs,
+            PerfilIbsCbs = CatalogoRegrasIbsCbs.PerfilDe(cfg).ToString(),
             Ambiente         = cfg.Ambiente.ToString(),
             cfg.SerieNfce,
             cfg.ProximoNumeroNfce,

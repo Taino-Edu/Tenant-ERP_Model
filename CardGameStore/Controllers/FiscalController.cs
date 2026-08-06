@@ -732,6 +732,62 @@ public class FiscalController : ControllerBase
     public async Task<IActionResult> GetAlertas([FromQuery] bool incluirResolvidos = false) =>
         Ok(await _alertas.ListarAsync(incluirResolvidos));
 
+    /// <summary>
+    /// Catálogo versionado de regras de IBS/CBS (RTC-001): o que está em vigor
+    /// hoje para este contribuinte, com alíquotas, fonte oficial e data de
+    /// consulta, mais o histórico de faixas. É o que o contador precisa ver para
+    /// conferir se o motor está aplicando a regra certa — e para saber com que
+    /// fonte ela foi registrada.
+    /// </summary>
+    // ── GET /api/fiscal/regras-ibs-cbs ────────────────────────────────────────
+    [HttpGet("regras-ibs-cbs")]
+    public async Task<IActionResult> GetRegrasIbsCbs(CancellationToken ct)
+    {
+        var cfg = await _db.FiscalConfigs.FindAsync(new object?[] { FiscalConfig.SingletonId }, ct);
+        var perfil = cfg is null ? PerfilIbsCbs.SimplesNacional : CatalogoRegrasIbsCbs.PerfilDe(cfg);
+        var hoje = DateOnly.FromDateTime(BrazilTime.NowBr().Date);
+        var vigente = CatalogoRegrasIbsCbs.Para(hoje, perfil);
+        var ambienteProducao = cfg?.Ambiente == AmbienteFiscal.Producao;
+
+        return Ok(new
+        {
+            Perfil = perfil.ToString(),
+            RevisaoRecomendadaEm = CatalogoRegrasIbsCbs.RevisaoRecomendadaEm,
+            RevisaoVencida = hoje >= CatalogoRegrasIbsCbs.RevisaoRecomendadaEm,
+            Vigente = vigente is null ? null : new
+            {
+                vigente.Versao,
+                vigente.VigenciaInicio,
+                vigente.VigenciaFim,
+                vigente.AliquotaIbsUf,
+                vigente.AliquotaIbsMun,
+                vigente.AliquotaCbs,
+                vigente.CstSuportados,
+                vigente.DestaqueObrigatorio,
+                vigente.FonteOficial,
+                vigente.ConsultadoEm,
+                vigente.Observacao,
+                // O que efetivamente sai no XML hoje: homologação sempre destaca;
+                // produção só quando a regra disser que o destaque já é exigido.
+                DestacaNoXmlAgora = vigente.DestaqueObrigatorio || !ambienteProducao,
+            },
+            Catalogo = CatalogoRegrasIbsCbs.Todas.Select(r => new
+            {
+                r.Versao,
+                r.VigenciaInicio,
+                r.VigenciaFim,
+                Perfis = r.Perfis.Select(p => p.ToString()),
+                r.AliquotaIbsUf,
+                r.AliquotaIbsMun,
+                r.AliquotaCbs,
+                r.DestaqueObrigatorio,
+                r.FonteOficial,
+                r.ConsultadoEm,
+                r.Observacao,
+            }),
+        });
+    }
+
     /// <summary>Recalcula as pendências agora, sem esperar o ciclo de 15 minutos.</summary>
     // ── POST /api/fiscal/alertas/sincronizar ──────────────────────────────────
     [HttpPost("alertas/sincronizar")]

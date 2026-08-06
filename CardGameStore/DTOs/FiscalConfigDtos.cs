@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // FiscalConfigDtos.cs — Contrato de escrita da configuração fiscal.
 // Fica em DTOs (e não dentro do controller) porque hoje há duas portas de
 // entrada pra mesma config: /api/fiscal/config (lojista) e
@@ -24,6 +24,16 @@ public class SaveFiscalConfigRequest
     public string? CscId               { get; init; }
     public string? CscToken            { get; init; }
     public string? RegimeTributario  { get; init; }
+
+    // ── Perfil IBS/CBS (RTC-001) ─────────────────────────────────────────────
+    // Selecionam qual faixa do catálogo versionado de regras se aplica. O regime
+    // declarado não revela nenhuma das duas, e o sistema não tem como inferi-las.
+
+    /// <summary>Optante do Simples que excedeu o sublimite estadual. Null = não altera.</summary>
+    public bool? ExcedeuSublimiteSimples  { get; init; }
+
+    /// <summary>Optante do Simples que optou pelo regime regular de IBS/CBS. Null = não altera.</summary>
+    public bool? OptouRegimeRegularIbsCbs { get; init; }
     public string? Ambiente          { get; init; }
     public int?    SerieNfce         { get; init; }
     public string? EmailContador     { get; init; }

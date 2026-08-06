@@ -80,6 +80,7 @@ public class AlertaFiscalService : IAlertaFiscalService
         detectadas.AddRange(await DetectarVendasSemDocumentoAsync(ct));
         detectadas.AddRange(await DetectarLacunasDeNumeracaoAsync(ct));
         detectadas.AddRange(await DetectarExportacaoMensalPendenteAsync(ct));
+        detectadas.AddRange(await DetectarRegraIbsCbsDesatualizadaAsync(ct));
 
         // Duas detecções com a mesma chave seriam um bug de composição — a última
         // vence, mas isso não deve acontecer e o banco recusaria a duplicata.
@@ -433,6 +434,65 @@ public class AlertaFiscalService : IAlertaFiscalService
                     "Baixe e envie o ZIP manualmente em Admin > Fiscal > Exportar XMLs, e verifique a " +
                     "configuração de e-mail — a guarda dos documentos é obrigação do emitente.",
                 OcorridoEm: inicioDoMesUtc,
+                Link: "/admin/fiscal"),
+        };
+    }
+
+    /// <summary>
+    /// A regra de IBS/CBS aplicada aos documentos passou da data recomendada de
+    /// revisão — ou não existe regra para hoje (RTC-001).
+    ///
+    /// Este alerta é a contrapartida de o motor não travar mais na virada do ano:
+    /// como a emissão continua com a última regra conhecida, é aqui que se cobra
+    /// a conferência contra a legislação vigente. Substituir uma parada geral por
+    /// silêncio seria trocar um defeito por outro.
+    /// </summary>
+    private async Task<List<PendenciaDetectada>> DetectarRegraIbsCbsDesatualizadaAsync(CancellationToken ct)
+    {
+        var vazio = new List<PendenciaDetectada>();
+
+        var cfg = await _db.FiscalConfigs.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == FiscalConfig.SingletonId, ct);
+        if (cfg is null) return vazio;
+
+        var hojeBr = DateOnly.FromDateTime(BrazilTime.NowBr().Date);
+        var perfil = CatalogoRegrasIbsCbs.PerfilDe(cfg);
+        var regra = CatalogoRegrasIbsCbs.Para(hojeBr, perfil);
+        var revisaoEm = CatalogoRegrasIbsCbs.RevisaoRecomendadaEm;
+
+        if (regra is null)
+            return new List<PendenciaDetectada>
+            {
+                new(
+                    Chave: $"{nameof(TipoAlertaFiscal.RegraIbsCbsDesatualizada)}:{perfil}:sem-regra",
+                    Tipo: TipoAlertaFiscal.RegraIbsCbsDesatualizada,
+                    Severidade: SeveridadeAlertaFiscal.Alta,
+                    Titulo: "Nenhuma regra de IBS/CBS cobre a data de hoje",
+                    Detalhe:
+                        $"O catálogo versionado não tem faixa vigente para {hojeBr:dd/MM/yyyy} no perfil " +
+                        $"{perfil}. As notas continuam sendo emitidas, mas SEM os grupos de IBS/CBS. " +
+                        "Atualize o catálogo conforme a Nota Técnica vigente antes do próximo fechamento.",
+                    OcorridoEm: BrazilTime.DateToUtcStart(hojeBr.ToDateTime(TimeOnly.MinValue)),
+                    Link: "/admin/fiscal"),
+            };
+
+        if (hojeBr < revisaoEm) return vazio;
+
+        return new List<PendenciaDetectada>
+        {
+            new(
+                Chave: $"{nameof(TipoAlertaFiscal.RegraIbsCbsDesatualizada)}:{regra.Versao}",
+                Tipo: TipoAlertaFiscal.RegraIbsCbsDesatualizada,
+                Severidade: SeveridadeAlertaFiscal.Media,
+                Titulo: $"Regra de IBS/CBS {regra.Versao} precisa ser reconferida",
+                Detalhe:
+                    $"A regra em uso desde {regra.VigenciaInicio:dd/MM/yyyy} continua sendo aplicada às notas " +
+                    $"(IBS UF {regra.AliquotaIbsUf:0.###}%, IBS municipal {regra.AliquotaIbsMun:0.###}%, " +
+                    $"CBS {regra.AliquotaCbs:0.###}%), mas a revisão era recomendada para " +
+                    $"{revisaoEm:dd/MM/yyyy}. Fonte registrada: {regra.FonteOficial} " +
+                    $"(consultada em {regra.ConsultadoEm:dd/MM/yyyy}). Confira a Nota Técnica vigente com o " +
+                    "contador e atualize o catálogo se as alíquotas mudaram.",
+                OcorridoEm: BrazilTime.DateToUtcStart(revisaoEm.ToDateTime(TimeOnly.MinValue)),
                 Link: "/admin/fiscal"),
         };
     }

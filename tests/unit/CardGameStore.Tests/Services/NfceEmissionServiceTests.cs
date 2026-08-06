@@ -925,8 +925,9 @@ public class NfceEmissionServiceTests
     [Fact]
     public void MontarItem_ComIbsCbs2026_UsaBaseLiquidaEClassificacaoOficial()
     {
+        var regra = CatalogoRegrasIbsCbs.Para(new DateOnly(2026, 8, 6), PerfilIbsCbs.SimplesNacional)!;
         var det = NfceEmissionService.MontarItem(
-            Item("102"), numero: 1, descontoCentavos: 200, incluirIbsCbs: true);
+            Item("102"), numero: 1, descontoCentavos: 200, regraIbsCbs: regra);
 
         var ibsCbs = det.imposto.IBSCBS!;
         ibsCbs.CST.ToString().Should().Be("Cst000");
@@ -947,13 +948,14 @@ public class NfceEmissionServiceTests
     [Fact]
     public void MontarTotaisIbsCbs2026_SomaBasesLiquidasETributosDosItens()
     {
+        var regra = CatalogoRegrasIbsCbs.Para(new DateOnly(2026, 8, 6), PerfilIbsCbs.SimplesNacional)!;
         var itens = new[]
         {
-            NfceEmissionService.MontarItem(Item("102"), 1, 200, incluirIbsCbs: true),
-            NfceEmissionService.MontarItem(Item("102"), 2, 0, incluirIbsCbs: true),
+            NfceEmissionService.MontarItem(Item("102"), 1, 200, regra),
+            NfceEmissionService.MontarItem(Item("102"), 2, 0, regra),
         };
 
-        var total = NfceEmissionService.MontarTotaisIbsCbs2026(itens);
+        var total = NfceEmissionService.MontarTotaisIbsCbs(itens);
 
         total.vBCIBSCBS.Should().Be(18m);
         total.gIBS!.gIBSUF!.vIBSUF.Should().Be(0.02m);

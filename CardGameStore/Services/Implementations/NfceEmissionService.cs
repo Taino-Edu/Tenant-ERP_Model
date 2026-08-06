@@ -1140,19 +1140,30 @@ public class NfceEmissionService : INfceEmissionService
         // Monta os itens (e valida CSOSN) ANTES de reservar o número — uma Natureza de
         // Operação mal configurada não pode queimar um número de NFC-e sem transmitir nada.
         var jaEmContingencia = nota.DhContingencia.HasValue;
-        var anoIbsCbs = jaEmContingencia
-            ? ParaBrasil(nota.EmitidoEm ?? nota.DhContingencia ?? nota.CreatedAt).Year
-            : AgoraBrasil().Year;
-        var incluirIbsCbs = ambiente == TipoAmbiente.Homologacao || anoIbsCbs >= 2027;
-        if (incluirIbsCbs && anoIbsCbs != 2026)
-            throw new FiscalNaoConfiguradoException(
-                $"As alíquotas de IBS/CBS para {anoIbsCbs} ainda não estão configuradas. " +
-                "Atualize o motor fiscal conforme a tabela oficial vigente antes de emitir.");
+
+        // RTC-001: a regra de IBS/CBS vem do catálogo versionado, pela DATA DE
+        // EMISSÃO do documento e pelo perfil do contribuinte. Não há mais condição
+        // fixa de ano: virar o calendário não derruba a emissão, porque a última
+        // faixa do catálogo é aberta. Se um dia não houver regra aplicável, o
+        // documento sai sem os grupos e o fato fica registrado — parar o caixa
+        // inteiro por causa de uma tabela desatualizada seria o pior desfecho.
+        var dataEmissao = DateOnly.FromDateTime((jaEmContingencia
+            ? ParaBrasil(nota.EmitidoEm ?? nota.DhContingencia ?? nota.CreatedAt)
+            : AgoraBrasil()).DateTime);
+        var perfilIbsCbs = CatalogoRegrasIbsCbs.PerfilDe(cfg);
+        var regraIbsCbs = CatalogoRegrasIbsCbs.Para(dataEmissao, perfilIbsCbs);
+        if (regraIbsCbs is null)
+            _logger.LogError(
+                "NFC-e {NotaId}: nenhuma regra de IBS/CBS no catálogo cobre {Data:yyyy-MM-dd} para o perfil " +
+                "{Perfil}. O documento sai sem os grupos de IBS/CBS — atualize o catálogo conforme a " +
+                "legislação vigente.", nota.Id, dataEmissao, perfilIbsCbs);
+
+        var regraParaXml = RegraParaDestaque(regraIbsCbs, ambiente);
 
         var descontosPorItem = DistribuirDesconto(dados.Itens, dados.DescontoTotalCentavos);
         var detItens = dados.Itens
             .Select((item, idx) => _taxEngine.MontarItem(
-                item, idx + 1, descontosPorItem[idx], incluirIbsCbs, cfg.RegimeTributario))
+                item, idx + 1, descontosPorItem[idx], regraParaXml, cfg.RegimeTributario))
             .ToList();
         if (ambiente == TipoAmbiente.Homologacao && detItens.Count > 0)
             detItens[0].prod.xProd = ProdutoHomologacao;
@@ -1285,7 +1296,7 @@ public class NfceEmissionService : INfceEmissionService
                         vTotTrib = tributosTotais,
                         vNF      = valorTotal,
                     },
-                    IBSCBSTot = incluirIbsCbs ? _taxEngine.MontarTotaisIbsCbs2026(detItens) : null,
+                    IBSCBSTot = regraParaXml is not null ? _taxEngine.MontarTotaisIbsCbs(detItens) : null,
                 },
                 transp = new transp { modFrete = ModalidadeFrete.mfSemFrete },
                 pag = new List<pag> { new pag { detPag = MontarDetPag(dados, valorTotal) } },
@@ -1968,7 +1979,7 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     internal static det MontarItem(
-        ItemFiscal item, int numero, int descontoCentavos = 0, bool incluirIbsCbs = false,
+        ItemFiscal item, int numero, int descontoCentavos = 0, RegraIbsCbs? regraIbsCbs = null,
         RegimeTributario regime = RegimeTributario.SimplesNacional)
     {
         var regimeNormal = regime != RegimeTributario.SimplesNacional;
@@ -2021,7 +2032,7 @@ public class NfceEmissionService : INfceEmissionService
                 },
                 PIS    = new PIS    { TipoPIS    = MontarPis(item, regime, baseIbsCbs) },
                 COFINS = new COFINS { TipoCOFINS = MontarCofins(item, regime, baseIbsCbs) },
-                IBSCBS = incluirIbsCbs ? MontarIbsCbs2026(item, baseIbsCbs) : null,
+                IBSCBS = regraIbsCbs is not null ? MontarIbsCbs(item, regraIbsCbs, baseIbsCbs) : null,
             },
         };
     }
@@ -2187,22 +2198,44 @@ public class NfceEmissionService : INfceEmissionService
                 $"CST de COFINS \"{cst}\" não existe no leiaute da NFC-e.");
 
     /// <summary>
-    /// Tributação integral usada na fase de testes de 2026. Pela regra UB16-10 da
-    /// NT 2025.002, a base subtrai o desconto incondicional informado no item.
+    /// Decide se a regra vigente vira destaque no XML (RTC-001).
+    ///
+    /// Homologação sempre destaca — é onde se testa o leiaute novo antes de ele
+    /// valer. Produção só quando a própria regra disser que o destaque já é
+    /// exigido, e não pelo simples fato de existir regra publicada: em 2026 o
+    /// destaque é informativo e há dispensa de penalidades pela omissão, então
+    /// ligá-lo é decisão fiscal datada, não efeito colateral de código.
     /// </summary>
-    internal static IbsCbsItem MontarIbsCbs2026(ItemFiscal item, decimal? baseCalculoInformada = null)
+    internal static RegraIbsCbs? RegraParaDestaque(RegraIbsCbs? regra, TipoAmbiente ambiente) =>
+        regra is not null && (regra.DestaqueObrigatorio || ambiente == TipoAmbiente.Homologacao)
+            ? regra
+            : null;
+
+    /// <summary>
+    /// Grupo IBS/CBS do item, com as alíquotas da regra vigente (RTC-001) — não
+    /// mais com percentuais fixos no código. Pela regra UB16-10 da NT 2025.002, a
+    /// base subtrai o desconto incondicional informado no item.
+    /// </summary>
+    internal static IbsCbsItem MontarIbsCbs(
+        ItemFiscal item, RegraIbsCbs regra, decimal? baseCalculoInformada = null)
     {
-        if (!string.Equals(item.IbsCbsCst, "000", StringComparison.Ordinal))
+        // O CST suportado é atributo da REGRA, não uma constante do motor: uma
+        // faixa futura pode passar a suportar outros, e um CST fora da lista
+        // exige provedor de cálculo próprio. Recusar aqui (antes de reservar
+        // numeração) é melhor do que emitir documento com valor inventado.
+        if (!regra.SuportaCst(item.IbsCbsCst))
             throw new FiscalNaoConfiguradoException(
-                $"CST IBS/CBS {item.IbsCbsCst} ainda exige um provedor de cálculo específico. " +
-                "Configure CST 000 ou habilite o provedor correspondente para esta natureza.");
+                $"CST IBS/CBS {item.IbsCbsCst} não é calculável pela regra {regra.Versao} " +
+                $"(suportados: {string.Join(", ", regra.CstSuportados)}). " +
+                "Ajuste a natureza de operação ou habilite o provedor correspondente.");
         if (string.IsNullOrWhiteSpace(item.IbsCbsClassTrib) || item.IbsCbsClassTrib.Length != 6 ||
             !item.IbsCbsClassTrib.All(char.IsDigit))
             throw new FiscalNaoConfiguradoException("cClassTrib do IBS/CBS deve conter 6 dígitos.");
 
         var baseCalculo = baseCalculoInformada ?? item.SubtotalCentavos / 100m;
-        var valorIbsUf  = ArredondarTributo(baseCalculo * 0.001m);
-        var valorCbs    = ArredondarTributo(baseCalculo * 0.009m);
+        var valorIbsUf  = ArredondarTributo(baseCalculo * regra.AliquotaIbsUf  / 100m);
+        var valorIbsMun = ArredondarTributo(baseCalculo * regra.AliquotaIbsMun / 100m);
+        var valorCbs    = ArredondarTributo(baseCalculo * regra.AliquotaCbs    / 100m);
 
         return new IbsCbsItem
         {
@@ -2211,15 +2244,15 @@ public class NfceEmissionService : INfceEmissionService
             gIBSCBS = new IbsCbsItemValues
             {
                 vBC = baseCalculo,
-                gIBSUF = new IbsItemUf { pIBSUF = 0.1m, vIBSUF = valorIbsUf },
-                gIBSMun = new IbsItemMun { pIBSMun = 0m, vIBSMun = 0m },
-                vIBS = valorIbsUf,
-                gCBS = new CbsItem { pCBS = 0.9m, vCBS = valorCbs },
+                gIBSUF = new IbsItemUf { pIBSUF = regra.AliquotaIbsUf, vIBSUF = valorIbsUf },
+                gIBSMun = new IbsItemMun { pIBSMun = regra.AliquotaIbsMun, vIBSMun = valorIbsMun },
+                vIBS = valorIbsUf + valorIbsMun,
+                gCBS = new CbsItem { pCBS = regra.AliquotaCbs, vCBS = valorCbs },
             },
         };
     }
 
-    internal static IbsCbsTotal MontarTotaisIbsCbs2026(IEnumerable<det> itens)
+    internal static IbsCbsTotal MontarTotaisIbsCbs(IEnumerable<det> itens)
     {
         var grupos = itens.Select(i => i.imposto.IBSCBS!.gIBSCBS!).ToList();
         var baseTotal   = grupos.Sum(g => g.vBC);

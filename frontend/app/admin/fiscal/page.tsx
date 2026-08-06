@@ -148,6 +148,10 @@ export default function FiscalPage() {
   const [razaoSocial, setRazaoSocial]     = useState('')
   const [ie, setIe]                       = useState('')
   const [regime, setRegime]               = useState('SimplesNacional')
+  // RTC-001 — as duas condições que o regime declarado não revela e que
+  // selecionam a faixa do catálogo de regras de IBS/CBS.
+  const [excedeuSublimite, setExcedeuSublimite]   = useState(false)
+  const [optouRegimeRegular, setOptouRegimeRegular] = useState(false)
   // Fora do Simples a natureza usa CST (não CSOSN) e destaca PIS/COFINS por item.
   const regimeNormal = regime !== 'SimplesNacional'
   const [ambiente, setAmbiente]           = useState('Homologacao')
@@ -476,6 +480,8 @@ export default function FiscalPage() {
       setRazaoSocial(cfg.razaoSocial ?? '')
       setIe(cfg.inscricaoEstadual ?? '')
       setRegime(cfg.regimeTributario ?? 'SimplesNacional')
+      setExcedeuSublimite(cfg.excedeuSublimiteSimples ?? false)
+      setOptouRegimeRegular(cfg.optouRegimeRegularIbsCbs ?? false)
       setAmbiente(cfg.ambiente ?? 'Homologacao')
       setSerieNfce(cfg.serieNfce ?? 1)
       setEmailContador(cfg.emailContador ?? '')
@@ -506,6 +512,8 @@ export default function FiscalPage() {
     try {
       const { data } = await fiscalApi.saveConfig({
         cnpj, razaoSocial, inscricaoEstadual: ie, regimeTributario: regime,
+        excedeuSublimiteSimples: excedeuSublimite,
+        optouRegimeRegularIbsCbs: optouRegimeRegular,
         ambiente, serieNfce, emailContador,
         logradouro, numero, complemento, bairro,
         codigoMunicipioIbge, municipio, uf, cep,
@@ -859,6 +867,43 @@ export default function FiscalPage() {
             <input type="email" value={emailContador} onChange={e => setEmailContador(e.target.value)} placeholder="contador@email.com" className="input w-full" />
           </div>
         </div>
+
+        {/* RTC-001 — o regime declarado não revela nenhuma das duas, e o sistema
+            não tem como inferi-las: são informação do contador. Selecionam qual
+            faixa do catálogo de IBS/CBS se aplica a esta loja. */}
+        {!regimeNormal && (
+          <div className="mt-4 p-3 rounded-xl bg-surface-800/50 border border-surface-700/50">
+            <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">
+              Situação no IBS/CBS (informar com o contador)
+            </p>
+            <label className="flex items-start gap-2 text-sm text-gray-300 cursor-pointer mb-2">
+              <input
+                type="checkbox" className="accent-brand-500 mt-0.5"
+                checked={excedeuSublimite}
+                onChange={e => setExcedeuSublimite(e.target.checked)}
+              />
+              <span>
+                Excedeu o sublimite estadual do Simples
+                <span className="block text-xs text-gray-500">
+                  Muda o enquadramento do IBS/CBS mesmo sem alterar o regime declarado.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                type="checkbox" className="accent-brand-500 mt-0.5"
+                checked={optouRegimeRegular}
+                onChange={e => setOptouRegimeRegular(e.target.checked)}
+              />
+              <span>
+                Optou pelo regime regular de IBS/CBS
+                <span className="block text-xs text-gray-500">
+                  Opção formal do optante do Simples; na dúvida, deixe desmarcado e confirme com o contador.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold mt-5 mb-3">Endereço do Estabelecimento</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

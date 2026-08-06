@@ -1401,6 +1401,10 @@ export interface FiscalConfigDto {
   codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
   cscId?: string; cscConfigurado: boolean
   regimeTributario: string; ambiente: string
+  // RTC-001 — perfilIbsCbs é derivado no backend a partir das duas flags.
+  excedeuSublimiteSimples?: boolean
+  optouRegimeRegularIbsCbs?: boolean
+  perfilIbsCbs?: string
   serieNfce: number; proximoNumeroNfce: number
   emailContador?: string
   certificadoConfigurado: boolean
@@ -1578,6 +1582,7 @@ export const fiscalApi = {
     codigoMunicipioIbge: string; municipio: string; uf: string; cep: string
     cscId: string; cscToken: string
     regimeTributario: string; ambiente: string; serieNfce: number; emailContador: string
+    excedeuSublimiteSimples: boolean; optouRegimeRegularIbsCbs: boolean
     formasPagamentoAutoEmissao: string[]
     ibptToken: string; ibptAutoSyncEnabled: boolean; removerIbptToken: boolean
   }>) => api.put<FiscalConfigDto>('/api/fiscal/config', body),
@@ -1691,6 +1696,10 @@ export interface ContadorConfigDto {
   logradouro?: string; numero?: string; complemento?: string; bairro?: string
   codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
   regimeTributario: string
+  // RTC-001 — perfilIbsCbs é derivado no backend a partir das duas flags.
+  excedeuSublimiteSimples?: boolean
+  optouRegimeRegularIbsCbs?: boolean
+  perfilIbsCbs?: string
   ambiente: string
   serieNfce: number; proximoNumeroNfce: number
   emailContador?: string
@@ -1714,7 +1723,12 @@ export interface ContadorConfigUpdate {
   cnpj?: string; razaoSocial?: string; inscricaoEstadual?: string
   logradouro?: string; numero?: string; complemento?: string; bairro?: string
   codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
-  regimeTributario?: string; ambiente?: string
+  regimeTributario?: string
+  // RTC-001 — quem sabe destas duas é o contador, por isso elas também são
+  // editáveis pelo portal dele.
+  excedeuSublimiteSimples?: boolean
+  optouRegimeRegularIbsCbs?: boolean
+  ambiente?: string
   serieNfce?: number; emailContador?: string
   cscId?: string; cscToken?: string
   anexoSimples?: string

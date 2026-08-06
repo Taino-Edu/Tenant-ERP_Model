@@ -34,7 +34,7 @@ public class NfceRegimeNormalTests
         NfceEmissionService.ItemFiscal item,
         RegimeTributario regime = RegimeTributario.LucroPresumido,
         int desconto = 0) =>
-        NfceEmissionService.MontarItem(item, 1, desconto, incluirIbsCbs: false, regime);
+        NfceEmissionService.MontarItem(item, 1, desconto, regraIbsCbs: null, regime);
 
     // ── ICMS ─────────────────────────────────────────────────────────────────
 
@@ -236,7 +236,7 @@ public class NfceRegimeNormalTests
         // XML precisa continuar exatamente como era antes desta mudança.
         var item = Item("00") with { Cst = null, Csosn = "102" };
 
-        var det = NfceEmissionService.MontarItem(item, 1, 0, false, RegimeTributario.SimplesNacional);
+        var det = NfceEmissionService.MontarItem(item, 1, 0, null, RegimeTributario.SimplesNacional);
 
         var pis = det.imposto.PIS.TipoPIS.Should().BeOfType<PISOutr>().Subject;
         pis.CST.Should().Be(CSTPIS.pis99);

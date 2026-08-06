@@ -86,6 +86,8 @@ function CadastroEmitente({ tenantId, config, onAtualizado }: Omit<Props, 'loadi
     serieNfce: String(config.serieNfce ?? 1),
     ambiente: config.ambiente,
     regimeTributario: config.regimeTributario,
+    excedeuSublimiteSimples: config.excedeuSublimiteSimples ?? false,
+    optouRegimeRegularIbsCbs: config.optouRegimeRegularIbsCbs ?? false,
   })
   const [salvando, setSalvando] = useState(false)
 
@@ -106,6 +108,8 @@ function CadastroEmitente({ tenantId, config, onAtualizado }: Omit<Props, 'loadi
       serieNfce: String(config.serieNfce ?? 1),
       ambiente: config.ambiente,
       regimeTributario: config.regimeTributario,
+      excedeuSublimiteSimples: config.excedeuSublimiteSimples ?? false,
+      optouRegimeRegularIbsCbs: config.optouRegimeRegularIbsCbs ?? false,
     })
   }, [config])
 
@@ -129,6 +133,8 @@ function CadastroEmitente({ tenantId, config, onAtualizado }: Omit<Props, 'loadi
         serieNfce: Number(form.serieNfce) || 1,
         ambiente: form.ambiente,
         regimeTributario: form.regimeTributario,
+        excedeuSublimiteSimples: form.excedeuSublimiteSimples,
+        optouRegimeRegularIbsCbs: form.optouRegimeRegularIbsCbs,
       })
       onAtualizado(data)
       toast.success('Cadastro do emitente atualizado.')
@@ -187,6 +193,35 @@ function CadastroEmitente({ tenantId, config, onAtualizado }: Omit<Props, 'loadi
           </select>
         </div>
       </div>
+
+      {form.regimeTributario === 'SimplesNacional' && (
+        <div className="rounded-xl border border-surface-700/50 bg-surface-800/40 p-3">
+          <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">
+            Situação no IBS/CBS
+          </p>
+          <p className="text-xs text-gray-500 mb-2">
+            O regime declarado não revela nenhuma das duas, e o sistema não tem como inferi-las.
+            Elas selecionam qual faixa do catálogo versionado de regras de IBS/CBS se aplica a
+            este cliente.
+          </p>
+          <label className="flex items-start gap-2 text-sm text-gray-300 cursor-pointer mb-2">
+            <input
+              type="checkbox" className="accent-brand-500 mt-0.5"
+              checked={form.excedeuSublimiteSimples}
+              onChange={e => setForm({ ...form, excedeuSublimiteSimples: e.target.checked })}
+            />
+            Excedeu o sublimite estadual do Simples
+          </label>
+          <label className="flex items-start gap-2 text-sm text-gray-300 cursor-pointer">
+            <input
+              type="checkbox" className="accent-brand-500 mt-0.5"
+              checked={form.optouRegimeRegularIbsCbs}
+              onChange={e => setForm({ ...form, optouRegimeRegularIbsCbs: e.target.checked })}
+            />
+            Optou pelo regime regular de IBS/CBS
+          </label>
+        </div>
+      )}
 
       {form.regimeTributario !== 'SimplesNacional' && (
         <Aviso tone="warning">

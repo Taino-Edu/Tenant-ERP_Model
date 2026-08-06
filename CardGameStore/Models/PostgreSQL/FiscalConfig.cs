@@ -123,6 +123,19 @@ public class FiscalConfig
     [Column("regime_tributario")]
     public RegimeTributario RegimeTributario { get; set; } = RegimeTributario.SimplesNacional;
 
+    // ── Perfil IBS/CBS (RTC-001) ──────────────────────────────────────────────
+    // Duas condições que o regime declarado NÃO revela e que o sistema não tem
+    // como inferir — vêm do contador. Selecionam qual faixa do catálogo de regras
+    // (CatalogoRegrasIbsCbs) se aplica ao contribuinte.
+
+    /// <summary>Optante do Simples que excedeu o sublimite estadual no período.</summary>
+    [Column("excedeu_sublimite_simples")]
+    public bool ExcedeuSublimiteSimples { get; set; }
+
+    /// <summary>Optante do Simples que fez a opção pelo regime regular de IBS/CBS.</summary>
+    [Column("optou_regime_regular_ibs_cbs")]
+    public bool OptouRegimeRegularIbsCbs { get; set; }
+
     // -------------------------------------------------------------------------
     // Parâmetros de apuração (portal do contador) — nada aqui entra no XML da
     // NFC-e; servem só pra calcular DAS do Simples e o comparativo com Lucro

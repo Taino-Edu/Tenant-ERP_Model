@@ -2295,3 +2295,119 @@ painel precisa. A ordem de gravidade agora é explícita na consulta.
 `dotnet test` — **633 aprovados, 0 falhas** (eram 603; +30). Frontend:
 `npm run build` concluído; a página `/admin/fiscal` compila e renderiza com o card
 novo (verificação visual com dados reais depende de backend e tenant autenticado).
+
+## 34. RTC-001 concluído — IBS/CBS versionado, sem bloqueio por ano — 06/08/2026
+
+### 34.1 O buraco
+
+Duas linhas no meio de `TransmitirAsync`:
+
+```csharp
+var incluirIbsCbs = ambiente == Homologacao || anoIbsCbs >= 2027;
+if (incluirIbsCbs && anoIbsCbs != 2026)
+    throw new FiscalNaoConfiguradoException("As alíquotas de IBS/CBS para {ano} ainda não estão configuradas...");
+```
+
+Em 01/01/2027, **toda emissão do sistema para** — de todos os tenants, ao mesmo
+tempo, sem que nada tenha mudado na loja. E as alíquotas da fase de transição
+(0,1% e 0,9%) estavam como literais no cálculo do item, sem vigência, sem fonte
+e sem versão ao lado.
+
+Um cronograma tributário que muda por Nota Técnica não pode ter o poder de parar
+o caixa de todo mundo na virada do calendário.
+
+### 34.2 O catálogo versionado
+
+`RegrasIbsCbs.cs` passa a conter faixas com vigência, perfil, alíquotas, CSTs
+suportados, **fonte oficial e data de consulta**. A seleção é por data de emissão
+do documento e perfil do contribuinte — não por condição de ano no motor.
+
+A propriedade que sustenta tudo: **a última faixa é aberta** (`VigenciaFim` nulo).
+Enquanto a regra seguinte não for publicada, o comportamento conhecido continua e
+a emissão não para. Há teste que falha se alguém fechar a última faixa sem
+publicar a próxima — o defeito não volta em silêncio.
+
+O catálogo mora em código, e não em tabela por tenant, de propósito: alíquota de
+IBS/CBS é legislação nacional. Deixar cada loja preencher a sua transformaria
+erro de digitação em erro fiscal, sem ninguém para revisar. O que é do
+contribuinte fica na `FiscalConfig`.
+
+### 34.3 Os quatro perfis
+
+O plano pede diferenciar Simples, excesso de sublimite, opção pelo regime regular
+e regime normal. As duas condições do meio **o regime declarado não revela** e o
+sistema não tem como inferir — passaram a ser informação do contador, editável no
+painel do lojista e no portal do contador:
+
+| Perfil | Como é determinado |
+|---|---|
+| `SimplesNacional` | Simples, dentro do sublimite, sem opção |
+| `SimplesExcessoSublimite` | Simples + `ExcedeuSublimiteSimples` |
+| `SimplesRegimeRegular` | Simples + `OptouRegimeRegularIbsCbs` (prevalece sobre o sublimite) |
+| `RegimeNormal` | Lucro Presumido ou Lucro Real |
+
+Em 2026 a faixa vale para os quatro — a diferenciação ainda não produz alíquotas
+distintas. O que importa é que a **seleção** já existe: quando 2027 trouxer
+regras por perfil, é dado novo no catálogo, não código novo no motor.
+
+### 34.4 O que NÃO mudou, de propósito
+
+Acrescentar a regra ao catálogo **não** ligou o destaque de IBS/CBS em produção.
+A faixa de 2026 carrega `DestaqueObrigatorio: false`, e o comportamento já
+homologado é preservado: os grupos saem em homologação (onde se testa o leiaute
+novo) e não saem em produção, porque em 2026 o destaque é informativo e há
+dispensa de penalidades pela omissão.
+
+Ligar isso é decisão fiscal datada — uma edição de campo no catálogo, com fonte —
+e não efeito colateral de a regra passar a existir. Há teste para os dois lados.
+
+### 34.5 A contrapartida honesta
+
+Trocar uma parada geral por silêncio seria trocar um defeito por outro. Por isso
+o CON-002 ganhou um sétimo tipo de alerta, `RegraIbsCbsDesatualizada`:
+
+- **regra vigente passou da data recomendada de revisão** (01/01/2027) → alerta
+  médio, com as alíquotas em uso, a fonte registrada e a data em que foi
+  consultada, para conferência com o contador;
+- **nenhuma regra cobre a data de hoje** → alerta alto, avisando que as notas
+  continuam saindo **sem** os grupos de IBS/CBS.
+
+A emissão não para; a pendência aparece e tem responsável.
+
+### 34.6 Entregue
+
+- `RegrasIbsCbs.cs`: `RegraIbsCbs`, `PerfilIbsCbs` e `CatalogoRegrasIbsCbs`;
+- `FiscalConfig.ExcedeuSublimiteSimples` e `OptouRegimeRegularIbsCbs` + migration
+  `AddPerfilIbsCbsNaFiscalConfig`, expostos no painel do lojista e no portal do
+  contador;
+- motor: condição fixa de ano removida; `MontarIbsCbs` usa as alíquotas da regra;
+  CST suportado passou a ser atributo da faixa; `IFiscalTaxEngine` recebe a regra
+  em vez de um booleano;
+- `GET /api/fiscal/regras-ibs-cbs` — regra em vigor, o que sai no XML hoje e o
+  catálogo completo com fontes;
+- alerta `RegraIbsCbsDesatualizada` no CON-002;
+- **25 testes**, incluindo o aceite literal do plano.
+
+**Aceite do plano atendido:** *"virar a data em teste não causa parada geral; o
+XML muda somente conforme a regra versionada aplicável ao contribuinte"* —
+`Catalogo_QualquerAnoFuturo_ContinuaTendoRegraAplicavel` (2026, 2027, 2030, 2040)
+e `MontarIbsCbs_ComRegraHipoteticaDeOutraFaixa_ProduzOutroValor`.
+
+### 34.7 O que RTC-001 não cobre
+
+- **As alíquotas de 2027 em diante não estão no catálogo** — porque ainda não há
+  publicação definitiva. RTC-001 entrega o mecanismo e a rastreabilidade, não a
+  adivinhação da tabela futura. Acrescentar a faixa é edição de dado, com fonte e
+  data, quando a NT sair.
+- **Só CST 000** é calculável. Regimes diferenciados, monofasia, crédito presumido
+  e Imposto Seletivo exigem provedor próprio e são recusados antes de consumir
+  numeração, com mensagem que nomeia a regra.
+- **Transição progressiva ICMS/ISS → IBS (2029–2032)** continua fora de escopo,
+  como registrado em 23.3.
+- Acompanhar NT, Informe Técnico e schemas antes de cada liberação continua sendo
+  trabalho humano; o alerta cobra a revisão, não a executa.
+
+### 34.8 Validação
+
+`dotnet test` — **658 aprovados, 0 falhas** (eram 633; +25). Frontend:
+`npm run build` concluído.

@@ -32,7 +32,7 @@ public class NfceTotalizadoresTests
         { Cst = cst, AliquotaIcmsProprio = aliquota };
 
     private static det Montar(NfceEmissionService.ItemFiscal item, RegimeTributario regime, int numero = 1) =>
-        NfceEmissionService.MontarItem(item, numero, 0, incluirIbsCbs: false, regime);
+        NfceEmissionService.MontarItem(item, numero, 0, regraIbsCbs: null, regime);
 
     // ── O caso que quebrava ──────────────────────────────────────────────────
 

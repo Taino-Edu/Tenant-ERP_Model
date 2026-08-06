@@ -43,6 +43,15 @@ public enum TipoAlertaFiscal
 
     /// <summary>O ZIP mensal de XMLs não chegou ao contador neste mês.</summary>
     ExportacaoMensalPendente,
+
+    /// <summary>
+    /// A regra de IBS/CBS em vigor passou da data recomendada de revisão, ou não
+    /// há regra cobrindo a data de hoje (RTC-001). Não bloqueia emissão — é
+    /// justamente por não bloquear que precisa aparecer: o documento continua
+    /// saindo com a última regra conhecida, e alguém tem que conferir se ela
+    /// ainda é a vigente.
+    /// </summary>
+    RegraIbsCbsDesatualizada,
 }
 
 public enum SeveridadeAlertaFiscal

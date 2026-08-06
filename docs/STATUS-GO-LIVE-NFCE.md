@@ -37,7 +37,7 @@ plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; 
 | **CAD-001** — saneamento do catálogo | 👤 | conferência de NCM/CEST/CFOP/CSOSN/CST pelo contador. | 9 |
 | **FIS-001** — escopo assinado | 👤 | UF, IE, credenciamento, série/número, escopo presencial — com o contador. | 4 |
 | **FIS-003** — pontos pré-aplicados | 👤 | decidir se pontos são desconto ou crédito virtual — decisão do contador. | 5 |
-| **RTC-001** — IBS/CBS versionado | 🟡 | grupos tolerados no parser; falta remover a trava fixa de 2027 e versionar as regras. | 10 |
+| **RTC-001** — IBS/CBS versionado | ✅ | trava fixa de 2027 removida: as regras viraram catálogo versionado com vigência, perfil do contribuinte, alíquotas, fonte oficial e data de consulta — a última faixa é aberta, então virar o ano nunca para a emissão. Perfil diferencia Simples, excesso de sublimite, opção pelo regime regular e regime normal. Alerta cobra a revisão da regra. 25 testes. **As alíquotas de 2027 dependem de publicação oficial** — o mecanismo está pronto, a faixa não. | 10, 34 |
 | **UF-001 / ECOM-001** | ⏳ | condicionais: outra UF / e-commerce, fora do escopo inicial. | 10 |
 | **OPS-001/002** — produção e guarda | 👤 | credenciamento real, backup, restauração — infra e homologação. | 11 |
 | **HOM-001 / PRD-001** — certificação | 👤 | bateria de homologação e piloto controlado. | 12 |
@@ -54,15 +54,15 @@ Trabalho anterior à auditoria, já na mesma PR:
 ## Onde estamos
 
 **Fechado em código nesta maratona:** FIS-002, RES-002, XML-001, DAN-001,
-REG-001, CON-001, RES-001, CON-002.
+REG-001, CON-001, RES-001, CON-002, RTC-001.
 
-**Próximos deliveráveis em código:** RTC-001 (remover a trava fixa de 2027 e
-versionar as regras) é o único cartão em aberto que depende só de código.
-XML-002 está bloqueado até o pacote de XSDs oficiais ser baixado e versionado no
-repositório. PDV-001 (operar com o enlace da loja fora do ar — seção 25.5) e o
-agente local de impressão continuam sendo decisão de produto, não pendência
-fiscal: a impressão do DANFE já funciona pelo navegador do PDV (opção C, seção
-27), e o agente só se justifica para operar offline, não para imprimir.
+**Não há mais cartão de go-live que dependa só de código.** XML-002 está
+bloqueado até o pacote de XSDs oficiais ser baixado e versionado no repositório.
+
+PDV-001 (operar com o enlace da loja fora do ar — seção 25.5) e o agente local de
+impressão continuam sendo decisão de produto, não pendência fiscal: a impressão
+do DANFE já funciona pelo navegador do PDV (opção C, seção 27), e o agente só se
+justifica para operar offline, não para imprimir.
 
 **O que só o dia da homologação resolve:** transmissão real (RES-001/002),
 impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do contador
@@ -70,5 +70,5 @@ impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do co
 
 ## Suíte
 
-`dotnet test` — **633 aprovados, 0 falhas** (PostgreSQL descartável de
+`dotnet test` — **658 aprovados, 0 falhas** (PostgreSQL descartável de
 `tests/docker-compose.yml`). Frontend: `npm run build` concluído.
