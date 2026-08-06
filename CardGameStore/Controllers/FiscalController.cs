@@ -240,6 +240,17 @@ public class FiscalController : ControllerBase
         {
             return BadRequest(new { Message = ex.Message });
         }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Rede de segurança: se um timeout escapar do serviço, ele ainda é
+            // indisponibilidade de terceiro, não erro do nosso servidor. 500 aqui
+            // sugeriria ao lojista que o sistema quebrou e que adianta insistir.
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                Message = "O IBPT não respondeu dentro do tempo limite. " +
+                          "Os produtos já sincronizados foram preservados; tente de novo mais tarde.",
+            });
+        }
     }
 
     /// <summary>Valida e salva o certificado digital A1 (.pfx) usado para assinar NFC-e.

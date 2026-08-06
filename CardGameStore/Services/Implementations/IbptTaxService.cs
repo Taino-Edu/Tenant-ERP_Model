@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -88,7 +88,16 @@ public sealed class IbptTaxService
                 AplicarResposta(produto, resposta, importado);
                 atualizados++;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            // O filtro precisa da checagem do token, não só do tipo: HttpClient.Timeout
+            // lança TaskCanceledException, que herda de OperationCanceledException e é
+            // indistinguível de um cancelamento real pelo tipo. Sem `!ct.IsCancellationRequested`,
+            // um IBPT lento escapava daqui e derrubava a sincronização inteira com 500 —
+            // era o defeito que o usuário via como "Erro interno. Tente novamente em
+            // instantes" ao clicar em "Sincronizar produtos agora".
+            //
+            // Com a checagem: timeout do IBPT vira erro DESTE produto e o laço segue;
+            // cancelamento de verdade (usuário fechou a aba) continua abortando tudo.
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
             {
                 var mensagem = MensagemSegura(ex);
                 erros.Add($"{produto.Name}: {mensagem}");
@@ -127,7 +136,9 @@ public sealed class IbptTaxService
             await _db.SaveChangesAsync(ct);
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // Mesma armadilha do laço acima: timeout do HttpClient chega como
+        // OperationCanceledException e não pode ser confundido com cancelamento.
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             cfg.IbptUltimoErro = MensagemSegura(ex);
             cfg.UpdatedAt = DateTime.UtcNow;
@@ -301,7 +312,19 @@ public sealed class IbptTaxService
     }
 
     private static string SomenteDigitos(string valor) => new(valor.Where(char.IsDigit).ToArray());
-    private static string MensagemSegura(Exception ex) => ex is IbptIntegrationException ? ex.Message : "Falha inesperada ao consultar o IBPT.";
+    /// <summary>
+    /// Mensagem que vai para a tela. Nunca expõe detalhe interno — mas também não
+    /// pode achatar tudo em "falha inesperada": timeout é o caso mais comum da
+    /// integração e merece dizer o que houve, senão o lojista fica sem saber se o
+    /// problema é o token dele ou o servidor do IBPT.
+    /// </summary>
+    private static string MensagemSegura(Exception ex) => ex switch
+    {
+        IbptIntegrationException => ex.Message,
+        OperationCanceledException or TimeoutException =>
+            "O IBPT não respondeu dentro do tempo limite (15s). Tente de novo mais tarde.",
+        _ => "Falha inesperada ao consultar o IBPT.",
+    };
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 }
