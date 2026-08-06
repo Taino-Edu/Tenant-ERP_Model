@@ -31,12 +31,16 @@ public class FiscalConfigService
     private readonly AppDbContext             _db;
     private readonly EncryptionService        _enc;
     private readonly FiscalCertificadoService _certificado;
+    private readonly ILogger<FiscalConfigService> _logger;
 
-    public FiscalConfigService(AppDbContext db, EncryptionService enc, FiscalCertificadoService certificado)
+    public FiscalConfigService(
+        AppDbContext db, EncryptionService enc, FiscalCertificadoService certificado,
+        ILogger<FiscalConfigService> logger)
     {
         _db          = db;
         _enc         = enc;
         _certificado = certificado;
+        _logger      = logger;
     }
 
     /// <summary>
@@ -89,7 +93,16 @@ public class FiscalConfigService
         if (req.Municipio           is not null) cfg.Municipio           = req.Municipio;
         if (req.Uf                  is not null) cfg.Uf                  = req.Uf.ToUpperInvariant();
         if (req.Cep                 is not null) cfg.Cep                 = new string(req.Cep.Where(char.IsDigit).ToArray());
-        if (req.CscId               is not null) cfg.CscId               = req.CscId;
+        // Campos que o usuário digita e que têm coluna curta. Sem esta checagem o
+        // valor grande demais só é recusado pelo PostgreSQL (22001), já dentro do
+        // SaveChanges — vira DbUpdateException, sobe sem tratamento e o admin
+        // recebe "Erro interno. Tente novamente em instantes", que é falso: tentar
+        // de novo dá exatamente o mesmo resultado, e a mensagem não diz qual campo
+        // está errado nem por quê.
+        var excedido = PrimeiroCampoExcedido(req);
+        if (excedido is not null) return FiscalConfigResultado.Falha(excedido);
+
+        if (req.CscId               is not null) cfg.CscId               = req.CscId.Trim();
         // CSC e IBPT são segredos independentes, ambos criptografados por tenant.
         if (req.CscToken            is not null) cfg.CscTokenEncrypted   = _enc.Encrypt(req.CscToken);
 
@@ -203,7 +216,23 @@ public class FiscalConfigService
         }
 
         cfg.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            // Rede de segurança para o que a checagem acima não previu. Qualquer
+            // recusa do banco aqui é dado do usuário, não falha do servidor —
+            // devolver 500 faria o admin tentar de novo indefinidamente, porque
+            // "Erro interno. Tente novamente em instantes" sugere transitório e
+            // isto é determinístico.
+            _db.ChangeTracker.Clear();
+            _logger.LogWarning(ex, "Configuração fiscal recusada pelo banco ao salvar.");
+            return FiscalConfigResultado.Falha(
+                "Não foi possível salvar: algum campo excede o tamanho aceito ou tem formato inválido. " +
+                "Revise CSC, CNPJ, inscrição estadual e endereço.");
+        }
 
         return FiscalConfigResultado.Sucesso(cfg);
     }
@@ -359,5 +388,38 @@ public class FiscalConfigService
             cfg.AliquotaIcmsPercentual,
             cfg.AliquotaIssPercentual,
         };
+    }
+
+    /// <summary>
+    /// Limites das colunas correspondentes. Manter em sincronia com FiscalConfig —
+    /// duplicar o número aqui é pior do que a alternativa, que é o usuário
+    /// descobrir o limite por 500 sem mensagem.
+    /// </summary>
+    private static readonly (string Campo, int Limite, Func<SaveFiscalConfigRequest, string?> Ler)[] LimitesDeTexto =
+    {
+        ("ID do CSC",              10,  r => r.CscId),
+        ("CNPJ",                   18,  r => r.Cnpj),
+        ("Razão social",           150, r => r.RazaoSocial),
+        ("Inscrição estadual",     20,  r => r.InscricaoEstadual),
+        ("Logradouro",             150, r => r.Logradouro),
+        ("Número",                 20,  r => r.Numero),
+        ("Complemento",            100, r => r.Complemento),
+        ("Bairro",                 100, r => r.Bairro),
+        ("Município",              100, r => r.Municipio),
+        ("Código IBGE do município", 7, r => r.CodigoMunicipioIbge),
+        ("UF",                     2,   r => r.Uf),
+        ("CEP",                    9,   r => r.Cep),
+        ("E-mail do contador",     200, r => r.EmailContador),
+    };
+
+    private static string? PrimeiroCampoExcedido(SaveFiscalConfigRequest req)
+    {
+        foreach (var (campo, limite, ler) in LimitesDeTexto)
+        {
+            var valor = ler(req)?.Trim();
+            if (valor is not null && valor.Length > limite)
+                return $"{campo}: máximo de {limite} caracteres (você informou {valor.Length}).";
+        }
+        return null;
     }
 }
