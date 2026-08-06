@@ -48,6 +48,23 @@ public class AlertaFiscalServiceTests
         return nota;
     }
 
+    /// <summary>
+    /// Loja aparelhada para emitir. O certificado é o que separa "tem o módulo
+    /// fiscal" (que todo tenant tem por padrão) de "usa o fiscal" — e só na
+    /// segunda existe expectativa de que uma venda tenha documento.
+    /// </summary>
+    private static async Task SeedLojaQueEmiteAsync(AppDbContext db)
+    {
+        db.FiscalConfigs.Add(new FiscalConfig
+        {
+            Cnpj                    = "12345678000195",
+            RazaoSocial             = "Loja Fiscal LTDA",
+            Uf                      = "SP",
+            CertificadoPfxEncrypted = "conteudo-irrelevante-para-o-teste",
+        });
+        await db.SaveChangesAsync();
+    }
+
     private static async Task<Guid> SeedAdminAsync(AppDbContext db, bool ativo = true)
     {
         var admin = new User
@@ -57,6 +74,50 @@ public class AlertaFiscalServiceTests
         db.Users.Add(admin);
         await db.SaveChangesAsync();
         return admin.Id;
+    }
+
+    // ── Quem é cobrado (e quem não é) ─────────────────────────────────────────
+
+    [Fact]
+    public async Task Sincronizar_LojaSemCertificado_NaoCobraVendaSemDocumento()
+    {
+        // O módulo fiscal vem habilitado por padrão em TODO tenant, então o
+        // reconciliador roda para lojas que nunca optaram por emitir nota. Sem
+        // esta separação, cada venda dos últimos 7 dias viraria um alerta por
+        // dia — escalando para Alta em três — no painel de quem só usa o PDV.
+        using var db = CreateDb();
+        var ontemBr = BrazilTime.NowBr().Date.AddDays(-1);
+        var meioDiaUtc = BrazilTime.DateToUtcStart(ontemBr).AddHours(15);
+
+        var user = new User { Id = Guid.NewGuid(), Name = "Cliente", Role = UserRole.Customer };
+        db.Users.Add(user);
+        db.Comandas.Add(new Comanda
+        {
+            Id = Guid.NewGuid(), UserId = user.Id, Status = ComandaStatus.Fechada,
+            ClosedAt = meioDiaUtc, TotalInCents = 9900, PaymentMethod = PaymentMethod.Dinheiro,
+        });
+        await db.SaveChangesAsync();
+
+        await CreateService(db).SincronizarAsync();
+
+        db.AlertasFiscais.Where(a => a.Tipo == TipoAlertaFiscal.VendaSemDocumento)
+            .Should().BeEmpty("sem certificado nenhuma venda deveria ter documento — não há o que cobrar");
+    }
+
+    [Fact]
+    public async Task Sincronizar_LojaSemCertificado_AindaCobraNotaComProblema()
+    {
+        // O contrário também precisa valer: se existe nota rejeitada, a loja
+        // emitiu em algum momento e o problema é real, mesmo que o certificado
+        // tenha sido removido depois.
+        using var db = CreateDb();
+        await SeedNotaAsync(db, NotaFiscalStatus.Rejeitada, n =>
+            n.MotivoRejeicao = "Rejeicao 999 - teste");
+
+        await CreateService(db).SincronizarAsync();
+
+        db.AlertasFiscais.Where(a => a.Tipo == TipoAlertaFiscal.NotaRejeitada)
+            .Should().ContainSingle("pendência que nasce de uma nota não depende de expectativa nenhuma");
     }
 
     // ── Detecção e severidade ─────────────────────────────────────────────────
@@ -280,6 +341,7 @@ public class AlertaFiscalServiceTests
     public async Task Sincronizar_VendasSemDocumentoDeOntem_GeraUmAlertaPorDia()
     {
         using var db = CreateDb();
+        await SeedLojaQueEmiteAsync(db);
         var ontemBr = BrazilTime.NowBr().Date.AddDays(-1);
         var meioDiaUtc = BrazilTime.DateToUtcStart(ontemBr).AddHours(15);
 
@@ -306,6 +368,7 @@ public class AlertaFiscalServiceTests
     public async Task Sincronizar_VendasSemDocumentoAntigas_EscalamParaAlta()
     {
         using var db = CreateDb();
+        await SeedLojaQueEmiteAsync(db);
         var diaBr = BrazilTime.NowBr().Date.AddDays(-5);
         var meioDiaUtc = BrazilTime.DateToUtcStart(diaBr).AddHours(15);
 
@@ -352,6 +415,7 @@ public class AlertaFiscalServiceTests
     public async Task Sincronizar_BuracoNaSequencia_ApontaOsNumerosFaltantes()
     {
         using var db = CreateDb();
+        await SeedLojaQueEmiteAsync(db);
         foreach (var numero in new[] { 10, 11, 14 })
             await SeedNotaAsync(db, NotaFiscalStatus.Autorizada, n =>
             {
@@ -372,6 +436,7 @@ public class AlertaFiscalServiceTests
     public async Task Sincronizar_BuracoCobertoPorInutilizacao_NaoEhLacuna()
     {
         using var db = CreateDb();
+        await SeedLojaQueEmiteAsync(db);
         foreach (var numero in new[] { 10, 11, 14 })
             await SeedNotaAsync(db, NotaFiscalStatus.Autorizada, n =>
             {

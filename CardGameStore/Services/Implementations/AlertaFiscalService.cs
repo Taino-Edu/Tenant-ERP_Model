@@ -76,11 +76,25 @@ public class AlertaFiscalService : IAlertaFiscalService
         var agora = DateTime.UtcNow;
 
         var detectadas = new List<PendenciaDetectada>();
+
+        // Pendências que nascem de uma NOTA valem sempre: se existe nota rejeitada,
+        // em contingência ou com resultado incerto, a loja emitiu — e precisa
+        // resolver, mesmo que tenha desistido do fiscal depois.
         detectadas.AddRange(await DetectarPorNotaAsync(ct));
-        detectadas.AddRange(await DetectarVendasSemDocumentoAsync(ct));
-        detectadas.AddRange(await DetectarLacunasDeNumeracaoAsync(ct));
-        detectadas.AddRange(await DetectarExportacaoMensalPendenteAsync(ct));
-        detectadas.AddRange(await DetectarRegraIbsCbsDesatualizadaAsync(ct));
+
+        // As demais nascem de uma EXPECTATIVA de emissão, e essa expectativa só
+        // existe se a loja está aparelhada para emitir. Sem certificado, nenhuma
+        // venda deveria ter documento — cobrar isso encheria o painel de uma loja
+        // que nunca optou pelo fiscal com um alerta por dia de venda, escalando
+        // para Alta em três dias. O módulo fiscal vem habilitado por padrão em
+        // todo tenant, então esta é a diferença entre "tem o módulo" e "usa".
+        if (await LojaEmiteDocumentoFiscalAsync(ct))
+        {
+            detectadas.AddRange(await DetectarVendasSemDocumentoAsync(ct));
+            detectadas.AddRange(await DetectarLacunasDeNumeracaoAsync(ct));
+            detectadas.AddRange(await DetectarExportacaoMensalPendenteAsync(ct));
+            detectadas.AddRange(await DetectarRegraIbsCbsDesatualizadaAsync(ct));
+        }
 
         // Duas detecções com a mesma chave seriam um bug de composição — a última
         // vence, mas isso não deve acontecer e o banco recusaria a duplicata.
@@ -197,6 +211,18 @@ public class AlertaFiscalService : IAlertaFiscalService
     }
 
     // ── Detecções ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A loja está aparelhada para emitir? O critério é o certificado A1: sem ele
+    /// a emissão nem chega a tentar (lança FiscalNaoConfiguradoException), então
+    /// nenhuma venda deveria ter documento e nada há a cobrar.
+    /// </summary>
+    private async Task<bool> LojaEmiteDocumentoFiscalAsync(CancellationToken ct)
+    {
+        var cfg = await _db.FiscalConfigs.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == FiscalConfig.SingletonId, ct);
+        return cfg?.CertificadoConfigurado == true;
+    }
 
     /// <summary>
     /// Pendências que vivem numa nota: resultado incerto, contingência e
