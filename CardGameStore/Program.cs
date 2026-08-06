@@ -469,6 +469,7 @@ builder.Services.AddScoped<FiscalConfigService>();
 builder.Services.AddScoped<FiscalXmlExportService>();
 builder.Services.AddScoped<IApuracaoTributariaService, ApuracaoTributariaService>();
 builder.Services.AddScoped<IConciliacaoFiscalService, ConciliacaoFiscalService>();
+builder.Services.AddScoped<IAlertaFiscalService, AlertaFiscalService>();
 builder.Services.AddScoped<IbptTaxService>();
 builder.Services.AddHostedService<IbptSyncBackgroundService>();
 builder.Services.AddScoped<IFiscalTaxEngine, ConfigurableFiscalTaxEngine>();

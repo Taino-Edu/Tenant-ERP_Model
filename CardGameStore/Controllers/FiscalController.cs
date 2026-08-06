@@ -38,11 +38,13 @@ public class FiscalController : ControllerBase
     // contador (ver o cabeçalho daquele arquivo).
     private readonly FiscalConfigService       _configService;
     private readonly IConciliacaoFiscalService _conciliacao;
+    private readonly IAlertaFiscalService      _alertas;
 
     public FiscalController(
         AppDbContext db, FiscalXmlExportService export, INfceEmissionService emissao,
         CatalogDbContext catalog, ITenantContext tenant, IbptTaxService ibpt, IAuditService audit,
-        FiscalConfigService configService, IConciliacaoFiscalService conciliacao)
+        FiscalConfigService configService, IConciliacaoFiscalService conciliacao,
+        IAlertaFiscalService alertas)
     {
         _db            = db;
         _export        = export;
@@ -53,6 +55,7 @@ public class FiscalController : ControllerBase
         _audit         = audit;
         _configService = configService;
         _conciliacao   = conciliacao;
+        _alertas       = alertas;
     }
 
     /// <summary>Agrega configuração, certificado, regra fiscal padrão, produtos e notas das
@@ -712,6 +715,109 @@ public class FiscalController : ControllerBase
             return BadRequest(new { Message = "O período final não pode ser anterior ao inicial." });
 
         return Ok(await _conciliacao.ConciliarAsync(inicio.Date, fim.Date));
+    }
+
+    /// <summary>
+    /// Painel de pendências fiscais (CON-002): resultado incerto, contingência
+    /// vencendo, rejeição, venda sem documento, lacuna de numeração e exportação
+    /// mensal atrasada — cada uma com severidade, idade, responsável e estado de
+    /// resolução.
+    ///
+    /// A lista é reconciliada a partir do estado real, não acumulada por
+    /// disparos: um alerta aberto aqui é uma pendência que existe agora.
+    /// </summary>
+    /// <param name="incluirResolvidos">Traz também o histórico já resolvido.</param>
+    // ── GET /api/fiscal/alertas?incluirResolvidos= ────────────────────────────
+    [HttpGet("alertas")]
+    public async Task<IActionResult> GetAlertas([FromQuery] bool incluirResolvidos = false) =>
+        Ok(await _alertas.ListarAsync(incluirResolvidos));
+
+    /// <summary>Recalcula as pendências agora, sem esperar o ciclo de 15 minutos.</summary>
+    // ── POST /api/fiscal/alertas/sincronizar ──────────────────────────────────
+    [HttpPost("alertas/sincronizar")]
+    public async Task<IActionResult> SincronizarAlertas()
+    {
+        await _alertas.SincronizarAsync();
+        return Ok(await _alertas.ListarAsync());
+    }
+
+    /// <summary>
+    /// O usuário autenticado passa a responder por esta pendência. Assumir é ato
+    /// próprio — por isso não recebe um id de usuário no corpo: ninguém atribui
+    /// responsabilidade fiscal a outra pessoa por uma chamada de API.
+    /// </summary>
+    /// <param name="id">Id do alerta.</param>
+    // ── POST /api/fiscal/alertas/{id}/assumir ─────────────────────────────────
+    [HttpPost("alertas/{id:guid}/assumir")]
+    public async Task<IActionResult> AssumirAlerta(Guid id)
+    {
+        try
+        {
+            var alerta = await _alertas.AtribuirResponsavelAsync(id, GetUserId());
+            await _audit.LogAsync(
+                "AssumiuAlertaFiscal", nameof(AlertaFiscal), alerta.Id.ToString(),
+                details: $"{{\"tipo\":\"{alerta.Tipo}\",\"chave\":\"{alerta.Chave}\"}}",
+                httpContext: HttpContext);
+            return Ok(new { alerta.Id, alerta.ResponsavelUserId, alerta.ResponsavelDefinidoEm });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>Devolve a pendência para a fila, sem responsável.</summary>
+    /// <param name="id">Id do alerta.</param>
+    // ── DELETE /api/fiscal/alertas/{id}/responsavel ───────────────────────────
+    [HttpDelete("alertas/{id:guid}/responsavel")]
+    public async Task<IActionResult> LiberarAlerta(Guid id)
+    {
+        try
+        {
+            var alerta = await _alertas.AtribuirResponsavelAsync(id, null);
+            await _audit.LogAsync(
+                "LiberouAlertaFiscal", nameof(AlertaFiscal), alerta.Id.ToString(),
+                details: $"{{\"tipo\":\"{alerta.Tipo}\"}}", httpContext: HttpContext);
+            return Ok(new { alerta.Id, alerta.ResponsavelUserId });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Confirmação humana de que a pendência foi tratada. Não suprime o fato: se
+    /// ele continuar verdadeiro, o próximo ciclo reabre o alerta — por isso a
+    /// observação é obrigatória e vai para a trilha de auditoria.
+    /// </summary>
+    /// <param name="id">Id do alerta.</param>
+    /// <param name="req">Observação descrevendo o que foi feito.</param>
+    // ── POST /api/fiscal/alertas/{id}/resolver ────────────────────────────────
+    [HttpPost("alertas/{id:guid}/resolver")]
+    public async Task<IActionResult> ResolverAlerta(Guid id, [FromBody] ResolverAlertaFiscalRequest req)
+    {
+        try
+        {
+            var alerta = await _alertas.ResolverAsync(id, GetUserId(), req.Observacao);
+            await _audit.LogAsync(
+                "ResolveuAlertaFiscal", nameof(AlertaFiscal), alerta.Id.ToString(),
+                details: $"{{\"tipo\":\"{alerta.Tipo}\",\"chave\":\"{alerta.Chave}\"}}",
+                httpContext: HttpContext);
+            return Ok(new { alerta.Id, alerta.ResolvidoEm, alerta.ResolucaoObservacao });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    private Guid GetUserId()
+    {
+        var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (claim is null || !Guid.TryParse(claim.Value, out var id))
+            throw new UnauthorizedAccessException("Token inválido: identificador de usuário ausente.");
+        return id;
     }
 
     /// <summary>Gera um .zip com os XMLs de todas as NFC-e emitidas no período, pra

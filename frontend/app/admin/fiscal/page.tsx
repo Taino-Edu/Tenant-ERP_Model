@@ -7,6 +7,7 @@ import { fiscalApi, FiscalConfigDto, FiscalSaudeDto, IbptStatusDto, NaturezaOper
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import Modal from '@/components/admin/ui/Modal'
+import AlertasFiscaisCard from '@/components/admin/fiscal/AlertasFiscaisCard'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
   Plus, Trash2, Download, ShieldCheck, Star, RefreshCw, Ban, ScrollText, Printer,
@@ -1412,6 +1413,9 @@ export default function FiscalPage() {
           </button>
         </form>
       </div>
+
+      {/* Pendências fiscais reconciliadas do estado real (CON-002) */}
+      <AlertasFiscaisCard />
 
       {/* Histórico de notas emitidas */}
       <div id="secao-notas" className="card p-5">

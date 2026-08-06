@@ -1619,6 +1619,20 @@ export const fiscalApi = {
     api.post<{ id: string; erpEstornadoEm?: string; erpEstornoErro?: string }>(`/api/fiscal/notas/${id}/reprocessar-estorno-erp`),
   obterCupom: (id: string) => api.get<DanfeFiscalDto>(`/api/fiscal/notas/${id}/cupom`),
 
+  // CON-002 — pendências fiscais reconciliadas do estado real
+  listAlertas: (incluirResolvidos = false) =>
+    api.get<PainelAlertasFiscaisDto>('/api/fiscal/alertas', { params: { incluirResolvidos } }),
+  sincronizarAlertas: () =>
+    api.post<PainelAlertasFiscaisDto>('/api/fiscal/alertas/sincronizar'),
+  assumirAlerta: (id: string) =>
+    api.post<{ id: string; responsavelUserId: string; responsavelDefinidoEm?: string }>(
+      `/api/fiscal/alertas/${id}/assumir`),
+  liberarAlerta: (id: string) =>
+    api.delete<{ id: string; responsavelUserId: string | null }>(`/api/fiscal/alertas/${id}/responsavel`),
+  resolverAlerta: (id: string, observacao: string) =>
+    api.post<{ id: string; resolvidoEm: string; resolucaoObservacao: string }>(
+      `/api/fiscal/alertas/${id}/resolver`, { observacao }),
+
   emitirNotaComanda: (comandaId: string) =>
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/comanda/${comandaId}`),
   emitirNotaVendaAvulsa: (vendaId: string) =>
@@ -1780,6 +1794,51 @@ export interface ConciliacaoFiscalDto {
   vendas: VendaConciliadaDto[]
   quantidadePendencias: number
   valorSemDocumento: number
+}
+
+// ── Alertas fiscais (CON-002) ────────────────────────────────────────────────
+// Pendências reconciliadas do estado real a cada ciclo: o que está aberto aqui
+// existe agora. Um alerta só some sozinho quando a condição some.
+
+export type TipoAlertaFiscal =
+  | 'ResultadoIncerto' | 'ContingenciaPendente' | 'NotaRejeitada'
+  | 'VendaSemDocumento' | 'LacunaNumeracao' | 'ExportacaoMensalPendente'
+
+export type SeveridadeAlertaFiscal = 'Critica' | 'Alta' | 'Media'
+
+export interface AlertaFiscalDto {
+  id: string
+  tipo: TipoAlertaFiscal
+  severidade: SeveridadeAlertaFiscal
+  titulo: string
+  detalhe: string
+  link?: string
+  notaFiscalId?: string
+  ocorridoEm: string
+  detectadoEm: string
+  atualizadoEm: string
+  ocorrencias: number
+  responsavelUserId?: string
+  responsavelNome?: string
+  responsavelDefinidoEm?: string
+  resolvidoEm?: string
+  resolvidoPorNome?: string
+  resolucaoObservacao?: string
+  resolvidoAutomaticamente: boolean
+  reabertoEm?: string
+  reaberturas: number
+  estaAberto: boolean
+  idadeEmHoras: number
+}
+
+export interface PainelAlertasFiscaisDto {
+  alertas: AlertaFiscalDto[]
+  totalAbertos: number
+  criticos: number
+  altos: number
+  medios: number
+  semResponsavel: number
+  maisAntigoOcorridoEm?: string
 }
 
 export interface FechamentoMensalDto {

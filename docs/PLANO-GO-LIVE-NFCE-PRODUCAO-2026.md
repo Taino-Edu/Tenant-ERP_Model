@@ -2195,3 +2195,103 @@ timeout real, é item da matriz HOM-001 (linha 9).
 
 `dotnet test` — **603 aprovados, 0 falhas** (eram 588; +15). Frontend:
 `npm run build` concluído.
+
+## 33. CON-002 concluído — alertas com responsável e resolução — 06/08/2026
+
+### 33.1 O buraco
+
+Os alertas que existiam eram **disparos**: `Notification` avulsa, criada quando um
+job passava e via algo errado, com deduplicação por "já criei uma com este título
+nas últimas 6h?".
+
+Três defeitos decorrem disso, e todos são de confiabilidade, não de estética:
+
+1. **duplicavam** — o critério de 6h é por título, então dois problemas distintos
+   do mesmo tipo viravam um aviso só, e o mesmo problema voltava a cada 6h;
+2. **nunca desapareciam** — a notificação de contingência continuava lá depois de
+   a nota ser autorizada, porque nada a retirava;
+3. **não sabiam responder "o que ainda está pendente?"** — não havia estado, só
+   histórico de avisos. E só três situações eram cobertas.
+
+### 33.2 O modelo: reconciliação, não disparo
+
+Cada ciclo pergunta ao banco quais pendências fiscais existem **agora** e casa
+esse conjunto com os alertas abertos:
+
+| Situação | Efeito |
+|---|---|
+| fato novo | alerta criado |
+| fato que continua | alerta atualizado (idade, severidade, ocorrências) |
+| fato que sumiu | alerta **resolvido automaticamente** |
+
+A identidade do alerta é derivada do próprio fato (`ResultadoIncerto:{notaId}`,
+`VendaSemDocumento:2026-08-05`) e é **única no banco** — a deduplicação é
+estrutural, não uma heurística de janela de tempo. Dois ciclos concorrentes não
+conseguem criar dois alertas para a mesma pendência nem que tentem.
+
+### 33.3 As seis situações da seção 8
+
+| Tipo | Severidade | Origem do fato |
+|---|---|---|
+| `ResultadoIncerto` | **Crítica desde o primeiro segundo** | nota em `ResultadoIncerto` (RES-001) |
+| `ContingenciaPendente` | Alta → **Crítica após 20h** | `DhContingencia`, contra o prazo legal de 24h |
+| `NotaRejeitada` | Alta | rejeitada e ainda não inutilizada, com motivo e ação sugerida |
+| `VendaSemDocumento` | Média → Alta após 3 dias | conciliação (CON-001), um alerta por dia fechado |
+| `LacunaNumeracao` | Média | número sem registro local nem inutilização, por série/ano |
+| `ExportacaoMensalPendente` | Média → Alta após o dia 5 | ZIP mensal ao contador que não saiu |
+
+Resultado incerto é crítico **imediatamente e não escalona**: o risco de existir
+um documento autorizado que este sistema desconhece já está no máximo no primeiro
+segundo. Contingência é o oposto — nasce alta e escalona, porque ali o que corre
+é um prazo legal.
+
+Severidade crítica também vira notificação para os admins, e só na **criação ou
+na escalada** — nunca a cada ciclo.
+
+### 33.4 Responsável e confirmação de resolução
+
+- **Assumir** é ato próprio: o endpoint usa o usuário autenticado e não aceita id
+  de terceiro no corpo. Ninguém atribui responsabilidade fiscal a outra pessoa
+  por uma chamada de API.
+- **Resolver** exige observação (mínimo 5 caracteres) e vai para a trilha de
+  auditoria com quem confirmou.
+- Resolver **não silencia o fato**: se ele continuar verdadeiro no próximo ciclo,
+  o alerta **reabre**, zera a resolução anterior e conta a reabertura. Uma nota
+  rejeitada não deixa de estar rejeitada porque alguém clicou — e o painel mostra
+  "reaberta 2×" justamente para expor a confirmação otimista.
+
+### 33.5 Entregue
+
+- `AlertaFiscal` + migration `AddAlertasFiscais`, com índice único na chave;
+- `AlertaFiscalService` (reconciliador, seis detecções, atribuição e resolução);
+- `GET /api/fiscal/alertas`, `POST alertas/sincronizar`, `POST alertas/{id}/assumir`,
+  `DELETE alertas/{id}/responsavel`, `POST alertas/{id}/resolver`;
+- sincronização ao fim de cada ciclo do retry (15 min), depois das tentativas, para
+  o painel refletir o estado pós-retry;
+- card **Pendências Fiscais** em Admin > Fiscal, com severidade, idade do fato,
+  responsável e resolução com observação;
+- a notificação avulsa de "contingência crítica" foi **removida** — está coberta,
+  sem os três defeitos acima;
+- **30 testes**, com foco no comportamento do reconciliador.
+
+Um bug real apareceu no caminho e foi corrigido: a severidade é persistida como
+texto (para a coluna ser legível em consulta manual), então ordenar o painel pela
+coluna dava ordem **alfabética** — "Alta" antes de "Critica", o inverso do que o
+painel precisa. A ordem de gravidade agora é explícita na consulta.
+
+### 33.6 O que CON-002 não cobre
+
+- **Falha de backup** (seção 8, último item): não há job de backup neste sistema
+  para falhar — backup e restauração são infraestrutura e continuam em OPS-002. O
+  que existe e é monitorado é a metade exportação: o ZIP mensal ao contador.
+- **Quem optou por não emitir** (item herdado de 31.4): continua pendente. Exige
+  persistir a decisão no fechamento da venda, não é detectável a posteriori. O
+  alerta mostra que a venda ficou sem documento; não diz quem decidiu isso.
+- **Canal externo** (e-mail/WhatsApp): alertas críticos geram notificação interna
+  e aparecem no painel. Não há envio para fora do sistema.
+
+### 33.7 Validação
+
+`dotnet test` — **633 aprovados, 0 falhas** (eram 603; +30). Frontend:
+`npm run build` concluído; a página `/admin/fiscal` compila e renderiza com o card
+novo (verificação visual com dados reais depende de backend e tenant autenticado).

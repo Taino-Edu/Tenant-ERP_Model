@@ -60,6 +60,7 @@ public class AppDbContext : DbContext
     public DbSet<NaturezaOperacao>   NaturezasOperacao    { get; set; }
     public DbSet<NotaFiscalEmitida>  NotasFiscaisEmitidas { get; set; }
     public DbSet<InutilizacaoFiscal> InutilizacoesFiscais  { get; set; }
+    public DbSet<AlertaFiscal>       AlertasFiscais       { get; set; }
 
     // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
     public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
@@ -251,6 +252,29 @@ public class AppDbContext : DbContext
             entity.HasIndex(i => new { i.Ano, i.Serie, i.NumeroInicial, i.NumeroFinal })
                   .IsUnique()
                   .HasDatabaseName("ix_inutilizacoes_fiscais_faixa");
+        });
+
+        // =====================================================================
+        // ALERTA FISCAL (CON-002)
+        // =====================================================================
+        modelBuilder.Entity<AlertaFiscal>(entity =>
+        {
+            entity.Property(a => a.Tipo).HasConversion<string>().HasMaxLength(40);
+            entity.Property(a => a.Severidade).HasConversion<string>().HasMaxLength(20);
+
+            // A deduplicação do CON-002 é do BANCO, não da aplicação: a chave é
+            // derivada do fato, então dois ciclos concorrentes não conseguem criar
+            // dois alertas para a mesma pendência nem que tentem.
+            entity.HasIndex(a => a.Chave)
+                  .IsUnique()
+                  .HasDatabaseName("ix_alertas_fiscais_chave");
+
+            // Consulta do painel: abertos primeiro, mais graves e mais antigos no topo.
+            entity.HasIndex(a => new { a.ResolvidoEm, a.Severidade, a.OcorridoEm })
+                  .HasDatabaseName("ix_alertas_fiscais_painel");
+
+            entity.HasIndex(a => a.NotaFiscalId)
+                  .HasDatabaseName("ix_alertas_fiscais_nota");
         });
 
         // =====================================================================

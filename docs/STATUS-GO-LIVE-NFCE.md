@@ -32,7 +32,7 @@ plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; 
 | **RES-001** — resultado incerto | ✅ | falha de rede deixou de ser um caso só: "nunca chegou" vai para contingência, timeout vira `ResultadoIncerto` e consulta a chave antes de decidir; duplicidade adota o documento da SEFAZ em vez de rejeitar. Chave/XML/tentativa persistidos antes do envio; número protegido de inutilização. 15 testes com a SEFAZ atrás de interface. Timeout real fica na HOM-001. | 6, 32 |
 | **XML-002** — validação XSD | 🚧 | **bloqueado por artefato externo**: a lib tem `ValidarSchemas`/`DiretorioSchemas`, mas os XSDs oficiais não vêm no pacote nem existem no repo — é preciso baixar e versionar o pacote de schemas. | 9, 30.5 |
 | **CON-001** — conciliação | ✅ | serviço parte das VENDAS e acha o documento de cada uma; expõe venda sem nota e divergência de valor; endpoints para lojista e contador + aba no portal. 16 testes. | 31 |
-| **CON-002** — alertas | ⏳ | alertas por severidade/idade, responsável e confirmação de resolução. Inclui o alerta imediato de resultado incerto (ver 32.6) e registrar quem optou por não emitir (ver 31.4). | 8 |
+| **CON-002** — alertas | ✅ | pendências reconciliadas do estado real (não disparos): as seis situações da seção 8, com severidade por idade, dedup pela chave do fato, resolução automática quando a condição some, responsável e confirmação auditável que reabre se o problema continua. Painel em Admin > Fiscal. 30 testes. Falta backup (é OPS-002) e registrar quem optou por não emitir (ver 31.4). | 8, 33 |
 | **REG-001** — regime normal | ✅ | totalizadores consolidam ICMS/ST/FCP/PIS/COFINS dos itens via getters polimórficos da lib; `ICMSTot` sem zeros fixos; emissão fora do Simples reaberta. 11 testes. **Não é aprovação fiscal** — falta XSD, homologação por CST e aceite do contador. | 30 |
 | **CAD-001** — saneamento do catálogo | 👤 | conferência de NCM/CEST/CFOP/CSOSN/CST pelo contador. | 9 |
 | **FIS-001** — escopo assinado | 👤 | UF, IE, credenciamento, série/número, escopo presencial — com o contador. | 4 |
@@ -54,13 +54,15 @@ Trabalho anterior à auditoria, já na mesma PR:
 ## Onde estamos
 
 **Fechado em código nesta maratona:** FIS-002, RES-002, XML-001, DAN-001,
-REG-001, CON-001, RES-001.
+REG-001, CON-001, RES-001, CON-002.
 
-**Próximos deliveráveis em código:** CON-002 (alertas por severidade e idade,
-com responsável e confirmação de resolução — inclui o alerta imediato de
-resultado incerto) e RTC-001 (remover a trava fixa de 2027 e versionar as
-regras). XML-002 está bloqueado até o pacote de XSDs oficiais ser baixado e
-versionado no repositório.
+**Próximos deliveráveis em código:** RTC-001 (remover a trava fixa de 2027 e
+versionar as regras) é o único cartão em aberto que depende só de código.
+XML-002 está bloqueado até o pacote de XSDs oficiais ser baixado e versionado no
+repositório. PDV-001 (operar com o enlace da loja fora do ar — seção 25.5) e o
+agente local de impressão continuam sendo decisão de produto, não pendência
+fiscal: a impressão do DANFE já funciona pelo navegador do PDV (opção C, seção
+27), e o agente só se justifica para operar offline, não para imprimir.
 
 **O que só o dia da homologação resolve:** transmissão real (RES-001/002),
 impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do contador
@@ -68,5 +70,5 @@ impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do co
 
 ## Suíte
 
-`dotnet test` — **603 aprovados, 0 falhas** (PostgreSQL descartável de
+`dotnet test` — **633 aprovados, 0 falhas** (PostgreSQL descartável de
 `tests/docker-compose.yml`). Frontend: `npm run build` concluído.
