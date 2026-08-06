@@ -55,8 +55,13 @@ public class FiscalRetryBackgroundService : BackgroundService
         var db      = sp.GetRequiredService<AppDbContext>();
         var emissao = sp.GetRequiredService<INfceEmissionService>();
 
+        // ResultadoIncerto entra aqui porque é o estado que MAIS precisa de novo
+        // contato com a SEFAZ: cada ciclo é uma nova chance de consultar a chave e
+        // descobrir se aquele documento foi autorizado (RES-001).
         var pendentesIds = await db.NotasFiscaisEmitidas
-            .Where(n => n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia)
+            .Where(n => n.Status == NotaFiscalStatus.PendenteEmissao ||
+                        n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+                        n.Status == NotaFiscalStatus.ResultadoIncerto)
             .OrderBy(n => n.CreatedAt)
             .Take(50) // não tenta reprocessar milhares de uma vez
             .Select(n => n.Id)

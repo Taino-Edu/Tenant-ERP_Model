@@ -436,6 +436,13 @@ function handleNotaFiscalResult(notaId?: string | null, status?: string | null, 
   if (!status) return
   if (status === 'Autorizada' && notaId) {
     window.open(`/admin/fiscal/cupom/${notaId}`, '_blank')
+  } else if (status === 'ResultadoIncerto') {
+    // RES-001: a resposta da SEFAZ se perdeu e a nota PODE estar autorizada.
+    // A pior reacao aqui e o operador emitir outra — daria duas NFC-e para a
+    // mesma venda. O sistema consulta a chave e conclui sozinho.
+    toast.error(
+      `A SEFAZ não respondeu a tempo e a nota pode já ter sido autorizada${motivo ? ' — ' + motivo : ''}. ` +
+      'Não emita outra: o sistema consulta a chave e conclui sozinho.')
   } else {
     toast.error(`Nota fiscal não autorizou ainda (${status})${motivo ? ' — ' + motivo : ''}. O sistema tenta de novo automaticamente.`)
   }

@@ -19,7 +19,15 @@ const STATUS_INFO: Record<string, { label: string; color: string }> = {
   Rejeitada:               { label: 'Rejeitada',             color: 'bg-red-500/15 text-red-400 border-red-500/30' },
   Cancelada:               { label: 'Cancelada',             color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   AutorizadaContingencia:  { label: 'Contingência',          color: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
+  // RES-001: a resposta da SEFAZ se perdeu e a chave ainda está sendo consultada.
+  // Não é pendente (o documento pode estar autorizado) nem rejeitada.
+  ResultadoIncerto:        { label: 'Resultado incerto',     color: 'bg-purple-500/15 text-purple-300 border-purple-500/30' },
 }
+
+// Só quem tem documento fiscal existente pode ter cupom impresso. Uma nota com
+// chave reservada mas sem autorização (pendente, rejeitada, resultado incerto)
+// não tem DANFE — o botão levaria a uma página vazia.
+const STATUS_COM_CUPOM = ['Autorizada', 'AutorizadaContingencia', 'Cancelada']
 
 const REGIMES = [
   { value: 'SimplesNacional', label: 'Simples Nacional' },
@@ -1453,13 +1461,14 @@ export default function FiscalPage() {
                     {n.erpEstornoErro && <p className="text-xs text-amber-400 mt-1">Estorno ERP pendente: {n.erpEstornoErro}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {n.chaveAcesso && (
+                    {n.chaveAcesso && STATUS_COM_CUPOM.includes(n.status) && (
                       <Link href={`/admin/fiscal/cupom/${n.id}`} target="_blank"
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 border border-surface-600 text-sm text-gray-300">
                         <Printer className="w-3.5 h-3.5" /> Cupom
                       </Link>
                     )}
-                    {(n.status === 'PendenteEmissao' || n.status === 'Rejeitada' || n.status === 'AutorizadaContingencia') && (
+                    {(n.status === 'PendenteEmissao' || n.status === 'Rejeitada' ||
+                      n.status === 'AutorizadaContingencia' || n.status === 'ResultadoIncerto') && (
                       <button onClick={() => reprocessarNota(n.id)} disabled={reprocessingId === n.id}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 border border-surface-600 text-sm text-gray-300">
                         {reprocessingId === n.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}

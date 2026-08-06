@@ -528,7 +528,12 @@ public class VendaAvulsaService : IVendaAvulsaService
         var possuiDocumentoFiscalImutavel = await _db.NotasFiscaisEmitidas.AnyAsync(n =>
             n.VendaAvulsaId == id && (n.Status == NotaFiscalStatus.Autorizada ||
                                       n.Status == NotaFiscalStatus.AutorizadaContingencia ||
-                                      n.Status == NotaFiscalStatus.Cancelada));
+                                      n.Status == NotaFiscalStatus.Cancelada ||
+                                      // RES-001: enquanto o destino da transmissão é
+                                      // desconhecido, pode existir documento autorizado
+                                      // com estes valores na SEFAZ — editar a venda aqui
+                                      // criaria divergência silenciosa com ele.
+                                      n.Status == NotaFiscalStatus.ResultadoIncerto));
         if (possuiDocumentoFiscalImutavel)
             throw new InvalidOperationException(
                 "A venda já possui documento fiscal e não pode ter pagamento, cliente ou desconto alterados.");

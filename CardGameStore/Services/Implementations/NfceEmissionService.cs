@@ -195,12 +195,86 @@ public class NfceEmissionService : INfceEmissionService
            or System.Net.Sockets.SocketException
            or TimeoutException
            or TaskCanceledException
+           // Stream cortado no meio da resposta. Entrou aqui com RES-001: antes,
+           // cair no catch genérico era o desfecho conservador; agora o desfecho
+           // conservador é ResultadoIncerto, que consulta a chave em vez de
+           // deixar a nota pendente sem ninguém perguntar nada à SEFAZ.
+           or IOException
         || (ex.InnerException is not null && EhFalhaDeConectividade(ex.InnerException)));
+
+    /// <summary>
+    /// Destino de uma tentativa de transmissão que terminou em falha de rede.
+    /// A distinção existe porque as duas situações exigem condutas opostas
+    /// (RES-001).
+    /// </summary>
+    internal enum DestinoTentativa
+    {
+        /// <summary>A requisição não chegou à SEFAZ: a conexão nem se estabeleceu
+        /// (DNS não resolveu, porta recusada, rede inalcançável). Nenhum documento
+        /// foi processado do outro lado, então a contingência offline é a conduta
+        /// correta e imediata — é para isso que ela existe.</summary>
+        NuncaChegou,
+
+        /// <summary>A requisição pode ter chegado e sido autorizada, com a resposta
+        /// perdida no caminho (timeout, conexão derrubada no meio). Emitir outro
+        /// documento aqui é o que gera duas NFC-e para a mesma venda: primeiro
+        /// consulta-se a chave original.</summary>
+        Incerto,
+    }
+
+    /// <summary>
+    /// Classifica a falha de rede em "nunca chegou" ou "resultado incerto".
+    /// Percorre a cadeia de exceções de fora para dentro e decide no primeiro
+    /// tipo que carrega essa informação.
+    ///
+    /// O default é deliberadamente <see cref="DestinoTentativa.Incerto"/>: só se
+    /// declara que o documento não chegou quando há evidência disso. Presumir o
+    /// contrário é barato de escrever e caro de corrigir — a nota duplicada já
+    /// está autorizada na SEFAZ quando alguém percebe.
+    /// </summary>
+    internal static DestinoTentativa ClassificarFalhaDeTransmissao(Exception? ex)
+    {
+        for (var atual = ex; atual is not null; atual = atual.InnerException)
+        {
+            switch (atual)
+            {
+                case TimeoutException or TaskCanceledException:
+                    return DestinoTentativa.Incerto;
+
+                case System.Net.Sockets.SocketException socket:
+                    return socket.SocketErrorCode is
+                        System.Net.Sockets.SocketError.HostNotFound or
+                        System.Net.Sockets.SocketError.ConnectionRefused or
+                        System.Net.Sockets.SocketError.NetworkUnreachable or
+                        System.Net.Sockets.SocketError.HostUnreachable or
+                        System.Net.Sockets.SocketError.NetworkDown or
+                        System.Net.Sockets.SocketError.AddressNotAvailable
+                        ? DestinoTentativa.NuncaChegou
+                        : DestinoTentativa.Incerto;
+
+                case System.Net.WebException web:
+                    return web.Status is
+                        System.Net.WebExceptionStatus.ConnectFailure or
+                        System.Net.WebExceptionStatus.NameResolutionFailure or
+                        System.Net.WebExceptionStatus.ProxyNameResolutionFailure
+                        ? DestinoTentativa.NuncaChegou
+                        : DestinoTentativa.Incerto;
+
+                case System.Net.Http.HttpRequestException http
+                    when http.HttpRequestError is System.Net.Http.HttpRequestError.NameResolutionError
+                                               or System.Net.Http.HttpRequestError.ConnectionError:
+                    return DestinoTentativa.NuncaChegou;
+            }
+        }
+
+        return DestinoTentativa.Incerto;
+    }
 
     private readonly AppDbContext                _db;
     private readonly EncryptionService           _enc;
     private readonly ILogger<NfceEmissionService> _logger;
     private readonly IFiscalTaxEngine             _taxEngine;
+    private readonly INfceSefazGateway            _sefaz;
 
     public NfceEmissionService(
         AppDbContext db, EncryptionService enc, ILogger<NfceEmissionService> logger)
@@ -208,12 +282,13 @@ public class NfceEmissionService : INfceEmissionService
 
     internal NfceEmissionService(
         AppDbContext db, EncryptionService enc, ILogger<NfceEmissionService> logger,
-        IFiscalTaxEngine taxEngine)
+        IFiscalTaxEngine taxEngine, INfceSefazGateway? sefaz = null)
     {
         _db     = db;
         _enc    = enc;
         _logger = logger;
         _taxEngine = taxEngine;
+        _sefaz  = sefaz ?? new NfceSefazGateway();
     }
 
     public async Task<NotaFiscalEmitida> EmitirParaComandaAsync(Guid comandaId) =>
@@ -227,7 +302,8 @@ public class NfceEmissionService : INfceEmissionService
         var nota = await _db.NotasFiscaisEmitidas.FindAsync(notaId)
             ?? throw new InvalidOperationException($"Nota {notaId} não encontrada.");
 
-        if (nota.Status is not (NotaFiscalStatus.PendenteEmissao or NotaFiscalStatus.Rejeitada or NotaFiscalStatus.AutorizadaContingencia))
+        if (nota.Status is not (NotaFiscalStatus.PendenteEmissao or NotaFiscalStatus.Rejeitada
+                             or NotaFiscalStatus.AutorizadaContingencia or NotaFiscalStatus.ResultadoIncerto))
             return nota; // Autorizada/Cancelada não têm o que reprocessar — devolve como está.
 
         if (nota.Status == NotaFiscalStatus.Rejeitada && nota.InutilizadoEm.HasValue)
@@ -257,6 +333,15 @@ public class NfceEmissionService : INfceEmissionService
                     "NFC-e {NotaId} em contingência desde {DhContingencia:o} está se aproximando do prazo legal " +
                     "de 24h sem retransmitir com sucesso.", nota.Id, nota.DhContingencia);
         }
+        else if (nota.Status == NotaFiscalStatus.ResultadoIncerto)
+        {
+            // Resultado incerto também não morre por contagem de tentativas: desistir
+            // de consultar deixaria a venda com destino fiscal desconhecido para
+            // sempre, e o número reservado travado. Continua tentando resolver.
+            _logger.LogInformation(
+                "NFC-e {NotaId} (chave {Chave}) segue com resultado incerto desde {Desde:o} — nova consulta à SEFAZ.",
+                nota.Id, nota.ChaveAcesso, nota.ResultadoIncertoEm);
+        }
         else if (nota.TentativasReprocessamento >= MaxTentativasReprocessamento)
         {
             _logger.LogWarning(
@@ -270,6 +355,12 @@ public class NfceEmissionService : INfceEmissionService
 
         await ExecutarComTratamentoDeErroAsync(nota, async () =>
         {
+            // RES-001: nota com tentativa em aberto não remonta documento nenhum
+            // antes de a SEFAZ dizer o que aconteceu com a chave já transmitida.
+            if (nota.Status == NotaFiscalStatus.ResultadoIncerto &&
+                !await ResolverResultadoIncertoPersistidoAsync(nota))
+                return;
+
             var dados = nota.Origem == NotaFiscalOrigem.Comanda
                 ? await CarregarDadosComandaAsync(nota.ComandaId!.Value)
                 : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value);
@@ -471,10 +562,15 @@ public class NfceEmissionService : INfceEmissionService
              (!n.EmitidoEm.HasValue && n.CreatedAt >= inicioAnoUtc && n.CreatedAt < fimAnoUtc)) &&
             (n.Status == NotaFiscalStatus.Autorizada ||
              n.Status == NotaFiscalStatus.AutorizadaContingencia ||
-             n.Status == NotaFiscalStatus.Cancelada));
+             n.Status == NotaFiscalStatus.Cancelada ||
+             // RES-001: número com tentativa sem resposta pode estar autorizado na
+             // SEFAZ. Inutilizar aqui seria declarar como não usado um número que
+             // talvez já tenha documento válido — resolve-se a consulta primeiro.
+             n.Status == NotaFiscalStatus.ResultadoIncerto));
         if (conflitaComDocumentoValido)
             throw new InvalidOperationException(
-                "A faixa contém NFC-e autorizada, cancelada ou em contingência e não pode ser inutilizada.");
+                "A faixa contém NFC-e autorizada, cancelada, em contingência ou com resultado incerto na SEFAZ " +
+                "e não pode ser inutilizada.");
 
         var (cfg, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
@@ -506,7 +602,8 @@ public class NfceEmissionService : INfceEmissionService
                          (!n.EmitidoEm.HasValue && n.CreatedAt >= inicioAnoUtc && n.CreatedAt < fimAnoUtc)) &&
                         n.Status != NotaFiscalStatus.Autorizada &&
                         n.Status != NotaFiscalStatus.AutorizadaContingencia &&
-                        n.Status != NotaFiscalStatus.Cancelada)
+                        n.Status != NotaFiscalStatus.Cancelada &&
+                        n.Status != NotaFiscalStatus.ResultadoIncerto)
             .ToListAsync();
         foreach (var nota in notasAbandonadas)
         {
@@ -1234,31 +1331,37 @@ public class NfceEmissionService : INfceEmissionService
             await _db.SaveChangesAsync();
         }
 
-        using var servico = new ServicosNFe(cfgServico, certificado);
-        RetornoNFeAutorizacao retorno;
+        // RES-001: a tentativa tem que existir no banco ANTES de sair pela rede.
+        // Sem chave, XML assinado e identificador da tentativa persistidos, uma
+        // resposta perdida deixaria o sistema sem nada para perguntar à SEFAZ — e
+        // a única saída seria presumir (possivelmente errado) que a nota falhou.
+        RegistrarTentativa(nota, chave.Chave, nfe);
+        await _db.SaveChangesAsync();
+
+        RespostaAutorizacaoNfce resposta;
         try
         {
-            retorno = servico.NFeAutorizacao(1, IndicadorSincronizacao.Sincrono, new List<NfeDocumento> { nfe }, false);
+            resposta = _sefaz.Autorizar(cfgServico, certificado, nfe);
         }
         catch (Exception ex) when (EhFalhaDeConectividade(ex))
         {
+            if (ClassificarFalhaDeTransmissao(ex) == DestinoTentativa.Incerto)
+            {
+                // O documento pode estar autorizado do lado da SEFAZ com esta chave.
+                // Antes de montar qualquer outro documento para esta venda, pergunta.
+                await TratarResultadoIncertoAsync(
+                    nota, dados, nfe, cfgServico, certificado, qrCodeUrl, jaEmContingencia, ex);
+                return;
+            }
+
             if (!jaEmContingencia)
             {
-                // Registra os dados imutáveis e remonta imediatamente o documento como
-                // tpEmis=9. A nota só vira AutorizadaContingencia dentro da segunda montagem,
-                // depois que chave e QR offline estiverem prontos e persistidos.
-                nota.Serie                     = cfg.SerieNfce;
-                nota.Numero                    = numero;
-                nota.CnfContingencia           = cNf;
-                nota.DhContingencia            = DateTime.UtcNow;
-                nota.EmitidoEm                ??= nota.DhContingencia;
-                nota.JustificativaContingencia = "Sem comunicação com o webservice da SEFAZ no momento da venda.";
-                await _db.SaveChangesAsync();
-
-                _logger.LogWarning(ex,
-                    "NFC-e {NotaId}: SEFAZ inalcançável; reconstruindo documento em contingência offline.", nota.Id);
-
-                await TransmitirAsync(nota, dados);
+                // A conexão nem chegou a se estabelecer: nada foi processado do outro
+                // lado. Este é o caso em que a contingência offline é a conduta certa e
+                // imediata. A nota só vira AutorizadaContingencia dentro da segunda
+                // montagem, depois que chave e QR offline estiverem prontos e persistidos.
+                await IniciarContingenciaOfflineAsync(
+                    nota, dados, "SEFAZ inalcançável (a requisição não chegou a ser enviada)", ex);
             }
             else
             {
@@ -1270,70 +1373,364 @@ public class NfceEmissionService : INfceEmissionService
             return;
         }
 
-        var protInfo = retorno.Retorno?.protNFe?.infProt;
-
         // Número já foi consumido, persistido atomicamente em ReservarProximoNumeroNfceAsync
         // e gravado na nota logo após a reserva (F6, acima) — autorizada ou não, a numeração
         // da NFC-e não pode ser reaproveitada sem inutilização.
+        await ProcessarRespostaAutorizacaoAsync(
+            nota, nfe, resposta, cfgServico, certificado, qrCodeUrl, jaEmContingencia);
+    }
 
-        if (protInfo is not null && protInfo.cStat == 100)
+    // ── Destino do documento transmitido (RES-001) ────────────────────────────
+
+    private const int CStatAutorizada  = 100;
+    private const int CStatNaoConsta   = 217;  // "NF-e não consta na base de dados da SEFAZ"
+    private const int CStatDuplicidade = 204;  // "Duplicidade de NF-e"
+    private const int CStatDuplicidadeChaveDivergente = 539;
+    private const int CStatSchemaInvalido = 225;
+
+    /// <summary>Denegação: a SEFAZ conhece o documento e recusou por irregularidade
+    /// do emitente/destinatário. É destino final — o número não volta a ser usado.</summary>
+    private static bool EhDenegada(int cStat) => cStat is 110 or 301 or 302 or 303;
+
+    /// <summary>
+    /// Aplica ao registro local o que a SEFAZ respondeu à transmissão.
+    ///
+    /// A duplicidade recebe tratamento próprio: ela é a SEFAZ afirmando que já
+    /// existe documento sob aquela chave. Registrar isso como rejeição local
+    /// transformaria uma nota autorizada de verdade em rejeitada só do nosso
+    /// lado — exatamente a divergência que RES-001 existe para impedir.
+    /// </summary>
+    private async Task ProcessarRespostaAutorizacaoAsync(
+        NotaFiscalEmitida nota, NfeDocumento nfe, RespostaAutorizacaoNfce resposta,
+        ConfiguracaoServico cfgServico, X509Certificate2 certificado,
+        string? qrCodeUrl, bool jaEmContingencia)
+    {
+        if (resposta.Protocolo is { infProt.cStat: CStatAutorizada } protocolo)
         {
-            nota.Status         = NotaFiscalStatus.Autorizada;
-            nota.ChaveAcesso    = protInfo.chNFe ?? chave.Chave;
-            nota.Protocolo      = protInfo.nProt;
-            nota.AutorizadoEm   = DateTime.UtcNow;
-            // Se veio de contingência, EmitidoEm já é o momento real da venda — não pisa nele
-            // com o momento da confirmação tardia da SEFAZ.
-            nota.EmitidoEm    ??= DateTime.UtcNow;
-            nota.XmlAutorizado  = MontarNfeProcXml(nfe, retorno.Retorno!.protNFe);
-            // A partir daqui o documento fiscal é o nfeProc autorizado. O XML de
-            // contingência já cumpriu seu papel (foi entregue e retransmitido) e
-            // deixa de ser fonte do DANFE — mantê-lo seria uma segunda via
-            // possível do mesmo documento.
-            nota.XmlContingencia = null;
-            nota.UrlQrCode      = qrCodeUrl;
-            nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
-            // F13: se esta nota foi Rejeitada antes (número anterior inutilizado
-            // automaticamente) e agora autoriza com um número NOVO, os campos de
-            // inutilização do número antigo não fazem mais sentido aqui — sem isso a nota
-            // fica com estado contraditório ("Autorizada" mas mostrando "inutilizado em X").
-            nota.InutilizadoEm         = null;
-            nota.ProtocoloInutilizacao = null;
+            AplicarAutorizacao(nota, nfe, protocolo, qrCodeUrl);
+            await _db.SaveChangesAsync();
+            return;
         }
-        else
-        {
-            nota.Status         = NotaFiscalStatus.Rejeitada;
-            nota.MotivoRejeicao = protInfo?.xMotivo ?? retorno.RetornoStr ?? "SEFAZ não retornou motivo.";
-            if (retorno.Retorno?.cStat == 225)
-                _logger.LogError(
-                    "SEFAZ rejeitou NFC-e {NotaId} com cStat 225. XML exato enviado: {XmlEnvio}",
-                    nota.Id, retorno.EnvioStr);
 
-            // F5: rejeição de uma nota que estava em contingência (retransmissão alcançou a
-            // SEFAZ, mas foi rejeitada por motivo de negócio) inutiliza o número atual — sem
-            // limpar os campos de contingência, o PRÓXIMO reprocessamento veria jaEmContingencia
-            // ainda true e tentaria reusar esse MESMO número já inutilizado, num loop que só
-            // erra. Limpa aqui pra o próximo TransmitirAsync reservar um número novo do zero
-            // (nota.Numero/Serie continuam documentando qual número foi inutilizado, só os
-            // campos de reconstrução de chave de contingência são limpos).
-            if (jaEmContingencia)
+        if (resposta.CStat is CStatDuplicidade or CStatDuplicidadeChaveDivergente)
+        {
+            var situacao = ConsultarChaveComTolerancia(cfgServico, certificado, nota.ChaveAcesso!);
+            if (situacao is { CStat: CStatAutorizada, Protocolo: not null })
             {
-                nota.CnfContingencia           = null;
-                nota.DhContingencia            = null;
-                nota.JustificativaContingencia = null;
-                // A retransmissão foi rejeitada por regra de negócio: aquele
-                // documento offline não vira nota válida. O próximo TransmitirAsync
-                // reserva número novo e monta um documento novo, então o XML antigo
-                // não deve sobreviver como fonte de DANFE.
-                nota.XmlContingencia           = null;
+                _logger.LogWarning(
+                    "NFC-e {NotaId}: SEFAZ respondeu duplicidade (cStat {CStat}) e a consulta da chave {Chave} " +
+                    "confirmou o documento autorizado. Protocolo recuperado em vez de registrar rejeição.",
+                    nota.Id, resposta.CStat, nota.ChaveAcesso);
+                AplicarAutorizacao(nota, nfe, situacao.Protocolo, qrCodeUrl);
+                await _db.SaveChangesAsync();
+                return;
             }
+
+            // A SEFAZ afirma duplicidade mas a consulta não confirma autorização.
+            // Não dá para rejeitar (o documento pode existir lá) nem para emitir
+            // outro. Fica incerto, com o número reservado, aguardando resolução.
+            nota.Status = NotaFiscalStatus.ResultadoIncerto;
+            nota.ResultadoIncertoEm ??= DateTime.UtcNow;
+            nota.MotivoRejeicao =
+                $"SEFAZ respondeu duplicidade (cStat {resposta.CStat}), mas a consulta da chave não confirmou " +
+                $"a autorização{(situacao is null ? " (consulta indisponível)" : $" (cStat {situacao.CStat})")}. " +
+                "Nenhum documento novo será emitido para esta venda até a situação ser esclarecida.";
+            await _db.SaveChangesAsync();
+            _logger.LogError(
+                "NFC-e {NotaId} (chave {Chave}): duplicidade sem confirmação na consulta — exige verificação manual.",
+                nota.Id, nota.ChaveAcesso);
+            return;
         }
+
+        AplicarRejeicao(
+            nota,
+            resposta.Motivo ?? "SEFAZ não retornou motivo.",
+            jaEmContingencia);
+
+        if (resposta.CStatLote == CStatSchemaInvalido)
+            _logger.LogError(
+                "SEFAZ rejeitou NFC-e {NotaId} com cStat 225. XML exato enviado: {XmlEnvio}",
+                nota.Id, resposta.XmlEnvio);
 
         await _db.SaveChangesAsync();
 
         // Rejeição não inutiliza automaticamente: o XML pode ser corrigido e
         // retransmitido com o mesmo nNF/cNF. Inutilização fica no fluxo explícito de
         // abandono de número/faixa, com justificativa do responsável fiscal.
+    }
+
+    /// <summary>
+    /// A resposta da autorização se perdeu (RES-001). Marca o estado como incerto
+    /// — que é o que se sabe — e consulta a chave para descobrir o destino real do
+    /// documento. Só depois disso o fluxo pode seguir para contingência.
+    /// </summary>
+    private async Task TratarResultadoIncertoAsync(
+        NotaFiscalEmitida nota, DadosEmissao? dados, NfeDocumento nfe,
+        ConfiguracaoServico cfgServico, X509Certificate2 certificado,
+        string? qrCodeUrl, bool jaEmContingencia, Exception causa)
+    {
+        nota.Status = NotaFiscalStatus.ResultadoIncerto;
+        nota.ResultadoIncertoEm ??= DateTime.UtcNow;
+        nota.MotivoRejeicao =
+            "A resposta da SEFAZ não chegou depois da transmissão. O documento pode ter sido autorizado — " +
+            "a chave está sendo consultada antes de qualquer nova emissão para esta venda.";
+        await _db.SaveChangesAsync();
+
+        _logger.LogWarning(causa,
+            "NFC-e {NotaId} (chave {Chave}): resposta da autorização perdida. Consultando a SEFAZ antes de " +
+            "decidir o destino do documento.", nota.Id, nota.ChaveAcesso);
+
+        var situacao = ConsultarChaveComTolerancia(cfgServico, certificado, nota.ChaveAcesso!);
+        if (situacao is null)
+        {
+            _logger.LogError(
+                "NFC-e {NotaId} (chave {Chave}) permanece com resultado incerto: a SEFAZ também não respondeu " +
+                "à consulta da chave. Nenhum documento novo será emitido para esta venda enquanto isso — o " +
+                "reprocessamento automático volta a consultar.", nota.Id, nota.ChaveAcesso);
+            return;
+        }
+
+        await AplicarSituacaoConsultadaAsync(
+            nota, dados, nfe, situacao, qrCodeUrl, jaEmContingencia, causa);
+    }
+
+    /// <summary>
+    /// Traduz a situação que a SEFAZ informou para a chave no destino local do
+    /// documento. Devolve <c>true</c> quando a nota fica liberada para uma nova
+    /// transmissão (a chave consultada não produziu documento nenhum lá).
+    /// </summary>
+    private async Task<bool> AplicarSituacaoConsultadaAsync(
+        NotaFiscalEmitida nota, DadosEmissao? dados, NfeDocumento nfe,
+        RespostaConsultaChaveNfce situacao, string? qrCodeUrl, bool jaEmContingencia, Exception? causa)
+    {
+        switch (situacao.CStat)
+        {
+            case CStatAutorizada when situacao.Protocolo is not null:
+                AplicarAutorizacao(nota, nfe, situacao.Protocolo, qrCodeUrl);
+                await _db.SaveChangesAsync();
+                _logger.LogWarning(
+                    "NFC-e {NotaId}: a SEFAZ havia autorizado o documento (protocolo {Protocolo}) — só a resposta " +
+                    "se perdeu. Protocolo recuperado pela consulta; nenhum documento adicional foi emitido.",
+                    nota.Id, nota.Protocolo);
+                return false;
+
+            case CStatNaoConsta:
+                // A SEFAZ não tem nada sob esta chave: a transmissão realmente não
+                // completou. Só com essa confirmação a alternativa offline é segura.
+                if (jaEmContingencia)
+                {
+                    VoltarParaContingencia(nota);
+                    await _db.SaveChangesAsync();
+                    _logger.LogWarning(
+                        "NFC-e {NotaId}: retransmissão do documento de contingência não chegou à SEFAZ " +
+                        "(chave não consta). Segue em contingência para nova tentativa.", nota.Id);
+                    return true;
+                }
+
+                if (dados is null)
+                {
+                    // Resolução fora do fluxo de venda (reprocessamento): a nota volta
+                    // a ser pendente e a próxima transmissão reusa o mesmo número/cNF —
+                    // a contingência é resposta para a hora da venda, não para o retry.
+                    nota.Status         = NotaFiscalStatus.PendenteEmissao;
+                    nota.MotivoRejeicao = null;
+                    LimparTentativaEmAberto(nota);
+                    await _db.SaveChangesAsync();
+                    _logger.LogInformation(
+                        "NFC-e {NotaId}: a SEFAZ confirmou que a chave não consta na base dela. A tentativa " +
+                        "anterior não produziu documento; a nota volta a pendente para nova transmissão.", nota.Id);
+                    return true;
+                }
+
+                await IniciarContingenciaOfflineAsync(
+                    nota, dados, "consulta confirmou que a chave não consta na base da SEFAZ", causa);
+                return false;
+
+            case var cStat when EhDenegada(cStat):
+                AplicarRejeicao(
+                    nota,
+                    situacao.Motivo ?? $"Documento denegado pela SEFAZ (cStat {situacao.CStat}).",
+                    jaEmContingencia);
+                await _db.SaveChangesAsync();
+                return false;
+
+            default:
+                nota.MotivoRejeicao =
+                    $"Consulta da chave devolveu cStat {situacao.CStat}: {situacao.Motivo}. " +
+                    "A situação do documento na SEFAZ ainda não é conclusiva.";
+                await _db.SaveChangesAsync();
+                _logger.LogError(
+                    "NFC-e {NotaId} (chave {Chave}): consulta inconclusiva (cStat {CStat} — {Motivo}).",
+                    nota.Id, nota.ChaveAcesso, situacao.CStat, situacao.Motivo);
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Reabre uma nota que ficou em <see cref="NotaFiscalStatus.ResultadoIncerto"/>
+    /// e tenta fechar o destino dela consultando a chave persistida (RES-001).
+    ///
+    /// Devolve <c>true</c> somente quando a SEFAZ confirmou que nada existe sob
+    /// aquela chave — a única situação em que transmitir de novo não corre o
+    /// risco de duplicar um documento já autorizado.
+    /// </summary>
+    private async Task<bool> ResolverResultadoIncertoPersistidoAsync(NotaFiscalEmitida nota)
+    {
+        if (string.IsNullOrWhiteSpace(nota.ChaveAcesso) || string.IsNullOrWhiteSpace(nota.XmlTentativa))
+        {
+            _logger.LogError(
+                "NFC-e {NotaId} está com resultado incerto sem chave ou sem o XML transmitido — não há o que " +
+                "consultar automaticamente. Exige verificação no portal da SEFAZ antes de qualquer nova emissão.",
+                nota.Id);
+            return false;
+        }
+
+        NfeDocumento nfe;
+        try
+        {
+            nfe = FuncoesXml.XmlStringParaClasse<NfeDocumento>(nota.XmlTentativa);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "NFC-e {NotaId}: XML da tentativa em aberto está ilegível; a autorização não poderia ser " +
+                "reconstruída nem que a consulta confirmasse. Exige verificação manual.", nota.Id);
+            return false;
+        }
+
+        var (_, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
+        using var _certDispose = certificado;
+
+        var situacao = ConsultarChaveComTolerancia(cfgServico, certificado, nota.ChaveAcesso);
+        if (situacao is null) return false;
+
+        return await AplicarSituacaoConsultadaAsync(
+            nota, dados: null, nfe, situacao,
+            qrCodeUrl: null, jaEmContingencia: nota.DhContingencia.HasValue, causa: null);
+    }
+
+    /// <summary>
+    /// Consulta a situação da chave sem deixar a falha da consulta derrubar o
+    /// fluxo: não conseguir perguntar não é resposta, e o estado incerto se
+    /// mantém até alguém conseguir perguntar.
+    /// </summary>
+    private RespostaConsultaChaveNfce? ConsultarChaveComTolerancia(
+        ConfiguracaoServico cfgServico, X509Certificate2 certificado, string chave)
+    {
+        // A consulta vai sempre ao webservice normal da UF, mesmo quando a
+        // tentativa era offline: a contingência muda como o documento é emitido,
+        // não onde a chave é consultada.
+        cfgServico.tpEmis = TipoEmissao.teNormal;
+        try
+        {
+            return _sefaz.ConsultarChave(cfgServico, certificado, chave);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Consulta da chave {Chave} na SEFAZ falhou — a situação do documento continua desconhecida.", chave);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Entra em contingência offline: fixa os dados imutáveis do documento e
+    /// remonta como tpEmis=9. Só deve ser chamado quando se sabe que a SEFAZ não
+    /// processou a tentativa anterior.
+    /// </summary>
+    private async Task IniciarContingenciaOfflineAsync(
+        NotaFiscalEmitida nota, DadosEmissao dados, string motivo, Exception? causa)
+    {
+        nota.DhContingencia            = DateTime.UtcNow;
+        nota.EmitidoEm               ??= nota.DhContingencia;
+        nota.JustificativaContingencia = "Sem comunicação com o webservice da SEFAZ no momento da venda.";
+        nota.MotivoRejeicao            = null;
+        LimparTentativaEmAberto(nota);
+        await _db.SaveChangesAsync();
+
+        _logger.LogWarning(causa,
+            "NFC-e {NotaId}: {Motivo}; reconstruindo documento em contingência offline.", nota.Id, motivo);
+
+        await TransmitirAsync(nota, dados);
+    }
+
+    /// <summary>Registra a tentativa que está prestes a ser transmitida.</summary>
+    private static void RegistrarTentativa(NotaFiscalEmitida nota, string chave, NfeDocumento nfe)
+    {
+        nota.ChaveAcesso  = chave;
+        nota.TentativaId  = Guid.NewGuid();
+        nota.XmlTentativa = FuncoesXml.ClasseParaXmlString(nfe);
+    }
+
+    private static void LimparTentativaEmAberto(NotaFiscalEmitida nota)
+    {
+        nota.TentativaId        = null;
+        nota.XmlTentativa       = null;
+        nota.ResultadoIncertoEm = null;
+    }
+
+    /// <summary>Documento offline continua válido: volta ao estado de contingência
+    /// aguardando retransmissão, sem descartar o XML entregue ao consumidor.</summary>
+    private static void VoltarParaContingencia(NotaFiscalEmitida nota)
+    {
+        nota.Status         = NotaFiscalStatus.AutorizadaContingencia;
+        nota.MotivoRejeicao = null;
+        LimparTentativaEmAberto(nota);
+    }
+
+    private void AplicarAutorizacao(
+        NotaFiscalEmitida nota, NfeDocumento nfe, NFe.Classes.Protocolo.protNFe protocolo, string? qrCodeUrl)
+    {
+        var infProt = protocolo.infProt;
+
+        nota.Status         = NotaFiscalStatus.Autorizada;
+        nota.ChaveAcesso    = infProt.chNFe ?? nota.ChaveAcesso;
+        nota.Protocolo      = infProt.nProt;
+        nota.AutorizadoEm   = DateTime.UtcNow;
+        // Se veio de contingência, EmitidoEm já é o momento real da venda — não pisa nele
+        // com o momento da confirmação tardia da SEFAZ.
+        nota.EmitidoEm    ??= DateTime.UtcNow;
+        nota.XmlAutorizado  = MontarNfeProcXml(nfe, protocolo);
+        // A partir daqui o documento fiscal é o nfeProc autorizado. O XML de
+        // contingência já cumpriu seu papel (foi entregue e retransmitido) e
+        // deixa de ser fonte do DANFE — mantê-lo seria uma segunda via
+        // possível do mesmo documento.
+        nota.XmlContingencia = null;
+        if (!string.IsNullOrWhiteSpace(qrCodeUrl))
+            nota.UrlQrCode  = qrCodeUrl;
+        nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
+        // F13: se esta nota foi Rejeitada antes (número anterior inutilizado
+        // automaticamente) e agora autoriza com um número NOVO, os campos de
+        // inutilização do número antigo não fazem mais sentido aqui — sem isso a nota
+        // fica com estado contraditório ("Autorizada" mas mostrando "inutilizado em X").
+        nota.InutilizadoEm         = null;
+        nota.ProtocoloInutilizacao = null;
+        LimparTentativaEmAberto(nota);
+    }
+
+    private static void AplicarRejeicao(NotaFiscalEmitida nota, string motivo, bool jaEmContingencia)
+    {
+        nota.Status         = NotaFiscalStatus.Rejeitada;
+        nota.MotivoRejeicao = motivo;
+        LimparTentativaEmAberto(nota);
+
+        // F5: rejeição de uma nota que estava em contingência (retransmissão alcançou a
+        // SEFAZ, mas foi rejeitada por motivo de negócio) inutiliza o número atual — sem
+        // limpar os campos de contingência, o PRÓXIMO reprocessamento veria jaEmContingencia
+        // ainda true e tentaria reusar esse MESMO número já inutilizado, num loop que só
+        // erra. Limpa aqui pra o próximo TransmitirAsync reservar um número novo do zero
+        // (nota.Numero/Serie continuam documentando qual número foi inutilizado, só os
+        // campos de reconstrução de chave de contingência são limpos).
+        if (!jaEmContingencia) return;
+
+        nota.CnfContingencia           = null;
+        nota.DhContingencia            = null;
+        nota.JustificativaContingencia = null;
+        // A retransmissão foi rejeitada por regra de negócio: aquele
+        // documento offline não vira nota válida. O próximo TransmitirAsync
+        // reserva número novo e monta um documento novo, então o XML antigo
+        // não deve sobreviver como fonte de DANFE.
+        nota.XmlContingencia           = null;
     }
 
     /// <summary>
@@ -1363,51 +1760,40 @@ public class NfceEmissionService : INfceEmissionService
             return;
         }
 
-        using var servico = new ServicosNFe(cfgServico, certificado);
-        RetornoNFeAutorizacao retorno;
+        // A tentativa em aberto aponta para o mesmo documento offline: é ele que
+        // está na rede e é a chave dele que se consulta se a resposta se perder.
+        nota.TentativaId  = Guid.NewGuid();
+        nota.XmlTentativa = nota.XmlContingencia;
+        await _db.SaveChangesAsync();
+
+        RespostaAutorizacaoNfce resposta;
         try
         {
-            retorno = servico.NFeAutorizacao(1, IndicadorSincronizacao.Sincrono, new List<NfeDocumento> { nfe }, false);
+            resposta = _sefaz.Autorizar(cfgServico, certificado, nfe);
         }
         catch (Exception ex) when (EhFalhaDeConectividade(ex))
         {
+            if (ClassificarFalhaDeTransmissao(ex) == DestinoTentativa.Incerto)
+            {
+                // Retransmissão sem resposta: a SEFAZ pode ter autorizado o documento
+                // offline. Descobrir isso é o que impede a nota de ficar presa em
+                // contingência (e vencer o prazo legal) por uma autorização que existe.
+                await TratarResultadoIncertoAsync(
+                    nota, dados: null, nfe, cfgServico, certificado,
+                    qrCodeUrl: null, jaEmContingencia: true, causa: ex);
+                return;
+            }
+
             _logger.LogWarning(ex,
                 "NFC-e {NotaId} (em contingência desde {DhContingencia:o}) ainda não conseguiu retransmitir — " +
                 "SEFAZ continua inalcançável.", nota.Id, nota.DhContingencia);
+            LimparTentativaEmAberto(nota);
+            await _db.SaveChangesAsync();
             return;
         }
 
-        var protInfo = retorno.Retorno?.protNFe?.infProt;
-        if (protInfo is not null && protInfo.cStat == 100)
-        {
-            nota.Status          = NotaFiscalStatus.Autorizada;
-            nota.ChaveAcesso     = protInfo.chNFe ?? nota.ChaveAcesso;
-            nota.Protocolo       = protInfo.nProt;
-            nota.AutorizadoEm    = DateTime.UtcNow;
-            // EmitidoEm é o momento real da venda offline — não pisa nele com o
-            // instante da confirmação tardia (mesma regra do caminho normal).
-            nota.EmitidoEm     ??= DateTime.UtcNow;
-            nota.XmlAutorizado   = MontarNfeProcXml(nfe, retorno.Retorno!.protNFe);
-            // O nfeProc autorizado passa a ser a fonte do DANFE; o XML offline
-            // cumpriu seu papel.
-            nota.XmlContingencia = null;
-            nota.MotivoRejeicao  = null;
-        }
-        else
-        {
-            // Rejeição de negócio na retransmissão: o documento offline não vira
-            // nota válida. Limpa os campos de reconstrução de contingência para o
-            // próximo reprocessamento montar um documento novo do zero (mesma
-            // lógica de F5 no caminho normal).
-            nota.Status                    = NotaFiscalStatus.Rejeitada;
-            nota.MotivoRejeicao            = protInfo?.xMotivo ?? retorno.RetornoStr ?? "SEFAZ não retornou motivo.";
-            nota.CnfContingencia           = null;
-            nota.DhContingencia            = null;
-            nota.JustificativaContingencia = null;
-            nota.XmlContingencia           = null;
-        }
-
-        await _db.SaveChangesAsync();
+        await ProcessarRespostaAutorizacaoAsync(
+            nota, nfe, resposta, cfgServico, certificado, qrCodeUrl: null, jaEmContingencia: true);
     }
 
     private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal) =>

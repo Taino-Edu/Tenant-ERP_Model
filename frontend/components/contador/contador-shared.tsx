@@ -65,6 +65,8 @@ export const STATUS_NOTA_TONE: Record<string, BadgeTone> = {
   PendenteEmissao:        'warning',
   Cancelada:              'danger',
   Rejeitada:              'danger',
+  // Documento transmitido cujo destino na SEFAZ ainda não é conhecido (RES-001).
+  ResultadoIncerto:       'warning',
 }
 
 /** Cabeçalho de seção dentro de uma aba — título, subtítulo e ações à direita. */

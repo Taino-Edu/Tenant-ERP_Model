@@ -91,7 +91,9 @@ public class FiscalController : ControllerBase
         int Contagem24h(NotaFiscalStatus s) => notas24h.FirstOrDefault(x => x.Status == s)?.Count ?? 0;
 
         var pendentesQuery = _db.NotasFiscaisEmitidas.Where(n =>
-            n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia);
+            n.Status == NotaFiscalStatus.PendenteEmissao ||
+            n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+            n.Status == NotaFiscalStatus.ResultadoIncerto);
         var pendentesCount = await pendentesQuery.CountAsync(ct);
         var pendenteMaisAntiga = pendentesCount > 0
             ? await pendentesQuery.OrderBy(n => n.CreatedAt).Select(n => n.CreatedAt).FirstAsync(ct)
@@ -545,7 +547,9 @@ public class FiscalController : ControllerBase
         // (pendentes de verdade + em contingência aguardando retransmissão) e há quanto
         // tempo a mais antiga está parada — sinal de que algo precisa de atenção.
         var pendentesQuery = _db.NotasFiscaisEmitidas.Where(n =>
-            n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia);
+            n.Status == NotaFiscalStatus.PendenteEmissao ||
+            n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+            n.Status == NotaFiscalStatus.ResultadoIncerto);
         var pendentesCount = await pendentesQuery.CountAsync();
         var pendenteMaisAntiga = pendentesCount > 0
             ? await pendentesQuery.OrderBy(n => n.CreatedAt).Select(n => n.CreatedAt).FirstAsync()

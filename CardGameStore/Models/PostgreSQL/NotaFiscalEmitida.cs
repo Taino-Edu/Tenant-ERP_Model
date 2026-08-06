@@ -25,6 +25,18 @@ public enum NotaFiscalStatus
     /// inalcançável — já vale pro cliente (cupom liberado), mas ainda precisa ser
     /// retransmitida à SEFAZ (o retry automático faz isso) pra virar Autorizada de fato.</summary>
     AutorizadaContingencia,
+
+    /// <summary>
+    /// O documento foi transmitido e a resposta se perdeu (RES-001). Não se sabe
+    /// se a SEFAZ autorizou: presumir falha e emitir outro documento pela mesma
+    /// venda é o que produz duas NFC-e para um único fato gerador.
+    ///
+    /// Estado transitório e resolvível: a consulta da chave original decide o
+    /// destino (autorizada, rejeitada ou inexistente na base da SEFAZ). Enquanto
+    /// não resolve, o número está reservado e NÃO pode ser inutilizado nem
+    /// reaproveitado, e a venda de origem não pode ser editada.
+    /// </summary>
+    ResultadoIncerto,
 }
 
 /// <summary>
@@ -182,6 +194,28 @@ public class NotaFiscalEmitida
     /// <summary>Justificativa (xJust) da entrada em contingência, exigida pela SEFAZ.</summary>
     [Column("justificativa_contingencia")]
     public string? JustificativaContingencia { get; set; }
+
+    // ── Tentativa em aberto e resultado incerto (RES-001) ──────────────────────
+    // Gravados ANTES de o documento sair pela rede. Se a resposta se perder, é
+    // por estes campos que se descobre o que foi enviado e qual chave consultar
+    // na SEFAZ — sem eles, "não recebi resposta" e "não foi enviado" seriam
+    // indistinguíveis e a única saída seria emitir um segundo documento.
+
+    /// <summary>Identificador da tentativa de transmissão em aberto. Muda a cada
+    /// envio e é limpo quando o destino do documento fica conhecido.</summary>
+    [Column("tentativa_id")]
+    public Guid? TentativaId { get; set; }
+
+    /// <summary>XML assinado exatamente como foi transmitido na tentativa em aberto.
+    /// É o que permite montar o <c>nfeProc</c> quando a autorização é recuperada
+    /// depois, por consulta da chave, em vez de remontar o documento.</summary>
+    [Column("xml_tentativa")]
+    public string? XmlTentativa { get; set; }
+
+    /// <summary>Momento (UTC) em que a resposta da SEFAZ se perdeu e a nota entrou
+    /// em <see cref="NotaFiscalStatus.ResultadoIncerto"/>.</summary>
+    [Column("resultado_incerto_em")]
+    public DateTime? ResultadoIncertoEm { get; set; }
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

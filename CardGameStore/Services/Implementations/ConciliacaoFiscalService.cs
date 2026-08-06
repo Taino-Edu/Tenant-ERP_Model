@@ -170,6 +170,10 @@ public class ConciliacaoFiscalService : IConciliacaoFiscalService
             NotaFiscalStatus.Autorizada             => SituacaoFiscalVenda.Autorizada,
             NotaFiscalStatus.AutorizadaContingencia => SituacaoFiscalVenda.EmContingencia,
             NotaFiscalStatus.PendenteEmissao        => SituacaoFiscalVenda.Pendente,
+            // Resultado incerto (RES-001) é pendência: existe documento transmitido
+            // cujo destino ainda não se conhece. Conta como venda a acompanhar, não
+            // como venda documentada.
+            NotaFiscalStatus.ResultadoIncerto        => SituacaoFiscalVenda.Pendente,
             NotaFiscalStatus.Rejeitada              => SituacaoFiscalVenda.Rejeitada,
             NotaFiscalStatus.Cancelada              => SituacaoFiscalVenda.NotaCancelada,
             _                                       => SituacaoFiscalVenda.Pendente,

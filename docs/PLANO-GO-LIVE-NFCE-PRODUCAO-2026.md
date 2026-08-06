@@ -2104,3 +2104,94 @@ mas não sabe quem decidiu. Fica como continuação natural, junto de CON-002
 
 `dotnet test` — **588 aprovados, 0 falhas** (eram 572; +16). Frontend:
 `npm run build` concluído.
+
+## 32. RES-001 concluído — resultado incerto da autorização — 06/08/2026
+
+### 32.1 O buraco
+
+`TransmitirAsync` tratava **qualquer** falha de rede como "a SEFAZ não recebeu":
+o `catch` de conectividade remontava o documento como `tpEmis=9` e entregava um
+cupom de contingência na hora.
+
+Isso é correto quando a conexão nem se estabeleceu. É errado quando a requisição
+chegou, a SEFAZ autorizou e **a resposta** é que se perdeu — o caso do timeout.
+Nessa hipótese a venda termina com dois documentos fiscais: o autorizado que
+ficou na SEFAZ (com a chave da tentativa normal) e o offline que o consumidor
+levou (com outra chave, porque `tpEmis` entra no cálculo da chave). Nenhum
+relatório local acusaria o primeiro — ele nunca foi registrado aqui.
+
+A mesma presunção aparecia na **duplicidade**: `cStat 204` é a SEFAZ dizendo
+"essa chave já existe na minha base". O código registrava rejeição local,
+transformando uma nota autorizada de verdade em rejeitada só do nosso lado.
+
+### 32.2 A distinção que resolve
+
+Falha de rede deixou de ser um caso só. `ClassificarFalhaDeTransmissao` separa:
+
+| Classificação | Evidência | Conduta |
+|---|---|---|
+| `NuncaChegou` | DNS não resolveu, conexão recusada, rede inalcançável | contingência offline imediata — é para isso que ela existe |
+| `Incerto` | timeout, conexão derrubada no meio, **qualquer falha não classificada** | consulta a chave antes de decidir |
+
+O default é `Incerto` de propósito: só se afirma que o documento não chegou
+quando há evidência disso. Presumir o contrário é barato de escrever e caro de
+corrigir — quando alguém percebe, a nota duplicada já está autorizada na SEFAZ.
+
+### 32.3 A máquina de estados
+
+Novo status `ResultadoIncerto` e três colunas gravadas **antes** de o documento
+sair pela rede (`chave_acesso`, `tentativa_id`, `xml_tentativa`), mais
+`resultado_incerto_em`. Sem elas, "não recebi resposta" e "não foi enviado"
+seriam indistinguíveis depois de um restart.
+
+Perdida a resposta, a chave é consultada e a SEFAZ decide o destino:
+
+| Consulta | Destino |
+|---|---|
+| `100` autorizada | recupera o protocolo e monta o `nfeProc` a partir do XML transmitido — **nenhum documento novo** |
+| `217` não consta | a transmissão não completou: aí sim contingência (na venda) ou nova tentativa (no reprocessamento), com o **mesmo número e cNF** |
+| `110/301/302/303` denegada | rejeição, destino final |
+| consulta indisponível | segue `ResultadoIncerto`; o retry automático volta a consultar |
+
+Enquanto o destino for desconhecido: nenhum documento novo é montado para aquela
+venda, o número reservado **não pode ser inutilizado** (`InutilizarFaixaAsync`
+bloqueia) e a venda avulsa de origem **não pode ser editada** — ela pode já ter
+um documento autorizado com aqueles valores.
+
+### 32.4 A fronteira que tornou isso testável
+
+`INfceSefazGateway` isola autorização e consulta de chave. Não havia como
+encenar "a SEFAZ autorizou e a resposta caiu" com a chamada da lib embutida no
+método; agora há. É a primeira vez que a suíte exercita a transmissão inteira —
+montagem, assinatura, QR Code e resposta — em vez de parar no pré-voo.
+
+### 32.5 Entregue
+
+- `NotaFiscalStatus.ResultadoIncerto` + migration `AddResultadoIncertoNfce`;
+- `INfceSefazGateway`/`NfceSefazGateway` e injeção no motor;
+- classificação da falha, consulta da chave e resolução tardia no
+  reprocessamento (automático e manual);
+- duplicidade resolvida por consulta em vez de rejeição local;
+- retransmissão de contingência sob a mesma máquina de estados;
+- conciliação, painel do admin, portal do contador e retry automático cientes do
+  novo estado;
+- **15 testes**, incluindo o aceite literal do plano.
+
+**Aceite do plano atendido:** *"no teste 'SEFAZ autorizou e a resposta caiu',
+termina existindo exatamente uma NFC-e autorizada, com a mesma chave nos dois
+lados"* — `Emissao_SefazAutorizouEARespostaCaiu_RecuperaProtocoloSemEmitirOutroDocumento`.
+
+### 32.6 O que RES-001 não cobre
+
+A consulta acontece na transmissão e a cada ciclo de reprocessamento (15 min).
+**Não há alerta imediato** ao operador quando uma nota entra em resultado
+incerto — o plano pede isso em CON-002 ("resultado incerto: imediato"), que
+segue pendente. Hoje o sinal é o log e a nota aparecendo no painel.
+
+Nada aqui substitui a homologação: o comportamento contra a SEFAZ real, com
+timeout real, é item da matriz HOM-001 (linha 9).
+
+### 32.7 Validação
+
+`dotnet test` — **603 aprovados, 0 falhas** (eram 588; +15). Frontend:
+`npm run build` concluído.
