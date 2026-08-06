@@ -1,11 +1,22 @@
-using CardGameStore.Data;
+﻿using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Services.Implementations;
 
-/// <summary>Atualiza diariamente as tabelas IBPT de cada tenant fiscal sem misturar schemas.</summary>
+/// <summary>
+/// IBPT-002 — o único lugar do sistema que conversa com o IBPT.
+///
+/// Antes, a rede estava no caminho do usuário: cadastrar produto e clicar em
+/// "sincronizar" disparavam consultas HTTP com 15s de timeout cada, dentro da
+/// requisição. Catálogo grande com API lenta não terminava, e o usuário via 500.
+///
+/// Agora este job popula a tabela local uma vez por dia, e o cadastro só lê. O
+/// tempo que a integração leva deixou de ser problema de ninguém: aqui não há
+/// tela esperando, e a falha de um NCM não invalida os outros nem a tabela de
+/// ontem.
+/// </summary>
 public sealed class IbptSyncBackgroundService : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
@@ -49,6 +60,11 @@ public sealed class IbptSyncBackgroundService : BackgroundService
         if (cfg is null || !cfg.IbptAutoSyncEnabled || !cfg.IbptConfigurado) return;
         if (cfg.IbptUltimaSincronizacao is { } ultima && ultima > DateTime.UtcNow.AddHours(-24)) return;
 
-        await sp.GetRequiredService<IbptTaxService>().SincronizarTodosAsync(ct);
+        var ibpt = sp.GetRequiredService<IbptTaxService>();
+
+        // Primeiro a rede (popula/renova a tabela local), depois a aplicação nos
+        // produtos — nesta ordem, o catálogo já aproveita o que acabou de chegar.
+        await ibpt.AtualizarTabelaLocalAsync(ct);
+        await ibpt.AplicarTabelaLocalAsync(ct);
     }
 }

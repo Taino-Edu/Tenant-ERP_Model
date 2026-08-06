@@ -229,7 +229,10 @@ public class FiscalController : ControllerBase
     {
         try
         {
-            var resultado = await _ibpt.SincronizarTodosAsync(ct);
+            // IBPT-002: o botao passa a reaplicar a tabela LOCAL. Sem rede, entao
+            // nao ha timeout a estourar nem com catalogo grande -- quem conversa com
+            // o IBPT e o job diario.
+            var resultado = await _ibpt.AplicarTabelaLocalAsync(ct);
             await _audit.LogAsync(
                 "SincronizouTributosIbpt", "Product",
                 details: $"atualizados={resultado.Atualizados}; manuais_preservados={resultado.IgnoradosManuais}; falhas={resultado.Falhas}",

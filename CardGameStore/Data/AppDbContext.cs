@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // AppDbContext.cs — Contexto do Entity Framework Core (PostgreSQL)
 // Configura mapeamentos, índices, conversões e seeds iniciais.
 // =============================================================================
@@ -61,6 +61,7 @@ public class AppDbContext : DbContext
     public DbSet<NotaFiscalEmitida>  NotasFiscaisEmitidas { get; set; }
     public DbSet<InutilizacaoFiscal> InutilizacoesFiscais  { get; set; }
     public DbSet<AlertaFiscal>       AlertasFiscais       { get; set; }
+    public DbSet<IbptTabelaEntry>    IbptTabela           { get; set; }
 
     // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
     public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
@@ -252,6 +253,18 @@ public class AppDbContext : DbContext
             entity.HasIndex(i => new { i.Ano, i.Serie, i.NumeroInicial, i.NumeroFinal })
                   .IsUnique()
                   .HasDatabaseName("ix_inutilizacoes_fiscais_faixa");
+        });
+
+        // =====================================================================
+        // TABELA IBPT LOCAL (IBPT-002)
+        // =====================================================================
+        modelBuilder.Entity<IbptTabelaEntry>(entity =>
+        {
+            // A chave natural é o que o lookup do cadastro de produto usa. Única
+            // para o upsert do job diário não duplicar linha a cada execução.
+            entity.HasIndex(e => new { e.Ncm, e.Uf, e.Importado })
+                  .IsUnique()
+                  .HasDatabaseName("ix_ibpt_tabela_ncm_uf_origem");
         });
 
         // =====================================================================

@@ -339,7 +339,7 @@ Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi fei
   totais federal/estadual/municipal.
 - Importação/exportação CSV inclui CEST, percentuais e fonte.
 
-### IBPT-002 — tabela local diária no lugar da consulta por produto — aberto em 2026-08-06
+### IBPT-002 — tabela local diária no lugar da consulta por produto — implementado em 2026-08-06
 
 **Motivador:** o `POST /api/fiscal/ibpt/sincronizar` derrubou com 500 em produção
 (trace `0HNNI4IMEL3EK:00000001`) porque a API do IBPT não respondeu em 15s. O
@@ -391,6 +391,21 @@ a API do IBPT fora do ar por um dia não impede cadastrar produto nem emitir.
 **Não fazer junto:** trocar o provedor de cálculo (ver a lista de candidatos
 abaixo). Este cartão é sobre COMO a mesma informação chega, não sobre trocar a
 fonte.
+
+**Implementado — e as duas perguntas abertas deixaram de bloquear.** A tabela
+local é construída pela API que já usamos (`apidoni.ibpt.org.br`), consultada por
+NCM distinto pelo job diário, e não pelo download do arquivo do "De Olho no
+Imposto". Isso resolve o problema real — tirar a rede do caminho do usuário — sem
+depender de credencial nova nem de decisão de licenciamento: cada tenant continua
+usando o próprio token, e a tabela vive no schema dele.
+
+O download do arquivo em bloco continua sendo a evolução natural (uma requisição
+em vez de N), e as duas perguntas acima continuam valendo **para essa etapa**.
+Mas ela deixou de ser pré-requisito.
+
+Entregue: `IbptTabelaEntry` (chave `NCM + UF + origem`), `AtualizarTabelaLocalAsync`
+(job, único ponto de rede), `PreencherProdutoDaTabelaLocalAsync` (cadastro, sem
+rede) e `AplicarTabelaLocalAsync` (botão da tela, sem rede). 6 testes.
 
 ### Concluído em 2026-07-22 — preenchimento automático pela API IBPT
 
