@@ -31,6 +31,25 @@ em nenhum deles — o portal publica apenas os arquivos que mudaram. O conjunto 
 `PL_010e_v1.02/NFe/` é autossuficiente para validar uma `<NFe>` assinada, que é o
 que acontece antes de transmitir. Validar o lote exigiria o pacote base.
 
+## O que a lib procura, verificado empiricamente
+
+`NFe.Utils.Validacao.Validador` resolve o XSD pelo nome do serviço. Sondado em
+06/08/2026 contra estas pastas:
+
+| Serviço | Arquivo procurado | Situação |
+|---|---|---|
+| `RecepcaoEventoCancelmento` (sic, typo da lib) | `envEvento_v1.00.xsd` | ✅ presente em `PL_010d_v1.03/Evento/` — cancelamento é validado |
+| `NfeInutilizacao` | `inutNFe_v4.00.xsd` | ❌ **não publicado em nenhum pacote do portal** |
+| Eventos do RTC (`e112110`, `e211110`, …) | `eNNNNNN_v1.00.xsd` | presentes em `Eventos_RTC/`, para quando esses eventos forem implementados |
+
+Sobre a inutilização: foram conferidos `010e_v1.02`, `010d_v1.03`, `010d_v1.01`
+(o "PL Eventos e Cad Consulta Cadastro CCC"), `Eventos_RTC` e `DistDFe`. Todos
+trazem apenas `leiauteInutNFe_v4.00.xsd` e `procInutNFe_v4.00.xsd`. O arquivo que
+a lib exige simplesmente não é distribuído — não é caso de baixar o pacote certo.
+
+**Não fabrique esse XSD.** Um schema montado à mão validaria contra uma regra
+que não é a da SEFAZ, e validação fiscal errada é pior do que validação nenhuma.
+
 ## Ao atualizar
 
 1. baixe o novo pacote do portal e extraia numa pasta com o nome dele;

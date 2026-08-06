@@ -361,6 +361,47 @@ public class NfceSchemaValidacaoTests
     }
 
     [Fact]
+    public void LibEncontraOSchemaDoEventoDeCancelamento()
+    {
+        // O teste que importa de verdade no caminho do evento: não basta o
+        // arquivo existir, a LIB precisa resolvê-lo pelo nome que ela usa
+        // internamente. Se ela procurasse outro nome, apontar DiretorioSchemas
+        // faria o cancelamento FALHAR por schema ausente — trocaria uma
+        // validação que não existe por um cancelamento que não acontece.
+        //
+        // Com um XML propositalmente inválido, a lib só chega a reclamar do
+        // CONTEÚDO se tiver carregado o schema. "não foi possível localizar o
+        // arquivo" seria a falha que este teste existe para pegar.
+        var validador = new NfceSchemaValidator(NullLogger<NfceSchemaValidator>.Instance);
+
+        var act = () => NFe.Utils.Validacao.Validador.Valida(
+            NFe.Classes.Servicos.Tipos.ServicoNFe.RecepcaoEventoCancelmento,
+            DFe.Classes.Flags.VersaoServico.Versao400,
+            "<x/>", validarLote: false, pathSchema: validador.DiretorioEventos!);
+
+        act.Should().Throw<Exception>()
+            .Which.Message.Should().NotContain("localizar o arquivo",
+                "a lib precisa achar envEvento_v1.00.xsd na pasta que apontamos");
+    }
+
+    [Fact]
+    public void Inutilizacao_ContinuaSemValidacao_PorFaltaDeArtefato()
+    {
+        // Registro executável de uma limitação, não de uma escolha: a lib procura
+        // inutNFe_v4.00.xsd, e esse arquivo não é publicado em nenhum dos pacotes
+        // do portal (conferidos 010e_v1.02, 010d_v1.03, 010d_v1.01, Eventos RTC e
+        // DistDFe — todos trazem só leiauteInutNFe e procInutNFe).
+        //
+        // Se um dia o arquivo aparecer, este teste falha e avisa que dá para
+        // fechar a lacuna — que é melhor do que a lacuna virar folclore.
+        var pasta = Path.Combine(
+            AppContext.BaseDirectory, "Schemas", NfceSchemaValidator.PacoteEventos, "NFe");
+
+        File.Exists(Path.Combine(pasta, "inutNFe_v4.00.xsd")).Should().BeFalse(
+            "se este arquivo passou a existir, habilite ValidarSchemas em InutilizarFaixaAsync");
+    }
+
+    [Fact]
     public void SchemasDeEvento_SaoAutocontidos()
     {
         // A razão de o caminho da lib funcionar aqui e não na autorização: a pasta
