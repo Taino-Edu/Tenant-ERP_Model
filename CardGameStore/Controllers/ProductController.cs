@@ -118,7 +118,13 @@ public class ProductController : ControllerBase
         try { created = await _service.CreateAsync(product); }
         catch (ArgumentException ex) { return BadRequest(new { Message = ex.Message }); }
 
-        await _ibpt.TentarSincronizarProdutoAsync(created.Id, HttpContext.RequestAborted);
+        // Fire-and-forget: IBPT não deve bloquear a resposta ao usuário.
+        // O produto já está salvo no banco — a sincronização é melhor-esforço.
+        _ = Task.Run(async () =>
+        {
+            try { await _ibpt.TentarSincronizarProdutoAsync(created.Id); }
+            catch (Exception) { /* logado internamente pelo IbptTaxService */ }
+        });
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -138,7 +144,12 @@ public class ProductController : ControllerBase
         catch (ArgumentException ex)     { return BadRequest(new { Message = ex.Message }); }
         catch (KeyNotFoundException ex)  { return NotFound(new { Message = ex.Message }); }
 
-        await _ibpt.TentarSincronizarProdutoAsync(updated.Id, HttpContext.RequestAborted);
+        // Fire-and-forget: IBPT não deve bloquear a resposta ao usuário.
+        _ = Task.Run(async () =>
+        {
+            try { await _ibpt.TentarSincronizarProdutoAsync(updated.Id); }
+            catch (Exception) { /* logado internamente pelo IbptTaxService */ }
+        });
         return Ok(await _service.GetByIdAsync(updated.Id));
     }
 

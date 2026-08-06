@@ -18,6 +18,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- XML-002: os XSDs oficiais da SEFAZ precisam existir ao lado do binário no
+         contêiner — sem isso o NfceSchemaValidator degrada para "sem validação"
+         em produção, silenciosamente, e a barreira antes da transmissão some. -->
+    <Content Include="Schemas\**\*.xsd">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Entity Framework Core -->
     <PackageReference Include="ClosedXML" Version="0.105.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.10" />

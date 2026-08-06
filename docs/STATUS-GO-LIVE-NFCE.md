@@ -30,7 +30,7 @@ plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; 
 | **DAN-001** — DANFE do XML | ✅ | parser + DTO imutável + HTML no padrão do manual, alimentado só pelo XML; `ObterCupomAsync` lê o XML persistido. 25 testes de parser. | 25.3, 26, 27 |
 | **DAN-002** — verificação física | 👤 | impressão em 58/80 mm, leitura do QR em dois aparelhos, aceite fiscal. | 7 |
 | **RES-001** — resultado incerto | ✅ | falha de rede deixou de ser um caso só: "nunca chegou" vai para contingência, timeout vira `ResultadoIncerto` e consulta a chave antes de decidir; duplicidade adota o documento da SEFAZ em vez de rejeitar. Chave/XML/tentativa persistidos antes do envio; número protegido de inutilização. 15 testes com a SEFAZ atrás de interface. Timeout real fica na HOM-001. | 6, 32 |
-| **XML-002** — validação XSD | 🚧 | **bloqueado por artefato externo**: a lib tem `ValidarSchemas`/`DiretorioSchemas`, mas os XSDs oficiais não vêm no pacote nem existem no repo — é preciso baixar e versionar o pacote de schemas. | 9, 30.5 |
+| **XML-002** — validação XSD | ✅ | pacotes oficiais baixados e versionados em `CardGameStore/Schemas` com procedência; validação própria (`XmlSchemaSet`) porque os arquivos não podem ser achatados como o `DiretorioSchemas` da lib exige — `tiposBasico_v4.00.xsd` difere entre `Evento/` e `NFe/` no mesmo pacote. Roda depois de assinar e antes da contingência; reprovação vira rejeição local, nunca contingência nem retry infinito. O XML do motor passa nos 5 cenários. 13 testes. Falta o pacote base para validar o lote (`enviNFe`). | 9, 30.5, 35 |
 | **CON-001** — conciliação | ✅ | serviço parte das VENDAS e acha o documento de cada uma; expõe venda sem nota e divergência de valor; endpoints para lojista e contador + aba no portal. 16 testes. | 31 |
 | **CON-002** — alertas | ✅ | pendências reconciliadas do estado real (não disparos): as seis situações da seção 8, com severidade por idade, dedup pela chave do fato, resolução automática quando a condição some, responsável e confirmação auditável que reabre se o problema continua. Painel em Admin > Fiscal. 30 testes. Falta backup (é OPS-002) e registrar quem optou por não emitir (ver 31.4). | 8, 33 |
 | **REG-001** — regime normal | ✅ | totalizadores consolidam ICMS/ST/FCP/PIS/COFINS dos itens via getters polimórficos da lib; `ICMSTot` sem zeros fixos; emissão fora do Simples reaberta. 11 testes. **Não é aprovação fiscal** — falta XSD, homologação por CST e aceite do contador. | 30 |
@@ -54,10 +54,11 @@ Trabalho anterior à auditoria, já na mesma PR:
 ## Onde estamos
 
 **Fechado em código nesta maratona:** FIS-002, RES-002, XML-001, DAN-001,
-REG-001, CON-001, RES-001, CON-002, RTC-001.
+REG-001, CON-001, RES-001, CON-002, RTC-001, XML-002.
 
-**Não há mais cartão de go-live que dependa só de código.** XML-002 está
-bloqueado até o pacote de XSDs oficiais ser baixado e versionado no repositório.
+**Não há mais cartão de go-live que dependa só de código, e nenhum bloqueado por
+artefato externo.** Todos os cartões restantes dependem de pessoas: contador,
+loja ou homologação na SEFAZ.
 
 PDV-001 (operar com o enlace da loja fora do ar — seção 25.5) e o agente local de
 impressão continuam sendo decisão de produto, não pendência fiscal: a impressão
@@ -70,5 +71,5 @@ impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do co
 
 ## Suíte
 
-`dotnet test` — **658 aprovados, 0 falhas** (PostgreSQL descartável de
+`dotnet test` — **671 aprovados, 0 falhas** (PostgreSQL descartável de
 `tests/docker-compose.yml`). Frontend: `npm run build` concluído.

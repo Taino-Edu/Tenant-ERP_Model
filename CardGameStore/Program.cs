@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // Program.cs — Ponto de entrada e configuração central da aplicação
 // Padrão: Minimal API (.NET 8+), sem Startup.cs separado
 // =============================================================================
@@ -470,6 +470,9 @@ builder.Services.AddScoped<FiscalXmlExportService>();
 builder.Services.AddScoped<IApuracaoTributariaService, ApuracaoTributariaService>();
 builder.Services.AddScoped<IConciliacaoFiscalService, ConciliacaoFiscalService>();
 builder.Services.AddScoped<IAlertaFiscalService, AlertaFiscalService>();
+// XML-002: singleton porque o XmlSchemaSet é compilado uma vez e reusado — recompilar
+// o leiaute 4.00 a cada venda custaria caro à toa.
+builder.Services.AddSingleton<INfceSchemaValidator, NfceSchemaValidator>();
 builder.Services.AddScoped<IbptTaxService>();
 builder.Services.AddHostedService<IbptSyncBackgroundService>();
 builder.Services.AddScoped<IFiscalTaxEngine, ConfigurableFiscalTaxEngine>();
@@ -477,7 +480,9 @@ builder.Services.AddScoped<INfceEmissionService>(sp => new NfceEmissionService(
     sp.GetRequiredService<AppDbContext>(),
     sp.GetRequiredService<EncryptionService>(),
     sp.GetRequiredService<ILogger<NfceEmissionService>>(),
-    sp.GetRequiredService<IFiscalTaxEngine>()));
+    sp.GetRequiredService<IFiscalTaxEngine>(),
+    sefaz: null,
+    schemaValidator: sp.GetRequiredService<INfceSchemaValidator>()));
 builder.Services.AddHostedService<FiscalAlertBackgroundService>();
 builder.Services.AddHostedService<FiscalXmlExportBackgroundService>();
 builder.Services.AddHostedService<FiscalRetryBackgroundService>();

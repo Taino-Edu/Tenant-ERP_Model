@@ -24,7 +24,7 @@ public class FiscalControllerErrosTests
     // Só o serviço de emissão participa destes casos: as demais dependências não
     // são tocadas antes da exceção subir.
     private static FiscalController CreateController(Mock<INfceEmissionService> emissao) =>
-        new(null!, null!, emissao.Object, null!, null!, null!, null!, null!, null!, null!);
+        new(null!, null!, emissao.Object, null!, null!, null!, null!, null!, null!, null!, null!);
 
     private const string MensagemDeConfiguracao =
         "O identificador fiscal do estabelecimento não é um CNPJ válido para a SEFAZ.";

@@ -2411,3 +2411,121 @@ e `MontarIbsCbs_ComRegraHipoteticaDeOutraFaixa_ProduzOutroValor`.
 
 `dotnet test` — **658 aprovados, 0 falhas** (eram 633; +25). Frontend:
 `npm run build` concluído.
+
+## 35. XML-002 concluído — validação de schema antes da transmissão — 06/08/2026
+
+### 35.1 O bloqueio que era artefato externo
+
+O cartão estava 🚧 desde a auditoria: a lib expõe `ValidarSchemas`/`DiretorioSchemas`,
+mas os XSDs oficiais não vêm no pacote NuGet (verificado: `zeus.net.nfe.nfce`
+traz 7 DLLs e **zero** arquivos `.xsd`) nem existiam no repositório. O download é
+manual, do Portal Nacional, e ficou com o responsável pelo produto.
+
+Quatro pacotes baixados em 06/08/2026 e versionados em `CardGameStore/Schemas/`,
+com procedência registrada em `LEIA-ME.md`.
+
+### 35.2 Duas descobertas que mudaram o desenho
+
+**Os pacotes do portal são incrementais.** Não existe `enviNFe_v4.00.xsd` nem
+`procNFe_v4.00.xsd` em nenhum dos quatro — o portal publica só o que mudou. O
+conjunto de `PL_010e_v1.02/NFe/` é autossuficiente para validar uma `<NFe>`
+assinada, que é o que interessa antes de transmitir; validar o *lote* exigiria o
+pacote base.
+
+**Os arquivos não podem ser achatados num diretório único.**
+`tiposBasico_v4.00.xsd` tem conteúdo diferente entre `Evento/` e `NFe/` **dentro
+do mesmo pacote oficial 010d** (`11da7598…` vs `6021a5e7…`), e
+`tiposBasico_v1.03.xsd` tem três versões distintas entre os pacotes. A SEFAZ
+separa em subpastas porque não são intercambiáveis, e os `schemaLocation` internos
+são relativos.
+
+Isso decide a implementação: o `DiretorioSchemas` do DFe.NET espera um diretório
+achatado, o que sobrescreveria um arquivo pelo outro em silêncio. **Uma validação
+fiscal errada é pior do que validação nenhuma**, então `ValidarSchemas` continua
+`false` e a validação é feita por `NfceSchemaValidator`, com `XmlSchemaSet`, lendo
+cada pacote na sua própria pasta.
+
+### 35.3 Onde a validação entra
+
+Depois de assinar e montar o QR Code — a assinatura faz parte do documento que a
+SEFAZ valida — e **antes** do bloco que persiste a contingência. A posição não é
+detalhe: validar depois dele entregaria ao consumidor um cupom offline que jamais
+seria autorizado.
+
+### 35.4 Conduta na reprovação
+
+`SchemaInvalidoException` existe separada porque exige conduta distinta das outras
+duas falhas possíveis na transmissão:
+
+| Falha | Conduta | Por quê |
+|---|---|---|
+| SEFAZ inalcançável | contingência offline | o documento é válido; falta rede |
+| Resposta perdida | consulta a chave (RES-001) | pode haver documento autorizado |
+| **Schema inválido** | **rejeita localmente, sem transmitir** | não é rede, e retentar produz o mesmo XML inválido |
+
+A nota vira `Rejeitada` com o motivo em linguagem de leiaute. Não vira
+`PendenteEmissao`: o job de 15 minutos remontaria o mesmo documento inválido para
+sempre, e a venda ficaria em silêncio. Como rejeitada, aparece no painel do
+CON-002 com motivo e ação, e o número fica preservado para inutilização — que a
+detecção de lacuna de numeração cobra depois.
+
+### 35.5 Degradação honesta
+
+Sem o pacote versionado, `Disponivel` é falso, a emissão segue normalmente e a
+SEFAZ continua sendo a validadora final. O que não pode acontecer é o sistema
+**achar** que validou: o estado aparece como pendência não bloqueante em
+`GET /api/fiscal/saude` e como warning no log de inicialização.
+
+### 35.6 A prova que faltava
+
+O teste central não valida fixture: valida o `XmlTentativa` — o documento assinado
+exatamente como foi transmitido, que o RES-001 já persistia. Validar remontagem
+seria validar uma aproximação.
+
+As fixtures de `Fixtures/Nfce/` **não** servem para isso e falham por construção:
+foram escritas à mão para o parser do DANFE (que tolera campo ausente) e usam UF
+99 inexistente para não parecerem documento real.
+
+| Cenário validado contra o XSD oficial | Resultado |
+|---|---|
+| Emissão padrão (Simples, SP, consumidor identificado) | válido |
+| Com GTIN real em `cEAN`/`cEANTrib` (XML-001) | válido |
+| Pagamento dividido, dois `detPag` (FIS-002) | válido |
+| Produção, sem grupos IBS/CBS (RTC-001) | válido |
+| Homologação, com grupos IBS/CBS (RTC-001) | válido |
+
+Os dois últimos importam: provam que o leiaute do RTC que o RTC-001 monta é o que
+a SEFAZ espera, e que o documento sem os grupos também é válido enquanto a regra
+não os tornar obrigatórios.
+
+**13 testes**, incluindo os que provam que a validação não é decorativa (XML
+adulterado precisa ser reprovado), que a reprovação não vira contingência nem
+pendência, que o número é preservado, e que o binário publicado tem os XSDs ao
+lado — o modo de falha mais silencioso do cartão.
+
+### 35.7 O que XML-002 não cobre
+
+- **Validação do lote de envio** (`enviNFe`) e do `nfeProc`: falta o pacote base,
+  que o portal não publica junto dos incrementais.
+- **Eventos** (cancelamento, inutilização): os XSDs estão versionados
+  (`PL_010d_v1.03/Evento/`), mas a validação em runtime hoje cobre só a
+  autorização — que é onde se queima numeração.
+- A validação local **não substitui** a homologação: a SEFAZ recusa por regra de
+  negócio (cadastro, credenciamento, sequência) que nenhum XSD expressa.
+
+### 35.8 Achado de infraestrutura
+
+O banco de testes tinha **6883 schemas órfãos** de execuções interrompidas (1,4
+milhão de linhas em `pg_class`), o que fazia a query de catálogo do Npgsql estourar
+o timeout do handshake — a suíte inteira ficava inacessível com um erro que aponta
+para o lugar errado. Limpo.
+
+Na limpeza apareceu o segundo: `/dev/shm` do contêiner nos 64 MB padrão do Docker.
+Quando estoura, **qualquer conexão nova** passa a falhar com "could not resize
+shared memory segment: No space left on device", que parece disco cheio e não é.
+Corrigido em `tests/docker-compose.yml` (`shm_size: 512mb`), com o motivo
+registrado ao lado dos outros parâmetros que já estavam lá pela mesma razão.
+
+### 35.9 Validação
+
+`dotnet test` — **671 aprovados, 0 falhas** (eram 658; +13).

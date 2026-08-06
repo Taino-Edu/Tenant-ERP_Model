@@ -275,6 +275,7 @@ public class NfceEmissionService : INfceEmissionService
     private readonly ILogger<NfceEmissionService> _logger;
     private readonly IFiscalTaxEngine             _taxEngine;
     private readonly INfceSefazGateway            _sefaz;
+    private readonly INfceSchemaValidator         _schemaValidator;
 
     public NfceEmissionService(
         AppDbContext db, EncryptionService enc, ILogger<NfceEmissionService> logger)
@@ -282,13 +283,18 @@ public class NfceEmissionService : INfceEmissionService
 
     internal NfceEmissionService(
         AppDbContext db, EncryptionService enc, ILogger<NfceEmissionService> logger,
-        IFiscalTaxEngine taxEngine, INfceSefazGateway? sefaz = null)
+        IFiscalTaxEngine taxEngine, INfceSefazGateway? sefaz = null,
+        INfceSchemaValidator? schemaValidator = null)
     {
         _db     = db;
         _enc    = enc;
         _logger = logger;
         _taxEngine = taxEngine;
         _sefaz  = sefaz ?? new NfceSefazGateway();
+        // Sem validador injetado, o serviço carrega o pacote versionado sozinho —
+        // e degrada para "sem validação" se ele não estiver presente (XML-002).
+        _schemaValidator = schemaValidator ?? new NfceSchemaValidator(
+            new Microsoft.Extensions.Logging.Abstractions.NullLogger<NfceSchemaValidator>());
     }
 
     public async Task<NotaFiscalEmitida> EmitirParaComandaAsync(Guid comandaId) =>
@@ -837,6 +843,24 @@ public class NfceEmissionService : INfceEmissionService
             _logger.LogInformation(
                 "NFC-e {NotaId} anulada automaticamente — comanda de origem foi cancelada antes da transmissão.", nota.Id);
         }
+        catch (SchemaInvalidoException ex)
+        {
+            // XML-002: destino final, não pendência. Deixar como PendenteEmissao
+            // faria o job de 15 minutos remontar o MESMO XML inválido para sempre,
+            // e a venda ficaria em silêncio, sem documento e sem ninguém sabendo.
+            // Como Rejeitada, aparece no painel de alertas (CON-002) com motivo e
+            // ação, e o número fica preservado para inutilização.
+            nota.Status         = NotaFiscalStatus.Rejeitada;
+            nota.MotivoRejeicao =
+                $"Reprovada na validação de schema XSD (antes de transmitir à SEFAZ): {ex.Message}"
+                    [..Math.Min(ex.Message.Length + 62, 900)];
+            await _db.SaveChangesAsync();
+
+            _logger.LogError(
+                "NFC-e {NotaId} ({Origem}) reprovada no schema oficial e NÃO transmitida. " +
+                "Não é indisponibilidade da SEFAZ: corrigir o cadastro e reemitir, ou inutilizar o número {Numero}.",
+                nota.Id, nota.Origem, nota.Numero);
+        }
         catch (FiscalNaoConfiguradoException ex)
         {
             // Estado esperado enquanto o admin não termina de configurar — não é uma falha real.
@@ -1326,6 +1350,13 @@ public class NfceEmissionService : INfceEmissionService
         nfe.infNFeSupl.urlChave = ExtinfNFeSupl.ObterUrlConsulta(
             nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao3);
 
+        // XML-002: valida contra o schema oficial ANTES de qualquer coisa irreversível.
+        // A posição aqui não é arbitrária — é depois de assinar e montar o QR (a
+        // assinatura faz parte do documento que a SEFAZ valida) e ANTES do bloco de
+        // contingência abaixo. Validar depois dele entregaria ao consumidor um cupom
+        // offline que jamais seria autorizado.
+        ValidarContraSchemaOficial(nfe, nota);
+
         // O documento offline precisa estar completamente montado antes de ser entregue
         // ao consumidor. Persistimos a chave, o QR e o XML ASSINADO de tpEmis=9 antes de
         // tentar retransmitir (RES-002): é o documento que o cliente leva, e é ele — não
@@ -1389,6 +1420,25 @@ public class NfceEmissionService : INfceEmissionService
         // da NFC-e não pode ser reaproveitada sem inutilização.
         await ProcessarRespostaAutorizacaoAsync(
             nota, nfe, resposta, cfgServico, certificado, qrCodeUrl, jaEmContingencia);
+    }
+
+    /// <summary>
+    /// XML-002 — barreira local antes da rede. Quando o pacote de schemas não está
+    /// versionado, não valida nada e não impede nada: a SEFAZ continua sendo a
+    /// validadora final, e o estado fica visível em /api/fiscal/saude.
+    /// </summary>
+    private void ValidarContraSchemaOficial(NfeDocumento nfe, NotaFiscalEmitida nota)
+    {
+        if (!_schemaValidator.Disponivel) return;
+
+        var erros = _schemaValidator.Validar(FuncoesXml.ClasseParaXmlString(nfe));
+        if (erros.Count == 0) return;
+
+        _logger.LogError(
+            "NFC-e {NotaId} reprovada no schema oficial ({Pacote}) antes de transmitir — {Total} erro(s): {Erros}",
+            nota.Id, _schemaValidator.PacoteEmUso, erros.Count, string.Join(" | ", erros.Take(5)));
+
+        throw new SchemaInvalidoException(erros);
     }
 
     // ── Destino do documento transmitido (RES-001) ────────────────────────────
@@ -2861,4 +2911,31 @@ public class ComandaCanceladaException : Exception
     public Guid ComandaId { get; }
     public ComandaCanceladaException(Guid comandaId)
         : base($"Comanda {comandaId} foi cancelada — emissão fiscal abortada.") => ComandaId = comandaId;
+}
+
+/// <summary>
+/// O documento montado não é válido para o schema oficial (XML-002).
+///
+/// Tem exceção própria porque exige conduta própria, distinta das outras duas
+/// falhas possíveis na hora de transmitir:
+///
+///   • <b>não é indisponibilidade da SEFAZ</b> — não pode acionar contingência
+///     offline. Reemitir o mesmo documento inválido em tpEmis=9 entregaria ao
+///     consumidor um cupom que jamais será autorizado (seção 20 do plano);
+///   • <b>não é falha transitória</b> — não adianta o retry automático tentar de
+///     novo a cada 15 minutos: sem corrigir o cadastro, a montagem produz
+///     exatamente o mesmo XML inválido.
+///
+/// A conduta é registrar como rejeitada, com o motivo em linguagem de leiaute, e
+/// deixar o número preservado para inutilização.
+/// </summary>
+public class SchemaInvalidoException : Exception
+{
+    public IReadOnlyList<string> Erros { get; }
+
+    public SchemaInvalidoException(IReadOnlyList<string> erros)
+        : base("O documento não passou na validação do schema oficial da SEFAZ: " +
+               string.Join(" | ", erros.Take(3)) +
+               (erros.Count > 3 ? $" (e mais {erros.Count - 3} erro(s))" : string.Empty)) =>
+        Erros = erros;
 }

@@ -39,12 +39,13 @@ public class FiscalController : ControllerBase
     private readonly FiscalConfigService       _configService;
     private readonly IConciliacaoFiscalService _conciliacao;
     private readonly IAlertaFiscalService      _alertas;
+    private readonly INfceSchemaValidator      _schemaValidator;
 
     public FiscalController(
         AppDbContext db, FiscalXmlExportService export, INfceEmissionService emissao,
         CatalogDbContext catalog, ITenantContext tenant, IbptTaxService ibpt, IAuditService audit,
         FiscalConfigService configService, IConciliacaoFiscalService conciliacao,
-        IAlertaFiscalService alertas)
+        IAlertaFiscalService alertas, INfceSchemaValidator schemaValidator)
     {
         _db            = db;
         _export        = export;
@@ -56,6 +57,7 @@ public class FiscalController : ControllerBase
         _configService = configService;
         _conciliacao   = conciliacao;
         _alertas       = alertas;
+        _schemaValidator = schemaValidator;
     }
 
     /// <summary>Agrega configuração, certificado, regra fiscal padrão, produtos e notas das
@@ -135,6 +137,11 @@ public class FiscalController : ControllerBase
             pendencias.Add(new { Categoria = "Comunicacao", Mensagem = $"{pendentesCount} nota(s) pendente(s) ou em contingência.", Bloqueia = false });
         if (rejeitadas24h > 0)
             pendencias.Add(new { Categoria = "Comunicacao", Mensagem = $"{rejeitadas24h} nota(s) rejeitada(s) nas últimas 24h.", Bloqueia = false });
+        // XML-002: operar sem o pacote de schemas é legítimo (a SEFAZ continua
+        // validando), mas não pode ser invisível — senão o sistema parece ter uma
+        // barreira antes da transmissão que na verdade não existe.
+        if (!_schemaValidator.Disponivel)
+            pendencias.Add(new { Categoria = "ConfiguracaoLoja", Mensagem = "Validação de schema XSD indisponível: erros de leiaute só serão descobertos pela rejeição da SEFAZ.", Bloqueia = false });
 
         // Homologação não bloqueia (a loja pode testar antes de ir pra produção), mas
         // também não deixa o status virar "Pronto" — nota emitida em Homologação não
