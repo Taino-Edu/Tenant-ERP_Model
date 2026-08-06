@@ -44,21 +44,25 @@ public class ProductController : ControllerBase
     /// Dispara o preenchimento automático do IBPT sem segurar a resposta — num
     /// escopo PRÓPRIO de injeção de dependência.
     ///
-    /// O escopo próprio não é preciosismo. A versão anterior usava o
-    /// IbptTaxService da requisição, que é scoped e carrega o AppDbContext
-    /// junto. Assim que a resposta HTTP saía, o ASP.NET Core descartava o escopo
-    /// — e a tarefa de fundo passava a operar sobre um DbContext já descartado.
-    /// Dois estragos, ambos silenciosos por causa do `catch` vazio que havia
-    /// aqui:
+    /// Duas armadilhas, e o desenho precisa escapar das duas:
     ///
-    ///   • o preenchimento automático NUNCA acontecia, em nenhum produto;
-    ///   • o DbContext não é thread-safe, e a tarefa competia com o
-    ///     `GetByIdAsync` final da própria requisição pelo mesmo contexto. Esse
-    ///     race derruba o SALVAMENTO ("a second operation was started on this
-    ///     context instance"), não só o IBPT — o usuário via o produto não
-    ///     salvar, por um defeito que nada tem a ver com o produto.
+    /// <b>1. Não pode ser aguardado.</b> A versão anterior fazia
+    /// `await _ibpt.TentarSincronizarProdutoAsync(...)` dentro do salvamento.
+    /// O HttpClient do IBPT tem timeout de 15s — com a API lenta ou o token
+    /// recusado, salvar um produto ficava travado esperando uma integração que
+    /// é meramente conveniente. O produto já está salvo antes disso; nada
+    /// justifica prender o usuário.
     ///
-    /// O escopo novo também precisa do tenant explícito: sem `Set()`, o
+    /// <b>2. Mas não basta jogar num Task.Run.</b> O IbptTaxService é scoped e
+    /// carrega o AppDbContext junto. Disparar em segundo plano com o serviço da
+    /// requisição faz a tarefa operar sobre um DbContext já descartado assim que
+    /// a resposta HTTP sai — o preenchimento nunca aconteceria, e pior: o
+    /// DbContext não é thread-safe, então a tarefa competiria com a própria
+    /// requisição pelo mesmo contexto ("a second operation was started on this
+    /// context instance"), derrubando o SALVAMENTO por um defeito que nada tem a
+    /// ver com o produto.
+    ///
+    /// Daí o escopo próprio, com o tenant reaplicado: sem `Set()`, o
     /// TenantConnectionInterceptor falha por projeto (IsExplicitlySet), e mesmo
     /// que não falhasse a consulta iria para o schema errado.
     /// </summary>
