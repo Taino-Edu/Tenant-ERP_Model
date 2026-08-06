@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
@@ -765,8 +765,20 @@ public class ComandaService : IComandaService
         // manualmente pelo histórico. Defesa em profundidade: se a loja não contratou o
         // módulo fiscal, ignora a flag silenciosamente (mesmo comportamento gracioso de
         // "não marcou") mesmo que um request forjado tente forçar emitirNotaFiscal=true.
+        // CON-003: a escolha fica registrada ANTES de tentar emitir, e vale
+        // inclusive quando a resposta é "não emitir" — é justamente esse caso que
+        // some sem registro e vira venda sem documento sem dono na conciliação.
+        var moduloFiscalAtivo = _tenant.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase);
+        if (moduloFiscalAtivo)
+        {
+            comanda.FiscalEmissaoEscolhida = emitirNotaFiscal;
+            comanda.FiscalDecisaoPorUserId = adminId;
+            comanda.FiscalDecisaoEm        = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
         NotaFiscalEmitida? nota = null;
-        if (emitirNotaFiscal && _tenant.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+        if (emitirNotaFiscal && moduloFiscalAtivo)
         {
             using var scope = _scopeFactory.CreateScope();
             // O novo escopo tem seu próprio ITenantContext (default = tenant-zero) —

@@ -187,6 +187,45 @@ public class NfceEmissionServiceTests
         nota.Numero.Should().BeNull(); // nunca chegou a reservar número
     }
 
+    [Theory]
+    [InlineData(RegimeTributario.LucroPresumido)]
+    [InlineData(RegimeTributario.LucroReal)]
+    public async Task EmitirParaComandaAsync_ForaDoSimples_NaoEBloqueadaPeloRegime(RegimeTributario regime)
+    {
+        // Com REG-001 fechado (itens por CST + totalizadores consolidados), o
+        // regime deixou de ser barreira de pré-voo. Esta comanda ainda para antes
+        // de transmitir, mas por OUTRO motivo — o produto do seed não tem
+        // transparência tributária. É isso que se afirma aqui.
+        using var db = CreateDb();
+        var comanda = await SeedComandaFechadaAsync(db);
+        var enc     = CreateEncryptionService();
+        var pfxBytes = CreateSelfSignedPfx(SenhaCertificadoTeste, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+
+        db.FiscalConfigs.Add(new FiscalConfig
+        {
+            Cnpj                      = "12345678000195",
+            RazaoSocial                = "Loja Teste LTDA",
+            InscricaoEstadual          = "110042490114",
+            Logradouro                 = "Rua Teste",
+            CodigoMunicipioIbge        = "3550308",
+            Uf                         = "SP",
+            Cep                        = "01001000",
+            CscId                      = "000001",
+            CscTokenEncrypted          = enc.Encrypt(Guid.NewGuid().ToString()),
+            CertificadoPfxEncrypted    = enc.Encrypt(Convert.ToBase64String(pfxBytes)),
+            CertificadoSenhaEncrypted  = enc.Encrypt(SenhaCertificadoTeste),
+            RegimeTributario           = regime,
+        });
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        var nota = await service.EmitirParaComandaAsync(comanda.Id);
+
+        nota.MotivoRejeicao.Should().NotContain("Simples Nacional",
+            "o regime não bloqueia mais a emissão — itens e totais são montados por CST");
+        nota.Numero.Should().BeNull("falha de configuração não pode consumir numeração");
+    }
+
     [Fact]
     public async Task EmitirParaComandaAsync_Repetido_ReutilizaMesmaNota()
     {
@@ -886,8 +925,9 @@ public class NfceEmissionServiceTests
     [Fact]
     public void MontarItem_ComIbsCbs2026_UsaBaseLiquidaEClassificacaoOficial()
     {
+        var regra = CatalogoRegrasIbsCbs.Para(new DateOnly(2026, 8, 6), PerfilIbsCbs.SimplesNacional)!;
         var det = NfceEmissionService.MontarItem(
-            Item("102"), numero: 1, descontoCentavos: 200, incluirIbsCbs: true);
+            Item("102"), numero: 1, descontoCentavos: 200, regraIbsCbs: regra);
 
         var ibsCbs = det.imposto.IBSCBS!;
         ibsCbs.CST.ToString().Should().Be("Cst000");
@@ -908,13 +948,14 @@ public class NfceEmissionServiceTests
     [Fact]
     public void MontarTotaisIbsCbs2026_SomaBasesLiquidasETributosDosItens()
     {
+        var regra = CatalogoRegrasIbsCbs.Para(new DateOnly(2026, 8, 6), PerfilIbsCbs.SimplesNacional)!;
         var itens = new[]
         {
-            NfceEmissionService.MontarItem(Item("102"), 1, 200, incluirIbsCbs: true),
-            NfceEmissionService.MontarItem(Item("102"), 2, 0, incluirIbsCbs: true),
+            NfceEmissionService.MontarItem(Item("102"), 1, 200, regra),
+            NfceEmissionService.MontarItem(Item("102"), 2, 0, regra),
         };
 
-        var total = NfceEmissionService.MontarTotaisIbsCbs2026(itens);
+        var total = NfceEmissionService.MontarTotaisIbsCbs(itens);
 
         total.vBCIBSCBS.Should().Be(18m);
         total.gIBS!.gIBSUF!.vIBSUF.Should().Be(0.02m);

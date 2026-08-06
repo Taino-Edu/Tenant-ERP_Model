@@ -22,6 +22,25 @@ public enum AmbienteFiscal
 }
 
 /// <summary>
+/// Anexo da LC 123/2006 usado na apuração do Simples Nacional. Define qual
+/// tabela de faixas/parcela a deduzir entra no cálculo da alíquota efetiva —
+/// não muda nada na emissão da NFC-e, é parâmetro só de apuração.
+/// </summary>
+public enum AnexoSimplesNacional
+{
+    /// <summary>Comércio.</summary>
+    I,
+    /// <summary>Indústria.</summary>
+    II,
+    /// <summary>Serviços em geral (e Anexo V com fator R ≥ 28%).</summary>
+    III,
+    /// <summary>Construção civil e serviços do §5º-C (CPP recolhida fora do DAS).</summary>
+    IV,
+    /// <summary>Serviços do §5º-I (fator R &lt; 28%).</summary>
+    V,
+}
+
+/// <summary>
 /// Configuração fiscal da empresa emitente e do certificado digital A1
 /// usado para assinar e transmitir NFC-e à SEFAZ via DFe.NET.
 /// </summary>
@@ -103,6 +122,53 @@ public class FiscalConfig
 
     [Column("regime_tributario")]
     public RegimeTributario RegimeTributario { get; set; } = RegimeTributario.SimplesNacional;
+
+    // ── Perfil IBS/CBS (RTC-001) ──────────────────────────────────────────────
+    // Duas condições que o regime declarado NÃO revela e que o sistema não tem
+    // como inferir — vêm do contador. Selecionam qual faixa do catálogo de regras
+    // (CatalogoRegrasIbsCbs) se aplica ao contribuinte.
+
+    /// <summary>Optante do Simples que excedeu o sublimite estadual no período.</summary>
+    [Column("excedeu_sublimite_simples")]
+    public bool ExcedeuSublimiteSimples { get; set; }
+
+    /// <summary>Optante do Simples que fez a opção pelo regime regular de IBS/CBS.</summary>
+    [Column("optou_regime_regular_ibs_cbs")]
+    public bool OptouRegimeRegularIbsCbs { get; set; }
+
+    // -------------------------------------------------------------------------
+    // Parâmetros de apuração (portal do contador) — nada aqui entra no XML da
+    // NFC-e; servem só pra calcular DAS do Simples e o comparativo com Lucro
+    // Presumido, que dependem de dados que o sistema não tem como inferir
+    // (anexo da atividade, folha de pagamento, alíquotas de ICMS/ISS locais).
+    // -------------------------------------------------------------------------
+
+    [Column("anexo_simples")]
+    public AnexoSimplesNacional AnexoSimples { get; set; } = AnexoSimplesNacional.I;
+
+    /// <summary>Folha de pagamento dos últimos 12 meses (com encargos), em centavos — numerador do fator R.</summary>
+    [Column("folha_pagamento12m_em_centavos")]
+    public long FolhaPagamento12mEmCentavos { get; set; }
+
+    /// <summary>Folha mensal com encargos, em centavos — base do INSS patronal no Lucro Presumido.</summary>
+    [Column("folha_pagamento_mensal_em_centavos")]
+    public long FolhaPagamentoMensalEmCentavos { get; set; }
+
+    /// <summary>% de presunção do IRPJ no Lucro Presumido (8 comércio/indústria, 32 serviços).</summary>
+    [Column("percentual_presuncao_irpj")]
+    public decimal PercentualPresuncaoIrpj { get; set; } = 8m;
+
+    /// <summary>% de presunção da CSLL no Lucro Presumido (12 comércio/indústria, 32 serviços).</summary>
+    [Column("percentual_presuncao_csll")]
+    public decimal PercentualPresuncaoCsll { get; set; } = 12m;
+
+    /// <summary>Alíquota média de ICMS aplicável fora do Simples — varia por UF e produto, então o contador informa.</summary>
+    [Column("aliquota_icms_percentual")]
+    public decimal AliquotaIcmsPercentual { get; set; }
+
+    /// <summary>Alíquota de ISS do município (2% a 5%) para a parcela de serviços.</summary>
+    [Column("aliquota_iss_percentual")]
+    public decimal AliquotaIssPercentual { get; set; }
 
     [Column("ambiente")]
     public AmbienteFiscal Ambiente { get; set; } = AmbienteFiscal.Homologacao;

@@ -1,0 +1,112 @@
+name: DeepSeek AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  deepseek-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extrair Git Diff da PR
+        id: get_diff
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD)
+          # Limit diff to ~40.000 chars to avoid API payload limits
+          TRUNCATED_DIFF=$(echo "$DIFF" | head -c 40000)
+          echo "diff<<EOF" >> $GITHUB_ENV
+          echo "$TRUNCATED_DIFF" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Executar Revisão DeepSeek AI
+        uses: actions/github-script@v7
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          PR_DIFF: ${{ env.diff }}
+        with:
+          script: |
+            const apiKey = process.env.DEEPSEEK_API_KEY;
+            if (!apiKey) {
+              console.log("⚠️ DEEPSEEK_API_KEY não foi encontrada nos Secrets do repositório.");
+              return;
+            }
+
+            const diff = process.env.PR_DIFF;
+            if (!diff || diff.trim().length === 0) {
+              console.log("Nenhuma alteração de código detectada para revisar.");
+              return;
+            }
+
+            const systemPrompt = `Você é um Engenheiro de Software Sênior especialista em C# .NET Core 8, TypeScript, Next.js 14, EF Core e PostgreSQL.
+            Sua missão é fazer um Code Review conciso, construtivo, rápido e direto ao ponto em PORTUGUÊS (BR) para esta Pull Request.
+
+            Analise as alterações no formato diff fornecido e estruture seu comentário em Markdown:
+
+            ### 🤖 Revisão de Código — DeepSeek AI
+
+            #### 📊 Resumo das Mudanças
+            (Resuma em 2 a 3 frases o objetivo técnico da alteração)
+
+            #### 🚨 Análise de Riscos & Bugs
+            (Se houver: problemas de segurança, concorrência, exceções não tratadas, vazamento de memória ou SQL/EF Core ineficiente. Se não houver, informe que não foram identificados riscos críticos.)
+
+            #### 💡 Sugestões & Boas Práticas
+            (Dicas de simplificação, tipagem ou clareza no código)
+
+            #### 🎯 Veredito
+            - ✅ **Aprovado** / ⚠️ **Atenção Recomendada** / ❌ **Correção Necessária**
+
+            Seja direto, empático, focado e prático. Evite rodeios.`;
+
+            try {
+              const response = await fetch('https://api.deepseek.com/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                  model: 'deepseek-chat',
+                  messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: `Analise estas alterações da Pull Request:\n\n\`\`\`diff\n${diff}\n\`\`\`` }
+                  ],
+                  temperature: 0.2,
+                  max_tokens: 2000
+                })
+              });
+
+              if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Erro na API do DeepSeek (HTTP ${response.status}): ${errText}`);
+              }
+
+              const data = await response.json();
+              const reviewText = data.choices?.[0]?.message?.content;
+
+              if (!reviewText) {
+                throw new Error("A API do DeepSeek respondeu mas o conteúdo veio vazio.");
+              }
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: reviewText
+              });
+
+              console.log("✅ Comentário de Code Review do DeepSeek publicado com sucesso na PR!");
+            } catch (err) {
+              console.error("❌ Falha na execução da revisão DeepSeek:", err.message);
+            }

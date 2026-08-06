@@ -1,72 +1,43 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { contadorApi, ContadorClienteDto, ContadorNotaDto, ContadorNotaRecebidaDto, ContadorConfigDto, ContadorProdutoDto, AvisoContadorDto, FinanceiroDto, getErrorMessage } from '@/lib/api'
+// =============================================================================
+// /contador — Portal do contador. Duas telas: a lista de clientes e o workspace
+// de um cliente (em abas). Tudo que é conteúdo vive em components/contador/*;
+// aqui fica só a busca da lista e a navegação entre as duas.
+// =============================================================================
+import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Calculator, Download, Loader2, FileText, Building2, ChevronLeft, Clock, Plus, AlertTriangle, Send, MessageSquare, Package, Save } from 'lucide-react'
-import clsx from 'clsx'
-
-const fmt = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace('.', ',')}`
-const fmtReais = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const brToday = () => new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date())
-
-function diasAte(dataIso?: string): number | null {
-  if (!dataIso) return null
-  return Math.ceil((new Date(dataIso).getTime() - Date.now()) / 86400000)
-}
-function diasDesde(dataIso?: string): number | null {
-  if (!dataIso) return null
-  return Math.floor((Date.now() - new Date(dataIso).getTime()) / 86400000)
-}
-
-const STATUS_STYLES: Record<string, string> = {
-  Autorizada:              'bg-accent-green/10 text-accent-green border-accent-green/30',
-  Cancelada:               'bg-red-500/10 text-red-400 border-red-500/30',
-  PendenteEmissao:         'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  AutorizadaContingencia:  'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  Rejeitada:               'bg-red-500/10 text-red-400 border-red-500/30',
-}
+import { Calculator } from 'lucide-react'
+import { contadorApi, getErrorMessage, type ContadorClienteDto } from '@/lib/api'
+import ClientesList from '@/components/contador/ClientesList'
+import ClienteWorkspace from '@/components/contador/ClienteWorkspace'
 
 export default function ContadorPage() {
   const [clientes, setClientes] = useState<ContadorClienteDto[]>([])
-  const [loadingClientes, setLoadingClientes] = useState(true)
-  const [selected, setSelected] = useState<ContadorClienteDto | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [selecionado, setSelecionado] = useState<ContadorClienteDto | null>(null)
 
-  const [novoSlug, setNovoSlug] = useState('')
-  const [solicitando, setSolicitando] = useState(false)
-
-  const fetchClientes = useCallback(() => {
-    setLoadingClientes(true)
+  const carregarClientes = useCallback(() => {
+    setLoading(true)
     contadorApi.listClientes()
       .then(r => setClientes(r.data))
       .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar lista de clientes')))
-      .finally(() => setLoadingClientes(false))
+      .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { fetchClientes() }, [fetchClientes])
+  useEffect(() => { carregarClientes() }, [carregarClientes])
 
-  async function solicitarAcesso(e: React.FormEvent) {
-    e.preventDefault()
-    if (!novoSlug.trim()) return
-    setSolicitando(true)
+  async function solicitarAcesso(slug: string) {
     try {
-      const { data } = await contadorApi.solicitarAcesso(novoSlug.trim().toLowerCase())
+      const { data } = await contadorApi.solicitarAcesso(slug)
       toast.success(data.message)
-      setNovoSlug('')
-      fetchClientes()
+      carregarClientes()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao solicitar acesso'))
-    } finally {
-      setSolicitando(false)
     }
   }
 
-  if (selected) {
-    return (
-      <ClienteDetalhe
-        cliente={selected}
-        onVoltar={() => setSelected(null)}
-      />
-    )
+  if (selecionado) {
+    return <ClienteWorkspace cliente={selecionado} onVoltar={() => setSelecionado(null)} />
   }
 
   return (
@@ -76,505 +47,17 @@ export default function ContadorPage() {
           <Calculator className="w-5 h-5 text-brand-400" />
         </div>
         <div>
-          <h1 className="text-xl font-black text-white">Meus Clientes</h1>
+          <h1 className="text-xl font-black text-white">Meus clientes</h1>
           <p className="text-sm text-gray-400">Lojas vinculadas à sua conta de contador</p>
         </div>
       </div>
 
-      <form onSubmit={solicitarAcesso} className="card p-4 flex flex-col sm:flex-row gap-3 sm:items-end">
-        <div className="flex-1">
-          <label className="label">Solicitar acesso a mais uma loja</label>
-          <input
-            className="input w-full"
-            placeholder="slug-da-loja"
-            value={novoSlug}
-            onChange={e => setNovoSlug(e.target.value)}
-          />
-        </div>
-        <button type="submit" disabled={solicitando} className="btn-primary justify-center">
-          {solicitando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          Solicitar acesso
-        </button>
-      </form>
-
-      <div className="card">
-        {loadingClientes ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
-          </div>
-        ) : clientes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Building2 className="w-10 h-10 text-gray-600 mb-2" />
-            <p className="text-gray-400">Você ainda não tem nenhuma loja vinculada.</p>
-            <p className="text-sm text-gray-500 mt-1">Peça o slug ao lojista e solicite acesso acima.</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-surface-700">
-            {clientes.map(c => {
-              const diasCert = c.status === 'Approved' ? diasAte(c.certificadoValidade) : null
-              const diasSemNota = c.status === 'Approved' ? diasDesde(c.ultimaNotaEm) : null
-              return (
-                <button
-                  key={c.tenantId}
-                  disabled={c.status !== 'Approved'}
-                  onClick={() => setSelected(c)}
-                  className={clsx(
-                    'w-full flex items-center justify-between gap-3 px-4 py-4 text-left transition-colors flex-wrap',
-                    c.status === 'Approved' ? 'hover:bg-surface-800/60 cursor-pointer' : 'cursor-not-allowed opacity-70'
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <Building2 className="w-4 h-4 text-gray-500" />
-                    <span className="text-white font-medium">{c.slug}</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {diasCert !== null && diasCert <= 30 && (
-                      <span className={clsx(
-                        'text-xs font-medium px-2 py-0.5 rounded-full border flex items-center gap-1',
-                        diasCert <= 7 ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                      )}>
-                        <AlertTriangle className="w-3 h-3" />
-                        {diasCert < 0 ? 'Certificado vencido' : `Certificado vence em ${diasCert}d`}
-                      </span>
-                    )}
-                    {c.status === 'Approved' && (c.ultimaNotaEm == null || (diasSemNota !== null && diasSemNota > 7)) && (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" />
-                        {c.ultimaNotaEm == null ? 'Nenhuma nota emitida ainda' : `Sem nota há ${diasSemNota}d`}
-                      </span>
-                    )}
-                    {c.status === 'Approved' ? (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-accent-green/10 text-accent-green border-accent-green/30">
-                        Aprovado
-                      </span>
-                    ) : (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30 flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> Aguardando aprovação
-                      </span>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Drill-down: notas fiscais + config de UM cliente aprovado ───────────────
-function ClienteDetalhe({ cliente, onVoltar }: { cliente: ContadorClienteDto; onVoltar: () => void }) {
-  const [config, setConfig]     = useState<ContadorConfigDto | null>(null)
-  const [notas, setNotas]       = useState<ContadorNotaDto[]>([])
-  const [notasRecebidas, setNotasRecebidas] = useState<ContadorNotaRecebidaDto[]>([])
-  const [dre, setDre] = useState<FinanceiroDto | null>(null)
-  const [loading, setLoading]   = useState(true)
-  const [exporting, setExporting] = useState(false)
-  const [produtos, setProdutos] = useState<ContadorProdutoDto[]>([])
-  const [loadingProdutos, setLoadingProdutos] = useState(true)
-
-  const [avisos, setAvisos] = useState<AvisoContadorDto[]>([])
-  const [loadingAvisos, setLoadingAvisos] = useState(true)
-  const [novoAviso, setNovoAviso] = useState('')
-  const [enviandoAviso, setEnviandoAviso] = useState(false)
-
-  const [inicio, setInicio] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 30)
-    return new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Sao_Paulo' }).format(d)
-  })
-  const [fim, setFim] = useState(brToday)
-
-  const fetchNotas = useCallback(() => {
-    setLoading(true)
-    Promise.all([
-      contadorApi.listNotas(cliente.tenantId, { inicio, fim, pageSize: 100 }),
-      contadorApi.listNotasRecebidas(cliente.tenantId, { inicio, fim }),
-      contadorApi.getDre(cliente.tenantId, inicio, fim),
-    ])
-      .then(([saidas, entradas, resultado]) => {
-        setNotas(saidas.data.items)
-        setNotasRecebidas(entradas.data)
-        setDre(resultado.data)
-      })
-      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar o fechamento fiscal')))
-      .finally(() => setLoading(false))
-  }, [cliente.tenantId, inicio, fim])
-
-  useEffect(() => { fetchNotas() }, [fetchNotas])
-
-  useEffect(() => {
-    contadorApi.getConfig(cliente.tenantId).then(r => setConfig(r.data)).catch(() => {})
-  }, [cliente.tenantId])
-
-  useEffect(() => {
-    setLoadingProdutos(true)
-    contadorApi.listProdutos(cliente.tenantId)
-      .then(r => setProdutos(r.data))
-      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar estoque')))
-      .finally(() => setLoadingProdutos(false))
-  }, [cliente.tenantId])
-
-  const loadAvisos = useCallback(() => {
-    setLoadingAvisos(true)
-    contadorApi.listAvisos(cliente.tenantId)
-      .then(r => setAvisos(r.data))
-      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar avisos')))
-      .finally(() => setLoadingAvisos(false))
-  }, [cliente.tenantId])
-
-  useEffect(() => { loadAvisos() }, [loadAvisos])
-
-  async function enviarAviso(e: React.FormEvent) {
-    e.preventDefault()
-    if (!novoAviso.trim()) return
-    setEnviandoAviso(true)
-    try {
-      await contadorApi.postAviso(cliente.tenantId, novoAviso.trim())
-      setNovoAviso('')
-      loadAvisos()
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao enviar aviso'))
-    } finally {
-      setEnviandoAviso(false)
-    }
-  }
-
-  const totalAutorizadas   = notas.filter(n => n.status === 'Autorizada' || n.status === 'AutorizadaContingencia')
-  const totalCanceladas    = notas.filter(n => n.status === 'Cancelada')
-  const somaAutorizadas    = totalAutorizadas.reduce((acc, n) => acc + n.valorTotalEmCentavos, 0)
-  const somaCanceladas     = totalCanceladas.reduce((acc, n) => acc + n.valorTotalEmCentavos, 0)
-
-  async function exportarXmls() {
-    if (!inicio || !fim) { toast.error('Selecione o período (início e fim).'); return }
-    setExporting(true)
-    try {
-      const { data } = await contadorApi.exportarXmls(cliente.tenantId, inicio, fim)
-      const url = URL.createObjectURL(data as Blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `xmls-fiscais-${cliente.slug}-${inicio}-a-${fim}.zip`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao gerar ZIP de XMLs'))
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  function exportarDreCsv() {
-    if (!dre) return
-    const rows: Array<[string, number]> = [
-      ['Receita bruta', dre.receitaBruta],
-      ['(-) Descontos e abatimentos', -dre.deducoes],
-      ['(-) Impostos sobre vendas', -dre.impostosSobreVendas],
-      ['Receita líquida', dre.receitaLiquidaDre],
-      ['(-) CMV', -dre.custo],
-      ['Lucro bruto', dre.receitaLiquidaDre - dre.custo],
-      ...dre.despesasPorCategoria.map(item => [`(-) ${item.categoria}`, -item.valor] as [string, number]),
-      ['Resultado operacional', dre.resultadoOperacional],
-      ['(+/-) Resultado financeiro', dre.resultadoFinanceiro],
-      ['(-) IRPJ / CSLL', -dre.impostosSobreLucro],
-      ['Resultado líquido', dre.resultadoLiquido],
-    ]
-    const csv = '\uFEFFLinha;Valor (R$)\r\n' + rows.map(([label, value]) => `${label};${value.toFixed(2).replace('.', ',')}`).join('\r\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `dre-${cliente.slug}-${inicio}-a-${fim}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <button onClick={onVoltar} className="btn-secondary py-1.5 px-2.5">
-          <ChevronLeft className="w-4 h-4" />
-        </button>
-        <div>
-          <h1 className="text-xl font-black text-white">{cliente.slug}</h1>
-          <p className="text-sm text-gray-400">Acesso somente leitura — notas emitidas e exportação de XMLs</p>
-        </div>
-      </div>
-
-      {config && (
-        <div className="card grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-          <div><span className="text-gray-500">Razão Social: </span><span className="text-white">{config.razaoSocial || '—'}</span></div>
-          <div><span className="text-gray-500">CNPJ: </span><span className="text-white">{config.cnpj || '—'}</span></div>
-          <div><span className="text-gray-500">Inscrição Estadual: </span><span className="text-white">{config.inscricaoEstadual || '—'}</span></div>
-          <div><span className="text-gray-500">Regime Tributário: </span><span className="text-white">{config.regimeTributario}</span></div>
-          <div className="sm:col-span-2">
-            <span className="text-gray-500">Endereço: </span>
-            <span className="text-white">
-              {[config.logradouro, config.numero, config.bairro, config.municipio, config.uf].filter(Boolean).join(', ') || '—'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {dre && (
-        <section className="card p-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-surface-600 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-white flex items-center gap-2"><Calculator className="w-4 h-4 text-brand-400" /> DRE gerencial</h3>
-              <p className="text-xs text-gray-500 mt-0.5">Competência de {inicio.split('-').reverse().join('/')} a {fim.split('-').reverse().join('/')}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] rounded-full border border-brand-500/30 bg-brand-500/10 text-brand-300 px-2 py-1">Mesma base da loja</span>
-              <button onClick={exportarDreCsv} className="btn-secondary py-1.5 px-2.5 text-xs"><Download className="w-3.5 h-3.5" /> CSV</button>
-            </div>
-          </div>
-          <div className="p-5 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-400">Receita bruta</span><strong className="font-mono text-white">{fmtReais(dre.receitaBruta)}</strong></div>
-            {dre.deducoes > 0 ? <div className="flex justify-between"><span className="text-gray-400">(−) Descontos e abatimentos</span><span className="font-mono text-red-400">({fmtReais(dre.deducoes)})</span></div> : null}
-            {dre.impostosSobreVendas > 0 ? <div className="flex justify-between"><span className="text-gray-400">(−) Impostos sobre vendas</span><span className="font-mono text-red-400">({fmtReais(dre.impostosSobreVendas)})</span></div> : null}
-            <div className="flex justify-between border-t border-surface-700 pt-2"><span className="font-semibold text-gray-200">Receita líquida</span><strong className="font-mono text-emerald-400">{fmtReais(dre.receitaLiquidaDre)}</strong></div>
-            <div className="flex justify-between"><span className="text-gray-400">(−) CMV</span><span className="font-mono text-red-400">({fmtReais(dre.custo)})</span></div>
-            <div className="flex justify-between border-t border-surface-700 pt-2"><span className="font-semibold text-gray-200">Lucro bruto</span><strong className="font-mono text-brand-300">{fmtReais(dre.receitaLiquidaDre - dre.custo)}</strong></div>
-            {dre.despesasPorCategoria.map(item => (
-              <div key={item.categoria} className="flex justify-between pl-3"><span className="text-gray-500">(−) {item.categoria}</span><span className="font-mono text-red-400">({fmtReais(item.valor)})</span></div>
-            ))}
-            <div className="flex justify-between border-t-2 border-surface-500 pt-3 text-base">
-              <strong className="text-white">Resultado operacional</strong>
-              <strong className={clsx('font-mono', dre.resultadoOperacional >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmtReais(dre.resultadoOperacional)}</strong>
-            </div>
-            {dre.resultadoFinanceiro !== 0 ? <div className="flex justify-between"><span className="text-gray-400">(+/−) Resultado financeiro</span><span className="font-mono text-white">{fmtReais(dre.resultadoFinanceiro)}</span></div> : null}
-            {dre.impostosSobreLucro > 0 ? <div className="flex justify-between"><span className="text-gray-400">(−) IRPJ / CSLL</span><span className="font-mono text-red-400">({fmtReais(dre.impostosSobreLucro)})</span></div> : null}
-            <div className="flex justify-between border-t-2 border-surface-500 pt-3 text-base"><strong className="text-white">Resultado líquido</strong><strong className={clsx('font-mono', dre.resultadoLiquido >= 0 ? 'text-emerald-400' : 'text-red-400')}>{fmtReais(dre.resultadoLiquido)}</strong></div>
-            {dre.lancamentosNaoClassificados > 0 ? <p className="text-xs text-amber-400">{fmtReais(dre.lancamentosNaoClassificados)} aguardam classificação contábil e não entraram no resultado.</p> : null}
-            <p className="text-[11px] text-gray-500 pt-1">Compras de mercadoria formam estoque e entram no resultado pelo CMV conforme a venda; extrato bancário permanece na conciliação de caixa.</p>
-          </div>
-        </section>
-      )}
-
-      <section className="card">
-        <h3 className="font-bold text-white mb-3">Checklist do fechamento</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-          <div className={clsx('rounded-xl border p-3', produtos.filter(p => !p.ncm).length ? 'border-amber-500/30 bg-amber-500/5' : 'border-green-500/20 bg-green-500/5')}>
-            <p className="text-gray-400">Produtos sem NCM</p><strong className="text-white text-lg">{produtos.filter(p => !p.ncm).length}</strong>
-          </div>
-          <div className={clsx('rounded-xl border p-3', notasRecebidas.filter(n => !n.estoqueRecebidoEm && n.status !== 'cancelada').length ? 'border-amber-500/30 bg-amber-500/5' : 'border-green-500/20 bg-green-500/5')}>
-            <p className="text-gray-400">Entradas sem conferência</p><strong className="text-white text-lg">{notasRecebidas.filter(n => !n.estoqueRecebidoEm && n.status !== 'cancelada').length}</strong>
-          </div>
-          <div className={clsx('rounded-xl border p-3', (dre?.lancamentosNaoClassificados ?? 0) > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-green-500/20 bg-green-500/5')}>
-            <p className="text-gray-400">Sem classificação na DRE</p><strong className="text-white text-lg">{fmtReais(dre?.lancamentosNaoClassificados ?? 0)}</strong>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="card p-4">
-          <p className="text-xs text-gray-500">Faturamento (autorizadas)</p>
-          <p className="text-lg font-black text-white mt-1">{fmt(somaAutorizadas)}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{totalAutorizadas.length} nota(s)</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500">Notas no período</p>
-          <p className="text-lg font-black text-white mt-1">{notas.length}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500">Canceladas</p>
-          <p className="text-lg font-black text-white mt-1">{fmt(somaCanceladas)}</p>
-          <p className="text-xs text-gray-500 mt-0.5">{totalCanceladas.length} nota(s)</p>
-        </div>
-      </div>
-
-      <div className="card space-y-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="label">De</label>
-            <input type="date" className="input" value={inicio} max={fim} onChange={e => setInicio(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Até</label>
-            <input type="date" className="input" value={fim} max={brToday()} min={inicio} onChange={e => setFim(e.target.value)} />
-          </div>
-          <button onClick={exportarXmls} disabled={exporting} className="btn-primary">
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            Exportar XMLs do período
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
-          </div>
-        ) : notas.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <FileText className="w-10 h-10 text-gray-600 mb-2" />
-            <p className="text-gray-400">Nenhuma nota fiscal no período selecionado.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px] text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b border-surface-600">
-                  <th className="py-2 font-medium">Data</th>
-                  <th className="py-2 font-medium">Número</th>
-                  <th className="py-2 font-medium">Origem</th>
-                  <th className="py-2 font-medium">Status</th>
-                  <th className="py-2 font-medium text-right">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {notas.map(n => (
-                  <tr key={n.id} className="border-b border-surface-700 last:border-0">
-                    <td className="py-3 text-gray-400">
-                      {new Date(n.createdAt).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="py-3 text-white">{n.serie && n.numero ? `${n.serie}/${n.numero}` : '—'}</td>
-                    <td className="py-3 text-gray-400">{n.origem}</td>
-                    <td className="py-3">
-                      <span className={clsx('text-xs font-medium px-2 py-0.5 rounded-full border', STATUS_STYLES[n.status] || 'bg-gray-500/10 text-gray-400 border-gray-500/30')}>
-                        {n.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right text-white font-mono">{fmt(n.valorTotalEmCentavos)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <section className="card space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="font-bold text-white flex items-center gap-2"><Package className="w-4 h-4 text-brand-400" /> NF-e de entrada</h3>
-            <p className="text-xs text-gray-500 mt-1">Documentos de fornecedores, contas geradas e conferência física do estoque.</p>
-          </div>
-          <span className="text-xs text-gray-400">{notasRecebidas.length} no período</span>
-        </div>
-        {notasRecebidas.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-6">Nenhuma NF-e de entrada no período.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] text-sm">
-              <thead><tr className="text-left text-gray-500 border-b border-surface-600">
-                <th className="py-2 font-medium">Emissão</th><th className="py-2 font-medium">Fornecedor</th>
-                <th className="py-2 font-medium">Financeiro</th><th className="py-2 font-medium">Estoque</th><th className="py-2 font-medium text-right">Valor</th>
-              </tr></thead>
-              <tbody>{notasRecebidas.map(nota => (
-                <tr key={nota.id} className="border-b border-surface-700 last:border-0">
-                  <td className="py-3 text-gray-400">{nota.dataEmissao ? new Date(nota.dataEmissao).toLocaleDateString('pt-BR') : '—'}</td>
-                  <td className="py-3"><p className="text-white">{nota.emitenteNome ?? 'Fornecedor'}</p><p className="text-[10px] text-gray-600 font-mono">{nota.chaveAcesso.slice(0, 6)}…{nota.chaveAcesso.slice(-8)}</p></td>
-                  <td className="py-3 text-gray-400">{nota.contasGeradas > 0 ? `${nota.contasGeradas} conta(s)` : 'Pendente'}</td>
-                  <td className="py-3">{nota.estoqueRecebidoEm ? <span className="text-emerald-400">✓ {nota.itensEstoqueRecebidos} un.</span> : <span className="text-amber-400">Aguardando conferência</span>}</td>
-                  <td className="py-3 text-right font-mono text-white">{fmtReais(nota.valor)}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <div className="card space-y-3">
-        <div>
-          <h3 className="font-bold text-white flex items-center gap-2">
-            <Package className="w-4 h-4 text-brand-400" /> Estoque e classificação fiscal
-          </h3>
-          <p className="text-xs text-gray-500 mt-1">A quantidade é somente leitura. Você pode atualizar NCM, CEST e tributos.</p>
-        </div>
-        {loadingProdutos ? (
-          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
-        ) : produtos.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-6">Nenhum produto cadastrado.</p>
-        ) : (
-          <div className="space-y-2">
-            {produtos.map(produto => (
-              <ProdutoFiscalRow key={produto.id} tenantId={cliente.tenantId} produto={produto} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="card space-y-3">
-        <h3 className="font-bold text-white flex items-center gap-2">
-          <MessageSquare className="w-4 h-4 text-brand-400" /> Avisos
-        </h3>
-        <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-          {loadingAvisos ? (
-            <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-brand-400" /></div>
-          ) : avisos.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-2">Nenhum aviso ainda.</p>
-          ) : (
-            avisos.map(a => (
-              <div key={a.id} className={clsx(
-                'rounded-xl p-3 text-sm max-w-[85%]',
-                a.autor === 'Contador' ? 'bg-brand-600/10 border border-brand-500/20 self-end text-right' : 'bg-surface-800/50 border border-surface-700/50'
-              )}>
-                <p className="text-white">{a.mensagem}</p>
-                <p className="text-[11px] text-gray-500 mt-1">{a.autor} · {new Date(a.createdAt).toLocaleString('pt-BR')}</p>
-              </div>
-            ))
-          )}
-        </div>
-        <form onSubmit={enviarAviso} className="flex gap-2">
-          <input
-            className="input flex-1" placeholder="Escrever um aviso pro lojista..."
-            value={novoAviso} onChange={e => setNovoAviso(e.target.value)}
-          />
-          <button type="submit" disabled={enviandoAviso} className="btn-primary justify-center">
-            {enviandoAviso ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-function ProdutoFiscalRow({ tenantId, produto }: { tenantId: string; produto: ContadorProdutoDto }) {
-  const [open, setOpen] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
-    ncm: produto.ncm ?? '', cest: produto.cest ?? '',
-    federal: produto.percentualTributosFederais?.toString() ?? '',
-    estadual: produto.percentualTributosEstaduais?.toString() ?? '',
-    municipal: produto.percentualTributosMunicipais?.toString() ?? '',
-    fonte: produto.fonteTributos ?? '',
-  })
-  const numberOrNull = (value: string) => value.trim() === '' ? null : Number(value.replace(',', '.'))
-
-  async function salvar() {
-    setSaving(true)
-    try {
-      await contadorApi.updateProdutoFiscal(tenantId, produto.id, {
-        ncm: form.ncm || null, cest: form.cest || null,
-        percentualTributosFederais: numberOrNull(form.federal),
-        percentualTributosEstaduais: numberOrNull(form.estadual),
-        percentualTributosMunicipais: numberOrNull(form.municipal),
-        fonteTributos: form.fonte || null,
-      })
-      toast.success(`Classificação fiscal de ${produto.name} atualizada.`)
-      setOpen(false)
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao atualizar classificação fiscal'))
-    } finally { setSaving(false) }
-  }
-
-  return (
-    <div className="rounded-xl border border-surface-700 bg-surface-800/40 p-3">
-      <button onClick={() => setOpen(v => !v)} className="w-full flex justify-between gap-3 text-left">
-        <div><p className="text-sm font-medium text-white">{produto.name}</p><p className="text-xs text-gray-500">{produto.category} · NCM {produto.ncm || 'pendente'}</p></div>
-        <span className="text-xs whitespace-nowrap text-gray-400">Estoque: <strong className="text-white">{produto.stockQuantity}</strong></span>
-      </button>
-      {open && (
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mt-3 pt-3 border-t border-surface-700">
-          <input className="input text-sm" placeholder="NCM (8 dígitos)" maxLength={10} value={form.ncm} onChange={e => setForm({ ...form, ncm: e.target.value })} />
-          <input className="input text-sm" placeholder="CEST (7 dígitos)" maxLength={9} value={form.cest} onChange={e => setForm({ ...form, cest: e.target.value })} />
-          <input className="input text-sm" inputMode="decimal" placeholder="Federal %" value={form.federal} onChange={e => setForm({ ...form, federal: e.target.value })} />
-          <input className="input text-sm" inputMode="decimal" placeholder="Estadual %" value={form.estadual} onChange={e => setForm({ ...form, estadual: e.target.value })} />
-          <input className="input text-sm" inputMode="decimal" placeholder="Municipal %" value={form.municipal} onChange={e => setForm({ ...form, municipal: e.target.value })} />
-          <input className="input text-sm" placeholder="Fonte (ex.: IBPT)" maxLength={100} value={form.fonte} onChange={e => setForm({ ...form, fonte: e.target.value })} />
-          <button onClick={salvar} disabled={saving} className="btn-primary justify-center col-span-2 md:col-span-6">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Salvar dados fiscais
-          </button>
-        </div>
-      )}
+      <ClientesList
+        clientes={clientes}
+        loading={loading}
+        onSelecionar={setSelecionado}
+        onSolicitarAcesso={solicitarAcesso}
+      />
     </div>
   )
 }

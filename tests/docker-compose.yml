@@ -39,6 +39,14 @@ services:
       POSTGRES_USER: tenant_test
       POSTGRES_PASSWORD: tenant_test_pw
       POSTGRES_DB: tenant_erp_test
+    # O default do Docker para /dev/shm é 64 MB, e o Postgres usa memória
+    # compartilhada para os workers paralelos. Com o catálogo inchado por
+    # schemas de execuções interrompidas, um `DROP SCHEMA ... CASCADE` estoura
+    # esse limite — e o sintoma não aponta para lugar nenhum útil: primeiro os
+    # DROPs falham, depois QUALQUER conexão nova morre com
+    # "could not resize shared memory segment ... No space left on device",
+    # que parece disco cheio e não é.
+    shm_size: 512mb
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
