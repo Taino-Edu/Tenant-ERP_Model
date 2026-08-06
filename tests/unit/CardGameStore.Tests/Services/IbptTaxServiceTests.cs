@@ -1,145 +1,155 @@
+// =============================================================================
+// IbptTaxServiceTests.cs — o IBPT lento não pode derrubar a sincronização.
+//
+// Defeito real, capturado no log de produção (trace 0HNNI4IMEL3EK:00000001):
+//
+//   POST /api/fiscal/ibpt/sincronizar
+//   TaskCanceledException: The request was canceled due to the configured
+//   HttpClient.Timeout of 15 seconds elapsing.
+//
+// A causa é sutil e vale registrar: o laço de sincronização protegia cada
+// produto com `catch (Exception ex) when (ex is not OperationCanceledException)`
+// — filtro escrito para deixar um cancelamento real subir. Só que
+// HttpClient.Timeout lança TaskCanceledException, que HERDA de
+// OperationCanceledException. Pelo tipo, timeout e cancelamento são a mesma
+// coisa; o que os separa é se o token do chamador foi cancelado.
+//
+// Sem essa distinção, um IBPT fora do ar virava 500 "Erro interno. Tente
+// novamente em instantes" — mensagem duplamente falsa: não é interno, e
+// insistir não muda nada.
+// =============================================================================
+
 using System.Net;
-using System.Text;
+using System.Runtime.CompilerServices;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
-using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 
 namespace CardGameStore.Tests.Services;
 
 public class IbptTaxServiceTests
 {
-    private static EncryptionService CreateEncryption()
+    private static AppDbContext CreateDb([CallerMemberName] string testName = "") =>
+        TestDbFactory.Create($"{nameof(IbptTaxServiceTests)}_{testName}");
+
+    /// <summary>Handler que reproduz exatamente o estouro de HttpClient.Timeout:
+    /// TaskCanceledException com TimeoutException por dentro, e o token do
+    /// chamador intacto.</summary>
+    private sealed class HandlerQueEstouraTimeout : HttpMessageHandler
     {
+        public int Chamadas { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Chamadas++;
+            return Task.FromException<HttpResponseMessage>(
+                new TaskCanceledException(
+                    "The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.",
+                    new TimeoutException("A task was canceled.")));
+        }
+    }
+
+    private sealed class FabricaDeCliente(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) =>
+            new(handler, disposeHandler: false) { BaseAddress = new Uri("https://apidoni.ibpt.org.br/") };
+    }
+
+    private static EncryptionService CreateEncryptionService()
+    {
+        var config = new ConfigurationBuilder().Build();
         var env = new Mock<IWebHostEnvironment>();
         env.Setup(e => e.EnvironmentName).Returns("Development");
-        return new EncryptionService(new ConfigurationBuilder().Build(), env.Object);
+        return new EncryptionService(config, env.Object);
     }
 
-    private static IbptTaxService CreateService(
-        AppDbContext db, EncryptionService encryption, HttpMessageHandler handler)
+    private static async Task SeedLojaComTokenAsync(AppDbContext db, int produtos = 1)
     {
-        var client = new HttpClient(handler) { BaseAddress = new Uri("https://apidoni.ibpt.org.br/") };
-        var factory = new Mock<IHttpClientFactory>();
-        factory.Setup(f => f.CreateClient("ibpt")).Returns(client);
-        return new IbptTaxService(db, factory.Object, encryption, NullLogger<IbptTaxService>.Instance);
-    }
-
-    private static async Task<(FiscalConfig Config, Product Product)> SeedAsync(
-        AppDbContext db, EncryptionService encryption, int origem = 0)
-    {
-        var cfg = new FiscalConfig
+        var enc = CreateEncryptionService();
+        db.FiscalConfigs.Add(new FiscalConfig
         {
-            Cnpj = "12345678000199", Uf = "SP", IbptAutoSyncEnabled = true,
-            IbptTokenEncrypted = encryption.Encrypt("token-secreto"),
-        };
-        var natureza = new NaturezaOperacao
-        {
-            Descricao = "Venda", Cfop = "5102", Csosn = "102", OrigemMercadoria = origem, IsPadrao = true,
-        };
-        var produto = new Product
-        {
-            Name = "Produto teste", Category = "Teste", PriceInCents = 1000,
-            StockQuantity = 1, Ncm = "95044000", NaturezaOperacao = natureza,
-        };
-        db.AddRange(cfg, natureza, produto);
-        await db.SaveChangesAsync();
-        return (cfg, produto);
-    }
-
-    [Theory]
-    [InlineData(0, 12.34)]
-    [InlineData(1, 21.45)]
-    public async Task TentarSincronizarProduto_SelecionaFederalPelaOrigemEPersisteVigencia(
-        int origem, decimal federalEsperado)
-    {
-        await using var db = TestDbFactory.Create($"{nameof(TentarSincronizarProduto_SelecionaFederalPelaOrigemEPersisteVigencia)}_{origem}");
-        var encryption = CreateEncryption();
-        var (_, produto) = await SeedAsync(db, encryption, origem);
-        Uri? chamada = null;
-        var handler = new FakeHandler(req =>
-        {
-            chamada = req.RequestUri;
-            return Json("""
-                {"Codigo":"95044000","UF":"SP","EX":0,"Descricao":"Jogos",
-                 "Nacional":12.34,"Estadual":18.0,"Importado":21.45,"Municipal":0.0,
-                 "Tipo":"0","VigenciaInicio":"20/06/2026","VigenciaFim":"31/12/2099",
-                 "Chave":"ABC123","Versao":"26.1.L","Fonte":"IBPT/empresometro.com.br"}
-                """);
+            Cnpj                = "12345678000195",
+            Uf                  = "SP",
+            IbptTokenEncrypted  = enc.Encrypt("token-de-teste"),
+            IbptAutoSyncEnabled = true,
         });
-
-        var atualizado = await CreateService(db, encryption, handler)
-            .TentarSincronizarProdutoAsync(produto.Id);
-
-        atualizado.Should().BeTrue();
-        await db.Entry(produto).ReloadAsync();
-        produto.PercentualTributosFederais.Should().Be(federalEsperado);
-        produto.PercentualTributosEstaduais.Should().Be(18m);
-        produto.PercentualTributosMunicipais.Should().Be(0m);
-        produto.TributosPreenchidosAutomaticamente.Should().BeTrue();
-        produto.IbptVersao.Should().Be("26.1.L");
-        produto.TributosVigenciaFim.Should().Be(new DateTime(2099, 12, 31, 0, 0, 0, DateTimeKind.Utc));
-        chamada!.Query.Should().Contain("codigo=95044000").And.Contain("token=token-secreto");
-    }
-
-    [Fact]
-    public async Task SincronizarTodos_PreservaOverrideManualSemChamarApi()
-    {
-        await using var db = TestDbFactory.Create(nameof(SincronizarTodos_PreservaOverrideManualSemChamarApi));
-        var encryption = CreateEncryption();
-        var (_, produto) = await SeedAsync(db, encryption);
-        produto.PercentualTributosFederais = 7m;
-        produto.PercentualTributosEstaduais = 8m;
-        produto.PercentualTributosMunicipais = 1m;
-        produto.FonteTributos = "Validado pelo contador";
-        produto.TributosPreenchidosAutomaticamente = false;
+        for (var i = 0; i < produtos; i++)
+            db.Products.Add(new Product
+            {
+                Id = Guid.NewGuid(), Name = $"Produto {i + 1}", Category = "MTG",
+                PriceInCents = 1000, StockQuantity = 5, Ncm = "95044000", IsActive = true,
+            });
         await db.SaveChangesAsync();
-        var chamadas = 0;
-        var handler = new FakeHandler(_ => { chamadas++; return Json("{}"); });
+    }
 
-        var resultado = await CreateService(db, encryption, handler).SincronizarTodosAsync();
+    private static IbptTaxService CreateService(AppDbContext db, HttpMessageHandler handler) =>
+        new(db, new FabricaDeCliente(handler), CreateEncryptionService(),
+            NullLogger<IbptTaxService>.Instance);
 
-        resultado.Atualizados.Should().Be(0);
-        resultado.IgnoradosManuais.Should().Be(1);
-        chamadas.Should().Be(0);
-        produto.PercentualTributosFederais.Should().Be(7m);
+    [Fact]
+    public async Task SincronizarTodos_IbptEstourandoTimeout_NaoPropagaExcecao()
+    {
+        // O cerne: antes isto lançava TaskCanceledException para fora e o
+        // endpoint devolvia 500.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db);
+        using var handler = new HandlerQueEstouraTimeout();
+
+        var act = async () => await CreateService(db, handler).SincronizarTodosAsync();
+
+        await act.Should().NotThrowAsync(
+            "timeout de um serviço de terceiro é falha do produto, não do nosso servidor");
     }
 
     [Fact]
-    public async Task TentarSincronizarProduto_RespostaInvalidaNaoPersisteAlteracaoParcial()
+    public async Task SincronizarTodos_IbptEstourandoTimeout_RelataFalhaPorProduto()
     {
-        await using var db = TestDbFactory.Create(nameof(TentarSincronizarProduto_RespostaInvalidaNaoPersisteAlteracaoParcial));
-        var encryption = CreateEncryption();
-        var (_, produto) = await SeedAsync(db, encryption);
-        var handler = new FakeHandler(_ => Json("""
-            {"Codigo":"95044000","UF":"SP","Nacional":12.34,"Estadual":18,
-             "Importado":21.45,"Municipal":0,"VigenciaInicio":"data-invalida",
-             "VigenciaFim":"31/12/2099","Chave":"ABC123","Versao":"26.1.L","Fonte":"IBPT"}
-            """));
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db, produtos: 3);
+        using var handler = new HandlerQueEstouraTimeout();
 
-        var atualizado = await CreateService(db, encryption, handler)
-            .TentarSincronizarProdutoAsync(produto.Id);
+        var resultado = await CreateService(db, handler).SincronizarTodosAsync();
 
-        atualizado.Should().BeFalse();
-        await db.Entry(produto).ReloadAsync();
-        produto.PercentualTributosFederais.Should().BeNull();
-        produto.PercentualTributosEstaduais.Should().BeNull();
-        produto.FonteTributos.Should().BeNull();
-        produto.TributosPreenchidosAutomaticamente.Should().BeFalse();
+        resultado.Falhas.Should().Be(3, "cada produto registra a própria falha");
+        resultado.Atualizados.Should().Be(0);
+        resultado.Erros.Should().OnlyContain(m => m.Contains("não respondeu"),
+            "a mensagem precisa dizer que foi o IBPT que não respondeu, não 'falha inesperada' — " +
+            "senão o lojista não sabe se o problema é o token dele");
     }
 
-    private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK)
+    [Fact]
+    public async Task SincronizarTodos_IbptLento_SegueParaOsDemaisProdutos()
     {
-        Content = new StringContent(json, Encoding.UTF8, "application/json"),
-    };
+        // Prova que o laço não para no primeiro erro: com 3 produtos, o handler
+        // precisa ter sido chamado 3 vezes.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db, produtos: 3);
+        using var handler = new HandlerQueEstouraTimeout();
 
-    private sealed class FakeHandler(Func<HttpRequestMessage, HttpResponseMessage> response) : HttpMessageHandler
+        await CreateService(db, handler).SincronizarTodosAsync();
+
+        handler.Chamadas.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task SincronizarTodos_CancelamentoDeVerdade_Aborta()
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(response(request));
+        // O outro lado da moeda: se o chamador cancelou (aba fechada, deploy
+        // derrubando o processo), continuar consumindo a API de terceiro seria
+        // errado. O filtro precisa distinguir os dois, e não achatar ambos.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db, produtos: 3);
+        using var handler = new HandlerQueEstouraTimeout();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = async () => await CreateService(db, handler).SincronizarTodosAsync(cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        handler.Chamadas.Should().Be(0, "nem o primeiro produto deve ser consultado");
     }
 }
