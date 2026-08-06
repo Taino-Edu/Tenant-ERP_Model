@@ -1,4 +1,4 @@
-﻿// =============================================================================
+// =============================================================================
 // ProductController.cs — CRUD de Produtos (Estoque Fixo)
 // GET    /api/product            → lista todos ativos
 // GET    /api/product/{id}       → busca por ID
