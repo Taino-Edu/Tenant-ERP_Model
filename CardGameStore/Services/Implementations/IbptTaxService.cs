@@ -175,10 +175,28 @@ public sealed class IbptTaxService
                 UpsertEntrada(existentes, uf, grupo.Key.Ncm, grupo.Key.Importado, resposta);
                 atualizados++;
             }
+            catch (Exception ex) when (EhServicoIndisponivel(ex))
+            {
+                // O serviço não está no ar. Insistir nos demais NCMs só multiplica
+                // a espera pelo mesmo resultado: em homologação foram 4 timeouts
+                // idênticos por ciclo, a cada ciclo, cada um até o limite.
+                //
+                // O primeiro timeout já contou tudo o que havia para saber. Os
+                // outros três eram só o job segurando um worker por minutos e
+                // martelando um servidor que não responde.
+                erros.Add(
+                    "O IBPT não respondeu. A atualização foi interrompida neste ciclo e será " +
+                    "retomada na próxima janela — a tabela anterior continua valendo.");
+                _logger.LogWarning(ex,
+                    "IBPT indisponível ao consultar o NCM {Ncm}. Ciclo interrompido após " +
+                    "{Ok} de {Total} NCM(s).", grupo.Key.Ncm, atualizados, combinacoes.Count);
+                break;
+            }
             catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
             {
-                // Um NCM que falhou nao invalida os outros, e a linha antiga
-                // continua valendo: tabela de ontem e melhor que nenhuma.
+                // Falha DESTE NCM (código recusado, resposta malformada): não diz
+                // nada sobre os outros, então o laço segue. A linha antiga
+                // continua valendo — tabela de ontem é melhor que nenhuma.
                 var mensagem = MensagemSegura(ex);
                 erros.Add($"NCM {grupo.Key.Ncm}: {mensagem}");
                 _logger.LogWarning(
@@ -532,6 +550,20 @@ public sealed class IbptTaxService
     /// integração e merece dizer o que houve, senão o lojista fica sem saber se o
     /// problema é o token dele ou o servidor do IBPT.
     /// </summary>
+    /// <summary>
+    /// Distingue "o serviço está fora" de "este NCM deu problema". A diferença
+    /// decide se vale continuar o ciclo: um NCM recusado não diz nada sobre os
+    /// outros; um serviço fora do ar diz tudo sobre todos.
+    ///
+    /// Timeout do HttpClient chega como TaskCanceledException — o mesmo tipo de
+    /// um cancelamento real —, então a checagem é por tipo E por causa interna.
+    /// </summary>
+    private static bool EhServicoIndisponivel(Exception ex) =>
+        ex is TimeoutException
+        || ex is HttpRequestException
+        || (ex is TaskCanceledException && ex.InnerException is TimeoutException)
+        || (ex.InnerException is not null && EhServicoIndisponivel(ex.InnerException));
+
     private static string MensagemSegura(Exception ex) => ex switch
     {
         IbptIntegrationException => ex.Message,

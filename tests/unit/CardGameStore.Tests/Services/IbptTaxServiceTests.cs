@@ -82,6 +82,22 @@ public class IbptTaxServiceTests
         }
     }
 
+    /// <summary>Serviço no ar, mas recusando este NCM — distinto de estar fora.</summary>
+    private sealed class HandlerQueRecusa : HttpMessageHandler
+    {
+        public int Chamadas { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Chamadas++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)
+            {
+                Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
     private sealed class FabricaDeCliente(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) =>
@@ -324,5 +340,47 @@ public class IbptTaxServiceTests
 
         var cfg = await db.FiscalConfigs.AsNoTracking().FirstAsync();
         cfg.IbptUltimoErro.Should().Contain("dígito(s)", "e isso tem que chegar à tela");
+    }
+
+    [Fact]
+    public async Task AtualizarTabelaLocal_ServicoForaDoAr_ParaNoPrimeiroEmVezDeMartelar()
+    {
+        // Em homologação foram 4 timeouts idênticos por ciclo, a cada ciclo, cada
+        // um até o limite — o job segurando um worker por minutos e martelando um
+        // servidor que não responde. O primeiro timeout já contou tudo.
+        //
+        // Se a causa for bloqueio por excesso de requisição, isto também é o que
+        // impede a reincidência.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db, produtos: 4);
+        var produtos = await db.Products.ToListAsync();
+        for (var i = 0; i < produtos.Count; i++) produtos[i].Ncm = $"9504400{i}";
+        await db.SaveChangesAsync();
+        using var handler = new HandlerQueEstouraTimeout();
+
+        var resultado = await CreateService(db, handler).AtualizarTabelaLocalAsync();
+
+        handler.Chamadas.Should().Be(1, "o primeiro timeout já diz tudo sobre os outros três");
+        resultado.Erros.Should().ContainSingle()
+            .Which.Should().Contain("interrompida neste ciclo");
+    }
+
+    [Fact]
+    public async Task AtualizarTabelaLocal_FalhaDeUmNcmSo_NaoInterrompeOsDemais()
+    {
+        // O outro lado: erro do NCM (código recusado, resposta malformada) não
+        // diz nada sobre os outros. Achatar os dois casos faria uma classificação
+        // errada de um produto travar a tabela inteira.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db, produtos: 3);
+        var produtos = await db.Products.ToListAsync();
+        for (var i = 0; i < produtos.Count; i++) produtos[i].Ncm = $"9504400{i}";
+        await db.SaveChangesAsync();
+        using var handler = new HandlerQueRecusa();
+
+        var resultado = await CreateService(db, handler).AtualizarTabelaLocalAsync();
+
+        handler.Chamadas.Should().Be(3, "cada NCM merece a própria tentativa");
+        resultado.Falhas.Should().Be(3);
     }
 }
