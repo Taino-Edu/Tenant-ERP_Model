@@ -299,4 +299,30 @@ public class IbptTaxServiceTests
         var salvo = await db.Products.FindAsync(produto.Id);
         salvo!.PercentualTributosFederais.Should().Be(99m, "o valor do contador tem precedência");
     }
+
+    [Fact]
+    public async Task AtualizarTabelaLocal_NcmComTamanhoErrado_ReportaEmVezDeIgnorar()
+    {
+        // Antes, NCM fora do formato era descartado em SILÊNCIO: o job não
+        // consultava, não registrava erro, e a aplicação da tabela dizia apenas
+        // "NCM ainda não está na tabela local" — para sempre, sem nada no painel
+        // explicando por quê. O produto ficava sem transparência tributária e a
+        // NFC-e dele nunca era emitida.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db);
+        var produto = await db.Products.FirstAsync();
+        produto.Ncm = "6109100";   // 7 dígitos
+        await db.SaveChangesAsync();
+        using var handler = new HandlerQueResponde();
+
+        var resultado = await CreateService(db, handler).AtualizarTabelaLocalAsync();
+
+        handler.Chamadas.Should().Be(0, "não faz sentido consultar o IBPT com NCM inválido");
+        resultado.Erros.Should().ContainSingle()
+            .Which.Should().Contain("7 dígito(s)").And.Contain("exige exatamente 8",
+                "o painel precisa dizer qual produto e o que corrigir");
+
+        var cfg = await db.FiscalConfigs.AsNoTracking().FirstAsync();
+        cfg.IbptUltimoErro.Should().Contain("dígito(s)", "e isso tem que chegar à tela");
+    }
 }

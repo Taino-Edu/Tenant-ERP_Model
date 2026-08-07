@@ -132,7 +132,7 @@ public sealed class IbptTaxService
 
         // (NCM, origem) e a unidade de consulta: a aliquota federal muda entre
         // nacional e importado, o resto nao depende do produto.
-        var combinacoes = produtos
+        var candidatos = produtos
             .Select(p => new
             {
                 Ncm = SomenteDigitos(p.Ncm!),
@@ -140,6 +140,20 @@ public sealed class IbptTaxService
                     p.NaturezaOperacao?.OrigemMercadoria ?? padrao?.OrigemMercadoria ?? 0),
                 Produto = p,
             })
+            .ToList();
+
+        // NCM com tamanho errado era descartado em SILÊNCIO aqui: o job não
+        // consultava, não registrava erro, e a aplicação da tabela depois dizia
+        // apenas "NCM ainda não está na tabela local" — para sempre, sem que nada
+        // no painel explicasse por quê. O produto ficava sem transparência
+        // tributária e a NFC-e dele nunca era emitida.
+        var erros = new List<string>();
+        foreach (var invalido in candidatos.Where(c => c.Ncm.Length != 8))
+            erros.Add(
+                $"{invalido.Produto.Name}: NCM \"{invalido.Produto.Ncm}\" tem {invalido.Ncm.Length} " +
+                "dígito(s); o IBPT exige exatamente 8. Corrija em Admin > Estoque.");
+
+        var combinacoes = candidatos
             .Where(c => c.Ncm.Length == 8)
             .GroupBy(c => new { c.Ncm, c.Importado })
             .ToList();
@@ -149,7 +163,6 @@ public sealed class IbptTaxService
             .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
 
         var atualizados = 0;
-        var erros = new List<string>();
 
         foreach (var grupo in combinacoes)
         {
