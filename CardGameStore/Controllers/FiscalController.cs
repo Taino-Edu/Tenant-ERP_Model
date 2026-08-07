@@ -945,8 +945,31 @@ public class FiscalController : ControllerBase
             }
             catch (Exception ex)
             {
+                // Registrar no painel, não só no log: a tarefa roda fora da
+                // requisição, então este catch é a ÚNICA chance de o lojista
+                // descobrir por que a tabela não atualizou. Sem isto, a tela dizia
+                // "buscando em segundo plano" e nada mais acontecia, para sempre.
                 _logger.LogWarning(ex,
                     "Atualização da tabela IBPT em segundo plano falhou (tenant {TenantId}).", tenantId);
+                try
+                {
+                    using var scopeErro = _scopeFactory.CreateScope();
+                    scopeErro.ServiceProvider.GetRequiredService<ITenantContext>()
+                        .Set(tenantId, schema, modulos);
+                    var db = scopeErro.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var cfg = await db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
+                    if (cfg is not null)
+                    {
+                        cfg.IbptUltimoErro = $"Atualização automática falhou: {ex.GetBaseException().Message}"
+                            [..Math.Min(ex.GetBaseException().Message.Length + 32, 500)];
+                        cfg.UpdatedAt = DateTime.UtcNow;
+                        await db.SaveChangesAsync();
+                    }
+                }
+                catch (Exception erroAoRegistrar)
+                {
+                    _logger.LogError(erroAoRegistrar, "Falha ao registrar o erro do IBPT na configuração.");
+                }
             }
         });
         return true;

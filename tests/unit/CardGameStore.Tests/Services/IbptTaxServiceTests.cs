@@ -299,4 +299,65 @@ public class IbptTaxServiceTests
         var salvo = await db.Products.FindAsync(produto.Id);
         salvo!.PercentualTributosFederais.Should().Be(99m, "o valor do contador tem precedência");
     }
+
+    // ── NCM que ainda não está na tabela (o caso do cadastro novo) ────────────
+
+    [Fact]
+    public async Task GarantirNcm_QuandoFaltaNaTabela_BuscaSoEleEPreenche()
+    {
+        // Tirar a rede da requisição não podia significar tirar o preenchimento:
+        // um produto com NCM novo ficava sem transparência tributária até o job do
+        // dia seguinte — e sem ela a NFC-e daquele produto não é emitida.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db);
+        var produto = await db.Products.FirstAsync();
+        using var handler = new HandlerQueResponde();
+
+        var preencheu = await CreateService(db, handler).GarantirNcmNaTabelaEPreencherAsync(produto.Id);
+
+        preencheu.Should().BeTrue();
+        handler.Chamadas.Should().Be(1, "uma consulta, para um NCM só");
+        var salvo = await db.Products.AsNoTracking().FirstAsync(p => p.Id == produto.Id);
+        salvo.PercentualTributosFederais.Should().Be(12.5m);
+    }
+
+    [Fact]
+    public async Task GarantirNcm_QuandoJaEstaNaTabela_NaoTocaNaRede()
+    {
+        // Segunda edição do mesmo produto não repete a consulta.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db);
+        using var handlerCarga = new HandlerQueResponde();
+        await CreateService(db, handlerCarga).AtualizarTabelaLocalAsync();
+
+        var produto = await db.Products.FirstAsync();
+        produto.TributosPreenchidosAutomaticamente = false;
+        produto.PercentualTributosFederais = null;
+        await db.SaveChangesAsync();
+
+        using var handlerProibido = new HandlerQueEstouraTimeout();
+        var preencheu = await CreateService(db, handlerProibido)
+            .GarantirNcmNaTabelaEPreencherAsync(produto.Id);
+
+        preencheu.Should().BeTrue();
+        handlerProibido.Chamadas.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GarantirNcm_ComIbptForaDoAr_RegistraOErroVisivelAoLojista()
+    {
+        // A tarefa roda fora da requisição: se a falha só for para o log, o
+        // lojista vê o produto sem tributos e não tem como descobrir por quê.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db);
+        var produto = await db.Products.FirstAsync();
+        using var handler = new HandlerQueEstouraTimeout();
+
+        var preencheu = await CreateService(db, handler).GarantirNcmNaTabelaEPreencherAsync(produto.Id);
+
+        preencheu.Should().BeFalse();
+        var cfg = await db.FiscalConfigs.AsNoTracking().FirstAsync();
+        cfg.IbptUltimoErro.Should().NotBeNullOrWhiteSpace()
+            .And.Contain("não respondeu", "o painel precisa dizer o que houve, não ficar em branco");
+    }
 }
