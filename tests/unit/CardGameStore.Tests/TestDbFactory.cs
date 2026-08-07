@@ -30,6 +30,8 @@
 // =============================================================================
 
 using System.Data.Common;
+using System.Diagnostics;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
@@ -62,6 +64,17 @@ public static class TestDbFactory
     {
         // Os schemas exclusivos evitam colisão entre processos, mas não devem
         // se acumular no banco local depois de uma execução normal da suíte.
+        //
+        // Isto sozinho NÃO basta, e o motivo não é óbvio: o runtime dá um prazo
+        // de ~2 segundos ao handler de ProcessExit e depois derruba o processo
+        // no meio do que estiver fazendo. Dropar ~300 schemas, cada um com uns
+        // 134 objetos em CASCADE, não cabe nesse prazo — então toda execução
+        // normal deixa um resto para trás, medido em ~300 schemas por rodada.
+        // É daí que vêm os 6.700 órfãos que já quebraram a suíte duas vezes.
+        //
+        // Por isso a varredura de verdade é CleanupOrphanSchemas, no INÍCIO da
+        // execução seguinte, onde não há relógio correndo. Este handler continua
+        // valendo pelo que consegue adiantar.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => CleanupRunSchemas();
     }
 
@@ -201,6 +214,7 @@ public static class TestDbFactory
                 using var connection = new NpgsqlConnection(PgConnString);
                 connection.Open();
                 EnsureLockCapacity(connection);
+                CleanupOrphanSchemas(connection);
                 return true;
             }
             catch (Exception exception) when (attempt < 6)
@@ -219,6 +233,88 @@ public static class TestDbFactory
             "'docker compose -f tests/docker-compose.yml up -d --wait' " +
             "ou configure TEST_POSTGRES_CONNECTION antes de rodar a suíte.",
             lastException);
+    }
+
+    /// <summary>Dropa schemas de execuções ANTERIORES que morreram sem passar
+    /// pelo ProcessExit — rodada cancelada no meio, testhost derrubado, debug
+    /// interrompido. Roda uma vez por processo, antes do primeiro Create().
+    ///
+    /// Sem isto o lixo se acumula em silêncio até o catálogo do Postgres ficar
+    /// grande demais e o handshake do Npgsql estourar o Timeout=3 — e o sintoma
+    /// não tem nenhuma relação com a causa: a suíte quebra em massa em testes
+    /// que ninguém tocou (já aconteceu duas vezes, ~6.700 schemas órfãos).
+    ///
+    /// A limpeza é de melhor esforço e nunca falha a suíte: um erro aqui
+    /// significa banco ocupado, não teste quebrado.</summary>
+    private static void CleanupOrphanSchemas(NpgsqlConnection connection)
+    {
+        try
+        {
+            var schemas = new List<string>();
+            using (var list = connection.CreateCommand())
+            {
+                // '_' é curinga no LIKE; escapado para não casar 'testX...'.
+                list.CommandText = @"SELECT schema_name FROM information_schema.schemata
+                                     WHERE schema_name LIKE 'test\_%'";
+                using var reader = list.ExecuteReader();
+                while (reader.Read()) schemas.Add(reader.GetString(0));
+            }
+
+            var removidos = 0;
+            foreach (var schema in schemas.Where(DeExecucaoJaMorta))
+            {
+                using var drop = connection.CreateCommand();
+                drop.CommandText =
+                    $"DROP SCHEMA IF EXISTS {new NpgsqlCommandBuilder().QuoteIdentifier(schema)} CASCADE;";
+                drop.ExecuteNonQuery();
+                removidos++;
+            }
+
+            if (removidos > 0)
+                Console.Error.WriteLine(
+                    $"[TestDbFactory] {removidos} schema(s) de execuções anteriores removido(s).");
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"[TestDbFactory] limpeza de schemas órfãos ignorada: {exception.Message}");
+        }
+    }
+
+    /// <summary>O schema pertence a uma execução que com certeza já terminou?
+    ///
+    /// O nome carrega o PID do testhost que o criou (ver RunId), então basta
+    /// perguntar ao SO se aquele processo ainda existe. A dúvida sempre resolve
+    /// para <c>false</c> — nome fora do padrão, processo vivo, ou PID reciclado
+    /// por outro programa — porque o único erro caro aqui seria dropar o schema
+    /// de uma segunda suíte rodando ao mesmo tempo, que a mataria com
+    /// "relation does not exist". Deixar lixo para trás custa uma passada a mais
+    /// na próxima execução; dropar o que está em uso custa uma investigação.</summary>
+    internal static bool DeExecucaoJaMorta(string schema)
+    {
+        // test_{pid:x}_{guid}_{sequencia}_{nome-do-teste}
+        var partes = schema.Split('_');
+        if (partes.Length < 4
+            || !int.TryParse(partes[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var pid)
+            || pid <= 0)
+            return false;
+
+        if (pid == Environment.ProcessId) return false;
+
+        try
+        {
+            using var processo = Process.GetProcessById(pid);
+            return processo.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            // Não existe processo com este id: a execução que criou o schema
+            // acabou (normalmente ou não) e o schema ficou para trás.
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void CleanupRunSchemas()
