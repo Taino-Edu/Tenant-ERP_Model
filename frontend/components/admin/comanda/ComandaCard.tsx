@@ -12,7 +12,7 @@ import clsx from 'clsx'
 import { fmt, elapsedLabel, elapsedColor } from './shared'
 import { AddItemModal } from './AddItemModal'
 import { CloseComandaModal } from './CloseComandaModal'
-import { ConfirmModal } from './ConfirmModal'
+import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
 
 // ── Card de Comanda ───────────────────────────────────────────────────────────
 
@@ -34,7 +34,14 @@ export function ComandaCard({
   const [addOpen, setAddOpen]     = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
   const [pixOpen, setPixOpen]     = useState(false)
-  const [confirm, setConfirm]     = useState<'cancel' | null>(null)
+  // Discriminada por `tipo` para o item carregar consigo qual item é — antes
+  // essa informação vivia no argumento do window.confirm e sumia junto com ele.
+  const [confirm, setConfirm]     = useState<
+    | { tipo: 'cancel' }
+    | { tipo: 'removeItem'; itemId: string; nome: string }
+    | { tipo: 'removePoints' }
+    | null
+  >(null)
   const [removingItem, setRemovingItem]   = useState<string | null>(null)
   const [updatingItem, setUpdatingItem]   = useState<string | null>(null)
   const [removingPts,  setRemovingPts]    = useState(false)
@@ -69,26 +76,32 @@ export function ComandaCard({
     setLoading(true)
     try { await onCancel(comanda.id) } finally { setLoading(false) }
   }
-  async function handleRemoveItem(itemId: string, itemName: string) {
-    if (!window.confirm(`Remover "${itemName}" da comanda?`)) return
+  function handleRemoveItem(itemId: string, itemName: string) {
+    setConfirm({ tipo: 'removeItem', itemId, nome: itemName })
+  }
+  async function removeItem(itemId: string) {
     setRemovingItem(itemId)
     try {
       const { data } = await comandaApi.removeItem(comanda.id, itemId)
       onUpdate(data, 'remove')
       toast.success('Item removido.')
+      setConfirm(null)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao remover item.'))
     } finally {
       setRemovingItem(null)
     }
   }
-  async function handleRemovePoints() {
-    if (!window.confirm('Remover os pontos aplicados e devolver ao saldo do cliente?')) return
+  function handleRemovePoints() {
+    setConfirm({ tipo: 'removePoints' })
+  }
+  async function removePoints() {
     setRemovingPts(true)
     try {
       const { data } = await comandaApi.removePoints(comanda.id)
       onUpdate(data, 'remove')
       toast.success('Pontos removidos e devolvidos ao cliente!')
+      setConfirm(null)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao remover pontos.'))
     } finally {
@@ -151,14 +164,33 @@ export function ComandaCard({
           onSuccess={onClosedExternally}
         />
       )}
-      {confirm === 'cancel' && (
-        <ConfirmModal
+      {confirm?.tipo === 'cancel' && (
+        <ConfirmDialog
           title="Cancelar comanda"
-          message={`Cancelar a comanda de ${comanda.userName}? Esta ação não pode ser desfeita.`}
+          message={<>Cancelar a comanda de <strong>{comanda.userName}</strong>? Esta ação não pode ser desfeita.</>}
           confirmLabel="Cancelar comanda"
-          confirmClass="btn-danger"
           onConfirm={handleCancel}
-          onCancel={() => setConfirm(null)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+      {confirm?.tipo === 'removeItem' && (
+        <ConfirmDialog
+          title="Remover item"
+          message={<>Remover <strong>{confirm.nome}</strong> da comanda?</>}
+          confirmLabel="Remover"
+          loading={removingItem === confirm.itemId}
+          onConfirm={() => removeItem(confirm.itemId)}
+          onClose={() => setConfirm(null)}
+        />
+      )}
+      {confirm?.tipo === 'removePoints' && (
+        <ConfirmDialog
+          title="Remover pontos"
+          message="Remover os pontos aplicados e devolver ao saldo do cliente?"
+          confirmLabel="Remover pontos"
+          loading={removingPts}
+          onConfirm={removePoints}
+          onClose={() => setConfirm(null)}
         />
       )}
 
@@ -335,7 +367,7 @@ export function ComandaCard({
             <CheckCircle className="w-4 h-4" /> Fechar
           </button>
           <button
-            onClick={() => setConfirm('cancel')} disabled={loading}
+            onClick={() => setConfirm({ tipo: 'cancel' })} disabled={loading}
             className="btn-danger py-1.5 px-3"
             title="Cancelar comanda"
           >

@@ -15,6 +15,7 @@ import { ItemCrediarioDto } from '@/lib/api'
 import { CobrancaPixModal } from '@/components/admin/CobrancaPixModal'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
+import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import clsx from 'clsx'
 
@@ -1089,15 +1090,20 @@ export default function CrediarioPage() {
   const [editarCrediario, setEditarCrediario] = useState<CrediariosDto | null>(null)
   const [pixCrediario, setPixCrediario]       = useState<CrediariosDto | null>(null)
   const [showNovaDivida, setShowNovaDivida] = useState(false)
+  const [confirmarExclusao, setConfirmarExclusao] = useState<CrediariosDto | null>(null)
+  const [excluindo, setExcluindo]           = useState(false)
 
   async function handleDeletar(crediario: CrediariosDto) {
-    if (!window.confirm(`Excluir o crediário de ${crediario.userName}?\nEsta ação não pode ser desfeita.`)) return
+    setExcluindo(true)
     try {
       await crediarioApi.deletar(crediario.id)
       toast.success('Crediário excluído!')
+      setConfirmarExclusao(null)
       fetchCrediarios()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao excluir crediário'))
+    } finally {
+      setExcluindo(false)
     }
   }
 
@@ -1259,7 +1265,7 @@ export default function CrediarioPage() {
                 grupo={g}
                 onPagamento={setModalCrediario}
                 onEditar={setEditarCrediario}
-                onDeletar={handleDeletar}
+                onDeletar={setConfirmarExclusao}
                 onCobrancaPix={setPixCrediario}
               />
             ))}
@@ -1282,11 +1288,22 @@ export default function CrediarioPage() {
               c={c}
               onPagamento={setModalCrediario}
               onEditar={setEditarCrediario}
-              onDeletar={handleDeletar}
+              onDeletar={setConfirmarExclusao}
               onCobrancaPix={setPixCrediario}
             />
           ))}
         </div>
+      )}
+
+      {confirmarExclusao && (
+        <ConfirmDialog
+          title="Excluir crediário"
+          message={<>Excluir o crediário de <strong>{confirmarExclusao.userName}</strong>? Esta ação não pode ser desfeita.</>}
+          confirmLabel="Excluir"
+          loading={excluindo}
+          onConfirm={() => handleDeletar(confirmarExclusao)}
+          onClose={() => setConfirmarExclusao(null)}
+        />
       )}
     </div>
   )

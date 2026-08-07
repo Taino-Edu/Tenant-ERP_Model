@@ -7,6 +7,8 @@ import { fiscalApi, FiscalConfigDto, FiscalSaudeDto, IbptStatusDto, NaturezaOper
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import Modal from '@/components/admin/ui/Modal'
+import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
+import NumberInput from '@/components/admin/ui/NumberInput'
 import AlertasFiscaisCard from '@/components/admin/fiscal/AlertasFiscaisCard'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
@@ -234,6 +236,7 @@ export default function FiscalPage() {
   const [inutFim, setInutFim] = useState(1)
   const [inutJustificativa, setInutJustificativa] = useState('')
   const [inutilizando, setInutilizando] = useState(false)
+  const [confirmarInutilizacao, setConfirmarInutilizacao] = useState(false)
 
   // Histórico de notas
   const [notas, setNotas]               = useState<NotaFiscalDto[]>([])
@@ -451,10 +454,10 @@ export default function FiscalPage() {
       toast.error('A justificativa precisa ter pelo menos 15 caracteres.')
       return
     }
-    if (!window.confirm(
-      `Inutilizar definitivamente a faixa ${inutSerie}/${inutInicio}-${inutFim} de ${inutAno}? Esta operação não pode ser desfeita.`
-    )) return
+    setConfirmarInutilizacao(true)
+  }
 
+  async function confirmarInutilizarFaixa() {
     setInutilizando(true)
     try {
       const { data } = await fiscalApi.inutilizarFaixa({
@@ -463,6 +466,7 @@ export default function FiscalPage() {
       })
       toast.success(`Faixa inutilizada. Protocolo ${data.protocolo}`)
       setInutJustificativa('')
+      setConfirmarInutilizacao(false)
       loadNotas()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao inutilizar faixa'))
@@ -890,7 +894,7 @@ export default function FiscalPage() {
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Série NFC-e</label>
-            <input type="number" min={1} value={serieNfce} onChange={e => setSerieNfce(Number(e.target.value))} className="input w-full" />
+            <NumberInput min={1} value={serieNfce} fallback={1} onChange={v => setSerieNfce(v ?? 1)} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Email do Contador</label>
@@ -1343,19 +1347,19 @@ export default function FiscalPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Ano</label>
-            <input type="number" value={inutAno} onChange={e => setInutAno(Number(e.target.value))} className="input w-full" />
+            <NumberInput value={inutAno} fallback={new Date().getFullYear()} onChange={v => setInutAno(v ?? new Date().getFullYear())} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Série</label>
-            <input type="number" min={1} max={999} value={inutSerie} onChange={e => setInutSerie(Number(e.target.value))} className="input w-full" />
+            <NumberInput min={1} max={999} value={inutSerie} fallback={1} onChange={v => setInutSerie(v ?? 1)} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Número inicial</label>
-            <input type="number" min={1} value={inutInicio} onChange={e => setInutInicio(Number(e.target.value))} className="input w-full" />
+            <NumberInput min={1} value={inutInicio} fallback={1} onChange={v => setInutInicio(v ?? 1)} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Número final</label>
-            <input type="number" min={1} value={inutFim} onChange={e => setInutFim(Number(e.target.value))} className="input w-full" />
+            <NumberInput min={1} value={inutFim} fallback={1} onChange={v => setInutFim(v ?? 1)} className="w-full" />
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 items-end">
@@ -1618,6 +1622,26 @@ export default function FiscalPage() {
               </button>
             </div>
         </Modal>
+      )}
+
+      {confirmarInutilizacao && (
+        <ConfirmDialog
+          title="Inutilizar faixa de numeração"
+          message={
+            <>
+              Inutilizar definitivamente a faixa{' '}
+              <strong>{inutSerie}/{inutInicio}–{inutFim}</strong> de <strong>{inutAno}</strong>?
+              <span className="block mt-2">
+                A faixa é declarada à SEFAZ como nunca usada. Não pode ser desfeita, e
+                nenhum desses números poderá ser emitido depois.
+              </span>
+            </>
+          }
+          confirmLabel="Inutilizar faixa"
+          loading={inutilizando}
+          onConfirm={confirmarInutilizarFaixa}
+          onClose={() => setConfirmarInutilizacao(false)}
+        />
       )}
     </div>
   )
