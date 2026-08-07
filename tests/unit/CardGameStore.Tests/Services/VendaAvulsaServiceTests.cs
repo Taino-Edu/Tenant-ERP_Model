@@ -382,7 +382,7 @@ public class VendaAvulsaServiceTests
         }, AdminId, AdminName);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de pontos está desativado*");
+            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
     }
 
     [Fact]
@@ -404,7 +404,7 @@ public class VendaAvulsaServiceTests
         }, AdminId, AdminName);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de pontos está desativado*");
+            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
     }
 
     [Fact]
@@ -431,7 +431,7 @@ public class VendaAvulsaServiceTests
         }, AdminId, AdminName);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*módulo de fidelidade não está habilitado*");
+            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
     }
 
     [Fact]
