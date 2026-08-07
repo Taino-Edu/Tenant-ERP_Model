@@ -132,7 +132,7 @@ public sealed class IbptTaxService
 
         // (NCM, origem) e a unidade de consulta: a aliquota federal muda entre
         // nacional e importado, o resto nao depende do produto.
-        var combinacoes = produtos
+        var candidatos = produtos
             .Select(p => new
             {
                 Ncm = SomenteDigitos(p.Ncm!),
@@ -140,6 +140,20 @@ public sealed class IbptTaxService
                     p.NaturezaOperacao?.OrigemMercadoria ?? padrao?.OrigemMercadoria ?? 0),
                 Produto = p,
             })
+            .ToList();
+
+        // NCM com tamanho errado era descartado em SILÊNCIO aqui: o job não
+        // consultava, não registrava erro, e a aplicação da tabela depois dizia
+        // apenas "NCM ainda não está na tabela local" — para sempre, sem que nada
+        // no painel explicasse por quê. O produto ficava sem transparência
+        // tributária e a NFC-e dele nunca era emitida.
+        var erros = new List<string>();
+        foreach (var invalido in candidatos.Where(c => c.Ncm.Length != 8))
+            erros.Add(
+                $"{invalido.Produto.Name}: NCM \"{invalido.Produto.Ncm}\" tem {invalido.Ncm.Length} " +
+                "dígito(s); o IBPT exige exatamente 8. Corrija em Admin > Estoque.");
+
+        var combinacoes = candidatos
             .Where(c => c.Ncm.Length == 8)
             .GroupBy(c => new { c.Ncm, c.Importado })
             .ToList();
@@ -149,7 +163,6 @@ public sealed class IbptTaxService
             .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
 
         var atualizados = 0;
-        var erros = new List<string>();
 
         foreach (var grupo in combinacoes)
         {
@@ -162,10 +175,28 @@ public sealed class IbptTaxService
                 UpsertEntrada(existentes, uf, grupo.Key.Ncm, grupo.Key.Importado, resposta);
                 atualizados++;
             }
+            catch (Exception ex) when (EhServicoIndisponivel(ex))
+            {
+                // O serviço não está no ar. Insistir nos demais NCMs só multiplica
+                // a espera pelo mesmo resultado: em homologação foram 4 timeouts
+                // idênticos por ciclo, a cada ciclo, cada um até o limite.
+                //
+                // O primeiro timeout já contou tudo o que havia para saber. Os
+                // outros três eram só o job segurando um worker por minutos e
+                // martelando um servidor que não responde.
+                erros.Add(
+                    "O IBPT não respondeu. A atualização foi interrompida neste ciclo e será " +
+                    "retomada na próxima janela — a tabela anterior continua valendo.");
+                _logger.LogWarning(ex,
+                    "IBPT indisponível ao consultar o NCM {Ncm}. Ciclo interrompido após " +
+                    "{Ok} de {Total} NCM(s).", grupo.Key.Ncm, atualizados, combinacoes.Count);
+                break;
+            }
             catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
             {
-                // Um NCM que falhou nao invalida os outros, e a linha antiga
-                // continua valendo: tabela de ontem e melhor que nenhuma.
+                // Falha DESTE NCM (código recusado, resposta malformada): não diz
+                // nada sobre os outros, então o laço segue. A linha antiga
+                // continua valendo — tabela de ontem é melhor que nenhuma.
                 var mensagem = MensagemSegura(ex);
                 erros.Add($"NCM {grupo.Key.Ncm}: {mensagem}");
                 _logger.LogWarning(
@@ -211,6 +242,103 @@ public sealed class IbptTaxService
         entrada.VigenciaFim         = ParseData(resposta.VigenciaFim, "fim");
         entrada.AtualizadoEm        = DateTime.UtcNow;
     }
+
+    /// <summary>
+    /// Importa a tabela oficial a partir do CSV do pacote do IBPT, substituindo
+    /// tudo o que houver para a UF da loja.
+    ///
+    /// Substituição total, e não mesclagem, de propósito: o arquivo é uma versão
+    /// fechada e coerente (mesma vigência, mesma chave). Misturar linhas de
+    /// versões diferentes produziria uma tabela que não corresponde a documento
+    /// nenhum — e é exatamente isso que a fiscalização pediria para conferir.
+    ///
+    /// Cada NCM vira DUAS linhas, nacional e importada, porque a alíquota federal
+    /// difere entre as duas e a origem é atributo do produto, não do NCM.
+    /// </summary>
+    public async Task<IbptImportacaoResult> ImportarTabelaCsvAsync(
+        Stream conteudo, string? nomeArquivo, CancellationToken ct = default)
+    {
+        var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct)
+            ?? throw new IbptIntegrationException("Configure os dados fiscais da loja antes de importar a tabela.");
+        if (string.IsNullOrWhiteSpace(cfg.Uf) || cfg.Uf.Length != 2)
+            throw new IbptIntegrationException("Informe a UF da loja antes de importar a tabela do IBPT.");
+
+        var uf = cfg.Uf.ToUpperInvariant();
+
+        // A tabela é POR ESTADO e a UF não está no conteúdo do arquivo, só no
+        // nome. Sem esta checagem, uma loja de MG importaria a tabela de SP e
+        // passaria a emitir com alíquota estadual errada, sem nada denunciando.
+        var ufDoArquivo = IbptTabelaCsvImporter.UfDoNomeDoArquivo(nomeArquivo);
+        if (ufDoArquivo is not null && ufDoArquivo != uf)
+            throw new IbptIntegrationException(
+                $"Este arquivo é a tabela de {ufDoArquivo} e a loja está configurada em {uf}. " +
+                "A alíquota estadual muda por UF — baixe o pacote do IBPT para a UF correta.");
+
+        var leitura = IbptTabelaCsvImporter.Ler(conteudo);
+
+        // Fora do change tracker: são ~24 mil linhas (dois registros por NCM), e
+        // rastrear cada uma multiplicaria o tempo por nada.
+        await _db.IbptTabela.Where(e => e.Uf == uf).ExecuteDeleteAsync(ct);
+
+        var agora = DateTime.UtcNow;
+        var entradas = new List<IbptTabelaEntry>(leitura.Linhas.Count * 2);
+        foreach (var linha in leitura.Linhas)
+        {
+            foreach (var importado in new[] { false, true })
+                entradas.Add(new IbptTabelaEntry
+                {
+                    Ncm                 = linha.Ncm,
+                    Uf                  = uf,
+                    Importado           = importado,
+                    PercentualFederal   = importado ? linha.ImportadoFederal : linha.NacionalFederal,
+                    PercentualEstadual  = linha.Estadual,
+                    PercentualMunicipal = linha.Municipal,
+                    Fonte               = Limitar($"{linha.Fonte} {linha.Versao}".Trim(), 100),
+                    Versao              = linha.Versao,
+                    Chave               = linha.Chave,
+                    VigenciaInicio      = linha.VigenciaInicio,
+                    VigenciaFim         = linha.VigenciaFim,
+                    AtualizadoEm        = agora,
+                });
+        }
+
+        var rastreamento = _db.ChangeTracker.AutoDetectChangesEnabled;
+        _db.ChangeTracker.AutoDetectChangesEnabled = false;
+        try
+        {
+            await _db.IbptTabela.AddRangeAsync(entradas, ct);
+            cfg.IbptUltimaSincronizacao = agora;
+            cfg.IbptUltimaVersao        = leitura.Versao;
+            cfg.IbptVigenciaInicio      = leitura.VigenciaInicio;
+            cfg.IbptVigenciaFim         = leitura.VigenciaFim;
+            cfg.IbptUltimoErro          = null;
+            cfg.UpdatedAt               = agora;
+            await _db.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            _db.ChangeTracker.AutoDetectChangesEnabled = rastreamento;
+        }
+
+        _logger.LogInformation(
+            "Tabela IBPT importada por arquivo: {Ncms} NCM(s), versão {Versao}, UF {Uf}.",
+            leitura.Linhas.Count, leitura.Versao, uf);
+
+        // Aplicar já: o motivo de importar é destravar produto e emissão agora.
+        var aplicacao = await AplicarTabelaLocalAsync(ct);
+
+        return new IbptImportacaoResult(
+            NcmsImportados: leitura.Linhas.Count,
+            LinhasIgnoradas: leitura.LinhasIgnoradas,
+            Versao: leitura.Versao,
+            VigenciaInicio: leitura.VigenciaInicio,
+            VigenciaFim: leitura.VigenciaFim,
+            ProdutosAtualizados: aplicacao.Atualizados,
+            ProdutosSemTabela: aplicacao.Falhas);
+    }
+
+    private static string? Limitar(string valor, int max) =>
+        string.IsNullOrWhiteSpace(valor) ? null : valor[..Math.Min(valor.Length, max)];
 
     /// <summary>
     /// IBPT-002 — o caminho do usuário: preenche o produto pela tabela LOCAL, sem
@@ -519,11 +647,26 @@ public sealed class IbptTaxService
     /// integração e merece dizer o que houve, senão o lojista fica sem saber se o
     /// problema é o token dele ou o servidor do IBPT.
     /// </summary>
+    /// <summary>
+    /// Distingue "o serviço está fora" de "este NCM deu problema". A diferença
+    /// decide se vale continuar o ciclo: um NCM recusado não diz nada sobre os
+    /// outros; um serviço fora do ar diz tudo sobre todos.
+    ///
+    /// Timeout do HttpClient chega como TaskCanceledException — o mesmo tipo de
+    /// um cancelamento real —, então a checagem é por tipo E por causa interna.
+    /// </summary>
+    private static bool EhServicoIndisponivel(Exception ex) =>
+        ex is TimeoutException
+        || ex is HttpRequestException
+        || (ex is TaskCanceledException && ex.InnerException is TimeoutException)
+        || (ex.InnerException is not null && EhServicoIndisponivel(ex.InnerException));
+
     private static string MensagemSegura(Exception ex) => ex switch
     {
         IbptIntegrationException => ex.Message,
         OperationCanceledException or TimeoutException =>
-            "O IBPT não respondeu dentro do tempo limite (15s). Tente de novo mais tarde.",
+            "O IBPT não respondeu dentro do tempo limite. A tabela anterior continua valendo; " +
+            "a próxima tentativa é automática.",
         _ => "Falha inesperada ao consultar o IBPT.",
     };
 
@@ -536,6 +679,11 @@ public sealed record IbptStatusDto(
     bool Configurado, bool AutoSyncAtivo, DateTime? UltimaSincronizacao, string? UltimaVersao,
     DateTime? VigenciaInicio, DateTime? VigenciaFim, string? UltimoErro,
     int ProdutosAtivos, int ProdutosAutomaticos, int ProdutosPendentes, int ProdutosVencidos);
+
+public sealed record IbptImportacaoResult(
+    int NcmsImportados, int LinhasIgnoradas, string? Versao,
+    DateTime? VigenciaInicio, DateTime? VigenciaFim,
+    int ProdutosAtualizados, int ProdutosSemTabela);
 
 public sealed record IbptSyncResult(
     int Total, int Atualizados, int IgnoradosManuais, int Falhas, List<string> Erros);
