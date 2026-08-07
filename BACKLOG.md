@@ -407,6 +407,27 @@ Entregue: `IbptTabelaEntry` (chave `NCM + UF + origem`), `AtualizarTabelaLocalAs
 (job, único ponto de rede), `PreencherProdutoDaTabelaLocalAsync` (cadastro, sem
 rede) e `AplicarTabelaLocalAsync` (botão da tela, sem rede). 6 testes.
 
+**Complemento entregue em 07/08/2026 — importação por arquivo (PR #72).** A API
+do IBPT ficou fora do ar (confirmado de três redes independentes: VPS, ambiente
+de desenvolvimento e o navegador do lojista — não foi bloqueio por excesso de
+requisição, que devolveria 429), e com ela a tabela local não tinha como ser
+construída. `Admin > Fiscal → Importar tabela (.csv)` aceita o
+`TabelaIBPTax<UF><versão>.csv` do pacote oficial e substitui a tabela da UF
+inteira de uma vez — ~12 mil NCMs numa operação, sem rede.
+
+Isso inverte a dependência que motivava o cartão: **a tabela local passa a ser a
+fonte, e a API vira só um mecanismo de atualização.** A API fora do ar deixa de
+impedir cadastrar produto ou emitir.
+
+Duas armadilhas do formato, ambas cobertas por teste contra recorte do arquivo
+real (`Fixtures/Ibpt/TabelaIBPTax SP 26.1.L`), não contra fixture inventada:
+decimal com **ponto** (`13.45` lido em cultura pt-BR viraria 1345) e alíquotas
+que variam mais do que se supõe — "Cartas de jogar" (95044000) tem estadual de
+**25%**, não os 18% da maioria das linhas. A **UF não está no conteúdo** do
+arquivo, só no nome; por isso a importação recusa quando a UF do nome não bate
+com a da loja, que é a única defesa contra importar a tabela do estado errado e
+emitir com alíquota errada sem nada denunciar.
+
 ### Concluído em 2026-07-22 — preenchimento automático pela API IBPT
 
 - Credencial IBPT própria por tenant, armazenada criptografada e nunca devolvida pela

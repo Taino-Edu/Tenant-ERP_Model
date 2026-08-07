@@ -6,7 +6,7 @@ Painel rápido do que já foi feito, do que está em andamento e do que falta.
 plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; aqui
 é só o retrato do progresso.
 
-Última atualização: **06/08/2026** (rev. 4) · Alvo de lançamento: **10/08/2026**
+Última atualização: **07/08/2026** (rev. 5) · Alvo de lançamento: **10/08/2026**
 
 ## Legenda
 
@@ -30,9 +30,10 @@ plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; 
 | **DAN-001** — DANFE do XML | ✅ | parser + DTO imutável + HTML no padrão do manual, alimentado só pelo XML; `ObterCupomAsync` lê o XML persistido. 25 testes de parser. | 25.3, 26, 27 |
 | **DAN-002** — verificação física | 👤 | impressão em 58/80 mm, leitura do QR em dois aparelhos, aceite fiscal. | 7 |
 | **RES-001** — resultado incerto | ✅ | falha de rede deixou de ser um caso só: "nunca chegou" vai para contingência, timeout vira `ResultadoIncerto` e consulta a chave antes de decidir; duplicidade adota o documento da SEFAZ em vez de rejeitar. Chave/XML/tentativa persistidos antes do envio; número protegido de inutilização. 15 testes com a SEFAZ atrás de interface. Timeout real fica na HOM-001. | 6, 32 |
-| **XML-002** — validação XSD | ✅ | pacotes oficiais baixados e versionados em `CardGameStore/Schemas` com procedência; validação própria (`XmlSchemaSet`) porque os arquivos não podem ser achatados como o `DiretorioSchemas` da lib exige — `tiposBasico_v4.00.xsd` difere entre `Evento/` e `NFe/` no mesmo pacote. Roda depois de assinar e antes da contingência; reprovação vira rejeição local, nunca contingência nem retry infinito. O XML do motor passa nos 5 cenários. 13 testes. Falta o pacote base para validar o lote (`enviNFe`). | 9, 30.5, 35 |
+| **XML-002** — validação XSD | ✅ | pacotes oficiais baixados e versionados em `CardGameStore/Schemas` com procedência; validação própria (`XmlSchemaSet`) porque os arquivos não podem ser achatados como o `DiretorioSchemas` da lib exige — `tiposBasico_v4.00.xsd` difere entre `Evento/` e `NFe/` no mesmo pacote. Roda depois de assinar e antes da contingência; reprovação vira rejeição local, nunca contingência nem retry infinito. O XML do motor passa nos 5 cenários. 13 testes. `enviNFe_v4.00.xsd` e `inutNFe_v4.00.xsd` já estão versionados, baixados byte a byte da SVRS. | 9, 30.5, 35 |
 | **CON-001** — conciliação | ✅ | serviço parte das VENDAS e acha o documento de cada uma; expõe venda sem nota e divergência de valor; endpoints para lojista e contador + aba no portal. 16 testes. | 31 |
-| **CON-002** — alertas | ✅ | pendências reconciliadas do estado real (não disparos): as seis situações da seção 8, com severidade por idade, dedup pela chave do fato, resolução automática quando a condição some, responsável e confirmação auditável que reabre se o problema continua. Painel em Admin > Fiscal. 30 testes. Falta backup (é OPS-002) e registrar quem optou por não emitir (ver 31.4). | 8, 33 |
+| **CON-002** — alertas | ✅ | pendências reconciliadas do estado real (não disparos): as seis situações da seção 8, com severidade por idade, dedup pela chave do fato, resolução automática quando a condição some, responsável e confirmação auditável que reabre se o problema continua. Painel em Admin > Fiscal. 30 testes. Falta backup (é OPS-002). | 8, 33 |
+| **CON-003** — quem optou por não emitir | ✅ | comanda e venda avulsa guardam a escolha, o operador e o horário (`fiscal_emissao_escolhida`), registrados ANTES da tentativa de emitir; a conciliação passa a exibir a decisão. Nulo = venda anterior ao registro, e não "não escolheu". Sem isso o contador recebe venda sem documento e sem contexto (seção 36.5). | 31.4, 36.5 |
 | **REG-001** — regime normal | ✅ | totalizadores consolidam ICMS/ST/FCP/PIS/COFINS dos itens via getters polimórficos da lib; `ICMSTot` sem zeros fixos; emissão fora do Simples reaberta. 11 testes. **Não é aprovação fiscal** — falta XSD, homologação por CST e aceite do contador. | 30 |
 | **CAD-001** — saneamento do catálogo | 👤 | conferência de NCM/CEST/CFOP/CSOSN/CST pelo contador. | 9 |
 | **FIS-001** — escopo assinado | 👤 | UF, IE, credenciamento, série/número, escopo presencial — com o contador. | 4 |
@@ -51,10 +52,20 @@ Trabalho anterior à auditoria, já na mesma PR:
 - **portal do contador** componentizado (visão geral, impostos, estoque, fechamento, avisos, config);
 - **configuração fiscal** ampliada (regime, CST, PIS/COFINS, folha, presunções).
 
+Depois da auditoria, na mesma frente:
+
+- **tabela local do IBPT** (IBPT-002): a consulta HTTP saiu do caminho do usuário
+  — job diário monta a tabela, cadastro de produto vira lookup local. Com a API do
+  IBPT fora do ar, `Admin > Fiscal → Importar tabela (.csv)` carrega o arquivo
+  oficial da UF inteira de uma vez e a emissão deixa de depender do serviço deles;
+- **pontos e cashback viraram módulo opcional, desligado** — o código continua
+  no lugar, mas não participa do fechamento da venda nem chega à nota. Retirou uma
+  decisão do contador do caminho crítico (ver `BACKLOG.md`).
+
 ## Onde estamos
 
 **Fechado em código nesta maratona:** FIS-002, RES-002, XML-001, DAN-001,
-REG-001, CON-001, RES-001, CON-002, RTC-001, XML-002.
+REG-001, CON-001, RES-001, CON-002, CON-003, RTC-001, XML-002.
 
 **Não há mais cartão de go-live que dependa só de código, e nenhum bloqueado por
 artefato externo.** Todos os cartões restantes dependem de pessoas: contador,
@@ -67,9 +78,21 @@ justifica para operar offline, não para imprimir.
 
 **O que só o dia da homologação resolve:** transmissão real (RES-001/002),
 impressão física (DAN-002), aceite do catálogo (CAD-001) e as decisões do contador
-(FIS-001, FIS-003).
+(FIS-001). FIS-003 saiu do caminho crítico: com pontos e cashback desligados, não
+há benefício pré-aplicado chegando à nota para classificar.
+
+**Pendência operacional aberta:** o número **22** da série foi queimado numa
+tentativa de emitir comanda vazia (defeito já corrigido — venda sem item ou com
+valor zero agora é recusada antes de reservar número). O número não foi usado e
+provavelmente precisa de **inutilização** junto à SEFAZ.
 
 ## Suíte
 
-`dotnet test` — **671 aprovados, 0 falhas** (PostgreSQL descartável de
+`dotnet test` — **727 aprovados, 0 falhas** (PostgreSQL descartável de
 `tests/docker-compose.yml`). Frontend: `npm run build` concluído.
+
+Se a suíte falhar em massa em testes sem relação nenhuma com o que mudou
+(`AuthService`, `TenantIsolation`), a causa provável não é o código: é schema de
+teste acumulado no Postgres local até o handshake do Npgsql estourar. A partir
+desta revisão a própria fábrica varre os órfãos no início da execução — ver o
+cabeçalho de `TestDbFactory`.
