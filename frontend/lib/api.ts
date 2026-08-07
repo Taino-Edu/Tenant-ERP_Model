@@ -1447,6 +1447,17 @@ export interface IbptSyncResult {
   total: number; atualizados: number; ignoradosManuais: number; falhas: number; erros: string[]
 }
 
+/** Resultado da importação do CSV oficial do IBPT (IBPT-002). */
+export interface IbptImportacaoResult {
+  ncmsImportados: number
+  linhasIgnoradas: number
+  versao?: string
+  vigenciaInicio?: string
+  vigenciaFim?: string
+  produtosAtualizados: number
+  produtosSemTabela: number
+}
+
 export interface NaturezaOperacaoDto {
   id: string; descricao: string; cfop: string; csosn?: string
   percentualCreditoIcmsSn?: number
@@ -1591,6 +1602,15 @@ export const fiscalApi = {
 
   getIbptStatus: () => api.get<IbptStatusDto>('/api/fiscal/ibpt/status'),
   sincronizarIbpt: () => api.post<IbptSyncResult>('/api/fiscal/ibpt/sincronizar'),
+
+  /** Importa o TabelaIBPTax<UF><versão>.csv do pacote oficial — não depende da API do IBPT estar no ar. */
+  importarTabelaIbpt: (file: File) => {
+    const form = new FormData()
+    form.append('arquivo', file)
+    return api.post<IbptImportacaoResult>('/api/fiscal/ibpt/importar-tabela', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 
   uploadCertificado: (file: File, senha: string) => {
     const form = new FormData()

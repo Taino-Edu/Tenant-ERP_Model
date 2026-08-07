@@ -178,6 +178,10 @@ export default function FiscalPage() {
   const [ibptStatus, setIbptStatus] = useState<IbptStatusDto | null>(null)
   const [savingIbpt, setSavingIbpt] = useState(false)
   const [syncingIbpt, setSyncingIbpt] = useState(false)
+  const [importandoIbpt, setImportandoIbpt] = useState(false)
+  // Mostrar a UF no texto de ajuda evita o erro mais caro da importação: pegar a
+  // tabela do estado errado, que muda a alíquota estadual sem nada denunciar.
+  const ufDaLoja = uf || '<UF>'
 
   // Formas de pagamento que emitem NFC-e sozinhas ao fechar a venda, sem perguntar.
   // Vazio por padrão — o admin decide a cada fechamento via checkbox (ver /admin/comanda
@@ -571,6 +575,26 @@ export default function FiscalPage() {
       toast.error(getErrorMessage(err, 'Erro ao sincronizar tabela IBPT'))
     } finally {
       setSyncingIbpt(false)
+    }
+  }
+
+  async function importarTabelaIbpt(file: File) {
+    setImportandoIbpt(true)
+    try {
+      const { data } = await fiscalApi.importarTabelaIbpt(file)
+      const { data: status } = await fiscalApi.getIbptStatus()
+      setIbptStatus(status)
+      toast.success(
+        `${data.ncmsImportados.toLocaleString('pt-BR')} NCM(s) importados (versão ${data.versao ?? '—'}); ` +
+        `${data.produtosAtualizados} produto(s) preenchido(s).`)
+      // Produto cujo NCM não existe na tabela é erro de classificação, não da
+      // importação — dizer isso evita a leitura de que o arquivo veio incompleto.
+      if (data.produtosSemTabela > 0)
+        toast.error(`${data.produtosSemTabela} produto(s) com NCM fora da tabela. Confira o NCM em Admin > Estoque.`)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao importar a tabela do IBPT'))
+    } finally {
+      setImportandoIbpt(false)
     }
   }
 
@@ -1032,7 +1056,25 @@ export default function FiscalPage() {
             {syncingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Aplicar tabela e buscar atualização
           </button>
+
+          {/* Caminho que não depende da API: o mesmo dado, do arquivo que o IBPT
+              entrega no pacote por CNPJ. Existe porque a API sai do ar — e
+              quando sai, sem isto a loja fica sem emitir. */}
+          <label className={`btn-secondary cursor-pointer ${importandoIbpt ? 'opacity-60 pointer-events-none' : ''}`}>
+            {importandoIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {importandoIbpt ? 'Importando…' : 'Importar tabela (.csv)'}
+            <input
+              type="file" accept=".csv,text/csv" className="hidden"
+              disabled={importandoIbpt}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importarTabelaIbpt(f) }}
+            />
+          </label>
         </div>
+        <p className="text-[11px] text-gray-500 mt-2">
+          Sem internet até o IBPT? Baixe o pacote no site deles e importe o
+          <strong> TabelaIBPTax{ufDaLoja}&lt;versão&gt;.csv</strong> — o arquivo traz os ~12 mil NCMs de
+          uma vez, e vale para todos os produtos, inclusive os que você cadastrar depois.
+        </p>
         <p className="text-[11px] text-gray-500 mt-3">
           O token é criptografado e nunca é exibido novamente. A fonte, versão, chave e vigência ficam registradas por produto.
         </p>

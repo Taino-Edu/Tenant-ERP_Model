@@ -826,6 +826,38 @@ public class FiscalController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Importa a tabela do IBPT a partir do CSV do pacote oficial — o caminho que
+    /// não depende da API estar no ar.
+    /// </summary>
+    /// <param name="arquivo">TabelaIBPTax&lt;UF&gt;&lt;versão&gt;.csv do pacote do IBPT.</param>
+    /// <param name="ct">Token de cancelamento da requisição.</param>
+    // ── POST /api/fiscal/ibpt/importar-tabela ─────────────────────────────────
+    [HttpPost("ibpt/importar-tabela")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> ImportarTabelaIbpt(IFormFile arquivo, CancellationToken ct)
+    {
+        if (arquivo is null || arquivo.Length == 0)
+            return BadRequest(new { Message = "Selecione o arquivo TabelaIBPTax<UF><versão>.csv." });
+
+        try
+        {
+            await using var conteudo = arquivo.OpenReadStream();
+            var resultado = await _ibpt.ImportarTabelaCsvAsync(conteudo, arquivo.FileName, ct);
+
+            await _audit.LogAsync(
+                "ImportouTabelaIbpt", "FiscalConfig",
+                details: $"ncms={resultado.NcmsImportados}; versao={resultado.Versao}",
+                httpContext: HttpContext);
+
+            return Ok(resultado);
+        }
+        catch (IbptIntegrationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
     /// <summary>Recalcula as pendências agora, sem esperar o ciclo de 15 minutos.</summary>
     // ── POST /api/fiscal/alertas/sincronizar ──────────────────────────────────
     [HttpPost("alertas/sincronizar")]

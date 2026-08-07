@@ -244,6 +244,103 @@ public sealed class IbptTaxService
     }
 
     /// <summary>
+    /// Importa a tabela oficial a partir do CSV do pacote do IBPT, substituindo
+    /// tudo o que houver para a UF da loja.
+    ///
+    /// Substituição total, e não mesclagem, de propósito: o arquivo é uma versão
+    /// fechada e coerente (mesma vigência, mesma chave). Misturar linhas de
+    /// versões diferentes produziria uma tabela que não corresponde a documento
+    /// nenhum — e é exatamente isso que a fiscalização pediria para conferir.
+    ///
+    /// Cada NCM vira DUAS linhas, nacional e importada, porque a alíquota federal
+    /// difere entre as duas e a origem é atributo do produto, não do NCM.
+    /// </summary>
+    public async Task<IbptImportacaoResult> ImportarTabelaCsvAsync(
+        Stream conteudo, string? nomeArquivo, CancellationToken ct = default)
+    {
+        var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct)
+            ?? throw new IbptIntegrationException("Configure os dados fiscais da loja antes de importar a tabela.");
+        if (string.IsNullOrWhiteSpace(cfg.Uf) || cfg.Uf.Length != 2)
+            throw new IbptIntegrationException("Informe a UF da loja antes de importar a tabela do IBPT.");
+
+        var uf = cfg.Uf.ToUpperInvariant();
+
+        // A tabela é POR ESTADO e a UF não está no conteúdo do arquivo, só no
+        // nome. Sem esta checagem, uma loja de MG importaria a tabela de SP e
+        // passaria a emitir com alíquota estadual errada, sem nada denunciando.
+        var ufDoArquivo = IbptTabelaCsvImporter.UfDoNomeDoArquivo(nomeArquivo);
+        if (ufDoArquivo is not null && ufDoArquivo != uf)
+            throw new IbptIntegrationException(
+                $"Este arquivo é a tabela de {ufDoArquivo} e a loja está configurada em {uf}. " +
+                "A alíquota estadual muda por UF — baixe o pacote do IBPT para a UF correta.");
+
+        var leitura = IbptTabelaCsvImporter.Ler(conteudo);
+
+        // Fora do change tracker: são ~24 mil linhas (dois registros por NCM), e
+        // rastrear cada uma multiplicaria o tempo por nada.
+        await _db.IbptTabela.Where(e => e.Uf == uf).ExecuteDeleteAsync(ct);
+
+        var agora = DateTime.UtcNow;
+        var entradas = new List<IbptTabelaEntry>(leitura.Linhas.Count * 2);
+        foreach (var linha in leitura.Linhas)
+        {
+            foreach (var importado in new[] { false, true })
+                entradas.Add(new IbptTabelaEntry
+                {
+                    Ncm                 = linha.Ncm,
+                    Uf                  = uf,
+                    Importado           = importado,
+                    PercentualFederal   = importado ? linha.ImportadoFederal : linha.NacionalFederal,
+                    PercentualEstadual  = linha.Estadual,
+                    PercentualMunicipal = linha.Municipal,
+                    Fonte               = Limitar($"{linha.Fonte} {linha.Versao}".Trim(), 100),
+                    Versao              = linha.Versao,
+                    Chave               = linha.Chave,
+                    VigenciaInicio      = linha.VigenciaInicio,
+                    VigenciaFim         = linha.VigenciaFim,
+                    AtualizadoEm        = agora,
+                });
+        }
+
+        var rastreamento = _db.ChangeTracker.AutoDetectChangesEnabled;
+        _db.ChangeTracker.AutoDetectChangesEnabled = false;
+        try
+        {
+            await _db.IbptTabela.AddRangeAsync(entradas, ct);
+            cfg.IbptUltimaSincronizacao = agora;
+            cfg.IbptUltimaVersao        = leitura.Versao;
+            cfg.IbptVigenciaInicio      = leitura.VigenciaInicio;
+            cfg.IbptVigenciaFim         = leitura.VigenciaFim;
+            cfg.IbptUltimoErro          = null;
+            cfg.UpdatedAt               = agora;
+            await _db.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            _db.ChangeTracker.AutoDetectChangesEnabled = rastreamento;
+        }
+
+        _logger.LogInformation(
+            "Tabela IBPT importada por arquivo: {Ncms} NCM(s), versão {Versao}, UF {Uf}.",
+            leitura.Linhas.Count, leitura.Versao, uf);
+
+        // Aplicar já: o motivo de importar é destravar produto e emissão agora.
+        var aplicacao = await AplicarTabelaLocalAsync(ct);
+
+        return new IbptImportacaoResult(
+            NcmsImportados: leitura.Linhas.Count,
+            LinhasIgnoradas: leitura.LinhasIgnoradas,
+            Versao: leitura.Versao,
+            VigenciaInicio: leitura.VigenciaInicio,
+            VigenciaFim: leitura.VigenciaFim,
+            ProdutosAtualizados: aplicacao.Atualizados,
+            ProdutosSemTabela: aplicacao.Falhas);
+    }
+
+    private static string? Limitar(string valor, int max) =>
+        string.IsNullOrWhiteSpace(valor) ? null : valor[..Math.Min(valor.Length, max)];
+
+    /// <summary>
     /// IBPT-002 — o caminho do usuário: preenche o produto pela tabela LOCAL, sem
     /// tocar na rede. É isto que torna o cadastro instantâneo e imune a
     /// indisponibilidade do IBPT.
@@ -582,6 +679,11 @@ public sealed record IbptStatusDto(
     bool Configurado, bool AutoSyncAtivo, DateTime? UltimaSincronizacao, string? UltimaVersao,
     DateTime? VigenciaInicio, DateTime? VigenciaFim, string? UltimoErro,
     int ProdutosAtivos, int ProdutosAutomaticos, int ProdutosPendentes, int ProdutosVencidos);
+
+public sealed record IbptImportacaoResult(
+    int NcmsImportados, int LinhasIgnoradas, string? Versao,
+    DateTime? VigenciaInicio, DateTime? VigenciaFim,
+    int ProdutosAtualizados, int ProdutosSemTabela);
 
 public sealed record IbptSyncResult(
     int Total, int Atualizados, int IgnoradosManuais, int Falhas, List<string> Erros);
