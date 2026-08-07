@@ -10,6 +10,8 @@ import {
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import PageHeader from '@/components/admin/PageHeader'
 import Modal from '@/components/admin/ui/Modal'
+import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
+import NumberInput from '@/components/admin/ui/NumberInput'
 import toast from 'react-hot-toast'
 import { ChefHat, Loader2, Pencil, Plus, Power, UtensilsCrossed } from 'lucide-react'
 
@@ -70,7 +72,7 @@ function AreaModal({ area, onClose, onSaved }: {
           </div>
           <div>
             <label className="label">Ordem</label>
-            <input type="number" className="input" min={0} max={1000} value={displayOrder} onChange={e => setDisplayOrder(Number(e.target.value))} />
+            <NumberInput min={0} max={1000} value={displayOrder} fallback={0} onChange={v => setDisplayOrder(v ?? 0)} />
           </div>
         </div>
         <div className="flex gap-3 pt-2">
@@ -91,6 +93,8 @@ export default function RestaurantePage() {
   const [areas, setAreas] = useState<RestaurantProductionAreaDto[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<RestaurantProductionAreaDto | null | undefined>(undefined)
+  const [confirmarDesativar, setConfirmarDesativar] = useState<RestaurantProductionAreaDto | null>(null)
+  const [desativando, setDesativando] = useState(false)
 
   const load = useCallback(async () => {
     if (!enabled) {
@@ -110,13 +114,16 @@ export default function RestaurantePage() {
   useEffect(() => { load() }, [load])
 
   async function deactivate(area: RestaurantProductionAreaDto) {
-    if (!window.confirm(`Desativar a área "${area.name}"?`)) return
+    setDesativando(true)
     try {
       await restaurantApi.deactivateProductionArea(area.id)
       toast.success('Área desativada sem apagar o histórico.')
+      setConfirmarDesativar(null)
       await load()
     } catch (error) {
       toast.error(getErrorMessage(error, 'Não foi possível desativar a área.'))
+    } finally {
+      setDesativando(false)
     }
   }
 
@@ -184,7 +191,7 @@ export default function RestaurantePage() {
                 <div className="flex gap-2 mt-4 pt-3 border-t border-surface-600">
                   <button className="btn-secondary text-xs py-1.5 flex-1 justify-center" onClick={() => setEditing(area)}><Pencil className="w-3.5 h-3.5" /> Editar</button>
                   {area.isActive ? (
-                    <button className="btn-secondary text-xs py-1.5 text-red-400 hover:text-red-300" title="Desativar" onClick={() => deactivate(area)}><Power className="w-3.5 h-3.5" /></button>
+                    <button className="btn-secondary text-xs py-1.5 text-red-400 hover:text-red-300" title="Desativar" onClick={() => setConfirmarDesativar(area)}><Power className="w-3.5 h-3.5" /></button>
                   ) : (
                     <button className="btn-secondary text-xs py-1.5 text-brand-400" onClick={() => reactivate(area)}><Power className="w-3.5 h-3.5" /> Reativar</button>
                   )}
@@ -210,6 +217,17 @@ export default function RestaurantePage() {
       </div>
 
       {editing !== undefined && <AreaModal area={editing} onClose={() => setEditing(undefined)} onSaved={load} />}
+
+      {confirmarDesativar && (
+        <ConfirmDialog
+          title="Desativar área"
+          message={<>Desativar a área <strong>{confirmarDesativar.name}</strong>? O histórico dela é preservado e ela pode ser reativada depois.</>}
+          confirmLabel="Desativar"
+          loading={desativando}
+          onConfirm={() => deactivate(confirmarDesativar)}
+          onClose={() => setConfirmarDesativar(null)}
+        />
+      )}
     </div>
   )
 }

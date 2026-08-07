@@ -4,6 +4,7 @@ import { metodosDisponiveis, ComandaDto, UserSummary, Product, EditarComandaRequ
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { X, UserSearch, Search, Plus, Trash2, CheckCircle, Loader2 } from 'lucide-react'
 import { fmt, EditItemState } from './shared'
+import NumberInput from '@/components/admin/ui/NumberInput'
 
 export function EditarComandaModal({
   comanda,
@@ -185,13 +186,15 @@ export function EditarComandaModal({
                   <input value={it.itemName} onChange={e => updateItem(idx, { itemName: e.target.value })}
                     className="flex-1 bg-transparent text-xs text-white outline-none min-w-0"
                     placeholder="Nome do item" />
-                  <input type="number" min="0.01" step="0.01"
-                    value={(it.unitPriceInCents / 100).toFixed(2)}
-                    onChange={e => updateItem(idx, { unitPriceInCents: Math.round(parseFloat(e.target.value || '0') * 100) })}
+                  <NumberInput min={0.01} step={0.01} decimals={2}
+                    value={it.unitPriceInCents / 100}
+                    fallback={0.01}
+                    onChange={v => updateItem(idx, { unitPriceInCents: Math.round((v ?? 0.01) * 100) })}
                     className="w-16 bg-surface-600 rounded-lg px-2 py-1 text-xs text-white text-right outline-none" />
-                  <input type="number" min="1" step="1"
+                  <NumberInput min={1}
                     value={it.quantity}
-                    onChange={e => updateItem(idx, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                    fallback={1}
+                    onChange={v => updateItem(idx, { quantity: v ?? 1 })}
                     className="w-10 bg-surface-600 rounded-lg px-2 py-1 text-xs text-white text-center outline-none" />
                   <button onClick={() => removeItem(idx)}
                     className="p-1 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors shrink-0">

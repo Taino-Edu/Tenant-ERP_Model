@@ -114,7 +114,11 @@ export default function LgpdPage() {
   const statusInfo = consultaResult ? STATUS_LABELS[consultaResult.status] : null
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    // Mesmos tokens de /termos e /privacidade. Antes esta página fixava
+    // bg-gray-50/text-gray-900 e não participava do tema: ficava clara com o
+    // resto escuro, e os inputs, que nem fundo declaravam, herdavam o do
+    // navegador — campo escuro dentro de card claro.
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       {/* Cabeçalho */}
       <header className="bg-[#1a0a2e] text-white py-6 px-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
@@ -132,7 +136,7 @@ export default function LgpdPage() {
           <Shield className="w-8 h-8 text-[#42B6EE] mt-1 shrink-0" />
           <div>
             <h1 className="text-2xl font-bold">Seus Direitos sobre seus Dados — LGPD</h1>
-            <p className="text-gray-600 mt-1 text-sm leading-relaxed">
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               Pela Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018), você tem o direito de
               acessar, corrigir, excluir ou portar seus dados pessoais. Preencha o formulário abaixo
               e responderemos em até <strong>15 dias corridos</strong>.
@@ -141,15 +145,15 @@ export default function LgpdPage() {
         </div>
 
         {/* Formulário de solicitação */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
+        <div className="card p-6 mb-8">
           <h2 className="text-lg font-bold mb-5">Abrir Solicitação</h2>
 
           {protocolo ? (
             <div className="bg-green-50 border border-green-200 rounded-xl p-5">
               <h3 className="font-bold text-green-800 text-lg mb-1">Solicitação enviada!</h3>
               <p className="text-green-700 text-sm mb-3">{protocolo.message}</p>
-              <div className="bg-white border border-green-200 rounded-lg p-3 font-mono text-sm break-all">
-                <span className="text-gray-500">Protocolo: </span>
+              <div className="border border-green-500/30 rounded-lg p-3 font-mono text-sm break-all" style={{ backgroundColor: 'var(--bg-input)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Protocolo: </span>
                 <strong>{protocolo.protocol}</strong>
               </div>
               <p className="text-xs text-green-600 mt-2">
@@ -166,7 +170,7 @@ export default function LgpdPage() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="label">
                   Nome completo <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -174,13 +178,13 @@ export default function LgpdPage() {
                   required
                   value={form.requesterName}
                   onChange={e => setForm(f => ({ ...f, requesterName: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE]"
+                  className="input"
                   placeholder="Seu nome completo"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="label">
                   E-mail <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -188,13 +192,13 @@ export default function LgpdPage() {
                   required
                   value={form.requesterEmail}
                   onChange={e => setForm(f => ({ ...f, requesterEmail: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE]"
+                  className="input"
                   placeholder="seu@email.com"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="label">
                   CPF <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -203,14 +207,14 @@ export default function LgpdPage() {
                   maxLength={14}
                   value={form.requesterCpf}
                   onChange={e => setForm(f => ({ ...f, requesterCpf: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE]"
+                  className="input"
                   placeholder="000.000.000-00"
                 />
                 <p className="text-xs text-gray-400 mt-1">Usado apenas para identificação do titular.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="label">
                   Tipo de solicitação <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -218,7 +222,7 @@ export default function LgpdPage() {
                     required
                     value={form.requestType}
                     onChange={e => setForm(f => ({ ...f, requestType: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-[#42B6EE] bg-white"
+                    className="input appearance-none"
                   >
                     <option value="">Selecione o tipo...</option>
                     {TIPOS_SOLICITACAO.map(t => (
@@ -230,7 +234,7 @@ export default function LgpdPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="label">
                   Descrição <span className="text-gray-400 font-normal">(opcional)</span>
                 </label>
                 <textarea
@@ -238,7 +242,7 @@ export default function LgpdPage() {
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                   rows={3}
                   maxLength={2000}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE] resize-none"
+                  className="input resize-none"
                   placeholder="Detalhe sua solicitação se desejar..."
                 />
               </div>
@@ -265,7 +269,7 @@ export default function LgpdPage() {
         </div>
 
         {/* Consulta de protocolo */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="card p-6">
           <div className="flex items-center gap-2 mb-5">
             <Search className="w-5 h-5 text-[#42B6EE]" />
             <h2 className="text-lg font-bold">Consultar Protocolo Existente</h2>
@@ -276,7 +280,7 @@ export default function LgpdPage() {
               type="text"
               value={consultaId}
               onChange={e => setConsultaId(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE] font-mono"
+              className="input font-mono"
               placeholder="Número do protocolo (ex: abc123-...)"
               required
             />
@@ -286,7 +290,7 @@ export default function LgpdPage() {
                 type="email"
                 value={consultaEmail}
                 onChange={e => setConsultaEmail(e.target.value)}
-                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#42B6EE]"
+                className="input flex-1"
                 placeholder="E-mail usado na solicitação"
                 required
               />
@@ -307,7 +311,7 @@ export default function LgpdPage() {
           )}
 
           {consultaResult && statusInfo && (
-            <div className="border border-gray-100 rounded-xl p-4 space-y-3">
+            <div className="rounded-xl p-4 space-y-3" style={{ border: '1px solid var(--border-color)' }}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-gray-400">#{consultaResult.id}</span>
                 <span className={`text-xs font-medium px-2 py-1 rounded-full ${statusInfo.color}`}>
@@ -341,9 +345,9 @@ export default function LgpdPage() {
                 )}
               </div>
               {consultaResult.adminResponse && (
-                <div className="bg-gray-50 rounded-lg p-3 mt-2">
-                  <p className="text-xs text-gray-400 mb-1">Resposta da {site.siteName}:</p>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{consultaResult.adminResponse}</p>
+                <div className="rounded-lg p-3 mt-2" style={{ backgroundColor: 'var(--bg-input)' }}>
+                  <p className="text-xs mb-1" style={{ color: 'var(--text-faint)' }}>Resposta da {site.siteName}:</p>
+                  <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{consultaResult.adminResponse}</p>
                 </div>
               )}
             </div>

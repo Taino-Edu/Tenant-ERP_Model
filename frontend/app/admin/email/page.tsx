@@ -5,6 +5,7 @@ import { emailConfigApi, EmailConfigDto, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import { Mail, Save, Loader2, Info, ExternalLink } from 'lucide-react'
+import NumberInput from '@/components/admin/ui/NumberInput'
 
 const DEFAULT: EmailConfigDto = {
   smtpHost: '', smtpPort: 587, smtpUsername: '', fromName: '', isActive: false, hasPassword: false,
@@ -94,11 +95,11 @@ export default function EmailConfigPage() {
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Porta</label>
-            <input
-              type="number"
+            <NumberInput
               value={cfg.smtpPort ?? 587}
-              onChange={e => setCfg(c => ({ ...c, smtpPort: Number(e.target.value) || 587 }))}
-              placeholder="587" className="input w-full" />
+              fallback={587}
+              onChange={v => setCfg(c => ({ ...c, smtpPort: v ?? 587 }))}
+              placeholder="587" className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Nome do remetente</label>
