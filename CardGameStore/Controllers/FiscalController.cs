@@ -40,12 +40,15 @@ public class FiscalController : ControllerBase
     private readonly IConciliacaoFiscalService _conciliacao;
     private readonly IAlertaFiscalService      _alertas;
     private readonly INfceSchemaValidator      _schemaValidator;
+    private readonly IServiceScopeFactory      _scopeFactory;
+    private readonly ILogger<FiscalController>  _logger;
 
     public FiscalController(
         AppDbContext db, FiscalXmlExportService export, INfceEmissionService emissao,
         CatalogDbContext catalog, ITenantContext tenant, IbptTaxService ibpt, IAuditService audit,
         FiscalConfigService configService, IConciliacaoFiscalService conciliacao,
-        IAlertaFiscalService alertas, INfceSchemaValidator schemaValidator)
+        IAlertaFiscalService alertas, INfceSchemaValidator schemaValidator,
+        IServiceScopeFactory scopeFactory, ILogger<FiscalController> logger)
     {
         _db            = db;
         _export        = export;
@@ -58,6 +61,8 @@ public class FiscalController : ControllerBase
         _conciliacao   = conciliacao;
         _alertas       = alertas;
         _schemaValidator = schemaValidator;
+        _scopeFactory    = scopeFactory;
+        _logger          = logger;
     }
 
     /// <summary>Agrega configuração, certificado, regra fiscal padrão, produtos e notas das
@@ -229,15 +234,27 @@ public class FiscalController : ControllerBase
     {
         try
         {
-            // IBPT-002: o botao passa a reaplicar a tabela LOCAL. Sem rede, entao
-            // nao ha timeout a estourar nem com catalogo grande -- quem conversa com
-            // o IBPT e o job diario.
+            // IBPT-002: a resposta sai da tabela LOCAL, na hora — sem rede, então
+            // não há timeout a estourar nem com catálogo grande. A busca de dado
+            // novo no IBPT acontece em segundo plano e chega no próximo
+            // carregamento da tela.
+            //
+            // As duas coisas juntas porque separá-las quebraria a expectativa: um
+            // botão chamado "sincronizar" que nunca fala com o IBPT seria mentira,
+            // e um que fala com o IBPT na frente do usuário é o defeito que este
+            // cartão veio corrigir.
             var resultado = await _ibpt.AplicarTabelaLocalAsync(ct);
+            var buscandoAtualizacao = AtualizarTabelaIbptEmSegundoPlano();
             await _audit.LogAsync(
                 "SincronizouTributosIbpt", "Product",
                 details: $"atualizados={resultado.Atualizados}; manuais_preservados={resultado.IgnoradosManuais}; falhas={resultado.Falhas}",
                 httpContext: HttpContext);
-            return Ok(resultado);
+            return Ok(new
+            {
+                resultado.Total, resultado.Atualizados, resultado.IgnoradosManuais,
+                resultado.Falhas, resultado.Erros,
+                BuscandoAtualizacao = buscandoAtualizacao,
+            });
         }
         catch (IbptIntegrationException ex)
         {
@@ -887,6 +904,52 @@ public class FiscalController : ControllerBase
         {
             return BadRequest(new { Message = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Intervalo mínimo entre duas buscas ao IBPT disparadas pela tela. Sem isto,
+    /// clicar no botão dez vezes seguidas dispararia dez varreduras concorrentes
+    /// do catálogo inteiro contra a API de terceiro.
+    /// </summary>
+    private static readonly TimeSpan IntervaloMinimoAtualizacaoIbpt = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Dispara a atualização da tabela IBPT fora da requisição, em escopo próprio
+    /// de DI com o tenant reaplicado — mesmo cuidado do ProductController: o
+    /// IbptTaxService é scoped e carrega o AppDbContext junto, então usar o da
+    /// requisição faria a tarefa operar sobre contexto descartado.
+    ///
+    /// Devolve false quando a última atualização é recente demais para justificar
+    /// outra — e isso não é falha: a tela acabou de aplicar a tabela local.
+    /// </summary>
+    private bool AtualizarTabelaIbptEmSegundoPlano()
+    {
+        var cfg = _db.FiscalConfigs.Find(FiscalConfig.SingletonId);
+        if (cfg is null || !cfg.IbptConfigurado) return false;
+        if (cfg.IbptUltimaSincronizacao is { } ultima &&
+            DateTime.UtcNow - ultima < IntervaloMinimoAtualizacaoIbpt) return false;
+
+        var tenantId = _tenant.TenantId;
+        var schema   = _tenant.SchemaName;
+        var modulos  = _tenant.EnabledModules;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(tenantId, schema, modulos);
+                var ibpt = scope.ServiceProvider.GetRequiredService<IbptTaxService>();
+                await ibpt.AtualizarTabelaLocalAsync();
+                await ibpt.AplicarTabelaLocalAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Atualização da tabela IBPT em segundo plano falhou (tenant {TenantId}).", tenantId);
+            }
+        });
+        return true;
     }
 
     private Guid GetUserId()
