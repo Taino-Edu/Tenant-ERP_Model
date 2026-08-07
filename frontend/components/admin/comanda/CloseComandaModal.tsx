@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { ComandaDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
+import { metodosDisponiveis, ComandaDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { CreditCard, QrCode, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
@@ -20,8 +20,8 @@ export function CloseComandaModal({
   fiscalEnabled: boolean
 }) {
   const { site } = useSiteConfig()
-  const paymentMethods = site.pontosFidelidadeAtivo ? COMANDA_PAYMENT_METHODS : COMANDA_PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
-  const secondPaymentMethods = site.pontosFidelidadeAtivo ? SECOND_PAYMENT_METHODS : SECOND_PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
+  const paymentMethods = metodosDisponiveis(COMANDA_PAYMENT_METHODS, site)
+  const secondPaymentMethods = metodosDisponiveis(SECOND_PAYMENT_METHODS, site)
   const [method,        setMethod]        = useState('Dinheiro')
   const [splitEnabled,  setSplitEnabled]  = useState(false)
   const [secondMethod,  setSecondMethod]  = useState('Cashback')

@@ -33,13 +33,20 @@ public class VendaAvulsaService : IVendaAvulsaService
         // (SiteConfig.PontosFidelidadeAtivo, decisão do próprio admin do tenant —
         // sem linha ainda = default true). Defesa em profundidade: rejeita aqui
         // mesmo que um request forjado tente usar/resgatar pontos sem um dos dois.
-        var usaPontosNestaVenda = request.PaymentMethod == PaymentMethod.Pontos || request.SecondPaymentMethod == PaymentMethod.Pontos;
-        if (usaPontosNestaVenda && !_tenantContext.EnabledModules.Contains("pontos"))
-            throw new InvalidOperationException("O módulo de fidelidade não está habilitado para esta loja.");
+        // Cashback entra junto com pontos — ver ComandaService.FidelidadeHabilitadaAsync:
+        // são o mesmo benefício, e o cashback não passava por gate nenhum.
+        var usaFidelidadeNestaVenda =
+            request.PaymentMethod       is PaymentMethod.Pontos or PaymentMethod.Cashback ||
+            request.SecondPaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback;
 
-        var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
-        if (!pontosAtivo && usaPontosNestaVenda)
-            throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
+        var pontosAtivo =
+            _tenantContext.EnabledModules.Contains("pontos", StringComparer.OrdinalIgnoreCase) &&
+            ((await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true);
+
+        if (usaFidelidadeNestaVenda && !pontosAtivo)
+            throw new InvalidOperationException(
+                "O programa de fidelidade (pontos e cashback) não está ativo nesta loja. " +
+                "Ative em Configurações do site, ou fale com o suporte se o módulo não estiver contratado.");
 
         // Valida tudo antes de qualquer escrita: falha rápida evita decremento parcial de estoque
         var productIds = request.Items.Select(i => i.ProductId).Distinct().ToList();

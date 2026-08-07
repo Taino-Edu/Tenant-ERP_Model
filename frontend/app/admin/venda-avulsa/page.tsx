@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { productApi, vendaAvulsaApi, userApi, fiscalApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, ProductVariant, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest, getErrorMessage } from '@/lib/api'
+import { metodosDisponiveis, productApi, vendaAvulsaApi, userApi, fiscalApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, ProductVariant, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest, getErrorMessage } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import { usePreferences } from '@/hooks/usePreferences'
 import toast from 'react-hot-toast'
@@ -196,7 +196,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
 
 function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto; onClose: () => void; onUpdate: (updated: VendaAvulsaDto) => void }) {
   const { site } = useSiteConfig()
-  const paymentMethods = site.pontosFidelidadeAtivo ? PAYMENT_METHODS : PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
+  const paymentMethods = metodosDisponiveis(PAYMENT_METHODS, site)
   const payLabel = PAYMENT_METHODS.find(m => m.value === venda.paymentMethod)?.label ?? venda.paymentMethod
   const [editingPay, setEditingPay] = useState(false)
   const [newPm,      setNewPm]      = useState(venda.paymentMethod)
@@ -462,7 +462,7 @@ function VendaWizard({
   onClose: () => void
 }) {
   const { site } = useSiteConfig()
-  const paymentMethods = site.pontosFidelidadeAtivo ? PAYMENT_METHODS : PAYMENT_METHODS.filter(m => m.value !== 'Pontos')
+  const paymentMethods = metodosDisponiveis(PAYMENT_METHODS, site)
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
   // Etapa 1 — cliente
