@@ -12,6 +12,7 @@
 // Venda avulsa de balcão → POST /api/venda-avulsa  (VendaAvulsaController)
 // =============================================================================
 
+using System.Globalization;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
@@ -42,6 +43,11 @@ public class ComandaController : ControllerBase
     private readonly ITenantContext _tenant;
     private readonly IPushService     _push;
     private readonly ILogger<ComandaController> _logger;
+
+    /// <summary>Cultura de exibição para o cliente final. Explícita porque o
+    /// contêiner roda em cultura invariante — depender da ambiente já produziu
+    /// valor formatado errado em produção.</summary>
+    private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
 
     public ComandaController(
         IComandaService service, AppDbContext db, InterSyncService inter,
@@ -348,7 +354,10 @@ public class ComandaController : ControllerBase
 
                 await _push.SendAsync(
                     comanda.UserId,
-                    $"Cobrança Pix — R$ {pix.ValorEmReais:N2}".Replace('.', ','),
+                    // pt-BR explícito: o contêiner roda em cultura invariante, e o
+                    // Replace('.', ',') que existia aqui só acertava abaixo de mil —
+                    // R$ 1.234,50 virava "R$ 1,234,50" na notificação do cliente.
+                    string.Format(PtBr, "Cobrança Pix — R$ {0:N2}", pix.ValorEmReais),
                     "Sua comanda está pronta pra pagar. Toque para abrir o Pix.",
                     "/cliente");
             }
