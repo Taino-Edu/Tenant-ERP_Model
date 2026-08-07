@@ -7,6 +7,7 @@ import { Plus, Edit2, Trash2, AlertTriangle, Package, Search, X, Loader2, Check,
 import ImageUpload from '@/components/admin/ImageUpload'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
+import NumberInput from '@/components/admin/ui/NumberInput'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { hasPermission } from '@/lib/auth'
@@ -358,7 +359,7 @@ function VariantsPanel({ productId }: { productId: string }) {
           </div>
           <div>
             <label className="label text-xs">Estoque inicial por variante</label>
-            <input className="input" type="number" min="0" value={bulkQty} onChange={e => setBulkQty(parseInt(e.target.value) || 0)} />
+            <NumberInput min={0} value={bulkQty} fallback={0} onChange={v => setBulkQty(v ?? 0)} />
           </div>
           {selSizes.length > 0 && selColors.length > 0 && (
             <p className="text-xs text-gray-400">
@@ -385,11 +386,12 @@ function VariantsPanel({ productId }: { productId: string }) {
                   <span className="text-sm text-gray-300 flex-1">{v.color ?? '—'}</span>
                   {editId === v.id && hasEstoqueModule ? (
                     <>
-                      <input
-                        className="input w-20 text-sm py-1 text-center"
-                        type="number" min="0"
+                      <NumberInput
+                        className="w-20 text-sm py-1 text-center"
+                        min={0}
                         value={editQty}
-                        onChange={e => setEditQty(parseInt(e.target.value) || 0)}
+                        fallback={0}
+                        onChange={v => setEditQty(v ?? 0)}
                         autoFocus
                       />
                       <button type="button" onClick={() => saveEdit(v.id)} className="p-1 text-emerald-400 hover:text-emerald-300"><Check className="w-4 h-4" /></button>
@@ -729,18 +731,20 @@ function ProductModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Estoque total {form.hasVariants && <span className="text-gray-500 font-normal">(soma das variantes)</span>}</label>
-              <input className="input" type="number" min="0"
+              <NumberInput min={0}
                 value={form.stockQuantity ?? 0}
-                onChange={e => set('stockQuantity', parseInt(e.target.value))}
+                fallback={0}
+                onChange={v => set('stockQuantity', v ?? 0)}
                 disabled={!!form.hasVariants}
                 title={form.hasVariants ? 'Gerenciado pelas variantes' : undefined}
               />
             </div>
             <div>
               <label className="label">Estoque mínimo</label>
-              <input className="input" type="number" min="0"
+              <NumberInput min={0}
                 value={form.minimumStock ?? 5}
-                onChange={e => set('minimumStock', parseInt(e.target.value))}
+                fallback={5}
+                onChange={v => set('minimumStock', v ?? 5)}
               />
             </div>
           </div>
@@ -946,10 +950,10 @@ function CategoryModal({
 
           <div>
             <label className="label">Ordem de exibição</label>
-            <input
-              className="input" type="number" min="0"
+            <NumberInput min={0}
               value={form.displayOrder ?? 0}
-              onChange={e => set('displayOrder', parseInt(e.target.value))}
+              fallback={0}
+              onChange={v => set('displayOrder', v ?? 0)}
             />
             <p className="text-xs text-gray-400 mt-1">Menor número aparece primeiro.</p>
           </div>

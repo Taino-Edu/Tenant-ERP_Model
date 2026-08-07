@@ -9,6 +9,7 @@ import { gerarRelatorioPDF } from '@/lib/relatorio'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import { gerarRelatorioClientes, gerarRelatorioPDV, gerarRelatorioComandas, gerarRelatorioCrediario } from '@/lib/relatorio-admin'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import NumberInput from '@/components/admin/ui/NumberInput'
 import toast from 'react-hot-toast'
 import {
   BarChart2, ChevronDown, ChevronUp, Loader2, Package,
@@ -392,10 +393,10 @@ export default function RelatoriosPage() {
       control: (
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-400">Últimos</span>
-          <input
-            type="number" min={1} max={365} value={diasPdv}
-            onChange={e => setDiasPdv(Math.max(1, Math.min(365, Number(e.target.value))))}
-            className="input py-0.5 px-2 text-xs w-16 text-center"
+          <NumberInput
+            min={1} max={365} value={diasPdv} fallback={30}
+            onChange={v => setDiasPdv(v ?? 30)}
+            className="py-0.5 px-2 text-xs w-16 text-center"
           />
           <span className="text-xs text-gray-400">dias</span>
         </div>
@@ -413,10 +414,10 @@ export default function RelatoriosPage() {
       control: (
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-gray-400">Abertas nos últimos</span>
-          <input
-            type="number" min={0} max={365} value={diasComandas}
-            onChange={e => setDiasComandas(Math.max(0, Math.min(365, Number(e.target.value))))}
-            className="input py-0.5 px-2 text-xs w-16 text-center"
+          <NumberInput
+            min={0} max={365} value={diasComandas} fallback={0}
+            onChange={v => setDiasComandas(v ?? 0)}
+            className="py-0.5 px-2 text-xs w-16 text-center"
           />
           <span className="text-xs text-gray-400">dias (0 = todas)</span>
         </div>
