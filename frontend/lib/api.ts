@@ -1442,6 +1442,8 @@ export interface IbptStatusDto {
 }
 
 export interface IbptSyncResult {
+  /** A busca de dado novo no IBPT foi disparada em segundo plano (IBPT-002). */
+  buscandoAtualizacao?: boolean
   total: number; atualizados: number; ignoradosManuais: number; falhas: number; erros: string[]
 }
 

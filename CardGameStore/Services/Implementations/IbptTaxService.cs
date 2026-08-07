@@ -111,6 +111,207 @@ public sealed class IbptTaxService
         return new IbptSyncResult(produtos.Count, atualizados, ignoradosManuais, erros.Count, erros.Take(20).ToList());
     }
 
+    /// <summary>
+    /// IBPT-002 — passo do job diário: conversa com o IBPT e guarda o resultado na
+    /// tabela local. É o único lugar do sistema que faz rede para o IBPT.
+    ///
+    /// Varre os NCMs distintos do catálogo, não os produtos: dez mil produtos de
+    /// vinte NCMs são vinte consultas. E demorar aqui não custa nada, porque
+    /// ninguém está esperando numa tela.
+    /// </summary>
+    public async Task<IbptSyncResult> AtualizarTabelaLocalAsync(CancellationToken ct = default)
+    {
+        var cfg = await ObterConfiguracaoValidaAsync(ct);
+        var padrao = await _db.NaturezasOperacao.AsNoTracking().FirstOrDefaultAsync(n => n.IsPadrao, ct);
+        var uf = cfg.Uf!.ToUpperInvariant();
+
+        var produtos = await _db.Products
+            .Include(p => p.NaturezaOperacao)
+            .Where(p => p.IsActive && p.Ncm != null)
+            .ToListAsync(ct);
+
+        // (NCM, origem) e a unidade de consulta: a aliquota federal muda entre
+        // nacional e importado, o resto nao depende do produto.
+        var combinacoes = produtos
+            .Select(p => new
+            {
+                Ncm = SomenteDigitos(p.Ncm!),
+                Importado = OrigemUsaAliquotaImportada(
+                    p.NaturezaOperacao?.OrigemMercadoria ?? padrao?.OrigemMercadoria ?? 0),
+                Produto = p,
+            })
+            .Where(c => c.Ncm.Length == 8)
+            .GroupBy(c => new { c.Ncm, c.Importado })
+            .ToList();
+
+        var existentes = await _db.IbptTabela
+            .Where(e => e.Uf == uf)
+            .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
+
+        var atualizados = 0;
+        var erros = new List<string>();
+
+        foreach (var grupo in combinacoes)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                // Qualquer produto do grupo serve de amostra: a consulta leva
+                // descricao/valor/GTIN dele, mas a aliquota e do NCM.
+                var resposta = await ConsultarApiAsync(cfg, grupo.First().Produto, grupo.Key.Ncm, ct);
+                UpsertEntrada(existentes, uf, grupo.Key.Ncm, grupo.Key.Importado, resposta);
+                atualizados++;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                // Um NCM que falhou nao invalida os outros, e a linha antiga
+                // continua valendo: tabela de ontem e melhor que nenhuma.
+                var mensagem = MensagemSegura(ex);
+                erros.Add($"NCM {grupo.Key.Ncm}: {mensagem}");
+                _logger.LogWarning(
+                    "Falha ao atualizar tabela IBPT do NCM {Ncm}: {Message}", grupo.Key.Ncm, mensagem);
+            }
+        }
+
+        AtualizarStatusConfiguracao(cfg, produtos.Where(p => p.TributosPreenchidosAutomaticamente), erros);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Tabela IBPT local atualizada: {Ok}/{Total} NCM(s), {Falhas} falha(s).",
+            atualizados, combinacoes.Count, erros.Count);
+
+        return new IbptSyncResult(combinacoes.Count, atualizados, 0, erros.Count, erros.Take(20).ToList());
+    }
+
+    private readonly record struct EntradaChave(string Ncm, bool Importado);
+
+    private void UpsertEntrada(
+        Dictionary<EntradaChave, IbptTabelaEntry> existentes,
+        string uf, string ncm, bool importado, IbptProdutoResponse resposta)
+    {
+        var fonte = $"{resposta.Fonte} {resposta.Versao}".Trim();
+        if (fonte.Length > 100)
+            throw new IbptIntegrationException("Fonte e versao retornadas pelo IBPT ultrapassam 100 caracteres.");
+
+        var chave = new EntradaChave(ncm, importado);
+        if (!existentes.TryGetValue(chave, out var entrada))
+        {
+            entrada = new IbptTabelaEntry { Ncm = ncm, Uf = uf, Importado = importado };
+            _db.IbptTabela.Add(entrada);
+            existentes[chave] = entrada;
+        }
+
+        entrada.PercentualFederal   = importado ? resposta.Importado : resposta.Nacional;
+        entrada.PercentualEstadual  = resposta.Estadual;
+        entrada.PercentualMunicipal = resposta.Municipal;
+        entrada.Fonte               = fonte;
+        entrada.Versao              = resposta.Versao?.Trim();
+        entrada.Chave               = resposta.Chave?.Trim();
+        entrada.VigenciaInicio      = ParseData(resposta.VigenciaInicio, "inicio");
+        entrada.VigenciaFim         = ParseData(resposta.VigenciaFim, "fim");
+        entrada.AtualizadoEm        = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// IBPT-002 — o caminho do usuário: preenche o produto pela tabela LOCAL, sem
+    /// tocar na rede. É isto que torna o cadastro instantâneo e imune a
+    /// indisponibilidade do IBPT.
+    ///
+    /// Devolve false quando não há linha para o NCM — situação normal para um NCM
+    /// novo, que o próximo ciclo do job resolve. Até lá o produto fica sem
+    /// transparência tributária, exatamente como ficava quando a consulta falhava.
+    /// </summary>
+    public async Task<bool> PreencherProdutoDaTabelaLocalAsync(Guid productId, CancellationToken ct = default)
+    {
+        var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct);
+        if (cfg is null || !cfg.IbptAutoSyncEnabled || string.IsNullOrWhiteSpace(cfg.Uf)) return false;
+
+        var produto = await _db.Products.Include(p => p.NaturezaOperacao)
+            .FirstOrDefaultAsync(p => p.Id == productId, ct);
+        if (produto is null || string.IsNullOrWhiteSpace(produto.Ncm)) return false;
+
+        // Preenchimento manual do contador continua tendo precedencia.
+        if (TemTransparenciaCompleta(produto) && !produto.TributosPreenchidosAutomaticamente) return false;
+
+        var origem = produto.NaturezaOperacao?.OrigemMercadoria ??
+            (await _db.NaturezasOperacao.AsNoTracking().FirstOrDefaultAsync(n => n.IsPadrao, ct))?.OrigemMercadoria ?? 0;
+        var importado = OrigemUsaAliquotaImportada(origem);
+        var ncm = SomenteDigitos(produto.Ncm);
+        var uf = cfg.Uf!.ToUpperInvariant();
+
+        var entrada = await _db.IbptTabela.AsNoTracking().FirstOrDefaultAsync(
+            e => e.Ncm == ncm && e.Uf == uf && e.Importado == importado, ct);
+        if (entrada is null) return false;
+
+        AplicarEntrada(produto, entrada);
+        await _db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    private static void AplicarEntrada(Product produto, IbptTabelaEntry entrada)
+    {
+        produto.PercentualTributosFederais   = entrada.PercentualFederal;
+        produto.PercentualTributosEstaduais  = entrada.PercentualEstadual;
+        produto.PercentualTributosMunicipais = entrada.PercentualMunicipal;
+        produto.FonteTributos                = entrada.Fonte;
+        produto.TributosPreenchidosAutomaticamente = true;
+        produto.TributosAtualizadosEm        = DateTime.UtcNow;
+        produto.TributosVigenciaInicio       = entrada.VigenciaInicio;
+        produto.TributosVigenciaFim          = entrada.VigenciaFim;
+        produto.IbptVersao                   = entrada.Versao;
+        produto.IbptChave                    = entrada.Chave;
+        produto.UpdatedAt                    = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Reaplica a tabela LOCAL a todos os produtos — é o que o botão da tela passa
+    /// a fazer. Sem rede, então não estoura timeout nem com catálogo grande.
+    /// </summary>
+    public async Task<IbptSyncResult> AplicarTabelaLocalAsync(CancellationToken ct = default)
+    {
+        var cfg = await ObterConfiguracaoValidaAsync(ct);
+        var uf = cfg.Uf!.ToUpperInvariant();
+        var padrao = await _db.NaturezasOperacao.AsNoTracking().FirstOrDefaultAsync(n => n.IsPadrao, ct);
+
+        var tabela = await _db.IbptTabela.AsNoTracking()
+            .Where(e => e.Uf == uf)
+            .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
+
+        var produtos = await _db.Products
+            .Include(p => p.NaturezaOperacao)
+            .Where(p => p.IsActive && p.Ncm != null)
+            .ToListAsync(ct);
+
+        var atualizados = 0;
+        var ignoradosManuais = 0;
+        var semTabela = new List<string>();
+
+        foreach (var produto in produtos)
+        {
+            if (TemTransparenciaCompleta(produto) && !produto.TributosPreenchidosAutomaticamente)
+            {
+                ignoradosManuais++;
+                continue;
+            }
+
+            var importado = OrigemUsaAliquotaImportada(
+                produto.NaturezaOperacao?.OrigemMercadoria ?? padrao?.OrigemMercadoria ?? 0);
+            var chave = new EntradaChave(SomenteDigitos(produto.Ncm!), importado);
+            if (!tabela.TryGetValue(chave, out var entrada))
+            {
+                semTabela.Add($"{produto.Name}: NCM ainda nao esta na tabela local.");
+                continue;
+            }
+
+            AplicarEntrada(produto, entrada);
+            atualizados++;
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return new IbptSyncResult(
+            produtos.Count, atualizados, ignoradosManuais, semTabela.Count, semTabela.Take(20).ToList());
+    }
+
     /// <summary>Preenche um produto apenas se estiver incompleto ou já for gerenciado pelo IBPT.</summary>
     public async Task<bool> TentarSincronizarProdutoAsync(Guid productId, CancellationToken ct = default)
     {

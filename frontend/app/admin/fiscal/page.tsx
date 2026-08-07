@@ -559,8 +559,14 @@ export default function FiscalPage() {
       const { data } = await fiscalApi.sincronizarIbpt()
       const { data: status } = await fiscalApi.getIbptStatus()
       setIbptStatus(status)
-      toast.success(`${data.atualizados} produto(s) atualizado(s); ${data.ignoradosManuais} override(s) preservado(s).`)
-      if (data.falhas > 0) toast.error(`${data.falhas} produto(s) falharam. Consulte o status da integração.`)
+      toast.success(
+        `${data.atualizados} produto(s) atualizado(s) pela tabela local; ` +
+        `${data.ignoradosManuais} override(s) preservado(s).`)
+      // A busca de dado novo no IBPT roda fora da requisição — dizer isso evita a
+      // leitura errada de que o botão não fez nada quando a tabela já estava em dia.
+      if (data.buscandoAtualizacao)
+        toast.success('Buscando atualização no IBPT em segundo plano — recarregue em alguns minutos.')
+      if (data.falhas > 0) toast.error(`${data.falhas} produto(s) sem NCM na tabela local ainda.`)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao sincronizar tabela IBPT'))
     } finally {
@@ -1024,7 +1030,7 @@ export default function FiscalPage() {
           </button>
           <button onClick={syncIbpt} disabled={syncingIbpt || (!ibptStatus?.configurado && !ibptToken)} className="btn-primary">
             {syncingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Sincronizar produtos agora
+            Aplicar tabela e buscar atualização
           </button>
         </div>
         <p className="text-[11px] text-gray-500 mt-3">

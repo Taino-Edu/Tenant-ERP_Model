@@ -18,6 +18,7 @@
 // desaparecia sozinha e não sabia dizer o que ainda estava pendente.
 // =============================================================================
 
+using System.Globalization;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
@@ -44,6 +45,15 @@ public class AlertaFiscalService : IAlertaFiscalService
     /// O dia corrente fica de fora de propósito: cobrar documento de uma venda que
     /// acabou de acontecer geraria alerta que se resolve sozinho em minutos.</summary>
     private const int DiasConciliacaoRetroativa = 7;
+
+    /// <summary>
+    /// Cultura explícita para tudo que vai à tela do lojista. Sem isto, o texto do
+    /// alerta herda a cultura do processo — e o contêiner roda em invariante, o
+    /// que faria "R$ 75,00" virar "R$ 75.00" num painel fiscal brasileiro.
+    /// Foi assim que o CI pegou o defeito: o teste passava na máquina pt-BR do
+    /// desenvolvedor e falhava no runner Linux.
+    /// </summary>
+    private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
 
     private readonly AppDbContext _db;
     private readonly IConciliacaoFiscalService _conciliacao;
@@ -277,7 +287,7 @@ public class AlertaFiscalService : IAlertaFiscalService
             var documento = nota.Numero.HasValue
                 ? $"NFC-e nº {nota.Numero} (série {nota.Serie})"
                 : "NFC-e sem número reservado";
-            var valor = $"R$ {(nota.ValorTotalEmCentavos / 100m):N2}";
+            var valor = string.Format(PtBr, "R$ {0:N2}", nota.ValorTotalEmCentavos / 100m);
 
             switch (nota.Status)
             {
@@ -372,9 +382,9 @@ public class AlertaFiscalService : IAlertaFiscalService
                     Severidade: agora - inicioDoDiaUtc >= SemDocumentoEscalona
                         ? SeveridadeAlertaFiscal.Alta
                         : SeveridadeAlertaFiscal.Media,
-                    Titulo: $"{dia.Count()} venda(s) sem documento fiscal em {dia.Key:dd/MM/yyyy}",
+                    Titulo: string.Format(PtBr, "{0} venda(s) sem documento fiscal em {1:dd/MM/yyyy}", dia.Count(), dia.Key),
                     Detalhe:
-                        $"Somam R$ {total:N2} em vendas fechadas que não geraram NFC-e. " +
+                        string.Format(PtBr, "Somam R$ {0:N2} em vendas fechadas que não geraram NFC-e. ", total) +
                         "Não é erro de emissão — é ausência dela. Emita as notas em atraso pelo histórico, " +
                         "ou registre com o contador a razão de não emitir para que o mês feche coerente.",
                     OcorridoEm: inicioDoDiaUtc,
@@ -522,7 +532,7 @@ public class AlertaFiscalService : IAlertaFiscalService
                     Severidade: SeveridadeAlertaFiscal.Alta,
                     Titulo: "Nenhuma regra de IBS/CBS cobre a data de hoje",
                     Detalhe:
-                        $"O catálogo versionado não tem faixa vigente para {hojeBr:dd/MM/yyyy} no perfil " +
+                        string.Format(PtBr, "O catálogo versionado não tem faixa vigente para {0:dd/MM/yyyy} no perfil ", hojeBr) +
                         $"{perfil}. As notas continuam sendo emitidas, mas SEM os grupos de IBS/CBS. " +
                         "Atualize o catálogo conforme a Nota Técnica vigente antes do próximo fechamento.",
                     OcorridoEm: BrazilTime.DateToUtcStart(hojeBr.ToDateTime(TimeOnly.MinValue)),
@@ -539,11 +549,13 @@ public class AlertaFiscalService : IAlertaFiscalService
                 Severidade: SeveridadeAlertaFiscal.Media,
                 Titulo: $"Regra de IBS/CBS {regra.Versao} precisa ser reconferida",
                 Detalhe:
-                    $"A regra em uso desde {regra.VigenciaInicio:dd/MM/yyyy} continua sendo aplicada às notas " +
-                    $"(IBS UF {regra.AliquotaIbsUf:0.###}%, IBS municipal {regra.AliquotaIbsMun:0.###}%, " +
-                    $"CBS {regra.AliquotaCbs:0.###}%), mas a revisão era recomendada para " +
-                    $"{revisaoEm:dd/MM/yyyy}. Fonte registrada: {regra.FonteOficial} " +
-                    $"(consultada em {regra.ConsultadoEm:dd/MM/yyyy}). Confira a Nota Técnica vigente com o " +
+                    string.Format(PtBr,
+                        "A regra em uso desde {0:dd/MM/yyyy} continua sendo aplicada às notas " +
+                        "(IBS UF {1:0.###}%, IBS municipal {2:0.###}%, CBS {3:0.###}%), mas a revisão era " +
+                        "recomendada para {4:dd/MM/yyyy}. Fonte registrada: {5} (consultada em {6:dd/MM/yyyy}). ",
+                        regra.VigenciaInicio, regra.AliquotaIbsUf, regra.AliquotaIbsMun, regra.AliquotaCbs,
+                        revisaoEm, regra.FonteOficial, regra.ConsultadoEm) +
+                    "Confira a Nota Técnica vigente com o " +
                     "contador e atualize o catálogo se as alíquotas mudaram.",
                 OcorridoEm: BrazilTime.DateToUtcStart(revisaoEm.ToDateTime(TimeOnly.MinValue)),
                 Link: "/admin/fiscal"),

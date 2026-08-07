@@ -25,6 +25,7 @@ using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -50,6 +51,34 @@ public class IbptTaxServiceTests
                 new TaskCanceledException(
                     "The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing.",
                     new TimeoutException("A task was canceled.")));
+        }
+    }
+
+
+    /// <summary>Handler que responde como o IBPT responderia — para exercitar a
+    /// construção da tabela local, e contar quantas vezes a rede foi tocada.</summary>
+    private sealed class HandlerQueResponde : HttpMessageHandler
+    {
+        public int Chamadas { get; private set; }
+        public List<string> NcmsConsultados { get; } = new();
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Chamadas++;
+            var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri!.Query);
+            NcmsConsultados.Add(query["codigo"] ?? "");
+
+            const string corpo = """
+                {"Codigo":"95044000","UF":"SP","EX":0,"Descricao":"Jogos",
+                 "Nacional":12.5,"Estadual":18.0,"Importado":15.5,"Municipal":0.0,
+                 "Tipo":"0","VigenciaInicio":"01/01/2026","VigenciaFim":"31/12/2026",
+                 "Chave":"ABC123","Versao":"26.1.A","Fonte":"IBPT"}
+                """;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(corpo, System.Text.Encoding.UTF8, "application/json"),
+            });
         }
     }
 
@@ -151,5 +180,123 @@ public class IbptTaxServiceTests
 
         await act.Should().ThrowAsync<OperationCanceledException>();
         handler.Chamadas.Should().Be(0, "nem o primeiro produto deve ser consultado");
+    }
+
+    // ── IBPT-002: a rede sai do caminho do usuário ────────────────────────────
+
+    [Fact]
+    public async Task AtualizarTabelaLocal_ConsultaUmaVezPorNcmDistinto_NaoPorProduto()
+    {
+        // O ganho que motiva o cartão: dez produtos do mesmo NCM custam UMA
+        // consulta. Antes, o custo crescia com o catálogo.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db, produtos: 10);
+        using var handler = new HandlerQueResponde();
+
+        await CreateService(db, handler).AtualizarTabelaLocalAsync();
+
+        handler.Chamadas.Should().Be(1, "os 10 produtos compartilham o mesmo NCM");
+        db.IbptTabela.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task AtualizarTabelaLocal_DuasExecucoes_NaoDuplicamALinha()
+    {
+        // O job roda todo dia; sem upsert, a tabela cresceria sem limite e o
+        // lookup passaria a depender de qual linha vem primeiro.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db, produtos: 2);
+        using var handler = new HandlerQueResponde();
+        var service = CreateService(db, handler);
+
+        await service.AtualizarTabelaLocalAsync();
+        await service.AtualizarTabelaLocalAsync();
+
+        db.IbptTabela.Should().ContainSingle("a chave é (NCM, UF, origem), não a execução");
+    }
+
+    [Fact]
+    public async Task PreencherProdutoDaTabelaLocal_NaoTocaNaRede()
+    {
+        // O coração do cartão. Se este teste falhar, a rede voltou para dentro
+        // da requisição e o 500 de produção volta com ela.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db);
+        using var handlerDaCarga = new HandlerQueResponde();
+        await CreateService(db, handlerDaCarga).AtualizarTabelaLocalAsync();
+
+        var produto = await db.Products.FirstAsync();
+        produto.PercentualTributosFederais = null;
+        produto.TributosPreenchidosAutomaticamente = false;
+        await db.SaveChangesAsync();
+
+        using var handlerProibido = new HandlerQueEstouraTimeout();
+        var preencheu = await CreateService(db, handlerProibido)
+            .PreencherProdutoDaTabelaLocalAsync(produto.Id);
+
+        preencheu.Should().BeTrue();
+        handlerProibido.Chamadas.Should().Be(0, "o preenchimento tem que sair da tabela local");
+        var salvo = await db.Products.FindAsync(produto.Id);
+        salvo!.PercentualTributosFederais.Should().Be(12.5m);
+        salvo.FonteTributos.Should().Contain("IBPT");
+    }
+
+    [Fact]
+    public async Task PreencherProdutoDaTabelaLocal_NcmForaDaTabela_NaoInventaValor()
+    {
+        // NCM novo é situação normal — o job resolve no próximo ciclo. O que não
+        // pode é preencher com valor de outro NCM nem com zero.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db);
+        var produto = await db.Products.FirstAsync();
+
+        using var handler = new HandlerQueEstouraTimeout();
+        var preencheu = await CreateService(db, handler).PreencherProdutoDaTabelaLocalAsync(produto.Id);
+
+        preencheu.Should().BeFalse();
+        handler.Chamadas.Should().Be(0);
+        var salvo = await db.Products.FindAsync(produto.Id);
+        salvo!.PercentualTributosFederais.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task AplicarTabelaLocal_ComIbptForaDoAr_ContinuaFuncionando()
+    {
+        // A consequência prática: o IBPT cair não impede mais o lojista de
+        // trabalhar. A última tabela conhecida continua valendo.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db, produtos: 3);
+        using var handlerDaCarga = new HandlerQueResponde();
+        await CreateService(db, handlerDaCarga).AtualizarTabelaLocalAsync();
+
+        using var handlerForaDoAr = new HandlerQueEstouraTimeout();
+        var resultado = await CreateService(db, handlerForaDoAr).AplicarTabelaLocalAsync();
+
+        resultado.Atualizados.Should().Be(3);
+        handlerForaDoAr.Chamadas.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task AplicarTabelaLocal_PreenchimentoManualDoContador_NaoEhSobrescrito()
+    {
+        // Regra que já valia no modelo antigo e não pode se perder na mudança.
+        using var db = CreateDb();
+        await SeedLojaComTokenAsync(db);
+        using var handler = new HandlerQueResponde();
+        await CreateService(db, handler).AtualizarTabelaLocalAsync();
+
+        var produto = await db.Products.FirstAsync();
+        produto.PercentualTributosFederais = 99m;
+        produto.PercentualTributosEstaduais = 99m;
+        produto.PercentualTributosMunicipais = 99m;
+        produto.FonteTributos = "Tabela do contador";
+        produto.TributosPreenchidosAutomaticamente = false;
+        await db.SaveChangesAsync();
+
+        var resultado = await CreateService(db, handler).AplicarTabelaLocalAsync();
+
+        resultado.IgnoradosManuais.Should().Be(1);
+        var salvo = await db.Products.FindAsync(produto.Id);
+        salvo!.PercentualTributosFederais.Should().Be(99m, "o valor do contador tem precedência");
     }
 }

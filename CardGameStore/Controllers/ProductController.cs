@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // ProductController.cs — CRUD de Produtos (Estoque Fixo)
 // GET    /api/product            → lista todos ativos
 // GET    /api/product/{id}       → busca por ID
@@ -82,7 +82,7 @@ public class ProductController : ControllerBase
                 scope.ServiceProvider.GetRequiredService<ITenantContext>()
                     .Set(tenantId, schema, modulos);
                 await scope.ServiceProvider.GetRequiredService<IbptTaxService>()
-                    .TentarSincronizarProdutoAsync(productId);
+                    .PreencherProdutoDaTabelaLocalAsync(productId);
             }
             catch (Exception ex)
             {
