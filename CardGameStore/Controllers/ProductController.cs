@@ -82,7 +82,7 @@ public class ProductController : ControllerBase
                 scope.ServiceProvider.GetRequiredService<ITenantContext>()
                     .Set(tenantId, schema, modulos);
                 await scope.ServiceProvider.GetRequiredService<IbptTaxService>()
-                    .PreencherProdutoDaTabelaLocalAsync(productId);
+                    .GarantirNcmNaTabelaEPreencherAsync(productId);
             }
             catch (Exception ex)
             {

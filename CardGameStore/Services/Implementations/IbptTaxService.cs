@@ -376,6 +376,69 @@ public sealed class IbptTaxService
         return true;
     }
 
+    /// <summary>
+    /// Garante que o NCM de UM produto esteja na tabela local, buscando só ele se
+    /// faltar — e então preenche o produto.
+    ///
+    /// Existe porque tirar a rede da requisição não podia significar tirar o
+    /// preenchimento: cadastrar um produto com NCM novo deixava-o sem
+    /// transparência tributária até o job do dia seguinte, e sem transparência a
+    /// NFC-e daquele produto não é emitida. O usuário via o cadastro salvar e a
+    /// venda falhar depois, sem ligação óbvia entre as duas coisas.
+    ///
+    /// Roda SEMPRE fora da requisição (ver ProductController): uma consulta só,
+    /// para um NCM só, mas ainda assim rede — e rede não fica na frente de quem
+    /// está esperando.
+    ///
+    /// Diferente do job, aqui a falha é registrada na configuração: sem isso, o
+    /// lojista não teria como saber por que o produto continua sem tributos.
+    /// </summary>
+    public async Task<bool> GarantirNcmNaTabelaEPreencherAsync(
+        Guid productId, CancellationToken ct = default)
+    {
+        if (await PreencherProdutoDaTabelaLocalAsync(productId, ct)) return true;
+
+        var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct);
+        if (cfg is null || !cfg.IbptAutoSyncEnabled || !cfg.IbptConfigurado) return false;
+
+        var produto = await _db.Products.Include(p => p.NaturezaOperacao)
+            .FirstOrDefaultAsync(p => p.Id == productId, ct);
+        if (produto is null || string.IsNullOrWhiteSpace(produto.Ncm)) return false;
+        if (TemTransparenciaCompleta(produto) && !produto.TributosPreenchidosAutomaticamente) return false;
+
+        try
+        {
+            ValidarConfiguracao(cfg);
+            var padrao = await _db.NaturezasOperacao.AsNoTracking()
+                .FirstOrDefaultAsync(n => n.IsPadrao, ct);
+            var importado = OrigemUsaAliquotaImportada(
+                produto.NaturezaOperacao?.OrigemMercadoria ?? padrao?.OrigemMercadoria ?? 0);
+            var ncm = SomenteDigitos(produto.Ncm);
+            var uf = cfg.Uf!.ToUpperInvariant();
+
+            var existentes = await _db.IbptTabela
+                .Where(e => e.Uf == uf && e.Ncm == ncm)
+                .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
+
+            var resposta = await ConsultarApiAsync(cfg, produto, ncm, ct);
+            UpsertEntrada(existentes, uf, ncm, importado, resposta);
+            cfg.IbptUltimoErro = null;
+            await _db.SaveChangesAsync(ct);
+
+            return await PreencherProdutoDaTabelaLocalAsync(productId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            // Fica visível no painel fiscal, não só no log do servidor.
+            cfg.IbptUltimoErro = $"NCM {produto.Ncm}: {MensagemSegura(ex)}";
+            cfg.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            _logger.LogWarning(
+                "Falha ao buscar o NCM {Ncm} sob demanda: {Message}", produto.Ncm, cfg.IbptUltimoErro);
+            return false;
+        }
+    }
+
     private static void AplicarEntrada(Product produto, IbptTabelaEntry entrada)
     {
         produto.PercentualTributosFederais   = entrada.PercentualFederal;
