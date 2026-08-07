@@ -26,6 +26,7 @@ using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using NFe.Utils;
@@ -75,7 +76,7 @@ public class NfceSchemaValidacaoTests
     /// </summary>
     private static async Task<Comanda> SeedLojaEVendaAsync(
         AppDbContext db, AmbienteFiscal ambiente = AmbienteFiscal.Homologacao,
-        string? gtin = null, Action<Comanda>? ajustarVenda = null)
+        string? gtin = null, Action<Comanda>? ajustarVenda = null, bool semItens = false)
     {
         var enc = CreateEncryptionService();
         db.FiscalConfigs.Add(new FiscalConfig
@@ -131,15 +132,24 @@ public class NfceSchemaValidacaoTests
             PaymentMethod = "Dinheiro",
             ClosedAt      = DateTime.UtcNow,
         };
-        comanda.Items.Add(new ComandaItem
+        if (semItens)
         {
-            ComandaId        = comanda.Id,
-            ProductId        = product.Id,
-            ItemNameSnapshot = product.Name,
-            UnitPriceInCents = 1500,
-            Quantity         = 1,
-            SubtotalInCents  = 1500,
-        });
+            // Comanda aberta e fechada sem consumo — cenário real, e que não pode
+            // gerar documento nem queimar numeração.
+            comanda.TotalInCents = 0;
+        }
+        else
+        {
+            comanda.Items.Add(new ComandaItem
+            {
+                ComandaId        = comanda.Id,
+                ProductId        = product.Id,
+                ItemNameSnapshot = product.Name,
+                UnitPriceInCents = 1500,
+                Quantity         = 1,
+                SubtotalInCents  = 1500,
+            });
+        }
         ajustarVenda?.Invoke(comanda);
         db.Comandas.Add(comanda);
 
@@ -460,6 +470,46 @@ public class NfceSchemaValidacaoTests
 
         validador.Validar("<NFe><sem fechar>")
             .Should().ContainSingle().Which.Should().Contain("malformado");
+    }
+
+    // ── Venda que não tem o que documentar ────────────────────────────────────
+
+    [Fact]
+    public async Task ComandaSemItens_NaoConsomeNumeroDeNota()
+    {
+        // Defeito real de homologação: fechar comanda vazia com "emitir nota"
+        // marcado montava um infNFe sem nenhum `det`, RESERVAVA o número e só
+        // então a validação de schema recusava — deixando número consumido, nota
+        // rejeitada e lacuna a inutilizar, por uma venda que nunca existiu.
+        using var db = CreateDb();
+        var comanda = await SeedLojaEVendaAsync(db, semItens: true);
+
+        var nota = await CreateService(db).EmitirParaComandaAsync(comanda.Id);
+
+        nota.Status.Should().Be(NotaFiscalStatus.Rejeitada);
+        nota.Numero.Should().BeNull("nenhum número pode ser queimado por uma venda sem itens");
+        nota.MotivoRejeicao.Should().Contain("não tem itens");
+
+        var cfg = await db.FiscalConfigs.AsNoTracking().FirstAsync();
+        cfg.ProximoNumeroNfce.Should().Be(900, "a sequência não pode ter avançado");
+    }
+
+    [Fact]
+    public async Task VendaComValorZero_NaoConsomeNumeroDeNota()
+    {
+        // O outro caminho para o mesmo XML inválido: itens existem, mas o desconto
+        // zera o total. NFC-e não é emitida sem valor a pagar.
+        using var db = CreateDb();
+        var comanda = await SeedLojaEVendaAsync(db, ajustarVenda: c =>
+        {
+            c.DiscountInCents = 1500;
+            c.TotalInCents    = 0;
+        });
+
+        var nota = await CreateService(db).EmitirParaComandaAsync(comanda.Id);
+
+        nota.Status.Should().Be(NotaFiscalStatus.Rejeitada);
+        nota.Numero.Should().BeNull();
     }
 
     [Fact]

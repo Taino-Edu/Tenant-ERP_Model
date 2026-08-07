@@ -897,6 +897,19 @@ public class NfceEmissionService : INfceEmissionService
             _logger.LogInformation(
                 "NFC-e {NotaId} anulada automaticamente — comanda de origem foi cancelada antes da transmissão.", nota.Id);
         }
+        catch (VendaNaoDocumentavelException ex)
+        {
+            // Destino final e silencioso no log: não é erro do sistema nem do
+            // operador — é uma venda que não tem o que documentar. Fica
+            // registrada como rejeitada para aparecer na conciliação, mas sem
+            // número consumido e sem alarme.
+            nota.Status         = NotaFiscalStatus.Rejeitada;
+            nota.MotivoRejeicao = ex.Message;
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "NFC-e {NotaId} ({Origem}) não emitida — {Motivo}", nota.Id, nota.Origem, ex.Message);
+        }
         catch (SchemaInvalidoException ex)
         {
             // XML-002: destino final, não pendência. Deixar como PendenteEmissao
@@ -1237,6 +1250,25 @@ public class NfceEmissionService : INfceEmissionService
                 "legislação vigente.", nota.Id, dataEmissao, perfilIbsCbs);
 
         var regraParaXml = RegraParaDestaque(regraIbsCbs, ambiente);
+
+        // Venda sem item não vira documento — e precisa ser barrada AQUI, antes da
+        // reserva de numeração, pelo mesmo motivo do comentário acima: nada que
+        // jamais será transmitido pode queimar um número de NFC-e.
+        //
+        // Defeito real capturado em homologação: fechar uma comanda vazia com
+        // "emitir nota" marcado montava um `infNFe` sem nenhum `det`, reservava o
+        // número e só então a validação de schema recusava — deixando um número
+        // consumido, uma nota rejeitada e uma lacuna a inutilizar, tudo por uma
+        // venda que nunca existiu.
+        if (dados.Itens.Count == 0)
+            throw new VendaNaoDocumentavelException(
+                "A venda não tem itens. NFC-e exige ao menos um produto, então nenhum documento " +
+                "foi gerado e nenhum número de nota foi consumido.");
+
+        if (dados.ValorLiquidoCentavos <= 0)
+            throw new VendaNaoDocumentavelException(
+                "O valor líquido da venda é zero. NFC-e não é emitida sem valor a pagar, então " +
+                "nenhum documento foi gerado e nenhum número de nota foi consumido.");
 
         var descontosPorItem = DistribuirDesconto(dados.Itens, dados.DescontoTotalCentavos);
         var detItens = dados.Itens
@@ -2974,6 +3006,22 @@ public class ComandaCanceladaException : Exception
     public Guid ComandaId { get; }
     public ComandaCanceladaException(Guid comandaId)
         : base($"Comanda {comandaId} foi cancelada — emissão fiscal abortada.") => ComandaId = comandaId;
+}
+
+/// <summary>
+/// A venda não pode gerar documento fiscal — sem itens, ou sem valor a pagar.
+///
+/// Tem exceção própria porque a conduta é distinta de tudo o mais: não é falha
+/// de rede, não é erro de configuração e não é defeito de montagem. É uma venda
+/// que simplesmente não tem o que documentar, e nenhuma tentativa futura vai
+/// mudar isso — por isso não volta para a fila de reprocessamento.
+///
+/// Lançada ANTES da reserva de numeração: uma venda que nunca virará documento
+/// não pode consumir um número e deixar lacuna para inutilizar.
+/// </summary>
+public class VendaNaoDocumentavelException : Exception
+{
+    public VendaNaoDocumentavelException(string message) : base(message) { }
 }
 
 /// <summary>
