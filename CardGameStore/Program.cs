@@ -395,7 +395,15 @@ builder.Services.AddHttpClient("gemini", client =>
 builder.Services.AddHttpClient("ibpt", client =>
 {
     client.BaseAddress = new Uri("https://apidoni.ibpt.org.br/");
-    client.Timeout = TimeSpan.FromSeconds(15);
+    // 15s existia porque a consulta ficava DENTRO da requisição, com o lojista
+    // esperando na tela. Depois do IBPT-002 nenhum caminho de request toca esta
+    // API -- só o job diário e a busca sob demanda, ambos em segundo plano -- e
+    // desistir cedo passou a ser só perda: em homologação, 4 de 4 NCMs falharam
+    // por timeout em todos os ciclos, e a tabela nunca se formou.
+    //
+    // Ninguém está esperando: esperar um minuto por uma resposta lenta é melhor
+    // do que ficar sem transparência tributária e sem poder emitir.
+    client.Timeout = TimeSpan.FromSeconds(60);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 }).RemoveAllLoggers();
 

@@ -536,7 +536,8 @@ public sealed class IbptTaxService
     {
         IbptIntegrationException => ex.Message,
         OperationCanceledException or TimeoutException =>
-            "O IBPT não respondeu dentro do tempo limite (15s). Tente de novo mais tarde.",
+            "O IBPT não respondeu dentro do tempo limite. A tabela anterior continua valendo; " +
+            "a próxima tentativa é automática.",
         _ => "Falha inesperada ao consultar o IBPT.",
     };
 
