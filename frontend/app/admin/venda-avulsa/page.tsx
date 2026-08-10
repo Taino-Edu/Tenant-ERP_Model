@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { createPortal } from 'react-dom'
+import AdminPortal from '@/components/admin/ui/AdminPortal'
 import { metodosDisponiveis, productApi, vendaAvulsaApi, userApi, fiscalApi, PAYMENT_METHODS, PAYMENT_NEEDS_USER, SECOND_PAYMENT_METHODS, Product, ProductVariant, VendaAvulsaDto, UserSummary, EditarPagamentoVendaAvulsaRequest, getErrorMessage } from '@/lib/api'
 import { useThrottle } from '@/lib/hooks'
 import { usePreferences } from '@/hooks/usePreferences'
@@ -15,6 +15,7 @@ import clsx from 'clsx'
 import VariantPicker from '@/components/admin/VariantPicker'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
+import Modal from '@/components/admin/ui/Modal'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 interface CartItem {
@@ -248,11 +249,7 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[90vh]">
+    <Modal onClose={onClose} maxWidth="md" scrollable={false} className="flex flex-col max-h-[90vh]">
 
         <div className="flex items-start justify-between px-5 py-4 border-b border-surface-600">
           <div>
@@ -411,8 +408,7 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
           </div>
         </div>
         )}
-      </div>
-    </div>
+    </Modal>
   )
 }
 
@@ -662,14 +658,12 @@ function VendaWizard({
 
   return (
     <>
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    <Modal
+      onClose={onClose}
+      maxWidth={step === 2 ? '2xl' : 'md'}
+      scrollable={false}
+      className="flex flex-col max-h-[92vh]"
     >
-      <div className={clsx(
-        "bg-surface-800 border border-surface-500 rounded-2xl w-full flex flex-col shadow-2xl animate-fade-in",
-        step === 2 ? "max-w-2xl max-h-[92vh]" : "max-w-md max-h-[92vh]"
-      )}>
 
         {/* Header + step indicator */}
         <div className="px-5 pt-4 pb-3 border-b border-surface-600 shrink-0">
@@ -688,7 +682,7 @@ function VendaWizard({
                   <div className={clsx(
                     'w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all',
                     n < step  ? 'bg-accent-green text-black' :
-                    n === step ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30' :
+                    n === step ? 'bg-brand-500 text-white' :
                     'bg-surface-600 border border-surface-500 text-gray-500'
                   )}>
                     {n < step ? <CheckCircle className="w-3.5 h-3.5" /> : n}
@@ -1280,8 +1274,7 @@ function VendaWizard({
             </>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
 
     {/* Seletor de variante (tamanho/cor) */}
     {variantPickerProduct && (
@@ -1455,14 +1448,15 @@ export default function VendaAvulsaPage() {
   return (
     <div className="p-4 sm:p-6 space-y-5 animate-slide-up">
 
-      {wizardOpen && !loading && createPortal(
-        <VendaWizard
-          products={products}
-          defaultDiscount={prefs.pdv.defaultDiscount}
-          onComplete={r => { setWizard(false); setReceipt(r); refreshToday() }}
-          onClose={() => setWizard(false)}
-        />,
-        document.body
+      {wizardOpen && !loading && (
+        <AdminPortal>
+          <VendaWizard
+            products={products}
+            defaultDiscount={prefs.pdv.defaultDiscount}
+            onComplete={r => { setWizard(false); setReceipt(r); refreshToday() }}
+            onClose={() => setWizard(false)}
+          />
+        </AdminPortal>
       )}
 
       <PageHeader
@@ -1731,13 +1725,14 @@ function HistoricoTab({ history, loading, date, onDateChange, onVendaUpdate }: {
   return (
     <div className="flex-1 overflow-y-auto space-y-4">
 
-      {selectedVenda && createPortal(
-        <VendaDetailModal
-          venda={selectedVenda}
-          onClose={() => setSelectedVenda(null)}
-          onUpdate={updated => { setSelectedVenda(updated); onVendaUpdate(updated) }}
-        />,
-        document.body
+      {selectedVenda && (
+        <AdminPortal>
+          <VendaDetailModal
+            venda={selectedVenda}
+            onClose={() => setSelectedVenda(null)}
+            onUpdate={updated => { setSelectedVenda(updated); onVendaUpdate(updated) }}
+          />
+        </AdminPortal>
       )}
 
       <div className="flex items-center gap-3 flex-wrap">
