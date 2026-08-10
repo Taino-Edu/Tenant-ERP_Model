@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
+const webServerPort = new URL(baseURL).port || '3000'
+
 /**
  * Read environment variables from file.
  * https://github.com/motdotla/dotenv
@@ -26,7 +29,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('')`. */
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
+    baseURL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -74,7 +77,8 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'node scripts/start-standalone.js',
-    url: 'http://localhost:3000',
+    url: baseURL,
+    env: { PORT: webServerPort },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

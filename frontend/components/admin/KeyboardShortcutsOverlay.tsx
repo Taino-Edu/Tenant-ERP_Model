@@ -1,81 +1,64 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Keyboard } from 'lucide-react'
+import { Keyboard, X } from 'lucide-react'
+import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import { hasPermission } from '@/lib/auth'
+import {
+  ADMIN_KEYBOARD_SHORTCUTS,
+  isEditableShortcutTarget,
+} from '@/lib/adminKeyboardShortcuts'
 
-interface Shortcut {
-  key: string
-  label: string
-  description: string
-  category: string
-}
-
-const SHORTCUTS: Shortcut[] = [
-  { key: 'd', label: 'D', description: 'Comanda (ao vivo)',           category: 'Navegação' },
-  { key: 'g', label: 'G', description: 'Painel Geral',                category: 'Navegação' },
-  { key: 'p', label: 'P', description: 'Frente de Caixa (PDV)',       category: 'Navegação' },
-  { key: 'e', label: 'E', description: 'Estoque',                     category: 'Navegação' },
-  { key: 'u', label: 'U', description: 'Clientes / Usuários',         category: 'Navegação' },
-  { key: 'c', label: 'C', description: 'Crediário',                   category: 'Navegação' },
-  { key: 'f', label: 'F', description: 'Financeiro',                  category: 'Navegação' },
-  { key: 'r', label: 'R', description: 'Relatórios',                  category: 'Navegação' },
-  { key: '?', label: '?', description: 'Mostrar / esconder esta ajuda', category: 'Geral'    },
-  { key: 'Escape', label: 'Esc', description: 'Fechar modal ou painel aberto', category: 'Geral' },
+const HELP_SHORTCUTS = [
+  { key: '?', label: '?', description: 'Mostrar / esconder esta ajuda', category: 'Ajuda' },
+  { key: 'Escape', label: 'Esc', description: 'Fechar modal ou painel aberto', category: 'Ajuda' },
 ]
 
-const NAV_MAP: Record<string, string> = {
-  d: '/admin/comanda',
-  g: '/admin/dashboard',
-  p: '/admin/venda-avulsa',
-  e: '/admin/estoque',
-  u: '/admin/usuarios',
-  c: '/admin/crediario',
-  f: '/admin/financeiro',
-  r: '/admin/relatorios',
-}
-
-export const SIDEBAR_SHORTCUT_KEYS: Record<string, string> = {
-  '/admin/comanda':      'D',
-  '/admin/dashboard':    'G',
-  '/admin/venda-avulsa': 'P',
-  '/admin/estoque':      'E',
-  '/admin/usuarios':     'U',
-  '/admin/crediario':    'C',
-  '/admin/financeiro':   'F',
-  '/admin/relatorios':   'R',
-}
-
 export default function KeyboardShortcutsOverlay() {
-  const router  = useRouter()
+  const router = useRouter()
+  const { site } = useSiteConfig()
   const [open, setOpen] = useState(false)
 
-  const handleKey = useCallback((e: KeyboardEvent) => {
-    const target   = e.target as HTMLElement
-    const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
-                     || target.isContentEditable
+  const shortcuts = useMemo(() => {
+    return ADMIN_KEYBOARD_SHORTCUTS.filter(shortcut => {
+      if (shortcut.module && !site.enabledModules?.includes(shortcut.module)) return false
+      if (shortcut.permission && !hasPermission(shortcut.permission)) return false
+      return true
+    })
+  }, [site.enabledModules])
 
-    // ? — toggle overlay (funciona mesmo digitando, para não perder)
-    if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
-      e.preventDefault()
-      setOpen(v => !v)
-      return
-    }
-
-    // Esc — fecha overlay
-    if (e.key === 'Escape') {
+  const handleKey = useCallback((event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
       setOpen(false)
       return
     }
 
-    // Atalhos de navegação — apenas fora de campos de texto
-    if (isTyping || e.ctrlKey || e.metaKey || e.altKey) return
+    // O site não sequestra teclas enquanto o usuário escreve, seleciona dados
+    // ou interage dentro de uma área que suspende explicitamente os atalhos.
+    if (
+      event.defaultPrevented
+      || event.isComposing
+      || event.repeat
+      || event.ctrlKey
+      || event.metaKey
+      || event.altKey
+      || isEditableShortcutTarget(event)
+    ) return
 
-    const dest = NAV_MAP[e.key.toLowerCase()]
-    if (dest) {
-      e.preventDefault()
-      router.push(dest)
+    if (event.key === '?') {
+      event.preventDefault()
+      setOpen(value => !value)
+      return
     }
-  }, [router])
+
+    const shortcut = shortcuts.find(item => item.key === event.key.toLowerCase())
+    if (!shortcut) return
+
+    event.preventDefault()
+    if (shortcut.eventName) window.dispatchEvent(new CustomEvent(shortcut.eventName))
+    if (shortcut.route) router.push(shortcut.route)
+  }, [router, shortcuts])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKey)
@@ -84,46 +67,47 @@ export default function KeyboardShortcutsOverlay() {
 
   if (!open) return null
 
-  const categories = [...new Set(SHORTCUTS.map(s => s.category))]
+  const visibleShortcuts = [...shortcuts, ...HELP_SHORTCUTS]
+  const categories = [...new Set(visibleShortcuts.map(shortcut => shortcut.category))]
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-      onClick={e => { if (e.target === e.currentTarget) setOpen(false) }}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={event => { if (event.target === event.currentTarget) setOpen(false) }}
     >
-      <div className="bg-surface-800 border border-surface-500 rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-surface-600">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-surface-500 bg-surface-800 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-surface-600 px-5 py-4">
           <div className="flex items-center gap-2">
-            <Keyboard className="w-4 h-4 text-brand-400" />
-            <h3 className="font-semibold text-white text-sm">Atalhos de Teclado</h3>
+            <Keyboard className="h-4 w-4 text-brand-400" />
+            <h3 className="text-sm font-semibold text-white">Atalhos de teclado</h3>
           </div>
-          <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-gray-300 transition-colors">
-            <X className="w-5 h-5" />
+          <button onClick={() => setOpen(false)} className="text-gray-500 transition-colors hover:text-gray-300" aria-label="Fechar atalhos">
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-5 space-y-5">
-          {categories.map(cat => (
-            <div key={cat}>
-              <p className="text-[10px] uppercase text-gray-500 font-bold tracking-wider mb-2">{cat}</p>
-              <div className="space-y-0.5">
-                {SHORTCUTS.filter(s => s.category === cat).map(s => (
+        <div className="max-h-[72vh] space-y-5 overflow-y-auto p-5">
+          {categories.map(category => (
+            <section key={category}>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">{category}</p>
+              <div className="grid gap-1 sm:grid-cols-2">
+                {visibleShortcuts.filter(shortcut => shortcut.category === category).map(shortcut => (
                   <div
-                    key={s.key}
-                    className="flex items-center justify-between gap-4 py-1.5 px-2 rounded-lg hover:bg-surface-700 transition-colors"
+                    key={shortcut.key}
+                    className="flex items-center justify-between gap-4 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-700"
                   >
-                    <span className="text-sm text-gray-300">{s.description}</span>
-                    <kbd className="shrink-0 text-[11px] text-gray-200 bg-surface-700 border border-surface-500 rounded-md px-2 py-0.5 font-mono font-bold min-w-[28px] text-center">
-                      {s.label}
+                    <span className="text-sm text-gray-300">{shortcut.description}</span>
+                    <kbd className="min-w-[28px] shrink-0 rounded-md border border-surface-500 bg-surface-700 px-2 py-0.5 text-center font-mono text-[11px] font-bold text-gray-200">
+                      {shortcut.label}
                     </kbd>
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
           ))}
 
-          <p className="text-[11px] text-gray-600 text-center pt-1 border-t border-surface-700">
-            Atalhos de navegação só funcionam quando nenhum campo de texto está focado
+          <p className="border-t border-surface-700 pt-3 text-center text-[11px] leading-relaxed text-gray-500">
+            Os atalhos ficam pausados enquanto você digita ou interage com o Assistente de IA.
           </p>
         </div>
       </div>

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
-import { SIDEBAR_SHORTCUT_KEYS } from '@/components/admin/KeyboardShortcutsOverlay'
+import { SIDEBAR_SHORTCUT_KEYS } from '@/lib/adminKeyboardShortcuts'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 const sections = [

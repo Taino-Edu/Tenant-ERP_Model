@@ -1,5 +1,21 @@
 # Changelog — Tenant-ERP
 
+## [v2.9.0] — 2026-08-10
+
+### Adicionado
+- Novos atalhos de teclado para Fiscal, QR Code, Mensageria, Timer, Configurações, Manual, Primeiros Passos e Assistente de IA
+- Primeiros Passos reorganizado da preparação do produto à conferência fiscal e financeira
+
+### Mudado
+- O painel de atalhos mostra apenas as ações permitidas para o perfil e os módulos ativos da loja
+- Manual atualizado para o fluxo atual de recebimento de NF-e, NCM rastreável, pagamento em dinheiro, troco e bloqueio fiscal de fidelidade
+- Paginação do manual impresso ajustada para não deixar grandes espaços vazios entre seções
+
+### Corrigido
+- Atalhos globais, inclusive `?`, não são mais acionados enquanto o usuário digita ou interage com o Assistente de IA
+
+---
+
 ## [v2.8.0] — 2026-08-03
 
 ### Adicionado

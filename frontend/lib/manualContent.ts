@@ -35,8 +35,9 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     itens: [
       { t: 'Como funciona', d: 'O cliente escaneia o QR Code da mesa e abre a própria comanda. O sistema identifica o cliente automaticamente pelo CPF ou WhatsApp.' },
       { t: 'Adicionar itens', d: 'No painel admin, clique na comanda aberta e pesquise o produto. Você também pode adicionar itens manualmente com nome e preço.' },
-      { t: 'Fechar a comanda', d: 'Clique em "Fechar Comanda", escolha a forma de pagamento (Dinheiro, Pix, Cartão, Crediário, Pontos ou Cashback) e confirme. O sistema desconta o estoque automaticamente.' },
-      { t: 'Desconto em R$', d: 'No fechamento, informe um valor de desconto direto em reais (além do desconto em pontos que o cliente já tenha aplicado). Aparece separado no histórico e nos relatórios.' },
+      { t: 'Fechar a comanda', d: 'Clique em "Fechar Comanda", escolha a forma de pagamento (Dinheiro, Pix, Cartão ou Crediário) e confirme. O sistema desconta o estoque automaticamente.' },
+      { t: 'Dinheiro e troco', d: 'Ao pagar em dinheiro, informe quanto o cliente entregou. O sistema mostra o valor devido e calcula o troco antes da confirmação; na NFC-e, o valor recebido e o troco seguem separados para a SEFAZ.' },
+      { t: 'Desconto em R$', d: 'No fechamento, informe um valor de desconto direto em reais. Ele aparece separado no histórico, nos relatórios e no documento fiscal.' },
       { t: 'Emitir cupom fiscal', d: 'No fechamento aparece o checkbox "Emitir cupom fiscal (NFC-e) agora" — a nota só é emitida se você marcar. Vem pré-marcado conforme a forma de pagamento estar configurada em Fiscal → Emissão automática, mas você sempre pode mudar na hora.' },
       { t: 'Split de pagamento', d: 'É possível usar duas formas de pagamento ao mesmo tempo. Selecione a segunda forma e informe o valor dela.' },
       { t: 'Cancelar comanda', d: 'Se o cliente desistir, use "Cancelar". O estoque não é alterado e a comanda some do painel.' },
@@ -90,18 +91,16 @@ export const MANUAL_SECOES: ManualSectionData[] = [
   },
   {
     num: '05',
-    titulo: 'Clientes, Pontos & Cashback',
+    titulo: 'Clientes',
     cor: '#C084FC',
     itens: [
       { t: 'Cadastrar cliente', d: 'Clique em "Novo Cliente". Nome é obrigatório; CPF, WhatsApp e e-mail são opcionais, mas ajudam na identificação.' },
-      { t: 'Pontos de Fidelidade', d: 'A cada R$1 gasto, o cliente ganha 1 ponto. Os pontos expiram em 30 dias após a última compra e podem ser usados como desconto.' },
-      { t: 'Pontos não acumulam com cashback', d: 'Se qualquer parte do pagamento usar cashback, o cliente não acumula pontos naquela venda.' },
-      { t: 'Adicionar pontos manualmente', d: 'Selecione o cliente no painel e informe a quantidade de pontos e o motivo (ex: "Bônus de aniversário").' },
-      { t: 'Cashback (Saldo)', d: 'Diferente de pontos — é saldo em reais que o cliente pode usar como pagamento. Crédite ou débite manualmente pelo painel.' },
+      { t: 'Identificação nas vendas', d: 'Selecionar um cliente é opcional no PDV, mas permite reunir comandas, vendas e crediários no histórico correto.' },
+      { t: 'Dados de contato', d: 'Mantenha CPF, WhatsApp e e-mail atualizados apenas quando necessários para atendimento, documento fiscal ou comunicação autorizada.' },
       { t: 'Histórico completo', d: 'Clique em "Ver Histórico" no painel do cliente para ver todas as comandas, vendas no caixa e crediários em um único lugar.' },
     ],
     dicas: [
-      'Pontos e cashback são coisas diferentes: pontos têm validade de 30 dias; cashback é saldo em reais sem validade.',
+      'Pontos e cashback não estão disponíveis como forma de pagamento; essa decisão evita inconsistência contábil e emissão fiscal indevida.',
       'Para redefinir a senha de um cliente, use o botão "Redefinir Senha" no painel lateral.',
     ],
   },
@@ -119,7 +118,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
       { t: 'Crediário vencido', d: 'Aparece em vermelho no painel quando passou dos 30 dias sem pagamento. Use para cobrar os clientes em atraso.' },
     ],
     dicas: [
-      'Pagar uma dívida de crediário NÃO gera pontos para o cliente.',
+      'O pagamento de uma dívida atualiza o saldo do crediário e o financeiro, sem criar uma nova venda.',
       'O vencimento é renovado automaticamente sempre que o cliente faz um pagamento parcial.',
     ],
   },
@@ -195,7 +194,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     cor: '#22D3EE',
     itens: [
       { t: 'Relatório PDV', d: 'Mostra todas as vendas avulsas do período: receita dia a dia, top produtos vendidos e formas de pagamento usadas.' },
-      { t: 'Relatório de Clientes', d: 'Lista todos os clientes com pontos, cashback e status de atividade. Ajuda a identificar quem está ativo e quem parou de visitar.' },
+      { t: 'Relatório de Clientes', d: 'Lista os clientes e o status de atividade. Ajuda a identificar quem está ativo e quem parou de visitar.' },
       { t: 'Comandas Abertas', d: 'Mostra as comandas que estão há mais dias abertas. Útil para identificar clientes que ainda não fecharam a conta.' },
       { t: 'Relatório Financeiro', d: 'Visão consolidada de receitas por período, formas de pagamento e ticket médio.' },
       { t: 'Exportar PDF', d: 'Cada relatório tem botão de exportação em PDF para imprimir ou compartilhar.' },
@@ -235,11 +234,12 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     titulo: 'Atalhos de Teclado',
     cor: '#F472B6',
     itens: [
-      { t: 'Navegar pelo teclado', d: 'Quando nenhum campo de texto está focado, pressione uma tecla para ir direto à página: D → Comandas, G → Dashboard, P → PDV (Frente de Caixa), E → Estoque, U → Clientes, C → Crediário, F → Financeiro, R → Relatórios.' },
-      { t: 'Ver todos os atalhos', d: 'Pressione ? (shift + /) em qualquer tela para abrir o painel de atalhos com a lista completa. Pressione ? novamente ou Esc para fechar.' },
+      { t: 'Operação', d: 'G → Painel, D → Comandas, P → PDV, E → Estoque, Q → QR Code e A → Assistente de IA.' },
+      { t: 'Gestão', d: 'U → Clientes, C → Crediário, F → Financeiro, R → Relatórios, I → Fiscal, M → Mensageria, T → Timer e S → Configurações.' },
+      { t: 'Ajuda', d: 'H abre o manual, 1 abre Primeiros Passos e ? (shift + /) mostra o painel com todos os atalhos disponíveis para seu perfil.' },
       { t: 'Fechar com Esc', d: 'A tecla Esc fecha modais, painéis flutuantes e o painel de atalhos. Funciona em qualquer contexto.' },
       { t: 'Badges no menu lateral', d: 'Ao passar o mouse sobre um item do menu no desktop, aparece a tecla de atalho correspondente em destaque ao lado do nome.' },
-      { t: 'Não interfere com digitação', d: 'Os atalhos de navegação ficam desativados enquanto você digita em campos de texto, busca ou formulários — só a tecla ? continua ativa.' },
+      { t: 'Digitação protegida', d: 'Nenhum atalho global — nem mesmo ? — é acionado enquanto você escreve em campos, buscas, formulários ou no Assistente de IA. Esc continua disponível para fechar painéis.' },
     ],
     dicas: [
       'Os atalhos de letras são case-insensitive — maiúscula ou minúscula, funciona igual.',
@@ -296,6 +296,8 @@ export const MANUAL_SECOES: ManualSectionData[] = [
       { t: 'Configuração SEFAZ única', d: 'CNPJ, UF, ambiente e certificado A1 são configurados somente em Fiscal. Em Integrações, o card da SEFAZ serve apenas para ativar a busca automática e sincronizar.' },
       { t: 'Emissão não é mais automática', d: 'Ao fechar uma comanda ou registrar uma venda avulsa, a nota só é emitida se você marcar o checkbox "Emitir cupom fiscal" no momento do fechamento — o sistema não emite nota sozinho sem perguntar.' },
       { t: 'Formas de pagamento com auto-emissão', d: 'Em Fiscal → Emissão automática, marque quais formas de pagamento (Pix, Dinheiro, Cartão...) vêm com o checkbox já pré-marcado no fechamento. Por padrão nenhuma vem marcada — é sempre uma escolha explícita até você configurar isso.' },
+      { t: 'Valor recebido e troco', d: 'Em pagamento em dinheiro, informe o valor efetivamente entregue. O XML envia esse valor como pagamento e a diferença como troco; o DANFE exibe os dois valores sem transformar o troco em desconto.' },
+      { t: 'Pontos e cashback', d: 'Essas formas de pagamento estão desabilitadas. Vendas antigas que ainda tenham fidelidade registrada ficam impedidas de emitir NFC-e até a situação ser regularizada, evitando documento fiscal incompatível.' },
       { t: 'Emitir nota depois (manual)', d: 'Se a venda foi fechada sem nota, use o botão "Emitir nota fiscal" no histórico da comanda ou no detalhe da venda avulsa a qualquer momento depois.' },
       { t: 'Acompanhar notas emitidas', d: 'A lista de notas em Admin → Fiscal mostra status (Pendente, Autorizada, Rejeitada, Cancelada, Contingência) e o motivo quando não autoriza — ex: certificado não configurado, produto sem NCM.' },
       { t: 'Reprocessar e cancelar', d: 'Notas pendentes ou rejeitadas podem ser reprocessadas manualmente. Notas autorizadas podem ser canceladas dentro de 30 minutos da emissão, com justificativa de pelo menos 15 caracteres.' },
@@ -342,12 +344,13 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     titulo: 'Assistente IA — Voz & Navegação',
     cor: '#A78BFA',
     itens: [
-      { t: 'Como acessar', d: 'Clique no botão roxo flutuante no canto da tela (arrastável). O widget abre acima do botão.' },
+      { t: 'Como acessar', d: 'Clique no botão flutuante no canto da tela (arrastável) ou pressione A quando não estiver digitando. O widget abre acima do botão.' },
       { t: 'Perguntas sobre a loja', d: 'Pergunte sobre vendas do dia, estoque baixo, crediários em aberto, top produtos e muito mais. O assistente responde com dados reais em tempo real.' },
       { t: 'Navegação por comando', d: 'Digite ou fale "abre o estoque", "vai pro financeiro", "abre a frente de caixa" e o assistente navega automaticamente para a página e fecha o widget.' },
       { t: 'Entrada por voz', d: 'Clique no ícone de microfone no campo de texto. Fale normalmente em português — a transcrição é enviada automaticamente ao assistente. Disponível no Chrome e Edge.' },
       { t: 'Resposta em voz', d: 'Clique no ícone de alto-falante no cabeçalho do widget para ativar leitura em voz alta das respostas em PT-BR.' },
       { t: 'Sugestões rápidas', d: 'Quando o chat está vazio, aparecem sugestões de perguntas e comandos para facilitar o uso.' },
+      { t: 'Atalhos pausados no chat', d: 'Enquanto você escreve ou interage com o Assistente, as teclas globais de navegação ficam suspensas. Assim, uma pergunta com ?, letras ou números não abre outra tela por acidente.' },
     ],
     dicas: [
       'O microfone funciona melhor no Chrome e Edge — Firefox não tem suporte nativo ao reconhecimento de voz.',
@@ -396,9 +399,8 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     titulo: 'Módulos Pagos por Loja',
     cor: '#14B8A6',
     itens: [
-      { t: 'O que são', d: 'Fiscal, Estoque, Fidelidade e Portal do Contador são módulos habilitados por loja — dá pra contratar só o que faz sentido pro seu negócio. Sem o módulo, o item some do menu e a tela/endpoint correspondente fica bloqueado.' },
+      { t: 'O que são', d: 'Fiscal, Estoque, Assistente de IA e Portal do Contador são módulos habilitados por loja — dá pra contratar só o que faz sentido pro seu negócio. Sem o módulo, o item some do menu e a tela/endpoint correspondente fica bloqueado.' },
       { t: 'Como saber o que está ativo', d: 'Se um item do menu (ex: Fiscal) não aparece, o módulo não está habilitado pra essa loja. Fale com o suporte pra contratar.' },
-      { t: 'Fidelidade tem dois níveis', d: 'Além do módulo estar contratado, o programa de pontos também tem um interruptor próprio em Configurações — dá pra desligar temporariamente sem perder o histórico de pontos já dado, mesmo com o módulo ativo.' },
     ],
     dicas: [
       'Só o dono da plataforma pode habilitar/desabilitar módulos de uma loja — não é uma configuração que o admin da loja mexe sozinho.',

@@ -143,8 +143,13 @@ export default function AiChatWidget() {
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    const onToggle = () => setOpen(value => !value)
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('admin:toggle-ai', onToggle)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('admin:toggle-ai', onToggle)
+    }
   }, [])
 
   useEffect(() => {
@@ -288,7 +293,7 @@ export default function AiChatWidget() {
     <>
       {/* ── Painel ─────────────────────────────────────────────────────────── */}
       {open && (
-        <div className="fixed z-50 flex flex-col w-[340px] sm:w-[400px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl overflow-hidden"
+        <div data-keyboard-shortcuts-disabled="true" className="fixed z-50 flex flex-col w-[340px] sm:w-[400px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl overflow-hidden"
              style={{ ...panelStyle, background: '#111117', border: '1px solid #303040', maxHeight: '72vh' }}>
 
           {/* Cabeçalho */}

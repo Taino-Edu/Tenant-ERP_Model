@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { MANUAL_SECOES as SECOES } from '@/lib/manualContent'
 
-const VERSION = 'v1.22.0'
-const DATA = '15/07/2026'
+const VERSION = 'v2.9.0'
+const DATA = '10/08/2026'
 
 export default function ManualPdfPage() {
   const { site } = useSiteConfig()
@@ -107,8 +107,6 @@ export default function ManualPdfPage() {
         /* Seção */
         .secao {
           margin-bottom: 28px;
-          break-inside: avoid;
-          page-break-inside: avoid;
         }
         .secao-header {
           display: flex;
@@ -117,6 +115,8 @@ export default function ManualPdfPage() {
           margin-bottom: 10px;
           padding-bottom: 8px;
           border-bottom: 2px solid #f3f4f6;
+          break-after: avoid;
+          page-break-after: avoid;
         }
         .secao-num {
           font-size: 11px;
@@ -138,7 +138,7 @@ export default function ManualPdfPage() {
         }
 
         /* Itens */
-        .item { display: flex; gap: 10px; margin-bottom: 6px; }
+        .item { display: flex; gap: 10px; margin-bottom: 6px; break-inside: avoid; page-break-inside: avoid; }
         .item-bullet {
           width: 18px;
           height: 18px;
@@ -158,7 +158,7 @@ export default function ManualPdfPage() {
         .item-d { color: #4b5563; font-size: 12px; margin-top: 1px; }
 
         /* Dicas */
-        .dicas { margin-top: 8px; background: #f9fafb; border-radius: 8px; padding: 8px 12px; border-left: 3px solid #00F0A8; }
+        .dicas { margin-top: 8px; background: #f9fafb; border-radius: 8px; padding: 8px 12px; border-left: 3px solid #00F0A8; break-inside: avoid; page-break-inside: avoid; }
         .dicas-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #00b87a; margin-bottom: 4px; }
         .dica { font-size: 11px; color: #4b5563; margin-bottom: 2px; }
         .dica::before { content: '→ '; color: #00b87a; font-weight: 700; }
@@ -172,6 +172,7 @@ export default function ManualPdfPage() {
           .page { padding: 16px 24px; max-width: 100%; }
           .capa h1 { font-size: 22px; }
           .secao { margin-bottom: 20px; }
+          .capa, .indice { break-inside: avoid; page-break-inside: avoid; }
           @page { margin: 1.5cm; size: A4; }
         }
       `}</style>
