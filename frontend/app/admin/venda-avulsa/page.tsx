@@ -1468,14 +1468,14 @@ export default function VendaAvulsaPage() {
             <button
               onClick={() => setTab('venda')}
               className={clsx('px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5',
-                tab === 'venda' ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20' : 'text-gray-400 hover:text-gray-200')}
+                tab === 'venda' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
             >
               <TrendingUp className="w-3.5 h-3.5" /> PDV
             </button>
             <button
               onClick={() => setTab('historico')}
               className={clsx('px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5',
-                tab === 'historico' ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20' : 'text-gray-400 hover:text-gray-200')}
+                tab === 'historico' ? 'bg-brand-600 text-white' : 'text-gray-400 hover:text-gray-200')}
             >
               <History className="w-3.5 h-3.5" /> Histórico
             </button>
@@ -1690,7 +1690,7 @@ export default function VendaAvulsaPage() {
         <button
           onClick={() => setWizard(true)}
           disabled={loading}
-          className="md:hidden fixed bottom-6 right-4 z-30 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-500 active:scale-95 flex items-center justify-center shadow-xl shadow-brand-600/40 disabled:opacity-50 transition-all"
+          className="md:hidden fixed bottom-6 right-4 z-30 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-500 active:scale-95 flex items-center justify-center shadow-xl disabled:opacity-50 transition-all"
           aria-label="Começar venda"
         >
           <Plus className="w-6 h-6 text-white" />
