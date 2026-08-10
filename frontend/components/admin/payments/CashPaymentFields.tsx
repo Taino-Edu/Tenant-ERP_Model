@@ -45,9 +45,9 @@ export default function CashPaymentFields({
   }, [receivedCents, change, roundingDiscount, valid, onChange])
 
   return (
-    <div className="space-y-3 rounded-xl border border-emerald-500/25 bg-emerald-500/5 p-3">
+    <div className="space-y-3 rounded-xl border border-[var(--status-success-border)] bg-[var(--status-success-surface)] p-3">
       <div>
-        <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-emerald-300">
+        <label className="mb-1 flex items-center gap-1.5 text-xs font-bold text-[var(--status-success-text)]">
           <Banknote className="h-3.5 w-3.5" /> Valor entregue em dinheiro
         </label>
         <input
@@ -56,15 +56,20 @@ export default function CashPaymentFields({
           value={received}
           onChange={e => setReceived(e.target.value)}
         />
-        <p className="mt-1 text-[11px] text-gray-500">Devido em dinheiro: {money(cashDueInCents)}</p>
+        <div className="mt-2 flex items-center justify-between rounded-lg bg-surface-800/80 px-3 py-2 text-xs">
+          <span className="font-medium text-gray-400">Devido em dinheiro</span>
+          <strong className="font-mono text-sm text-white">{money(cashDueInCents)}</strong>
+        </div>
       </div>
 
       <div className={clsx(
-        'flex items-center justify-between rounded-lg px-3 py-2 text-sm font-semibold',
-        valid ? 'bg-emerald-500/10 text-emerald-300' : 'bg-red-500/10 text-red-400',
+        'flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm font-bold',
+        valid
+          ? 'border-[var(--status-success-border)] bg-surface-800 text-[var(--status-success-text)]'
+          : 'border-[var(--status-danger-border)] bg-[var(--status-danger-surface)] text-[var(--status-danger-text)]',
       )}>
         <span>{valid ? 'Troco' : 'Falta'}</span>
-        <span className="font-mono">{money(valid ? change : cashDueInCents - receivedCents)}</span>
+        <span className="font-mono text-base">{money(valid ? change : cashDueInCents - receivedCents)}</span>
       </div>
 
       {valid && exactChange % 5 !== 0 && (
