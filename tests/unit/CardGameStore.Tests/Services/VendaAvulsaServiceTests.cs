@@ -305,11 +305,11 @@ public class VendaAvulsaServiceTests
     // ── Programa de pontos — opcional por loja (SiteConfig.PontosFidelidadeAtivo) ──
 
     [Fact]
-    public async Task Register_SemConfigDePontos_DeveGanharPontosPorDefault()
+    public async Task Register_SemConfigDePontos_NaoDeveGanharPontos()
     {
         // Sem linha de SiteConfig nenhuma — o serviço trata como ativo (default true),
         // mesmo comportamento de sempre pra loja que nunca mexeu na configuração.
-        var db = CreateDb(nameof(Register_SemConfigDePontos_DeveGanharPontosPorDefault));
+        var db = CreateDb(nameof(Register_SemConfigDePontos_NaoDeveGanharPontos));
         var product = await SeedProductAsync(db, priceInCents: 5000, stock: 5);
         var user    = await SeedUserAsync(db);
         var service = CreateService(db);
@@ -322,7 +322,7 @@ public class VendaAvulsaServiceTests
         }, AdminId, AdminName);
 
         db.ChangeTracker.Clear();
-        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(50); // R$50 → 50 pts
+        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(0);
     }
 
     [Fact]
@@ -346,9 +346,9 @@ public class VendaAvulsaServiceTests
     }
 
     [Fact]
-    public async Task Register_ComPontosAtivados_DeveGanharPontos()
+    public async Task Register_ComToggleLegadoAtivo_NaoDeveGanharPontos()
     {
-        var db = CreateDb(nameof(Register_ComPontosAtivados_DeveGanharPontos));
+        var db = CreateDb(nameof(Register_ComToggleLegadoAtivo_NaoDeveGanharPontos));
         await SetPontosAtivoAsync(db, ativo: true);
         var product = await SeedProductAsync(db, priceInCents: 3000, stock: 5);
         var user    = await SeedUserAsync(db);
@@ -362,7 +362,7 @@ public class VendaAvulsaServiceTests
         }, AdminId, AdminName);
 
         db.ChangeTracker.Clear();
-        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(30); // R$30 → 30 pts
+        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(0);
     }
 
     [Fact]
@@ -382,7 +382,7 @@ public class VendaAvulsaServiceTests
         }, AdminId, AdminName);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
+            .WithMessage("*desativados*");
     }
 
     [Fact]
@@ -404,7 +404,7 @@ public class VendaAvulsaServiceTests
         }, AdminId, AdminName);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
+            .WithMessage("*desativados*");
     }
 
     [Fact]
@@ -431,13 +431,13 @@ public class VendaAvulsaServiceTests
         }, AdminId, AdminName);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
+            .WithMessage("*desativados*");
     }
 
     [Fact]
-    public async Task Register_PagarComPontosAtivados_DeveDebitarSaldo()
+    public async Task Register_PagarComPontosMesmoAtivados_DeveRecusar()
     {
-        var db = CreateDb(nameof(Register_PagarComPontosAtivados_DeveDebitarSaldo));
+        var db = CreateDb(nameof(Register_PagarComPontosMesmoAtivados_DeveRecusar));
         await SetPontosAtivoAsync(db, ativo: true);
         var product = await SeedProductAsync(db, priceInCents: 1000, stock: 5);
         // Nota: o resgate debita o valor em CENTAVOS do saldo de pontos (não o
@@ -446,15 +446,14 @@ public class VendaAvulsaServiceTests
         var user    = await SeedUserAsync(db, pointsBalance: 2000);
         var service = CreateService(db);
 
-        await service.RegisterAsync(new VendaAvulsaRequest
+        var act = async () => await service.RegisterAsync(new VendaAvulsaRequest
         {
             UserId        = user.Id,
             PaymentMethod = PaymentMethod.Pontos,
             Items = [new VendaAvulsaItemRequest { ProductId = product.Id, Quantity = 1 }],
         }, AdminId, AdminName);
 
-        db.ChangeTracker.Clear();
-        (await db.Users.FindAsync(user.Id))!.PointsBalance.Should().Be(1000); // 2000 - 1000 (débito em centavos)
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*desativados*");
     }
 
     // ── GetByDate ─────────────────────────────────────────────────────────────

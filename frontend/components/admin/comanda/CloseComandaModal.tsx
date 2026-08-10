@@ -24,7 +24,7 @@ export function CloseComandaModal({
   const secondPaymentMethods = metodosDisponiveis(SECOND_PAYMENT_METHODS, site)
   const [method,        setMethod]        = useState('Dinheiro')
   const [splitEnabled,  setSplitEnabled]  = useState(false)
-  const [secondMethod,  setSecondMethod]  = useState('Cashback')
+  const [secondMethod,  setSecondMethod]  = useState('Dinheiro')
   const [secondAmtStr,  setSecondAmtStr]  = useState('')
   const [descontoStr,   setDescontoStr]   = useState('')
   const [emitirNota,    setEmitirNota]    = useState(() => autoEmitMethods.includes('Dinheiro'))

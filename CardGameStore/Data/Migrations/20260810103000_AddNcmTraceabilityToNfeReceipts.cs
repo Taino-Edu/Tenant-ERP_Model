@@ -20,6 +20,10 @@ namespace CardGameStore.Data.Migrations
                 type: "character varying(8)",
                 maxLength: 8,
                 nullable: true);
+
+            // Desativa novas operações de fidelidade sem apagar saldos ou
+            // histórico, que permanecem necessários para auditoria e estorno.
+            migrationBuilder.Sql("UPDATE site_config SET pontos_fidelidade_ativo = FALSE;");
         }
 
         /// <inheritdoc />

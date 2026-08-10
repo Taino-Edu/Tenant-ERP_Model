@@ -319,9 +319,9 @@ public class ComandaServiceTests
     // ── Aplicar pontos ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ApplyPoints_DeveReduzirSaldoERegistrarNaComanda()
+    public async Task ApplyPoints_MesmoComSaldo_DeveRecusarProgramaDesativado()
     {
-        var db      = CreateDb(nameof(ApplyPoints_DeveReduzirSaldoERegistrarNaComanda));
+        var db      = CreateDb(nameof(ApplyPoints_MesmoComSaldo_DeveRecusarProgramaDesativado));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
 
@@ -330,11 +330,9 @@ public class ComandaServiceTests
         await db.SaveChangesAsync();
 
         await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 4 });
-        var resultado = await service.ApplyPointsAsync(comanda.Id, user.Id, 60);
+        var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 60);
 
-        resultado.PointsApplied.Should().Be(60);
-        var saldoAtual = (await db.Users.FindAsync(user.Id))!.PointsBalance;
-        saldoAtual.Should().Be(40);
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*desativados*");
     }
 
     [Fact]
@@ -361,7 +359,7 @@ public class ComandaServiceTests
         var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
+            .WithMessage("*desativados*");
     }
 
     [Fact]
@@ -379,7 +377,7 @@ public class ComandaServiceTests
         var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*expirados*");
+            .WithMessage("*desativados*");
     }
 
     [Fact]
@@ -397,7 +395,7 @@ public class ComandaServiceTests
         var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*Saldo insuficiente*");
+            .WithMessage("*desativados*");
     }
 
     [Fact]
@@ -412,11 +410,10 @@ public class ComandaServiceTests
         await db.SaveChangesAsync();
         await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 4 });
 
-        await service.ApplyPointsAsync(comanda.Id, user.Id, 30);
         var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 30);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*já foram aplicados*");
+            .WithMessage("*desativados*");
     }
 
     [Fact]
@@ -436,16 +433,16 @@ public class ComandaServiceTests
         var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
+            .WithMessage("*desativados*");
     }
 
     // ── Fechar comanda — programa de pontos opcional por loja ─────────────────
 
     [Fact]
-    public async Task CloseComanda_SemConfigDePontos_DeveGanharPontosPorDefault()
+    public async Task CloseComanda_SemConfigDePontos_NaoDeveGanharPontos()
     {
         // Sem linha de SiteConfig nenhuma — o serviço trata como ativo (default true).
-        var db      = CreateDb(nameof(CloseComanda_SemConfigDePontos_DeveGanharPontosPorDefault));
+        var db      = CreateDb(nameof(CloseComanda_SemConfigDePontos_NaoDeveGanharPontos));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
         await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 4 }); // R$20
@@ -453,7 +450,7 @@ public class ComandaServiceTests
         await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Pix");
 
         var saldo = (await db.Users.FindAsync(user.Id))!.PointsBalance;
-        saldo.Should().Be(20); // R$20 → 20 pts
+        saldo.Should().Be(0);
     }
 
     [Fact]
@@ -487,13 +484,13 @@ public class ComandaServiceTests
         var act = async () => await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Pontos");
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
+            .WithMessage("*desativados*");
     }
 
     [Fact]
-    public async Task CloseComanda_ComPontosAtivados_DevePermitirPagarComPontos()
+    public async Task CloseComanda_ComToggleLegadoAtivo_DeveRecusarPontos()
     {
-        var db = CreateDb(nameof(CloseComanda_ComPontosAtivados_DevePermitirPagarComPontos));
+        var db = CreateDb(nameof(CloseComanda_ComToggleLegadoAtivo_DeveRecusarPontos));
         db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
@@ -505,10 +502,10 @@ public class ComandaServiceTests
         await db.SaveChangesAsync();
         await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 1 });
 
-        await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Pontos");
+        var act = async () => await service.CloseComandaAsync(
+            comanda.Id, Guid.NewGuid(), paymentMethod: "Pontos");
 
-        var saldo = (await db.Users.FindAsync(user.Id))!.PointsBalance;
-        saldo.Should().Be(500); // 1000 - 500 (débito em centavos)
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*desativados*");
     }
 
     // ── PaymentCrediario e controle de estoque ────────────────────────────────

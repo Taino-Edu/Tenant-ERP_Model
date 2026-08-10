@@ -496,23 +496,16 @@ export const crediarioApi = {
 }
 
 /**
- * Fidelidade (pontos E cashback) exige dois "sim": o módulo contratado pela
- * plataforma e o toggle operacional da loja. São o mesmo benefício — saldo do
- * cliente que abate a venda — e antes disto o cashback ficava na lista mesmo com
- * o programa desligado, gerando erro só ao fechar a venda.
- *
- * Um helper só, porque a regra estava repetida em cinco telas e o cashback
- * escapava de todas.
+ * Pontos e cashback foram retirados de novas vendas por decisão fiscal/contábil.
+ * Os valores continuam no histórico, mas nunca voltam às opções operacionais,
+ * mesmo que um tenant ainda possua módulo ou toggle legado habilitado.
  */
 export function metodosDisponiveis<T extends { readonly value: string }>(
   metodos: readonly T[],
   site: { pontosFidelidadeAtivo?: boolean; enabledModules?: string[] },
 ): T[] {
-  const fidelidadeAtiva =
-    (site.enabledModules ?? []).includes('pontos') && site.pontosFidelidadeAtivo !== false
-  return fidelidadeAtiva
-    ? [...metodos]
-    : metodos.filter(m => m.value !== 'Pontos' && m.value !== 'Cashback')
+  void site
+  return metodos.filter(m => m.value !== 'Pontos' && m.value !== 'Cashback')
 }
 
 export const COMANDA_PAYMENT_METHODS = [

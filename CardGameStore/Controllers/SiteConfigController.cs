@@ -46,6 +46,9 @@ public class SiteConfigController : ControllerBase
         // Converte somente o placeholder histórico. Qualquer nome escolhido pelo
         // tenant continua tendo prioridade absoluta sobre a marca padrão Octus.
         cfg.SiteName = SiteConfig.ResolveSiteName(cfg.SiteName);
+        // Programa preservado apenas como histórico; novas operações foram
+        // desativadas por decisão fiscal/contábil em todos os tenants.
+        cfg.PontosFidelidadeAtivo = false;
         // Inofensivo expor via endpoint público: só diz quais módulos pagos a loja
         // habilitou, não vaza dado sensível nenhum (mesmo espírito de expor a cor/nome
         // da loja aqui, que já é público).
@@ -88,7 +91,7 @@ public class SiteConfigController : ControllerBase
         if (req.ColorNavy            is not null) cfg.ColorNavy            = req.ColorNavy;
         if (req.ColorBackground      is not null) cfg.ColorBackground      = req.ColorBackground;
         if (req.ColorCard            is not null) cfg.ColorCard            = req.ColorCard;
-        if (req.PontosFidelidadeAtivo.HasValue)    cfg.PontosFidelidadeAtivo = req.PontosFidelidadeAtivo.Value;
+        cfg.PontosFidelidadeAtivo = false;
 
         cfg.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();

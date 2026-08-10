@@ -91,14 +91,13 @@ public class FidelidadeModuloTests
             comanda.Id, Guid.NewGuid(), paymentMethod: metodo);
 
         (await act.Should().ThrowAsync<InvalidOperationException>())
-            .Which.Message.Should().Contain("fidelidade",
-                "a mensagem precisa dizer que é o programa, não um erro genérico de pagamento");
+            .Which.Message.Should().Contain("desativados");
     }
 
     [Theory]
     [InlineData(PaymentMethod.Pontos)]
     [InlineData(PaymentMethod.Cashback)]
-    public async Task ModuloLigado_AceitaFechamentoComFidelidade(string metodo)
+    public async Task MesmoComModuloLigado_RecusaFechamentoComFidelidade(string metodo)
     {
         // O outro lado: quem contratou continua usando. "Desconectar" não pode
         // virar "quebrar para quem paga".
@@ -110,7 +109,8 @@ public class FidelidadeModuloTests
         var act = async () => await service.CloseComandaAsync(
             comanda.Id, Guid.NewGuid(), paymentMethod: metodo);
 
-        await act.Should().NotThrowAsync();
+        (await act.Should().ThrowAsync<InvalidOperationException>())
+            .Which.Message.Should().Contain("desativados");
     }
 
     [Fact]

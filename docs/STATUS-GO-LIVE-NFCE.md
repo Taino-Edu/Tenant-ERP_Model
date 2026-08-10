@@ -37,7 +37,7 @@ plano continua sendo a fonte da verdade sobre escopo, critérios e fundamentos; 
 | **REG-001** — regime normal | ✅ | totalizadores consolidam ICMS/ST/FCP/PIS/COFINS dos itens via getters polimórficos da lib; `ICMSTot` sem zeros fixos; emissão fora do Simples reaberta. 11 testes. XML/DANFE aceitos pelo contador; falta homologação real por CST. | 30 |
 | **CAD-001** — saneamento do catálogo | 👤 | conferência de NCM/CEST/CFOP/CSOSN/CST pelo contador. | 9 |
 | **FIS-001** — escopo assinado | 👤 | UF, IE, credenciamento, série/número, escopo presencial — com o contador. | 4 |
-| **FIS-003** — pontos pré-aplicados | ✅ | decisão do contador: pontos/cashback ficam fora da emissão fiscal; histórico preservado e novas tentativas bloqueadas. | 5 |
+| **FIS-003** — pontos pré-aplicados | ✅ | decisão do contador: pontos/cashback desativados em novas vendas e na emissão fiscal; histórico/saldos preservados para auditoria e estorno. | 5 |
 | **RTC-001** — IBS/CBS versionado | ✅ | trava fixa de 2027 removida: as regras viraram catálogo versionado com vigência, perfil do contribuinte, alíquotas, fonte oficial e data de consulta — a última faixa é aberta, então virar o ano nunca para a emissão. Perfil diferencia Simples, excesso de sublimite, opção pelo regime regular e regime normal. Alerta cobra a revisão da regra. 25 testes. **As alíquotas de 2027 dependem de publicação oficial** — o mecanismo está pronto, a faixa não. | 10, 34 |
 | **UF-001 / ECOM-001** | ⏳ | condicionais: outra UF / e-commerce, fora do escopo inicial. | 10 |
 | **OPS-001/002** — produção e guarda | 👤 | credenciamento real, backup, restauração — infra e homologação. | 11 |
@@ -58,9 +58,9 @@ Depois da auditoria, na mesma frente:
   — job diário monta a tabela, cadastro de produto vira lookup local. Com a API do
   IBPT fora do ar, `Admin > Fiscal → Importar tabela (.csv)` carrega o arquivo
   oficial da UF inteira de uma vez e a emissão deixa de depender do serviço deles;
-- **pontos e cashback viraram módulo opcional, desligado** — o código continua
-  no lugar, mas não participa do fechamento da venda nem chega à nota. Retirou uma
-  decisão do contador do caminho crítico (ver `BACKLOG.md`);
+- **pontos e cashback foram desativados para novas vendas** — não aparecem no
+  PDV, requests forjados são recusados, não há novo acúmulo e nada chega à nota.
+  Histórico e saldos antigos continuam disponíveis para auditoria e estorno;
 - **rastreabilidade do NCM pela NF-e de entrada** — o recebimento preserva o NCM
   do item como evidência, preenche somente cadastro sem NCM, mantém divergências
   visíveis sem sobrescrever e mostra ao contador chave, fornecedor e item de origem.
