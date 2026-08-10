@@ -13,6 +13,7 @@ type Product = {
   barcode?: string
   stockQuantity: number
   costPriceInCents: number
+  ncm?: string
   hasVariants: boolean
   variants: Variant[]
 }
@@ -169,7 +170,7 @@ export function NfeReceiptModal({ notaId, onClose, onReceived }: {
                       <p className="text-sm font-semibold text-white">{row.itemNumber}. {row.description}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
                         Cód. fornecedor {row.supplierProductCode} · XML: {row.xmlQuantity} {row.unit ?? 'un'} · {money(row.lineTotal)}
-                        {row.gtin ? ` · EAN ${row.gtin}` : ''}
+                        {row.gtin ? ` · EAN ${row.gtin}` : ''}{row.ncm ? ` · NCM ${row.ncm}` : ' · NCM não informado no XML'}
                       </p>
                     </div>
                     {row.matchReason ? (
@@ -234,6 +235,16 @@ export function NfeReceiptModal({ notaId, onClose, onReceived }: {
                   {row.suggestedQuantity == null ? (
                     <p className="text-xs text-amber-400 mt-2">A quantidade do XML é fracionada. Informe quantas unidades entram no estoque.</p>
                   ) : null}
+                  {!row.ignore && selected && row.ncm && !selected.ncm ? (
+                    <p className="text-xs text-green-400 mt-2">
+                      NCM {row.ncm} será preenchido no produto a partir desta NF-e de entrada.
+                    </p>
+                  ) : null}
+                  {!row.ignore && selected?.ncm && row.ncm && selected.ncm !== row.ncm ? (
+                    <p className="text-xs text-amber-400 mt-2">
+                      Divergência de NCM: XML {row.ncm} × cadastro {selected.ncm}. O cadastro não será sobrescrito; revise com o contador.
+                    </p>
+                  ) : null}
                   <label className="inline-flex items-center gap-2 text-xs text-gray-400 mt-3 cursor-pointer">
                     <input
                       type="checkbox" checked={row.ignore}
@@ -249,7 +260,7 @@ export function NfeReceiptModal({ notaId, onClose, onReceived }: {
 
           <div className="px-5 py-4 border-t border-surface-600 flex flex-col sm:flex-row sm:items-center gap-3">
             <p className="text-xs text-gray-500 flex-1">
-              Ao confirmar, estoque, custo médio e histórico serão atualizados juntos. A mesma NF-e não poderá ser recebida novamente.
+              Ao confirmar, estoque, custo médio, NCM ausente e histórico da nota serão atualizados juntos. A mesma NF-e não poderá ser recebida novamente.
             </p>
             <button onClick={onClose} disabled={saving} className="px-4 py-2.5 rounded-xl bg-surface-700 text-gray-300 text-sm font-semibold">
               Voltar

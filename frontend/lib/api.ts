@@ -1916,6 +1916,8 @@ export interface ContadorProdutoDto {
   percentualTributosFederais?: number; percentualTributosEstaduais?: number
   percentualTributosMunicipais?: number; fonteTributos?: string
   tributosAtualizadosEm?: string
+  ncmNotaEntrada?: string; ncmOrigemChave?: string; ncmOrigemEmitente?: string
+  ncmOrigemData?: string; ncmOrigemItem?: number; ncmOrigemConfere?: boolean
 }
 
 export interface SolicitacaoContadorDto {

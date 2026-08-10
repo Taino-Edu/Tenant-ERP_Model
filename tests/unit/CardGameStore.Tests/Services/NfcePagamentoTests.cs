@@ -48,14 +48,12 @@ public class NfcePagamentoTests
     [Theory]
     [InlineData(PaymentMethod.Pontos)]
     [InlineData(PaymentMethod.Cashback)]
-    public void PontosECashback_UsamTPag19(string forma)
+    public void PontosECashback_BloqueiamEmissaoFiscal(string forma)
     {
-        // fpProgramadefidelidade == 19: "Programa de fidelidade, Cashback,
-        // Crédito Virtual".
-        var pag = Unico(forma);
+        var act = () => Unico(forma);
 
-        pag.tPag.Should().Be(PagamentoTipos.FormaPagamento.fpProgramadefidelidade);
-        pag.xPag.Should().BeNullOrEmpty();
+        act.Should().Throw<FiscalNaoConfiguradoException>()
+            .WithMessage("*pontos ou cashback*orientação contábil*");
     }
 
     [Fact]
@@ -89,19 +87,14 @@ public class NfcePagamentoTests
     }
 
     [Fact]
-    public void Split_DividePreservandoAExatidaoDoTotal()
+    public void Split_ComCashback_BloqueiaTodaAEmissao()
     {
-        // Pix (R$ 70) + cashback (R$ 30) — a soma dos detPag tem que bater o vNF
-        // exatamente, senão a SEFAZ rejeita por diferença de pagamento.
-        var pags = NfceEmissionService.MontarDetPag(
-            PaymentMethod.Pix, PaymentMethod.Cashback, segundoValorCentavos: 3000, valorTotal: 100m);
+        var act = () => NfceEmissionService.MontarDetPag(
+            PaymentMethod.Pix, PaymentMethod.Cashback,
+            segundoValorCentavos: 3000, valorTotal: 100m);
 
-        pags.Should().HaveCount(2);
-        pags[0].tPag.Should().Be(PagamentoTipos.FormaPagamento.fpPagamentoInstantaneoPIXDinamico);
-        pags[0].vPag.Should().Be(70m);
-        pags[1].tPag.Should().Be(PagamentoTipos.FormaPagamento.fpProgramadefidelidade);
-        pags[1].vPag.Should().Be(30m);
-        pags.Sum(p => p.vPag).Should().Be(100m);
+        act.Should().Throw<FiscalNaoConfiguradoException>()
+            .WithMessage("*pontos ou cashback*");
     }
 
     [Fact]

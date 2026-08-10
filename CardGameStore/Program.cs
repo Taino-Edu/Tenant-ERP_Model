@@ -54,6 +54,16 @@ if (args.Contains("gen-vapid"))
 
 var builder = WebApplication.CreateBuilder(args);
 
+// O provider padrão de Event Log do Windows exige permissão para registrar a
+// source ".NET Runtime". Em uma estação comum, um simples LogWarning durante o
+// seed lançava UnauthorizedAccessException e abortava todo o boot. O ERP roda em
+// container/Linux em produção e seus logs operacionais já saem por stdout;
+// portanto mantemos providers portáveis e não deixamos logging derrubar a app.
+builder.Logging.ClearProviders();
+builder.Logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
 // ---------------------------------------------------------------------------
 // 1. CONFIGURAÇÕES
 // ---------------------------------------------------------------------------

@@ -543,7 +543,46 @@ public class ContadorPortalController : ControllerBase
                 p.FonteTributos, p.TributosAtualizadosEm,
             })
             .ToListAsync();
-        return Ok(produtos);
+
+        // Evidência do NCM: item conciliado + NF-e de fornecedor. Preferimos a
+        // entrada cujo NCM ainda coincide com o cadastro; se não houver, mostramos
+        // a mais recente como divergência, sem esconder a fonte documental.
+        var produtoIds = produtos.Select(p => p.Id).ToList();
+        var evidencias = await db.NfeReceiptItems.AsNoTracking()
+            .Where(i => i.ProductId.HasValue && produtoIds.Contains(i.ProductId.Value) &&
+                        !i.Ignored && i.SourceNcm != null)
+            .OrderByDescending(i => i.CreatedAt)
+            .Select(i => new
+            {
+                ProdutoId = i.ProductId!.Value,
+                NcmNotaEntrada = i.SourceNcm!,
+                i.ItemNumber,
+                i.NotaDestinada.ChaveAcesso,
+                i.NotaDestinada.EmitenteNome,
+                DataNotaEntrada = i.NotaDestinada.DataEmissao ?? i.CreatedAt,
+            })
+            .ToListAsync();
+
+        var retorno = produtos.Select(p =>
+        {
+            var origem = evidencias.FirstOrDefault(e =>
+                             e.ProdutoId == p.Id && e.NcmNotaEntrada == p.Ncm)
+                         ?? evidencias.FirstOrDefault(e => e.ProdutoId == p.Id);
+            return new
+            {
+                p.Id, p.Name, p.Category, p.Barcode, p.StockQuantity, p.IsActive,
+                p.Ncm, p.Cest, p.PercentualTributosFederais,
+                p.PercentualTributosEstaduais, p.PercentualTributosMunicipais,
+                p.FonteTributos, p.TributosAtualizadosEm,
+                NcmNotaEntrada = origem?.NcmNotaEntrada,
+                NcmOrigemChave = origem?.ChaveAcesso,
+                NcmOrigemEmitente = origem?.EmitenteNome,
+                NcmOrigemData = origem?.DataNotaEntrada,
+                NcmOrigemItem = origem?.ItemNumber,
+                NcmOrigemConfere = origem is not null && origem.NcmNotaEntrada == p.Ncm,
+            };
+        });
+        return Ok(retorno);
     }
 
     /// <summary>Altera somente NCM, CEST e tributos; quantidade e dados comerciais ficam protegidos.</summary>

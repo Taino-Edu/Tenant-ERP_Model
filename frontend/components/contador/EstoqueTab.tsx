@@ -151,6 +151,14 @@ function ProdutoFiscalRow({ tenantId, produto, onAtualizado }: {
           <p className="text-xs text-gray-500">
             {produto.category} · NCM {produto.ncm || <span className="text-amber-400">pendente</span>}
           </p>
+          {produto.ncmOrigemChave ? (
+            <p className={clsx('text-[11px] mt-0.5', produto.ncmOrigemConfere ? 'text-green-500' : 'text-amber-400')}>
+              NF-e de entrada {produto.ncmOrigemChave.slice(0, 8)}…{produto.ncmOrigemChave.slice(-8)}
+              {produto.ncmOrigemEmitente ? ` · ${produto.ncmOrigemEmitente}` : ''}
+              {` · item ${produto.ncmOrigemItem} · NCM XML ${produto.ncmNotaEntrada}`}
+              {!produto.ncmOrigemConfere ? ' · divergente do cadastro' : ''}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <span className="text-xs text-gray-400">

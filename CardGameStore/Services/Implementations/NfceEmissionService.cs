@@ -1222,6 +1222,12 @@ public class NfceEmissionService : INfceEmissionService
             return;
         }
 
+        // Pontos e cashback podem permanecer no histórico do ERP, mas não são
+        // aceitos como pagamento de uma NOVA NFC-e. A validação acontece antes
+        // de abrir o certificado e, principalmente, antes de reservar numeração.
+        ValidarFormasPagamentoPermitidasNaNfce(
+            dados.FormaPagamento, dados.SegundaFormaPagamento);
+
         var (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
 
@@ -1963,6 +1969,10 @@ public class NfceEmissionService : INfceEmissionService
     internal static List<detPag> MontarDetPag(
         string formaPagamento, string? segundaForma, int segundoValorCentavos, decimal valorTotal)
     {
+        // Defesa em profundidade para chamadores que montem o pagamento sem
+        // passar pela orquestração de TransmitirAsync.
+        ValidarFormasPagamentoPermitidasNaNfce(formaPagamento, segundaForma);
+
         if (string.IsNullOrWhiteSpace(segundaForma) || segundoValorCentavos <= 0)
             return new List<detPag> { MontarDetPagUnico(formaPagamento, valorTotal) };
 
@@ -1975,6 +1985,18 @@ public class NfceEmissionService : INfceEmissionService
         };
     }
 
+    internal static void ValidarFormasPagamentoPermitidasNaNfce(
+        string formaPagamento, string? segundaFormaPagamento)
+    {
+        static bool Fidelidade(string? forma) =>
+            forma is PaymentMethod.Pontos or PaymentMethod.Cashback;
+
+        if (Fidelidade(formaPagamento) || Fidelidade(segundaFormaPagamento))
+            throw new FiscalNaoConfiguradoException(
+                "A emissão de NFC-e com pontos ou cashback está bloqueada por orientação contábil. " +
+                "Registre a venda com uma forma de pagamento fiscal permitida ou não emita o documento.");
+    }
+
     /// <summary>
     /// Monta um detPag. Para cartão de crédito/débito E Pix, a SEFAZ exige o grupo `card`
     /// (rejeição observada em homologação: "Não informados os dados do cartão de
@@ -1984,8 +2006,9 @@ public class NfceEmissionService : INfceEmissionService
     /// bandeira nem autorização pra informar — então o grupo é enviado só com
     /// `tpIntegra = Não integrado`, que é o mínimo aceito pela SEFAZ nesse caso.
     ///
-    /// Crediário (05), pontos e cashback (19) agora usam código próprio e não
-    /// precisam mais de xPag. O xPag fica reservado ao 99 ("Outros"), único
+    /// Crediário (05) usa código próprio e não precisa de xPag. Pontos e cashback
+    /// são bloqueados antes desta etapa por decisão fiscal. O xPag fica reservado
+    /// ao 99 ("Outros"), único
     /// código que a SEFAZ rejeita sem descrição ("Descrição do pagamento
     /// obrigatória para meio de pagamento 99-outros" — rejeição observada em
     /// produção). Se um meio novo cair no fpOutro, a descrição continua saindo.
@@ -2003,8 +2026,8 @@ public class NfceEmissionService : INfceEmissionService
 
     private static string DescricaoFormaPagamentoOutro(string formaPagamento) => formaPagamento switch
     {
-        // Só é chamado quando o meio cai no fpOutro (99). Crediário, pontos e
-        // cashback têm código próprio e não passam mais por aqui.
+        // Só é chamado quando o meio cai no fpOutro (99). Crediário tem código
+        // próprio; pontos e cashback são recusados antes desta etapa.
         _                       => formaPagamento,
     };
 
@@ -2963,19 +2986,14 @@ public class NfceEmissionService : INfceEmissionService
     /// Traduz o meio comercial do ERP para o código da Tabela de Meios de
     /// Pagamento (FIS-002 do plano de go-live).
     ///
-    /// Crediário, pontos e cashback caíam todos em 99 ("Outros"). Existem
-    /// códigos próprios e vigentes para os dois casos, e usar 99 quando há
-    /// código específico degrada a qualidade declaratória — ainda mais numa
-    /// loja onde crediário e fidelidade são o modelo do negócio, não exceção:
+    /// Crediário usa o código próprio 05; pontos e cashback são barrados antes
+    /// deste mapeamento por decisão contábil. Usar 99 quando há código específico
+    /// degrada a qualidade declaratória:
     ///
     ///   • 05 (fpCartaoDaLoja) — "Cartão da Loja (Private Label), Crediário
     ///     Digital, Outros Crediários". A descrição foi ampliada pelo Informe
     ///     Técnico 2024.002, vigente em produção desde 01/07/2024; antes dele o
     ///     código cobria só o cartão de loja, origem da confusão comum.
-    ///   • 19 (fpProgramadefidelidade) — "Programa de fidelidade, Cashback,
-    ///     Crédito Virtual". Não confundir com 12 (vale-presente) nem com 21
-    ///     (crédito em loja por troca/devolução, que é dinheiro já pago antes).
-    ///
     /// O mapeamento é responsabilidade nossa: a biblioteca fiscal expõe todos os
     /// enums lado a lado e não escolhe nenhum.
     /// </summary>

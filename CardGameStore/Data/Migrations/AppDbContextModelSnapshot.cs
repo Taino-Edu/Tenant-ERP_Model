@@ -1692,6 +1692,11 @@ namespace CardGameStore.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
+                    b.Property<string>("SourceNcm")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("source_ncm");
+
                     b.Property<string>("SupplierProductCode")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
