@@ -886,6 +886,12 @@ function VendaWizard({
                     </div>
                   ) : filtered.map(p => {
                     const inCart = cart.find(i => i.product.id === p.id)
+                    const cartQuantity = p.hasVariants
+                      ? 0
+                      : cart.filter(i => i.product.id === p.id).reduce((sum, i) => sum + i.quantity, 0)
+                    const availableStock = Math.max(0, p.stockQuantity - cartQuantity)
+                    const allStockInCart = !p.hasVariants && p.stockQuantity > 0 && availableStock === 0
+                    const noStock = !p.hasVariants && p.stockQuantity === 0
                     const price  = p.isOnPromo && p.discountPriceInCents != null ? p.discountPriceInCents : p.priceInCents
                     return (
                       <div
@@ -905,12 +911,20 @@ function VendaWizard({
                           <span className="text-sm text-white font-medium">{p.name}</span>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className="text-accent-gold text-xs font-bold">{fmt(price / 100)}</span>
-                            <span className="text-gray-600 text-[10px]">{p.stockQuantity} un.</span>
+                            <span className="text-gray-500 text-[10px]">
+                              {p.stockQuantity} un. no estoque
+                              {cartQuantity > 0 && ` · ${cartQuantity} no carrinho`}
+                            </span>
+                            {allStockInCart && (
+                              <span className="text-[10px] font-semibold text-[var(--status-success-text)]">
+                                última unidade separada
+                              </span>
+                            )}
                           </div>
                         </div>
                         <button
                           onClick={() => addToCart(p)}
-                          disabled={!p.hasVariants && (inCart ? inCart.quantity >= p.stockQuantity : p.stockQuantity === 0)}
+                          disabled={noStock || allStockInCart}
                           className={clsx(
                             'shrink-0 w-8 h-8 rounded-lg border flex items-center justify-center transition-all',
                             p.hasVariants
@@ -918,11 +932,19 @@ function VendaWizard({
                               : inCart
                               ? 'bg-brand-600/25 border-brand-500/50 text-brand-300 hover:bg-brand-600/40'
                               : 'bg-brand-600/15 border-brand-500/30 text-brand-400 hover:bg-brand-600/25',
-                            !p.hasVariants && inCart && inCart.quantity >= p.stockQuantity ? 'opacity-40 cursor-not-allowed' : ''
+                            noStock ? 'opacity-40 cursor-not-allowed' : '',
+                            allStockInCart ? 'border-[var(--status-success-border)] bg-[var(--status-success-surface)] text-[var(--status-success-text)] cursor-default' : ''
                           )}
-                          title={p.hasVariants ? 'Escolher tamanho/cor' : 'Adicionar'}
+                          title={p.hasVariants
+                            ? 'Escolher tamanho/cor'
+                            : noStock
+                              ? 'Produto sem estoque'
+                              : allStockInCart
+                                ? 'Todo o estoque disponível já está no carrinho'
+                                : `Adicionar ao carrinho (${availableStock} disponível${availableStock === 1 ? '' : 'is'})`}
+                          aria-label={allStockInCart ? 'Todo o estoque já está no carrinho' : `Adicionar ${p.name}`}
                         >
-                          <Plus className="w-4 h-4" />
+                          {allStockInCart ? <CheckCircle className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                         </button>
                       </div>
                     )
