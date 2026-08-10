@@ -20,7 +20,7 @@ export function ComandaCard({
   comanda, onClose, onCancel, onUpdate, onClosedExternally, isNew, recentChange, autoEmitMethods, fiscalEnabled,
 }: {
   comanda: ComandaDto
-  onClose:  (id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean) => void
+  onClose:  (id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean, cashReceivedInCents?: number, cashRoundingDiscountInCents?: number) => void
   onCancel: (id: string) => void
   onUpdate: (updated: ComandaDto, changeType?: 'add' | 'remove') => void
   onClosedExternally: () => void
@@ -66,10 +66,10 @@ export function ComandaCard({
     Aberta: '● Aberta', EmAndamento: '● Em Andamento',
   }
 
-  async function handleClose(paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean) {
+  async function handleClose(paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean, cashReceivedInCents?: number, cashRoundingDiscountInCents?: number) {
     setCloseOpen(false)
     setLoading(true)
-    try { await onClose(comanda.id, paymentMethod, secondMethod, secondAmountInCents, discountInCents, emitirNotaFiscal) } finally { setLoading(false) }
+    try { await onClose(comanda.id, paymentMethod, secondMethod, secondAmountInCents, discountInCents, emitirNotaFiscal, cashReceivedInCents, cashRoundingDiscountInCents) } finally { setLoading(false) }
   }
   async function handleCancel() {
     setConfirm(null)

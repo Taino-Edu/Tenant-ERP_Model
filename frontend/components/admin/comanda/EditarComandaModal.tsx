@@ -1,10 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { metodosDisponiveis, ComandaDto, UserSummary, Product, EditarComandaRequest, EditarItemRequest, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { X, UserSearch, Search, Plus, Trash2, CheckCircle, Loader2 } from 'lucide-react'
 import { fmt, EditItemState } from './shared'
 import NumberInput from '@/components/admin/ui/NumberInput'
+import CashPaymentFields, { CashPaymentState } from '@/components/admin/payments/CashPaymentFields'
 
 export function EditarComandaModal({
   comanda,
@@ -24,7 +25,8 @@ export function EditarComandaModal({
   const [pm,       setPm]       = useState(comanda.paymentMethod ?? 'Dinheiro')
   const [pm2,      setPm2]      = useState(comanda.secondPaymentMethod ?? '')
   const [pm2val,   setPm2val]   = useState(String(comanda.secondPaymentAmountInCents / 100))
-  const [desconto, setDesconto] = useState(String(comanda.discountInCents / 100))
+  const initialManualDiscount = Math.max(0, comanda.discountInCents - (comanda.cashRoundingDiscountInCents ?? 0))
+  const [desconto, setDesconto] = useState(String(initialManualDiscount / 100))
   const [clienteId, setClienteId] = useState(comanda.userId)
   const [clienteSearch, setClienteSearch] = useState('')
   const [showClienteList, setShowClienteList] = useState(false)
@@ -38,6 +40,26 @@ export function EditarComandaModal({
   const [prodSearch, setProdSearch] = useState('')
   const [showProdList, setShowProdList] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [cashState, setCashState] = useState<CashPaymentState>({
+    cashReceivedInCents: comanda.cashReceivedInCents ?? 0,
+    changeInCents: comanda.changeInCents ?? 0,
+    roundingDiscountInCents: comanda.cashRoundingDiscountInCents ?? 0,
+    valid: false,
+  })
+  const handleCashChange = useCallback((next: CashPaymentState) => setCashState(current =>
+    current.cashReceivedInCents === next.cashReceivedInCents &&
+    current.changeInCents === next.changeInCents &&
+    current.roundingDiscountInCents === next.roundingDiscountInCents &&
+    current.valid === next.valid ? current : next), [])
+
+  const subtotalCents = items.filter(i => !i.remover)
+    .reduce((sum, item) => sum + item.unitPriceInCents * item.quantity, 0)
+  const manualDiscountCents = Math.min(subtotalCents,
+    Math.max(0, Math.round((parseFloat(desconto.replace(',', '.') || '0')) * 100)))
+  const totalBeforeRounding = Math.max(0, subtotalCents - comanda.pointsApplied - manualDiscountCents)
+  const secondBase = pm2 ? Math.round((parseFloat(pm2val.replace(',', '.') || '0')) * 100) : 0
+  const usesCash = pm === 'Dinheiro' || pm2 === 'Dinheiro'
+  const cashDue = pm === 'Dinheiro' ? totalBeforeRounding - secondBase : pm2 === 'Dinheiro' ? secondBase : 0
 
   const nomeCliente = clientes.find(u => u.id === clienteId)?.name ?? comanda.userName
   const filteredClientes = clientes.filter(u =>
@@ -70,8 +92,10 @@ export function EditarComandaModal({
   async function handleSave() {
     setSaving(true)
     try {
-      const descontoNum = Math.round(parseFloat(desconto.replace(',', '.') || '0') * 100)
-      const pm2valNum   = Math.round(parseFloat(pm2val.replace(',', '.') || '0') * 100)
+      const rounding = usesCash ? cashState.roundingDiscountInCents : 0
+      const descontoNum = manualDiscountCents + rounding
+      const pm2valNum = pm2
+        ? Math.max(0, secondBase - (pm2 === 'Dinheiro' ? rounding : 0)) : 0
 
       const itens: EditarItemRequest[] = items.map(it => ({
         comandaItemId: it.id,
@@ -88,6 +112,8 @@ export function EditarComandaModal({
         secondPaymentAmountInCents: pm2 ? pm2valNum : 0,
         novoClienteId: clienteId !== comanda.userId ? clienteId : undefined,
         descontoEmCentavos: descontoNum,
+        cashReceivedInCents: usesCash ? cashState.cashReceivedInCents : undefined,
+        cashRoundingDiscountInCents: rounding,
         itens,
       })
     } finally {
@@ -106,6 +132,7 @@ export function EditarComandaModal({
             <h2 className="text-sm font-bold text-white">Editar Comanda</h2>
             <p className="text-xs text-gray-500 mt-0.5">{comanda.userName} · {fmt(comanda.totalInReais)}</p>
           </div>
+
           <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-gray-300 rounded-xl hover:bg-surface-700 transition-colors">
             <X className="w-4 h-4" />
           </button>
@@ -149,6 +176,10 @@ export function EditarComandaModal({
             <input type="number" step="0.01" min="0" value={desconto} onChange={e => setDesconto(e.target.value)}
               className="w-full bg-surface-700 border border-surface-500 text-white rounded-xl px-3 py-2 text-sm" />
           </div>
+
+          {usesCash && cashDue > 0 && (
+            <CashPaymentFields cashDueInCents={cashDue} onChange={handleCashChange} />
+          )}
 
           {/* Cliente */}
           <div className="relative">
@@ -250,7 +281,7 @@ export function EditarComandaModal({
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-surface-600 shrink-0">
-          <button onClick={handleSave} disabled={saving}
+          <button onClick={handleSave} disabled={saving || (usesCash && !cashState.valid)}
             className="w-full btn-primary justify-center py-2.5">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
             {saving ? 'Salvando...' : 'Salvar Alterações'}

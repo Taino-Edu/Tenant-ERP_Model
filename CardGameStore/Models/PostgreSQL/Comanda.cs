@@ -73,6 +73,15 @@ public class Comanda
     [Column("second_payment_amount_in_cents")]
     public int SecondPaymentAmountInCents { get; set; }
 
+    [Column("cash_received_in_cents")]
+    public int? CashReceivedInCents { get; set; }
+
+    [Column("change_in_cents")]
+    public int ChangeInCents { get; set; }
+
+    [Column("cash_rounding_discount_in_cents")]
+    public int CashRoundingDiscountInCents { get; set; }
+
     // -------------------------------------------------------------------------
     // Totalizadores (calculados e sincronizados a cada item adicionado)
     // -------------------------------------------------------------------------

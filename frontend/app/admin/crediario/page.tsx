@@ -5,6 +5,7 @@ import {
   FORMAS_PAGAMENTO_CREDIARIO, UserSummary, getErrorMessage,
 } from '@/lib/api'
 import toast from 'react-hot-toast'
+import CashPaymentFields, { CashPaymentState } from '@/components/admin/payments/CashPaymentFields'
 import {
   CreditCard, CheckCircle, Clock, AlertTriangle,
   Filter, Loader2, User, Calendar, ChevronDown, ChevronUp,
@@ -320,7 +321,6 @@ function EditarCrediarioModal({ crediario, onClose, onSuccess }: EditarModalProp
   const [obs, setObs]         = useState(crediario.observacao ?? '')
   const [venc, setVenc]       = useState(crediario.dataVencimento.slice(0, 10))
   const [loading, setLoading] = useState(false)
-
   // Editor de itens
   const [itens, setItens]           = useState<ItemCrediarioDto[]>(crediario.itensComanda)
   const [itensEditado, setItensEditado] = useState(false)
@@ -558,6 +558,16 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
   const [valor2,  setValor2]  = useState('')
   const [obs,     setObs]     = useState('')
   const [loading, setLoading] = useState(false)
+  const [cashState, setCashState] = useState<CashPaymentState>({
+    cashReceivedInCents: 0, changeInCents: 0, roundingDiscountInCents: 0, valid: false,
+  })
+  const handleCashChange = useCallback((next: CashPaymentState) => {
+    setCashState(current =>
+      current.cashReceivedInCents === next.cashReceivedInCents &&
+      current.changeInCents === next.changeInCents &&
+      current.roundingDiscountInCents === next.roundingDiscountInCents &&
+      current.valid === next.valid ? current : next)
+  }, [])
 
   // Uma chave por "tentativa de pagamento" (vida do modal): retry após falha de
   // rede reusa a chave e o backend não debita duas vezes; reabrir o modal gera
@@ -570,11 +580,17 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
   const valor2Num = parseFloat(valor2.replace(',', '.')) || 0
   const totalPago = split ? valorNum + valor2Num : valorNum
   const quita     = totalPago >= saldo - 0.005
+  const cashDueInCents = forma === 'Dinheiro'
+    ? Math.round(valorNum * 100)
+    : split && forma2 === 'Dinheiro' ? Math.round(valor2Num * 100) : 0
+  const usesCash = cashDueInCents > 0
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (valorNum <= 0) { toast.error('Informe um valor válido'); return }
     if (split && valor2Num <= 0) { toast.error('Informe o valor do segundo método'); return }
+    if (split && forma === forma2) { toast.error('Escolha dois métodos diferentes'); return }
+    if (usesCash && !cashState.valid) { toast.error('O valor entregue em dinheiro é insuficiente'); return }
     if (totalPago > saldo + 0.005) {
       toast.error(`Total (${fmt(totalPago)}) maior que o saldo restante (${fmt(saldo)})`)
       return
@@ -589,6 +605,8 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
         secondValorEmCentavos: split ? Math.round(valor2Num * 100) : undefined,
         observacao:            obs || undefined,
         idempotencyKey:        idemKeyRef.current,
+        cashReceivedInCents:   usesCash ? cashState.cashReceivedInCents : undefined,
+        cashRoundingDiscountInCents: usesCash ? cashState.roundingDiscountInCents : 0,
       })
       toast.success(quita ? 'Crediário quitado!' : `Pagamento de ${fmt(totalPago)} registrado!`)
       onSuccess()
@@ -699,6 +717,10 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
             </div>
           )}
 
+          {usesCash && (
+            <CashPaymentFields cashDueInCents={cashDueInCents} onChange={handleCashChange} />
+          )}
+
           {/* Observação */}
           <div>
             <label className="label">Observação (opcional)</label>
@@ -716,7 +738,7 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
             <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
               Cancelar
             </button>
-            <button type="submit" disabled={loading} className="btn-success flex-1 justify-center">
+            <button type="submit" disabled={loading || (usesCash && !cashState.valid)} className="btn-success flex-1 justify-center">
               {loading
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
                 : <><CheckCircle className="w-4 h-4" /> {quita ? 'Quitar dívida' : 'Confirmar'}</>
@@ -967,6 +989,11 @@ function CrediarioCard({
                       <span className="text-xs text-gray-500 ml-2">— {p.observacao}</span>
                     )}
                     <p className="text-[10px] text-gray-500 mt-0.5">{fmtDateHour(p.createdAt)}</p>
+                    {p.cashReceivedInCents != null && (
+                      <p className="text-[10px] text-gray-400 mt-0.5">
+                        Recebido {fmt(p.cashReceivedInCents / 100)} · Troco {fmt(p.changeInCents / 100)}
+                      </p>
+                    )}
                   </div>
                   <span className="text-sm font-bold text-accent-green">{fmt(p.valorEmReais)}</span>
                 </div>

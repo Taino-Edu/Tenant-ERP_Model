@@ -492,7 +492,7 @@ public class ComandaService : IComandaService
         return dto;
     }
 
-    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = PaymentMethod.Dinheiro, string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0, bool emitirNotaFiscal = false)
+    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = PaymentMethod.Dinheiro, string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0, bool emitirNotaFiscal = false, int? cashReceivedInCents = null, int cashRoundingDiscountInCents = 0)
     {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -530,6 +530,13 @@ public class ComandaService : IComandaService
             throw new InvalidOperationException("O valor do segundo pagamento não pode cobrir o total inteiro. Selecione apenas o método principal.");
 
         var primaryAmt = hasSecond ? netTotal - secondPaymentAmountInCents : netTotal;
+        if (cashRoundingDiscountInCents > discountInCents)
+            throw new InvalidOperationException("O arredondamento do troco não pode ser maior que o desconto total.");
+        var cash = CashPaymentCalculator.Calculate(
+            netTotal, paymentMethod, hasSecond ? secondPaymentMethod : null,
+            hasSecond ? secondPaymentAmountInCents : 0, cashReceivedInCents);
+        if (cashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            throw new InvalidOperationException("O arredondamento deve produzir troco em múltiplos de cinco centavos.");
         var pointsDebitedAtSale = comanda.PointsApplied;
         var cashbackDebitedAtSale = 0;
         var pointsAwardedAtSale = 0;
@@ -718,6 +725,9 @@ public class ComandaService : IComandaService
         comanda.Status        = ComandaStatus.Fechada;
         comanda.ClosedAt      = DateTime.UtcNow;
         comanda.PaymentMethod = paymentMethod;
+        comanda.CashReceivedInCents         = cash.ReceivedInCents;
+        comanda.ChangeInCents               = cash.ChangeInCents;
+        comanda.CashRoundingDiscountInCents = cashRoundingDiscountInCents;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
         // Não acumula quando qualquer parte do pagamento usa cashback, pontos ou
@@ -1162,6 +1172,15 @@ public class ComandaService : IComandaService
         if (comanda.Status != ComandaStatus.Fechada)
             throw new InvalidOperationException("Somente comandas com status 'Fechada' podem ser editadas.");
 
+        var possuiDocumentoFiscalImutavel = await _db.NotasFiscaisEmitidas.AnyAsync(n =>
+            n.ComandaId == comandaId && (n.Status == NotaFiscalStatus.Autorizada ||
+                                         n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+                                         n.Status == NotaFiscalStatus.Cancelada ||
+                                         n.Status == NotaFiscalStatus.ResultadoIncerto));
+        if (possuiDocumentoFiscalImutavel)
+            throw new InvalidOperationException(
+                "A comanda já possui documento fiscal e não pode ser alterada. Cancele a NFC-e dentro do prazo ou use o fluxo de devolução.");
+
         // 1. Forma de pagamento
         if (request.PaymentMethod != null)
         {
@@ -1294,6 +1313,17 @@ public class ComandaService : IComandaService
             .Where(i => i.ComandaId == comandaId)
             .SumAsync(i => i.SubtotalInCents);
         comanda.TotalInCents = Math.Max(0, totalItens - comanda.PointsApplied - comanda.DiscountInCents);
+        if (request.CashRoundingDiscountInCents > comanda.DiscountInCents)
+            throw new InvalidOperationException("O arredondamento do troco não pode ser maior que o desconto total.");
+        var cash = CashPaymentCalculator.Calculate(
+            comanda.TotalInCents, comanda.PaymentMethod ?? PaymentMethod.Dinheiro,
+            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents,
+            request.CashReceivedInCents);
+        if (request.CashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            throw new InvalidOperationException("O arredondamento deve produzir troco em múltiplos de cinco centavos.");
+        comanda.CashReceivedInCents = cash.ReceivedInCents;
+        comanda.ChangeInCents = cash.ChangeInCents;
+        comanda.CashRoundingDiscountInCents = request.CashRoundingDiscountInCents;
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Comanda {Id} editada pelo admin {AdminId}.", comandaId, adminId);
@@ -1342,6 +1372,9 @@ public class ComandaService : IComandaService
         PaymentMethod              = comanda.PaymentMethod,
         SecondPaymentMethod        = comanda.SecondPaymentMethod,
         SecondPaymentAmountInCents = comanda.SecondPaymentAmountInCents,
+        CashReceivedInCents         = comanda.CashReceivedInCents,
+        ChangeInCents               = comanda.ChangeInCents,
+        CashRoundingDiscountInCents = comanda.CashRoundingDiscountInCents,
         Notes                      = comanda.Notes,
         UserPointsBalance          = comanda.User?.PointsBalance  ?? 0,
         UserBalanceInCents         = comanda.User?.BalanceInCents ?? 0,

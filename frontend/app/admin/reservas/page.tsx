@@ -6,6 +6,7 @@ import { api, productApi, waitListApi, Product, WaitListEntry, getErrorMessage }
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import Modal from '@/components/admin/ui/Modal'
+import CashPaymentFields, { CashPaymentState } from '@/components/admin/payments/CashPaymentFields'
 import {
   Clock, CheckCircle, XCircle, Package, User as UserIcon,
   ShoppingBag, LayoutList, RefreshCw, Loader2, ChevronLeft, ChevronRight,
@@ -13,7 +14,13 @@ import {
   Hourglass, Sparkles,
 } from 'lucide-react'
 
-const PAYMENT_METHODS = ['Dinheiro', 'Pix', 'Débito', 'Crédito', 'Crediario']
+const PAYMENT_METHODS = [
+  { value: 'Dinheiro', label: 'Dinheiro' },
+  { value: 'Pix', label: 'Pix' },
+  { value: 'CartaoDebito', label: 'Débito' },
+  { value: 'CartaoCredito', label: 'Crédito' },
+  { value: 'Crediario', label: 'Crediário' },
+] as const
 
 type Reservation = {
   id: string
@@ -25,6 +32,7 @@ type Reservation = {
   variantId?: string
   variantLabel?: string
   quantity: number
+  unitPriceInCents: number
   status: string
   notes?: string
   reservedAt: string
@@ -112,6 +120,16 @@ export default function ReservasPage() {
   const [homModal,    setHomModal]    = useState<Reservation | null>(null)
   const [homMode,     setHomMode]     = useState<'pdv' | 'comanda'>('pdv')
   const [homPayment,  setHomPayment]  = useState('Dinheiro')
+  const [homCash, setHomCash] = useState<CashPaymentState>({
+    cashReceivedInCents: 0, changeInCents: 0, roundingDiscountInCents: 0, valid: false,
+  })
+  const handleHomCash = useCallback((next: CashPaymentState) => {
+    setHomCash(current =>
+      current.cashReceivedInCents === next.cashReceivedInCents &&
+      current.changeInCents === next.changeInCents &&
+      current.roundingDiscountInCents === next.roundingDiscountInCents &&
+      current.valid === next.valid ? current : next)
+  }, [])
   const [comandas,    setComandas]    = useState<OpenComanda[]>([])
   const [homComanda,  setHomComanda]  = useState<string>('')
   const [submitting,  setSubmitting]  = useState(false)
@@ -257,12 +275,17 @@ export default function ReservasPage() {
     if (homMode === 'comanda' && !homComanda) {
       toast.error('Selecione uma comanda'); return
     }
+    if (homMode === 'pdv' && homPayment === 'Dinheiro' && !homCash.valid) {
+      toast.error('O valor entregue em dinheiro é insuficiente'); return
+    }
     setSubmitting(true)
     try {
       await api.post(`/api/reservations/${homModal.id}/homologar`, {
         mode:          homMode,
         paymentMethod: homMode === 'pdv' ? homPayment : undefined,
         comandaId:     homMode === 'comanda' ? homComanda : undefined,
+        cashReceivedInCents: homMode === 'pdv' && homPayment === 'Dinheiro' ? homCash.cashReceivedInCents : undefined,
+        cashRoundingDiscountInCents: homMode === 'pdv' && homPayment === 'Dinheiro' ? homCash.roundingDiscountInCents : 0,
       })
       toast.success('Reserva homologada!')
       setHomModal(null)
@@ -684,21 +707,27 @@ export default function ReservasPage() {
 
             {/* PDV — forma de pagamento */}
             {homMode === 'pdv' && (
-              <div>
+              <div className="space-y-3">
                 <label className="text-xs text-gray-400 mb-2 block font-semibold">Forma de pagamento</label>
                 <div className="grid grid-cols-3 gap-2">
                   {PAYMENT_METHODS.map(m => (
-                    <button key={m} onClick={() => setHomPayment(m)}
+                    <button key={m.value} onClick={() => setHomPayment(m.value)}
                       className={clsx(
                         'py-2 rounded-lg text-xs font-semibold border transition-colors',
-                        homPayment === m
+                        homPayment === m.value
                           ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
                           : 'bg-surface-700 text-gray-400 border-surface-600'
                       )}>
-                      {m}
+                      {m.label}
                     </button>
                   ))}
                 </div>
+                {homPayment === 'Dinheiro' && homModal.unitPriceInCents > 0 && (
+                  <CashPaymentFields
+                    cashDueInCents={homModal.unitPriceInCents * homModal.quantity}
+                    onChange={handleHomCash}
+                  />
+                )}
               </div>
             )}
 
@@ -745,7 +774,7 @@ export default function ReservasPage() {
                 className="flex-1 py-3 rounded-xl bg-surface-700 text-gray-300 text-sm font-semibold">
                 Cancelar
               </button>
-              <button onClick={handleHomologar} disabled={submitting || (homMode === 'comanda' && !homComanda)}
+              <button onClick={handleHomologar} disabled={submitting || (homMode === 'comanda' && !homComanda) || (homMode === 'pdv' && homPayment === 'Dinheiro' && !homCash.valid)}
                 className="flex-1 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 disabled:opacity-40
                            text-white text-sm font-bold transition-colors flex items-center justify-center gap-2">
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}

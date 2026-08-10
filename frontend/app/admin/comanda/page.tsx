@@ -188,7 +188,7 @@ export default function ComandaPage() {
     if (changeType) markChange(updated.id, changeType)
   }
 
-  async function handleClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean) {
+  async function handleClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean, cashReceivedInCents?: number, cashRoundingDiscountInCents?: number) {
     if (paymentMethod === 'Crediario') {
       // Descobre o cliente da comanda
       const comanda = comandas.find(c => c.id === id)
@@ -207,12 +207,12 @@ export default function ComandaPage() {
         } catch { /* se falhar na busca, fecha normalmente */ }
       }
     }
-    await executarClose(id, paymentMethod, secondMethod, secondAmountInCents, undefined, discountInCents, emitirNotaFiscal)
+    await executarClose(id, paymentMethod, secondMethod, secondAmountInCents, undefined, discountInCents, emitirNotaFiscal, cashReceivedInCents, cashRoundingDiscountInCents)
   }
 
-  async function executarClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, crediarioExistenteId?: string, discountInCents?: number, emitirNotaFiscal?: boolean) {
+  async function executarClose(id: string, paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, crediarioExistenteId?: string, discountInCents?: number, emitirNotaFiscal?: boolean, cashReceivedInCents?: number, cashRoundingDiscountInCents?: number) {
     try {
-      const { data } = await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal)
+      const { data } = await comandaApi.close(id, paymentMethod, undefined, secondMethod, secondAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal, cashReceivedInCents, cashRoundingDiscountInCents)
       const label = paymentMethod === 'Crediario' ? 'Comanda fechada no crediário!' : 'Comanda fechada!'
       toast.success(label)
       handleNotaFiscalResult(data.notaFiscalId, data.notaFiscalStatus, data.notaFiscalMotivoRejeicao)

@@ -121,6 +121,9 @@ export interface ComandaDto {
   paymentMethod: string | null
   secondPaymentMethod: string | null
   secondPaymentAmountInCents: number
+  cashReceivedInCents?: number
+  changeInCents: number
+  cashRoundingDiscountInCents: number
   items: ComandaItemDto[]
   notes: string | null
   /** Saldo de pontos do cliente (para exibir na modal de fechamento). */
@@ -154,6 +157,8 @@ export interface EditarComandaRequest {
   secondPaymentAmountInCents?: number
   novoClienteId?: string
   descontoEmCentavos?: number
+  cashReceivedInCents?: number
+  cashRoundingDiscountInCents?: number
   notes?: string
   itens?: EditarItemRequest[]
 }
@@ -326,6 +331,9 @@ export interface VendaAvulsaDto {
   paymentMethod: string
   secondPaymentMethod: string | null
   secondPaymentAmountInCents: number
+  cashReceivedInCents?: number
+  changeInCents: number
+  cashRoundingDiscountInCents: number
   totalInReais: number
   discountPercent: number
   discountInReais: number
@@ -374,8 +382,8 @@ export const comandaApi = {
   updateNotes:  (id: string, notes: string | null) => api.put<ComandaDto>(`/api/comanda/${id}/notes`, { notes }),
   updateItem:   (id: string, itemId: string, quantity: number) =>
     api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
-  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0, emitirNotaFiscal = false) =>
-    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal }),
+  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0, emitirNotaFiscal = false, cashReceivedInCents?: number, cashRoundingDiscountInCents = 0) =>
+    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal, cashReceivedInCents, cashRoundingDiscountInCents }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
   editar:       (id: string, request: EditarComandaRequest) => api.put<ComandaDto>(`/api/comanda/${id}/editar`, request),
   adminOpen:    (userId: string, tableIdentifier?: string) =>
@@ -401,6 +409,9 @@ export interface PagamentoCrediarioDto {
   id: string
   valorEmReais: number
   formaPagamento: string
+  cashReceivedInCents?: number
+  changeInCents: number
+  cashRoundingDiscountInCents: number
   observacao: string | null
   createdAt: string
 }
@@ -477,7 +488,7 @@ export const crediarioApi = {
   meu:         () => api.get<CrediariosDto>('/api/crediarios/meu'),
   marcarPago:  (id: string, observacao?: string) =>
     api.put<CrediariosDto>(`/api/crediarios/${id}/pagar`, { observacao }),
-  registrarPagamento: (id: string, req: { valorEmCentavos: number; formaPagamento: string; secondFormaPagamento?: string; secondValorEmCentavos?: number; observacao?: string; idempotencyKey?: string }) =>
+  registrarPagamento: (id: string, req: { valorEmCentavos: number; formaPagamento: string; secondFormaPagamento?: string; secondValorEmCentavos?: number; observacao?: string; idempotencyKey?: string; cashReceivedInCents?: number; cashRoundingDiscountInCents?: number }) =>
     api.post<CrediariosDto>(`/api/crediarios/${id}/pagamento`, req),
   criarManual: (req: CriarCrediarioManualRequest) =>
     api.post<CrediariosDto>('/api/crediarios', req),
@@ -525,6 +536,8 @@ export interface EditarPagamentoVendaAvulsaRequest {
   clientName?: string
   clearClientName?: boolean
   discountInCents?: number
+  cashReceivedInCents?: number
+  cashRoundingDiscountInCents?: number
 }
 
 export const vendaAvulsaApi = {
@@ -538,12 +551,16 @@ export const vendaAvulsaApi = {
     secondPaymentAmountInCents = 0,
     discountInCents?: number,
     emitirNotaFiscal = false,
+    cashReceivedInCents?: number,
+    cashRoundingDiscountInCents = 0,
   ) =>
     api.post<VendaAvulsaDto>('/api/venda-avulsa', {
       clientName, paymentMethod, items, discountPercent, discountInCents, userId,
       secondPaymentMethod: secondPaymentMethod || null,
       secondPaymentAmountInCents,
       emitirNotaFiscal,
+      cashReceivedInCents,
+      cashRoundingDiscountInCents,
     }),
   recent: (limit = 50) =>
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/recent', { params: { limit } }),

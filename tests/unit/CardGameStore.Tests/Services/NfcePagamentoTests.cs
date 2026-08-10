@@ -109,4 +109,40 @@ public class NfcePagamentoTests
         pags.Should().OnlyContain(p => string.IsNullOrEmpty(p.xPag),
             "nenhum meio do split cai mais no 99");
     }
+
+    [Fact]
+    public void Dinheiro_UsaValorEfetivamenteEntregueNoVPag()
+    {
+        var pags = NfceEmissionService.MontarDetPag(
+            PaymentMethod.Dinheiro, null, 0, valorTotal: 67.74m,
+            dinheiroRecebidoCentavos: 7000);
+
+        pags.Should().ContainSingle();
+        pags[0].vPag.Should().Be(70m);
+    }
+
+    [Fact]
+    public void Split_DinheiroMaisPix_PreservaNumerarioReal()
+    {
+        var pags = NfceEmissionService.MontarDetPag(
+            PaymentMethod.Dinheiro, PaymentMethod.Pix,
+            segundoValorCentavos: 5000, valorTotal: 67.74m,
+            dinheiroRecebidoCentavos: 2000);
+
+        pags[0].vPag.Should().Be(20m);
+        pags[1].vPag.Should().Be(50m);
+    }
+
+    [Fact]
+    public void TrocoReal_VaiParaVtrocoDoXml()
+    {
+        var pagamento = NfceEmissionService.MontarPagamento(
+            PaymentMethod.Dinheiro, PaymentMethod.Pix,
+            segundoValorCentavos: 5000, valorTotal: 67.74m,
+            dinheiroRecebidoCentavos: 2000, trocoCentavos: 226);
+
+        pagamento.vTroco.Should().Be(2.26m);
+        pagamento.detPag.Sum(p => p.vPag).Should().Be(70m);
+        (pagamento.detPag.Sum(p => p.vPag) - pagamento.vTroco).Should().Be(67.74m);
+    }
 }

@@ -36,6 +36,15 @@ public class PagamentoCrediario
     [Column("forma_pagamento")]
     public string FormaPagamento { get; set; } = PaymentMethod.Dinheiro;
 
+    [Column("cash_received_in_cents")]
+    public int? CashReceivedInCents { get; set; }
+
+    [Column("change_in_cents")]
+    public int ChangeInCents { get; set; }
+
+    [Column("cash_rounding_discount_in_cents")]
+    public int CashRoundingDiscountInCents { get; set; }
+
     [MaxLength(500)]
     [Column("observacao")]
     public string? Observacao { get; set; }

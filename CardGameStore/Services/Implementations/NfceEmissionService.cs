@@ -988,7 +988,8 @@ public class NfceEmissionService : INfceEmissionService
 
     private record DadosEmissao(
         List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
-        string? SegundaFormaPagamento, int SegundoValorCentavos, int DescontoTotalCentavos)
+        string? SegundaFormaPagamento, int SegundoValorCentavos, int DescontoTotalCentavos,
+        int? DinheiroRecebidoCentavos, int TrocoCentavos)
     {
         public int ValorBrutoCentavos => Itens.Sum(i => i.SubtotalCentavos);
         public int ValorLiquidoCentavos => Math.Max(0, ValorBrutoCentavos - DescontoTotalCentavos);
@@ -1030,7 +1031,8 @@ public class NfceEmissionService : INfceEmissionService
 
         return new DadosEmissao(
             itens, comanda.PaymentMethod ?? PaymentMethod.Dinheiro, comanda.User?.Cpf,
-            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents, descontoTotal);
+            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents, descontoTotal,
+            comanda.CashReceivedInCents, comanda.ChangeInCents);
     }
 
     private async Task<DadosEmissao> CarregarDadosVendaAvulsaAsync(Guid vendaAvulsaId, bool permitirCancelada = false)
@@ -1074,7 +1076,8 @@ public class NfceEmissionService : INfceEmissionService
         return new DadosEmissao(
             itens, venda.PaymentMethod, cpf,
             venda.SecondPaymentMethod, venda.SecondPaymentAmountInCents,
-            Math.Clamp(venda.DiscountInCents, 0, itens.Sum(i => i.SubtotalCentavos)));
+            Math.Clamp(venda.DiscountInCents, 0, itens.Sum(i => i.SubtotalCentavos)),
+            venda.CashReceivedInCents, venda.ChangeInCents);
     }
 
     private static ItemFiscal CriarItemFiscal(
@@ -1415,7 +1418,10 @@ public class NfceEmissionService : INfceEmissionService
                     IBSCBSTot = regraParaXml is not null ? _taxEngine.MontarTotaisIbsCbs(detItens) : null,
                 },
                 transp = new transp { modFrete = ModalidadeFrete.mfSemFrete },
-                pag = new List<pag> { new pag { detPag = MontarDetPag(dados, valorTotal) } },
+                pag = new List<pag> { MontarPagamento(
+                    dados.FormaPagamento, dados.SegundaFormaPagamento,
+                    dados.SegundoValorCentavos, valorTotal,
+                    dados.DinheiroRecebidoCentavos, dados.TrocoCentavos) },
                 infAdic = new infAdic
                 {
                     infCpl = MontarTextoTransparenciaTributaria(
@@ -1959,7 +1965,17 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal) =>
-        MontarDetPag(dados.FormaPagamento, dados.SegundaFormaPagamento, dados.SegundoValorCentavos, valorTotal);
+        MontarDetPag(dados.FormaPagamento, dados.SegundaFormaPagamento,
+            dados.SegundoValorCentavos, valorTotal, dados.DinheiroRecebidoCentavos);
+
+    internal static pag MontarPagamento(
+        string formaPagamento, string? segundaForma, int segundoValorCentavos,
+        decimal valorTotal, int? dinheiroRecebidoCentavos, int trocoCentavos) => new()
+    {
+        detPag = MontarDetPag(formaPagamento, segundaForma, segundoValorCentavos,
+            valorTotal, dinheiroRecebidoCentavos),
+        vTroco = trocoCentavos > 0 ? trocoCentavos / 100m : null,
+    };
 
     /// <summary>
     /// Monta um ou dois detPag conforme haja segundo método de pagamento (split).
@@ -1967,17 +1983,27 @@ public class NfceEmissionService : INfceEmissionService
     /// exatamente com vNF — evita a diferença de centavos ser "engolida" num só método.
     /// </summary>
     internal static List<detPag> MontarDetPag(
-        string formaPagamento, string? segundaForma, int segundoValorCentavos, decimal valorTotal)
+        string formaPagamento, string? segundaForma, int segundoValorCentavos, decimal valorTotal,
+        int? dinheiroRecebidoCentavos = null)
     {
         // Defesa em profundidade para chamadores que montem o pagamento sem
         // passar pela orquestração de TransmitirAsync.
         ValidarFormasPagamentoPermitidasNaNfce(formaPagamento, segundaForma);
 
         if (string.IsNullOrWhiteSpace(segundaForma) || segundoValorCentavos <= 0)
-            return new List<detPag> { MontarDetPagUnico(formaPagamento, valorTotal) };
+        {
+            var valor = formaPagamento == PaymentMethod.Dinheiro && dinheiroRecebidoCentavos.HasValue
+                ? dinheiroRecebidoCentavos.Value / 100m : valorTotal;
+            return new List<detPag> { MontarDetPagUnico(formaPagamento, valor) };
+        }
 
         var valorSegundo  = segundoValorCentavos / 100m;
         var valorPrimeiro = valorTotal - valorSegundo;
+        if (formaPagamento == PaymentMethod.Dinheiro && dinheiroRecebidoCentavos.HasValue)
+            valorPrimeiro = dinheiroRecebidoCentavos.Value / 100m;
+        if (segundaForma == PaymentMethod.Dinheiro && dinheiroRecebidoCentavos.HasValue)
+            valorSegundo = dinheiroRecebidoCentavos.Value / 100m;
+
         return new List<detPag>
         {
             MontarDetPagUnico(formaPagamento, valorPrimeiro),

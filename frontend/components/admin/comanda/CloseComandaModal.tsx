@@ -1,11 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { metodosDisponiveis, ComandaDto, COMANDA_PAYMENT_METHODS } from '@/lib/api'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { CreditCard, QrCode, CheckCircle } from 'lucide-react'
 import clsx from 'clsx'
 import { SECOND_PAYMENT_METHODS } from './shared'
 import Modal from '@/components/admin/ui/Modal'
+import CashPaymentFields, { CashPaymentState } from '@/components/admin/payments/CashPaymentFields'
 
 // ── Modal: selecionar pagamento ao fechar comanda ────────────────────────────
 
@@ -13,7 +14,7 @@ export function CloseComandaModal({
   comanda, onConfirm, onCancel, onGerarPix, autoEmitMethods, fiscalEnabled,
 }: {
   comanda:   ComandaDto
-  onConfirm: (paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean) => void
+  onConfirm: (paymentMethod: string, secondMethod?: string, secondAmountInCents?: number, discountInCents?: number, emitirNotaFiscal?: boolean, cashReceivedInCents?: number, cashRoundingDiscountInCents?: number) => void
   onCancel:  () => void
   onGerarPix: () => void
   autoEmitMethods: string[]
@@ -29,21 +30,41 @@ export function CloseComandaModal({
   const [descontoStr,   setDescontoStr]   = useState('')
   const [emitirNota,    setEmitirNota]    = useState(() => autoEmitMethods.includes('Dinheiro'))
   const [notaTouched,   setNotaTouched]   = useState(false)
+  const [cashState, setCashState] = useState<CashPaymentState>({
+    cashReceivedInCents: 0, changeInCents: 0, roundingDiscountInCents: 0, valid: false,
+  })
+  const handleCashChange = useCallback((next: CashPaymentState) => {
+    setCashState(current =>
+      current.cashReceivedInCents === next.cashReceivedInCents &&
+      current.changeInCents === next.changeInCents &&
+      current.roundingDiscountInCents === next.roundingDiscountInCents &&
+      current.valid === next.valid ? current : next)
+  }, [])
 
   useEffect(() => {
     if (!notaTouched) setEmitirNota(autoEmitMethods.includes(method))
   }, [method, autoEmitMethods, notaTouched])
 
   const totalAntesDesconto = comanda.totalInReais - comanda.pointsApplied / 100
-  const descontoCents  = Math.min(
+  const descontoManualCents = Math.min(
     Math.round(parseFloat(descontoStr.replace(',', '.') || '0') * 100),
     Math.round(totalAntesDesconto * 100),
   )
-  const totalRestante  = totalAntesDesconto - descontoCents / 100
+  const totalAntesArredondamentoCents = Math.round(totalAntesDesconto * 100) - descontoManualCents
   const saldoCashback  = comanda.userBalanceInCents / 100
   const saldoPontos    = comanda.userPointsBalance
 
-  const secondAmtCents = splitEnabled ? Math.round(parseFloat(secondAmtStr || '0') * 100) : 0
+  const secondAmtBaseCents = splitEnabled ? Math.round(parseFloat(secondAmtStr || '0') * 100) : 0
+  const usesCash = method === 'Dinheiro' || (splitEnabled && secondMethod === 'Dinheiro')
+  const cashDueBeforeRounding = method === 'Dinheiro'
+    ? totalAntesArredondamentoCents - secondAmtBaseCents
+    : splitEnabled && secondMethod === 'Dinheiro' ? secondAmtBaseCents : 0
+  const cashRoundingDiscount = usesCash ? cashState.roundingDiscountInCents : 0
+  const descontoCents = descontoManualCents + cashRoundingDiscount
+  const totalRestante = (totalAntesArredondamentoCents - cashRoundingDiscount) / 100
+  const secondAmtCents = splitEnabled
+    ? Math.max(0, secondAmtBaseCents - (secondMethod === 'Dinheiro' ? cashRoundingDiscount : 0))
+    : 0
   const primaryAmtCents = Math.round(totalRestante * 100) - secondAmtCents
   const primaryAmtReais = primaryAmtCents / 100
 
@@ -53,14 +74,14 @@ export function CloseComandaModal({
   const splitInvalido    = splitEnabled && (secondAmtCents <= 0 || secondAmtCents >= Math.round(totalRestante * 100))
   const splitSemCashback = splitEnabled && secondMethod === 'Cashback' && secondAmtCents > comanda.userBalanceInCents
   const splitSemPontos   = splitEnabled && secondMethod === 'Pontos'   && secondAmtCents > saldoPontos
-  const bloqueado = semSaldoCashback || semSaldoPontos || splitInvalido || splitSemCashback || splitSemPontos
+  const bloqueado = semSaldoCashback || semSaldoPontos || splitInvalido || splitSemCashback || splitSemPontos || (usesCash && !cashState.valid)
 
   function handleConfirm() {
     const emitir = fiscalEnabled && emitirNota
     if (splitEnabled && secondAmtCents > 0)
-      onConfirm(method, secondMethod, secondAmtCents, descontoCents, emitir)
+      onConfirm(method, secondMethod, secondAmtCents, descontoCents, emitir, cashState.cashReceivedInCents, cashRoundingDiscount)
     else
-      onConfirm(method, undefined, undefined, descontoCents, emitir)
+      onConfirm(method, undefined, undefined, descontoCents, emitir, usesCash ? cashState.cashReceivedInCents : undefined, cashRoundingDiscount)
   }
 
   return (
@@ -230,6 +251,9 @@ export function CloseComandaModal({
           <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300">
             O valor será acumulado no saldo devedor do cliente. Novas comandas podem ser abertas normalmente.
           </div>
+        )}
+        {usesCash && cashDueBeforeRounding > 0 && (
+          <CashPaymentFields cashDueInCents={cashDueBeforeRounding} onChange={handleCashChange} />
         )}
         {method === 'Crediario' && splitEnabled && secondAmtCents > 0 && (
           <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300">

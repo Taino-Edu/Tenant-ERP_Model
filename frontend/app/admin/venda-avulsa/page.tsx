@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import VariantPicker from '@/components/admin/VariantPicker'
+import CashPaymentFields, { CashPaymentState } from '@/components/admin/payments/CashPaymentFields'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import Modal from '@/components/admin/ui/Modal'
@@ -50,11 +51,15 @@ function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string, siteName: st
     </tr>
   `).join('')
 
-  const discountRow = receipt.discountPercent > 0 ? `
+  const discountRow = receipt.discountInReais > 0 ? `
     <tr style="color:#16a34a;">
       <td>Desconto (${receipt.discountPercent}%)</td>
       <td align="right">−R$&nbsp;${receipt.discountInReais.toFixed(2).replace('.', ',')}</td>
     </tr>
+  ` : ''
+  const cashRows = receipt.cashReceivedInCents != null ? `
+    <p class="payment">Recebido em dinheiro: R$&nbsp;${(receipt.cashReceivedInCents / 100).toFixed(2).replace('.', ',')}</p>
+    <p class="payment">Troco: R$&nbsp;${(receipt.changeInCents / 100).toFixed(2).replace('.', ',')}</p>
   ` : ''
 
   w.document.write(`<!DOCTYPE html>
@@ -92,6 +97,7 @@ ${receipt.clientName ? `<p class="sub">Cliente: <strong>${receipt.clientName}</s
   </tr>
 </table>
 <p class="payment">Pagamento: ${payLabel}</p>
+${cashRows}
 <hr>
 <p class="footer">Obrigado pela preferência!</p>
 <script>window.onload = function() { window.print(); }<\/script>
@@ -204,9 +210,31 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
   const [newPm2,     setNewPm2]     = useState(venda.secondPaymentMethod ?? '')
   const [pm2val,     setPm2val]     = useState(String(venda.secondPaymentAmountInCents / 100))
   const [newClient,  setNewClient]  = useState(venda.clientName ?? '')
-  const [newDisc,    setNewDisc]    = useState(venda.discountInReais > 0 ? String(venda.discountInReais.toFixed(2).replace('.', ',')) : '')
+  const existingManualDiscount = Math.max(0, Math.round(venda.discountInReais * 100) - (venda.cashRoundingDiscountInCents ?? 0))
+  const [newDisc,    setNewDisc]    = useState(existingManualDiscount > 0 ? String((existingManualDiscount / 100).toFixed(2).replace('.', ',')) : '')
   const [saving,     setSaving]     = useState(false)
   const [emitindoNota, setEmitindoNota] = useState(false)
+  const [editCash, setEditCash] = useState<CashPaymentState>({
+    cashReceivedInCents: venda.cashReceivedInCents ?? 0,
+    changeInCents: venda.changeInCents ?? 0,
+    roundingDiscountInCents: venda.cashRoundingDiscountInCents ?? 0,
+    valid: false,
+  })
+  const handleEditCash = useCallback((next: CashPaymentState) => setEditCash(current =>
+    current.cashReceivedInCents === next.cashReceivedInCents &&
+    current.changeInCents === next.changeInCents &&
+    current.roundingDiscountInCents === next.roundingDiscountInCents &&
+    current.valid === next.valid ? current : next), [])
+
+  const editSubtotalCents = Math.round(venda.items.reduce((sum, item) => sum + item.subtotalInReais, 0) * 100)
+  const editManualDiscount = Math.min(editSubtotalCents, Math.max(0,
+    Math.round((parseFloat(newDisc.replace(',', '.') || '0')) * 100)))
+  const editTotalBeforeRounding = editSubtotalCents - editManualDiscount
+  const editSecondBase = newPm2 ? Math.round((parseFloat(pm2val.replace(',', '.') || '0')) * 100) : 0
+  const editUsesCash = newPm === 'Dinheiro' || newPm2 === 'Dinheiro'
+  const editCashDue = newPm === 'Dinheiro'
+    ? editTotalBeforeRounding - editSecondBase
+    : newPm2 === 'Dinheiro' ? editSecondBase : 0
 
   async function handleEmitirNota() {
     setEmitindoNota(true)
@@ -228,14 +256,19 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
   async function handleSavePay() {
     setSaving(true)
     try {
-      const discVal = newDisc ? Math.round(parseFloat(newDisc.replace(',', '.') || '0') * 100) : undefined
+      const rounding = editUsesCash ? editCash.roundingDiscountInCents : 0
+      const discVal = editManualDiscount + rounding
+      const secondEffective = newPm2
+        ? Math.max(0, editSecondBase - (newPm2 === 'Dinheiro' ? rounding : 0)) : 0
       const req: EditarPagamentoVendaAvulsaRequest = {
         paymentMethod:              newPm,
         secondPaymentMethod:        newPm2 || undefined,
-        secondPaymentAmountInCents: newPm2 ? Math.round(parseFloat(pm2val.replace(',', '.') || '0') * 100) : 0,
+        secondPaymentAmountInCents: secondEffective,
         clientName:                 newClient.trim() || undefined,
         clearClientName:            newClient.trim() === '' && !!venda.clientName,
         discountInCents:            discVal,
+        cashReceivedInCents:        editUsesCash ? editCash.cashReceivedInCents : undefined,
+        cashRoundingDiscountInCents: rounding,
       }
       const { data } = await vendaAvulsaApi.editarPagamento(venda.id, req)
       toast.success('Venda atualizada!')
@@ -313,6 +346,12 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
             {PAYMENT_ICONS_INNER[venda.paymentMethod]}
             <span>{payLabel}</span>
           </div>
+          {venda.cashReceivedInCents != null && (
+            <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+              <span className="text-gray-400">Recebido: <strong className="text-white">{fmt(venda.cashReceivedInCents / 100)}</strong></span>
+              <span className="text-gray-400">Troco: <strong className="text-emerald-300">{fmt(venda.changeInCents / 100)}</strong></span>
+            </div>
+          )}
         </div>
 
         {editingPay ? (
@@ -370,11 +409,15 @@ function VendaDetailModal({ venda, onClose, onUpdate }: { venda: VendaAvulsaDto;
               </div>
             </div>
 
+            {editUsesCash && editCashDue > 0 && (
+              <CashPaymentFields cashDueInCents={editCashDue} onChange={handleEditCash} />
+            )}
+
             <div className="flex gap-2 pt-1">
               <button onClick={() => setEditingPay(false)} className="btn-secondary flex-1 justify-center text-sm">
                 Cancelar
               </button>
-              <button onClick={handleSavePay} disabled={saving} className="btn-primary flex-1 justify-center text-sm">
+              <button onClick={handleSavePay} disabled={saving || (editUsesCash && !editCash.valid)} className="btn-primary flex-1 justify-center text-sm">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                 Salvar
               </button>
@@ -481,7 +524,16 @@ function VendaWizard({
   const [discountMode, setDiscountMode] = useState<'percent' | 'cents'>('percent')
   const [discountPct, setDiscountPct] = useState(defaultDiscount)
   const [discountValueStr, setDiscountValueStr] = useState('')
-  const [received, setReceived] = useState('')
+  const [cashState, setCashState] = useState<CashPaymentState>({
+    cashReceivedInCents: 0, changeInCents: 0, roundingDiscountInCents: 0, valid: false,
+  })
+  const handleCashChange = useCallback((next: CashPaymentState) => {
+    setCashState(current =>
+      current.cashReceivedInCents === next.cashReceivedInCents &&
+      current.changeInCents === next.changeInCents &&
+      current.roundingDiscountInCents === next.roundingDiscountInCents &&
+      current.valid === next.valid ? current : next)
+  }, [])
   const [submitting, setSubmitting] = useState(false)
 
   // Pagamento dividido (segundo método)
@@ -601,13 +653,21 @@ function VendaWizard({
       ? i.product.discountPriceInCents : i.product.priceInCents
     return s + price * i.quantity
   }, 0)
-  const discountCents     = discountMode === 'cents'
+  const manualDiscountCents = discountMode === 'cents'
     ? Math.min(Math.round(parseFloat(discountValueStr.replace(',', '.') || '0') * 100), subtotal)
     : Math.round(subtotal * discountPct / 100)
-  const total             = subtotal - discountCents
-  const receivedCents     = Math.round(parseFloat(received.replace(',', '.') || '0') * 100)
-  const troco             = receivedCents - total
-  const secondAmountCents = splitEnabled ? Math.round(parseFloat(secondAmountStr.replace(',', '.') || '0') * 100) : 0
+  const totalBeforeCashRounding = subtotal - manualDiscountCents
+  const secondAmountBaseCents = splitEnabled ? Math.round(parseFloat(secondAmountStr.replace(',', '.') || '0') * 100) : 0
+  const usesCash = payment === 'Dinheiro' || (splitEnabled && secondPayment === 'Dinheiro')
+  const cashDueBeforeRounding = payment === 'Dinheiro'
+    ? totalBeforeCashRounding - secondAmountBaseCents
+    : splitEnabled && secondPayment === 'Dinheiro' ? secondAmountBaseCents : 0
+  const cashRoundingDiscount = usesCash ? cashState.roundingDiscountInCents : 0
+  const discountCents = Math.min(subtotal, manualDiscountCents + cashRoundingDiscount)
+  const total = subtotal - discountCents
+  const secondAmountCents = splitEnabled
+    ? Math.max(0, secondAmountBaseCents - (secondPayment === 'Dinheiro' ? cashRoundingDiscount : 0))
+    : 0
   const primaryAmountCents = total - secondAmountCents
   const splitValid        = !splitEnabled || (secondAmountCents > 0 && secondAmountCents < total)
   const secondNeedsUser   = splitEnabled && (PAYMENT_NEEDS_USER as readonly string[]).includes(secondPayment)
@@ -637,8 +697,10 @@ function VendaWizard({
         selectedUserId ?? undefined,
         splitEnabled ? secondPayment : null,
         splitEnabled ? secondAmountCents : 0,
-        discountMode === 'cents' ? discountCents : undefined,
+        discountMode === 'cents' || cashRoundingDiscount > 0 ? discountCents : undefined,
         site.enabledModules.includes('fiscal') && emitirNota,
+        usesCash ? cashState.cashReceivedInCents : undefined,
+        cashRoundingDiscount,
       )
       onComplete(data)
       toast.success('Venda registrada!')
@@ -646,7 +708,7 @@ function VendaWizard({
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao registrar venda.'))
     } finally { setSubmitting(false) }
-  }, [cart, clientName, payment, discountMode, discountPct, discountCents, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid, emitirNota, site.enabledModules])
+  }, [cart, clientName, payment, discountMode, discountPct, discountCents, selectedUserId, onComplete, splitEnabled, secondPayment, secondAmountCents, splitValid, emitirNota, site.enabledModules, usesCash, cashState.cashReceivedInCents, cashRoundingDiscount])
 
   const handleSubmit = useThrottle(submitRaw, 2000)
 
@@ -1032,7 +1094,6 @@ function VendaWizard({
                       key={m.value}
                       onClick={() => {
                         setPayment(m.value)
-                        setReceived('')
                         if (splitEnabled && m.value === secondPayment)
                           setSecondPayment(paymentMethods.find(p => p.value !== m.value)?.value ?? 'Dinheiro')
                       }}
@@ -1179,29 +1240,8 @@ function VendaWizard({
                 </div>
               )}
 
-              {payment === 'Dinheiro' && (
-                <div className="space-y-2">
-                  <label className="text-xs text-gray-400 flex items-center gap-1">
-                    <Banknote className="w-3.5 h-3.5" /> Valor recebido (R$)
-                  </label>
-                  <input
-                    type="number" min="0" step="0.01"
-                    className="input text-sm"
-                    placeholder="0,00"
-                    value={received}
-                    onChange={e => setReceived(e.target.value)}
-                    autoFocus
-                  />
-                  {received && receivedCents >= 0 && (
-                    <div className={clsx(
-                      'flex justify-between text-sm font-semibold rounded-xl px-3 py-2',
-                      troco >= 0 ? 'bg-accent-green/10 text-accent-green' : 'bg-red-500/10 text-red-400'
-                    )}>
-                      <span>{troco >= 0 ? 'Troco' : 'Falta'}</span>
-                      <span className="font-mono">{fmt(Math.abs(troco) / 100)}</span>
-                    </div>
-                  )}
-                </div>
+              {usesCash && cashDueBeforeRounding > 0 && (
+                <CashPaymentFields cashDueInCents={cashDueBeforeRounding} onChange={handleCashChange} />
               )}
 
               {site.enabledModules.includes('fiscal') && (
@@ -1263,7 +1303,7 @@ function VendaWizard({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={submitting || (needsUser && !selectedUserId) || !splitValid}
+                disabled={submitting || (needsUser && !selectedUserId) || !splitValid || (usesCash && !cashState.valid)}
                 className="btn-success flex-1 justify-center text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting
@@ -1399,7 +1439,7 @@ export default function VendaAvulsaPage() {
                 <span className="text-gray-400 font-mono">{fmt(item.subtotalInReais)}</span>
               </div>
             ))}
-            {receipt.discountPercent > 0 && (
+            {receipt.discountInReais > 0 && (
               <div className="flex justify-between items-center px-4 py-3 text-sm">
                 <span className="text-accent-green">Desconto ({receipt.discountPercent}%)</span>
                 <span className="text-accent-green font-mono">−{fmt(receipt.discountInReais)}</span>
@@ -1410,6 +1450,16 @@ export default function VendaAvulsaPage() {
               <span className="text-accent-gold text-lg">{fmt(receipt.totalInReais)}</span>
             </div>
           </div>
+          {receipt.cashReceivedInCents != null && (
+            <div className="grid grid-cols-2 gap-2 text-left text-xs">
+              <div className="rounded-lg bg-surface-800 px-3 py-2 text-gray-400">
+                Recebido <strong className="block text-sm text-white">{fmt(receipt.cashReceivedInCents / 100)}</strong>
+              </div>
+              <div className="rounded-lg bg-surface-800 px-3 py-2 text-gray-400">
+                Troco <strong className="block text-sm text-emerald-300">{fmt(receipt.changeInCents / 100)}</strong>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-gray-400">{new Date(receipt.soldAt).toLocaleString('pt-BR')}</p>
           <div className="flex gap-2">
             <button

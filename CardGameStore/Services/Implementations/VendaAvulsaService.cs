@@ -160,6 +160,12 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         // Valor cobrado pelo método principal (total menos a parcela do segundo método)
         var primaryAmt = finalTotal - secondAmt;
+        if (request.CashRoundingDiscountInCents > discountInCents)
+            throw new InvalidOperationException("O arredondamento do troco não pode ser maior que o desconto total.");
+        var cash = CashPaymentCalculator.Calculate(
+            finalTotal, request.PaymentMethod, secondPm, secondAmt, request.CashReceivedInCents);
+        if (request.CashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            throw new InvalidOperationException("O arredondamento deve produzir troco em múltiplos de cinco centavos.");
         var pointsDebitedAtSale = 0;
         var cashbackDebitedAtSale = 0;
         var pointsAwardedAtSale = 0;
@@ -184,6 +190,9 @@ public class VendaAvulsaService : IVendaAvulsaService
             PaymentMethod              = request.PaymentMethod,
             SecondPaymentMethod        = secondPm,
             SecondPaymentAmountInCents = secondAmt,
+            CashReceivedInCents         = cash.ReceivedInCents,
+            ChangeInCents               = cash.ChangeInCents,
+            CashRoundingDiscountInCents = request.CashRoundingDiscountInCents,
             ClientName                 = clientNameResolved,
             UserId                     = request.UserId,
             UserName                   = clientNameResolved,
@@ -579,6 +588,17 @@ public class VendaAvulsaService : IVendaAvulsaService
             venda.TotalInCents    = originalTotal - newDiscount;
         }
 
+        if (request.CashRoundingDiscountInCents > venda.DiscountInCents)
+            throw new InvalidOperationException("O arredondamento do troco não pode ser maior que o desconto total.");
+        var cash = CashPaymentCalculator.Calculate(
+            venda.TotalInCents, request.PaymentMethod, request.SecondPaymentMethod,
+            request.SecondPaymentAmountInCents, request.CashReceivedInCents);
+        if (request.CashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            throw new InvalidOperationException("O arredondamento deve produzir troco em múltiplos de cinco centavos.");
+        venda.CashReceivedInCents         = cash.ReceivedInCents;
+        venda.ChangeInCents               = cash.ChangeInCents;
+        venda.CashRoundingDiscountInCents = request.CashRoundingDiscountInCents;
+
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Venda avulsa {Id} atualizada: pagamento={PM}, cliente={CN}, desconto={Desc}.",
@@ -593,6 +613,9 @@ public class VendaAvulsaService : IVendaAvulsaService
         PaymentMethod              = v.PaymentMethod,
         SecondPaymentMethod        = v.SecondPaymentMethod,
         SecondPaymentAmountInCents = v.SecondPaymentAmountInCents,
+        CashReceivedInCents         = v.CashReceivedInCents,
+        ChangeInCents               = v.ChangeInCents,
+        CashRoundingDiscountInCents = v.CashRoundingDiscountInCents,
         TotalInReais               = v.TotalInReais,
         DiscountPercent            = v.DiscountPercent,
         DiscountInReais            = v.DiscountInReais,
