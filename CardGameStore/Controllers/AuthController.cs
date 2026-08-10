@@ -8,6 +8,7 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -543,6 +544,7 @@ public class AuthController : ControllerBase
     /// <response code="204">Logout realizado com sucesso.</response>
     [HttpPost("logout")]
     [Authorize]
+    [OperatorSelfService]
     [ProducesResponseType(204)]
     public async Task<IActionResult> Logout()
     {
@@ -625,6 +627,7 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("test-email")]
     [Authorize(Policy = "AdminOnly")]
+    [OperatorForbidden]
     public async Task<IActionResult> TestEmail([FromBody] TestEmailRequest request)
     {
         var success = await _emailService.SendDiagnosticEmailAsync(request.Email);

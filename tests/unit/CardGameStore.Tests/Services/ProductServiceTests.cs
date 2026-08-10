@@ -4,6 +4,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -34,6 +35,13 @@ public class ProductServiceTests
             MinimumStock  = min,
             IsActive      = active,
         };
+
+    private static async Task<List<T>> MaterializeAsync<T>(IAsyncEnumerable<T> source)
+    {
+        var result = new List<T>();
+        await foreach (var item in source) result.Add(item);
+        return result;
+    }
 
     // ── Listagem ──────────────────────────────────────────────────────────────
 
@@ -84,6 +92,27 @@ public class ProductServiceTests
 
         result.Should().ContainSingle()
               .Which.Category.Should().Be("MTG");
+    }
+
+    [Fact]
+    public async Task StreamPublico_DeveFiltrarOrdenarEProjetarDto()
+    {
+        var db = CreateDb(nameof(StreamPublico_DeveFiltrarOrdenarEProjetarDto));
+        var service = CreateService(db);
+
+        var beta = MakeProduct("Beta");
+        beta.CostPriceInCents = 999;
+        var alpha = MakeProduct("Alpha");
+        var oculto = MakeProduct("Oculto");
+        oculto.ShowOnMarketplace = false;
+        db.Products.AddRange(beta, alpha, oculto, MakeProduct("Inativo", active: false));
+        await db.SaveChangesAsync();
+
+        var result = await MaterializeAsync(service.StreamAllActivePublicAsync());
+
+        result.Select(p => p.Name).Should().Equal("Alpha", "Beta");
+        result.Should().OnlyContain(p => p.IsActive && p.ShowOnMarketplace);
+        result.Should().AllBeOfType<ProductPublicDto>();
     }
 
     // ── Estoque baixo ─────────────────────────────────────────────────────────

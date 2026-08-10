@@ -51,7 +51,9 @@ const config: Config = {
         }
       },
       fontFamily: {
-        sans: ['var(--font-nunito)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        // Fontes do sistema mantêm o build reproduzível e evitam depender da
+        // disponibilidade do Google Fonts durante cada deploy.
+        sans: ['ui-sans-serif', 'system-ui', '-apple-system', '"Segoe UI"', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
       animation: {

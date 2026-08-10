@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react'
+import { useState, useRef, useEffect, useMemo, KeyboardEvent, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { BrainCircuit, X, Send, Loader2, ChevronDown, Sparkles, Mic, MicOff, Volume2, VolumeX } from 'lucide-react'
-import { aiApi } from '@/lib/api'
+import { streamAiChat, AiStreamEvent } from '@/lib/api'
 import { usePreferences } from '@/hooks/usePreferences'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import { mixHex, hexToRgbTriplet, getContrastText } from '@/lib/colors'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -98,6 +99,22 @@ export default function AiChatWidget() {
   const [listening, setListening] = useState(false)
   const [voiceOn,   setVoiceOn]   = useState(false)
   const [hasSpeech, setHasSpeech] = useState(false)
+
+  // Cores da própria loja em vez de roxo fixo — antes o widget ignorava
+  // completamente o branding do tenant (site.colorPrimary/colorNavy já
+  // existem e são usados no resto do sistema, só não aqui).
+  const C = useMemo(() => {
+    const primary     = site.colorPrimary || '#3EC2F2'
+    const primaryDark = mixHex(primary, '#000000', 0.25)
+    const onPrimary   = getContrastText(primary)
+    const rgb         = hexToRgbTriplet(primary)
+    return {
+      primary, primaryDark, onPrimary,
+      gradient: `linear-gradient(135deg, ${primary}, ${primaryDark})`,
+      shadow:   (alpha: number) => `rgba(${rgb.replace(/ /g, ',')}, ${alpha})`,
+      soft:     (alpha: number) => `${primary}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`,
+    }
+  }, [site.colorPrimary])
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const inputRef     = useRef<HTMLTextAreaElement>(null)
@@ -196,33 +213,52 @@ export default function AiChatWidget() {
   }, [listening]) // eslint-disable-line
 
   // ── Chat ──────────────────────────────────────────────────────────────────
+  // Streaming em vez de esperar a resposta inteira: aparece um bubble vazio
+  // logo de cara e vai preenchendo aos pedaços conforme o Gemini gera — antes
+  // ficava só nos "···" até o texto inteiro estar pronto, o que parecia muito
+  // mais lento do que realmente era.
   const sendText = useCallback(async (text: string) => {
     if (!text.trim() || loading) return
     setInput('')
-    setMessages(prev => [...prev, { role: 'user', text }])
+    setMessages(prev => [...prev, { role: 'user', text }, { role: 'assistant', text: '' }])
     setLoading(true)
+
+    let fullReply = ''
+    const appendToLast = (chunk: string) => {
+      fullReply += chunk
+      setMessages(prev => {
+        const next = [...prev]
+        next[next.length - 1] = { role: 'assistant', text: fullReply }
+        return next
+      })
+    }
+
     try {
-      const { data } = await aiApi.chat(text)
-      const reply = data.success ? data.reply : (data.reply || 'Erro ao obter resposta.')
-      setMessages(prev => [...prev, { role: 'assistant', text: reply }])
+      for await (const evt of streamAiChat(text) as AsyncGenerator<AiStreamEvent>) {
+        if (evt.delta) appendToLast(evt.delta)
 
-      // Lê em voz alta se ativo
-      if (voiceOn) speak(reply)
+        if (evt.done) {
+          if (voiceOn && fullReply) speak(fullReply)
 
-      // Executa action de navegação
-      const action = data.action as AiAction | undefined
-      if (action?.type === 'navigate' && action.route) {
-        setTimeout(() => { router.push(action.route!); setOpen(false) }, 800)
-      } else if (action?.type === 'openWizard') {
-        setTimeout(() => {
-          // Dispara evento customizado que a venda-avulsa escuta
-          window.dispatchEvent(new CustomEvent('ai:openWizard'))
-          router.push('/admin/venda-avulsa')
-          setOpen(false)
-        }, 800)
+          const action = evt.action as AiAction | undefined
+          if (action?.type === 'navigate' && action.route) {
+            setTimeout(() => { router.push(action.route!); setOpen(false) }, 800)
+          } else if (action?.type === 'openWizard') {
+            setTimeout(() => {
+              // Dispara evento customizado que a venda-avulsa escuta
+              window.dispatchEvent(new CustomEvent('ai:openWizard'))
+              router.push('/admin/venda-avulsa')
+              setOpen(false)
+            }, 800)
+          }
+        }
       }
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', text: 'Não consegui conectar ao assistente. Tente novamente.' }])
+      setMessages(prev => {
+        const next = [...prev]
+        next[next.length - 1] = { role: 'assistant', text: 'Não consegui conectar ao assistente. Tente novamente.' }
+        return next
+      })
     } finally {
       setLoading(false)
     }
@@ -257,15 +293,15 @@ export default function AiChatWidget() {
 
           {/* Cabeçalho */}
           <div className="flex items-center justify-between px-4 py-3"
-               style={{ background: 'linear-gradient(135deg, #1a1028 0%, #111117 100%)', borderBottom: '1px solid #303040' }}>
+               style={{ background: `linear-gradient(135deg, ${C.soft(0.15)} 0%, #111117 100%)`, borderBottom: '1px solid #303040' }}>
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-                   style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}>
-                <BrainCircuit size={15} className="text-white" />
+                   style={{ background: C.gradient }}>
+                <BrainCircuit size={15} style={{ color: C.onPrimary }} />
               </div>
               <div>
                 <p className="text-sm font-semibold text-white leading-tight">Assistente IA</p>
-                <p className="text-[10px] text-violet-400 leading-tight">{site.siteName} · Gemini</p>
+                <p className="text-[10px] leading-tight" style={{ color: C.primary }}>{site.siteName} · Gemini</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -274,7 +310,7 @@ export default function AiChatWidget() {
                 onClick={() => { setVoiceOn(v => !v); window.speechSynthesis?.cancel() }}
                 title={voiceOn ? 'Desligar voz' : 'Ligar voz'}
                 className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
-                style={{ color: voiceOn ? '#a78bfa' : '#6b7280', background: voiceOn ? '#3b1f6a33' : 'transparent' }}>
+                style={{ color: voiceOn ? C.primary : '#6b7280', background: voiceOn ? C.soft(0.2) : 'transparent' }}>
                 {voiceOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
               </button>
               <button onClick={() => setOpen(false)}
@@ -291,14 +327,14 @@ export default function AiChatWidget() {
               <div className="space-y-4">
                 <div className="flex flex-col items-center pt-2 pb-1">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-2"
-                       style={{ background: 'linear-gradient(135deg, #7c3aed33, #6d28d933)', border: '1px solid #7c3aed44' }}>
-                    <Sparkles size={22} className="text-violet-400" />
+                       style={{ background: `linear-gradient(135deg, ${C.soft(0.2)}, ${C.soft(0.2)})`, border: `1px solid ${C.soft(0.27)}` }}>
+                    <Sparkles size={22} style={{ color: C.primary }} />
                   </div>
                   <p className="text-xs text-gray-400 text-center">
                     Pergunte sobre vendas, estoque,<br />crediários ou navegue pelo sistema
                   </p>
                   {hasSpeech && (
-                    <p className="text-[10px] text-violet-500 mt-1">
+                    <p className="text-[10px] mt-1" style={{ color: C.primary }}>
                       🎤 Fale com o assistente usando o microfone
                     </p>
                   )}
@@ -306,8 +342,8 @@ export default function AiChatWidget() {
                 <div className="space-y-1.5">
                   {SUGGESTIONS.map(s => (
                     <button key={s} onClick={() => send(s)}
-                            className="w-full text-left text-xs px-3 py-2.5 rounded-xl text-violet-200 hover:text-white hover:border-violet-500/50 transition-all"
-                            style={{ background: '#1a1a2e', border: '1px solid #4c2d8a' }}>
+                            className="w-full text-left text-xs px-3 py-2.5 rounded-xl hover:text-white transition-all"
+                            style={{ background: '#1a1a2e', border: `1px solid ${C.soft(0.35)}`, color: C.soft(0.85) }}>
                       {s}
                     </button>
                   ))}
@@ -315,11 +351,11 @@ export default function AiChatWidget() {
               </div>
             )}
 
-            {messages.map((m, i) => (
+            {messages.filter(m => m.text).map((m, i) => (
               <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className="max-w-[88%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap"
                      style={m.role === 'user'
-                       ? { background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff', borderRadius: '16px 16px 4px 16px' }
+                       ? { background: C.gradient, color: C.onPrimary, borderRadius: '16px 16px 4px 16px' }
                        : { background: '#1a1a26', color: '#e5e7eb', border: '1px solid #2d2d40', borderRadius: '16px 16px 16px 4px' }
                      }>
                   {m.text}
@@ -327,13 +363,15 @@ export default function AiChatWidget() {
               </div>
             ))}
 
-            {loading && (
+            {/* "···" só até o primeiro pedaço da resposta chegar — depois disso
+                o próprio texto crescendo já é o indicador de progresso. */}
+            {loading && messages[messages.length - 1]?.text === '' && (
               <div className="flex justify-start">
                 <div className="px-4 py-3 rounded-2xl flex items-center gap-2"
                      style={{ background: '#1a1a26', border: '1px solid #2d2d40', borderRadius: '16px 16px 16px 4px' }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ animationDelay: '0ms', background: C.primary }} />
+                  <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ animationDelay: '150ms', background: C.primary }} />
+                  <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ animationDelay: '300ms', background: C.primary }} />
                 </div>
               </div>
             )}
@@ -344,7 +382,7 @@ export default function AiChatWidget() {
           {/* Input */}
           <div className="px-3 py-3" style={{ borderTop: '1px solid #303040', background: '#111117' }}>
             <div className="flex items-end gap-2 rounded-xl p-1"
-                 style={{ background: '#252538', border: `1px solid ${listening ? '#ef4444' : '#6d28d9'}` }}>
+                 style={{ background: '#252538', border: `1px solid ${listening ? '#ef4444' : C.primaryDark}` }}>
 
               {/* Microfone */}
               {hasSpeech && (
@@ -355,7 +393,7 @@ export default function AiChatWidget() {
                   className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all mb-0.5 disabled:opacity-30"
                   style={{
                     background: listening ? 'rgba(239,68,68,0.2)' : 'transparent',
-                    color: listening ? '#ef4444' : '#7c3aed',
+                    color: listening ? '#ef4444' : C.primary,
                     animation: listening ? 'pulse 1s infinite' : 'none',
                   }}>
                   {listening ? <MicOff size={15} /> : <Mic size={15} />}
@@ -370,17 +408,19 @@ export default function AiChatWidget() {
                 placeholder={listening ? 'Ouvindo...' : 'Pergunte algo ou diga "abre o estoque"…'}
                 rows={1}
                 disabled={loading || listening}
-                className="flex-1 resize-none bg-transparent text-sm text-violet-200 placeholder-gray-500 px-2 py-1.5 outline-none disabled:opacity-50"
-                style={{ maxHeight: '80px', lineHeight: '1.5' }}
+                className="flex-1 resize-none bg-transparent text-sm placeholder-gray-500 px-2 py-1.5 outline-none disabled:opacity-50"
+                style={{ maxHeight: '80px', lineHeight: '1.5', color: C.soft(0.9) }}
               />
 
               <button
                 onClick={() => send()}
                 disabled={!input.trim() || loading}
                 className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center transition-all disabled:opacity-30 hover:opacity-90 active:scale-95 mb-0.5"
-                style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)' }}
+                style={{ background: C.gradient }}
                 aria-label="Enviar">
-                {loading ? <Loader2 size={14} className="text-white animate-spin" /> : <Send size={14} className="text-white" />}
+                {loading
+                  ? <Loader2 size={14} className="animate-spin" style={{ color: C.onPrimary }} />
+                  : <Send size={14} style={{ color: C.onPrimary }} />}
               </button>
             </div>
             <p className="text-[10px] text-gray-600 mt-1.5 text-center">
@@ -398,15 +438,15 @@ export default function AiChatWidget() {
           style={{
             ...CORNER_STYLES[prefs.aiButton.corner] ?? CORNER_STYLES['bottom-right'],
             width: BTN_SIZE, height: BTN_SIZE,
-            background: open ? '#4c1d95' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-            boxShadow: `0 4px 24px rgba(109, 40, 217, ${listening ? 0.9 : 0.6})`,
+            background: open ? C.primaryDark : C.gradient,
+            boxShadow: `0 4px 24px ${C.shadow(listening ? 0.9 : 0.6)}`,
           }}
           aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}>
           {listening
             ? <Mic size={22} className="text-red-400 animate-pulse" />
             : open
-              ? <ChevronDown size={22} className="text-white" />
-              : <BrainCircuit size={22} className="text-white" />
+              ? <ChevronDown size={22} style={{ color: C.onPrimary }} />
+              : <BrainCircuit size={22} style={{ color: C.onPrimary }} />
           }
         </button>
       ) : pos ? (
@@ -417,8 +457,8 @@ export default function AiChatWidget() {
           style={{
             left: pos.x, top: pos.y,
             width: BTN_SIZE, height: BTN_SIZE,
-            background: open ? '#4c1d95' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-            boxShadow: `0 4px 24px rgba(109, 40, 217, ${listening ? 0.9 : 0.6})`,
+            background: open ? C.primaryDark : C.gradient,
+            boxShadow: `0 4px 24px ${C.shadow(listening ? 0.9 : 0.6)}`,
             cursor: 'grab',
           }}
           aria-label={open ? 'Fechar assistente IA' : 'Abrir assistente IA'}
@@ -426,8 +466,8 @@ export default function AiChatWidget() {
           {listening
             ? <Mic size={22} className="text-red-400 animate-pulse" />
             : open
-              ? <ChevronDown size={22} className="text-white" />
-              : <BrainCircuit size={22} className="text-white" />
+              ? <ChevronDown size={22} style={{ color: C.onPrimary }} />
+              : <BrainCircuit size={22} style={{ color: C.onPrimary }} />
           }
         </button>
       ) : null}

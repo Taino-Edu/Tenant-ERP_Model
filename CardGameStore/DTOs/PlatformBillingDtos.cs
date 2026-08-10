@@ -74,7 +74,7 @@ public class GerarMensalidadesResultDto
     public int JaExistiam { get; set; }
 
     /// <summary>Lojas ativas ignoradas por ainda não terem entrado em cobrança
-    /// (primeiro mês de acesso grátis) ou por não terem mensalidade definida.</summary>
+    /// (15 dias de acesso grátis) ou por não terem mensalidade definida.</summary>
     public int ForaDeCobranca { get; set; }
 
     public decimal TotalGerado { get; set; }

@@ -433,7 +433,8 @@ public class SefazNfeService
                                 ? DateTime.SpecifyKind(DateTime.Parse(venc[..10]), DateTimeKind.Utc)
                                 : null,
                 Status      = "pending",
-                Category    = "Fornecedor",
+                Category    = "Compras para estoque",
+                DreGroup    = DreGroups.InventoryPurchase,
                 Supplier    = xNome,
                 NfeKey      = nota.ChaveAcesso,
                 Notes       = $"Gerada automaticamente via Manifestação do Destinatário (NSU {nota.Nsu}).",

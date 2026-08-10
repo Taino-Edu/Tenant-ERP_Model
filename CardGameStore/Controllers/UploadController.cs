@@ -6,6 +6,9 @@
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using CardGameStore.Multitenancy;
+using CardGameStore.Middleware;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using System.Security.Claims;
 
@@ -19,6 +22,7 @@ public class UploadController : ControllerBase
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<UploadController> _logger;
     private readonly IUserService _userService;
+    private readonly ITenantContext _tenant;
 
     private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -38,11 +42,16 @@ public class UploadController : ControllerBase
 
     private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
 
-    public UploadController(IWebHostEnvironment env, ILogger<UploadController> logger, IUserService userService)
+    public UploadController(
+        IWebHostEnvironment env,
+        ILogger<UploadController> logger,
+        IUserService userService,
+        ITenantContext tenant)
     {
         _env         = env;
         _logger      = logger;
         _userService = userService;
+        _tenant      = tenant;
     }
 
     /// <summary>
@@ -51,12 +60,13 @@ public class UploadController : ControllerBase
     /// </summary>
     [HttpPost("image")]
     [Authorize(Policy = "AdminOnly")]
+    [RequireOperatorPermission(Permissao.Estoque)]
     [RequestSizeLimit(6 * 1024 * 1024)] // margem acima do limite de negócio
     [ProducesResponseType(typeof(UploadImageResponse), 200)]
     [ProducesResponseType(typeof(ErrorResponse), 400)]
     public async Task<IActionResult> UploadImage(IFormFile? file)
     {
-        return await ProcessImageUpload(file, "uploads");
+        return await ProcessImageUpload(file, TenantUploadDirectory(_tenant.TenantId));
     }
 
     /// <summary>
@@ -65,10 +75,11 @@ public class UploadController : ControllerBase
     /// </summary>
     [HttpPost("marketplace-image")]
     [Authorize]
+    [RequireOperatorPermission(Permissao.Estoque)]
     [RequestSizeLimit(6 * 1024 * 1024)]
     [ProducesResponseType(typeof(UploadImageResponse), 200)]
     public Task<IActionResult> UploadMarketplaceImage(IFormFile? file)
-        => ProcessImageUpload(file, Path.Combine("uploads", "marketplace"));
+        => ProcessImageUpload(file, TenantUploadDirectory(_tenant.TenantId, "marketplace"));
 
     /// <summary>
     /// Faz upload da foto de perfil do usuário logado.
@@ -76,6 +87,7 @@ public class UploadController : ControllerBase
     /// </summary>
     [HttpPost("profile-image")]
     [Authorize]
+    [OperatorSelfService]
     [RequestSizeLimit(6 * 1024 * 1024)]
     public async Task<IActionResult> UploadProfileImage(IFormFile? file)
     {
@@ -83,7 +95,7 @@ public class UploadController : ControllerBase
         if (claim == null || !Guid.TryParse(claim.Value, out var userId))
             return Unauthorized();
 
-        var result = await ProcessImageUpload(file, Path.Combine("uploads", "profiles"));
+        var result = await ProcessImageUpload(file, TenantUploadDirectory(_tenant.TenantId, "profiles"));
 
         if (result is OkObjectResult okResult && okResult.Value is UploadImageResponse response)
         {
@@ -154,6 +166,14 @@ public class UploadController : ControllerBase
             return true;
 
         return false;
+    }
+
+    internal static string TenantUploadDirectory(Guid tenantId, params string[] subdirectories)
+    {
+        var parts = new[] { "uploads", "t", tenantId.ToString("N") }
+            .Concat(subdirectories)
+            .ToArray();
+        return Path.Combine(parts);
     }
 }
 

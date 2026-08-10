@@ -110,7 +110,9 @@ export default function CreateTenantModal({
                     {formatarReais(plano.preco)}<span className="text-xs font-normal text-gray-500">/mês</span>
                   </span>
                   <span className="block text-xs text-gray-500">
-                    + {formatarReais(taxaImplantacao(plano.preco))} de implantação
+                    {plano.taxaImplantacao === 0
+                      ? 'Implantação gratuita'
+                      : `+ ${formatarReais(taxaImplantacao(plano))} de implantação`}
                   </span>
                 </button>
               ))}

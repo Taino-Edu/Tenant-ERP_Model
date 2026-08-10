@@ -6,6 +6,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.Authorization;
@@ -42,6 +43,9 @@ public class SiteConfigController : ControllerBase
     public async Task<IActionResult> Get()
     {
         var cfg = await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
+        // Converte somente o placeholder histórico. Qualquer nome escolhido pelo
+        // tenant continua tendo prioridade absoluta sobre a marca padrão Octus.
+        cfg.SiteName = SiteConfig.ResolveSiteName(cfg.SiteName);
         // Inofensivo expor via endpoint público: só diz quais módulos pagos a loja
         // habilitou, não vaza dado sensível nenhum (mesmo espírito de expor a cor/nome
         // da loja aqui, que já é público).
@@ -56,6 +60,7 @@ public class SiteConfigController : ControllerBase
     /// <param name="req">Campos a atualizar (nome, textos, cores, ícones, toggle de pontos etc.). Campos omitidos/nulos não são alterados.</param>
     [HttpPut]
     [Authorize(Policy = "AdminOnly")]
+    [OperatorForbidden]
     public async Task<IActionResult> Save([FromBody] SaveSiteConfigRequest req)
     {
         var cfg = await GetOrCreateConfigAsync();

@@ -13,7 +13,7 @@ public interface ITenantProvisioningService
     /// <param name="adminPassword">Senha inicial do admin.</param>
     /// <param name="enabledModules">Módulos pagos habilitados já na criação (ex: ["fiscal","estoque"]).
     /// Null ou vazio cai no default do model (["fiscal"]) — mesmo comportamento de antes desse parâmetro existir.</param>
-    /// <param name="planName">Nome do plano contratado (ex: "Mar", "Lagoa"). Null cai no default do model ("Completo").</param>
+    /// <param name="planName">Nome do plano contratado (ex: "Mar", "Lagoa"). Null cai no default do model ("Rio").</param>
     /// <param name="maxUsers">Limite de usuários com acesso ao painel (Admin+Operator). Null = sem limite.</param>
     Task<Tenant> ProvisionAsync(
         string slug, string adminEmail, string adminPassword, string[]? enabledModules = null,

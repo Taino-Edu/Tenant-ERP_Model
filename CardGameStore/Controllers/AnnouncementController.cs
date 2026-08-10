@@ -9,6 +9,8 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +20,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/announcements")]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Anuncios)]
 public class AnnouncementController : ControllerBase
 {
     private readonly IAnnouncementService _service;

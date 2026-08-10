@@ -10,8 +10,10 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
+using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -48,7 +50,9 @@ public class PublicDirectoryController : ControllerBase
             .Select(t => new PublicTenantDto
             {
                 Slug        = t.Slug,
-                DisplayName = t.DisplayName ?? t.Slug,
+                DisplayName = t.DisplayName == SiteConfig.LegacyDefaultSiteName
+                    ? SiteConfig.DefaultSiteName
+                    : t.DisplayName ?? t.Slug,
                 LogoUrl     = t.LogoUrl,
             })
             .ToListAsync();
@@ -94,11 +98,50 @@ public class PublicDirectoryController : ControllerBase
 
         return Ok(new
         {
-            FaviconUrl = cfg?.FaviconUrl,
-            PwaIconUrl = cfg?.PwaIconUrl,
-            SiteName   = cfg?.SiteName,
-            UpdatedAt  = cfg?.UpdatedAt,
+            FaviconUrl   = cfg?.FaviconUrl,
+            PwaIconUrl   = cfg?.PwaIconUrl,
+            SiteName     = SiteConfig.ResolveSiteName(cfg?.SiteName),
+            HeroSubtitle = cfg?.HeroSubtitle,
+            AddressLine  = cfg?.AddressLine,
+            UpdatedAt    = cfg?.UpdatedAt,
         });
+    }
+
+    // ── GET /api/public/product?slug=loja-final&id=guid ───────────────────────
+    // Mesmo motivo do site-icons acima: usado pelo generateMetadata da página de
+    // produto (app/produtos/[id]/page.tsx) pra montar <title>/OG/JSON-LD com
+    // nome, preço e imagem reais do produto, sem depender do header Host. Mesmos
+    // campos já expostos anonimamente em GET /api/product/{id} (ProductPublicDto,
+    // sem custo/margem) — só resolvido por slug em vez de Host.
+    /// <summary>
+    /// Produto (nome, descrição, preço, imagem) pro tenant resolvido pelo slug —
+    /// usado pelo SSR do Next.js pra montar metadados de SEO da página de
+    /// produto. Mesmos campos já expostos em GET /api/product/{id}, nada sensível.
+    /// </summary>
+    /// <param name="slug">Slug da loja (mesmo valor usado no subdomínio).</param>
+    /// <param name="id">Id do produto.</param>
+    [HttpGet("product")]
+    [ProducesResponseType(typeof(ProductPublicDto), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetPublicProduct([FromQuery] string slug, [FromQuery] Guid id)
+    {
+        if (string.IsNullOrWhiteSpace(slug)) return BadRequest();
+
+        var tenant = await _catalog.Tenants
+            .Where(t => t.Slug == slug.Trim().ToLowerInvariant() && t.Status == TenantStatus.Active)
+            .Select(t => new { t.Id, t.SchemaName, t.EnabledModules })
+            .FirstOrDefaultAsync();
+
+        if (tenant is null) return NotFound();
+
+        using var scope = _scopeFactory.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+
+        var service = scope.ServiceProvider.GetRequiredService<IProductService>();
+        var product = await service.GetByIdAsync(id);
+
+        return product is null ? NotFound() : Ok(ProductPublicDto.FromEntity(product));
     }
 }
 

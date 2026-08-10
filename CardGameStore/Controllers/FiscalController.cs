@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // FiscalController.cs — Configuração fiscal, certificado A1, naturezas de
 // operação e exportação de XMLs de NFC-e pro contador.
 // =============================================================================
@@ -6,6 +6,7 @@
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -21,33 +22,47 @@ namespace CardGameStore.Controllers;
 [Route("api/fiscal")]
 [Authorize(Policy = "AdminOnly")]
 [RequireModule("fiscal")]
+[RequireOperatorPermission(Permissao.Fiscal)]
 [Produces("application/json")]
 public class FiscalController : ControllerBase
 {
     private readonly AppDbContext              _db;
-    private readonly EncryptionService         _enc;
-    private readonly FiscalCertificadoService  _certificado;
     private readonly FiscalXmlExportService    _export;
     private readonly INfceEmissionService      _emissao;
     private readonly CatalogDbContext          _catalog;
     private readonly ITenantContext            _tenant;
     private readonly IbptTaxService            _ibpt;
     private readonly IAuditService             _audit;
+    // Criptografia e validação de certificado saíram daqui junto com a escrita
+    // da config: vivem em FiscalConfigService, compartilhado com o portal do
+    // contador (ver o cabeçalho daquele arquivo).
+    private readonly FiscalConfigService       _configService;
+    private readonly IConciliacaoFiscalService _conciliacao;
+    private readonly IAlertaFiscalService      _alertas;
+    private readonly INfceSchemaValidator      _schemaValidator;
+    private readonly IServiceScopeFactory      _scopeFactory;
+    private readonly ILogger<FiscalController>  _logger;
 
     public FiscalController(
-        AppDbContext db, EncryptionService enc, FiscalCertificadoService certificado,
-        FiscalXmlExportService export, INfceEmissionService emissao,
-        CatalogDbContext catalog, ITenantContext tenant, IbptTaxService ibpt, IAuditService audit)
+        AppDbContext db, FiscalXmlExportService export, INfceEmissionService emissao,
+        CatalogDbContext catalog, ITenantContext tenant, IbptTaxService ibpt, IAuditService audit,
+        FiscalConfigService configService, IConciliacaoFiscalService conciliacao,
+        IAlertaFiscalService alertas, INfceSchemaValidator schemaValidator,
+        IServiceScopeFactory scopeFactory, ILogger<FiscalController> logger)
     {
-        _db          = db;
-        _enc         = enc;
-        _certificado = certificado;
-        _export      = export;
-        _emissao     = emissao;
-        _catalog     = catalog;
-        _tenant      = tenant;
-        _ibpt        = ibpt;
-        _audit       = audit;
+        _db            = db;
+        _export        = export;
+        _emissao       = emissao;
+        _catalog       = catalog;
+        _tenant        = tenant;
+        _ibpt          = ibpt;
+        _audit         = audit;
+        _configService = configService;
+        _conciliacao   = conciliacao;
+        _alertas       = alertas;
+        _schemaValidator = schemaValidator;
+        _scopeFactory    = scopeFactory;
+        _logger          = logger;
     }
 
     /// <summary>Agrega configuração, certificado, regra fiscal padrão, produtos e notas das
@@ -86,7 +101,9 @@ public class FiscalController : ControllerBase
         int Contagem24h(NotaFiscalStatus s) => notas24h.FirstOrDefault(x => x.Status == s)?.Count ?? 0;
 
         var pendentesQuery = _db.NotasFiscaisEmitidas.Where(n =>
-            n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia);
+            n.Status == NotaFiscalStatus.PendenteEmissao ||
+            n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+            n.Status == NotaFiscalStatus.ResultadoIncerto);
         var pendentesCount = await pendentesQuery.CountAsync(ct);
         var pendenteMaisAntiga = pendentesCount > 0
             ? await pendentesQuery.OrderBy(n => n.CreatedAt).Select(n => n.CreatedAt).FirstAsync(ct)
@@ -125,6 +142,11 @@ public class FiscalController : ControllerBase
             pendencias.Add(new { Categoria = "Comunicacao", Mensagem = $"{pendentesCount} nota(s) pendente(s) ou em contingência.", Bloqueia = false });
         if (rejeitadas24h > 0)
             pendencias.Add(new { Categoria = "Comunicacao", Mensagem = $"{rejeitadas24h} nota(s) rejeitada(s) nas últimas 24h.", Bloqueia = false });
+        // XML-002: operar sem o pacote de schemas é legítimo (a SEFAZ continua
+        // validando), mas não pode ser invisível — senão o sistema parece ter uma
+        // barreira antes da transmissão que na verdade não existe.
+        if (!_schemaValidator.Disponivel)
+            pendencias.Add(new { Categoria = "ConfiguracaoLoja", Mensagem = "Validação de schema XSD indisponível: erros de leiaute só serão descobertos pela rejeição da SEFAZ.", Bloqueia = false });
 
         // Homologação não bloqueia (a loja pode testar antes de ir pra produção), mas
         // também não deixa o status virar "Pronto" — nota emitida em Homologação não
@@ -184,7 +206,7 @@ public class FiscalController : ControllerBase
     public async Task<IActionResult> GetConfig()
     {
         var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
-        return Ok(ToDto(cfg));
+        return Ok(FiscalConfigService.ToDto(cfg));
     }
 
     /// <summary>Atualiza a configuração fiscal (update parcial — só os campos enviados
@@ -194,94 +216,12 @@ public class FiscalController : ControllerBase
     [HttpPut("config")]
     public async Task<IActionResult> SaveConfig([FromBody] SaveFiscalConfigRequest req)
     {
-        var cfg = await GetOrCreateConfigAsync();
+        // Mesma escrita que o portal do contador usa — regras de regime, CSC,
+        // IBPT e titularidade do certificado vivem em FiscalConfigService.
+        var resultado = await _configService.SalvarAsync(req);
+        if (!resultado.Ok) return BadRequest(new { Message = resultado.Erro });
 
-        if (req.Cnpj is not null)
-            cfg.Cnpj = Cnpj.Normalizar(req.Cnpj);
-        if (req.RazaoSocial       is not null) cfg.RazaoSocial       = req.RazaoSocial;
-        if (req.InscricaoEstadual is not null) cfg.InscricaoEstadual = req.InscricaoEstadual;
-        if (req.EmailContador     is not null) cfg.EmailContador     = req.EmailContador;
-        if (req.SerieNfce.HasValue)            cfg.SerieNfce         = req.SerieNfce.Value;
-
-        if (req.Logradouro          is not null) cfg.Logradouro          = req.Logradouro;
-        if (req.Numero              is not null) cfg.Numero              = req.Numero;
-        if (req.Complemento         is not null) cfg.Complemento         = req.Complemento;
-        if (req.Bairro              is not null) cfg.Bairro              = req.Bairro;
-        if (req.CodigoMunicipioIbge is not null) cfg.CodigoMunicipioIbge = req.CodigoMunicipioIbge;
-        if (req.Municipio           is not null) cfg.Municipio           = req.Municipio;
-        if (req.Uf                  is not null) cfg.Uf                  = req.Uf.ToUpperInvariant();
-        if (req.Cep                 is not null) cfg.Cep                 = new string(req.Cep.Where(char.IsDigit).ToArray());
-        if (req.CscId               is not null) cfg.CscId               = req.CscId;
-        // CSC e IBPT são segredos independentes, ambos criptografados por tenant.
-        if (req.CscToken            is not null) cfg.CscTokenEncrypted   = _enc.Encrypt(req.CscToken);
-
-        if (req.RemoverIbptToken == true)
-        {
-            cfg.IbptTokenEncrypted = null;
-            cfg.IbptAutoSyncEnabled = false;
-            cfg.IbptUltimoErro = null;
-        }
-        else if (!string.IsNullOrWhiteSpace(req.IbptToken))
-        {
-            cfg.IbptTokenEncrypted = _enc.Encrypt(req.IbptToken.Trim());
-            cfg.IbptUltimoErro = null;
-        }
-        if (req.IbptAutoSyncEnabled.HasValue)
-        {
-            if (req.IbptAutoSyncEnabled.Value && string.IsNullOrWhiteSpace(cfg.IbptTokenEncrypted))
-                return BadRequest(new { Message = "Configure o token IBPT antes de ativar o preenchimento automático." });
-            cfg.IbptAutoSyncEnabled = req.IbptAutoSyncEnabled.Value;
-        }
-        if (req.RegimeTributario is not null)
-        {
-            if (!Enum.TryParse<RegimeTributario>(req.RegimeTributario, out var regime))
-                return BadRequest(new { Message = $"Regime tributário \"{req.RegimeTributario}\" inválido." });
-
-            // F10: a montagem de itens (NfceEmissionService.MontarIcmsSimplesNacional) só sabe
-            // gerar classes ICMSSN* (CSOSN do Simples Nacional) — Lucro Presumido/Real exigiria
-            // CST de ICMS normal (regime não-cumulativo), que este sistema não calcula. Permitir
-            // a escolha aqui geraria CRT×CSOSN inconsistente no XML: 100% de rejeição da SEFAZ.
-            if (regime != RegimeTributario.SimplesNacional)
-                return BadRequest(new
-                {
-                    Message = "Este sistema só emite NFC-e pra empresas no Simples Nacional — a montagem " +
-                               "de impostos usa CSOSN, incompatível com Lucro Presumido/Real (exigiria CST " +
-                               "de ICMS normal, não implementado). Consulte o contador antes de mudar de regime.",
-                });
-
-            cfg.RegimeTributario = regime;
-        }
-
-        var ambienteFinal = cfg.Ambiente;
-        if (req.Ambiente is not null &&
-            Enum.TryParse<AmbienteFiscal>(req.Ambiente, out var ambiente))
-            ambienteFinal = ambiente;
-
-        // Homologação não tem valor fiscal, então só Produção precisa de guarda:
-        // é onde a nota existe de verdade e emitir com certificado de outra
-        // empresa vira uso indevido. Cobre as duas portas — ligar Produção, e
-        // trocar o CNPJ com Produção já ligada (cfg.Cnpj acima já é o novo).
-        if (ambienteFinal == AmbienteFiscal.Producao &&
-            (cfg.Ambiente != AmbienteFiscal.Producao || req.Cnpj is not null))
-        {
-            var erro = ValidarTitularidadeDoCertificado(cfg);
-            if (erro is not null) return erro;
-        }
-        cfg.Ambiente = ambienteFinal;
-
-        if (req.FormasPagamentoAutoEmissao is not null)
-        {
-            var invalidas = req.FormasPagamentoAutoEmissao.Where(f => !PaymentMethod.IsValid(f)).ToList();
-            if (invalidas.Count > 0)
-                return BadRequest(new { Message = $"Forma(s) de pagamento inválida(s): {string.Join(", ", invalidas)}." });
-
-            cfg.FormasPagamentoAutoEmissao = string.Join(",", req.FormasPagamentoAutoEmissao.Distinct());
-        }
-
-        cfg.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-
-        return Ok(ToDto(cfg));
+        return Ok(FiscalConfigService.ToDto(resultado.Config));
     }
 
     [HttpGet("ibpt/status")]
@@ -294,16 +234,42 @@ public class FiscalController : ControllerBase
     {
         try
         {
-            var resultado = await _ibpt.SincronizarTodosAsync(ct);
+            // IBPT-002: a resposta sai da tabela LOCAL, na hora — sem rede, então
+            // não há timeout a estourar nem com catálogo grande. A busca de dado
+            // novo no IBPT acontece em segundo plano e chega no próximo
+            // carregamento da tela.
+            //
+            // As duas coisas juntas porque separá-las quebraria a expectativa: um
+            // botão chamado "sincronizar" que nunca fala com o IBPT seria mentira,
+            // e um que fala com o IBPT na frente do usuário é o defeito que este
+            // cartão veio corrigir.
+            var resultado = await _ibpt.AplicarTabelaLocalAsync(ct);
+            var buscandoAtualizacao = AtualizarTabelaIbptEmSegundoPlano();
             await _audit.LogAsync(
                 "SincronizouTributosIbpt", "Product",
                 details: $"atualizados={resultado.Atualizados}; manuais_preservados={resultado.IgnoradosManuais}; falhas={resultado.Falhas}",
                 httpContext: HttpContext);
-            return Ok(resultado);
+            return Ok(new
+            {
+                resultado.Total, resultado.Atualizados, resultado.IgnoradosManuais,
+                resultado.Falhas, resultado.Erros,
+                BuscandoAtualizacao = buscandoAtualizacao,
+            });
         }
         catch (IbptIntegrationException ex)
         {
             return BadRequest(new { Message = ex.Message });
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Rede de segurança: se um timeout escapar do serviço, ele ainda é
+            // indisponibilidade de terceiro, não erro do nosso servidor. 500 aqui
+            // sugeriria ao lojista que o sistema quebrou e que adianta insistir.
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+            {
+                Message = "O IBPT não respondeu dentro do tempo limite. " +
+                          "Os produtos já sincronizados foram preservados; tente de novo mais tarde.",
+            });
         }
     }
 
@@ -319,65 +285,17 @@ public class FiscalController : ControllerBase
     {
         if (file is null || file.Length == 0)
             return BadRequest(new { Message = "Arquivo de certificado (.pfx) inválido ou vazio." });
-        if (string.IsNullOrWhiteSpace(senha))
-            return BadRequest(new { Message = "Informe a senha do certificado." });
 
         using var ms = new MemoryStream();
         await file.CopyToAsync(ms);
-        var pfxBytes = ms.ToArray();
 
-        CertificadoInfo info;
-        try
-        {
-            info = _certificado.Validar(pfxBytes, senha);
-        }
-        catch (CertificadoInvalidoException ex)
-        {
-            return BadRequest(new { Message = ex.Message });
-        }
-
-        var cfg = await GetOrCreateConfigAsync();
-
-        // A NFC-e é assinada com este certificado e o emitente do XML é o CNPJ da
-        // loja. Se forem CNPJs diferentes, ou a SEFAZ rejeita, ou — se o CNPJ da
-        // loja tiver sido preenchido com o do dono do certificado — a loja emite
-        // nota fiscal real em nome de terceiro. Barra antes de guardar o .pfx.
-        var cnpjLoja = Cnpj.Normalizar(cfg.Cnpj);
-        var emProducao = cfg.Ambiente == AmbienteFiscal.Producao;
-
-        // Em Produção falha fechada: trocar o certificado por um de titular
-        // desconhecido não pode ser um jeito de contornar a guarda do ambiente.
-        // Em Homologação (onde a nota não tem valor fiscal) só barra o que dá pra
-        // afirmar que está errado, pra não travar quem ainda vai preencher o CNPJ.
-        if (emProducao && info.Cnpj is null)
-            return BadRequest(new
-            {
-                Message = "Não foi possível identificar o CNPJ do titular no certificado. " +
-                          "Com a loja em Produção, só é aceito certificado e-CNPJ A1 do próprio emitente."
-            });
-
-        if (info.Cnpj is not null && cnpjLoja.Length == 14 && info.Cnpj != cnpjLoja)
-            return BadRequest(new
-            {
-                Message = $"O certificado pertence ao CNPJ {Cnpj.Formatar(info.Cnpj)}, mas a loja está " +
-                          $"configurada como {Cnpj.Formatar(cnpjLoja)}. Envie o certificado do próprio " +
-                          "emitente — assinar NFC-e com certificado de outra empresa é uso indevido e a " +
-                          "SEFAZ rejeita a nota."
-            });
-
-        cfg.CertificadoPfxEncrypted        = _enc.Encrypt(Convert.ToBase64String(pfxBytes));
-        cfg.CertificadoSenhaEncrypted      = _enc.Encrypt(senha);
-        cfg.CertificadoValidade            = info.NotAfter;
-        cfg.CertificadoUploadedAt          = DateTime.UtcNow;
-        cfg.CertificadoUltimoAlertaLimiar  = null; // reseta o ciclo de alertas pro novo certificado
-        cfg.UpdatedAt                      = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
+        var (erro, info) = await _configService.SalvarCertificadoAsync(ms.ToArray(), senha);
+        if (erro is not null) return BadRequest(new { Message = erro });
 
         return Ok(new
         {
             Message   = "Certificado validado e salvo com sucesso.",
-            Validade  = info.NotAfter,
+            Validade  = info!.NotAfter,
             DiasRestantes = (int)(info.NotAfter.Date - DateTime.UtcNow.Date).TotalDays,
         });
     }
@@ -393,57 +311,6 @@ public class FiscalController : ControllerBase
             .ToListAsync();
 
         return Ok(naturezas);
-    }
-
-    /// <summary>
-    /// Confere se o certificado guardado é do mesmo CNPJ da loja. Reabre o .pfx
-    /// em vez de guardar o CNPJ numa coluna: a virada de ambiente é rara e assim
-    /// não precisa de migration nem de manter dado derivado sincronizado.
-    /// </summary>
-    private BadRequestObjectResult? ValidarTitularidadeDoCertificado(FiscalConfig cfg)
-    {
-        if (string.IsNullOrWhiteSpace(cfg.CertificadoPfxEncrypted) ||
-            string.IsNullOrWhiteSpace(cfg.CertificadoSenhaEncrypted))
-            return BadRequest(new
-            {
-                Message = "Envie o certificado digital A1 antes de ligar o ambiente de Produção."
-            });
-
-        CertificadoInfo info;
-        try
-        {
-            info = _certificado.Validar(
-                Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted)),
-                _enc.Decrypt(cfg.CertificadoSenhaEncrypted));
-        }
-        catch (CertificadoInvalidoException ex)
-        {
-            return BadRequest(new { Message = $"Certificado inválido para Produção: {ex.Message}" });
-        }
-
-        var cnpjLoja = Cnpj.Normalizar(cfg.Cnpj);
-        if (cnpjLoja.Length != 14)
-            return BadRequest(new { Message = "Configure o CNPJ da loja antes de ligar o ambiente de Produção." });
-
-        // Falha fechada: se não dá pra dizer de quem é o certificado (e-CPF, Subject
-        // fora do padrão da ICP-Brasil), a titularidade não foi provada — e provar a
-        // titularidade é a única razão desta checagem existir.
-        if (info.Cnpj is null)
-            return BadRequest(new
-            {
-                Message = "Não foi possível identificar o CNPJ do titular no certificado. " +
-                          "Produção exige um certificado e-CNPJ A1 do próprio emitente."
-            });
-
-        if (info.Cnpj != cnpjLoja)
-            return BadRequest(new
-            {
-                Message = $"O certificado instalado é do CNPJ {Cnpj.Formatar(info.Cnpj)} e a loja emite como " +
-                          $"{Cnpj.Formatar(cnpjLoja)}. Em Produção a nota tem valor fiscal — emitir com " +
-                          "certificado de outra empresa é uso indevido. Instale o certificado do emitente."
-            });
-
-        return null;
     }
 
     private static readonly string[] CsosnSuportados =
@@ -481,6 +348,57 @@ public class FiscalController : ControllerBase
             if (req.ModalidadeBcSt is 0 or 1 or 2 or 3 or 5 && req.BaseStFixaEmCentavos is null or <= 0)
                 return BadRequest(new { Message = "A modalidade selecionada exige base/pauta ST fixa por unidade." });
         }
+
+        return ValidarRegraFiscalRegimeNormal(req);
+    }
+
+    private static readonly string[] CstSuportados =
+        { "00", "10", "20", "30", "40", "41", "50", "60", "70", "90" };
+
+    /// <summary>
+    /// Valida os campos que só existem fora do Simples. A natureza não sabe em
+    /// qual regime a loja está — e nem precisa saber: guarda os dois conjuntos e
+    /// a emissão escolhe pelo CRT. O que se valida aqui é a coerência interna do
+    /// conjunto do regime normal, pra o erro aparecer no cadastro em vez de
+    /// virar rejeição da SEFAZ na hora da venda.
+    /// </summary>
+    private BadRequestObjectResult? ValidarRegraFiscalRegimeNormal(SaveNaturezaRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Cst)) return null;
+
+        if (!CstSuportados.Contains(req.Cst))
+            return BadRequest(new
+            {
+                Message = $"CST de ICMS \"{req.Cst}\" não é suportado. Use um destes: {string.Join(", ", CstSuportados)}."
+            });
+
+        // Onde há ICMS destacado, a alíquota própria é obrigatória.
+        if (req.Cst is "00" or "10" or "20" or "70" && req.AliquotaIcmsProprio is null or < 0)
+            return BadRequest(new { Message = $"CST {req.Cst} exige a alíquota de ICMS da operação própria." });
+
+        if (req.Cst is "20" or "70" && req.PercentualReducaoBc is null or <= 0)
+            return BadRequest(new { Message = $"CST {req.Cst} exige o percentual de redução da base de cálculo." });
+
+        // CSTs em que a loja é a substituta: mesmas exigências do ST no Simples.
+        if (req.Cst is "10" or "30" or "70")
+        {
+            if (req.ModalidadeBcSt is null or < 0 or > 6)
+                return BadRequest(new { Message = $"CST {req.Cst} exige modalidade da BC-ST entre 0 e 6." });
+            if (req.AliquotaIcmsSt is null or <= 0)
+                return BadRequest(new { Message = $"CST {req.Cst} exige a alíquota do ICMS-ST." });
+            if (req.ModalidadeBcSt == 4 && req.PercentualMvaSt is null or < 0)
+                return BadRequest(new { Message = "Modalidade MVA exige o percentual de MVA-ST." });
+            if (req.ModalidadeBcSt is 0 or 1 or 2 or 3 or 5 && req.BaseStFixaEmCentavos is null or <= 0)
+                return BadRequest(new { Message = "A modalidade selecionada exige base/pauta ST fixa por unidade." });
+        }
+
+        foreach (var (cst, tributo) in new[] { (req.CstPis, "PIS"), (req.CstCofins, "COFINS") })
+        {
+            if (string.IsNullOrWhiteSpace(cst)) continue;
+            if (cst.Length != 2 || !cst.All(char.IsDigit))
+                return BadRequest(new { Message = $"CST de {tributo} deve conter 2 dígitos." });
+        }
+
         return null;
     }
 
@@ -500,6 +418,16 @@ public class FiscalController : ControllerBase
         natureza.BaseStFixaEmCentavos = req.BaseStFixaEmCentavos;
         natureza.IbsCbsCst = req.IbsCbsCst;
         natureza.IbsCbsClassTrib = req.IbsCbsClassTrib;
+
+        natureza.Cst = string.IsNullOrWhiteSpace(req.Cst) ? null : req.Cst;
+        natureza.PercentualReducaoBc = req.PercentualReducaoBc;
+        natureza.AliquotaFcp = req.AliquotaFcp;
+        natureza.BaseStRetidaEmCentavos = req.BaseStRetidaEmCentavos;
+        natureza.ValorStRetidoEmCentavos = req.ValorStRetidoEmCentavos;
+        natureza.CstPis = string.IsNullOrWhiteSpace(req.CstPis) ? null : req.CstPis;
+        natureza.CstCofins = string.IsNullOrWhiteSpace(req.CstCofins) ? null : req.CstCofins;
+        natureza.AliquotaPis = req.AliquotaPis;
+        natureza.AliquotaCofins = req.AliquotaCofins;
     }
 
     /// <summary>Cria uma natureza de operação (CFOP/CSOSN). Marcar como padrão desmarca
@@ -660,7 +588,9 @@ public class FiscalController : ControllerBase
         // (pendentes de verdade + em contingência aguardando retransmissão) e há quanto
         // tempo a mais antiga está parada — sinal de que algo precisa de atenção.
         var pendentesQuery = _db.NotasFiscaisEmitidas.Where(n =>
-            n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia);
+            n.Status == NotaFiscalStatus.PendenteEmissao ||
+            n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+            n.Status == NotaFiscalStatus.ResultadoIncerto);
         var pendentesCount = await pendentesQuery.CountAsync();
         var pendenteMaisAntiga = pendentesCount > 0
             ? await pendentesQuery.OrderBy(n => n.CreatedAt).Select(n => n.CreatedAt).FirstAsync()
@@ -806,6 +736,285 @@ public class FiscalController : ControllerBase
         return cupom is null ? NotFound() : Ok(cupom);
     }
 
+    /// <summary>
+    /// Conciliação fiscal do período: toda venda tributável com o documento que
+    /// tem — ou a falta dele (CON-001). Diferente dos demais relatórios, parte
+    /// das VENDAS e não das notas, então enxerga a venda fechada sem emissão,
+    /// que hoje não aparece em lugar nenhum.
+    /// </summary>
+    /// <param name="inicio">Data inicial do período (inclusive).</param>
+    /// <param name="fim">Data final do período (inclusive).</param>
+    // ── GET /api/fiscal/conciliacao?inicio=&fim= ──────────────────────────────
+    [HttpGet("conciliacao")]
+    public async Task<IActionResult> GetConciliacao(
+        [FromQuery] DateTime inicio, [FromQuery] DateTime fim)
+    {
+        if (fim.Date < inicio.Date)
+            return BadRequest(new { Message = "O período final não pode ser anterior ao inicial." });
+
+        return Ok(await _conciliacao.ConciliarAsync(inicio.Date, fim.Date));
+    }
+
+    /// <summary>
+    /// Painel de pendências fiscais (CON-002): resultado incerto, contingência
+    /// vencendo, rejeição, venda sem documento, lacuna de numeração e exportação
+    /// mensal atrasada — cada uma com severidade, idade, responsável e estado de
+    /// resolução.
+    ///
+    /// A lista é reconciliada a partir do estado real, não acumulada por
+    /// disparos: um alerta aberto aqui é uma pendência que existe agora.
+    /// </summary>
+    /// <param name="incluirResolvidos">Traz também o histórico já resolvido.</param>
+    // ── GET /api/fiscal/alertas?incluirResolvidos= ────────────────────────────
+    [HttpGet("alertas")]
+    public async Task<IActionResult> GetAlertas([FromQuery] bool incluirResolvidos = false) =>
+        Ok(await _alertas.ListarAsync(incluirResolvidos));
+
+    /// <summary>
+    /// Catálogo versionado de regras de IBS/CBS (RTC-001): o que está em vigor
+    /// hoje para este contribuinte, com alíquotas, fonte oficial e data de
+    /// consulta, mais o histórico de faixas. É o que o contador precisa ver para
+    /// conferir se o motor está aplicando a regra certa — e para saber com que
+    /// fonte ela foi registrada.
+    /// </summary>
+    // ── GET /api/fiscal/regras-ibs-cbs ────────────────────────────────────────
+    [HttpGet("regras-ibs-cbs")]
+    public async Task<IActionResult> GetRegrasIbsCbs(CancellationToken ct)
+    {
+        var cfg = await _db.FiscalConfigs.FindAsync(new object?[] { FiscalConfig.SingletonId }, ct);
+        var perfil = cfg is null ? PerfilIbsCbs.SimplesNacional : CatalogoRegrasIbsCbs.PerfilDe(cfg);
+        var hoje = DateOnly.FromDateTime(BrazilTime.NowBr().Date);
+        var vigente = CatalogoRegrasIbsCbs.Para(hoje, perfil);
+        var ambienteProducao = cfg?.Ambiente == AmbienteFiscal.Producao;
+
+        return Ok(new
+        {
+            Perfil = perfil.ToString(),
+            RevisaoRecomendadaEm = CatalogoRegrasIbsCbs.RevisaoRecomendadaEm,
+            RevisaoVencida = hoje >= CatalogoRegrasIbsCbs.RevisaoRecomendadaEm,
+            Vigente = vigente is null ? null : new
+            {
+                vigente.Versao,
+                vigente.VigenciaInicio,
+                vigente.VigenciaFim,
+                vigente.AliquotaIbsUf,
+                vigente.AliquotaIbsMun,
+                vigente.AliquotaCbs,
+                vigente.CstSuportados,
+                vigente.DestaqueObrigatorio,
+                vigente.FonteOficial,
+                vigente.ConsultadoEm,
+                vigente.Observacao,
+                // O que efetivamente sai no XML hoje: homologação sempre destaca;
+                // produção só quando a regra disser que o destaque já é exigido.
+                DestacaNoXmlAgora = vigente.DestaqueObrigatorio || !ambienteProducao,
+            },
+            Catalogo = CatalogoRegrasIbsCbs.Todas.Select(r => new
+            {
+                r.Versao,
+                r.VigenciaInicio,
+                r.VigenciaFim,
+                Perfis = r.Perfis.Select(p => p.ToString()),
+                r.AliquotaIbsUf,
+                r.AliquotaIbsMun,
+                r.AliquotaCbs,
+                r.DestaqueObrigatorio,
+                r.FonteOficial,
+                r.ConsultadoEm,
+                r.Observacao,
+            }),
+        });
+    }
+
+    /// <summary>
+    /// Importa a tabela do IBPT a partir do CSV do pacote oficial — o caminho que
+    /// não depende da API estar no ar.
+    /// </summary>
+    /// <param name="arquivo">TabelaIBPTax&lt;UF&gt;&lt;versão&gt;.csv do pacote do IBPT.</param>
+    /// <param name="ct">Token de cancelamento da requisição.</param>
+    // ── POST /api/fiscal/ibpt/importar-tabela ─────────────────────────────────
+    [HttpPost("ibpt/importar-tabela")]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<IActionResult> ImportarTabelaIbpt(IFormFile arquivo, CancellationToken ct)
+    {
+        if (arquivo is null || arquivo.Length == 0)
+            return BadRequest(new { Message = "Selecione o arquivo TabelaIBPTax<UF><versão>.csv." });
+
+        try
+        {
+            await using var conteudo = arquivo.OpenReadStream();
+            var resultado = await _ibpt.ImportarTabelaCsvAsync(conteudo, arquivo.FileName, ct);
+
+            await _audit.LogAsync(
+                "ImportouTabelaIbpt", "FiscalConfig",
+                details: $"ncms={resultado.NcmsImportados}; versao={resultado.Versao}",
+                httpContext: HttpContext);
+
+            return Ok(resultado);
+        }
+        catch (IbptIntegrationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>Recalcula as pendências agora, sem esperar o ciclo de 15 minutos.</summary>
+    // ── POST /api/fiscal/alertas/sincronizar ──────────────────────────────────
+    [HttpPost("alertas/sincronizar")]
+    public async Task<IActionResult> SincronizarAlertas()
+    {
+        await _alertas.SincronizarAsync();
+        return Ok(await _alertas.ListarAsync());
+    }
+
+    /// <summary>
+    /// O usuário autenticado passa a responder por esta pendência. Assumir é ato
+    /// próprio — por isso não recebe um id de usuário no corpo: ninguém atribui
+    /// responsabilidade fiscal a outra pessoa por uma chamada de API.
+    /// </summary>
+    /// <param name="id">Id do alerta.</param>
+    // ── POST /api/fiscal/alertas/{id}/assumir ─────────────────────────────────
+    [HttpPost("alertas/{id:guid}/assumir")]
+    public async Task<IActionResult> AssumirAlerta(Guid id)
+    {
+        try
+        {
+            var alerta = await _alertas.AtribuirResponsavelAsync(id, GetUserId());
+            await _audit.LogAsync(
+                "AssumiuAlertaFiscal", nameof(AlertaFiscal), alerta.Id.ToString(),
+                details: $"{{\"tipo\":\"{alerta.Tipo}\",\"chave\":\"{alerta.Chave}\"}}",
+                httpContext: HttpContext);
+            return Ok(new { alerta.Id, alerta.ResponsavelUserId, alerta.ResponsavelDefinidoEm });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>Devolve a pendência para a fila, sem responsável.</summary>
+    /// <param name="id">Id do alerta.</param>
+    // ── DELETE /api/fiscal/alertas/{id}/responsavel ───────────────────────────
+    [HttpDelete("alertas/{id:guid}/responsavel")]
+    public async Task<IActionResult> LiberarAlerta(Guid id)
+    {
+        try
+        {
+            var alerta = await _alertas.AtribuirResponsavelAsync(id, null);
+            await _audit.LogAsync(
+                "LiberouAlertaFiscal", nameof(AlertaFiscal), alerta.Id.ToString(),
+                details: $"{{\"tipo\":\"{alerta.Tipo}\"}}", httpContext: HttpContext);
+            return Ok(new { alerta.Id, alerta.ResponsavelUserId });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Confirmação humana de que a pendência foi tratada. Não suprime o fato: se
+    /// ele continuar verdadeiro, o próximo ciclo reabre o alerta — por isso a
+    /// observação é obrigatória e vai para a trilha de auditoria.
+    /// </summary>
+    /// <param name="id">Id do alerta.</param>
+    /// <param name="req">Observação descrevendo o que foi feito.</param>
+    // ── POST /api/fiscal/alertas/{id}/resolver ────────────────────────────────
+    [HttpPost("alertas/{id:guid}/resolver")]
+    public async Task<IActionResult> ResolverAlerta(Guid id, [FromBody] ResolverAlertaFiscalRequest req)
+    {
+        try
+        {
+            var alerta = await _alertas.ResolverAsync(id, GetUserId(), req.Observacao);
+            await _audit.LogAsync(
+                "ResolveuAlertaFiscal", nameof(AlertaFiscal), alerta.Id.ToString(),
+                details: $"{{\"tipo\":\"{alerta.Tipo}\",\"chave\":\"{alerta.Chave}\"}}",
+                httpContext: HttpContext);
+            return Ok(new { alerta.Id, alerta.ResolvidoEm, alerta.ResolucaoObservacao });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Intervalo mínimo entre duas buscas ao IBPT disparadas pela tela. Sem isto,
+    /// clicar no botão dez vezes seguidas dispararia dez varreduras concorrentes
+    /// do catálogo inteiro contra a API de terceiro.
+    /// </summary>
+    private static readonly TimeSpan IntervaloMinimoAtualizacaoIbpt = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Dispara a atualização da tabela IBPT fora da requisição, em escopo próprio
+    /// de DI com o tenant reaplicado — mesmo cuidado do ProductController: o
+    /// IbptTaxService é scoped e carrega o AppDbContext junto, então usar o da
+    /// requisição faria a tarefa operar sobre contexto descartado.
+    ///
+    /// Devolve false quando a última atualização é recente demais para justificar
+    /// outra — e isso não é falha: a tela acabou de aplicar a tabela local.
+    /// </summary>
+    private bool AtualizarTabelaIbptEmSegundoPlano()
+    {
+        var cfg = _db.FiscalConfigs.Find(FiscalConfig.SingletonId);
+        if (cfg is null || !cfg.IbptConfigurado) return false;
+        if (cfg.IbptUltimaSincronizacao is { } ultima &&
+            DateTime.UtcNow - ultima < IntervaloMinimoAtualizacaoIbpt) return false;
+
+        var tenantId = _tenant.TenantId;
+        var schema   = _tenant.SchemaName;
+        var modulos  = _tenant.EnabledModules;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                scope.ServiceProvider.GetRequiredService<ITenantContext>().Set(tenantId, schema, modulos);
+                var ibpt = scope.ServiceProvider.GetRequiredService<IbptTaxService>();
+                await ibpt.AtualizarTabelaLocalAsync();
+                await ibpt.AplicarTabelaLocalAsync();
+            }
+            catch (Exception ex)
+            {
+                // Registrar no painel, não só no log: a tarefa roda fora da
+                // requisição, então este catch é a ÚNICA chance de o lojista
+                // descobrir por que a tabela não atualizou. Sem isto, a tela dizia
+                // "buscando em segundo plano" e nada mais acontecia, para sempre.
+                _logger.LogWarning(ex,
+                    "Atualização da tabela IBPT em segundo plano falhou (tenant {TenantId}).", tenantId);
+                try
+                {
+                    using var scopeErro = _scopeFactory.CreateScope();
+                    scopeErro.ServiceProvider.GetRequiredService<ITenantContext>()
+                        .Set(tenantId, schema, modulos);
+                    var db = scopeErro.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var cfg = await db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
+                    if (cfg is not null)
+                    {
+                        cfg.IbptUltimoErro = $"Atualização automática falhou: {ex.GetBaseException().Message}"
+                            [..Math.Min(ex.GetBaseException().Message.Length + 32, 500)];
+                        cfg.UpdatedAt = DateTime.UtcNow;
+                        await db.SaveChangesAsync();
+                    }
+                }
+                catch (Exception erroAoRegistrar)
+                {
+                    _logger.LogError(erroAoRegistrar, "Falha ao registrar o erro do IBPT na configuração.");
+                }
+            }
+        });
+        return true;
+    }
+
+    private Guid GetUserId()
+    {
+        var claim = User.FindFirst("sub") ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (claim is null || !Guid.TryParse(claim.Value, out var id))
+            throw new UnauthorizedAccessException("Token inválido: identificador de usuário ausente.");
+        return id;
+    }
+
     /// <summary>Gera um .zip com os XMLs de todas as NFC-e emitidas no período, pra
     /// entregar ao contador.</summary>
     /// <param name="inicio">Data inicial do período (inclusive).</param>
@@ -841,6 +1050,16 @@ public class FiscalController : ControllerBase
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
         var email = request.Email.Trim().ToLowerInvariant();
+        var tenantSlug = await _catalog.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == _tenant.TenantId)
+            .Select(t => t.Slug)
+            .SingleOrDefaultAsync();
+
+        if (string.IsNullOrWhiteSpace(tenantSlug))
+            return Problem("Não foi possível identificar o link público desta loja.");
+
+        var invitationPath = $"/contador/cadastro?tenantSlug={Uri.EscapeDataString(tenantSlug)}";
         var conta = await _catalog.ContadorAccounts.FirstOrDefaultAsync(c => c.Email == email);
 
         // Convite cego: contador ainda não tem conta. Guarda o convite — quando
@@ -860,7 +1079,9 @@ public class FiscalController : ControllerBase
             });
             await _catalog.SaveChangesAsync();
 
-            return Ok(new { Message = "Convite registrado — quando esse e-mail se cadastrar no portal do contador (/contador/cadastro), o acesso a esta loja é liberado automaticamente." });
+            return Ok(new ConvidarContadorResponse(
+                "Convite registrado — envie o link de cadastro ao contador. Quando ele usar o e-mail convidado, o acesso a esta loja será liberado automaticamente.",
+                invitationPath));
         }
 
         var jaVinculado = await _catalog.ContadorTenantLinks
@@ -876,7 +1097,9 @@ public class FiscalController : ControllerBase
         });
         await _catalog.SaveChangesAsync();
 
-        return Ok(new { Message = $"Contador {conta.Name} vinculado com sucesso." });
+        return Ok(new ConvidarContadorResponse(
+            $"Contador {conta.Name} vinculado com sucesso.",
+            null));
     }
 
     /// <summary>Lista os vínculos de contador desta loja (aprovados e pendentes de
@@ -1010,106 +1233,9 @@ public class FiscalController : ControllerBase
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Busca a linha única de configuração fiscal pelo ID fixo, criando-a se necessário.
-    /// Como o ID é fixo, uma segunda inserção concorrente vira uma violação de PK —
-    /// nesse caso, descarta a tentativa local e relê a linha que a outra requisição criou.
-    /// </summary>
-    private async Task<FiscalConfig> GetOrCreateConfigAsync()
-    {
-        var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
-        if (cfg is not null) return cfg;
-
-        cfg = new FiscalConfig();
-        _db.FiscalConfigs.Add(cfg);
-
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException)
-        {
-            _db.Entry(cfg).State = EntityState.Detached;
-            cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId)
-                ?? throw new InvalidOperationException("Falha ao obter configuração fiscal após conflito de concorrência.");
-        }
-
-        return cfg;
-    }
-
-    private static object ToDto(FiscalConfig? cfg)
-    {
-        cfg ??= new FiscalConfig();
-
-        int? diasParaVencer = cfg.CertificadoValidade.HasValue
-            ? (int)(cfg.CertificadoValidade.Value.Date - DateTime.UtcNow.Date).TotalDays
-            : null;
-
-        return new
-        {
-            cfg.Cnpj,
-            cfg.RazaoSocial,
-            cfg.InscricaoEstadual,
-            cfg.Logradouro,
-            cfg.Numero,
-            cfg.Complemento,
-            cfg.Bairro,
-            cfg.CodigoMunicipioIbge,
-            cfg.Municipio,
-            cfg.Uf,
-            cfg.Cep,
-            CscConfigurado = !string.IsNullOrWhiteSpace(cfg.CscId) && !string.IsNullOrWhiteSpace(cfg.CscTokenEncrypted),
-            cfg.CscId, // não sensível isoladamente; o token nunca é retornado
-            RegimeTributario = cfg.RegimeTributario.ToString(),
-            Ambiente         = cfg.Ambiente.ToString(),
-            cfg.SerieNfce,
-            cfg.ProximoNumeroNfce,
-            cfg.EmailContador,
-            cfg.CertificadoConfigurado,
-            cfg.CertificadoValidade,
-            DiasParaVencer = diasParaVencer,
-            FormasPagamentoAutoEmissao = string.IsNullOrWhiteSpace(cfg.FormasPagamentoAutoEmissao)
-                ? Array.Empty<string>()
-                : cfg.FormasPagamentoAutoEmissao.Split(',', StringSplitOptions.RemoveEmptyEntries),
-            IbptConfigurado = cfg.IbptConfigurado,
-            cfg.IbptAutoSyncEnabled,
-            cfg.IbptUltimaSincronizacao,
-            cfg.IbptUltimaVersao,
-            cfg.IbptVigenciaInicio,
-            cfg.IbptVigenciaFim,
-            cfg.IbptUltimoErro,
-        };
-    }
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
-
-public class SaveFiscalConfigRequest
-{
-    public string? Cnpj              { get; init; }
-    public string? RazaoSocial       { get; init; }
-    public string? InscricaoEstadual { get; init; }
-    public string? Logradouro          { get; init; }
-    public string? Numero              { get; init; }
-    public string? Complemento         { get; init; }
-    public string? Bairro              { get; init; }
-    public string? CodigoMunicipioIbge { get; init; }
-    public string? Municipio           { get; init; }
-    public string? Uf                  { get; init; }
-    public string? Cep                 { get; init; }
-    public string? CscId               { get; init; }
-    public string? CscToken            { get; init; }
-    public string? RegimeTributario  { get; init; }
-    public string? Ambiente          { get; init; }
-    public int?    SerieNfce         { get; init; }
-    public string? EmailContador     { get; init; }
-    public string? IbptToken         { get; init; }
-    public bool? IbptAutoSyncEnabled { get; init; }
-    public bool? RemoverIbptToken    { get; init; }
-
-    /// <summary>Formas de pagamento que emitem NFC-e automaticamente ao fechar a venda, sem perguntar. Null = não altera.</summary>
-    public string[]? FormasPagamentoAutoEmissao { get; init; }
-}
 
 public class CancelarNotaRequest
 {
@@ -1174,4 +1300,38 @@ public class SaveNaturezaRequest
     public string IbsCbsClassTrib { get; init; } = "000001";
 
     public bool IsPadrao { get; init; }
+
+    // ── Regime normal (Lucro Presumido/Real) ─────────────────────────────────
+    // Convivem com os campos de CSOSN acima: a mesma natureza continua válida se
+    // a empresa mudar de regime, e a emissão escolhe o par certo pelo CRT.
+
+    /// <summary>CST do ICMS (00, 10, 20, 30, 40, 41, 50, 60, 70, 90).</summary>
+    [MaxLength(2)]
+    public string? Cst { get; init; }
+
+    /// <summary>% de redução da base de cálculo da operação própria — CST 20 e 70.</summary>
+    [Range(0, 100)]
+    public decimal? PercentualReducaoBc { get; init; }
+
+    /// <summary>Alíquota do FCP sobre a operação própria.</summary>
+    [Range(0, 100)]
+    public decimal? AliquotaFcp { get; init; }
+
+    [Range(1, int.MaxValue)]
+    public int? BaseStRetidaEmCentavos { get; init; }
+
+    [Range(1, int.MaxValue)]
+    public int? ValorStRetidoEmCentavos { get; init; }
+
+    [MaxLength(2)]
+    public string? CstPis { get; init; }
+
+    [MaxLength(2)]
+    public string? CstCofins { get; init; }
+
+    [Range(0, 100)]
+    public decimal? AliquotaPis { get; init; }
+
+    [Range(0, 100)]
+    public decimal? AliquotaCofins { get; init; }
 }

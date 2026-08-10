@@ -34,4 +34,13 @@
     <ProjectReference Include="..\..\..\CardGameStore\CardGameStore.csproj" />
   </ItemGroup>
 
+  <!-- XMLs de NFC-e sintéticos usados pelos testes do DANFE (ver Fixtures/Nfce/LEIA-ME.md) -->
+  <ItemGroup>
+    <Content Include="Fixtures\Nfce\*.xml" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Recorte REAL da tabela do IBPT (SP 26.1.L), não fixture inventada:
+         o formato tem armadilhas que só o arquivo oficial revela. Ver o
+         cabeçalho de IbptTabelaCsvImporterTests. -->
+    <Content Include="Fixtures\Ibpt\*.csv" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

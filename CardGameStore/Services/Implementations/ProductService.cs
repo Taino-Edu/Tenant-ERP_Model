@@ -2,6 +2,7 @@
 // ProductService.cs — Implementação de Produtos (estoque físico)
 // =============================================================================
 using CardGameStore.Data;
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,56 @@ public class ProductService : IProductService
 
     public ProductService(AppDbContext db, IPushService push, IEmailService email, ILogger<ProductService> logger)
     { _db = db; _push = push; _email = email; _logger = logger; }
+
+    public IAsyncEnumerable<ProductPublicDto> StreamAllActivePublicAsync(string? category = null) =>
+        BuildPublicQuery(includeHidden: false, category).AsAsyncEnumerable();
+
+    public IAsyncEnumerable<ProductPublicDto> StreamAllStorePublicAsync() =>
+        BuildPublicQuery(includeHidden: true, category: null).AsAsyncEnumerable();
+
+    // Projeta somente os campos do contrato público e deixa o serializer
+    // consumir o cursor do EF de forma assíncrona. Antes, 50 mil entidades com
+    // todos os campos fiscais/internos eram materializadas numa List<Product>
+    // antes de o primeiro byte da resposta ser escrito.
+    private IQueryable<ProductPublicDto> BuildPublicQuery(bool includeHidden, string? category)
+    {
+        var query = _db.Products.AsNoTracking().Where(p => p.IsActive);
+
+        if (!includeHidden)
+            query = query.Where(p => p.ShowOnMarketplace);
+        if (category is not null)
+            query = query.Where(p => p.Category == category);
+
+        return query
+            .OrderBy(p => p.Name)
+            .Select(p => new ProductPublicDto
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Description = p.Description,
+                Category = p.Category,
+                Barcode = p.Barcode,
+                PriceInCents = p.PriceInCents,
+                StockQuantity = p.HasVariants
+                    ? _db.Set<ProductVariant>()
+                        .Where(v => v.ProductId == p.Id)
+                        .Sum(v => (int?)v.StockQuantity) ?? 0
+                    : p.StockQuantity,
+                Ncm = p.Ncm,
+                ImageUrl = p.ImageUrl,
+                ImageUrls = p.ImageUrls,
+                FullDescription = p.FullDescription,
+                IsActive = p.IsActive,
+                IsFeatured = p.IsFeatured,
+                ShowOnSite = p.ShowOnSite,
+                ShowOnMarketplace = p.ShowOnMarketplace,
+                DiscountPriceInCents = p.DiscountPriceInCents,
+                IsPreVenda = p.IsPreVenda,
+                HasVariants = p.HasVariants,
+                CreatedAt = p.CreatedAt,
+                UpdatedAt = p.UpdatedAt,
+            });
+    }
 
     public async Task<IEnumerable<Product>> GetAllActiveAsync()
     {

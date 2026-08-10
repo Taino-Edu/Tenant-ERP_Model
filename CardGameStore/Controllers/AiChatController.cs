@@ -5,7 +5,10 @@
 // Acesso:   AdminOnly (JWT obrigatório)
 // =============================================================================
 
+using System.Text.Json;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -18,6 +21,7 @@ namespace CardGameStore.Controllers;
 [Route("api/ai")]
 [Authorize(Policy = "AdminOnly")]
 [RequireModule("ia")]
+[RequireOperatorPermission(Permissao.Ia)]
 [EnableRateLimiting("api")]
 public class AiChatController : ControllerBase
 {
@@ -58,6 +62,49 @@ public class AiChatController : ControllerBase
                 Reply   = "Ocorreu um erro ao processar sua pergunta. Tente novamente.",
                 Success = false,
             });
+        }
+    }
+
+    /// <summary>
+    /// Mesma coisa que POST /chat, mas devolve a resposta em streaming
+    /// (Server-Sent Events) — o widget vai mostrando o texto conforme chega em
+    /// vez de esperar a resposta inteira, que é o que fazia o assistente parecer
+    /// lento mesmo quando o Gemini respondia rápido.
+    /// </summary>
+    [HttpPost("chat/stream")]
+    public async Task ChatStream([FromBody] AiChatRequest request, CancellationToken ct)
+    {
+        if (!ModelState.IsValid)
+        {
+            Response.StatusCode = StatusCodes.Status400BadRequest;
+            return;
+        }
+
+        Response.ContentType = "text/event-stream";
+        Response.Headers.CacheControl = "no-cache";
+        // nginx: desliga o buffer de proxy pra esse response — sem isso o SSE
+        // chega inteiro de uma vez só no cliente em produção, mesmo funcionando
+        // certinho em dev (next dev não bufferiza).
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        try
+        {
+            await foreach (var evt in _ai.ChatStreamAsync(request.Message, ct))
+            {
+                await Response.WriteAsync($"data: {JsonSerializer.Serialize(evt)}\n\n", ct);
+                await Response.Body.FlushAsync(ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cliente fechou a conexão (navegou pra outra tela, fechou o widget) — normal, não é erro.
+        }
+        catch (Exception ex)
+        {
+            // Mesmo motivo do catch em Chat(): nunca vaza ex.Message pro cliente.
+            _logger.LogError(ex, "AiChatController: erro inesperado (stream).");
+            var errEvt = new AiStreamEvent { Delta = "Ocorreu um erro ao processar sua pergunta. Tente novamente.", Done = true };
+            await Response.WriteAsync($"data: {JsonSerializer.Serialize(errEvt)}\n\n", ct);
         }
     }
 }

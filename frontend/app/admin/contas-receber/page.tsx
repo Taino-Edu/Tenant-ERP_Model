@@ -5,11 +5,12 @@ import { api, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import Modal from '@/components/admin/ui/Modal'
+import { NfeReceiptModal } from '@/components/admin/financeiro/NfeReceiptModal'
 import {
   Wallet, Plus, Upload, RefreshCw, Loader2,
   ChevronLeft, ChevronRight, CheckCircle, Clock,
   AlertTriangle, TrendingDown, TrendingUp, DollarSign,
-  X, Pencil, Trash2, FileText, Inbox,
+  X, Pencil, Trash2, FileText, Inbox, ScanBarcode,
 } from 'lucide-react'
 
 type Transaction = {
@@ -22,6 +23,7 @@ type Transaction = {
   paidAt?: string
   status: string
   category?: string
+  dreGroup: string
   supplier?: string
   notes?: string
   createdAt: string
@@ -45,6 +47,8 @@ type NotaDestinada = {
   cienciaEm?: string
   erro?: string
   createdAt: string
+  estoqueRecebidoEm?: string
+  itensEstoqueRecebidos: number
 }
 
 type SefazStatus = {
@@ -70,7 +74,16 @@ const TYPE_OPTS = [
   { value: 'income',  label: 'A Receber' },
 ]
 
-const CATEGORIES = ['Fornecedor', 'Aluguel', 'Salário', 'Imposto', 'Marketing', 'Serviço', 'Equipamento', 'Outro']
+const CATEGORIES = ['Compras para estoque', 'Aluguel', 'Salário', 'Imposto sobre venda', 'IRPJ/CSLL', 'Juros e tarifas', 'Marketing', 'Serviço', 'Equipamento', 'Outro']
+const DRE_GROUPS = [
+  { value: 'operating_expense', label: 'Despesa operacional' },
+  { value: 'inventory_purchase', label: 'Compra para estoque (vira CMV ao vender)' },
+  { value: 'sales_tax', label: 'Imposto sobre vendas' },
+  { value: 'financial', label: 'Resultado financeiro' },
+  { value: 'income_tax', label: 'IRPJ / CSLL' },
+  { value: 'fixed_asset', label: 'Investimento / imobilizado' },
+  { value: 'unclassified', label: 'Aguardando classificação' },
+]
 
 const statusCls: Record<string, string> = {
   pending:   'bg-blue-500/15 text-blue-400 border-blue-500/30',
@@ -123,6 +136,7 @@ function TransactionModal({ initial, onClose, onSaved }: {
   const [description, setDescription] = useState(initial?.description ?? '')
   const [dueDate,     setDueDate]     = useState(initial?.dueDate?.slice(0,10) ?? '')
   const [category,    setCategory]    = useState(initial?.category    ?? '')
+  const [dreGroup,    setDreGroup]    = useState(initial?.dreGroup ?? 'operating_expense')
   const [supplier,    setSupplier]    = useState(initial?.supplier    ?? '')
   const [notes,       setNotes]       = useState(initial?.notes       ?? '')
   const [saving,      setSaving]      = useState(false)
@@ -133,7 +147,7 @@ function TransactionModal({ initial, onClose, onSaved }: {
     try {
       const payload = {
         type, amount: parseFloat(amount.replace(',', '.')),
-        description, category: category || undefined,
+        description, category: category || undefined, dreGroup,
         supplier: supplier || undefined, notes: notes || undefined,
         dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       }
@@ -189,10 +203,25 @@ function TransactionModal({ initial, onClose, onSaved }: {
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Categoria</label>
-            <select value={category} onChange={e => setCategory(e.target.value)} className="input w-full">
+            <select value={category} onChange={e => {
+              const value = e.target.value
+              setCategory(value)
+              if (value === 'Compras para estoque') setDreGroup('inventory_purchase')
+              else if (value === 'Equipamento') setDreGroup('fixed_asset')
+              else if (value === 'Imposto sobre venda') setDreGroup('sales_tax')
+              else if (value === 'Juros e tarifas') setDreGroup('financial')
+              else if (value === 'IRPJ/CSLL') setDreGroup('income_tax')
+            }} className="input w-full">
               <option value="">Sem categoria</option>
               {CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>
+          </div>
+          <div className="col-span-2">
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">Como entra na DRE</label>
+            <select value={dreGroup} onChange={e => setDreGroup(e.target.value)} className="input w-full">
+              {DRE_GROUPS.map(group => <option key={group.value} value={group.value}>{group.label}</option>)}
+            </select>
+            <p className="text-[11px] text-gray-500 mt-1">A categoria sugere uma classificação, mas você ou o contador podem ajustá-la.</p>
           </div>
           <div className="col-span-2">
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Observações</label>
@@ -230,6 +259,9 @@ function NotasRecebidasTab() {
   const [status,  setStatus]  = useState<SefazStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
+  const [receivingId, setReceivingId] = useState<string | null>(null)
+  const [accessKey, setAccessKey] = useState('')
+  const [locating, setLocating] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -259,6 +291,33 @@ function NotasRecebidasTab() {
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao sincronizar com a SEFAZ.'))
     } finally { setSyncing(false) }
+  }
+
+  async function localizarChave() {
+    const key = accessKey.replace(/\D/g, '')
+    if (key.length !== 44) { toast.error('A chave de acesso da NF-e deve ter 44 números.'); return }
+    setLocating(true)
+    try {
+      let current = notas
+      let found = current.find(n => n.chaveAcesso === key)
+      if (!found) {
+        await api.post('/api/contas-receber/sefaz/sync')
+        const { data } = await api.get<NotaDestinada[]>('/api/contas-receber/notas-destinadas')
+        current = data
+        setNotas(data)
+        found = current.find(n => n.chaveAcesso === key)
+      }
+      if (!found) { toast.error('Essa NF-e ainda não apareceu para o CNPJ da loja. Confira a chave ou aguarde a SEFAZ disponibilizar o XML.'); return }
+      if (found.estoqueRecebidoEm) { toast.success(`Mercadoria já recebida em ${fmtDate(found.estoqueRecebidoEm)}.`); return }
+      if (found.status !== 'contas_geradas' && found.status !== 'xml_baixado') {
+        toast(`NF-e localizada, mas o XML ainda está em processamento (${notaStatusInfo[found.status]?.label ?? found.status}).`)
+        return
+      }
+      setReceivingId(found.id)
+      setAccessKey('')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Não foi possível localizar a NF-e'))
+    } finally { setLocating(false) }
   }
 
   if (loading) {
@@ -309,6 +368,28 @@ function NotasRecebidasTab() {
         </div>
       )}
 
+      <div className="card p-4 mb-4">
+        <div className="flex items-start gap-3">
+          <ScanBarcode className="w-5 h-5 text-brand-400 mt-2.5 flex-shrink-0" />
+          <div className="flex-1">
+            <label htmlFor="nfe-access-key" className="text-sm font-semibold text-white">Receber pela chave da NF-e</label>
+            <p className="text-xs text-gray-500 mt-0.5">Leia o código de barras do DANFE com o scanner ou cole os 44 números.</p>
+            <div className="flex flex-col sm:flex-row gap-2 mt-2">
+              <input
+                id="nfe-access-key" value={accessKey} maxLength={60} inputMode="numeric"
+                onChange={event => setAccessKey(event.target.value)}
+                onKeyDown={event => { if (event.key === 'Enter') localizarChave() }}
+                className="input flex-1 font-mono" placeholder="Chave de acesso (44 números)"
+              />
+              <button onClick={localizarChave} disabled={locating} className="btn-primary px-4 py-2.5">
+                {locating ? <Loader2 className="w-4 h-4 animate-spin" /> : <ScanBarcode className="w-4 h-4" />}
+                {locating ? 'Localizando…' : 'Localizar e receber'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Lista de notas */}
       {notas.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
@@ -321,7 +402,7 @@ function NotasRecebidasTab() {
           {notas.map(n => {
             const st = notaStatusInfo[n.status] ?? { label: n.status, cls: 'bg-gray-500/15 text-gray-400 border-gray-500/30' }
             return (
-              <div key={n.id} className="card flex items-center gap-3 p-3">
+              <div key={n.id} className="card flex items-center gap-3 p-3 flex-wrap">
                 <div className="w-9 h-9 rounded-xl bg-brand-500/10 flex items-center justify-center flex-shrink-0">
                   <FileText className="w-4 h-4 text-brand-400" />
                 </div>
@@ -337,6 +418,9 @@ function NotasRecebidasTab() {
                     {n.contasGeradas > 0 && (
                       <span className="text-xs text-green-400">· {n.contasGeradas} conta{n.contasGeradas !== 1 ? 's' : ''} a pagar</span>
                     )}
+                    {n.estoqueRecebidoEm && (
+                      <span className="text-xs text-brand-300">· {n.itensEstoqueRecebidos} unidade(s) recebida(s)</span>
+                    )}
                   </div>
                   {n.erro && <p className="text-xs text-red-400 mt-0.5 truncate" title={n.erro}>{n.erro}</p>}
                 </div>
@@ -346,10 +430,25 @@ function NotasRecebidasTab() {
                     {st.label}
                   </span>
                 </div>
+                {!n.estoqueRecebidoEm && (n.status === 'contas_geradas' || n.status === 'xml_baixado') && (
+                  <button
+                    onClick={() => setReceivingId(n.id)}
+                    className="w-full sm:w-auto px-3 py-2 rounded-xl bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 text-sm font-semibold text-brand-300"
+                  >
+                    Receber mercadoria
+                  </button>
+                )}
               </div>
             )
           })}
         </div>
+      )}
+      {receivingId && (
+        <NfeReceiptModal
+          notaId={receivingId}
+          onClose={() => setReceivingId(null)}
+          onReceived={() => { setReceivingId(null); load() }}
+        />
       )}
     </div>
   )

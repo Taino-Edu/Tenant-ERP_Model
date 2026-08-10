@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { authApi } from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
@@ -16,6 +16,15 @@ export default function ContadorCadastroPage() {
   const [confirm, setConfirm]   = useState('')
   const [tenantSlug, setTenantSlug] = useState('')
   const [loading, setLoading]   = useState(false)
+
+  useEffect(() => {
+    const invitedTenantSlug = new URLSearchParams(window.location.search)
+      .get('tenantSlug')
+      ?.trim()
+      .toLowerCase()
+
+    if (invitedTenantSlug) setTenantSlug(invitedTenantSlug)
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -48,43 +57,45 @@ export default function ContadorCadastroPage() {
 
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div>
-          <label className="label">Nome completo</label>
+          <label htmlFor="contador-nome" className="label">Nome completo</label>
           <div className="relative">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input type="text" required value={name} onChange={e => setName(e.target.value)}
+            <input id="contador-nome" type="text" required value={name} onChange={e => setName(e.target.value)}
                    className="input pl-9" placeholder="José Contabilidade" />
           </div>
         </div>
         <div>
-          <label className="label">E-mail</label>
+          <label htmlFor="contador-email" className="label">E-mail</label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
+            <input id="contador-email" type="email" required value={email} onChange={e => setEmail(e.target.value)}
                    className="input pl-9" placeholder="contador@escritorio.com" />
           </div>
         </div>
         <div>
-          <label className="label">Slug da loja</label>
+          <label htmlFor="contador-slug" className="label">Slug da loja</label>
           <div className="relative">
             <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input type="text" required value={tenantSlug} onChange={e => setTenantSlug(e.target.value)}
+            <input id="contador-slug" type="text" required value={tenantSlug} onChange={e => setTenantSlug(e.target.value)}
                    className="input pl-9" placeholder="slug-da-loja" />
           </div>
-          <p className="text-xs text-gray-500 mt-1">Peça este código ao lojista.</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {tenantSlug ? 'Loja preenchida pelo link do convite.' : 'Peça este código ao lojista.'}
+          </p>
         </div>
         <div>
-          <label className="label">Senha</label>
+          <label htmlFor="contador-senha" className="label">Senha</label>
           <div className="relative">
             <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
+            <input id="contador-senha" type="password" required value={password} onChange={e => setPassword(e.target.value)}
                    className="input pl-9" placeholder="Mínimo 8 caracteres" />
           </div>
         </div>
         <div>
-          <label className="label">Confirmar senha</label>
+          <label htmlFor="contador-confirmar-senha" className="label">Confirmar senha</label>
           <div className="relative">
             <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <input type="password" required value={confirm} onChange={e => setConfirm(e.target.value)}
+            <input id="contador-confirmar-senha" type="password" required value={confirm} onChange={e => setConfirm(e.target.value)}
                    className="input pl-9" placeholder="••••••••" />
           </div>
         </div>

@@ -14,6 +14,14 @@ namespace CardGameStore.Models.PostgreSQL;
 public class SiteConfig
 {
     public static readonly Guid SingletonId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    public const string DefaultSiteName = "Octus";
+    public const string LegacyDefaultSiteName = "Minha Loja";
+
+    public static string ResolveSiteName(string? siteName) =>
+        string.IsNullOrWhiteSpace(siteName) ||
+        siteName.Equals(LegacyDefaultSiteName, StringComparison.OrdinalIgnoreCase)
+            ? DefaultSiteName
+            : siteName;
 
     [Key]
     [Column("id")]
@@ -22,7 +30,7 @@ public class SiteConfig
     // ── Identidade ───────────────────────────────────────────────────────────
     [Required, MaxLength(100)]
     [Column("site_name")]
-    public string SiteName { get; set; } = "Minha Loja";
+    public string SiteName { get; set; } = DefaultSiteName;
 
     [MaxLength(400)]
     [Column("hero_subtitle")]

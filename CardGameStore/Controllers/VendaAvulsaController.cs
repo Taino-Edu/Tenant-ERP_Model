@@ -12,6 +12,7 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +23,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/venda-avulsa")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Pdv)]
 [Produces("application/json")]
 public class VendaAvulsaController : ControllerBase
 {

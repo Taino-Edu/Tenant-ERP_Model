@@ -6,6 +6,7 @@
 
 using System.ComponentModel.DataAnnotations;
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -17,6 +18,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/admin/mensageria")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Anuncios)]
 [Produces("application/json")]
 public class MensageriaController : ControllerBase
 {
@@ -48,9 +50,8 @@ public class MensageriaController : ControllerBase
     // ── Segmentos pré-definidos ────────────────────────────────────────────────
 
     [HttpGet("segments")]
-    public async Task<IActionResult> GetSegments()
+    public IActionResult GetSegments()
     {
-        var now = DateTime.UtcNow;
         return Ok(new[]
         {
             new { id = "all",         label = "Todos os clientes" },

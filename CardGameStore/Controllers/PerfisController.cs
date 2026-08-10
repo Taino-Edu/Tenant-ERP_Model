@@ -60,6 +60,12 @@ public class PerfisController : ControllerBase
                 Permissao.Anuncios    => "Anúncios",
                 Permissao.QrCodes     => "QR Codes",
                 Permissao.Lgpd        => "LGPD & Auditoria",
+                Permissao.Fiscal      => "Fiscal",
+                Permissao.Eventos     => "Gestão de Eventos",
+                Permissao.Timers      => "Timers",
+                Permissao.Suporte     => "Suporte",
+                Permissao.Ia          => "Assistente de IA",
+                Permissao.Restaurante => "Restaurante",
                 _                     => p,
             }
         });

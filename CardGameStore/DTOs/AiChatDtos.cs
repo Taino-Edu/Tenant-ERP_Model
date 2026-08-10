@@ -26,3 +26,12 @@ public class AiAction
     public string  Type  { get; set; } = string.Empty; // "navigate" | "openWizard"
     public string? Route { get; set; }
 }
+
+/// <summary>Um evento SSE do chat em streaming — ou um pedaço de texto (Delta),
+/// ou o evento final (Done=true) com a action já extraída/limpa dos marcadores.</summary>
+public class AiStreamEvent
+{
+    public string?   Delta  { get; set; }
+    public bool      Done   { get; set; }
+    public AiAction? Action { get; set; }
+}

@@ -23,27 +23,37 @@
 // URL de loja), sem precisar mexer em header nenhum.
 // =============================================================================
 
-const INTERNAL_API_URL = process.env.INTERNAL_API_URL || 'http://cardgamestore_api:5000'
+export const INTERNAL_API_URL = process.env.INTERNAL_API_URL || 'http://cardgamestore_api:5000'
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
 
 export interface TenantSiteIcons {
   faviconUrl?: string | null
   pwaIconUrl?: string | null
   siteName?: string
+  heroSubtitle?: string
+  addressLine?: string
   updatedAt?: string
 }
 
 /** Mesma regra de CardGameStore/Multitenancy/TenantResolutionMiddleware.ExtractSlug —
  * host precisa terminar em ".{ROOT_DOMAIN}" (subdomínio de UM nível só, tenant de
  * verdade); domínio raiz, www, IP puro ou host que não bate com o sufixo → null
- * (não tem tenant pra resolver, ex: página institucional). */
-function extractSlug(host: string | null): string | null {
+ * (não tem tenant pra resolver, ex: página institucional). Exportado pra
+ * lib/serverProduct.ts reaproveitar a mesma regra. */
+export function extractSlug(host: string | null): string | null {
   if (!host || !ROOT_DOMAIN) return null
 
-  const suffix = '.' + ROOT_DOMAIN
-  if (!host.toLowerCase().endsWith(suffix.toLowerCase())) return null
+  // headers().get('host') devolve o header cru, com porta se o cliente mandou
+  // uma (ex: dev local "loja.localhost:3000") — diferente do HostString.Host
+  // do ASP.NET Core (TenantResolutionMiddleware), que já vem sem porta. Sem
+  // isso o slug nunca batia em dev (bug real: achado testando no navegador,
+  // via curl com Host sem porta o problema não aparecia).
+  const hostname = host.split(':')[0]
 
-  const slug = host.slice(0, host.length - suffix.length)
+  const suffix = '.' + ROOT_DOMAIN
+  if (!hostname.toLowerCase().endsWith(suffix.toLowerCase())) return null
+
+  const slug = hostname.slice(0, hostname.length - suffix.length)
   if (!slug || slug.includes('.') || slug.toLowerCase() === 'www') return null
 
   return slug
@@ -72,10 +82,12 @@ export async function getTenantIconsForHost(host: string | null): Promise<Tenant
     if (!data || typeof data !== 'object') return null
 
     return {
-      faviconUrl: typeof data.faviconUrl === 'string' ? data.faviconUrl : null,
-      pwaIconUrl: typeof data.pwaIconUrl === 'string' ? data.pwaIconUrl : null,
-      siteName:   typeof data.siteName   === 'string' ? data.siteName   : undefined,
-      updatedAt:  typeof data.updatedAt  === 'string' ? data.updatedAt  : undefined,
+      faviconUrl:   typeof data.faviconUrl   === 'string' ? data.faviconUrl   : null,
+      pwaIconUrl:   typeof data.pwaIconUrl    === 'string' ? data.pwaIconUrl   : null,
+      siteName:     typeof data.siteName      === 'string' ? data.siteName     : undefined,
+      heroSubtitle: typeof data.heroSubtitle  === 'string' ? data.heroSubtitle : undefined,
+      addressLine:  typeof data.addressLine   === 'string' ? data.addressLine  : undefined,
+      updatedAt:    typeof data.updatedAt      === 'string' ? data.updatedAt    : undefined,
     }
   } catch {
     return null

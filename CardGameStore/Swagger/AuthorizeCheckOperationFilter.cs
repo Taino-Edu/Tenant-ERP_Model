@@ -26,13 +26,26 @@ public class AuthorizeCheckOperationFilter : IOperationFilter
 
         if (!requiresAuth) return;
 
+        // Dois requisitos SEPARADOS (duas entradas na lista), não um só com dois
+        // esquemas: no OpenAPI, itens da lista são alternativas ("ou"), e chaves
+        // dentro do mesmo item são cumulativas ("e"). Juntar os dois num item só
+        // faria a doc afirmar que o endpoint exige cookie E header ao mesmo tempo,
+        // o que é falso — qualquer um dos dois autentica.
         operation.Security = new List<OpenApiSecurityRequirement>
         {
             new()
             {
-                [new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } }]
-                    = Array.Empty<string>()
+                [Reference("cookieAuth")] = Array.Empty<string>()
+            },
+            new()
+            {
+                [Reference("Bearer")] = Array.Empty<string>()
             }
         };
     }
+
+    private static OpenApiSecurityScheme Reference(string id) => new()
+    {
+        Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = id }
+    };
 }

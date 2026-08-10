@@ -12,9 +12,11 @@
 // Venda avulsa de balcão → POST /api/venda-avulsa  (VendaAvulsaController)
 // =============================================================================
 
+using System.Globalization;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Hubs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -29,6 +31,8 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[RequireOperatorPermission(Permissao.Comandas)]
+[RequireModule("restaurante")]
 [Produces("application/json")]
 public class ComandaController : ControllerBase
 {
@@ -36,17 +40,25 @@ public class ComandaController : ControllerBase
     private readonly AppDbContext     _db;
     private readonly InterSyncService _inter;
     private readonly IHubContext<ComandaHub> _hub;
+    private readonly ITenantContext _tenant;
     private readonly IPushService     _push;
     private readonly ILogger<ComandaController> _logger;
 
+    /// <summary>Cultura de exibição para o cliente final. Explícita porque o
+    /// contêiner roda em cultura invariante — depender da ambiente já produziu
+    /// valor formatado errado em produção.</summary>
+    private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
+
     public ComandaController(
         IComandaService service, AppDbContext db, InterSyncService inter,
-        IHubContext<ComandaHub> hub, IPushService push, ILogger<ComandaController> logger)
+        IHubContext<ComandaHub> hub, ITenantContext tenant,
+        IPushService push, ILogger<ComandaController> logger)
     {
         _service = service;
         _db      = db;
         _inter   = inter;
         _hub     = hub;
+        _tenant  = tenant;
         _push    = push;
         _logger  = logger;
     }
@@ -168,6 +180,20 @@ public class ComandaController : ControllerBase
         {
             return BadRequest(new { Message = ex.Message });
         }
+    }
+
+    /// <summary>Adiciona ou altera uma observação enquanto a comanda está aberta.</summary>
+    [HttpPut("{id:guid}/notes")]
+    [ProducesResponseType(typeof(ComandaDto), 200)]
+    public async Task<IActionResult> UpdateNotes(Guid id, [FromBody] UpdateComandaNotesRequest request)
+    {
+        try
+        {
+            return Ok(await _service.UpdateNotesAsync(id, GetUserId(), request.Notes));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
     }
 
     /// <summary>Fecha uma comanda (pagamento recebido). Apenas Admin.</summary>
@@ -323,12 +349,15 @@ public class ComandaController : ControllerBase
             // no navegador se o site estiver fechado. Falha aqui nunca desfaz a cobrança.
             try
             {
-                await _hub.Clients.Group(ComandaHub.GetComandaGroup(comanda.Id))
+                await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comanda.Id))
                     .SendAsync("PixCobrancaCriada", PixDto(pix));
 
                 await _push.SendAsync(
                     comanda.UserId,
-                    $"Cobrança Pix — R$ {pix.ValorEmReais:N2}".Replace('.', ','),
+                    // pt-BR explícito: o contêiner roda em cultura invariante, e o
+                    // Replace('.', ',') que existia aqui só acertava abaixo de mil —
+                    // R$ 1.234,50 virava "R$ 1,234,50" na notificação do cliente.
+                    string.Format(PtBr, "Cobrança Pix — R$ {0:N2}", pix.ValorEmReais),
                     "Sua comanda está pronta pra pagar. Toque para abrir o Pix.",
                     "/cliente");
             }

@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // VendaAvulsa.cs — Evento de caixa: venda imediata no balcão sem QR Code.
 // Antes vivia no MongoDB (documento autocontido); migrado pro PostgreSQL como
 // parte da consolidação multi-tenant (um único banco, isolado por schema).
@@ -88,6 +88,24 @@ public class VendaAvulsa
 
     [NotMapped]
     public decimal DiscountInReais => DiscountInCents / 100m;
+
+    // ── Decisão fiscal no fechamento (CON-003) ────────────────────────────────
+    // Quem fechou a venda escolhe emitir NFC-e ou não. Sem registrar a escolha,
+    // a conciliação enxerga "venda sem documento" e não sabe distinguir decisão
+    // deliberada de falha do sistema — e o contador recebe uma lista sem
+    // contexto, que é justamente o que a seção 36.5 do plano diz ser inviável.
+    // Nulo = venda anterior a este registro (não é "não escolheu", é "não sabemos").
+
+    /// <summary>True = pediu emissão no fechamento. False = optou por NÃO emitir.</summary>
+    [Column("fiscal_emissao_escolhida")]
+    public bool? FiscalEmissaoEscolhida { get; set; }
+
+    /// <summary>Operador que tomou a decisão.</summary>
+    [Column("fiscal_decisao_por_user_id")]
+    public Guid? FiscalDecisaoPorUserId { get; set; }
+
+    [Column("fiscal_decisao_em")]
+    public DateTime? FiscalDecisaoEm { get; set; }
 }
 
 public class VendaAvulsaItem

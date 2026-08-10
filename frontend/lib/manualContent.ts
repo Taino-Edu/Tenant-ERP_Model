@@ -269,6 +269,8 @@ export const MANUAL_SECOES: ManualSectionData[] = [
     cor: '#38BDF8',
     itens: [
       { t: 'Filtro de período', d: 'Selecione o intervalo de datas no topo ou use o mini filtro abaixo do gráfico para ajustar o período sem precisar rolar a página.' },
+      { t: 'DRE por competência', d: 'A DRE separa receita bruta, descontos, impostos sobre vendas, receita líquida, CMV, despesas operacionais, resultado financeiro e resultado líquido. Crediário em aberto continua em Contas a Receber e não reduz o lucro.' },
+      { t: 'Classificar despesas', d: 'Ao criar uma conta, informe como ela entra na DRE. Compra para estoque vira CMV somente quando o produto é vendido; equipamento fica como investimento; despesas do dia a dia entram no resultado operacional.' },
       { t: 'Gráfico de receita por dia', d: 'Barras animadas com entrada suave. Clique em qualquer barra para abrir o detalhe do dia: donut por forma de pagamento, receita, custo e margem.' },
       { t: 'Gráfico de formas de pagamento', d: 'Pizza interativa mostrando a proporção de cada método. Quando há apenas um método no período, a pizza aparece completa sem erro visual.' },
       { t: 'Visão Simples', d: 'Tabela de produtos com receita, quantidade, preço médio, custo e margem. Colunas ordenáveis por clique.' },
@@ -290,6 +292,8 @@ export const MANUAL_SECOES: ManualSectionData[] = [
       { t: 'Certificado digital A1', d: 'Envie o arquivo .pfx do certificado A1 e a senha. O sistema valida e guarda criptografado — nunca aparece de novo em texto puro depois de salvo.' },
       { t: 'Natureza de Operação', d: 'Cadastre CFOP/CSOSN uma vez (ex: "Venda dentro do estado") e marque uma como padrão. Produtos sem natureza específica usam a padrão automaticamente.' },
       { t: 'NCM é obrigatório', d: 'Todo produto vendido por NFC-e precisa ter o NCM cadastrado (Admin → Estoque), copiado da nota fiscal de compra do produto — o sistema nunca inventa ou sugere um NCM sozinho.' },
+      { t: 'Receber mercadoria', d: 'Em Financeiro → Notas Recebidas, leia o código de barras do DANFE ou cole a chave de acesso com 44 números. Confira os produtos sugeridos e confirme para atualizar estoque e custo médio; o vínculo do fornecedor fica salvo para a próxima compra.' },
+      { t: 'Configuração SEFAZ única', d: 'CNPJ, UF, ambiente e certificado A1 são configurados somente em Fiscal. Em Integrações, o card da SEFAZ serve apenas para ativar a busca automática e sincronizar.' },
       { t: 'Emissão não é mais automática', d: 'Ao fechar uma comanda ou registrar uma venda avulsa, a nota só é emitida se você marcar o checkbox "Emitir cupom fiscal" no momento do fechamento — o sistema não emite nota sozinho sem perguntar.' },
       { t: 'Formas de pagamento com auto-emissão', d: 'Em Fiscal → Emissão automática, marque quais formas de pagamento (Pix, Dinheiro, Cartão...) vêm com o checkbox já pré-marcado no fechamento. Por padrão nenhuma vem marcada — é sempre uma escolha explícita até você configurar isso.' },
       { t: 'Emitir nota depois (manual)', d: 'Se a venda foi fechada sem nota, use o botão "Emitir nota fiscal" no histórico da comanda ou no detalhe da venda avulsa a qualquer momento depois.' },

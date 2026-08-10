@@ -14,4 +14,12 @@ public interface IAiChatService
     /// Pode incluir uma action (navegação, abrir wizard) detectada na resposta.
     /// </summary>
     Task<AiChatResponse> ChatAsync(string userMessage);
+
+    /// <summary>
+    /// Mesma coisa que ChatAsync, mas transmite a resposta aos pedaços (delta a
+    /// delta) conforme o Gemini gera — reduz a sensação de espera do widget, que
+    /// antes ficava parado até o texto inteiro estar pronto. O último evento
+    /// (Done=true) traz a action já extraída/limpa dos marcadores [NAV:...]/[WIZARD].
+    /// </summary>
+    IAsyncEnumerable<AiStreamEvent> ChatStreamAsync(string userMessage, CancellationToken ct = default);
 }

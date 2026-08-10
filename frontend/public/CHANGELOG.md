@@ -1,5 +1,23 @@
 # Changelog — Tenant-ERP
 
+## [v2.8.0] — 2026-08-03
+
+### Adicionado
+- **Recebimento de mercadoria por NF-e**: leia a chave de 44 números do DANFE, confira os itens do XML e confirme a entrada no estoque com atualização de custo médio
+- Reconhecimento automático de produtos por EAN/GTIN, SKU e vínculo já confirmado para aquele fornecedor
+- Livro de movimentações de estoque e proteção contra receber a mesma nota/item duas vezes
+- **DRE profissional por competência**: receita bruta, descontos, impostos, receita líquida, CMV, despesas operacionais, resultado financeiro e resultado líquido
+- Classificação contábil simples nos lançamentos financeiros, mantendo compras de estoque e imobilizado fora das despesas operacionais
+- Portal do Contador com DRE, exportação CSV, NF-e de entrada, situação do recebimento e checklist de fechamento
+- ZIP fiscal agora separa XMLs de saída e de entrada em pastas próprias
+
+### Mudado
+- A configuração da SEFAZ usa uma única fonte: CNPJ, UF, ambiente e certificado ficam em Fiscal; Integrações apenas ativa e monitora a busca automática
+- Margem percentual agora é calculada sobre a receita; o cálculo antigo era markup sobre o custo
+- Crediário em aberto deixou de ser descontado da DRE e permanece na visão correta de contas a receber/caixa
+
+---
+
 ## [v2.7.0] — 2026-07-15
 
 ### Adicionado

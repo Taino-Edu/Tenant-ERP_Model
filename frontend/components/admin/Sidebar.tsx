@@ -10,7 +10,7 @@ import {
   LogOut, User, ShoppingBag, Users, Megaphone,
   Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
   Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy, Mail,
-  ChevronsLeft, ChevronsRight, Rocket, PartyPopper, Sparkles,
+  ChevronsLeft, ChevronsRight, Rocket, PartyPopper, Sparkles, UtensilsCrossed,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -36,11 +36,18 @@ const sections = [
     items: [
       { href: '/admin/perfis',      label: 'Perfis de Acesso', icon: UserCog, perm: null },
       { href: '/admin/integracoes', label: 'Integrações',      icon: Plug,    perm: null },
-      { href: '/admin/fiscal',      label: 'Fiscal',           icon: Receipt, perm: null },
       { href: '/admin/site',        label: 'Personalizar Site', icon: Palette, perm: null },
       { href: '/admin/email',      label: 'E-mail',           icon: Mail,    perm: null },
       { href: '/admin/ia-config',  label: 'Assistente de IA', icon: Sparkles, perm: null },
-      { href: '/admin/suporte',     label: 'Suporte',          icon: LifeBuoy, perm: null },
+    ],
+  },
+  {
+    label: 'Módulos',
+    items: [
+      { href: '/admin/fiscal',      label: 'Fiscal',            icon: Receipt,            perm: 'fiscal' },
+      { href: '/admin/eventos',     label: 'Gestão de Eventos', icon: PartyPopper,       perm: 'eventos' },
+      { href: '/admin/restaurante', label: 'Restaurante',       icon: UtensilsCrossed,     perm: 'restaurante' },
+      { href: '/admin/suporte',     label: 'Suporte',           icon: LifeBuoy,            perm: 'suporte' },
     ],
   },
   {
@@ -58,15 +65,6 @@ const sections = [
     ],
   },
   {
-    label: 'Eventos',
-    // EventosController é [Authorize(Policy = "AdminOnly")] — sem isso, Operator
-    // via o link e recebia 403 (perm: null só pula o filtro de perfil, não o de role).
-    adminOnly: true,
-    items: [
-      { href: '/admin/eventos', label: 'Gestão de Eventos', icon: PartyPopper, perm: null },
-    ],
-  },
-  {
     label: 'Financeiro',
     items: [
       { href: '/admin/financeiro',     label: 'Financeiro',        icon: TrendingUp,    perm: 'financeiro' },
@@ -79,7 +77,7 @@ const sections = [
     items: [
       { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,     perm: 'anuncios' },
       { href: '/admin/mensageria', label: 'Mensageria',   icon: MessageSquare,  perm: 'anuncios' },
-      { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: null },
+      { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: 'timers' },
     ],
   },
   {
@@ -119,10 +117,12 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
         if (adminOnly && !isAdmin) return null
         const visibleItems = items.filter(({ perm, href }) =>
           checkPerm(perm)
+          && (href !== '/admin/comanda' || enabledModules.includes('restaurante'))
           && (href !== '/admin/fiscal' || enabledModules.includes('fiscal'))
           && (href !== '/admin/reservas' || enabledModules.includes('estoque'))
           && (href !== '/admin/eventos' || enabledModules.includes('eventos'))
           && (href !== '/admin/ia-config' || enabledModules.includes('ia'))
+          && (href !== '/admin/restaurante' || enabledModules.includes('restaurante'))
         )
         if (visibleItems.length === 0) return null
         return (
@@ -193,11 +193,16 @@ export default function Sidebar() {
   const [mobileOpen,   setMobileOpen]   = useState(false)
   const [unreadCount,  setUnreadCount]  = useState(0)
   const [fiscalAlerta, setFiscalAlerta] = useState(false)
+  // Cookies de metadados só existem no navegador. O primeiro render precisa
+  // repetir o SSR; nome/role reais entram depois da hidratação.
+  const [mounted, setMounted] = useState(false)
   // Sempre começa expandida (igual no server e no primeiro render do client) —
   // ler localStorage direto no initializer causaria mismatch de hidratação
   // sempre que o valor salvo fosse "recolhida". O valor real só é aplicado
   // depois, via useEffect (client-only) — mesmo padrão de usePersistentPanel.
   const [collapsed,    setCollapsed]    = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     try {
@@ -251,7 +256,8 @@ export default function Sidebar() {
     router.push('/login')
   }
 
-  const role = getRole()
+  const role = mounted ? getRole() : ''
+  const userName = mounted ? getUserName() : 'Admin'
   const roleLabel = role === 'Admin' ? 'Admin' : role === 'Operator' ? 'Operador' : role
 
   function renderFooter(isCollapsed: boolean) {
@@ -261,7 +267,7 @@ export default function Sidebar() {
       return (
         <div className="px-3 py-4 border-t border-surface-500 flex flex-col items-center gap-2">
           <div
-            title={`${getUserName() || 'Admin'} (${roleLabel})`}
+            title={`${userName} (${roleLabel})`}
             className="w-10 h-10 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center shrink-0"
           >
             <User className="w-5 h-5 text-brand-400" />
@@ -290,7 +296,7 @@ export default function Sidebar() {
             <User className="w-5 h-5 text-brand-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{getUserName() || 'Admin'}</p>
+            <p className="text-sm font-semibold text-white truncate">{userName}</p>
             <span className="badge-admin text-[10px]">{roleLabel}</span>
           </div>
         </div>

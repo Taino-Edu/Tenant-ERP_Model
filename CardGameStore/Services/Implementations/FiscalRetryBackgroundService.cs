@@ -1,6 +1,8 @@
-// =============================================================================
+﻿// =============================================================================
 // FiscalRetryBackgroundService.cs — Contingência: reprocessa periodicamente
-// notas PendenteEmissao (ex: SEFAZ estava fora do ar na tentativa original).
+// notas PendenteEmissao (ex: SEFAZ estava fora do ar na tentativa original),
+// resultado incerto (consulta a chave) e contingência (retransmite), e ao fim
+// de cada ciclo sincroniza o painel de pendências fiscais (CON-002).
 // =============================================================================
 
 using CardGameStore.Data;
@@ -54,9 +56,15 @@ public class FiscalRetryBackgroundService : BackgroundService
 
         var db      = sp.GetRequiredService<AppDbContext>();
         var emissao = sp.GetRequiredService<INfceEmissionService>();
+        var alertas = sp.GetRequiredService<IAlertaFiscalService>();
 
+        // ResultadoIncerto entra aqui porque é o estado que MAIS precisa de novo
+        // contato com a SEFAZ: cada ciclo é uma nova chance de consultar a chave e
+        // descobrir se aquele documento foi autorizado (RES-001).
         var pendentesIds = await db.NotasFiscaisEmitidas
-            .Where(n => n.Status == NotaFiscalStatus.PendenteEmissao || n.Status == NotaFiscalStatus.AutorizadaContingencia)
+            .Where(n => n.Status == NotaFiscalStatus.PendenteEmissao ||
+                        n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+                        n.Status == NotaFiscalStatus.ResultadoIncerto)
             .OrderBy(n => n.CreatedAt)
             .Take(50) // não tenta reprocessar milhares de uma vez
             .Select(n => n.Id)
@@ -69,10 +77,6 @@ public class FiscalRetryBackgroundService : BackgroundService
             .Select(n => n.Id)
             .ToListAsync(ct);
 
-        if (pendentesIds.Count == 0 && estornosPendentesIds.Count == 0) return;
-
-        await AlertarContingenciasCriticasAsync(db, ct);
-
         int autorizadas = 0;
         foreach (var id in pendentesIds)
         {
@@ -83,48 +87,37 @@ public class FiscalRetryBackgroundService : BackgroundService
         foreach (var id in estornosPendentesIds)
             await emissao.ReprocessarEstornoErpAsync(id);
 
+        // CON-002: sincroniza DEPOIS das tentativas, para o painel refletir o
+        // estado pós-retry — sem isso, uma nota autorizada neste ciclo ainda
+        // apareceria como pendência por mais 15 minutos. Roda mesmo quando não
+        // houve nada a reprocessar: venda sem documento, lacuna de numeração e
+        // exportação atrasada não têm nota pendente para disparar a varredura.
+        await SincronizarAlertasAsync(alertas, ct);
+
+        if (pendentesIds.Count == 0 && estornosPendentesIds.Count == 0) return;
+
         _logger.LogInformation(
             "Reprocessamento automático: {Total} pendente(s) verificada(s), {Autorizadas} autorizada(s) agora.",
             pendentesIds.Count, autorizadas);
     }
 
-    private static async Task AlertarContingenciasCriticasAsync(AppDbContext db, CancellationToken ct)
+    /// <summary>
+    /// Falha ao montar o painel de alertas não pode derrubar o reprocessamento —
+    /// transmitir documento fiscal é mais importante do que listar pendência.
+    /// </summary>
+    private async Task SincronizarAlertasAsync(IAlertaFiscalService alertas, CancellationToken ct)
     {
-        var limite = DateTime.UtcNow.AddHours(-20);
-        var criticas = await db.NotasFiscaisEmitidas
-            .Where(n => n.Status == NotaFiscalStatus.AutorizadaContingencia &&
-                        n.DhContingencia != null && n.DhContingencia <= limite)
-            .OrderBy(n => n.DhContingencia)
-            .Select(n => new { n.Id, n.Numero, n.DhContingencia })
-            .Take(20)
-            .ToListAsync(ct);
-        if (criticas.Count == 0) return;
-
-        // Evita uma notificação nova a cada ciclo de 15 minutos.
-        var dedupeDesde = DateTime.UtcNow.AddHours(-6);
-        var jaAlertou = await db.Notifications.AnyAsync(
-            n => n.Title == "NFC-e em contingência crítica" && n.CreatedAt >= dedupeDesde, ct);
-        if (jaAlertou) return;
-
-        var admins = await db.Users
-            .Where(u => u.Role == UserRole.Admin && u.IsActive)
-            .Select(u => u.Id)
-            .ToListAsync(ct);
-        var maisAntiga = criticas[0];
-        var horas = maisAntiga.DhContingencia.HasValue
-            ? (int)Math.Floor((DateTime.UtcNow - maisAntiga.DhContingencia.Value).TotalHours)
-            : 20;
-
-        foreach (var adminId in admins)
+        try
         {
-            db.Notifications.Add(new Notification
-            {
-                UserId = adminId,
-                Title = "NFC-e em contingência crítica",
-                Body = $"{criticas.Count} NFC-e(s) aguardam autorização. A mais antiga está há {horas}h em contingência. Verifique antes do prazo de 24h.",
-                Link = "/admin/fiscal",
-            });
+            await alertas.SincronizarAsync(ct);
         }
-        await db.SaveChangesAsync(ct);
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha ao sincronizar os alertas fiscais deste tenant.");
+        }
     }
 }

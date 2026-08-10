@@ -6,12 +6,12 @@
 // ── Badge na aba ──────────────────────────────────────────────────────────────
 let badgeCount = 0
 
-export function incrementBadge(storeName = 'Minha Loja') {
+export function incrementBadge(storeName = 'Octus') {
   badgeCount++
   atualizarTitulo(storeName)
 }
 
-export function clearBadge(storeName = 'Minha Loja') {
+export function clearBadge(storeName = 'Octus') {
   badgeCount = 0
   atualizarTitulo(storeName)
 }

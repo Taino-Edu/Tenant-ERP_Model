@@ -20,7 +20,7 @@ public class TenantProvisioningService : ITenantProvisioningService
     /// pra montar os checkboxes de criação/edição de tenant (ver lib/api.ts TENANT_MODULES).
     /// Módulo desconhecido na criação é rejeitado em vez de gravado silenciosamente (typo
     /// no request viraria um módulo fantasma, sem RequireModule nenhum lendo aquele nome).</summary>
-    public static readonly string[] KnownModules = ["fiscal", "estoque", "pontos", "contador", "ia", "eventos"];
+    public static readonly string[] KnownModules = ["fiscal", "estoque", "pontos", "contador", "ia", "eventos", "restaurante"];
 
     /// <summary>Tabela de preços vigente (decidida em 2026-07-27, ver BACKLOG e a
     /// const PLANOS de frontend/app/institucional/page.tsx, que é o que o cliente
@@ -36,17 +36,26 @@ public class TenantProvisioningService : ITenantProvisioningService
     /// arquivos e quebra o CI se divergirem.</summary>
     internal static readonly Dictionary<string, decimal> TabelaPrecos = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Essencial"] = 120m,
-        ["Completo"]  = 269m,
-        ["Avançado"]  = 487m,
+        ["Lagoa"] = 129m,
+        ["Rio"]   = 269m,
+        ["Mar"]   = 487m,
     };
 
     /// <summary>Preço de tabela do plano, ou 0 se o nome não está na tabela
     /// (PlanName é texto livre: cortesia, piloto, plano legado ou typo). Zero é
     /// deliberado — chutar um valor infla o MRR com número que parece certo e que
     /// ninguém vai conferir depois.</summary>
-    private static decimal PrecoMensalDoPlano(string planName) =>
+    internal static decimal PrecoMensalDoPlano(string planName) =>
         TabelaPrecos.TryGetValue(planName.Trim(), out var preco) ? preco : 0m;
+
+    internal static void ApplyCommercialTerms(Tenant tenant)
+    {
+        tenant.MonthlyPrice = PrecoMensalDoPlano(tenant.PlanName);
+        tenant.SetupFee = tenant.PlanName.Equals("Mar", StringComparison.OrdinalIgnoreCase)
+            ? 0m
+            : tenant.MonthlyPrice * 2;
+        tenant.BillingStartsOn = tenant.CreatedAt.AddDays(15);
+    }
 
     // Provisionamento (criar schema + rodar migrations + admin inicial) não
     // tinha nenhuma trava de concorrência: dois cadastros de tenant no mesmo
@@ -59,15 +68,18 @@ public class TenantProvisioningService : ITenantProvisioningService
 
     private readonly CatalogDbContext     _catalog;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TenantDatabaseAdmin  _databaseAdmin;
     private readonly ILogger<TenantProvisioningService> _logger;
 
     public TenantProvisioningService(
         CatalogDbContext catalog,
         IServiceScopeFactory scopeFactory,
+        TenantDatabaseAdmin databaseAdmin,
         ILogger<TenantProvisioningService> logger)
     {
         _catalog      = catalog;
         _scopeFactory = scopeFactory;
+        _databaseAdmin = databaseAdmin;
         _logger       = logger;
     }
 
@@ -119,6 +131,7 @@ public class TenantProvisioningService : ITenantProvisioningService
         }
 
         var schemaName = "tenant_" + slug.Replace('-', '_');
+        TenantSchemaName.Validate(schemaName);
 
         var tenant = new Tenant
         {
@@ -136,16 +149,14 @@ public class TenantProvisioningService : ITenantProvisioningService
             tenant.MaxUsers = maxUsers.Value;
 
         // Billing: preenche a partir da tabela vigente e das regras comerciais
-        // (implantação = 2 mensalidades, primeiro mês de acesso sem mensalidade).
+        // (Lagoa/Rio: implantação = 2 mensalidades; Mar: gratuita; 15 dias grátis).
         // Fica editável depois no painel — a tabela é o ponto de partida, não uma
         // amarra: cliente que fechar por valor negociado tem o campo ajustado.
         //
         // Plano fora da tabela (nome livre, cortesia, piloto) entra com preço 0 em
         // vez de chutar um valor: MRR errado pra cima é pior que MRR incompleto,
         // porque parece certo e ninguém vai conferir.
-        tenant.MonthlyPrice     = PrecoMensalDoPlano(tenant.PlanName);
-        tenant.SetupFee         = tenant.MonthlyPrice * 2;
-        tenant.BillingStartsOn  = tenant.CreatedAt.AddMonths(1);
+        ApplyCommercialTerms(tenant);
 
         _catalog.Tenants.Add(tenant);
         await _catalog.SaveChangesAsync();
@@ -158,16 +169,14 @@ public class TenantProvisioningService : ITenantProvisioningService
             // contém [a-z0-9_] (validado acima via SlugPattern + prefixo fixo),
             // então a interpolação abaixo é segura — identificadores (nome de
             // schema) não podem ser parametrizados via ExecuteSqlAsync de qualquer forma.
-#pragma warning disable EF1002
-            await _catalog.Database.ExecuteSqlRawAsync($"CREATE SCHEMA IF NOT EXISTS \"{schemaName}\"");
-#pragma warning restore EF1002
+            await _databaseAdmin.CreateAndMigrateTenantAsync(
+                tenant.Id, schemaName, tenant.EnabledModules);
 
             using var scope = _scopeFactory.CreateScope();
             var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
             tenantContext.Set(tenant.Id, schemaName, tenant.EnabledModules);
 
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            await db.Database.MigrateAsync();
 
             db.Users.Add(new User
             {

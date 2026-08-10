@@ -1,7 +1,7 @@
 self.addEventListener('push', event => {
   const data = event.data?.json() ?? {}
   event.waitUntil(
-    self.registration.showNotification(data.title ?? 'Minha Loja', {
+    self.registration.showNotification(data.title ?? 'Octus', {
       body:  data.body  ?? '',
       image: data.image ?? undefined,
       icon:  '/icon.svg',

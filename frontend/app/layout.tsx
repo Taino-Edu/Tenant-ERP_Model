@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next'
-import { Nunito } from 'next/font/google'
 import { headers } from 'next/headers'
+import Script from 'next/script'
 import './globals.css'
 import PWAInstallButton from '@/components/PWAInstallButton'
 import CookieBanner from '@/components/CookieBanner'
@@ -9,24 +9,17 @@ import VLibrasController from '@/components/VLibrasController'
 import ClientProviders from '@/components/ClientProviders'
 import { getTenantIconsForHost, withCacheBust } from '@/lib/serverSiteConfig'
 
-const nunito = Nunito({
-  subsets: ['latin'],
-  variable: '--font-nunito',
-  display: 'swap',
-  weight: ['400', '500', '600', '700', '800', '900'],
-})
-
 export const viewport: Viewport = {
   themeColor: '#42B6EE',
   width: 'device-width',
   initialScale: 1,
 }
 
-// Ícone/favicon por tenant, resolvido pelo Host da requisição — o resto dos
-// metadados (nome, descrição) continua fixo/genérico de propósito (fora de
-// escopo aqui; o nome real da loja já é renderizado no client via
-// useSiteConfig() em outros pontos da página). Fallback pros ícones estáticos
-// de sempre em qualquer falha — getTenantIconsForHost nunca lança.
+// Favicon + título/descrição por tenant, resolvidos pelo Host da requisição.
+// Páginas públicas (Home, /cadastro, /login etc.) não têm generateMetadata
+// própria, então herdam esse default — é ele quem aparece na aba do
+// navegador e no snippet do Google pra cada loja. Fallback genérico
+// ("Octus") em qualquer falha — getTenantIconsForHost nunca lança.
 export async function generateMetadata(): Promise<Metadata> {
   const host = headers().get('host')
   const icons = await getTenantIconsForHost(host)
@@ -35,9 +28,12 @@ export async function generateMetadata(): Promise<Metadata> {
     ? withCacheBust(icons.faviconUrl, icons.updatedAt)
     : '/icon.svg'
 
+  const siteName = icons?.siteName || 'Octus'
+  const description = icons?.heroSubtitle || 'Sistema de gestão para lojas e varejo'
+
   return {
-    title: { default: 'Minha Loja', template: '%s — Minha Loja' },
-    description: 'Sistema de gestão para lojas e varejo',
+    title: { default: siteName, template: `%s — ${siteName}` },
+    description,
     icons: {
       icon: [
         { url: iconUrl, type: icons?.faviconUrl ? undefined : 'image/svg+xml' },
@@ -48,14 +44,26 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: {
       capable: true,
       statusBarStyle: 'black-translucent',
-      title: 'Minha Loja',
+      title: siteName,
+    },
+    openGraph: {
+      title: siteName,
+      description,
+      siteName,
+      locale: 'pt_BR',
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary',
+      title: siteName,
+      description,
     },
   }
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={nunito.variable} suppressHydrationWarning>
+    <html lang="pt-BR" suppressHydrationWarning>
       <head>
         {/* iOS Safari PWA meta tags */}
         <meta name="mobile-web-app-capable" content="yes" />
@@ -63,11 +71,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* apple-touch-icon já vem de generateMetadata (icons.apple) — link estático
             removido daqui pra não duplicar/entrar em conflito com o dinâmico. */}
         {/* Aplica o tema salvo antes do primeiro render para evitar flash */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.remove('light')}else{document.documentElement.classList.add('light');if(!t)localStorage.setItem('theme','light')}}catch(e){document.documentElement.classList.add('light')}})();`
-          }}
-        />
+        <Script id="initial-theme" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.remove('light')}else{document.documentElement.classList.add('light');if(!t)localStorage.setItem('theme','light')}}catch(e){document.documentElement.classList.add('light')}})();`}
+        </Script>
       </head>
       <body>
         <ClientProviders>
@@ -81,17 +87,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="vw-plugin-top-wrapper"></div>
           </div>
         </div>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
+        <Script id="vlibras-loader" strategy="afterInteractive">
+          {`
               window.VLibras = window.VLibras || {};
               var script = document.createElement('script');
               script.src = 'https://vlibras.gov.br/app/vlibras-plugin.js';
               script.onload = function() { new window.VLibras.Widget('https://vlibras.gov.br/app'); };
               document.body.appendChild(script);
-            `
-          }}
-        />
+            `}
+        </Script>
         <VLibrasController />
         {children}
         {/* Rodapé com links legais (LGPD) — não aparece no painel admin */}

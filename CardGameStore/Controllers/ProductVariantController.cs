@@ -1,4 +1,5 @@
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.Authorization;
@@ -10,6 +11,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/products/{productId:guid}/variants")]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Estoque)]
 public class ProductVariantController : ControllerBase
 {
     private readonly AppDbContext _db;

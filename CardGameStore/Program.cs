@@ -1,9 +1,11 @@
-// =============================================================================
+﻿// =============================================================================
 // Program.cs — Ponto de entrada e configuração central da aplicação
 // Padrão: Minimal API (.NET 8+), sem Startup.cs separado
 // =============================================================================
 
 using System.Net;
+using System.IO.Compression;
+using System.Reflection;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -15,11 +17,15 @@ using CardGameStore.Middleware;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
+using CardGameStore.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 
 // Comando utilitário: dotnet run -- gen-key  →  imprime nova chave AES-256 em Base64
 if (args.Contains("gen-key"))
@@ -29,14 +35,20 @@ if (args.Contains("gen-key"))
     return;
 }
 
-// Comando utilitário: dotnet run -- gen-vapid  →  gera par de chaves VAPID para push browser
+// Comando utilitário: dotnet run -- gen-vapid  →  gera par de chaves VAPID para push browser.
+//
+// Os nomes impressos são os do .env (VAPID_PUBLIC_KEY etc.), NÃO os da configuração
+// da app (Vapid__PublicKey): quem lê o .env é o docker-compose, que faz a ponte pros
+// nomes de configuração. Antes isto imprimia os nomes de configuração e ninguém
+// consumia a saída — as chaves nunca chegavam ao container e o push era um no-op
+// silencioso. setup.sh/update.sh agora fazem esse append automaticamente.
 if (args.Contains("gen-vapid"))
 {
     var keys = WebPush.VapidHelper.GenerateVapidKeys();
-    Console.WriteLine("# Adicione ao .env do VPS:");
-    Console.WriteLine($"VAPID__PublicKey={keys.PublicKey}");
-    Console.WriteLine($"VAPID__PrivateKey={keys.PrivateKey}");
-    Console.WriteLine("VAPID__Subject=mailto:contato@tenant-erp.local");
+    Console.WriteLine("# Chaves VAPID (push do navegador) — anexe ao .env do VPS:");
+    Console.WriteLine($"VAPID_PUBLIC_KEY={keys.PublicKey}");
+    Console.WriteLine($"VAPID_PRIVATE_KEY={keys.PrivateKey}");
+    Console.WriteLine("VAPID_SUBJECT=mailto:contato@tenant-erp.local");
     return;
 }
 
@@ -50,10 +62,44 @@ var jwtSettings = builder.Configuration.GetSection("JwtSettings").Get<JwtSetting
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("JwtSettings"));
 
 // ---------------------------------------------------------------------------
-// 2. BANCO RELACIONAL — SQLite (dev local) ou PostgreSQL (produção/Docker)
+// 2. BANCO RELACIONAL — PostgreSQL (único provider suportado)
 // ---------------------------------------------------------------------------
+// O SQLite foi removido de propósito, não por falta de tempo: o multi-tenant
+// inteiro é schema + search_path, conceito que o SQLite não tem, então tudo que
+// importa (isolamento entre tenants, provisionamento, migrations por schema)
+// simplesmente não existia no caminho "dev sem Postgres". Pior, o provider é
+// tolerante onde o Postgres não é — aceitava DateTime com Kind=Unspecified em
+// coluna timestamptz — e isso já deixou passar bug real de produção (fechamento
+// financeiro quebrado em silêncio) que a suíte inteira em SQLite nunca pegaria.
+// A suíte de testes já roda 100% em Postgres real desde então (TestDbFactory);
+// isto aqui alinha a aplicação ao mesmo padrão.
+//
+// Dev local: suba o mesmo Postgres da suíte e aponte a connection string —
+//   docker compose -f tests/docker-compose.yml up -d
+//   ConnectionStrings__PostgreSQL="Host=127.0.0.1;Port=5433;Database=tenant_erp_test;Username=tenant_test;Password=tenant_test_pw"
 var pgConnStr = builder.Configuration.GetConnectionString("PostgreSQL");
-var useSqlite = string.IsNullOrWhiteSpace(pgConnStr);
+if (string.IsNullOrWhiteSpace(pgConnStr))
+    throw new InvalidOperationException(
+        "ConnectionStrings:PostgreSQL não configurado. O Tenant-ERP roda exclusivamente " +
+        "contra PostgreSQL (o multi-tenant depende de schema/search_path). Configure a " +
+        "variável de ambiente ConnectionStrings__PostgreSQL — em dev, suba o Postgres da " +
+        "suíte com 'docker compose -f tests/docker-compose.yml up -d'.");
+
+// Credencial de runtime (acima) não tem DDL nem acesso a outros schemas — só
+// migrations/provisionamento (TenantDatabaseAdmin) usam a credencial admin.
+var pgAdminConnStr = builder.Configuration.GetConnectionString("PostgreSQLAdmin");
+if (string.IsNullOrWhiteSpace(pgAdminConnStr))
+    throw new InvalidOperationException(
+        "ConnectionStrings:PostgreSQLAdmin é obrigatória. A aplicação não usa mais a credencial administrativa em requests.");
+
+var runtimeUser = new NpgsqlConnectionStringBuilder(pgConnStr!).Username;
+var adminUser   = new NpgsqlConnectionStringBuilder(pgAdminConnStr).Username;
+if (string.Equals(runtimeUser, adminUser, StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException(
+        "PostgreSQL e PostgreSQLAdmin devem usar usuários diferentes (runtime sem privilégios vs. migração/provisionamento).");
+
+builder.Services.AddSingleton<TenantDatabaseAdmin>();
+builder.Services.AddSingleton<TenantDatabaseCredentials>();
 
 // ITenantContext é scoped — cada request (ou cada escopo manual criado por um
 // hosted service) tem sua própria instância, com o valor padrão já apontando
@@ -62,65 +108,44 @@ builder.Services.AddScoped<ITenantContext, TenantContext>();
 
 builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 {
-    if (useSqlite)
-    {
-        // SQLite não tem conceito de schema/search_path — o interceptor de
-        // tenant só faz sentido contra Postgres.
-        var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "cardgamestore.db");
-        options.UseSqlite($"Data Source={dbPath}");
-    }
-    else
-    {
-        // A tabela de histórico de migrations (__EFMigrationsHistory) precisa de
-        // schema explícito, não pode depender do search_path como o resto do
-        // model: a checagem "a tabela existe?" do provider Npgsql não é
-        // consistentemente scoped pelo search_path da mesma forma que a query
-        // real de leitura, o que causava um mismatch — a checagem "achava" a
-        // tabela (via public, de outro tenant) mas a leitura real (isolada só
-        // no schema do tenant atual) não encontrava nada, derrubando o
-        // provisionamento de tenant novo com "relation does not exist".
-        var tenantSchemaForHistory = sp.GetRequiredService<ITenantContext>().SchemaName;
-        options.UseNpgsql(
-            pgConnStr,
-            npgsqlOptions => npgsqlOptions
-                .EnableRetryOnFailure(maxRetryCount: 5)
-                .MigrationsHistoryTable("__EFMigrationsHistory", tenantSchemaForHistory)
-        );
-        // Resolve do próprio IServiceProvider scoped (sp) — pega a MESMA
-        // instância de ITenantContext que o TenantResolutionMiddleware populou
-        // nesta requisição, não uma nova.
-        options.AddInterceptors(new TenantConnectionInterceptor(
-            sp.GetRequiredService<ITenantContext>(),
-            sp.GetRequiredService<ILogger<TenantConnectionInterceptor>>()));
-    }
+    // A tabela de histórico de migrations (__EFMigrationsHistory) precisa de
+    // schema explícito, não pode depender do search_path como o resto do
+    // model: a checagem "a tabela existe?" do provider Npgsql não é
+    // consistentemente scoped pelo search_path da mesma forma que a query
+    // real de leitura, o que causava um mismatch — a checagem "achava" a
+    // tabela (via public, de outro tenant) mas a leitura real (isolada só
+    // no schema do tenant atual) não encontrava nada, derrubando o
+    // provisionamento de tenant novo com "relation does not exist".
+    var tenantSchemaForHistory = sp.GetRequiredService<ITenantContext>().SchemaName;
+    options.UseNpgsql(
+        sp.GetRequiredService<TenantDatabaseCredentials>()
+            .ConnectionStringFor(sp.GetRequiredService<ITenantContext>().TenantId),
+        npgsqlOptions => npgsqlOptions
+            .EnableRetryOnFailure(maxRetryCount: 5)
+            .MigrationsHistoryTable("__EFMigrationsHistory", tenantSchemaForHistory)
+    );
+    // Resolve do próprio IServiceProvider scoped (sp) — pega a MESMA
+    // instância de ITenantContext que o TenantResolutionMiddleware populou
+    // nesta requisição, não uma nova.
+    options.AddInterceptors(new TenantConnectionInterceptor(
+        sp.GetRequiredService<ITenantContext>(),
+        sp.GetRequiredService<ILogger<TenantConnectionInterceptor>>()));
 
-    // Diff automático de auditoria (Product/VendaAvulsa/User) — independe do
-    // provider, roda em dev (SQLite) e produção (Postgres) igual.
+    // Diff automático de auditoria (Product/VendaAvulsa/User).
     options.AddInterceptors(new AuditSaveChangesInterceptor(
         sp.GetRequiredService<IHttpContextAccessor>(),
         sp.GetRequiredService<ILogger<AuditSaveChangesInterceptor>>(),
         sp.GetRequiredService<IConfiguration>()));
 });
 
-// Catálogo de tenants — em Postgres é o mesmo banco físico do AppDbContext
-// (schema "public"), contexto leve e independente, sem o interceptor de
-// search_path. Em SQLite (dev) usa um arquivo próprio: EnsureCreatedAsync só
-// olha se o arquivo/banco já existe, não se as tabelas do model atual estão
-// lá — dois contextos apontando pro mesmo arquivo faria o segundo virar no-op.
+// Catálogo de tenants — mesmo banco físico do AppDbContext (schema "public"),
+// contexto leve e independente, sem o interceptor de search_path.
 builder.Services.AddDbContext<CatalogDbContext>(options =>
 {
-    if (useSqlite)
-    {
-        var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "cardgamestore_catalog.db");
-        options.UseSqlite($"Data Source={dbPath}");
-    }
-    else
-    {
-        options.UseNpgsql(
-            pgConnStr,
-            npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5)
-        );
-    }
+    options.UseNpgsql(
+        pgConnStr,
+        npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5)
+    );
 });
 
 // ---------------------------------------------------------------------------
@@ -252,6 +277,31 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueLimit           = 10;
     });
 
+    // Assistente comercial público: limite baixo por IP para controlar custo e abuso.
+    options.AddPolicy("public-ai", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientIp(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit          = 10,
+                Window               = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit           = 0,
+            }));
+
+    // Formulário institucional: evita spam e crescimento artificial da tabela
+    // de leads. Turnstile será a segunda camada quando as chaves forem ativadas.
+    options.AddPolicy("public-lead", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            GetClientIp(context),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(15),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
     // "locate-account" → bem mais apertado que "auth": cada chamada testa a
     // senha contra TODO tenant ativo (um schema por vez), bem mais caro que um
     // login normal (uma query só). 5/hora por IP é suficiente pro uso real
@@ -306,6 +356,7 @@ builder.Services.AddRequestTimeouts(options =>
 // ---------------------------------------------------------------------------
 // 8. SIGNALR — Comunicação em tempo real (comandas → dashboard)
 // ---------------------------------------------------------------------------
+builder.Services.AddSingleton<TenantHubFilter>();
 builder.Services.AddSignalR(options =>
 {
     options.EnableDetailedErrors      = builder.Environment.IsDevelopment();
@@ -314,6 +365,11 @@ builder.Services.AddSignalR(options =>
     options.KeepAliveInterval         = TimeSpan.FromSeconds(10);
     // Se não receber resposta em 20s, considera desconectado (padrão: 30s)
     options.ClientTimeoutInterval     = TimeSpan.FromSeconds(20);
+
+    // O SignalR não herda o escopo de DI da requisição, então o ITenantContext
+    // que o hub recebe nasce no default (tenant-zero) — este filtro reidrata o
+    // tenant do handshake antes de cada método do hub. Ver TenantHubFilter.
+    options.AddFilter<TenantHubFilter>();
 });
 
 // ---------------------------------------------------------------------------
@@ -332,14 +388,22 @@ builder.Services.AddHttpClient("gemini", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(30);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
+}).RemoveAllLoggers();
 
 // IBPT — token vai na query string por exigência do contrato legado da API.
 // Remove os loggers do HttpClient para a credencial nunca aparecer em logs de URL.
 builder.Services.AddHttpClient("ibpt", client =>
 {
     client.BaseAddress = new Uri("https://apidoni.ibpt.org.br/");
-    client.Timeout = TimeSpan.FromSeconds(15);
+    // 15s existia porque a consulta ficava DENTRO da requisição, com o lojista
+    // esperando na tela. Depois do IBPT-002 nenhum caminho de request toca esta
+    // API -- só o job diário e a busca sob demanda, ambos em segundo plano -- e
+    // desistir cedo passou a ser só perda: em homologação, 4 de 4 NCMs falharam
+    // por timeout em todos os ciclos, e a tabela nunca se formou.
+    //
+    // Ninguém está esperando: esperar um minuto por uma resposta lenta é melhor
+    // do que ficar sem transparência tributária e sem poder emitir.
+    client.Timeout = TimeSpan.FromSeconds(60);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 }).RemoveAllLoggers();
 
@@ -388,6 +452,7 @@ builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
 builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
+builder.Services.AddScoped<IPublicSalesAssistantService, PublicSalesAssistantService>();
 builder.Services.AddScoped<IProspectingService,  ProspectingService>();
 builder.Services.AddScoped<IPlatformBillingService, PlatformBillingService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
@@ -401,13 +466,25 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddSingleton<OfxParserService>();
 builder.Services.AddScoped<SefazNfeService>();
+builder.Services.AddScoped<NfeReceivingService>();
 builder.Services.AddSingleton<EncryptionService>();
 builder.Services.AddScoped<InterSyncService>();
 builder.Services.AddHostedService<InterSyncBackgroundService>();
 
 // Fiscal — emissão de NFC-e, certificado A1, exportação de XMLs
 builder.Services.AddScoped<FiscalCertificadoService>();
+builder.Services.AddScoped<FiscalConfigService>();
 builder.Services.AddScoped<FiscalXmlExportService>();
+builder.Services.AddScoped<IApuracaoTributariaService, ApuracaoTributariaService>();
+builder.Services.AddScoped<IConciliacaoFiscalService, ConciliacaoFiscalService>();
+builder.Services.AddScoped<IAlertaFiscalService>(sp => new AlertaFiscalService(
+    sp.GetRequiredService<AppDbContext>(),
+    sp.GetRequiredService<IConciliacaoFiscalService>(),
+    sp.GetRequiredService<ILogger<AlertaFiscalService>>(),
+    sp.GetRequiredService<IEmailService>()));
+// XML-002: singleton porque o XmlSchemaSet é compilado uma vez e reusado — recompilar
+// o leiaute 4.00 a cada venda custaria caro à toa.
+builder.Services.AddSingleton<INfceSchemaValidator, NfceSchemaValidator>();
 builder.Services.AddScoped<IbptTaxService>();
 builder.Services.AddHostedService<IbptSyncBackgroundService>();
 builder.Services.AddScoped<IFiscalTaxEngine, ConfigurableFiscalTaxEngine>();
@@ -415,7 +492,9 @@ builder.Services.AddScoped<INfceEmissionService>(sp => new NfceEmissionService(
     sp.GetRequiredService<AppDbContext>(),
     sp.GetRequiredService<EncryptionService>(),
     sp.GetRequiredService<ILogger<NfceEmissionService>>(),
-    sp.GetRequiredService<IFiscalTaxEngine>()));
+    sp.GetRequiredService<IFiscalTaxEngine>(),
+    sefaz: null,
+    schemaValidator: sp.GetRequiredService<INfceSchemaValidator>()));
 builder.Services.AddHostedService<FiscalAlertBackgroundService>();
 builder.Services.AddHostedService<FiscalXmlExportBackgroundService>();
 builder.Services.AddHostedService<FiscalRetryBackgroundService>();
@@ -433,6 +512,13 @@ var corsOrigins = (builder.Configuration["CorsSettings:AllowedOrigins"] ?? "http
 // acima (IP de teste, domínio raiz) — nenhuma substitui a outra.
 var corsRootDomain = builder.Configuration["Multitenancy:RootDomain"];
 
+if (builder.Environment.IsProduction() && string.IsNullOrWhiteSpace(corsRootDomain))
+{
+    throw new InvalidOperationException(
+        "Multitenancy:RootDomain é obrigatório em produção. " +
+        "Configure MULTITENANCY_ROOT_DOMAIN antes de iniciar a API.");
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
@@ -449,9 +535,10 @@ builder.Services.AddCors(options =>
                 if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
                     return false;
 
-                var host = originUri.Host;
-                return host.Equals(corsRootDomain, StringComparison.OrdinalIgnoreCase)
-                    || host.EndsWith("." + corsRootDomain, StringComparison.OrdinalIgnoreCase);
+                // Cada frontend fala com a API na própria origem pelo nginx.
+                // Liberar todos os subdomínios com AllowCredentials permitiria
+                // que um tenant comprometido enviasse requests autenticados a outro.
+                return originUri.Host.Equals(corsRootDomain, StringComparison.OrdinalIgnoreCase);
             })
             .AllowAnyHeader()
             .AllowAnyMethod()
@@ -465,11 +552,66 @@ builder.Services.AddCors(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
+    var apiVersion = System.Reflection.Assembly.GetExecutingAssembly()
+        .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()
+        ?.InformationalVersion.Split('+')[0] ?? "1.0.0";
+
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title       = "Tenant-ERP API",
-        Version     = "v1",
-        Description = "API do Tenant-ERP — sistema de gestão para lojas e varejo"
+        Title   = "Tenant-ERP API",
+        Version = apiVersion,
+        Description = """
+            API do Tenant-ERP — ERP multi-tenant para lojas e varejo (PDV, estoque,
+            crediário, financeiro, NFC-e, portal do contador e painel da plataforma).
+
+            ## Autenticação
+
+            Dois esquemas, e o que o navegador usa **não** é o `Bearer`:
+
+            - **cookieAuth (padrão real)** — `POST /api/auth/login` devolve os JWTs em
+              cookies `HttpOnly` (`accessToken` e `refreshToken`). Como são HttpOnly,
+              nenhum JavaScript os lê: o navegador reenvia sozinho a cada request.
+              É por isso que o "Authorize" abaixo não pede nada pra este esquema —
+              basta ter logado neste mesmo domínio e o Swagger UI já manda o cookie.
+            - **Bearer** — mesmo token no header `Authorization`, para integrações
+              fora do navegador (scripts, n8n, Postman). O SignalR (`/hubs/comanda`)
+              aceita ainda uma terceira forma, `?access_token=` na query string,
+              porque o handshake de WebSocket não deixa mandar header.
+
+            ## Multi-tenancy — o `Host` decide o que você enxerga
+
+            Cada loja vive num schema PostgreSQL próprio, e o schema é resolvido pelo
+            **subdomínio da requisição** (`loja-x.seudominio.com.br`), não por
+            parâmetro. A mesma rota, com o mesmo token, devolve dados diferentes em
+            hosts diferentes — e um token emitido pro tenant A é rejeitado no host do
+            tenant B. Ao testar por fora do navegador, mande o `Host` certo; sem
+            subdomínio a requisição cai no tenant-zero (ou é recusada, quando
+            `Multitenancy:RejectUnknownHosts` está ligado).
+
+            ## Módulos
+
+            Endpoints marcados com `RequireModule` respondem **403** quando o módulo
+            (`fiscal`, `estoque`, `crediario`...) não está habilitado no plano do
+            tenant — não é erro de permissão do usuário, é contratação.
+            """,
+        Contact = new OpenApiContact { Name = "Tenant-ERP", Url = new Uri("https://github.com/Taino-Edu/Tenant-ERP_Model") },
+    });
+
+    // A doc é servida pelo próprio host que atendeu a requisição — deixar a lista
+    // de servers vazia faz o Swagger UI usar a origem corrente, que é o
+    // comportamento certo aqui: em multi-tenant o host É o seletor de tenant, e
+    // cravar uma URL fixa faria todo "Try it out" bater no tenant errado.
+
+    // Cookie HttpOnly: o esquema que a aplicação realmente usa. Faltava na doc —
+    // só existia o Bearer, então quem lia a referência concluía que precisava
+    // montar o header na mão e o "Try it out" do próprio Swagger parecia quebrado.
+    c.AddSecurityDefinition("cookieAuth", new OpenApiSecurityScheme
+    {
+        Name        = "accessToken",
+        Type        = SecuritySchemeType.ApiKey,
+        In          = ParameterLocation.Cookie,
+        Description = "JWT em cookie HttpOnly, emitido por POST /api/auth/login. "
+                    + "O navegador envia sozinho — nada a preencher aqui.",
     });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -479,7 +621,8 @@ builder.Services.AddSwaggerGen(c =>
         Scheme       = "Bearer",
         BearerFormat = "JWT",
         In           = ParameterLocation.Header,
-        Description  = "Informe: Bearer {seu_token}"
+        Description  = "Para integrações fora do navegador. Informe apenas o token "
+                     + "(o Swagger UI acrescenta o prefixo 'Bearer').",
     });
 
     // Requisito de segurança é adicionado por operação (ver AuthorizeCheckOperationFilter),
@@ -495,6 +638,21 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 builder.Services.AddControllers();
+
+// Respostas JSON grandes (catálogo, relatórios e exportações) atravessavam o
+// proxy sem compressão. Em tenant com 20 mil produtos o catálogo público tinha
+// mais de 10 MB por request. Brotli/Gzip reduzem banda e tempo de transferência;
+// Fastest evita trocar o gargalo de rede por CPU no servidor.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+    options.Level = CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+    options.Level = CompressionLevel.Fastest);
 
 // ---------------------------------------------------------------------------
 // 14. BUILD
@@ -529,7 +687,7 @@ if (!app.Environment.IsDevelopment() && string.IsNullOrWhiteSpace(app.Configurat
 }
 
 // ---------------------------------------------------------------------------
-// 15. BANCO DE DADOS — EnsureCreated em dev sem Postgres (SQLite), Migrations em Postgres
+// 15. BANCO DE DADOS — Migrations (catálogo + tenant-zero + cada tenant ativo)
 // ---------------------------------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
@@ -543,78 +701,66 @@ using (var scope = app.Services.CreateScope())
         .Set(TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
 
     var db      = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    var catalog = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
     var logger  = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     try
     {
         logger.LogInformation("Inicializando banco de dados...");
 
-        if (useSqlite)
+        // Schema versionado via EF Core Migrations (Data/Migrations). As duas
+        // chamadas abaixo só migram o schema "public" (tenant-zero, resolvido por
+        // padrão pelo ITenantContext fora de qualquer request HTTP) e o catálogo —
+        // NENHUMA migration de AppDbContext propaga sozinha pro schema de um tenant
+        // já provisionado antes (só TenantProvisioningService roda migration num
+        // schema de tenant, e só uma vez, na criação). Sem o loop abaixo, qualquer
+        // tabela/coluna nova do AppDbContext (ex: FechamentoPeriodo, os ícones novos
+        // do SiteConfig) nunca chega em tenants como loja-final/loja-teste3 — bug
+        // real, confirmado em produção. Migrations e grants passam pela credencial
+        // admin (TenantDatabaseAdmin) — o AppDbContext/CatalogDbContext resolvidos
+        // por request usam só a credencial de runtime, sem DDL.
+        var databaseAdmin = scope.ServiceProvider.GetRequiredService<TenantDatabaseAdmin>();
+        await databaseAdmin.MigrateCatalogAsync();
+        await databaseAdmin.MigrateTenantAsync(
+            TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
+
+        var tenantsParaMigrar = (await databaseAdmin.ListTenantsAsync())
+            .Where(t => t.Status == TenantStatus.Active)
+            .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
+            .ToList();
+
+        // C4 (parcial — VPS único por enquanto, sem lock/processo migrador separado):
+        // antes o catch abaixo só logava por tenant e o resumo final dizia sempre
+        // "aplicadas em N tenant(s)", sem distinguir sucesso de falha — um tenant
+        // ficava sem migrar silenciosamente até o próximo restart, sem nada gritando
+        // sobre isso. Agora rastreia falhas e o resumo final é WARNING (não INFO) se
+        // qualquer uma ocorreu, com a lista de slugs — visível no boot, não só grep de log.
+        var tenantsComFalha = new List<string>();
+
+        foreach (var tenant in tenantsParaMigrar)
         {
-            // SQLite (dev local sem Postgres configurado) não tem migrations —
-            // schema é gerado direto do model atual a cada start.
-            await db.Database.EnsureCreatedAsync();
-            await catalog.Database.EnsureCreatedAsync();
-        }
-        else
-        {
-            // Postgres — schema versionado via EF Core Migrations (Data/Migrations).
-            // As duas chamadas abaixo só migram o schema "public" (tenant-zero,
-            // resolvido por padrão pelo ITenantContext fora de qualquer request
-            // HTTP) e o catálogo — NENHUMA migration de AppDbContext propaga
-            // sozinha pro schema de um tenant já provisionado antes (só
-            // TenantProvisioningService roda migration num schema de tenant, e só
-            // uma vez, na criação). Sem o loop abaixo, qualquer tabela/coluna nova
-            // do AppDbContext (ex: FechamentoPeriodo, os ícones novos do
-            // SiteConfig) nunca chega em tenants como loja-final/loja-teste3 —
-            // bug real, confirmado em produção nesta sessão.
-            await catalog.Database.MigrateAsync();
-            await db.Database.MigrateAsync();
-
-            var tenantsParaMigrar = await catalog.Tenants
-                .Where(t => t.Status == TenantStatus.Active)
-                .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
-                .ToListAsync();
-
-            // C4 (parcial — VPS único por enquanto, sem lock/processo migrador separado):
-            // antes o catch abaixo só logava por tenant e o resumo final dizia sempre
-            // "aplicadas em N tenant(s)", sem distinguir sucesso de falha — um tenant
-            // ficava sem migrar silenciosamente até o próximo restart, sem nada gritando
-            // sobre isso. Agora rastreia falhas e o resumo final é WARNING (não INFO) se
-            // qualquer uma ocorreu, com a lista de slugs — visível no boot, não só grep de log.
-            var tenantsComFalha = new List<string>();
-
-            foreach (var tenant in tenantsParaMigrar)
+            try
             {
-                try
-                {
-                    using var tenantScope = app.Services.CreateScope();
-                    var tenantContext = tenantScope.ServiceProvider.GetRequiredService<ITenantContext>();
-                    tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
-
-                    var tenantDb = tenantScope.ServiceProvider.GetRequiredService<AppDbContext>();
-                    await tenantDb.Database.MigrateAsync();
-                }
-                catch (Exception ex)
-                {
-                    // Um schema quebrado/tenant com migration pendente conflitante
-                    // não pode travar o boot dos outros — loga e segue o loop.
-                    tenantsComFalha.Add(tenant.Slug);
-                    logger.LogError(ex, "Falha ao migrar schema do tenant {Slug} ({SchemaName})", tenant.Slug, tenant.SchemaName);
-                }
+                await databaseAdmin.MigrateTenantAsync(
+                    tenant.Id, tenant.SchemaName, tenant.EnabledModules);
             }
-
-            if (tenantsComFalha.Count > 0)
-                logger.LogWarning(
-                    "Migrations: {Ok}/{Total} tenant(s) OK — FALHOU em {Falha}: {Slugs}. Esses tenants " +
-                    "continuam rodando no schema desatualizado até o próximo restart bem-sucedido — " +
-                    "investigar antes que um endpoint novo quebre pra eles.",
-                    tenantsParaMigrar.Count - tenantsComFalha.Count, tenantsParaMigrar.Count,
-                    tenantsComFalha.Count, string.Join(", ", tenantsComFalha));
-            else
-                logger.LogInformation("Migrations aplicadas em {Count} tenant(s) ativo(s)", tenantsParaMigrar.Count);
+            catch (Exception ex)
+            {
+                // Um schema quebrado/tenant com migration pendente conflitante
+                // não pode travar o boot dos outros — loga e segue o loop.
+                tenantsComFalha.Add(tenant.Slug);
+                logger.LogError(ex, "Falha ao migrar schema do tenant {Slug} ({SchemaName})", tenant.Slug, tenant.SchemaName);
+            }
         }
+
+        if (tenantsComFalha.Count > 0)
+            logger.LogWarning(
+                "Migrations: {Ok}/{Total} tenant(s) OK — FALHOU em {Falha}: {Slugs}. Esses tenants " +
+                "continuam rodando no schema desatualizado até o próximo restart bem-sucedido — " +
+                "investigar antes que um endpoint novo quebre pra eles.",
+                tenantsParaMigrar.Count - tenantsComFalha.Count, tenantsParaMigrar.Count,
+                tenantsComFalha.Count, string.Join(", ", tenantsComFalha));
+        else
+            logger.LogInformation("Migrations aplicadas em {Count} tenant(s) ativo(s)", tenantsParaMigrar.Count);
 
         logger.LogInformation("Banco pronto.");
 
@@ -657,12 +803,32 @@ using (var scope = app.Services.CreateScope())
                 Email        = platformOwnerEmail,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(ownerPassword),
                 Role         = CardGameStore.Models.PostgreSQL.UserRole.PlatformOwner,
+                PlatformAccessProfile = PlatformAccessProfiles.Primary,
+                PlatformPermissionsJson = PlatformAccessProfiles.Serialize([PlatformPermission.All]),
+                IsPlatformPrimaryOwner = true,
+                SessionVersion = 1,
                 IsActive     = true,
                 CreatedAt    = DateTime.UtcNow,
                 UpdatedAt    = DateTime.UtcNow
             });
             await db.SaveChangesAsync();
             logger.LogInformation("Usuário dono da plataforma criado com sucesso.");
+        }
+
+        // A conta indicada pelo ambiente é a raiz também em instalações antigas.
+        if (!string.IsNullOrWhiteSpace(platformOwnerEmail))
+        {
+            var primaryOwner = await db.Users.FirstOrDefaultAsync(u =>
+                u.Email == platformOwnerEmail &&
+                u.Role == CardGameStore.Models.PostgreSQL.UserRole.PlatformOwner);
+            if (primaryOwner is not null && !primaryOwner.IsPlatformPrimaryOwner)
+            {
+                primaryOwner.IsPlatformPrimaryOwner = true;
+                primaryOwner.PlatformAccessProfile = PlatformAccessProfiles.Primary;
+                primaryOwner.PlatformPermissionsJson = PlatformAccessProfiles.Serialize([PlatformPermission.All]);
+                primaryOwner.SessionVersion++;
+                await db.SaveChangesAsync();
+            }
         }
     }
     catch (Exception ex)
@@ -710,11 +876,15 @@ app.Use(async (context, next) =>
     }
 });
 
-// ForwardedHeaders — lê X-Forwarded-For/Proto do proxy reverso (nginx/Cloudflare)
-// de forma controlada pelo runtime, eliminando leitura manual do header nos serviços
+// ForwardedHeaders — lê For/Proto/Host do proxy reverso. X-Forwarded-Host é
+// necessário no dev: o rewrite do Next chama a API em localhost:5000 e preserva
+// o host original nesse header, permitindo resolver loja.localhost corretamente.
+// Só proxies explicitamente confiáveis abaixo podem sobrescrever esses valores.
 var forwardedOptions = new ForwardedHeadersOptions
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor
+        | ForwardedHeaders.XForwardedProto
+        | ForwardedHeaders.XForwardedHost,
 };
 // Aceita proxy da rede Docker interna (172.16.0.0/12) e loopback
 forwardedOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(IPAddress.Parse("172.16.0.0"), 12));
@@ -722,6 +892,7 @@ forwardedOptions.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetw
 forwardedOptions.KnownProxies.Add(IPAddress.Loopback);
 forwardedOptions.KnownProxies.Add(IPAddress.IPv6Loopback);
 app.UseForwardedHeaders(forwardedOptions);
+app.UseResponseCompression();
 
 // Headers de segurança HTTP em todas as respostas
 app.Use(async (context, next) =>
@@ -732,8 +903,10 @@ app.Use(async (context, next) =>
     context.Response.Headers["Referrer-Policy"]         = "no-referrer";
     context.Response.Headers["Permissions-Policy"]      = "camera=(), microphone=(), geolocation=()";
     // CSP: API retorna apenas JSON/binários — bloquear todo conteúdo ativo.
-    // Exceção: /swagger (só existe em Development) precisa carregar seu próprio
-    // CSS/JS/imagens — mesma origem, sem CDN externo — pra sequer renderizar.
+    // Exceção: /swagger precisa carregar seu próprio CSS/JS/imagens — mesma
+    // origem, sem CDN externo — pra sequer renderizar. (Antes o /swagger só
+    // existia em Development; agora pode estar ligado em produção num host
+    // dedicado via Swagger:Enabled, e esta exceção segue valendo só pra ele.)
     context.Response.Headers["Content-Security-Policy"] =
         context.Request.Path.StartsWithSegments("/swagger")
             ? "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
@@ -741,34 +914,62 @@ app.Use(async (context, next) =>
     await next();
 });
 
+// ---------------------------------------------------------------------------
+// SWAGGER — registrado ANTES do UseTenantResolution, de propósito.
+//
+// A doc é estática (gerada por reflexão sobre os controllers, não toca banco),
+// então não precisa de tenant. E se passasse pela resolução, o host dedicado
+// `dev-swagger.<RootDomain>` seria lido como slug de loja por ExtractSlug —
+// não existiria tenant "dev-swagger" e a resposta seria 404 "Loja não
+// encontrada" antes de o Swagger sequer entrar no pipeline.
+//
+// Fora de Development fica DESLIGADO por padrão: a doc expõe a superfície
+// inteira da API. Pra publicar num host dedicado, ligue Swagger__Enabled=true e
+// deixe o nginx aceitar só esse host (ver deploy/nginx/dev-swagger.conf).
+// ---------------------------------------------------------------------------
+var swaggerEnabled = app.Configuration.GetValue("Swagger:Enabled", app.Environment.IsDevelopment());
+if (swaggerEnabled)
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Tenant-ERP API");
+        c.RoutePrefix    = "swagger"; // UI disponível em /swagger
+        c.DocumentTitle  = "Tenant-ERP API — referência";
+        c.DefaultModelsExpandDepth(0);            // recolhe o paredão de schemas no rodapé
+        c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None); // abre com as tags fechadas
+        c.EnableDeepLinking();                    // URL acompanha o endpoint aberto (link compartilhável)
+        c.EnablePersistAuthorization();           // não perde o token a cada reload
+        c.DisplayRequestDuration();
+    });
+
+    if (!app.Environment.IsDevelopment())
+        app.Logger.LogWarning(
+            "Swagger habilitado fora de Development (Swagger:Enabled=true) — a documentação " +
+            "expõe toda a superfície da API. Garanta que o nginx só sirva /swagger no host " +
+            "dedicado e que ele não esteja aberto na internet sem necessidade.");
+}
+
 // Resolve o tenant da requisição (por Host) antes de qualquer coisa que possa
 // tocar o AppDbContext — o schema que o TenantConnectionInterceptor usa vem
 // do ITenantContext que este middleware popula.
 app.UseTenantResolution();
 
-// Swagger apenas em desenvolvimento — evita expor a estrutura da API em produção
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Tenant-ERP API v1");
-        c.RoutePrefix   = "swagger"; // UI disponível em /swagger
-        c.DocumentTitle = "Tenant-ERP API";
-    });
-}
-
 // SSL gerenciado pelo reverse proxy (Nginx/Cloudflare) — não redirecionar aqui
+app.UseTenantUploadGuard();
 app.UseStaticFiles(); // serve wwwroot/uploads/* como arquivos estáticos
 app.UseCors("FrontendPolicy");
 app.UseRateLimiter();
 app.UseRequestTimeouts();
 app.UseAuthentication();
+app.UseBrowserRequestGuard();
 app.UseTenantClaimGuard();
 app.UseAuthorization();
+app.UsePlatformAccess();
 app.UseOperatorPermissions();
 
 app.MapControllers();
+app.ValidateOperatorPermissionCoverage();
 app.MapHub<ComandaHub>("/hubs/comanda").RequireRateLimiting("comanda-hub");
 
 // MCP — o tenant pluga a IA dele aqui (ver CardGameStore/Mcp/ErpTools.cs).

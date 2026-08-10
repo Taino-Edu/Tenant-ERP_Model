@@ -148,7 +148,34 @@ public class FinanceiroCalculoServiceTests
         dto.ReceitaComandas.Should().Be(20.00m); // 2 × R$10
         dto.Custo.Should().Be(8.00m);            // 2 × R$4
         dto.Margem.Should().Be(12.00m);
-        dto.MargemPercent.Should().Be(150.0m);   // 12/8 × 100
+        dto.MargemPercent.Should().Be(60.0m);    // margem = 12/20; 150% seria markup
+    }
+
+    [Fact]
+    public async Task CalcularAsync_DreClassificada_SeparaEstoqueOperacaoFinanceiroETributos()
+    {
+        var db = CreateDb(nameof(CalcularAsync_DreClassificada_SeparaEstoqueOperacaoFinanceiroETributos));
+        var product = await SeedProductAsync(db, costCents: 400);
+        var service = CreateService(db);
+        var (ini, end, dBrIni, dBrFim) = JanelaHoje();
+        await SeedComandaFechadaAsync(db, product, quantity: 2, unitPriceCents: 1000, closedAt: DateTime.UtcNow);
+
+        db.ExternalTransactions.AddRange(
+            new ExternalTransaction { Source = "manual", Type = "expense", Amount = 2, Description = "ICMS", DueDate = DateTime.UtcNow, Status = "pending", DreGroup = DreGroups.SalesTax },
+            new ExternalTransaction { Source = "manual", Type = "expense", Amount = 3, Description = "Aluguel", DueDate = DateTime.UtcNow, Status = "pending", Category = "Aluguel", DreGroup = DreGroups.OperatingExpense },
+            new ExternalTransaction { Source = "manual", Type = "expense", Amount = 1, Description = "Tarifa", DueDate = DateTime.UtcNow, Status = "paid", DreGroup = DreGroups.Financial },
+            new ExternalTransaction { Source = "manual", Type = "expense", Amount = 1, Description = "CSLL", DueDate = DateTime.UtcNow, Status = "pending", DreGroup = DreGroups.IncomeTax },
+            new ExternalTransaction { Source = "sefaz", Type = "expense", Amount = 100, Description = "Compra", DueDate = DateTime.UtcNow, Status = "pending", DreGroup = DreGroups.InventoryPurchase });
+        await db.SaveChangesAsync();
+
+        var dto = await service.CalcularAsync(ini, end, dBrIni, dBrFim);
+
+        dto.ImpostosSobreVendas.Should().Be(2);
+        dto.ReceitaLiquidaDre.Should().Be(18);
+        dto.ResultadoOperacional.Should().Be(7); // 18 - CMV 8 - aluguel 3
+        dto.ResultadoFinanceiro.Should().Be(-1);
+        dto.ResultadoLiquido.Should().Be(5); // 7 - tarifa 1 - CSLL 1
+        dto.DespesasPorCategoria.Should().ContainSingle(x => x.Categoria == "Aluguel" && x.Valor == 3);
     }
 
     [Fact]

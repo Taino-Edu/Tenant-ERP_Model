@@ -51,13 +51,13 @@ public class Tenant
     /// <summary>Nome do plano contratado — texto livre (sem enum fixo, pricing ainda não fechado).</summary>
     [Required, MaxLength(63)]
     [Column("plan_name")]
-    public string PlanName { get; set; } = "Completo";
+    public string PlanName { get; set; } = "Rio";
 
     [Column("payment_status")]
     public TenantPaymentStatus PaymentStatus { get; set; } = TenantPaymentStatus.Pago;
 
     /// <summary>Módulos pagos habilitados pra este tenant — hoje "fiscal", "estoque",
-    /// "pontos" (fidelidade), "contador" (portal cross-tenant), "ia" (assistente Gemini)
+    /// "restaurante" (comandas), "pontos" (fidelidade), "contador" (portal cross-tenant), "ia" (assistente Gemini)
     /// e "eventos" (gestão de eventos com cobrança de entrada). Ver RequireModuleAttribute
     /// e, pro portal do contador, o gate manual em ContadorPortalController.AutorizarEObterTenantAsync.</summary>
     [Column("enabled_modules")]
@@ -92,9 +92,9 @@ public class Tenant
     public string? CustomDomain { get; set; }
 
     // ── Billing da plataforma ────────────────────────────────────────────────
-    // Tabela vigente (decidida em 2026-07-27, ver BACKLOG): Essencial R$120,
-    // Completo R$269, Avançado R$487; implantação = 2 mensalidades do plano;
-    // primeiro mês de acesso sem mensalidade.
+    // Tabela vigente: Lagoa R$129, Rio R$269 e Mar R$487. Lagoa/Rio têm
+    // implantação de 2 mensalidades; Mar tem implantação gratuita; todos têm
+    // 15 dias sem mensalidade.
     //
     // O valor fica NO TENANT, não numa tabela de planos, de propósito: PlanName
     // já é texto livre e desconto negociado caso a caso é regra, não exceção
@@ -104,11 +104,10 @@ public class Tenant
     /// <summary>Mensalidade efetivamente cobrada deste tenant, em reais. Zero =
     /// não cobra (cortesia, piloto, tenant-zero da própria plataforma). É a base
     /// do MRR: somar isto nos tenants Active dá a receita contratada.</summary>
-    // [Precision] em vez de TypeName = "decimal(10,2)": esta app roda em SQLite
-    // (dev) e Postgres (produção), e nome de tipo cravado só vale num deles — no
-    // Postgres o tipo é `numeric`, e passar "decimal(10,2)" fazia o Npgsql cair
-    // no caminho de mapeamento de coleção e estourar IndexOutOfRangeException ao
-    // gerar migration. [Precision] é agnóstico: cada provider escolhe o tipo.
+    // [Precision] em vez de TypeName = "decimal(10,2)": no Postgres o tipo é
+    // `numeric`, e passar "decimal(10,2)" fazia o Npgsql cair no caminho de
+    // mapeamento de coleção e estourar IndexOutOfRangeException ao gerar
+    // migration. [Precision] deixa o provider escolher o tipo certo.
     [Precision(10, 2)]
     [Column("monthly_price")]
     public decimal MonthlyPrice { get; set; }
@@ -121,8 +120,8 @@ public class Tenant
     [Column("setup_fee")]
     public decimal SetupFee { get; set; }
 
-    /// <summary>Data da PRIMEIRA mensalidade devida. É assim que o "primeiro mês
-    /// de acesso grátis" fica registrado — na provisão vira CreatedAt + 1 mês, em
+    /// <summary>Data da PRIMEIRA mensalidade devida. É assim que o período de
+    /// 15 dias grátis fica registrado — na provisão vira CreatedAt + 15 dias, em
     /// vez de uma flag booleana "primeiroMesGratis" que desalinha da realidade no
     /// instante em que alguém edita a data à mão. Null = billing ainda não
     /// definido (tenant provisionado antes deste campo existir).

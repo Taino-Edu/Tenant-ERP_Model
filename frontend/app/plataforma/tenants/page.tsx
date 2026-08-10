@@ -160,7 +160,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
     saveBilling({
       planName:       plano.nome,
       monthlyPrice:   plano.preco,
-      setupFee:       taxaImplantacao(plano.preco),
+      setupFee:       taxaImplantacao(plano),
       enabledModules: plano.modules,
     })
   }
@@ -170,7 +170,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
     if (!Number.isFinite(valor) || valor < 0) { setMensalidade(String(tenant.monthlyPrice)); return }
     if (valor === tenant.monthlyPrice) return
     // Mexer no valor à mão descola da tabela — o plano vira Personalizado pra
-    // não ficar escrito "Completo" numa loja que paga outro preço.
+    // não ficar escrito "Rio" numa loja que paga outro preço.
     saveBilling({
       planName:     acharPlano(planName) && valor !== acharPlano(planName)!.preco ? PLANO_PERSONALIZADO : planName,
       monthlyPrice: valor,

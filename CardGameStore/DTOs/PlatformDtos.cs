@@ -203,3 +203,40 @@ public class PlatformAuditLogDto
     public string?  TraceId       { get; set; }
     public DateTime CreatedAt     { get; set; }
 }
+
+public sealed class PlatformTeamMemberDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string ProfileKey { get; set; } = string.Empty;
+    public string ProfileName { get; set; } = string.Empty;
+    public string[] Permissions { get; set; } = [];
+    public bool IsPrimaryOwner { get; set; }
+    public bool IsActive { get; set; }
+    public bool InvitationPending { get; set; }
+    public DateTime? LastLoginAt { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class PlatformAccessProfileDto
+{
+    public string Key { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string[] Permissions { get; set; } = [];
+}
+
+public sealed class InvitePlatformOwnerRequest
+{
+    [Required, MaxLength(150)] public string Name { get; set; } = string.Empty;
+    [Required, EmailAddress, MaxLength(255)] public string Email { get; set; } = string.Empty;
+    [Required, MaxLength(40)] public string ProfileKey { get; set; } = string.Empty;
+}
+
+public sealed class UpdatePlatformOwnerRequest
+{
+    [Required, MaxLength(150)] public string Name { get; set; } = string.Empty;
+    [Required, MaxLength(40)] public string ProfileKey { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+}

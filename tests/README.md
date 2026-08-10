@@ -80,30 +80,39 @@ O backend emite os tokens como cookies **HttpOnly** (invisíveis ao JavaScript):
 
 ### Pré-requisitos
 - .NET 8 SDK instalado (`dotnet --version`)
+- Docker com Compose (o banco de testes é PostgreSQL 16 real)
+
+> **Suba o banco sempre pelo compose** (`tests/docker-compose.yml`), nunca com um
+> `docker run` cru. O servidor precisa de `max_locks_per_transaction` bem acima
+> do default de 64: cada teste dropa e recria o próprio schema, e um
+> `DROP SCHEMA CASCADE` de ~60 tabelas estoura a tabela de locks do cluster sob
+> concorrência. Quando isso acontece o schema fica pela metade e testes
+> aleatórios falham com `42P01: relation ... does not exist` — parece bug de
+> isolamento entre testes, mas é configuração do servidor. `run-tests.ps1`
+> detecta um container antigo e o recria sozinho; a `TestDbFactory` aborta com
+> mensagem explícita se o servidor estiver abaixo do mínimo.
 
 ### Comandos
 
 ```bash
-# Na raiz do projeto
-cd tests/unit/CardGameStore.Tests
+# Na raiz do projeto, sobe o PostgreSQL isolado e executa toda a suíte
+./run-tests.ps1
 
-# Restaurar pacotes
-dotnet restore
-
-# Executar todos os testes
-dotnet test
+# Ou execute os passos separadamente
+docker compose -f tests/docker-compose.yml up -d --wait
+dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
 
 # Executar com output detalhado
-dotnet test --logger "console;verbosity=detailed"
+./run-tests.ps1 --logger "console;verbosity=detailed"
 
 # Executar apenas testes de LGPD
-dotnet test --filter "FullyQualifiedName~LgpdServiceTests"
+./run-tests.ps1 --filter "FullyQualifiedName~LgpdServiceTests"
 
 # Executar apenas testes de Audit
-dotnet test --filter "FullyQualifiedName~AuditServiceTests"
+./run-tests.ps1 --filter "FullyQualifiedName~AuditServiceTests"
 
 # Executar apenas testes de comanda
-dotnet test --filter "FullyQualifiedName~ComandaServiceTests"
+./run-tests.ps1 --filter "FullyQualifiedName~ComandaServiceTests"
 ```
 
 ### Cobertura de código (coverlet)
@@ -147,6 +156,6 @@ reportgenerator \
 ## ⚠️ Atenção
 
 - O arquivo `http-client.env.json` **já está no .gitignore** — não commitá-lo com tokens reais
-- Os testes unitários usam banco **InMemory** (sem necessidade de Docker)
+- Os testes xUnit usam **PostgreSQL real**, com um schema isolado por teste
 - Os testes de API precisam do backend rodando na porta `5000`
 - O upload de imagem (09-upload.http) requer um arquivo local — edite `@imagePath` no arquivo

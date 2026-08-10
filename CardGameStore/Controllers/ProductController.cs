@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // ProductController.cs — CRUD de Produtos (Estoque Fixo)
 // GET    /api/product            → lista todos ativos
 // GET    /api/product/{id}       → busca por ID
@@ -9,6 +9,8 @@
 // =============================================================================
 
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
+using CardGameStore.Multitenancy;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -20,15 +22,77 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
+[RequireOperatorPermission(Permissao.Estoque)]
 public class ProductController : ControllerBase
 {
     private readonly IProductService _service;
-    private readonly IbptTaxService _ibpt;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ITenantContext _tenant;
+    private readonly ILogger<ProductController> _logger;
 
-    public ProductController(IProductService service, IbptTaxService ibpt)
+    public ProductController(
+        IProductService service, IServiceScopeFactory scopeFactory,
+        ITenantContext tenant, ILogger<ProductController> logger)
     {
-        _service = service;
-        _ibpt = ibpt;
+        _service      = service;
+        _scopeFactory = scopeFactory;
+        _tenant       = tenant;
+        _logger       = logger;
+    }
+
+    /// <summary>
+    /// Dispara o preenchimento automático do IBPT sem segurar a resposta — num
+    /// escopo PRÓPRIO de injeção de dependência.
+    ///
+    /// Duas armadilhas, e o desenho precisa escapar das duas:
+    ///
+    /// <b>1. Não pode ser aguardado.</b> A versão anterior fazia
+    /// `await _ibpt.TentarSincronizarProdutoAsync(...)` dentro do salvamento.
+    /// O HttpClient do IBPT tem timeout de 15s — com a API lenta ou o token
+    /// recusado, salvar um produto ficava travado esperando uma integração que
+    /// é meramente conveniente. O produto já está salvo antes disso; nada
+    /// justifica prender o usuário.
+    ///
+    /// <b>2. Mas não basta jogar num Task.Run.</b> O IbptTaxService é scoped e
+    /// carrega o AppDbContext junto. Disparar em segundo plano com o serviço da
+    /// requisição faz a tarefa operar sobre um DbContext já descartado assim que
+    /// a resposta HTTP sai — o preenchimento nunca aconteceria, e pior: o
+    /// DbContext não é thread-safe, então a tarefa competiria com a própria
+    /// requisição pelo mesmo contexto ("a second operation was started on this
+    /// context instance"), derrubando o SALVAMENTO por um defeito que nada tem a
+    /// ver com o produto.
+    ///
+    /// Daí o escopo próprio, com o tenant reaplicado: sem `Set()`, o
+    /// TenantConnectionInterceptor falha por projeto (IsExplicitlySet), e mesmo
+    /// que não falhasse a consulta iria para o schema errado.
+    /// </summary>
+    private void SincronizarIbptEmSegundoPlano(Guid productId)
+    {
+        // Capturado ANTES de a requisição terminar: depois disso, o
+        // ITenantContext da requisição já não pode ser lido com segurança.
+        var tenantId = _tenant.TenantId;
+        var schema   = _tenant.SchemaName;
+        var modulos  = _tenant.EnabledModules;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                scope.ServiceProvider.GetRequiredService<ITenantContext>()
+                    .Set(tenantId, schema, modulos);
+                await scope.ServiceProvider.GetRequiredService<IbptTaxService>()
+                    .GarantirNcmNaTabelaEPreencherAsync(productId);
+            }
+            catch (Exception ex)
+            {
+                // Melhor-esforço: o produto já está salvo. Mas engolir sem log foi
+                // exatamente o que manteve o defeito acima invisível.
+                _logger.LogWarning(ex,
+                    "Preenchimento automático IBPT falhou para o produto {ProductId} (tenant {TenantId}).",
+                    productId, tenantId);
+            }
+        });
     }
 
     /// <summary>Lista todos os produtos ativos. Acessível por todos.</summary>
@@ -36,26 +100,24 @@ public class ProductController : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<ProductPublicDto>), 200)]
-    public async Task<IActionResult> GetAll([FromQuery] string? category)
+    public IActionResult GetAll([FromQuery] string? category)
     {
-        var products = category != null
-            ? await _service.GetByCategoryAsync(category)
-            : await _service.GetAllActiveAsync();
         // M12: entidade completa vazava CostPriceInCents/MinimumStock (custo/margem interna)
         // pra qualquer visitante anônimo — endpoint público só devolve o DTO sem esses campos.
-        return Ok(products.Select(ProductPublicDto.FromEntity));
+        // Projeção no banco + serialização assíncrona: o contrato continua
+        // sendo um array JSON, sem materializar o catálogo inteiro no servidor.
+        return Ok(_service.StreamAllActivePublicAsync(category));
     }
 
     /// <summary>Lista todos os produtos ativos para comanda do cliente (sem filtro de marketplace).</summary>
     [HttpGet("store")]
     [Authorize]
     [ProducesResponseType(typeof(IEnumerable<ProductPublicDto>), 200)]
-    public async Task<IActionResult> GetAllStore()
+    public IActionResult GetAllStore()
     {
-        var products = await _service.GetAllForAdminAsync();
         // M12: usado pela comanda do CLIENTE (app/cliente) — mesmo motivo do GetAll acima,
         // Customer não pode ver custo/margem. Admin/Operator usam GetAllAdmin (entidade completa).
-        return Ok(products.Select(ProductPublicDto.FromEntity));
+        return Ok(_service.StreamAllStorePublicAsync());
     }
 
     /// <summary>Lista TODOS os produtos ativos (incluindo ocultos do site). Só Admin/Operator.</summary>
@@ -118,7 +180,7 @@ public class ProductController : ControllerBase
         try { created = await _service.CreateAsync(product); }
         catch (ArgumentException ex) { return BadRequest(new { Message = ex.Message }); }
 
-        await _ibpt.TentarSincronizarProdutoAsync(created.Id, HttpContext.RequestAborted);
+        SincronizarIbptEmSegundoPlano(created.Id);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -138,8 +200,11 @@ public class ProductController : ControllerBase
         catch (ArgumentException ex)     { return BadRequest(new { Message = ex.Message }); }
         catch (KeyNotFoundException ex)  { return NotFound(new { Message = ex.Message }); }
 
-        await _ibpt.TentarSincronizarProdutoAsync(updated.Id, HttpContext.RequestAborted);
-        return Ok(await _service.GetByIdAsync(updated.Id));
+        // A leitura final acontece ANTES de disparar o trabalho de fundo: assim
+        // nenhuma tarefa concorre com esta requisição pelo mesmo DbContext.
+        var resposta = await _service.GetByIdAsync(updated.Id);
+        SincronizarIbptEmSegundoPlano(updated.Id);
+        return Ok(resposta);
     }
 
     /// <summary>Desativa um produto (soft delete). Apenas Admin.</summary>

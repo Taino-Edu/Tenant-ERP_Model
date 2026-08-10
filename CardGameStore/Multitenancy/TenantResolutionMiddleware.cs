@@ -26,6 +26,7 @@ public class TenantResolutionMiddleware
     private readonly IMemoryCache _cache;
     private readonly ILogger<TenantResolutionMiddleware> _logger;
     private readonly string? _rootDomain;
+    private readonly bool _rejectUnknownHosts;
     private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(30);
 
     public TenantResolutionMiddleware(
@@ -38,6 +39,7 @@ public class TenantResolutionMiddleware
         _cache      = cache;
         _logger     = logger;
         _rootDomain = config["Multitenancy:RootDomain"];
+        _rejectUnknownHosts = config.GetValue("Multitenancy:RejectUnknownHosts", false);
     }
 
     public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext, CatalogDbContext catalog)
@@ -105,7 +107,20 @@ public class TenantResolutionMiddleware
             return;
         }
 
-        // Nada reconhecido (slug e domínio próprio) — tenant-zero.
+        // Em produção, Host arbitrário não pode cair silenciosamente no
+        // tenant-zero. Isso evita servir dados públicos do schema "public" por
+        // IP direto, domínio de terceiro ou Host forjado. O domínio raiz e www
+        // continuam sendo os Hosts legítimos da plataforma.
+        if (_rejectUnknownHosts
+            && !IsPlatformHost(host, _rootDomain)
+            && !context.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            await context.Response.WriteAsJsonAsync(new { Message = "Endereço não reconhecido." });
+            return;
+        }
+
+        // Nada reconhecido, mas Host de plataforma permitido — tenant-zero.
         await SetTenantAndContinue(
             context, tenantContext,
             TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
@@ -132,6 +147,22 @@ public class TenantResolutionMiddleware
         string[] enabledModules)
     {
         tenantContext.Set(tenantId, schemaName, enabledModules);
+
+        // Cópia do tenant no HttpContext, além do ITenantContext: o SignalR cria
+        // um escopo de DI PRÓPRIO por invocação de hub e não herda o escopo desta
+        // requisição, então o ITenantContext que o hub recebe nasce no default
+        // (tenant-zero) e o middleware nunca chega nele. O HttpContext do
+        // handshake, ao contrário, continua acessível pela vida da conexão via
+        // HubCallerContext.GetHttpContext() — é por ele que o TenantHubFilter
+        // reidrata o tenant antes de qualquer método do hub rodar.
+        //
+        // Sem isso, um admin de loja.dominio entrava no grupo da tenant-zero
+        // enquanto os eventos da loja iam pro grupo dela: conectado e surdo, sem
+        // erro nenhum. E toda conexão de cliente estourava, porque o
+        // OnConnectedAsync dele toca o banco e o TenantConnectionInterceptor tem
+        // fail-fast pra escopo sem Set().
+        context.Items[TenantHubFilter.HttpContextItemKey] =
+            new TenantSnapshot(tenantId, schemaName, enabledModules);
 
         // Template de mensagem (e não um Dictionary) de propósito: o formatter
         // do console renderiza o escopo chamando ToString() nele, e
@@ -165,8 +196,17 @@ public class TenantResolutionMiddleware
 
         var slug = host[..^suffix.Length];
         // Subdomínio de nível único apenas — "a.b.dominio.com" não é um slug válido.
-        return slug.Length > 0 && !slug.Contains('.') ? slug.ToLowerInvariant() : null;
+        return slug.Length > 0
+            && !slug.Contains('.')
+            && !slug.Equals("www", StringComparison.OrdinalIgnoreCase)
+                ? slug.ToLowerInvariant()
+                : null;
     }
+
+    internal static bool IsPlatformHost(string host, string? rootDomain) =>
+        !string.IsNullOrWhiteSpace(rootDomain)
+        && (host.Equals(rootDomain, StringComparison.OrdinalIgnoreCase)
+            || host.Equals($"www.{rootDomain}", StringComparison.OrdinalIgnoreCase));
 }
 
 public static class TenantResolutionMiddlewareExtensions

@@ -57,6 +57,38 @@ cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
 cd "$COMPOSE_DIR"
 # CACHEBUST força o Docker a recompilar o Next.js
 $COMPOSE build --build-arg CACHEBUST="$(date +%s)"
+
+# ── 3b. Backfill das chaves VAPID (push do navegador) ───────────────────────
+# Instalações criadas antes de o push existir no .env não têm estas chaves, e
+# sem elas o PushService é um no-op silencioso: o usuário concede permissão de
+# notificação no navegador e nunca recebe nada. Gera uma única vez, aqui, com a
+# imagem recém-buildada; execuções seguintes viram no-op.
+# Não basta a variável existir: instalações antigas podem ter placeholder
+# (${VAPID_PRIVATE_KEY}), aspas vazias ou valor curto/corrompido. O Compose
+# avisa "variable is not set", mas o grep antigo tratava o placeholder como
+# chave válida e pulava a geração para sempre.
+if ! grep -Eq '^VAPID_PRIVATE_KEY=[A-Za-z0-9_-]{40,}$' "$APP_DIR/.env" 2>/dev/null \
+   || ! grep -Eq '^VAPID_PUBLIC_KEY=[A-Za-z0-9_-]{80,}$' "$APP_DIR/.env" 2>/dev/null; then
+    echo -e "${YELLOW}🔑 Gerando chaves VAPID (push do navegador) — ausentes no .env...${NC}"
+    if vapid=$(docker run --rm cardgamestore_api:latest gen-vapid 2>/dev/null | grep -E '^VAPID_[A-Z_]+='); then
+        # Linhas VAPID_ vazias antigas precisam sair: o compose usa a PRIMEIRA
+        # ocorrência do .env, então uma vazia no topo anularia a nova no fim.
+        sed -i '/^VAPID_/d' "$APP_DIR/.env"
+        {
+            echo ""
+            echo "# --- Push do navegador (VAPID) — gerado por update.sh em $(date) ---"
+            echo "# Não regenere sem necessidade: trocar o par invalida todas as"
+            echo "# subscrições já salvas e os clientes precisam reativar o push."
+            echo "$vapid"
+        } >> "$APP_DIR/.env"
+        cp "$APP_DIR/.env" "$COMPOSE_DIR/.env"
+        echo -e "${GREEN}✅ Chaves VAPID geradas — push do navegador ativado.${NC}"
+    else
+        echo -e "${YELLOW}⚠️  Falhou ao gerar VAPID; push segue desativado. Rode manualmente:${NC}"
+        echo -e "${YELLOW}   docker run --rm cardgamestore_api:latest gen-vapid >> $APP_DIR/.env${NC}"
+    fi
+fi
+
 $COMPOSE up -d
 
 # nginx.conf entra por bind mount, não pela imagem: o `up -d` acima só recria

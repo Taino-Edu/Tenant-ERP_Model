@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
@@ -82,7 +82,7 @@ public class ComandaService : IComandaService
         _logger.LogInformation("Comanda {Id} aberta para usuário {UserId}", comanda.Id, userId);
 
         // Notifica o cliente (User_{userId}) que a comanda foi aberta pelo admin
-        await _hub.Clients.Group(ComandaHub.GetUserGroup(userId))
+        await _hub.Clients.Group(ComandaHub.GetUserGroup(_tenant.TenantId, userId))
             .SendAsync("ComandaOpened", new { ComandaId = comanda.Id, TableIdentifier = comanda.TableIdentifier });
 
         // Notifica o admin (dashboard)
@@ -274,7 +274,7 @@ public class ComandaService : IComandaService
                     await transaction.CommitAsync();
                 });
 
-                await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+                await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
                     .SendAsync("ItemAddedByAdmin", new { ItemName = existing.ItemNameSnapshot, NewTotalInReais = comanda.TotalInReais });
                 await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
                     .SendAsync("ComandaUpdated", new ComandaUpdateEvent
@@ -322,7 +322,7 @@ public class ComandaService : IComandaService
         });
 
         // Notifica o cliente na comanda que o admin adicionou um item
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ItemAddedByAdmin", new
             {
                 ItemName        = item.ItemNameSnapshot,
@@ -396,7 +396,7 @@ public class ComandaService : IComandaService
 
         var dto = MapToDto(comanda);
         // Notifica cliente e admin da remoção
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
@@ -475,7 +475,7 @@ public class ComandaService : IComandaService
 
         var dto = MapToDto(comanda);
         // Notifica cliente e admin da atualização de quantidade
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
             .SendAsync("ComandaUpdated", new ComandaUpdateEvent
@@ -508,13 +508,17 @@ public class ComandaService : IComandaService
         // (SiteConfig.PontosFidelidadeAtivo, decisão do próprio admin do tenant —
         // sem linha ainda = default true). Defesa em profundidade: rejeita aqui
         // mesmo que um request forjado tente usar pontos sem um dos dois.
-        var usaPontosNestaVenda = paymentMethod == PaymentMethod.Pontos || secondPaymentMethod == PaymentMethod.Pontos;
-        if (usaPontosNestaVenda && !_tenant.EnabledModules.Contains("pontos"))
-            throw new InvalidOperationException("O módulo de fidelidade não está habilitado para esta loja.");
+        // Cashback entra na mesma checagem que pontos: são o mesmo benefício com
+        // roupas diferentes (saldo do cliente que abate a venda), e antes disto o
+        // cashback não passava por gate NENHUM — desligar "pontos" deixava metade
+        // do programa de fidelidade funcionando.
+        var usaFidelidadeNestaVenda =
+            paymentMethod       is PaymentMethod.Pontos or PaymentMethod.Cashback ||
+            secondPaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback;
 
-        var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
-        if (!pontosAtivo && usaPontosNestaVenda)
-            throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
+        var pontosAtivo = await FidelidadeHabilitadaAsync();
+        if (usaFidelidadeNestaVenda && !pontosAtivo)
+            throw new InvalidOperationException(MensagemFidelidadeIndisponivel);
 
         if (discountInCents > 0 && discountInCents > comanda.TotalInCents - comanda.PointsApplied)
             throw new InvalidOperationException(
@@ -721,8 +725,11 @@ public class ComandaService : IComandaService
         comanda.PaymentMethod = paymentMethod;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
-        // Não acumula quando qualquer parte do pagamento usa cashback, pontos ou crediário,
-        // nem quando o programa de pontos está desligado nesta loja.
+        // Não acumula quando qualquer parte do pagamento usa cashback, pontos ou
+        // crediário, nem quando o programa está desligado. `pontosAtivo` agora
+        // exige o módulo TAMBÉM — antes o acúmulo só olhava o toggle da loja,
+        // então um tenant sem o módulo continuava creditando saldo que ninguém
+        // podia gastar.
         if (pontosAtivo && comanda.User != null && paymentMethod != PaymentMethod.Crediario
                                  && paymentMethod != PaymentMethod.Pontos
                                  && paymentMethod != PaymentMethod.Cashback
@@ -765,8 +772,20 @@ public class ComandaService : IComandaService
         // manualmente pelo histórico. Defesa em profundidade: se a loja não contratou o
         // módulo fiscal, ignora a flag silenciosamente (mesmo comportamento gracioso de
         // "não marcou") mesmo que um request forjado tente forçar emitirNotaFiscal=true.
+        // CON-003: a escolha fica registrada ANTES de tentar emitir, e vale
+        // inclusive quando a resposta é "não emitir" — é justamente esse caso que
+        // some sem registro e vira venda sem documento sem dono na conciliação.
+        var moduloFiscalAtivo = _tenant.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase);
+        if (moduloFiscalAtivo)
+        {
+            comanda.FiscalEmissaoEscolhida = emitirNotaFiscal;
+            comanda.FiscalDecisaoPorUserId = adminId;
+            comanda.FiscalDecisaoEm        = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
         NotaFiscalEmitida? nota = null;
-        if (emitirNotaFiscal && _tenant.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+        if (emitirNotaFiscal && moduloFiscalAtivo)
         {
             using var scope = _scopeFactory.CreateScope();
             // O novo escopo tem seu próprio ITenantContext (default = tenant-zero) —
@@ -786,7 +805,7 @@ public class ComandaService : IComandaService
         dto.NotaFiscalStatus          = nota?.Status.ToString();
         dto.NotaFiscalMotivoRejeicao  = nota?.MotivoRejeicao;
         // Notifica o cliente que a comanda foi fechada
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaClosed", new { ComandaId = comandaId, PaymentMethod = paymentMethod });
         // Notifica o admin
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
@@ -868,7 +887,7 @@ public class ComandaService : IComandaService
             comandaId, comanda.Items.Count(i => i.ProductId.HasValue));
 
         // Notifica o cliente que a comanda foi cancelada
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaCancelled", new { ComandaId = comandaId });
         // Notifica o admin
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
@@ -940,8 +959,8 @@ public class ComandaService : IComandaService
         if (comanda.PointsApplied > 0)
             throw new InvalidOperationException("Pontos já foram aplicados nesta comanda.");
 
-        if (!_tenant.EnabledModules.Contains("pontos"))
-            throw new InvalidOperationException("O módulo de fidelidade não está habilitado para esta loja.");
+        if (!await FidelidadeHabilitadaAsync())
+            throw new InvalidOperationException(MensagemFidelidadeIndisponivel);
 
         var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
         if (!pontosAtivo)
@@ -1011,7 +1030,7 @@ public class ComandaService : IComandaService
         var dto = MapToDto(comanda);
 
         // Notifica o cliente que os pontos foram removidos
-        await _hub.Clients.Group(ComandaHub.GetComandaGroup(comandaId))
+        await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, comandaId))
             .SendAsync("ComandaUpdated", new { ComandaId = comandaId, NewTotalInReais = dto.TotalInReais });
         // Notifica o admin (dashboard)
         await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
@@ -1061,6 +1080,27 @@ public class ComandaService : IComandaService
     }
 
     /// <summary>Mesmo padrão de <see cref="DebitarPontosAsync"/>, pro saldo de cashback (M2).</summary>
+    /// <summary>
+    /// Mensagem única para pontos e cashback. O lojista não distingue "módulo não
+    /// contratado" de "programa desligado" — para ele o que importa é que a opção
+    /// não está disponível e onde ligar.
+    /// </summary>
+    private const string MensagemFidelidadeIndisponivel =
+        "O programa de fidelidade (pontos e cashback) não está ativo nesta loja. " +
+        "Ative em Configurações do site, ou fale com o suporte se o módulo não estiver contratado.";
+
+    /// <summary>
+    /// Fidelidade exige dois "sim": o módulo pago habilitado para o tenant
+    /// (decisão da plataforma) e o toggle operacional da loja (decisão do admin).
+    /// Um único ponto de decisão — antes a checagem estava espalhada e o cashback
+    /// escapava de todas.
+    /// </summary>
+    private async Task<bool> FidelidadeHabilitadaAsync()
+    {
+        if (!_tenant.EnabledModules.Contains("pontos", StringComparer.OrdinalIgnoreCase)) return false;
+        return (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
+    }
+
     private async Task DebitarCashbackAsync(User user, int centavos)
     {
         var linhas = await _db.Users
@@ -1309,6 +1349,25 @@ public class ComandaService : IComandaService
         return MapToDto(updated);
     }
 
+    public async Task<ComandaDto> UpdateNotesAsync(Guid comandaId, Guid requestingUserId, string? notes)
+    {
+        var comanda = await _db.Comandas
+            .Include(c => c.User)
+            .Include(c => c.Items)
+            .FirstOrDefaultAsync(c => c.Id == comandaId)
+            ?? throw new KeyNotFoundException("Comanda não encontrada.");
+
+        var solicitante = await _db.Users.FindAsync(requestingUserId);
+        if (solicitante?.Role != UserRole.Admin && comanda.UserId != requestingUserId)
+            throw new UnauthorizedAccessException("Você não pode alterar esta comanda.");
+        if (comanda.Status is ComandaStatus.Fechada or ComandaStatus.Cancelada)
+            throw new InvalidOperationException("A observação de uma comanda encerrada não pode ser alterada por aqui.");
+
+        comanda.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        await _db.SaveChangesAsync();
+        return MapToDto(comanda);
+    }
+
     private static ComandaDto MapToDto(Comanda comanda) => new()
     {
         Id                         = comanda.Id,
@@ -1324,6 +1383,7 @@ public class ComandaService : IComandaService
         PaymentMethod              = comanda.PaymentMethod,
         SecondPaymentMethod        = comanda.SecondPaymentMethod,
         SecondPaymentAmountInCents = comanda.SecondPaymentAmountInCents,
+        Notes                      = comanda.Notes,
         UserPointsBalance          = comanda.User?.PointsBalance  ?? 0,
         UserBalanceInCents         = comanda.User?.BalanceInCents ?? 0,
         ProfileImageUrl            = comanda.User?.ProfileImageUrl,

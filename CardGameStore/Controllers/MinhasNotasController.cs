@@ -10,6 +10,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -21,6 +22,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/minhas-notas")]
 [Authorize(Policy = "CustomerOrAdmin")]
+[OperatorForbidden]
 [Produces("application/json")]
 public class MinhasNotasController : ControllerBase
 {

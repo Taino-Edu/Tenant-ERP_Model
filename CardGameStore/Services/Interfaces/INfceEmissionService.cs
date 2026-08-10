@@ -1,7 +1,8 @@
-// =============================================================================
+﻿// =============================================================================
 // INfceEmissionService.cs — Contrato do motor de emissão de NFC-e
 // =============================================================================
 
+using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 
 namespace CardGameStore.Services.Interfaces;
@@ -44,18 +45,10 @@ public interface INfceEmissionService
     Task<InutilizacaoFiscal> InutilizarFaixaAsync(
         int ano, int serie, int numeroInicial, int numeroFinal, string justificativa);
 
-    /// <summary>Monta os dados pra exibir/imprimir o cupom da NFC-e (com QR Code, se o CSC estiver configurado).</summary>
-    Task<CupomDto?> ObterCupomAsync(Guid notaId);
+    /// <summary>
+    /// Monta a representação do DANFE NFC-e a partir do XML fiscal persistido.
+    /// Devolve null quando a nota não tem XML — documento sem autorização não
+    /// pode ser apresentado como DANFE (DFE-007 do plano de go-live).
+    /// </summary>
+    Task<DanfeFiscalDto?> ObterCupomAsync(Guid notaId);
 }
-
-public record CupomItemDto(
-    string Nome, int Quantidade, int PrecoUnitarioCentavos, int SubtotalCentavos,
-    int TributosAproximadosCentavos);
-
-public record CupomDto(
-    string RazaoSocial, string Cnpj, string Endereco,
-    string? ChaveAcesso, string? Protocolo, DateTime? EmitidoEm,
-    int Serie, int Numero, string Status,
-    List<CupomItemDto> Itens, int DescontoTotalCentavos, int ValorTotalCentavos, string FormaPagamento,
-    int TributosFederaisCentavos, int TributosEstaduaisCentavos, int TributosMunicipaisCentavos,
-    string? FontesTributos, string? QrCodeUrl);

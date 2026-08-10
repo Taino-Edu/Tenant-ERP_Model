@@ -94,6 +94,8 @@ step 5 "Configurando .env de produção..."
 if [ ! -f "$APP_DIR/.env" ]; then
     # Gera segredos automaticamente
     POSTGRES_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    POSTGRES_APP_PASS=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
+    TENANT_DB_KEY=$(openssl rand -hex 32)
     JWT_SECRET=$(openssl rand -base64 64 | tr -d '\n')
     IP_SALT=$(openssl rand -hex 32)
     ENCRYPTION_KEY=$(openssl rand -base64 32)
@@ -113,18 +115,21 @@ if [ ! -f "$APP_DIR/.env" ]; then
 # Gerado por setup.sh em $(date)
 # Edite este arquivo e preencha GEMINI_API_KEY e SMTP_PASSWORD
 
-# --- Acesso (sem domínio ainda — teste por IP direto, sem HTTPS) ---
-# ATENÇÃO: quando configurar domínio + Cloudflare, você PRECISA trocar as
-# duas linhas abaixo: APP_URL pra https://seu-dominio.com e COOKIE_SECURE
-# pra true. Esquecer isso deixa os cookies JWT trafegando sem o flag Secure
-# em produção. A API loga um warning todo boot enquanto isso não for feito.
-APP_URL=http://${PUBLIC_IP}
-COOKIE_SECURE=false
+# --- Acesso oficial em produção ---
+# O acesso por IP é rejeitado para impedir fallback de Host para tenant-zero.
+APP_URL=https://3esysten.com.br
+COOKIE_SECURE=true
+# Obrigatório em Production. Mantém a resolução de subdomínios isolada e
+# impede fallback silencioso para tenant-zero.
+MULTITENANCY_ROOT_DOMAIN=3esysten.com.br
 
 # --- PostgreSQL ---
 POSTGRES_DB=cardgamestore
-POSTGRES_USER=cardgame_user
+POSTGRES_USER=cardgame_owner
 POSTGRES_PASSWORD=${POSTGRES_PASS}
+POSTGRES_APP_USER=cardgame_catalog
+POSTGRES_APP_PASSWORD=${POSTGRES_APP_PASS}
+TENANT_DB_CREDENTIAL_KEY=${TENANT_DB_KEY}
 
 # --- JWT (não altere após primeiro deploy) ---
 JWT_SECRET=${JWT_SECRET}
@@ -183,6 +188,51 @@ cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
 cd "$APP_DIR/deploy"
 docker compose -f docker-compose.prod.yml build --no-cache
 ok "Imagens buildadas com sucesso"
+
+# =============================================================================
+# 6b. Chaves VAPID (push do navegador)
+# =============================================================================
+# Precisa rodar DEPOIS do build: quem gera o par é a própria API
+# (WebPush.VapidHelper, via `gen-vapid`), então a imagem tem que existir.
+# Sem estas chaves o push do navegador é um no-op silencioso — a feature
+# inteira já esteve implementada ponta a ponta e nunca funcionou em produção
+# exatamente porque ninguém gravava as chaves em lugar nenhum.
+ensure_vapid_keys() {
+    local env_file="$1"
+
+    if grep -q '^VAPID_PRIVATE_KEY=.\+' "$env_file" 2>/dev/null; then
+        ok "Chaves VAPID já configuradas"
+        return 0
+    fi
+
+    local generated
+    if ! generated=$(docker run --rm cardgamestore_api:latest gen-vapid 2>/dev/null | grep -E '^VAPID_[A-Z_]+='); then
+        warn "Não consegui gerar as chaves VAPID — push do navegador ficará desativado."
+        warn "  Gere depois com: docker run --rm cardgamestore_api:latest gen-vapid"
+        warn "  e cole a saída no fim de $env_file"
+        return 0
+    fi
+
+    # Remove linhas VAPID_ vazias de uma instalação anterior antes de anexar,
+    # senão o docker compose lê a PRIMEIRA ocorrência (vazia) e ignora a nova.
+    if grep -q '^VAPID_' "$env_file" 2>/dev/null; then
+        sed -i '/^VAPID_/d' "$env_file"
+    fi
+
+    {
+        echo ""
+        echo "# --- Push do navegador (VAPID) — gerado automaticamente em $(date) ---"
+        echo "# Não regenere sem necessidade: trocar o par invalida todas as"
+        echo "# subscrições já salvas e os clientes precisam reativar o push."
+        echo "$generated"
+    } >> "$env_file"
+
+    ok "Chaves VAPID geradas e gravadas no .env"
+}
+
+step "6b" "Gerando chaves VAPID (push do navegador)..."
+ensure_vapid_keys "$APP_DIR/.env"
+cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
 
 # =============================================================================
 # 7. Subir os containers

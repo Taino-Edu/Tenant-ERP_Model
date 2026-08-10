@@ -6,6 +6,7 @@
 // =============================================================================
 
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,7 @@ namespace CardGameStore.Controllers;
 
 [ApiController]
 [Route("api/push")]
+[OperatorSelfService]
 public class PushController : ControllerBase
 {
     private readonly AppDbContext  _db;

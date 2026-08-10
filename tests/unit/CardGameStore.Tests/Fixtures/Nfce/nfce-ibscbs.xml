@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Documento com os grupos da reforma tributária (IBS/CBS) presentes no item e no
+  total. Serve para provar que o parser tolera as tags novas sem quebrar e sem
+  inventar conteúdo: enquanto o manual do DANFE não exigir destaque desses
+  valores, eles ficam fora da representação (DFE-010).
+-->
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe>
+    <infNFe Id="NFe99260800000000000191650010000000201123456789" versao="4.00">
+      <ide>
+        <cUF>99</cUF>
+        <cNF>12345678</cNF>
+        <natOp>VENDA AO CONSUMIDOR</natOp>
+        <mod>65</mod>
+        <serie>1</serie>
+        <nNF>20</nNF>
+        <dhEmi>2026-08-04T11:11:11-03:00</dhEmi>
+        <tpNF>1</tpNF>
+        <idDest>1</idDest>
+        <cMunFG>9999999</cMunFG>
+        <tpImp>4</tpImp>
+        <tpEmis>1</tpEmis>
+        <cDV>9</cDV>
+        <tpAmb>1</tpAmb>
+        <finNFe>1</finNFe>
+        <indFinal>1</indFinal>
+        <indPres>1</indPres>
+      </ide>
+      <emit>
+        <CNPJ>00000000000191</CNPJ>
+        <xNome>LOJA FIXTURE DE TESTE LTDA</xNome>
+        <enderEmit>
+          <xLgr>Rua das Fixtures</xLgr>
+          <nro>100</nro>
+          <xBairro>Centro</xBairro>
+          <cMun>9999999</cMun>
+          <xMun>Cidade Fixture</xMun>
+          <UF>SP</UF>
+          <CEP>00000000</CEP>
+        </enderEmit>
+        <IE>000000000000</IE>
+        <CRT>1</CRT>
+      </emit>
+      <det nItem="1">
+        <prod>
+          <cProd>SKU-0005</cProd>
+          <cEAN>SEM GTIN</cEAN>
+          <xProd>Produto com IBS CBS</xProd>
+          <NCM>95044000</NCM>
+          <CFOP>5102</CFOP>
+          <uCom>UN</uCom>
+          <qCom>1.0000</qCom>
+          <vUnCom>100.0000000000</vUnCom>
+          <vProd>100.00</vProd>
+          <indTot>1</indTot>
+        </prod>
+        <imposto>
+          <vTotTrib>15.00</vTotTrib>
+          <IBSCBS>
+            <CST>000</CST>
+            <cClassTrib>000001</cClassTrib>
+            <gIBSCBS>
+              <vBC>100.00</vBC>
+              <gIBSUF>
+                <pIBSUF>0.1000</pIBSUF>
+                <vIBSUF>0.10</vIBSUF>
+              </gIBSUF>
+              <gIBSMun>
+                <pIBSMun>0.0000</pIBSMun>
+                <vIBSMun>0.00</vIBSMun>
+              </gIBSMun>
+              <vIBS>0.10</vIBS>
+              <gCBS>
+                <pCBS>0.9000</pCBS>
+                <vCBS>0.90</vCBS>
+              </gCBS>
+            </gIBSCBS>
+          </IBSCBS>
+        </imposto>
+      </det>
+      <total>
+        <ICMSTot>
+          <vBC>0.00</vBC>
+          <vICMS>0.00</vICMS>
+          <vProd>100.00</vProd>
+          <vDesc>0.00</vDesc>
+          <vNF>100.00</vNF>
+          <vTotTrib>15.00</vTotTrib>
+        </ICMSTot>
+        <IBSCBSTot>
+          <vBCIBSCBS>100.00</vBCIBSCBS>
+          <gIBS>
+            <gIBSUFTot>
+              <vIBSUF>0.10</vIBSUF>
+            </gIBSUFTot>
+            <gIBSMunTot>
+              <vIBSMun>0.00</vIBSMun>
+            </gIBSMunTot>
+            <vIBS>0.10</vIBS>
+          </gIBS>
+          <gCBS>
+            <vCBS>0.90</vCBS>
+          </gCBS>
+        </IBSCBSTot>
+      </total>
+      <pag>
+        <detPag>
+          <tPag>03</tPag>
+          <vPag>100.00</vPag>
+          <card>
+            <tpIntegra>2</tpIntegra>
+            <tBand>01</tBand>
+          </card>
+        </detPag>
+      </pag>
+    </infNFe>
+    <infNFeSupl>
+      <qrCode>https://www.nfce.fazenda.sp.gov.br/qrcode?p=99260800000000000191650010000000201123456789|2|1|1|abcdef</qrCode>
+      <urlChave>https://www.nfce.fazenda.sp.gov.br/consulta</urlChave>
+    </infNFeSupl>
+  </NFe>
+  <protNFe versao="4.00">
+    <infProt>
+      <tpAmb>1</tpAmb>
+      <chNFe>99260800000000000191650010000000201123456789</chNFe>
+      <dhRecbto>2026-08-04T11:11:15-03:00</dhRecbto>
+      <nProt>999260000009075411</nProt>
+      <cStat>100</cStat>
+      <xMotivo>Autorizado o uso da NF-e</xMotivo>
+    </infProt>
+  </protNFe>
+</nfeProc>

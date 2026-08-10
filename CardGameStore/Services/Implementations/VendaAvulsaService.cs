@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
@@ -33,13 +33,20 @@ public class VendaAvulsaService : IVendaAvulsaService
         // (SiteConfig.PontosFidelidadeAtivo, decisão do próprio admin do tenant —
         // sem linha ainda = default true). Defesa em profundidade: rejeita aqui
         // mesmo que um request forjado tente usar/resgatar pontos sem um dos dois.
-        var usaPontosNestaVenda = request.PaymentMethod == PaymentMethod.Pontos || request.SecondPaymentMethod == PaymentMethod.Pontos;
-        if (usaPontosNestaVenda && !_tenantContext.EnabledModules.Contains("pontos"))
-            throw new InvalidOperationException("O módulo de fidelidade não está habilitado para esta loja.");
+        // Cashback entra junto com pontos — ver ComandaService.FidelidadeHabilitadaAsync:
+        // são o mesmo benefício, e o cashback não passava por gate nenhum.
+        var usaFidelidadeNestaVenda =
+            request.PaymentMethod       is PaymentMethod.Pontos or PaymentMethod.Cashback ||
+            request.SecondPaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback;
 
-        var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
-        if (!pontosAtivo && usaPontosNestaVenda)
-            throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
+        var pontosAtivo =
+            _tenantContext.EnabledModules.Contains("pontos", StringComparer.OrdinalIgnoreCase) &&
+            ((await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true);
+
+        if (usaFidelidadeNestaVenda && !pontosAtivo)
+            throw new InvalidOperationException(
+                "O programa de fidelidade (pontos e cashback) não está ativo nesta loja. " +
+                "Ative em Configurações do site, ou fale com o suporte se o módulo não estiver contratado.");
 
         // Valida tudo antes de qualquer escrita: falha rápida evita decremento parcial de estoque
         var productIds = request.Items.Select(i => i.ProductId).Distinct().ToList();
@@ -402,7 +409,18 @@ public class VendaAvulsaService : IVendaAvulsaService
         await transaction.CommitAsync();
         });
 
-        if (request.EmitirNotaFiscal && _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase))
+        // CON-003 — ver ComandaService.CloseComandaAsync: a escolha é registrada
+        // mesmo (e principalmente) quando é "não emitir".
+        var moduloFiscalAtivo = _tenantContext.EnabledModules.Contains("fiscal", StringComparer.OrdinalIgnoreCase);
+        if (moduloFiscalAtivo)
+        {
+            venda.FiscalEmissaoEscolhida = request.EmitirNotaFiscal;
+            venda.FiscalDecisaoPorUserId = adminId;
+            venda.FiscalDecisaoEm        = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+        }
+
+        if (request.EmitirNotaFiscal && moduloFiscalAtivo)
         {
             using var scope = _scopeFactory.CreateScope();
             scope.ServiceProvider.GetRequiredService<ITenantContext>()
@@ -528,7 +546,12 @@ public class VendaAvulsaService : IVendaAvulsaService
         var possuiDocumentoFiscalImutavel = await _db.NotasFiscaisEmitidas.AnyAsync(n =>
             n.VendaAvulsaId == id && (n.Status == NotaFiscalStatus.Autorizada ||
                                       n.Status == NotaFiscalStatus.AutorizadaContingencia ||
-                                      n.Status == NotaFiscalStatus.Cancelada));
+                                      n.Status == NotaFiscalStatus.Cancelada ||
+                                      // RES-001: enquanto o destino da transmissão é
+                                      // desconhecido, pode existir documento autorizado
+                                      // com estes valores na SEFAZ — editar a venda aqui
+                                      // criaria divergência silenciosa com ele.
+                                      n.Status == NotaFiscalStatus.ResultadoIncerto));
         if (possuiDocumentoFiscalImutavel)
             throw new InvalidOperationException(
                 "A venda já possui documento fiscal e não pode ter pagamento, cliente ou desconto alterados.");

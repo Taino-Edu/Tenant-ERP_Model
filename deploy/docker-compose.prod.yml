@@ -100,7 +100,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
       # Banco de dados
-      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_USER:-cardgame_user};Password=${POSTGRES_PASSWORD}"
+      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_APP_USER:-cardgame_catalog};Password=${POSTGRES_APP_PASSWORD}"
+      ConnectionStrings__PostgreSQLAdmin: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-cardgamestore};Username=${POSTGRES_USER:-cardgame_owner};Password=${POSTGRES_PASSWORD}"
+      Database__CatalogRole: "${POSTGRES_APP_USER:-cardgame_catalog}"
+      Database__TenantCredentialKey: "${TENANT_DB_CREDENTIAL_KEY}"
       # JWT
       JwtSettings__SecretKey: "${JWT_SECRET}"
       JwtSettings__Issuer: "${APP_URL:-http://localhost}"
@@ -115,15 +118,27 @@ services:
       SmtpSettings__FromEmail: "${SMTP_FROM_EMAIL:-noreply@tenant-erp.local}"
       SmtpSettings__FromName: "${SMTP_FROM_NAME:-Tenant ERP}"
       SmtpSettings__AppUrl: "${APP_URL:-http://localhost}"
+      # Push do navegador (VAPID). Sem estas chaves o PushService vira no-op
+      # silencioso e /api/push/vapid-public-key devolve 404 — foi exatamente o
+      # que aconteceu enquanto elas não existiam aqui: a feature inteira estava
+      # implementada ponta a ponta e nunca funcionou em produção.
+      # setup.sh (deploy novo) e update.sh (instalação existente) geram e gravam
+      # no .env automaticamente; pra gerar à mão:
+      #   docker run --rm cardgamestore_api:latest gen-vapid
+      Vapid__PublicKey: "${VAPID_PUBLIC_KEY}"
+      Vapid__PrivateKey: "${VAPID_PRIVATE_KEY}"
+      Vapid__Subject: "${VAPID_SUBJECT:-mailto:contato@tenant-erp.local}"
       # Integrações
       GeminiSettings__ApiKey: "${GEMINI_API_KEY}"
       # Prospecção de leads (/plataforma/prospeccao) — chave dedicada e opcional,
       # separada da GEMINI_API_KEY acima; sem ela, a busca funciona normalmente
       # e só o botão "Enriquecer com IA" fica indisponível.
       ProspectingSettings__GeminiApiKey: "${PROSPECTING_GEMINI_API_KEY}"
-      # Inter PJ — certificado mTLS (Client ID/Secret são salvos via /admin/integracoes)
-      Inter__CertificatePath: "/app/certs/inter/inter.crt"
-      Inter__KeyPath: "/app/certs/inter/inter.key"
+      # Inter PJ: NÃO há variável de certificado aqui de propósito. O par
+      # .crt/.key é enviado por tenant em /admin/integracoes e guardado
+      # criptografado no banco (InterSyncService.BuildMtlsClient lê de lá).
+      # As antigas Inter__CertificatePath/Inter__KeyPath apontavam pra um arquivo
+      # compartilhado entre todos os tenants — nenhum código as lia mais.
       # Segurança — só true quando estiver atrás de HTTPS (Cloudflare); em teste
       # via IP puro/HTTP direto tem que ser false, senão o cookie nunca é aceito.
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
@@ -132,6 +147,12 @@ services:
       # Sem isso, TenantResolutionMiddleware.ExtractSlug() nunca acha slug nenhum e
       # toda requisição cai em tenant-zero, mesmo com o wildcard configurado no Nginx.
       Multitenancy__RootDomain: "${MULTITENANCY_ROOT_DOMAIN}"
+      Multitenancy__RejectUnknownHosts: "true"
+      # Referência da API (Swagger UI). Fora de Development o padrão é desligado;
+      # aqui fica ligado porque existe um host dedicado só pra ela — o nginx só
+      # serve /swagger em dev-swagger.<domínio> (ver deploy/nginx/dev-swagger.conf).
+      # A doc é gerada antes da resolução de tenant, então não depende de slug.
+      Swagger__Enabled: "${SWAGGER_ENABLED:-true}"
       Security__IpHashSalt: "${IP_HASH_SALT}"
       Encryption__Key: "${ENCRYPTION_KEY}"
       # Seed do dono da plataforma (painel /plataforma) — só roda se preenchido.
@@ -143,10 +164,11 @@ services:
       ADMIN_SEED_PASSWORD: "${ADMIN_SEED_PASSWORD}"
     volumes:
       - api_uploads:/app/wwwroot/uploads
-      - ./certs/inter:/app/certs/inter
     depends_on:
       postgres:
         condition: service_healthy
+      database-security-init:
+        condition: service_completed_successfully
     networks:
       - cardgame_network
     restart: unless-stopped
@@ -175,10 +197,13 @@ services:
     container_name: cardgamestore_postgres
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-cardgamestore}
-      POSTGRES_USER:     ${POSTGRES_USER:-cardgame_user}
+      POSTGRES_USER:     ${POSTGRES_USER:-cardgame_owner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-cardgame_catalog}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
     networks:
       - cardgame_network
     restart: unless-stopped
@@ -193,10 +218,32 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cardgame_user} -d ${POSTGRES_DB:-cardgamestore}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cardgame_owner} -d ${POSTGRES_DB:-cardgamestore}"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Idempotente e executado também em volumes já existentes. Cria somente o
+  # papel restrito usado pela API; migrations/grants por schema ficam com o
+  # TenantDatabaseAdmin durante o boot.
+  database-security-init:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-cardgamestore}
+      POSTGRES_USER: ${POSTGRES_USER:-cardgame_owner}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-cardgame_catalog}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
+    volumes:
+      - ./postgres-init:/scripts:ro
+    command: ["/scripts/10-runtime-role.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - cardgame_network
+    restart: "no"
 
   # ---------------------------------------------------------------------------
   # EVOLUTION API — WhatsApp por tenant (feature premium). NÃO SOBE POR PADRÃO.

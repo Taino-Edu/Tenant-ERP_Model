@@ -7,10 +7,13 @@ import { fiscalApi, FiscalConfigDto, FiscalSaudeDto, IbptStatusDto, NaturezaOper
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import Modal from '@/components/admin/ui/Modal'
+import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
+import NumberInput from '@/components/admin/ui/NumberInput'
+import AlertasFiscaisCard from '@/components/admin/fiscal/AlertasFiscaisCard'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
   Plus, Trash2, Download, ShieldCheck, Star, RefreshCw, Ban, ScrollText, Printer,
-  Calculator, UserPlus, Check, Clock, CalendarClock, Send, MessageSquare, X,
+  Calculator, UserPlus, Check, Clock, CalendarClock, Send, MessageSquare, X, Copy,
 } from 'lucide-react'
 
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
@@ -19,7 +22,15 @@ const STATUS_INFO: Record<string, { label: string; color: string }> = {
   Rejeitada:               { label: 'Rejeitada',             color: 'bg-red-500/15 text-red-400 border-red-500/30' },
   Cancelada:               { label: 'Cancelada',             color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
   AutorizadaContingencia:  { label: 'Contingência',          color: 'bg-orange-500/15 text-orange-400 border-orange-500/30' },
+  // RES-001: a resposta da SEFAZ se perdeu e a chave ainda está sendo consultada.
+  // Não é pendente (o documento pode estar autorizado) nem rejeitada.
+  ResultadoIncerto:        { label: 'Resultado incerto',     color: 'bg-purple-500/15 text-purple-300 border-purple-500/30' },
 }
+
+// Só quem tem documento fiscal existente pode ter cupom impresso. Uma nota com
+// chave reservada mas sem autorização (pendente, rejeitada, resultado incerto)
+// não tem DANFE — o botão levaria a uma página vazia.
+const STATUS_COM_CUPOM = ['Autorizada', 'AutorizadaContingencia', 'Cancelada']
 
 const REGIMES = [
   { value: 'SimplesNacional', label: 'Simples Nacional' },
@@ -45,6 +56,39 @@ const CSOSN_OPCOES = [
   { value: '500', label: '500 — ICMS já retido antes (substituição tributária)' },
   { value: '900', label: '900 — Outros' },
 ]
+
+// CST de ICMS — usado por quem está fora do Simples (CRT=3). O par do CSOSN:
+// mesma natureza, código diferente conforme o regime da loja.
+const CST_OPCOES = [
+  { value: '',   label: '— Nenhum —' },
+  { value: '00', label: '00 — Tributada integralmente (mais comum)' },
+  { value: '60', label: '60 — ICMS já cobrado antes por substituição tributária' },
+  { value: '20', label: '20 — Com redução de base de cálculo' },
+  { value: '40', label: '40 — Isenta' },
+  { value: '41', label: '41 — Não tributada' },
+  { value: '50', label: '50 — Suspensão' },
+  { value: '10', label: '10 — Tributada e com cobrança de ICMS-ST' },
+  { value: '30', label: '30 — Isenta e com cobrança de ICMS-ST' },
+  { value: '70', label: '70 — Com redução de base e cobrança de ICMS-ST' },
+  { value: '90', label: '90 — Outras' },
+]
+
+// CSTs de PIS/COFINS que aparecem em venda no varejo. Vazio = padrão do regime
+// (01 tributável, com a alíquota cumulativa ou não-cumulativa conforme o caso).
+const CST_PIS_COFINS_OPCOES = [
+  { value: '',   label: '— Padrão do regime —' },
+  { value: '01', label: '01 — Tributável, alíquota básica' },
+  { value: '02', label: '02 — Tributável, alíquota diferenciada' },
+  { value: '04', label: '04 — Monofásico, alíquota zero' },
+  { value: '06', label: '06 — Alíquota zero' },
+  { value: '07', label: '07 — Isenta' },
+  { value: '08', label: '08 — Sem incidência' },
+  { value: '09', label: '09 — Com suspensão' },
+  { value: '49', label: '49 — Outras operações de saída' },
+]
+
+/** CSTs em que a própria loja recolhe o ST (o 60 é ST já retido pelo fornecedor). */
+const CST_COM_ST = ['10', '30', '70']
 
 function fmtDate(d?: string) {
   if (!d) return '—'
@@ -106,6 +150,12 @@ export default function FiscalPage() {
   const [razaoSocial, setRazaoSocial]     = useState('')
   const [ie, setIe]                       = useState('')
   const [regime, setRegime]               = useState('SimplesNacional')
+  // RTC-001 — as duas condições que o regime declarado não revela e que
+  // selecionam a faixa do catálogo de regras de IBS/CBS.
+  const [excedeuSublimite, setExcedeuSublimite]   = useState(false)
+  const [optouRegimeRegular, setOptouRegimeRegular] = useState(false)
+  // Fora do Simples a natureza usa CST (não CSOSN) e destaca PIS/COFINS por item.
+  const regimeNormal = regime !== 'SimplesNacional'
   const [ambiente, setAmbiente]           = useState('Homologacao')
   const [serieNfce, setSerieNfce]         = useState(1)
   const [emailContador, setEmailContador] = useState('')
@@ -130,6 +180,10 @@ export default function FiscalPage() {
   const [ibptStatus, setIbptStatus] = useState<IbptStatusDto | null>(null)
   const [savingIbpt, setSavingIbpt] = useState(false)
   const [syncingIbpt, setSyncingIbpt] = useState(false)
+  const [importandoIbpt, setImportandoIbpt] = useState(false)
+  // Mostrar a UF no texto de ajuda evita o erro mais caro da importação: pegar a
+  // tabela do estado errado, que muda a alíquota estadual sem nada denunciar.
+  const ufDaLoja = uf || '<UF>'
 
   // Formas de pagamento que emitem NFC-e sozinhas ao fechar a venda, sem perguntar.
   // Vazio por padrão — o admin decide a cada fechamento via checkbox (ver /admin/comanda
@@ -159,6 +213,16 @@ export default function FiscalPage() {
   const [novoIbsCbsClassTrib, setNovoIbsCbsClassTrib] = useState('000001')
   const [novoPadrao, setNovoPadrao]       = useState(false)
   const [savingNatureza, setSavingNatureza] = useState(false)
+  // Regime normal (Lucro Presumido/Real): CST no lugar do CSOSN e PIS/COFINS
+  // destacados por item. Ficam guardados junto dos campos do Simples — a mesma
+  // natureza continua válida se a empresa trocar de regime.
+  const [novoCst, setNovoCst] = useState('')
+  const [novaReducaoBc, setNovaReducaoBc] = useState('0')
+  const [novaAliquotaFcp, setNovaAliquotaFcp] = useState('0')
+  const [novoCstPis, setNovoCstPis] = useState('')
+  const [novoCstCofins, setNovoCstCofins] = useState('')
+  const [novaAliquotaPis, setNovaAliquotaPis] = useState('')
+  const [novaAliquotaCofins, setNovaAliquotaCofins] = useState('')
 
   // Exportação de XMLs
   const [inicio, setInicio] = useState('')
@@ -172,6 +236,7 @@ export default function FiscalPage() {
   const [inutFim, setInutFim] = useState(1)
   const [inutJustificativa, setInutJustificativa] = useState('')
   const [inutilizando, setInutilizando] = useState(false)
+  const [confirmarInutilizacao, setConfirmarInutilizacao] = useState(false)
 
   // Histórico de notas
   const [notas, setNotas]               = useState<NotaFiscalDto[]>([])
@@ -186,6 +251,8 @@ export default function FiscalPage() {
   // Contador — convite e aprovação de solicitações de acesso
   const [convidarEmail, setConvidarEmail] = useState('')
   const [convidando, setConvidando] = useState(false)
+  const [conviteLink, setConviteLink] = useState('')
+  const [conviteLinkCopiado, setConviteLinkCopiado] = useState(false)
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoContadorDto[]>([])
   const [loadingSolicitacoes, setLoadingSolicitacoes] = useState(true)
   const [aprovandoId, setAprovandoId] = useState<string | null>(null)
@@ -243,12 +310,28 @@ export default function FiscalPage() {
     try {
       const { data } = await fiscalApi.convidarContador(convidarEmail.trim())
       toast.success(data.message)
+      setConviteLink(data.invitationPath
+        ? new URL(data.invitationPath, window.location.origin).toString()
+        : '')
+      setConviteLinkCopiado(false)
       setConvidarEmail('')
       loadSolicitacoes()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao convidar contador'))
     } finally {
       setConvidando(false)
+    }
+  }
+
+  async function copiarConviteContador() {
+    if (!conviteLink) return
+
+    try {
+      await navigator.clipboard.writeText(conviteLink)
+      setConviteLinkCopiado(true)
+      toast.success('Link do convite copiado!')
+    } catch {
+      toast.error('Não consegui copiar automaticamente. Selecione o link e copie manualmente.')
     }
   }
 
@@ -371,10 +454,10 @@ export default function FiscalPage() {
       toast.error('A justificativa precisa ter pelo menos 15 caracteres.')
       return
     }
-    if (!window.confirm(
-      `Inutilizar definitivamente a faixa ${inutSerie}/${inutInicio}-${inutFim} de ${inutAno}? Esta operação não pode ser desfeita.`
-    )) return
+    setConfirmarInutilizacao(true)
+  }
 
+  async function confirmarInutilizarFaixa() {
     setInutilizando(true)
     try {
       const { data } = await fiscalApi.inutilizarFaixa({
@@ -383,6 +466,7 @@ export default function FiscalPage() {
       })
       toast.success(`Faixa inutilizada. Protocolo ${data.protocolo}`)
       setInutJustificativa('')
+      setConfirmarInutilizacao(false)
       loadNotas()
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao inutilizar faixa'))
@@ -404,6 +488,8 @@ export default function FiscalPage() {
       setRazaoSocial(cfg.razaoSocial ?? '')
       setIe(cfg.inscricaoEstadual ?? '')
       setRegime(cfg.regimeTributario ?? 'SimplesNacional')
+      setExcedeuSublimite(cfg.excedeuSublimiteSimples ?? false)
+      setOptouRegimeRegular(cfg.optouRegimeRegularIbsCbs ?? false)
       setAmbiente(cfg.ambiente ?? 'Homologacao')
       setSerieNfce(cfg.serieNfce ?? 1)
       setEmailContador(cfg.emailContador ?? '')
@@ -434,6 +520,8 @@ export default function FiscalPage() {
     try {
       const { data } = await fiscalApi.saveConfig({
         cnpj, razaoSocial, inscricaoEstadual: ie, regimeTributario: regime,
+        excedeuSublimiteSimples: excedeuSublimite,
+        optouRegimeRegularIbsCbs: optouRegimeRegular,
         ambiente, serieNfce, emailContador,
         logradouro, numero, complemento, bairro,
         codigoMunicipioIbge, municipio, uf, cep,
@@ -479,12 +567,38 @@ export default function FiscalPage() {
       const { data } = await fiscalApi.sincronizarIbpt()
       const { data: status } = await fiscalApi.getIbptStatus()
       setIbptStatus(status)
-      toast.success(`${data.atualizados} produto(s) atualizado(s); ${data.ignoradosManuais} override(s) preservado(s).`)
-      if (data.falhas > 0) toast.error(`${data.falhas} produto(s) falharam. Consulte o status da integração.`)
+      toast.success(
+        `${data.atualizados} produto(s) atualizado(s) pela tabela local; ` +
+        `${data.ignoradosManuais} override(s) preservado(s).`)
+      // A busca de dado novo no IBPT roda fora da requisição — dizer isso evita a
+      // leitura errada de que o botão não fez nada quando a tabela já estava em dia.
+      if (data.buscandoAtualizacao)
+        toast.success('Buscando atualização no IBPT em segundo plano — recarregue em alguns minutos.')
+      if (data.falhas > 0) toast.error(`${data.falhas} produto(s) sem NCM na tabela local ainda.`)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao sincronizar tabela IBPT'))
     } finally {
       setSyncingIbpt(false)
+    }
+  }
+
+  async function importarTabelaIbpt(file: File) {
+    setImportandoIbpt(true)
+    try {
+      const { data } = await fiscalApi.importarTabelaIbpt(file)
+      const { data: status } = await fiscalApi.getIbptStatus()
+      setIbptStatus(status)
+      toast.success(
+        `${data.ncmsImportados.toLocaleString('pt-BR')} NCM(s) importados (versão ${data.versao ?? '—'}); ` +
+        `${data.produtosAtualizados} produto(s) preenchido(s).`)
+      // Produto cujo NCM não existe na tabela é erro de classificação, não da
+      // importação — dizer isso evita a leitura de que o arquivo veio incompleto.
+      if (data.produtosSemTabela > 0)
+        toast.error(`${data.produtosSemTabela} produto(s) com NCM fora da tabela. Confira o NCM em Admin > Estoque.`)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao importar a tabela do IBPT'))
+    } finally {
+      setImportandoIbpt(false)
     }
   }
 
@@ -524,7 +638,8 @@ export default function FiscalPage() {
         csosn: novoCsosn || undefined,
         percentualCreditoSn: ['101', '201'].includes(novoCsosn) && novoPercentualCredito ? Number(novoPercentualCredito) : undefined,
         origemMercadoria: Number(novaOrigemMercadoria),
-        modalidadeBcSt: ['201', '202', '203'].includes(novoCsosn) ? Number(novaModalidadeBcSt) : undefined,
+        modalidadeBcSt: ['201', '202', '203'].includes(novoCsosn) || CST_COM_ST.includes(novoCst)
+          ? Number(novaModalidadeBcSt) : undefined,
         percentualMvaSt: novaModalidadeBcSt === '4' ? numero(novoMvaSt) : undefined,
         percentualReducaoBcSt: numero(novaReducaoBcSt),
         aliquotaIcmsSt: numero(novaAliquotaIcmsSt),
@@ -535,11 +650,20 @@ export default function FiscalPage() {
         ibsCbsCst: novoIbsCbsCst,
         ibsCbsClassTrib: novoIbsCbsClassTrib,
         isPadrao: novoPadrao,
+        cst: novoCst || undefined,
+        percentualReducaoBc: ['20', '70'].includes(novoCst) ? numero(novaReducaoBc) : undefined,
+        aliquotaFcp: numero(novaAliquotaFcp),
+        cstPis: novoCstPis || undefined,
+        cstCofins: novoCstCofins || undefined,
+        aliquotaPis: numero(novaAliquotaPis),
+        aliquotaCofins: numero(novaAliquotaCofins),
       })
       setNovaDescricao(''); setNovoCfop(''); setNovoCsosn(''); setNovoPercentualCredito(''); setNovoPadrao(false)
       setNovaOrigemMercadoria('0'); setNovaModalidadeBcSt('4'); setNovoMvaSt('')
       setNovaReducaoBcSt('0'); setNovaAliquotaIcmsSt(''); setNovaAliquotaIcmsProprio('')
       setNovaAliquotaFcpSt('0'); setNovaBaseStFixa(''); setNovoIbsCbsCst('000'); setNovoIbsCbsClassTrib('000001')
+      setNovoCst(''); setNovaReducaoBc('0'); setNovaAliquotaFcp('0')
+      setNovoCstPis(''); setNovoCstCofins(''); setNovaAliquotaPis(''); setNovaAliquotaCofins('')
       toast.success('Natureza de operação criada!')
       load()
     } catch (err) {
@@ -770,13 +894,50 @@ export default function FiscalPage() {
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Série NFC-e</label>
-            <input type="number" min={1} value={serieNfce} onChange={e => setSerieNfce(Number(e.target.value))} className="input w-full" />
+            <NumberInput min={1} value={serieNfce} fallback={1} onChange={v => setSerieNfce(v ?? 1)} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Email do Contador</label>
             <input type="email" value={emailContador} onChange={e => setEmailContador(e.target.value)} placeholder="contador@email.com" className="input w-full" />
           </div>
         </div>
+
+        {/* RTC-001 — o regime declarado não revela nenhuma das duas, e o sistema
+            não tem como inferi-las: são informação do contador. Selecionam qual
+            faixa do catálogo de IBS/CBS se aplica a esta loja. */}
+        {!regimeNormal && (
+          <div className="mt-4 p-3 rounded-xl bg-surface-800/50 border border-surface-700/50">
+            <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">
+              Situação no IBS/CBS (informar com o contador)
+            </p>
+            <label className="flex items-start gap-2 text-sm text-gray-300 cursor-pointer mb-2">
+              <input
+                type="checkbox" className="accent-brand-500 mt-0.5"
+                checked={excedeuSublimite}
+                onChange={e => setExcedeuSublimite(e.target.checked)}
+              />
+              <span>
+                Excedeu o sublimite estadual do Simples
+                <span className="block text-xs text-gray-500">
+                  Muda o enquadramento do IBS/CBS mesmo sem alterar o regime declarado.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-gray-300 cursor-pointer">
+              <input
+                type="checkbox" className="accent-brand-500 mt-0.5"
+                checked={optouRegimeRegular}
+                onChange={e => setOptouRegimeRegular(e.target.checked)}
+              />
+              <span>
+                Optou pelo regime regular de IBS/CBS
+                <span className="block text-xs text-gray-500">
+                  Opção formal do optante do Simples; na dúvida, deixe desmarcado e confirme com o contador.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
 
         <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold mt-5 mb-3">Endereço do Estabelecimento</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -897,9 +1058,27 @@ export default function FiscalPage() {
           </button>
           <button onClick={syncIbpt} disabled={syncingIbpt || (!ibptStatus?.configurado && !ibptToken)} className="btn-primary">
             {syncingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Sincronizar produtos agora
+            Aplicar tabela e buscar atualização
           </button>
+
+          {/* Caminho que não depende da API: o mesmo dado, do arquivo que o IBPT
+              entrega no pacote por CNPJ. Existe porque a API sai do ar — e
+              quando sai, sem isto a loja fica sem emitir. */}
+          <label className={`btn-secondary cursor-pointer ${importandoIbpt ? 'opacity-60 pointer-events-none' : ''}`}>
+            {importandoIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {importandoIbpt ? 'Importando…' : 'Importar tabela (.csv)'}
+            <input
+              type="file" accept=".csv,text/csv" className="hidden"
+              disabled={importandoIbpt}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importarTabelaIbpt(f) }}
+            />
+          </label>
         </div>
+        <p className="text-[11px] text-gray-500 mt-2">
+          Sem internet até o IBPT? Baixe o pacote no site deles e importe o
+          <strong> TabelaIBPTax{ufDaLoja}&lt;versão&gt;.csv</strong> — o arquivo traz os ~12 mil NCMs de
+          uma vez, e vale para todos os produtos, inclusive os que você cadastrar depois.
+        </p>
         <p className="text-[11px] text-gray-500 mt-3">
           O token é criptografado e nunca é exibido novamente. A fonte, versão, chave e vigência ficam registradas por produto.
         </p>
@@ -957,9 +1136,19 @@ export default function FiscalPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{n.descricao}</p>
                 <p className="text-xs text-gray-500">
-                  CFOP {n.cfop}{n.csosn ? ` · CSOSN ${n.csosn}` : ''}
+                  CFOP {n.cfop}
+                  {n.csosn ? ` · CSOSN ${n.csosn}` : ''}
+                  {n.cst ? ` · CST ${n.cst}` : ''}
                   {n.csosn === '101' && n.percentualCreditoIcmsSn != null && ` (${n.percentualCreditoIcmsSn}% crédito)`}
                 </p>
+                {/* Sem o código do regime em que a loja está, a natureza não é
+                    utilizável na emissão — avisa aqui e não na hora da venda. */}
+                {regimeNormal && !n.cst && (
+                  <p className="text-xs text-amber-400">Sem CST — não emite fora do Simples.</p>
+                )}
+                {!regimeNormal && !n.csosn && (
+                  <p className="text-xs text-amber-400">Sem CSOSN — usará 102 na emissão.</p>
+                )}
               </div>
               <button onClick={() => removeNatureza(n.id)} className="text-gray-500 hover:text-red-400 p-1">
                 <Trash2 className="w-4 h-4" />
@@ -982,15 +1171,48 @@ export default function FiscalPage() {
             <input value={novoCfop} onChange={e => setNovoCfop(e.target.value)} placeholder="5102" className="input w-full" />
           </div>
           <div>
-            <label className="text-xs text-gray-400 font-semibold mb-1 block">CSOSN</label>
-            <select value={novoCsosn} onChange={e => setNovoCsosn(e.target.value)} className="input w-full">
-              {CSOSN_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+            {/* O campo segue o regime da loja: CSOSN no Simples, CST fora dele.
+                Mostrar os dois ao mesmo tempo só produziria o par errado no XML. */}
+            <label className="text-xs text-gray-400 font-semibold mb-1 block">
+              {regimeNormal ? 'CST de ICMS' : 'CSOSN'}
+            </label>
+            {regimeNormal ? (
+              <select value={novoCst} onChange={e => setNovoCst(e.target.value)} className="input w-full">
+                {CST_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ) : (
+              <select value={novoCsosn} onChange={e => setNovoCsosn(e.target.value)} className="input w-full">
+                {CSOSN_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            )}
           </div>
           <button onClick={addNatureza} disabled={savingNatureza} className="btn-primary justify-center">
             {savingNatureza ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           </button>
         </div>
+
+        {regimeNormal && ['00', '10', '20', '70', '90'].includes(novoCst) && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-2">
+            <div>
+              <label className="text-xs text-gray-400 font-semibold mb-1 block">Alíquota ICMS (%)</label>
+              <input type="number" min={0} max={100} step={0.01} value={novaAliquotaIcmsProprio}
+                     onChange={e => setNovaAliquotaIcmsProprio(e.target.value)} className="input w-full" />
+            </div>
+            {['20', '70'].includes(novoCst) && (
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Redução da BC (%)</label>
+                <input type="number" min={0} max={100} step={0.01} value={novaReducaoBc}
+                       onChange={e => setNovaReducaoBc(e.target.value)} className="input w-full" />
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-gray-400 font-semibold mb-1 block">FCP (%)</label>
+              <input type="number" min={0} max={100} step={0.01} value={novaAliquotaFcp}
+                     onChange={e => setNovaAliquotaFcp(e.target.value)} className="input w-full" />
+            </div>
+          </div>
+        )}
+
         {['101', '201'].includes(novoCsosn) && (
           <div className="mt-2 max-w-[200px]">
             <label className="text-xs text-gray-400 font-semibold mb-1 block">% de crédito de ICMS</label>
@@ -1026,7 +1248,41 @@ export default function FiscalPage() {
             </div>
           </div>
 
-          {['201', '202', '203'].includes(novoCsosn) && (
+          {regimeNormal && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 border-t border-surface-600 pt-3">
+              <div className="col-span-2 sm:col-span-4">
+                <p className="text-xs font-semibold text-gray-300">PIS / COFINS</p>
+                <p className="text-xs text-gray-500">
+                  Fora do Simples cada item destaca PIS e COFINS. Em branco, o sistema usa a alíquota
+                  do regime da loja: {regime === 'LucroReal' ? '1,65% e 7,6% (não-cumulativo)' : '0,65% e 3% (cumulativo)'}.
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">CST PIS</label>
+                <select value={novoCstPis} onChange={e => setNovoCstPis(e.target.value)} className="input w-full">
+                  {CST_PIS_COFINS_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Alíquota PIS (%)</label>
+                <input type="number" min={0} max={100} step={0.01} value={novaAliquotaPis}
+                       onChange={e => setNovaAliquotaPis(e.target.value)} placeholder="padrão do regime" className="input w-full" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">CST COFINS</label>
+                <select value={novoCstCofins} onChange={e => setNovoCstCofins(e.target.value)} className="input w-full">
+                  {CST_PIS_COFINS_OPCOES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 font-semibold mb-1 block">Alíquota COFINS (%)</label>
+                <input type="number" min={0} max={100} step={0.01} value={novaAliquotaCofins}
+                       onChange={e => setNovaAliquotaCofins(e.target.value)} placeholder="padrão do regime" className="input w-full" />
+              </div>
+            </div>
+          )}
+
+          {(['201', '202', '203'].includes(novoCsosn) || CST_COM_ST.includes(novoCst)) && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 border-t border-surface-600 pt-3">
               <div>
                 <label className="text-xs text-gray-400 font-semibold mb-1 block">Modalidade BC-ST</label>
@@ -1091,19 +1347,19 @@ export default function FiscalPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Ano</label>
-            <input type="number" value={inutAno} onChange={e => setInutAno(Number(e.target.value))} className="input w-full" />
+            <NumberInput value={inutAno} fallback={new Date().getFullYear()} onChange={v => setInutAno(v ?? new Date().getFullYear())} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Série</label>
-            <input type="number" min={1} max={999} value={inutSerie} onChange={e => setInutSerie(Number(e.target.value))} className="input w-full" />
+            <NumberInput min={1} max={999} value={inutSerie} fallback={1} onChange={v => setInutSerie(v ?? 1)} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Número inicial</label>
-            <input type="number" min={1} value={inutInicio} onChange={e => setInutInicio(Number(e.target.value))} className="input w-full" />
+            <NumberInput min={1} value={inutInicio} fallback={1} onChange={v => setInutInicio(v ?? 1)} className="w-full" />
           </div>
           <div>
             <label className="text-xs text-gray-400 font-semibold mb-1 block">Número final</label>
-            <input type="number" min={1} value={inutFim} onChange={e => setInutFim(Number(e.target.value))} className="input w-full" />
+            <NumberInput min={1} value={inutFim} fallback={1} onChange={v => setInutFim(v ?? 1)} className="w-full" />
           </div>
         </div>
         <div className="flex flex-col sm:flex-row gap-3 items-end">
@@ -1151,6 +1407,25 @@ export default function FiscalPage() {
             Convidar
           </button>
         </form>
+
+        {conviteLink && (
+          <div className="mb-4 rounded-xl border border-brand-500/25 bg-brand-500/5 p-3">
+            <p className="mb-2 text-xs font-semibold text-brand-300">Link pronto para enviar ao contador</p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                readOnly
+                value={conviteLink}
+                aria-label="Link de cadastro do contador"
+                className="input flex-1 text-xs"
+                onFocus={event => event.currentTarget.select()}
+              />
+              <button type="button" onClick={copiarConviteContador} className="btn-secondary justify-center">
+                {conviteLinkCopiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {conviteLinkCopiado ? 'Copiado' : 'Copiar link'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {loadingSolicitacoes ? (
           <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
@@ -1236,6 +1511,9 @@ export default function FiscalPage() {
         </form>
       </div>
 
+      {/* Pendências fiscais reconciliadas do estado real (CON-002) */}
+      <AlertasFiscaisCard />
+
       {/* Histórico de notas emitidas */}
       <div id="secao-notas" className="card p-5">
         <div className="flex items-center justify-between mb-3">
@@ -1284,13 +1562,14 @@ export default function FiscalPage() {
                     {n.erpEstornoErro && <p className="text-xs text-amber-400 mt-1">Estorno ERP pendente: {n.erpEstornoErro}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {n.chaveAcesso && (
+                    {n.chaveAcesso && STATUS_COM_CUPOM.includes(n.status) && (
                       <Link href={`/admin/fiscal/cupom/${n.id}`} target="_blank"
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 border border-surface-600 text-sm text-gray-300">
                         <Printer className="w-3.5 h-3.5" /> Cupom
                       </Link>
                     )}
-                    {(n.status === 'PendenteEmissao' || n.status === 'Rejeitada' || n.status === 'AutorizadaContingencia') && (
+                    {(n.status === 'PendenteEmissao' || n.status === 'Rejeitada' ||
+                      n.status === 'AutorizadaContingencia' || n.status === 'ResultadoIncerto') && (
                       <button onClick={() => reprocessarNota(n.id)} disabled={reprocessingId === n.id}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500 border border-surface-600 text-sm text-gray-300">
                         {reprocessingId === n.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -1343,6 +1622,26 @@ export default function FiscalPage() {
               </button>
             </div>
         </Modal>
+      )}
+
+      {confirmarInutilizacao && (
+        <ConfirmDialog
+          title="Inutilizar faixa de numeração"
+          message={
+            <>
+              Inutilizar definitivamente a faixa{' '}
+              <strong>{inutSerie}/{inutInicio}–{inutFim}</strong> de <strong>{inutAno}</strong>?
+              <span className="block mt-2">
+                A faixa é declarada à SEFAZ como nunca usada. Não pode ser desfeita, e
+                nenhum desses números poderá ser emitido depois.
+              </span>
+            </>
+          }
+          confirmLabel="Inutilizar faixa"
+          loading={inutilizando}
+          onConfirm={confirmarInutilizarFaixa}
+          onClose={() => setConfirmarInutilizacao(false)}
+        />
       )}
     </div>
   )

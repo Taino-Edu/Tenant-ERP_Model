@@ -58,9 +58,21 @@ public record QuickLoginRequest(
     [MaxLength(50)]             string? TableIdentifier = null
 );
 
-/// <summary>Renovação de token usando o Refresh Token.</summary>
+/// <summary>
+/// Renovação de token. O caminho normal é o cookie HttpOnly — o corpo existe só
+/// como alternativa pra cliente que não seja navegador.
+///
+/// O campo é OPCIONAL de propósito, e isso não é descuido: o frontend chama
+/// POST /api/auth/refresh com corpo vazio ({}), porque o token vai no cookie.
+/// Com [Required] — ou mesmo só com `string` não-anulável, que o ASP.NET trata
+/// como obrigatório sozinho — a validação automática do [ApiController] rejeitava
+/// esse corpo com 400 ANTES da action rodar, e a linha que lê o cookie nunca era
+/// alcançada. Efeito: renovação de sessão nunca funcionou, e todo usuário era
+/// deslogado quando o access token expirava. Se voltar a marcar como obrigatório,
+/// o sistema inteiro volta a derrubar sessão de hora em hora.
+/// </summary>
 public record RefreshTokenRequest(
-    [Required] string RefreshToken
+    string? RefreshToken = null
 );
 
 /// <summary>"Não achei minha conta aqui, procurar em outro lugar" — mesmo e-mail/senha
@@ -123,11 +135,29 @@ public record ConvidarContadorRequest(
     [Required, EmailAddress] string Email
 );
 
+/// <summary>Confirma o convite e, quando o contador ainda não tem conta, devolve
+/// o caminho de cadastro já associado à loja. O link não carrega e-mail nem segredo.</summary>
+public record ConvidarContadorResponse(
+    string Message,
+    string? InvitationPath
+);
+
 /// <summary>Aviso trocado entre contador e lojista, preso a um ContadorTenantLink.</summary>
 public record AvisoContadorRequest(
     [Required, MaxLength(2000)] string Mensagem,
     Guid? LinkId = null
 );
+
+/// <summary>Campos fiscais que o contador pode manter no cadastro do produto.</summary>
+public class ContadorProdutoFiscalRequest
+{
+    public string? Ncm { get; set; }
+    public string? Cest { get; set; }
+    [Range(typeof(decimal), "0", "100")] public decimal? PercentualTributosFederais { get; set; }
+    [Range(typeof(decimal), "0", "100")] public decimal? PercentualTributosEstaduais { get; set; }
+    [Range(typeof(decimal), "0", "100")] public decimal? PercentualTributosMunicipais { get; set; }
+    [MaxLength(100)] public string? FonteTributos { get; set; }
+}
 
 /// <summary>Resposta da busca por CPF.</summary>
 public record CpfLookupResponse(

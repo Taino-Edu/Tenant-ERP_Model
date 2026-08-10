@@ -339,6 +339,95 @@ Em ordem de prioridade sugerida pelas avaliações, já descontado o que foi fei
   totais federal/estadual/municipal.
 - Importação/exportação CSV inclui CEST, percentuais e fonte.
 
+### IBPT-002 — tabela local diária no lugar da consulta por produto — implementado em 2026-08-06
+
+**Motivador:** o `POST /api/fiscal/ibpt/sincronizar` derrubou com 500 em produção
+(trace `0HNNI4IMEL3EK:00000001`) porque a API do IBPT não respondeu em 15s. O
+defeito de tratamento foi corrigido na PR #68 — timeout agora vira falha daquele
+produto e o laço segue. Mas isso trata o sintoma; o desenho continua frágil.
+
+**Por que o modelo atual não escala.** A sincronização faz uma chamada HTTP por
+NCM distinto, dentro da requisição, com 15s de timeout cada. Há cache por NCM no
+laço, então o custo é `nº de NCMs distintos`, não `nº de produtos` — mas segue
+ilimitado: um catálogo com 200 NCMs e a API lenta ultrapassa qualquer timeout de
+proxy reverso muito antes de terminar. O usuário não tem progresso, não pode
+fechar a aba, e uma falha no meio não é retomável. Somando os tenants, é a mesma
+tabela nacional sendo baixada NCM a NCM, repetidas vezes, por lojas diferentes.
+
+**Desenho proposto (a validar):**
+
+1. job diário baixa a **tabela** do IBPT (por UF), em vez de consultar produto a
+   produto;
+2. a tabela é persistida localmente (`ncm + uf + vigência → alíquotas`), com
+   versão e vigência registradas;
+3. cadastrar/alterar produto vira **lookup local** — instantâneo, sem rede, sem
+   timeout, sem o `Task.Run` em escopo próprio que hoje existe no
+   `ProductController`;
+4. a sincronização em lote deixa de existir como operação de request e vira
+   consequência do job.
+
+**Perguntas abertas — resolver antes de estimar:**
+
+- **O token atual dá acesso ao download da tabela?** A credencial de hoje é da
+  API `apidoni.ibpt.org.br`. O arquivo do "De Olho no Imposto" é outro produto e
+  pode exigir credencial/fluxo distinto. **Verificar antes de qualquer código.**
+- **A licença permite compartilhar a tabela entre tenants?** A tabela é
+  licenciada ao CNPJ que a baixou. Uma tabela nacional por UF servindo todas as
+  lojas seria o desenho eficiente, mas pode violar a licença — o que empurra
+  para "um download por tenant, com o token dele", perdendo boa parte do ganho
+  de eficiência (mas mantendo todo o ganho de latência e robustez). **Decisão
+  jurídica, não técnica.**
+- **Onde a tabela mora?** Se for por tenant, no schema do tenant. Se for
+  compartilhada, no schema público — e aí muda o modelo de dados e o
+  provisionamento.
+- **O que acontece com quem não tem token?** Hoje o produto fica sem
+  transparência tributária e a emissão é bloqueada por tabela vencida. Isso
+  continua igual.
+
+**Aceite:** cadastrar um produto com NCM preenche os tributos **sem nenhuma
+chamada de rede na requisição**; virar o dia atualiza a tabela sem intervenção; e
+a API do IBPT fora do ar por um dia não impede cadastrar produto nem emitir.
+
+**Não fazer junto:** trocar o provedor de cálculo (ver a lista de candidatos
+abaixo). Este cartão é sobre COMO a mesma informação chega, não sobre trocar a
+fonte.
+
+**Implementado — e as duas perguntas abertas deixaram de bloquear.** A tabela
+local é construída pela API que já usamos (`apidoni.ibpt.org.br`), consultada por
+NCM distinto pelo job diário, e não pelo download do arquivo do "De Olho no
+Imposto". Isso resolve o problema real — tirar a rede do caminho do usuário — sem
+depender de credencial nova nem de decisão de licenciamento: cada tenant continua
+usando o próprio token, e a tabela vive no schema dele.
+
+O download do arquivo em bloco continua sendo a evolução natural (uma requisição
+em vez de N), e as duas perguntas acima continuam valendo **para essa etapa**.
+Mas ela deixou de ser pré-requisito.
+
+Entregue: `IbptTabelaEntry` (chave `NCM + UF + origem`), `AtualizarTabelaLocalAsync`
+(job, único ponto de rede), `PreencherProdutoDaTabelaLocalAsync` (cadastro, sem
+rede) e `AplicarTabelaLocalAsync` (botão da tela, sem rede). 6 testes.
+
+**Complemento entregue em 07/08/2026 — importação por arquivo (PR #72).** A API
+do IBPT ficou fora do ar (confirmado de três redes independentes: VPS, ambiente
+de desenvolvimento e o navegador do lojista — não foi bloqueio por excesso de
+requisição, que devolveria 429), e com ela a tabela local não tinha como ser
+construída. `Admin > Fiscal → Importar tabela (.csv)` aceita o
+`TabelaIBPTax<UF><versão>.csv` do pacote oficial e substitui a tabela da UF
+inteira de uma vez — ~12 mil NCMs numa operação, sem rede.
+
+Isso inverte a dependência que motivava o cartão: **a tabela local passa a ser a
+fonte, e a API vira só um mecanismo de atualização.** A API fora do ar deixa de
+impedir cadastrar produto ou emitir.
+
+Duas armadilhas do formato, ambas cobertas por teste contra recorte do arquivo
+real (`Fixtures/Ibpt/TabelaIBPTax SP 26.1.L`), não contra fixture inventada:
+decimal com **ponto** (`13.45` lido em cultura pt-BR viraria 1345) e alíquotas
+que variam mais do que se supõe — "Cartas de jogar" (95044000) tem estadual de
+**25%**, não os 18% da maioria das linhas. A **UF não está no conteúdo** do
+arquivo, só no nome; por isso a importação recusa quando a UF do nome não bate
+com a da loja, que é a única defesa contra importar a tabela do estado errado e
+emitir com alíquota errada sem nada denunciar.
+
 ### Concluído em 2026-07-22 — preenchimento automático pela API IBPT
 
 - Credencial IBPT própria por tenant, armazenada criptografada e nunca devolvida pela

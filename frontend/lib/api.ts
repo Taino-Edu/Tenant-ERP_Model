@@ -69,13 +69,22 @@ api.interceptors.response.use(
         return api(original)
       } catch {
         // Refresh falhou — redireciona de acordo com o tipo de página:
-        //   /admin/*  → /login   (painel de gestão)
-        //   /cliente/* → /entrar (área do cliente)
-        //   demais    → limpa cookies e fica na página (QR code, campeonatos, etc.)
+        //   /admin/*      → /login   (painel de gestão da loja)
+        //   /plataforma/* → /login   (painel da plataforma; é pra lá que o
+        //                   PlatformOwner é mandado depois do login)
+        //   /cliente/*    → /entrar  (área do cliente)
+        //   demais        → limpa cookies e fica na página (QR code, vitrine, etc.)
+        //
+        // /plataforma estava fora desta lista e caía no ramo das páginas
+        // públicas: em vez de ir pro login, o dono da plataforma ficava numa
+        // página que PARECIA logada — a tabela já renderizada, o menu no lugar —
+        // e toda escrita falhava com um toast genérico. Um delete de tenant foi
+        // clicado quatro vezes em sete minutos por causa disso, porque nada na
+        // tela dizia que a sessão tinha morrido.
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           const path = window.location.pathname
           clearAuth()
-          if (path.startsWith('/admin')) {
+          if (path.startsWith('/admin') || path.startsWith('/plataforma')) {
             window.location.href = '/login'
           } else if (path.startsWith('/cliente')) {
             window.location.href = '/entrar'
@@ -113,6 +122,7 @@ export interface ComandaDto {
   secondPaymentMethod: string | null
   secondPaymentAmountInCents: number
   items: ComandaItemDto[]
+  notes: string | null
   /** Saldo de pontos do cliente (para exibir na modal de fechamento). */
   userPointsBalance: number
   /** Saldo de cashback/crédito do cliente em centavos. */
@@ -361,6 +371,7 @@ export const comandaApi = {
   addItem:      (id: string, item: { productId?: string; cardCacheId?: string; variantId?: string; itemName: string; unitPriceInCents: number; quantity: number }) =>
     api.post<ComandaDto>(`/api/comanda/${id}/items`, item),
   removeItem:   (id: string, itemId: string) => api.delete<ComandaDto>(`/api/comanda/${id}/items/${itemId}`),
+  updateNotes:  (id: string, notes: string | null) => api.put<ComandaDto>(`/api/comanda/${id}/notes`, { notes }),
   updateItem:   (id: string, itemId: string, quantity: number) =>
     api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
   close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0, emitirNotaFiscal = false) =>
@@ -482,6 +493,26 @@ export const crediarioApi = {
     api.post<PixCobrancaDto>(`/api/crediarios/${id}/pix`),
   statusPix: (id: string, txid: string) =>
     api.get<{ txId: string; status: string; pagoEm: string | null }>(`/api/crediarios/${id}/pix/${txid}/status`),
+}
+
+/**
+ * Fidelidade (pontos E cashback) exige dois "sim": o módulo contratado pela
+ * plataforma e o toggle operacional da loja. São o mesmo benefício — saldo do
+ * cliente que abate a venda — e antes disto o cashback ficava na lista mesmo com
+ * o programa desligado, gerando erro só ao fechar a venda.
+ *
+ * Um helper só, porque a regra estava repetida em cinco telas e o cashback
+ * escapava de todas.
+ */
+export function metodosDisponiveis<T extends { readonly value: string }>(
+  metodos: readonly T[],
+  site: { pontosFidelidadeAtivo?: boolean; enabledModules?: string[] },
+): T[] {
+  const fidelidadeAtiva =
+    (site.enabledModules ?? []).includes('pontos') && site.pontosFidelidadeAtivo !== false
+  return fidelidadeAtiva
+    ? [...metodos]
+    : metodos.filter(m => m.value !== 'Pontos' && m.value !== 'Cashback')
 }
 
 export const COMANDA_PAYMENT_METHODS = [
@@ -695,9 +726,66 @@ export interface AiChatResponse {
   action?: { type: 'navigate' | 'openWizard'; route?: string }
 }
 
+export interface AiStreamEvent {
+  delta?:  string
+  done?:   boolean
+  action?: { type: 'navigate' | 'openWizard'; route?: string }
+}
+
 export const aiApi = {
   chat: (message: string) =>
     api.post<AiChatResponse>('/api/ai/chat', { message }),
+}
+
+/**
+ * Chat da IA em streaming (SSE) — usa fetch() puro em vez do axios (`api`)
+ * porque o axios não expõe leitura incremental do corpo da resposta no
+ * browser de um jeito confiável entre navegadores; fetch + ReadableStream sim.
+ * `credentials: 'include'` reproduz o `withCredentials` do axios (cookies
+ * HttpOnly de auth), já que essa chamada não passa pelo interceptor de refresh
+ * do `api` — se o accessToken já tiver expirado, o stream cai no evento de
+ * erro genérico e o usuário só precisa tentar de novo (refresh terá rodado
+ * numa chamada comum antes disso, na prática).
+ */
+export async function* streamAiChat(
+  message: string,
+  signal?: AbortSignal
+): AsyncGenerator<AiStreamEvent> {
+  const res = await fetch('/api/ai/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ message }),
+    signal,
+  })
+
+  if (!res.body) throw new Error('Resposta sem corpo de stream.')
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+  const reader  = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() ?? ''
+
+    for (const part of parts) {
+      const line = part.trim()
+      if (!line.startsWith('data:')) continue
+      const jsonStr = line.slice('data:'.length).trim()
+      if (!jsonStr) continue
+      try {
+        yield JSON.parse(jsonStr) as AiStreamEvent
+      } catch {
+        // linha malformada — ignora esse evento, não derruba o stream inteiro
+      }
+    }
+  }
 }
 
 // ── Painel do dono da plataforma (gestão de tenants) ──────────────────────────
@@ -731,6 +819,7 @@ export const TENANT_MODULES = [
   { value: 'contador', label: 'Portal do Contador',   description: 'Acesso cross-tenant do contador da loja' },
   { value: 'ia',       label: 'Assistente de IA',     description: 'Chat com IA (Gemini) sobre estoque e devedores' },
   { value: 'eventos',  label: 'Gestão de Eventos',    description: 'Cadastro de eventos e cobrança de entrada' },
+  { value: 'restaurante', label: 'Restaurante',        description: 'Comandas, mesas, cozinha, salão e produção' },
 ] as const
 
 /** O catálogo de planos vive em `lib/planos.ts` — um só, compartilhado com o
@@ -766,6 +855,16 @@ export interface TenantUsagePathDto {
 
 export interface TenantUsageDto {
   totalHoras: number; usuariosAtivos: number; topPaths: TenantUsagePathDto[]
+}
+
+export interface PlatformTeamMemberDto {
+  id: string; name: string; email: string; profileKey: string; profileName: string
+  permissions: string[]; isPrimaryOwner: boolean; isActive: boolean
+  invitationPending: boolean; lastLoginAt: string | null; createdAt: string
+}
+
+export interface PlatformAccessProfileDto {
+  key: string; name: string; description: string; permissions: string[]
 }
 
 export const platformApi = {
@@ -811,6 +910,13 @@ export const platformApi = {
     api.post<void>(`/api/platform/support-tickets/${id}/messages`, { body, imageUrl }),
   updateSupportTicketStatus: (id: string, status: SupportTicketStatus) =>
     api.patch<{ id: string; status: SupportTicketStatus }>(`/api/platform/support-tickets/${id}/status`, { status }),
+  listTeam: () => api.get<PlatformTeamMemberDto[]>('/api/platform/team'),
+  listTeamProfiles: () => api.get<PlatformAccessProfileDto[]>('/api/platform/team/profiles'),
+  inviteTeamMember: (req: { name: string; email: string; profileKey: string }) =>
+    api.post<{ member: PlatformTeamMemberDto; emailSent: boolean; message: string }>('/api/platform/team/invitations', req),
+  updateTeamMember: (id: string, req: { name: string; profileKey: string; isActive: boolean }) =>
+    api.patch<PlatformTeamMemberDto>(`/api/platform/team/${id}`, req),
+  resendTeamInvite: (id: string) => api.post(`/api/platform/team/${id}/resend-invite`, {}),
 }
 
 // ── Paginação genérica ──────────────────────────────────────────────────────────
@@ -1137,12 +1243,23 @@ export interface FormaPagamentoTotalDto {
 }
 
 export interface FinanceiroDto {
+  receitaBruta: number
+  deducoes: number
   receita: number
+  impostosSobreVendas: number
+  receitaLiquidaDre: number
   receitaComandas: number
   receitaAvulsa: number
   custo: number
   margem: number
   margemPercent: number
+  despesasOperacionais: number
+  resultadoOperacional: number
+  resultadoFinanceiro: number
+  impostosSobreLucro: number
+  resultadoLiquido: number
+  lancamentosNaoClassificados: number
+  despesasPorCategoria: { categoria: string; valor: number }[]
   crediarios: number
   recebidoCrediario: number
   diaDia: DiaFinanceiroDto[]
@@ -1304,6 +1421,10 @@ export interface FiscalConfigDto {
   codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
   cscId?: string; cscConfigurado: boolean
   regimeTributario: string; ambiente: string
+  // RTC-001 — perfilIbsCbs é derivado no backend a partir das duas flags.
+  excedeuSublimiteSimples?: boolean
+  optouRegimeRegularIbsCbs?: boolean
+  perfilIbsCbs?: string
   serieNfce: number; proximoNumeroNfce: number
   emailContador?: string
   certificadoConfigurado: boolean
@@ -1341,7 +1462,20 @@ export interface IbptStatusDto {
 }
 
 export interface IbptSyncResult {
+  /** A busca de dado novo no IBPT foi disparada em segundo plano (IBPT-002). */
+  buscandoAtualizacao?: boolean
   total: number; atualizados: number; ignoradosManuais: number; falhas: number; erros: string[]
+}
+
+/** Resultado da importação do CSV oficial do IBPT (IBPT-002). */
+export interface IbptImportacaoResult {
+  ncmsImportados: number
+  linhasIgnoradas: number
+  versao?: string
+  vigenciaInicio?: string
+  vigenciaFim?: string
+  produtosAtualizados: number
+  produtosSemTabela: number
 }
 
 export interface NaturezaOperacaoDto {
@@ -1358,6 +1492,15 @@ export interface NaturezaOperacaoDto {
   ibsCbsCst: string
   ibsCbsClassTrib: string
   isPadrao: boolean; isActive: boolean
+  // Regime normal (Lucro Presumido/Real) — convivem com os campos de CSOSN
+  // acima; a emissão escolhe o par certo pelo CRT da loja.
+  cst?: string
+  percentualReducaoBc?: number
+  aliquotaFcp?: number
+  baseStRetidaEmCentavos?: number
+  valorStRetidoEmCentavos?: number
+  cstPis?: string; cstCofins?: string
+  aliquotaPis?: number; aliquotaCofins?: number
 }
 
 export interface SaveNaturezaFiscalBody {
@@ -1366,6 +1509,13 @@ export interface SaveNaturezaFiscalBody {
   percentualReducaoBcSt?: number; aliquotaIcmsSt?: number; aliquotaIcmsProprio?: number
   aliquotaFcpSt?: number; baseStFixaEmCentavos?: number
   ibsCbsCst: string; ibsCbsClassTrib: string; isPadrao: boolean
+  cst?: string
+  percentualReducaoBc?: number
+  aliquotaFcp?: number
+  baseStRetidaEmCentavos?: number
+  valorStRetidoEmCentavos?: number
+  cstPis?: string; cstCofins?: string
+  aliquotaPis?: number; aliquotaCofins?: number
 }
 
 export interface NotaFiscalDto {
@@ -1381,19 +1531,79 @@ export interface NotaFiscalDto {
   createdAt: string
 }
 
-export interface CupomItemDto {
-  nome: string; quantidade: number; precoUnitarioCentavos: number; subtotalCentavos: number
-  tributosAproximadosCentavos: number
+// ── DANFE NFC-e — derivado exclusivamente do XML fiscal ──────────────────────
+// Contrato espelha CardGameStore/DTOs/DanfeFiscalDtos.cs. Nenhum campo aqui tem
+// fallback para cadastro: o que não veio no XML chega ausente e a tela decide
+// como mostrar a ausência.
+
+export interface DanfeEnderecoDto {
+  logradouro?: string; numero?: string; complemento?: string; bairro?: string
+  municipio?: string; uf?: string; cep?: string
+  linha: string
 }
 
-export interface CupomDto {
-  razaoSocial: string; cnpj: string; endereco: string
-  chaveAcesso?: string; protocolo?: string; emitidoEm?: string
-  serie: number; numero: number; status: string
-  itens: CupomItemDto[]; descontoTotalCentavos: number; valorTotalCentavos: number; formaPagamento: string
-  tributosFederaisCentavos: number; tributosEstaduaisCentavos: number; tributosMunicipaisCentavos: number
-  fontesTributos?: string
+export interface DanfeEmitenteDto {
+  cnpj?: string; razaoSocial?: string; nomeFantasia?: string
+  inscricaoEstadual?: string; endereco: DanfeEnderecoDto
+}
+
+export interface DanfeConsumidorDto {
+  cpf?: string; cnpj?: string; nome?: string; endereco?: DanfeEnderecoDto
+  identificado: boolean
+}
+
+export interface DanfeItemDto {
+  numero: number
+  codigo?: string; descricao?: string; ncm?: string; cfop?: string
+  unidadeComercial?: string
+  quantidade: number; valorUnitario: number; valorTotal: number; desconto: number
+  gtin?: string
+  tributosAproximados?: number
+}
+
+export interface DanfeTotaisDto {
+  quantidadeItens: number
+  valorProdutos: number; valorDesconto: number; valorTotal: number
+  tributosAproximados?: number
+}
+
+export interface DanfePagamentoDto {
+  codigoTPag: string; valor: number
+  descricaoXPag?: string; bandeira?: string; autorizacao?: string
+}
+
+export interface DanfeProtocoloDto {
+  numero?: string; dataHora?: string; status?: string; motivo?: string
+}
+
+export interface DanfeContingenciaDto { dataHora?: string; justificativa?: string }
+
+/** 1 = Produção, 2 = Homologação. */
+export type DanfeAmbiente = 'Producao' | 'Homologacao'
+export type DanfeTipoEmissao = 'Normal' | 'ContingenciaOffline' | 'Outra'
+export type DanfeSituacao = 'Autorizada' | 'ContingenciaSemProtocolo' | 'Cancelada'
+
+export interface DanfeFiscalDto {
+  chaveAcesso?: string
+  ambiente: DanfeAmbiente
+  tipoEmissao: DanfeTipoEmissao
+  situacao: DanfeSituacao
+  serie: number; numero: number
+  emitidoEm?: string
+  naturezaOperacao?: string
+  emitente: DanfeEmitenteDto
+  consumidor: DanfeConsumidorDto
+  itens: DanfeItemDto[]
+  totais: DanfeTotaisDto
+  pagamentos: DanfePagamentoDto[]
+  troco?: number
+  protocolo?: DanfeProtocoloDto
+  contingencia?: DanfeContingenciaDto
+  informacoesComplementares?: string
   qrCodeUrl?: string
+  urlConsultaChave?: string
+  exigeAvisoSemValorFiscal: boolean
+  emContingencia: boolean
 }
 
 export const fiscalApi = {
@@ -1405,12 +1615,22 @@ export const fiscalApi = {
     codigoMunicipioIbge: string; municipio: string; uf: string; cep: string
     cscId: string; cscToken: string
     regimeTributario: string; ambiente: string; serieNfce: number; emailContador: string
+    excedeuSublimiteSimples: boolean; optouRegimeRegularIbsCbs: boolean
     formasPagamentoAutoEmissao: string[]
     ibptToken: string; ibptAutoSyncEnabled: boolean; removerIbptToken: boolean
   }>) => api.put<FiscalConfigDto>('/api/fiscal/config', body),
 
   getIbptStatus: () => api.get<IbptStatusDto>('/api/fiscal/ibpt/status'),
   sincronizarIbpt: () => api.post<IbptSyncResult>('/api/fiscal/ibpt/sincronizar'),
+
+  /** Importa o TabelaIBPTax<UF><versão>.csv do pacote oficial — não depende da API do IBPT estar no ar. */
+  importarTabelaIbpt: (file: File) => {
+    const form = new FormData()
+    form.append('arquivo', file)
+    return api.post<IbptImportacaoResult>('/api/fiscal/ibpt/importar-tabela', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 
   uploadCertificado: (file: File, senha: string) => {
     const form = new FormData()
@@ -1444,7 +1664,21 @@ export const fiscalApi = {
   }>('/api/fiscal/inutilizacoes', body),
   reprocessarEstornoErp: (id: string) =>
     api.post<{ id: string; erpEstornadoEm?: string; erpEstornoErro?: string }>(`/api/fiscal/notas/${id}/reprocessar-estorno-erp`),
-  obterCupom: (id: string) => api.get<CupomDto>(`/api/fiscal/notas/${id}/cupom`),
+  obterCupom: (id: string) => api.get<DanfeFiscalDto>(`/api/fiscal/notas/${id}/cupom`),
+
+  // CON-002 — pendências fiscais reconciliadas do estado real
+  listAlertas: (incluirResolvidos = false) =>
+    api.get<PainelAlertasFiscaisDto>('/api/fiscal/alertas', { params: { incluirResolvidos } }),
+  sincronizarAlertas: () =>
+    api.post<PainelAlertasFiscaisDto>('/api/fiscal/alertas/sincronizar'),
+  assumirAlerta: (id: string) =>
+    api.post<{ id: string; responsavelUserId: string; responsavelDefinidoEm?: string }>(
+      `/api/fiscal/alertas/${id}/assumir`),
+  liberarAlerta: (id: string) =>
+    api.delete<{ id: string; responsavelUserId: string | null }>(`/api/fiscal/alertas/${id}/responsavel`),
+  resolverAlerta: (id: string, observacao: string) =>
+    api.post<{ id: string; resolvidoEm: string; resolucaoObservacao: string }>(
+      `/api/fiscal/alertas/${id}/resolver`, { observacao }),
 
   emitirNotaComanda: (comandaId: string) =>
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/comanda/${comandaId}`),
@@ -1452,7 +1686,7 @@ export const fiscalApi = {
     api.post<{ id: string; status: string; motivoRejeicao?: string }>(`/api/fiscal/emitir/venda-avulsa/${vendaId}`),
 
   convidarContador: (email: string) =>
-    api.post<{ message: string }>('/api/fiscal/contador/convidar', { email }),
+    api.post<{ message: string; invitationPath: string | null }>('/api/fiscal/contador/convidar', { email }),
   listSolicitacoesContador: () =>
     api.get<SolicitacaoContadorDto[]>('/api/fiscal/contador/solicitacoes'),
   aprovarSolicitacaoContador: (linkId: string) =>
@@ -1472,7 +1706,7 @@ export interface MinhaNotaDto {
 
 export const minhasNotasApi = {
   list: () => api.get<MinhaNotaDto[]>('/api/minhas-notas'),
-  obterCupom: (id: string) => api.get<CupomDto>(`/api/minhas-notas/${id}/cupom`),
+  obterCupom: (id: string) => api.get<DanfeFiscalDto>(`/api/minhas-notas/${id}/cupom`),
 }
 
 // ── Portal do contador (cross-tenant — uma conta, vários clientes) ────────────
@@ -1493,11 +1727,195 @@ export interface ContadorNotaDto {
   emitidoEm?: string; canceladoEm?: string; createdAt: string
 }
 
+export interface ContadorNotaRecebidaDto {
+  id: string; chaveAcesso: string; emitenteCnpj?: string; emitenteNome?: string
+  valor: number; dataEmissao?: string; status: string; situacao: number
+  contasGeradas: number; estoqueRecebidoEm?: string; itensEstoqueRecebidos: number; erro?: string
+}
+
 export interface ContadorConfigDto {
   cnpj?: string; razaoSocial?: string; inscricaoEstadual?: string
   logradouro?: string; numero?: string; complemento?: string; bairro?: string
-  municipio?: string; uf?: string; cep?: string
+  codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
   regimeTributario: string
+  // RTC-001 — perfilIbsCbs é derivado no backend a partir das duas flags.
+  excedeuSublimiteSimples?: boolean
+  optouRegimeRegularIbsCbs?: boolean
+  perfilIbsCbs?: string
+  ambiente: string
+  serieNfce: number; proximoNumeroNfce: number
+  emailContador?: string
+  cscConfigurado: boolean; cscId?: string
+  certificadoConfigurado: boolean; certificadoValidade?: string; diasParaVencer?: number
+  formasPagamentoAutoEmissao: string[]
+  ibptConfigurado: boolean; ibptAutoSyncEnabled: boolean
+  ibptUltimaSincronizacao?: string; ibptUltimaVersao?: string; ibptUltimoErro?: string
+  // Parâmetros de apuração (comparativo Simples x Presumido)
+  anexoSimples: string
+  folhaPagamento12mEmCentavos: number
+  folhaPagamentoMensalEmCentavos: number
+  percentualPresuncaoIrpj: number
+  percentualPresuncaoCsll: number
+  aliquotaIcmsPercentual: number
+  aliquotaIssPercentual: number
+}
+
+/** Update parcial — campo omitido mantém o valor atual (mesmo contrato do /admin/fiscal). */
+export interface ContadorConfigUpdate {
+  cnpj?: string; razaoSocial?: string; inscricaoEstadual?: string
+  logradouro?: string; numero?: string; complemento?: string; bairro?: string
+  codigoMunicipioIbge?: string; municipio?: string; uf?: string; cep?: string
+  regimeTributario?: string
+  // RTC-001 — quem sabe destas duas é o contador, por isso elas também são
+  // editáveis pelo portal dele.
+  excedeuSublimiteSimples?: boolean
+  optouRegimeRegularIbsCbs?: boolean
+  ambiente?: string
+  serieNfce?: number; emailContador?: string
+  cscId?: string; cscToken?: string
+  anexoSimples?: string
+  folhaPagamento12mEmCentavos?: number
+  folhaPagamentoMensalEmCentavos?: number
+  percentualPresuncaoIrpj?: number
+  percentualPresuncaoCsll?: number
+  aliquotaIcmsPercentual?: number
+  aliquotaIssPercentual?: number
+}
+
+export interface ReceitaMensalDto {
+  ano: number; mes: number; competencia: string; receitaBruta: number
+}
+
+export interface TributoLinhaDto {
+  tributo: string; base: number; aliquota: number; valor: number; observacao?: string
+}
+
+export interface ApuracaoTributariaDto {
+  periodoInicio: string; periodoFim: string; mesesNoPeriodo: number
+  receitaBrutaPeriodo: number
+  rbt12: number; rbt12Parcial: boolean; mesesComReceita: number
+  historicoReceita: ReceitaMensalDto[]
+  folhaPagamento12m: number; folhaPagamentoMensal: number
+  simples: {
+    anexoConfigurado: string; anexoAplicado: string; fatorR?: number
+    faixa: number; aliquotaNominal: number; parcelaDeduzir: number
+    aliquotaEfetiva: number; valorDas: number
+    excedeuLimite: boolean; excedeuSublimite: boolean
+    linhas: TributoLinhaDto[]
+  }
+  presumido: {
+    baseIrpj: number; irpj: number; adicionalIrpj: number
+    baseCsll: number; csll: number; pis: number; cofins: number
+    icms: number; iss: number; inssPatronal: number
+    total: number; aliquotaEfetiva: number
+    linhas: TributoLinhaDto[]
+  }
+  regimeMaisEconomico: string; economia: number; regimeAtual: string
+  alertas: string[]
+}
+
+// ── Conciliação fiscal (CON-001) ─────────────────────────────────────────────
+// Parte das VENDAS e procura o documento de cada uma — por isso enxerga a venda
+// fechada sem nota, que nenhum relatório baseado em NotaFiscalEmitida mostra.
+
+export type SituacaoFiscalVenda =
+  | 'Autorizada' | 'EmContingencia' | 'Pendente' | 'Rejeitada'
+  | 'NotaCancelada' | 'SemDocumento' | 'VendaCancelada'
+
+export interface VendaConciliadaDto {
+  vendaId: string
+  origem: string
+  ocorridaEm: string
+  valorVenda: number
+  situacao: SituacaoFiscalVenda
+  notaId?: string
+  serie?: number
+  numero?: number
+  chaveAcesso?: string
+  valorNota?: number
+  motivoRejeicao?: string
+  valorDivergente: boolean
+  exigeAtencao: boolean
+}
+
+export interface ConciliacaoResumoDto { quantidade: number; valor: number }
+
+export interface ConciliacaoFiscalDto {
+  periodoInicio: string
+  periodoFim: string
+  totalVendas: number
+  valorTotalVendas: number
+  porSituacao: Record<string, ConciliacaoResumoDto>
+  pendencias: VendaConciliadaDto[]
+  vendas: VendaConciliadaDto[]
+  quantidadePendencias: number
+  valorSemDocumento: number
+}
+
+// ── Alertas fiscais (CON-002) ────────────────────────────────────────────────
+// Pendências reconciliadas do estado real a cada ciclo: o que está aberto aqui
+// existe agora. Um alerta só some sozinho quando a condição some.
+
+export type TipoAlertaFiscal =
+  | 'ResultadoIncerto' | 'ContingenciaPendente' | 'NotaRejeitada'
+  | 'VendaSemDocumento' | 'LacunaNumeracao' | 'ExportacaoMensalPendente'
+
+export type SeveridadeAlertaFiscal = 'Critica' | 'Alta' | 'Media'
+
+export interface AlertaFiscalDto {
+  id: string
+  tipo: TipoAlertaFiscal
+  severidade: SeveridadeAlertaFiscal
+  titulo: string
+  detalhe: string
+  link?: string
+  notaFiscalId?: string
+  ocorridoEm: string
+  detectadoEm: string
+  atualizadoEm: string
+  ocorrencias: number
+  responsavelUserId?: string
+  responsavelNome?: string
+  responsavelDefinidoEm?: string
+  resolvidoEm?: string
+  resolvidoPorNome?: string
+  resolucaoObservacao?: string
+  resolvidoAutomaticamente: boolean
+  reabertoEm?: string
+  reaberturas: number
+  estaAberto: boolean
+  idadeEmHoras: number
+}
+
+export interface PainelAlertasFiscaisDto {
+  alertas: AlertaFiscalDto[]
+  totalAbertos: number
+  criticos: number
+  altos: number
+  medios: number
+  semResponsavel: number
+  maisAntigoOcorridoEm?: string
+}
+
+export interface FechamentoMensalDto {
+  id: string; ano: number; mes: number; competencia: string
+  periodoInicio: string; periodoFim: string
+  receitaBruta: number; deducoes: number; impostosSobreVendas: number
+  receitaLiquida: number; custoMercadoriaVendida: number; despesasOperacionais: number
+  resultadoOperacional: number; resultadoLiquido: number
+  notasAutorizadas: number; notasCanceladas: number; valorNotasAutorizadas: number
+  notasEntrada: number; valorNotasEntrada: number
+  regimeApurado: string; impostoApurado: number; aliquotaEfetiva: number
+  observacao?: string; fechadoPorNome?: string; fechadoEm: string
+}
+
+export interface ContadorProdutoDto {
+  id: string; name: string; category: string; barcode?: string
+  stockQuantity: number; isActive: boolean
+  ncm?: string; cest?: string
+  percentualTributosFederais?: number; percentualTributosEstaduais?: number
+  percentualTributosMunicipais?: number; fonteTributos?: string
+  tributosAtualizadosEm?: string
 }
 
 export interface SolicitacaoContadorDto {
@@ -1511,9 +1929,41 @@ export const contadorApi = {
     api.post<{ message: string }>('/api/contador-portal/solicitar-acesso', { tenantSlug }),
   listNotas: (tenantId: string, params?: { inicio?: string; fim?: string; status?: string; page?: number; pageSize?: number }) =>
     api.get<{ items: ContadorNotaDto[]; total: number; totalPages: number }>(`/api/contador-portal/clientes/${tenantId}/notas`, { params }),
+  listNotasRecebidas: (tenantId: string, params?: { inicio?: string; fim?: string }) =>
+    api.get<ContadorNotaRecebidaDto[]>(`/api/contador-portal/clientes/${tenantId}/notas-recebidas`, { params }),
+  getDre: (tenantId: string, inicio: string, fim: string) =>
+    api.get<FinanceiroDto>(`/api/contador-portal/clientes/${tenantId}/dre`, { params: { inicio, fim } }),
   exportarXmls: (tenantId: string, inicio: string, fim: string) =>
     api.get(`/api/contador-portal/clientes/${tenantId}/exportar-xmls`, { params: { inicio, fim }, responseType: 'blob' }),
   getConfig: (tenantId: string) => api.get<ContadorConfigDto>(`/api/contador-portal/clientes/${tenantId}/config`),
+  updateConfig: (tenantId: string, data: ContadorConfigUpdate) =>
+    api.put<ContadorConfigDto>(`/api/contador-portal/clientes/${tenantId}/config`, data),
+  uploadCertificado: (tenantId: string, file: File, senha: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('senha', senha)
+    return api.post<{ message: string; validade: string; diasRestantes: number }>(
+      `/api/contador-portal/clientes/${tenantId}/certificado`, form,
+      { headers: { 'Content-Type': 'multipart/form-data' } })
+  },
+  getApuracao: (tenantId: string, inicio: string, fim: string) =>
+    api.get<ApuracaoTributariaDto>(`/api/contador-portal/clientes/${tenantId}/apuracao`, { params: { inicio, fim } }),
+  getConciliacao: (tenantId: string, inicio: string, fim: string) =>
+    api.get<ConciliacaoFiscalDto>(`/api/contador-portal/clientes/${tenantId}/conciliacao`, { params: { inicio, fim } }),
+  listFechamentos: (tenantId: string) =>
+    api.get<FechamentoMensalDto[]>(`/api/contador-portal/clientes/${tenantId}/fechamentos`),
+  fecharCompetencia: (tenantId: string, data: { ano: number; mes: number; observacao?: string }) =>
+    api.post<FechamentoMensalDto>(`/api/contador-portal/clientes/${tenantId}/fechamentos`, data),
+  reabrirCompetencia: (tenantId: string, fechamentoId: string) =>
+    api.delete<{ message: string }>(`/api/contador-portal/clientes/${tenantId}/fechamentos/${fechamentoId}`),
+  baixarPacoteMensal: (tenantId: string, ano: number, mes: number) =>
+    api.get(`/api/contador-portal/clientes/${tenantId}/pacote-mensal`, { params: { ano, mes }, responseType: 'blob' }),
+  listProdutos: (tenantId: string) => api.get<ContadorProdutoDto[]>(`/api/contador-portal/clientes/${tenantId}/produtos`),
+  updateProdutoFiscal: (tenantId: string, produtoId: string, data: {
+    ncm: string | null; cest: string | null
+    percentualTributosFederais: number | null; percentualTributosEstaduais: number | null
+    percentualTributosMunicipais: number | null; fonteTributos: string | null
+  }) => api.put<{ message: string }>(`/api/contador-portal/clientes/${tenantId}/produtos/${produtoId}/fiscal`, data),
   listAvisos: (tenantId: string) => api.get<AvisoContadorDto[]>(`/api/contador-portal/clientes/${tenantId}/avisos`),
   postAviso: (tenantId: string, mensagem: string) =>
     api.post<{ message: string }>(`/api/contador-portal/clientes/${tenantId}/avisos`, { mensagem }),
@@ -1616,6 +2066,15 @@ export const publicDirectoryApi = {
   listTenants: () => api.get<PublicTenantDto[]>('/api/public/tenants'),
 }
 
+export interface PublicAssistantResponse {
+  reply: string
+  marketingWhatsappUrl: string
+}
+
+export const publicAssistantApi = {
+  ask: (message: string) => api.post<PublicAssistantResponse>('/api/public/assistant', { message }),
+}
+
 // ── Notificações in-app ───────────────────────────────────────────────────────
 
 export interface AppNotification {
@@ -1699,4 +2158,35 @@ export const eventosApi = {
     api.post<EventoEntradaDto>(`/api/eventos/${eventoId}/entradas/${entradaId}/checkin`),
   cancelarEntrada: (eventoId: string, entradaId: string) =>
     api.delete(`/api/eventos/${eventoId}/entradas/${entradaId}`),
+}
+
+// ── Restaurante (módulo opcional por tenant) ────────────────────────────────
+
+export interface RestaurantProductionAreaDto {
+  id: string
+  name: string
+  description: string | null
+  color: string
+  displayOrder: number
+  isActive: boolean
+}
+
+export interface SaveRestaurantProductionAreaRequest {
+  name: string
+  description?: string | null
+  color: string
+  displayOrder: number
+}
+
+export const restaurantApi = {
+  listProductionAreas: (includeInactive = false) =>
+    api.get<RestaurantProductionAreaDto[]>('/api/restaurante/areas-producao', { params: { includeInactive } }),
+  createProductionArea: (body: SaveRestaurantProductionAreaRequest) =>
+    api.post<RestaurantProductionAreaDto>('/api/restaurante/areas-producao', body),
+  updateProductionArea: (id: string, body: SaveRestaurantProductionAreaRequest) =>
+    api.put<RestaurantProductionAreaDto>(`/api/restaurante/areas-producao/${id}`, body),
+  deactivateProductionArea: (id: string) =>
+    api.delete(`/api/restaurante/areas-producao/${id}`),
+  reactivateProductionArea: (id: string) =>
+    api.post<RestaurantProductionAreaDto>(`/api/restaurante/areas-producao/${id}/reativar`),
 }

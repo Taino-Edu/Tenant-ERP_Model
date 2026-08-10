@@ -1,4 +1,5 @@
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
@@ -13,6 +14,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/contas-receber")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Financeiro)]
 [Produces("application/json")]
 public class ContasReceberController : ControllerBase
 {
@@ -21,15 +23,17 @@ public class ContasReceberController : ControllerBase
     private readonly SefazNfeService    _sefaz;
     private readonly EncryptionService  _enc;
     private readonly InterSyncService   _inter;
+    private readonly NfeReceivingService _receiving;
     private readonly IConfiguration     _config;
 
-    public ContasReceberController(AppDbContext db, OfxParserService ofx, SefazNfeService sefaz, EncryptionService enc, InterSyncService inter, IConfiguration config)
+    public ContasReceberController(AppDbContext db, OfxParserService ofx, SefazNfeService sefaz, EncryptionService enc, InterSyncService inter, NfeReceivingService receiving, IConfiguration config)
     {
         _db     = db;
         _ofx    = ofx;
         _sefaz  = sefaz;
         _enc    = enc;
         _inter  = inter;
+        _receiving = receiving;
         _config = config;
     }
 
@@ -124,6 +128,7 @@ public class ContasReceberController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateTransactionRequest req)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
+        var dreGroup = ValidDreGroup(req.DreGroup) ?? DreGroups.Infer(req.Category);
 
         var tx = new ExternalTransaction
         {
@@ -134,6 +139,7 @@ public class ContasReceberController : ControllerBase
             DueDate     = req.DueDate?.ToUniversalTime(),
             Status      = "pending",
             Category    = req.Category,
+            DreGroup    = dreGroup,
             Supplier    = req.Supplier,
             Notes       = req.Notes,
         };
@@ -157,6 +163,12 @@ public class ContasReceberController : ControllerBase
         if (req.Amount.HasValue)         tx.Amount      = req.Amount.Value;
         if (req.DueDate.HasValue)        tx.DueDate     = req.DueDate.Value.ToUniversalTime();
         if (req.Category is not null)    tx.Category    = req.Category;
+        if (req.DreGroup is not null)
+        {
+            var dreGroup = ValidDreGroup(req.DreGroup);
+            if (dreGroup is null) return BadRequest(new { Message = "Classificação de DRE inválida." });
+            tx.DreGroup = dreGroup;
+        }
         if (req.Supplier is not null)    tx.Supplier    = req.Supplier;
         if (req.Notes    is not null)    tx.Notes       = req.Notes;
 
@@ -239,6 +251,7 @@ public class ContasReceberController : ControllerBase
     public async Task<IActionResult> GetIntegracoes()
     {
         var configs = await _db.IntegrationConfigs.ToListAsync();
+        var fiscal = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
         var sources = new[] { "inter", "mercadopago", "sefaz" };
 
         return Ok(sources.Select(src =>
@@ -249,7 +262,9 @@ public class ContasReceberController : ControllerBase
                 source      = src,
                 isActive    = cfg?.IsActive ?? false,
                 isConnected = cfg is not null && cfg.IsActive,
-                cnpj        = cfg?.Cnpj,
+                // SEFAZ usa a configuração fiscal como fonte única. Não existe
+                // um segundo CNPJ para o lojista manter sincronizado.
+                cnpj        = src == "sefaz" ? fiscal?.Cnpj : cfg?.Cnpj,
                 pixKey      = cfg?.PixKey,
                 lastSyncAt  = cfg?.LastSyncAt,
                 expiresAt   = cfg?.ExpiresAt,
@@ -282,7 +297,8 @@ public class ContasReceberController : ControllerBase
         // ClientSecret, AccessToken e RefreshToken → AES-256-GCM
         if (req.ClientSecret is not null) cfg.ClientSecret = _enc.Encrypt(req.ClientSecret);
 
-        if (req.Cnpj      is not null) cfg.Cnpj     = req.Cnpj.Replace(".", "").Replace("/", "").Replace("-", "");
+        if (source != "sefaz" && req.Cnpj is not null)
+            cfg.Cnpj = req.Cnpj.Replace(".", "").Replace("/", "").Replace("-", "");
         if (req.PixKey    is not null) cfg.PixKey   = req.PixKey.Trim();
         if (req.IsActive.HasValue)     cfg.IsActive  = req.IsActive.Value;
 
@@ -389,11 +405,46 @@ public class ContasReceberController : ControllerBase
             {
                 n.Id, n.ChaveAcesso, n.EmitenteCnpj, n.EmitenteNome,
                 n.Valor, n.DataEmissao, n.Status, n.ContasGeradas,
-                n.CienciaEm, n.Erro, n.CreatedAt,
+                n.CienciaEm, n.Erro, n.CreatedAt, n.EstoqueRecebidoEm,
+                n.ItensEstoqueRecebidos,
             })
             .ToListAsync();
 
         return Ok(notas);
+    }
+
+    /// <summary>
+    /// Lê os itens do XML da NF-e e sugere vínculos com o estoque por vínculo
+    /// anterior, GTIN/EAN ou SKU. Não altera nenhum saldo.
+    /// </summary>
+    [HttpGet("notas-destinadas/{notaId:guid}/recebimento")]
+    [RequireModule("fiscal")]
+    public async Task<IActionResult> PreviewRecebimento(Guid notaId, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _receiving.PreviewAsync(notaId, ct));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
+    }
+
+    /// <summary>
+    /// Confirma a entrada da mercadoria, atualiza estoque/custo médio, aprende os
+    /// vínculos do fornecedor e grava o livro de movimentos em uma transação única.
+    /// </summary>
+    [HttpPost("notas-destinadas/{notaId:guid}/receber")]
+    [RequireModule("fiscal")]
+    public async Task<IActionResult> ReceberMercadoria(
+        Guid notaId, [FromBody] ReceiveNfeRequest request, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await _receiving.ReceiveAsync(notaId, request, ct));
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { Message = ex.Message }); }
+        catch (InvalidOperationException ex) { return Conflict(new { Message = ex.Message }); }
+        catch (OverflowException) { return Conflict(new { Message = "A quantidade informada excede o limite do estoque." }); }
     }
 
     /// <summary>Sincroniza manualmente o extrato do Banco Inter dos últimos N dias.</summary>
@@ -464,12 +515,16 @@ public class ContasReceberController : ControllerBase
         t.PaidAt,
         t.Status,
         t.Category,
+        t.DreGroup,
         t.Supplier,
         t.NfeKey,
         t.Notes,
         t.CreatedAt,
         t.UpdatedAt,
     };
+
+    private static string? ValidDreGroup(string? value) =>
+        !string.IsNullOrWhiteSpace(value) && DreGroups.All.Contains(value) ? value : null;
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────────
@@ -487,6 +542,7 @@ public class CreateTransactionRequest
 
     public DateTime? DueDate  { get; init; }
     public string?   Category { get; init; }
+    public string?   DreGroup { get; init; }
     public string?   Supplier { get; init; }
     public string?   Notes    { get; init; }
 }
@@ -498,6 +554,7 @@ public class UpdateTransactionRequest
     public DateTime? DueDate     { get; init; }
     public string?   Status      { get; init; }
     public string?   Category    { get; init; }
+    public string?   DreGroup    { get; init; }
     public string?   Supplier    { get; init; }
     public string?   Notes       { get; init; }
 }

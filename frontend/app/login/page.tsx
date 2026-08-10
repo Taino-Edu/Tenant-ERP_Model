@@ -98,11 +98,11 @@ export default function LoginPage() {
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="card space-y-5">
           <div>
-            <label className="label">E-mail</label>
+            <label htmlFor="login-email" className="label">E-mail</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
-                type="email" required value={email}
+                id="login-email" type="email" required value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="input pl-9"
                 placeholder="seu@email.com.br"
@@ -110,11 +110,11 @@ export default function LoginPage() {
             </div>
           </div>
           <div>
-            <label className="label">Senha</label>
+            <label htmlFor="login-password" className="label">Senha</label>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
-                type={showPass ? 'text' : 'password'} required value={password}
+                id="login-password" type={showPass ? 'text' : 'password'} required value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="input pl-9 pr-10"
                 placeholder="••••••••"

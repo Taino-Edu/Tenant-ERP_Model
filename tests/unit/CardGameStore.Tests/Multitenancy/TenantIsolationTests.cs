@@ -44,10 +44,11 @@ public class TenantIsolationTests
     /// exatamente como no provisionamento de tenant de produção).</summary>
     private static ITenantContext ProvisionSchema(string schema)
     {
-        TestDbFactory.ResetSchema(schema);
+        var isolatedSchema = TestDbFactory.IsolatedSchemaName(schema);
+        TestDbFactory.ResetSchema(isolatedSchema);
 
         var tenant = new TenantContext();
-        tenant.Set(Guid.NewGuid(), schema, ["fiscal"]);
+        tenant.Set(Guid.NewGuid(), isolatedSchema, ["fiscal"]);
 
         using var db = CreateDbFor(tenant);
         db.GetInfrastructure().GetRequiredService<IRelationalDatabaseCreator>().CreateTables();
@@ -102,7 +103,7 @@ public class TenantIsolationTests
         // conexão aberta — se o contexto mudar (ex: loop de migrations por tenant
         // no boot), conexões novas têm que cair no schema novo.
         var tenantA = ProvisionSchema("mt_swap_tenant_a");
-        ProvisionSchema("mt_swap_tenant_b");
+        var tenantB = ProvisionSchema("mt_swap_tenant_b");
 
         await using (var dbA = CreateDbFor(tenantA))
         {
@@ -111,7 +112,7 @@ public class TenantIsolationTests
         }
 
         // Mesmo ITenantContext, agora apontando pro schema B
-        tenantA.Set(Guid.NewGuid(), "mt_swap_tenant_b", ["fiscal"]);
+        tenantA.Set(Guid.NewGuid(), tenantB.SchemaName, ["fiscal"]);
 
         await using var dbDepoisDaTroca = CreateDbFor(tenantA);
         var produtos = await dbDepoisDaTroca.Products.ToListAsync();

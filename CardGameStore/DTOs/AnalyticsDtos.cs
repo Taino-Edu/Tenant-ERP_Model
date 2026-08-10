@@ -68,12 +68,23 @@ public class ClienteInsightDto
 
 public class FinanceiroDto
 {
+    public decimal ReceitaBruta     { get; set; } // itens antes de descontos
+    public decimal Deducoes         { get; set; } // descontos/abatimentos que reduziram a venda
     public decimal Receita          { get; set; } // total (comandas + avulsas)
+    public decimal ImpostosSobreVendas { get; set; }
+    public decimal ReceitaLiquidaDre { get; set; }
     public decimal ReceitaComandas  { get; set; } // só comandas fechadas
     public decimal ReceitaAvulsa    { get; set; } // só vendas avulsas
     public decimal Custo            { get; set; } // custo dos produtos vendidos (R$)
     public decimal Margem           { get; set; } // receita - custo
-    public decimal MargemPercent    { get; set; } // (margem / custo) * 100
+    public decimal MargemPercent    { get; set; } // (lucro bruto / receita líquida) * 100
+    public decimal DespesasOperacionais { get; set; }
+    public decimal ResultadoOperacional { get; set; }
+    public decimal ResultadoFinanceiro { get; set; }
+    public decimal ImpostosSobreLucro { get; set; }
+    public decimal ResultadoLiquido { get; set; }
+    public decimal LancamentosNaoClassificados { get; set; }
+    public List<DreCategoriaDto> DespesasPorCategoria { get; set; } = new();
     public decimal Crediarios        { get; set; } // total em aberto nos crediários (R$)
     public decimal RecebidoCrediario { get; set; } // total recebido de crediários no período
     public List<DiaFinanceiroDto>               DiaDia                     { get; set; } = new();
@@ -88,6 +99,12 @@ public class FinanceiroDto
     /// período que não termina hoje.
     /// </summary>
     public ProjecaoDto? Projecao { get; set; }
+}
+
+public class DreCategoriaDto
+{
+    public string Categoria { get; set; } = string.Empty;
+    public decimal Valor { get; set; }
 }
 
 public class ProjecaoDto

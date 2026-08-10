@@ -78,6 +78,14 @@ public class NotaDestinada
     [Column("contas_geradas")]
     public int ContasGeradas { get; set; }
 
+    /// <summary>Quando a mercadoria desta nota foi confirmada no estoque.</summary>
+    [Column("estoque_recebido_em")]
+    public DateTime? EstoqueRecebidoEm { get; set; }
+
+    /// <summary>Quantidade total de unidades acrescentadas ao estoque.</summary>
+    [Column("itens_estoque_recebidos")]
+    public int ItensEstoqueRecebidos { get; set; }
+
     /// <summary>Último erro do pipeline (manifestação/download/parse) — null quando ok.</summary>
     [MaxLength(500)]
     [Column("erro")]
@@ -88,4 +96,6 @@ public class NotaDestinada
 
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<NfeReceiptItem> ReceiptItems { get; set; } = new List<NfeReceiptItem>();
 }

@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // AppDbContext.cs — Contexto do Entity Framework Core (PostgreSQL)
 // Configura mapeamentos, índices, conversões e seeds iniciais.
 // =============================================================================
@@ -60,9 +60,14 @@ public class AppDbContext : DbContext
     public DbSet<NaturezaOperacao>   NaturezasOperacao    { get; set; }
     public DbSet<NotaFiscalEmitida>  NotasFiscaisEmitidas { get; set; }
     public DbSet<InutilizacaoFiscal> InutilizacoesFiscais  { get; set; }
+    public DbSet<AlertaFiscal>       AlertasFiscais       { get; set; }
+    public DbSet<IbptTabelaEntry>    IbptTabela           { get; set; }
 
     // ── Fiscal: NF-e destinadas (Manifestação do Destinatário) ────────────────
     public DbSet<NotaDestinada>      NotasDestinadas      { get; set; }
+    public DbSet<NfeReceiptItem>     NfeReceiptItems      { get; set; }
+    public DbSet<SupplierProductLink> SupplierProductLinks { get; set; }
+    public DbSet<StockMovement>      StockMovements       { get; set; }
 
     // ── Personalização da landing page ─────────────────────────────────────────
     public DbSet<SiteConfig>         SiteConfigs          { get; set; }
@@ -79,9 +84,15 @@ public class AppDbContext : DbContext
     // ── Financeiro: fechamentos formais de período (dia/semana/mês) ───────────
     public DbSet<FechamentoPeriodo>  FechamentosPeriodo   { get; set; }
 
+    // ── Fiscal: fechamento contábil da competência, travado pelo contador ─────
+    public DbSet<FechamentoFiscalMensal> FechamentosFiscaisMensais { get; set; }
+
     // ── Eventos: cadastro de evento + venda/check-in de entradas ──────────────
     public DbSet<Evento>         Eventos        { get; set; }
     public DbSet<EventoEntrada>  EventoEntradas { get; set; }
+
+    // Restaurante: somente entidades novas do módulo opcional.
+    public DbSet<RestaurantProductionArea> RestaurantProductionAreas { get; set; }
 
     // -------------------------------------------------------------------------
     // OnModelCreating — Fluent API para configurações avançadas
@@ -108,6 +119,10 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(u => u.WhatsApp)
                   .HasDatabaseName("ix_users_whatsapp");
+
+            // Dashboard: total de clientes ativos e novos clientes no mês.
+            entity.HasIndex(u => new { u.IsActive, u.Role, u.CreatedAt })
+                  .HasDatabaseName("ix_users_active_role_created_at");
         });
 
         // =====================================================================
@@ -143,6 +158,11 @@ public class AppDbContext : DbContext
             entity.HasIndex(p => p.NaturezaOperacaoId)
                   .HasDatabaseName("ix_products_natureza_operacao");
 
+            // Catálogo público: filtro fixo e ordenação por nome. O índice simples
+            // em IsActive não evitava sort nem a varredura do catálogo inteiro.
+            entity.HasIndex(p => new { p.IsActive, p.ShowOnMarketplace, p.Name })
+                  .HasDatabaseName("ix_products_marketplace_active_name");
+
             entity.HasOne(p => p.NaturezaOperacao)
                   .WithMany(n => n.Products)
                   .HasForeignKey(p => p.NaturezaOperacaoId)
@@ -157,9 +177,26 @@ public class AppDbContext : DbContext
         {
             entity.Property(f => f.RegimeTributario).HasConversion<string>();
             entity.Property(f => f.Ambiente).HasConversion<string>();
+            entity.Property(f => f.AnexoSimples).HasConversion<string>();
+            entity.Property(f => f.PercentualPresuncaoIrpj).HasColumnType("numeric(5,2)");
+            entity.Property(f => f.PercentualPresuncaoCsll).HasColumnType("numeric(5,2)");
+            entity.Property(f => f.AliquotaIcmsPercentual).HasColumnType("numeric(5,2)");
+            entity.Property(f => f.AliquotaIssPercentual).HasColumnType("numeric(5,2)");
 
             entity.HasIndex(f => f.Cnpj)
                   .HasDatabaseName("ix_fiscal_config_cnpj");
+        });
+
+        // =====================================================================
+        // FECHAMENTO FISCAL MENSAL
+        // =====================================================================
+        modelBuilder.Entity<FechamentoFiscalMensal>(entity =>
+        {
+            // Uma competência só pode ter um fechamento — é o que faz o snapshot
+            // ser "travado": gravar de novo esbarra na unique, não sobrescreve.
+            entity.HasIndex(f => new { f.Ano, f.Mes })
+                  .IsUnique()
+                  .HasDatabaseName("ix_fechamentos_fiscais_competencia");
         });
 
         // =====================================================================
@@ -219,6 +256,41 @@ public class AppDbContext : DbContext
         });
 
         // =====================================================================
+        // TABELA IBPT LOCAL (IBPT-002)
+        // =====================================================================
+        modelBuilder.Entity<IbptTabelaEntry>(entity =>
+        {
+            // A chave natural é o que o lookup do cadastro de produto usa. Única
+            // para o upsert do job diário não duplicar linha a cada execução.
+            entity.HasIndex(e => new { e.Ncm, e.Uf, e.Importado })
+                  .IsUnique()
+                  .HasDatabaseName("ix_ibpt_tabela_ncm_uf_origem");
+        });
+
+        // =====================================================================
+        // ALERTA FISCAL (CON-002)
+        // =====================================================================
+        modelBuilder.Entity<AlertaFiscal>(entity =>
+        {
+            entity.Property(a => a.Tipo).HasConversion<string>().HasMaxLength(40);
+            entity.Property(a => a.Severidade).HasConversion<string>().HasMaxLength(20);
+
+            // A deduplicação do CON-002 é do BANCO, não da aplicação: a chave é
+            // derivada do fato, então dois ciclos concorrentes não conseguem criar
+            // dois alertas para a mesma pendência nem que tentem.
+            entity.HasIndex(a => a.Chave)
+                  .IsUnique()
+                  .HasDatabaseName("ix_alertas_fiscais_chave");
+
+            // Consulta do painel: abertos primeiro, mais graves e mais antigos no topo.
+            entity.HasIndex(a => new { a.ResolvidoEm, a.Severidade, a.OcorridoEm })
+                  .HasDatabaseName("ix_alertas_fiscais_painel");
+
+            entity.HasIndex(a => a.NotaFiscalId)
+                  .HasDatabaseName("ix_alertas_fiscais_nota");
+        });
+
+        // =====================================================================
         // COMANDA
         // =====================================================================
         modelBuilder.Entity<Comanda>(entity =>
@@ -231,6 +303,15 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(c => c.Status)
                   .HasDatabaseName("ix_comandas_status");
+
+            // Analytics filtra por status + janela de fechamento em praticamente
+            // todas as métricas de receita e ticket médio.
+            entity.HasIndex(c => new { c.Status, c.ClosedAt })
+                  .HasDatabaseName("ix_comandas_status_closed_at");
+
+            // Histórico do cliente filtra por usuário e ordena por abertura.
+            entity.HasIndex(c => new { c.UserId, c.OpenedAt })
+                  .HasDatabaseName("ix_comandas_user_opened_at");
 
             entity.HasOne(c => c.User)
                   .WithMany(u => u.Comandas)
@@ -245,6 +326,10 @@ public class AppDbContext : DbContext
         {
             entity.HasIndex(i => i.ComandaId)
                   .HasDatabaseName("ix_comanda_items_comanda");
+
+            // Consultas temporais de itens usadas pela IA e pelas ferramentas MCP.
+            entity.HasIndex(i => i.AddedAt)
+                  .HasDatabaseName("ix_comanda_items_added_at");
 
             entity.HasOne(i => i.Comanda)
                   .WithMany(c => c.Items)
@@ -516,6 +601,66 @@ public class AppDbContext : DbContext
                   .HasDatabaseName("ix_notas_destinadas_status");
         });
 
+        modelBuilder.Entity<NfeReceiptItem>(entity =>
+        {
+            entity.HasIndex(i => new { i.NotaDestinadaId, i.ItemNumber })
+                  .IsUnique()
+                  .HasDatabaseName("ix_nfe_receipt_items_note_number");
+
+            entity.HasOne(i => i.NotaDestinada)
+                  .WithMany(n => n.ReceiptItems)
+                  .HasForeignKey(i => i.NotaDestinadaId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(i => i.Product)
+                  .WithMany()
+                  .HasForeignKey(i => i.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(i => i.ProductVariant)
+                  .WithMany()
+                  .HasForeignKey(i => i.ProductVariantId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SupplierProductLink>(entity =>
+        {
+            entity.HasIndex(l => new { l.SupplierCnpj, l.SupplierProductCode })
+                  .IsUnique()
+                  .HasDatabaseName("ix_supplier_product_links_supplier_code");
+
+            entity.HasOne(l => l.Product)
+                  .WithMany()
+                  .HasForeignKey(l => l.ProductId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(l => l.ProductVariant)
+                  .WithMany()
+                  .HasForeignKey(l => l.ProductVariantId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<StockMovement>(entity =>
+        {
+            entity.HasIndex(m => new { m.NfeKey, m.SourceItemNumber })
+                  .IsUnique()
+                  .HasFilter("nfe_key IS NOT NULL AND source_item_number IS NOT NULL")
+                  .HasDatabaseName("ix_stock_movements_nfe_item");
+
+            entity.HasIndex(m => new { m.ProductId, m.OccurredAt })
+                  .HasDatabaseName("ix_stock_movements_product_date");
+
+            entity.HasOne(m => m.Product)
+                  .WithMany()
+                  .HasForeignKey(m => m.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(m => m.ProductVariant)
+                  .WithMany()
+                  .HasForeignKey(m => m.ProductVariantId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
         // =====================================================================
         // FECHAMENTO PERIODO
         // =====================================================================
@@ -545,6 +690,19 @@ public class AppDbContext : DbContext
         {
             entity.HasIndex(e => e.EventoId)
                   .HasDatabaseName("ix_evento_entradas_evento_id");
+        });
+
+        // =====================================================================
+        // RESTAURANTE (módulo opcional, sem dependência das comandas atuais)
+        // =====================================================================
+        modelBuilder.Entity<RestaurantProductionArea>(entity =>
+        {
+            entity.HasIndex(area => area.Name)
+                  .IsUnique()
+                  .HasDatabaseName("ix_restaurant_production_areas_name");
+
+            entity.HasIndex(area => new { area.IsActive, area.DisplayOrder })
+                  .HasDatabaseName("ix_restaurant_production_areas_active_order");
         });
     }
 }

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using CardGameStore.Data;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,7 +10,8 @@ namespace CardGameStore.Controllers;
 
 [ApiController]
 [Route("api/timers")]
-[Authorize(Roles = "Admin")]
+[Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Timers)]
 public class TimerController : ControllerBase
 {
     private readonly AppDbContext _db;

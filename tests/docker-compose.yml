@@ -1,0 +1,59 @@
+# =============================================================================
+# PostgreSQL de testes. A suíte inteira roda contra ele (TestDbFactory), um
+# schema por teste, dropado e recriado a cada execução.
+#
+# Os parâmetros do `command` NÃO são enfeite — com os defaults, a suíte falhava
+# de 4 a 19 testes por rodada, sempre em testes diferentes, todos passando
+# quando executados isolados:
+#
+#   max_locks_per_transaction (default 64) dimensiona a tabela de locks
+#   COMPARTILHADA do cluster: max_locks_per_transaction × max_connections.
+#   Cada `DROP SCHEMA ... CASCADE` de um schema do AppDbContext pega um lock
+#   por objeto — são ~60 tabelas mais índices e sequences, bem acima de 64 —
+#   e várias classes de teste dropam schemas ao mesmo tempo. Quando a tabela
+#   de locks estoura, o DROP/CREATE falha no meio: o schema fica sem as
+#   tabelas e o primeiro INSERT do teste morre com
+#   "42P01: relation ... does not exist" — erro que aponta pro lugar errado e
+#   parece bug de isolamento entre testes, não de configuração do servidor.
+# =============================================================================
+services:
+  postgres-tests:
+    image: postgres:16-alpine
+    container_name: tenant-erp-test-db
+    command:
+      - postgres
+      - -c
+      - max_locks_per_transaction=1024
+      - -c
+      - max_connections=200
+      # Banco descartável: recriado do zero quando quiser. Sem durabilidade,
+      # o DDL pesado da suíte (centenas de CREATE/DROP TABLE) fica bem mais
+      # rápido, e não há dado nenhum que valha um fsync.
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+    environment:
+      POSTGRES_USER: tenant_test
+      POSTGRES_PASSWORD: tenant_test_pw
+      POSTGRES_DB: tenant_erp_test
+    # O default do Docker para /dev/shm é 64 MB, e o Postgres usa memória
+    # compartilhada para os workers paralelos. Com o catálogo inchado por
+    # schemas de execuções interrompidas, um `DROP SCHEMA ... CASCADE` estoura
+    # esse limite — e o sintoma não aponta para lugar nenhum útil: primeiro os
+    # DROPs falham, depois QUALQUER conexão nova morre com
+    # "could not resize shared memory segment ... No space left on device",
+    # que parece disco cheio e não é.
+    shm_size: 512mb
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/01-runtime-role.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenant_test -d tenant_erp_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped

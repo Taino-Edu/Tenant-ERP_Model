@@ -1,4 +1,4 @@
-// =============================================================================
+﻿// =============================================================================
 // NfceEmissionService.cs — Motor de emissão de NFC-e via DFe.NET
 //
 // Monta o objeto NFe (ide/emit/dest/det/total/pag), assina com o certificado
@@ -13,9 +13,14 @@
 //    sentido pra um lojista que NÃO é substituto tributário). 201/202/203
 //    (ICMS-ST como substituto) são bloqueados de propósito — exigem MVA/base
 //    reduzida que ninguém aqui calcula sozinho; ver MontarIcmsSimplesNacional.
-//  - dhEmi usa nota.CreatedAt (momento real da venda/fechamento da comanda),
-//    não o momento da transmissão — importante pro caso comum de retry
-//    automático rodar minutos/horas depois da venda de verdade.
+//  - dhEmi na emissão NORMAL é o momento da TRANSMISSÃO (AgoraBrasil), não o da
+//    venda: a SEFAZ rejeita documento com data de emissão atrasada, então o
+//    retry automático que roda horas depois precisa carimbar o horário atual.
+//    A consequência fiscal disso não é neutra e está registrada na seção 36 do
+//    plano: emitir dias depois produz documento que declara a data de HOJE para
+//    uma operação de ONTEM. Só a contingência (tpEmis=9) preserva o instante
+//    real da venda, e é esse o mecanismo previsto para "não deu para transmitir
+//    na hora".
 //  - Todos os timestamps enviados à SEFAZ usam o fuso America/Sao_Paulo
 //    explicitamente (ParaBrasil/AgoraBrasil), independente do fuso do
 //    servidor onde a API está hospedada.
@@ -66,6 +71,7 @@ using NFe.Classes.Servicos.Tipos;
 using NFe.Servicos;
 using NFe.Servicos.Retorno;
 using NFe.Utils;
+using NFe.Utils.Excecoes;
 using NFe.Utils.Consulta;
 using Npgsql;
 using NFe.Utils.InformacoesSuplementares;
@@ -195,12 +201,87 @@ public class NfceEmissionService : INfceEmissionService
            or System.Net.Sockets.SocketException
            or TimeoutException
            or TaskCanceledException
+           // Stream cortado no meio da resposta. Entrou aqui com RES-001: antes,
+           // cair no catch genérico era o desfecho conservador; agora o desfecho
+           // conservador é ResultadoIncerto, que consulta a chave em vez de
+           // deixar a nota pendente sem ninguém perguntar nada à SEFAZ.
+           or IOException
         || (ex.InnerException is not null && EhFalhaDeConectividade(ex.InnerException)));
+
+    /// <summary>
+    /// Destino de uma tentativa de transmissão que terminou em falha de rede.
+    /// A distinção existe porque as duas situações exigem condutas opostas
+    /// (RES-001).
+    /// </summary>
+    internal enum DestinoTentativa
+    {
+        /// <summary>A requisição não chegou à SEFAZ: a conexão nem se estabeleceu
+        /// (DNS não resolveu, porta recusada, rede inalcançável). Nenhum documento
+        /// foi processado do outro lado, então a contingência offline é a conduta
+        /// correta e imediata — é para isso que ela existe.</summary>
+        NuncaChegou,
+
+        /// <summary>A requisição pode ter chegado e sido autorizada, com a resposta
+        /// perdida no caminho (timeout, conexão derrubada no meio). Emitir outro
+        /// documento aqui é o que gera duas NFC-e para a mesma venda: primeiro
+        /// consulta-se a chave original.</summary>
+        Incerto,
+    }
+
+    /// <summary>
+    /// Classifica a falha de rede em "nunca chegou" ou "resultado incerto".
+    /// Percorre a cadeia de exceções de fora para dentro e decide no primeiro
+    /// tipo que carrega essa informação.
+    ///
+    /// O default é deliberadamente <see cref="DestinoTentativa.Incerto"/>: só se
+    /// declara que o documento não chegou quando há evidência disso. Presumir o
+    /// contrário é barato de escrever e caro de corrigir — a nota duplicada já
+    /// está autorizada na SEFAZ quando alguém percebe.
+    /// </summary>
+    internal static DestinoTentativa ClassificarFalhaDeTransmissao(Exception? ex)
+    {
+        for (var atual = ex; atual is not null; atual = atual.InnerException)
+        {
+            switch (atual)
+            {
+                case TimeoutException or TaskCanceledException:
+                    return DestinoTentativa.Incerto;
+
+                case System.Net.Sockets.SocketException socket:
+                    return socket.SocketErrorCode is
+                        System.Net.Sockets.SocketError.HostNotFound or
+                        System.Net.Sockets.SocketError.ConnectionRefused or
+                        System.Net.Sockets.SocketError.NetworkUnreachable or
+                        System.Net.Sockets.SocketError.HostUnreachable or
+                        System.Net.Sockets.SocketError.NetworkDown or
+                        System.Net.Sockets.SocketError.AddressNotAvailable
+                        ? DestinoTentativa.NuncaChegou
+                        : DestinoTentativa.Incerto;
+
+                case System.Net.WebException web:
+                    return web.Status is
+                        System.Net.WebExceptionStatus.ConnectFailure or
+                        System.Net.WebExceptionStatus.NameResolutionFailure or
+                        System.Net.WebExceptionStatus.ProxyNameResolutionFailure
+                        ? DestinoTentativa.NuncaChegou
+                        : DestinoTentativa.Incerto;
+
+                case System.Net.Http.HttpRequestException http
+                    when http.HttpRequestError is System.Net.Http.HttpRequestError.NameResolutionError
+                                               or System.Net.Http.HttpRequestError.ConnectionError:
+                    return DestinoTentativa.NuncaChegou;
+            }
+        }
+
+        return DestinoTentativa.Incerto;
+    }
 
     private readonly AppDbContext                _db;
     private readonly EncryptionService           _enc;
     private readonly ILogger<NfceEmissionService> _logger;
     private readonly IFiscalTaxEngine             _taxEngine;
+    private readonly INfceSefazGateway            _sefaz;
+    private readonly INfceSchemaValidator         _schemaValidator;
 
     public NfceEmissionService(
         AppDbContext db, EncryptionService enc, ILogger<NfceEmissionService> logger)
@@ -208,12 +289,18 @@ public class NfceEmissionService : INfceEmissionService
 
     internal NfceEmissionService(
         AppDbContext db, EncryptionService enc, ILogger<NfceEmissionService> logger,
-        IFiscalTaxEngine taxEngine)
+        IFiscalTaxEngine taxEngine, INfceSefazGateway? sefaz = null,
+        INfceSchemaValidator? schemaValidator = null)
     {
         _db     = db;
         _enc    = enc;
         _logger = logger;
         _taxEngine = taxEngine;
+        _sefaz  = sefaz ?? new NfceSefazGateway();
+        // Sem validador injetado, o serviço carrega o pacote versionado sozinho —
+        // e degrada para "sem validação" se ele não estiver presente (XML-002).
+        _schemaValidator = schemaValidator ?? new NfceSchemaValidator(
+            new Microsoft.Extensions.Logging.Abstractions.NullLogger<NfceSchemaValidator>());
     }
 
     public async Task<NotaFiscalEmitida> EmitirParaComandaAsync(Guid comandaId) =>
@@ -227,7 +314,8 @@ public class NfceEmissionService : INfceEmissionService
         var nota = await _db.NotasFiscaisEmitidas.FindAsync(notaId)
             ?? throw new InvalidOperationException($"Nota {notaId} não encontrada.");
 
-        if (nota.Status is not (NotaFiscalStatus.PendenteEmissao or NotaFiscalStatus.Rejeitada or NotaFiscalStatus.AutorizadaContingencia))
+        if (nota.Status is not (NotaFiscalStatus.PendenteEmissao or NotaFiscalStatus.Rejeitada
+                             or NotaFiscalStatus.AutorizadaContingencia or NotaFiscalStatus.ResultadoIncerto))
             return nota; // Autorizada/Cancelada não têm o que reprocessar — devolve como está.
 
         if (nota.Status == NotaFiscalStatus.Rejeitada && nota.InutilizadoEm.HasValue)
@@ -257,6 +345,15 @@ public class NfceEmissionService : INfceEmissionService
                     "NFC-e {NotaId} em contingência desde {DhContingencia:o} está se aproximando do prazo legal " +
                     "de 24h sem retransmitir com sucesso.", nota.Id, nota.DhContingencia);
         }
+        else if (nota.Status == NotaFiscalStatus.ResultadoIncerto)
+        {
+            // Resultado incerto também não morre por contagem de tentativas: desistir
+            // de consultar deixaria a venda com destino fiscal desconhecido para
+            // sempre, e o número reservado travado. Continua tentando resolver.
+            _logger.LogInformation(
+                "NFC-e {NotaId} (chave {Chave}) segue com resultado incerto desde {Desde:o} — nova consulta à SEFAZ.",
+                nota.Id, nota.ChaveAcesso, nota.ResultadoIncertoEm);
+        }
         else if (nota.TentativasReprocessamento >= MaxTentativasReprocessamento)
         {
             _logger.LogWarning(
@@ -270,6 +367,12 @@ public class NfceEmissionService : INfceEmissionService
 
         await ExecutarComTratamentoDeErroAsync(nota, async () =>
         {
+            // RES-001: nota com tentativa em aberto não remonta documento nenhum
+            // antes de a SEFAZ dizer o que aconteceu com a chave já transmitida.
+            if (nota.Status == NotaFiscalStatus.ResultadoIncerto &&
+                !await ResolverResultadoIncertoPersistidoAsync(nota))
+                return;
+
             var dados = nota.Origem == NotaFiscalOrigem.Comanda
                 ? await CarregarDadosComandaAsync(nota.ComandaId!.Value)
                 : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value);
@@ -304,11 +407,37 @@ public class NfceEmissionService : INfceEmissionService
         var (cfg, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
 
+        // XML-002 (evento): aqui quem valida é a lib, porque RecepcaoEventoCancelamento
+        // monta e transmite numa chamada só, sem expor o XML antes. E o
+        // DiretorioSchemas dela funciona neste caso justamente porque a pasta
+        // Evento/ do pacote oficial é autocontida — tem o próprio tiposBasico,
+        // então não há o conflito de nomes que impediu esse caminho na autorização.
+        if (_schemaValidator.DiretorioEventos is { } diretorioEventos)
+        {
+            cfgServico.ValidarSchemas   = true;
+            cfgServico.DiretorioSchemas = diretorioEventos;
+        }
+
         using var servico = new ServicosNFe(cfgServico, certificado);
-        var retorno = servico.RecepcaoEventoCancelamento(
-            idlote: 1, sequenciaEvento: 1,
-            protocoloAutorizacao: nota.Protocolo!, chaveNFe: nota.ChaveAcesso!,
-            justificativa: justificativa.Trim(), cpfcnpj: NormalizarCnpjParaSefaz(cfg.Cnpj), dhEvento: AgoraBrasil());
+        RetornoRecepcaoEvento retorno;
+        try
+        {
+            retorno = servico.RecepcaoEventoCancelamento(
+                idlote: 1, sequenciaEvento: 1,
+                protocoloAutorizacao: nota.Protocolo!, chaveNFe: nota.ChaveAcesso!,
+                justificativa: justificativa.Trim(),
+                cpfcnpj: NormalizarCnpjParaSefaz(cfg.Cnpj), dhEvento: AgoraBrasil());
+        }
+        catch (ValidacaoSchemaException ex)
+        {
+            // Mesma conduta da autorização: erro de leiaute não é indisponibilidade
+            // da SEFAZ nem falha transitória. O evento não foi transmitido, a nota
+            // continua autorizada, e reenviar sem corrigir daria no mesmo.
+            _logger.LogError(ex,
+                "Evento de cancelamento da NFC-e {NotaId} reprovado no schema oficial — não transmitido.",
+                nota.Id);
+            throw new SchemaInvalidoException(new[] { ex.Message });
+        }
 
         var infEvento = retorno.Retorno?.retEvento?.FirstOrDefault()?.infEvento;
         if (infEvento is null || infEvento.cStat is not (135 or 136))
@@ -345,62 +474,55 @@ public class NfceEmissionService : INfceEmissionService
         return await _db.NotasFiscaisEmitidas.FindAsync(notaId) ?? nota;
     }
 
-    public async Task<CupomDto?> ObterCupomAsync(Guid notaId)
+    /// <summary>
+    /// Representação do DANFE NFC-e, montada SOMENTE a partir do XML fiscal
+    /// persistido (DFE-001 do plano de go-live).
+    ///
+    /// A versão anterior remontava o cupom relendo a comanda e a FiscalConfig
+    /// atuais. O resultado parecia certo na tela, mas corrigir o endereço da
+    /// loja ou renomear um produto mudava a reimpressão de uma venda antiga — o
+    /// papel passava a divergir do documento que a SEFAZ autorizou. Agora nada
+    /// aqui consulta cadastro ou venda: o XML é a única fonte.
+    ///
+    /// Ordem de preferência da fonte: nfeProc autorizado &gt; XML assinado de
+    /// contingência. Nota sem nenhum dos dois (pendente ou rejeitada) devolve
+    /// null — documento sem autorização não pode ser apresentado como DANFE
+    /// válido (DFE-007). A via de contingência é um DANFE legítimo, ainda sem
+    /// protocolo: o próprio parser sinaliza esse estado.
+    /// </summary>
+    public async Task<DanfeFiscalDto?> ObterCupomAsync(Guid notaId)
     {
-        var nota = await _db.NotasFiscaisEmitidas.FindAsync(notaId);
+        var nota = await _db.NotasFiscaisEmitidas
+            .AsNoTracking()
+            .FirstOrDefaultAsync(n => n.Id == notaId);
         if (nota is null) return null;
 
-        var dados = nota.Origem == NotaFiscalOrigem.Comanda
-            ? await CarregarDadosComandaAsync(nota.ComandaId!.Value, permitirCancelada: true)
-            : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value, permitirCancelada: true);
-
-        var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
-        var endereco = cfg is null ? "" : $"{cfg.Logradouro}, {cfg.Numero} - {cfg.Bairro} - {cfg.Municipio}/{cfg.Uf}";
-
-        var descontos = DistribuirDesconto(dados.Itens, dados.DescontoTotalCentavos);
-        var tributosItens = ObterTributosItensDoSnapshot(nota, dados.Itens, descontos);
-
-        return new CupomDto(
-            RazaoSocial: cfg?.RazaoSocial ?? "",
-            Cnpj:        cfg?.Cnpj ?? "",
-            Endereco:    endereco,
-            ChaveAcesso: nota.ChaveAcesso,
-            Protocolo:   nota.Protocolo,
-            EmitidoEm:   nota.EmitidoEm,
-            Serie:       nota.Serie ?? 0,
-            Numero:      nota.Numero ?? 0,
-            Status:      nota.Status.ToString(),
-            Itens:       dados.Itens.Select((i, indice) => new CupomItemDto(
-                i.Nome, i.Quantidade, i.PrecoUnitarioCentavos, i.SubtotalCentavos,
-                tributosItens.ElementAtOrDefault(indice))).ToList(),
-            DescontoTotalCentavos: dados.DescontoTotalCentavos,
-            ValorTotalCentavos: nota.ValorTotalEmCentavos,
-            FormaPagamento: dados.FormaPagamento,
-            TributosFederaisCentavos: nota.TributosFederaisEmCentavos,
-            TributosEstaduaisCentavos: nota.TributosEstaduaisEmCentavos,
-            TributosMunicipaisCentavos: nota.TributosMunicipaisEmCentavos,
-            FontesTributos: nota.FontesTributos,
-            QrCodeUrl:   nota.UrlQrCode);
-    }
-
-    private static List<int> ObterTributosItensDoSnapshot(
-        NotaFiscalEmitida nota, IReadOnlyList<ItemFiscal> itens, IReadOnlyList<int> descontos)
-    {
-        if (!string.IsNullOrWhiteSpace(nota.TributosItensJson))
+        var xml = nota.XmlAutorizado ?? nota.XmlContingencia;
+        if (string.IsNullOrWhiteSpace(xml))
         {
-            try
-            {
-                var snapshot = JsonSerializer.Deserialize<List<int>>(nota.TributosItensJson);
-                if (snapshot is { Count: > 0 }) return snapshot;
-            }
-            catch (JsonException)
-            {
-                // Notas antigas ou snapshot corrompido usam o calculo atual como fallback visual.
-            }
+            _logger.LogInformation(
+                "DANFE não gerado para a nota {NotaId}: status {Status} sem XML fiscal persistido.",
+                notaId, nota.Status);
+            return null;
         }
 
-        return itens.Select((item, indice) =>
-            DecimalParaCentavos(CalcularTributosAproximados(item, descontos[indice]).Total)).ToList();
+        try
+        {
+            var danfe = DanfeXmlParser.Parse(xml);
+
+            // O cancelamento é um evento posterior, fora do XML de autorização —
+            // é o único dado da representação que precisa vir do registro local.
+            return nota.Status == NotaFiscalStatus.Cancelada
+                ? danfe with { Situacao = DanfeSituacao.Cancelada }
+                : danfe;
+        }
+        catch (DanfeXmlInvalidoException ex)
+        {
+            // XML corrompido em repouso é problema de guarda, não de venda: falha
+            // de forma visível em vez de cair no cadastro e mascarar a perda.
+            _logger.LogError(ex, "XML fiscal da nota {NotaId} não pôde ser lido para gerar o DANFE.", notaId);
+            return null;
+        }
     }
 
     // ── Orquestração ──────────────────────────────────────────────────────────
@@ -478,17 +600,44 @@ public class NfceEmissionService : INfceEmissionService
              (!n.EmitidoEm.HasValue && n.CreatedAt >= inicioAnoUtc && n.CreatedAt < fimAnoUtc)) &&
             (n.Status == NotaFiscalStatus.Autorizada ||
              n.Status == NotaFiscalStatus.AutorizadaContingencia ||
-             n.Status == NotaFiscalStatus.Cancelada));
+             n.Status == NotaFiscalStatus.Cancelada ||
+             // RES-001: número com tentativa sem resposta pode estar autorizado na
+             // SEFAZ. Inutilizar aqui seria declarar como não usado um número que
+             // talvez já tenha documento válido — resolve-se a consulta primeiro.
+             n.Status == NotaFiscalStatus.ResultadoIncerto));
         if (conflitaComDocumentoValido)
             throw new InvalidOperationException(
-                "A faixa contém NFC-e autorizada, cancelada ou em contingência e não pode ser inutilizada.");
+                "A faixa contém NFC-e autorizada, cancelada, em contingência ou com resultado incerto na SEFAZ " +
+                "e não pode ser inutilizada.");
 
         var (cfg, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
+
+        // XML-002: inutilizar é declarar à SEFAZ que uma faixa de numeração nunca
+        // será usada — irreversível. Mesma mecânica do evento de cancelamento:
+        // quem valida é a lib, porque NfeInutilizacao monta e transmite numa
+        // chamada só.
+        if (_schemaValidator.DiretorioInutilizacao is { } diretorioInutilizacao)
+        {
+            cfgServico.ValidarSchemas   = true;
+            cfgServico.DiretorioSchemas = diretorioInutilizacao;
+        }
+
         using var servico = new ServicosNFe(cfgServico, certificado);
-        var retorno = servico.NfeInutilizacao(
-            NormalizarCnpjParaSefaz(cfg.Cnpj), ano, ModeloDocumento.NFCe,
-            serie, numeroInicial, numeroFinal, justificativa);
+        RetornoNfeInutilizacao retorno;
+        try
+        {
+            retorno = servico.NfeInutilizacao(
+                NormalizarCnpjParaSefaz(cfg.Cnpj), ano, ModeloDocumento.NFCe,
+                serie, numeroInicial, numeroFinal, justificativa);
+        }
+        catch (ValidacaoSchemaException ex)
+        {
+            _logger.LogError(ex,
+                "Pedido de inutilização da faixa {Inicial}-{Final} (série {Serie}) reprovado no schema " +
+                "oficial — não transmitido.", numeroInicial, numeroFinal, serie);
+            throw new SchemaInvalidoException(new[] { ex.Message });
+        }
         var infInut = retorno.Retorno?.infInut;
         if (infInut is null || infInut.cStat != 102)
             throw new InvalidOperationException(
@@ -513,7 +662,8 @@ public class NfceEmissionService : INfceEmissionService
                          (!n.EmitidoEm.HasValue && n.CreatedAt >= inicioAnoUtc && n.CreatedAt < fimAnoUtc)) &&
                         n.Status != NotaFiscalStatus.Autorizada &&
                         n.Status != NotaFiscalStatus.AutorizadaContingencia &&
-                        n.Status != NotaFiscalStatus.Cancelada)
+                        n.Status != NotaFiscalStatus.Cancelada &&
+                        n.Status != NotaFiscalStatus.ResultadoIncerto)
             .ToListAsync();
         foreach (var nota in notasAbandonadas)
         {
@@ -747,6 +897,37 @@ public class NfceEmissionService : INfceEmissionService
             _logger.LogInformation(
                 "NFC-e {NotaId} anulada automaticamente — comanda de origem foi cancelada antes da transmissão.", nota.Id);
         }
+        catch (VendaNaoDocumentavelException ex)
+        {
+            // Destino final e silencioso no log: não é erro do sistema nem do
+            // operador — é uma venda que não tem o que documentar. Fica
+            // registrada como rejeitada para aparecer na conciliação, mas sem
+            // número consumido e sem alarme.
+            nota.Status         = NotaFiscalStatus.Rejeitada;
+            nota.MotivoRejeicao = ex.Message;
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "NFC-e {NotaId} ({Origem}) não emitida — {Motivo}", nota.Id, nota.Origem, ex.Message);
+        }
+        catch (SchemaInvalidoException ex)
+        {
+            // XML-002: destino final, não pendência. Deixar como PendenteEmissao
+            // faria o job de 15 minutos remontar o MESMO XML inválido para sempre,
+            // e a venda ficaria em silêncio, sem documento e sem ninguém sabendo.
+            // Como Rejeitada, aparece no painel de alertas (CON-002) com motivo e
+            // ação, e o número fica preservado para inutilização.
+            nota.Status         = NotaFiscalStatus.Rejeitada;
+            nota.MotivoRejeicao =
+                $"Reprovada na validação de schema XSD (antes de transmitir à SEFAZ): {ex.Message}"
+                    [..Math.Min(ex.Message.Length + 62, 900)];
+            await _db.SaveChangesAsync();
+
+            _logger.LogError(
+                "NFC-e {NotaId} ({Origem}) reprovada no schema oficial e NÃO transmitida. " +
+                "Não é indisponibilidade da SEFAZ: corrigir o cadastro e reemitir, ou inutilizar o número {Numero}.",
+                nota.Id, nota.Origem, nota.Numero);
+        }
         catch (FiscalNaoConfiguradoException ex)
         {
             // Estado esperado enquanto o admin não termina de configurar — não é uma falha real.
@@ -789,7 +970,21 @@ public class NfceEmissionService : INfceEmissionService
         decimal? PercentualTributosMunicipais = null,
         string? FonteTributos = null,
         bool TributosPreenchidosAutomaticamente = false,
-        DateTime? TributosVigenciaFim = null);
+        DateTime? TributosVigenciaFim = null,
+        // ── Regime normal (Lucro Presumido/Real) ─────────────────────────────
+        string? Cst = null,
+        decimal? PercentualReducaoBc = null,
+        decimal? AliquotaFcp = null,
+        int? BaseStRetidaEmCentavos = null,
+        int? ValorStRetidoEmCentavos = null,
+        string? CstPis = null, string? CstCofins = null,
+        decimal? AliquotaPis = null, decimal? AliquotaCofins = null,
+        // ── Identificação do produto no XML (XML-001) ────────────────────────
+        // ProdutoId dá ao cProd uma identidade estável (cruza com estoque e
+        // escrituração); Gtin é o código de barras do cadastro, usado no cEAN
+        // só quando é um GTIN válido.
+        Guid? ProdutoId = null,
+        string? Gtin = null);
 
     private record DadosEmissao(
         List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
@@ -909,7 +1104,18 @@ public class NfceEmissionService : INfceEmissionService
         PercentualTributosMunicipais: product.PercentualTributosMunicipais,
         FonteTributos: product.FonteTributos,
         TributosPreenchidosAutomaticamente: product.TributosPreenchidosAutomaticamente,
-        TributosVigenciaFim: product.TributosVigenciaFim);
+        TributosVigenciaFim: product.TributosVigenciaFim,
+        Cst: regra?.Cst,
+        PercentualReducaoBc: regra?.PercentualReducaoBc,
+        AliquotaFcp: regra?.AliquotaFcp,
+        BaseStRetidaEmCentavos: regra?.BaseStRetidaEmCentavos,
+        ValorStRetidoEmCentavos: regra?.ValorStRetidoEmCentavos,
+        CstPis: regra?.CstPis,
+        CstCofins: regra?.CstCofins,
+        AliquotaPis: regra?.AliquotaPis,
+        AliquotaCofins: regra?.AliquotaCofins,
+        ProdutoId: product.Id,
+        Gtin: product.Barcode);
 
     // ── Montagem, assinatura e transmissão ─────────────────────────────────────
 
@@ -936,9 +1142,15 @@ public class NfceEmissionService : INfceEmissionService
             throw new FiscalNaoConfiguradoException("CSC (identificador e token) não configurado em Admin > Fiscal.");
         if (cfg.SerieNfce is < 1 or > 999 || cfg.ProximoNumeroNfce < 1)
             throw new FiscalNaoConfiguradoException("Série ou próximo número da NFC-e inválido.");
-        if (cfg.RegimeTributario != RegimeTributario.SimplesNacional)
-            throw new FiscalNaoConfiguradoException(
-                "O motor fiscal atual suporta somente Simples Nacional. Lucro Presumido/Real ainda não podem emitir.");
+        // Os três regimes montam documento completo: itens por CSOSN (Simples) ou
+        // por CST (Presumido/Real), com PIS/COFINS do regime, e os totalizadores
+        // consolidam esses grupos a partir dos próprios itens (REG-001). A
+        // coerência CRT × código de tributação é validada por item em
+        // MontarIcms*, antes de reservar número.
+        //
+        // Isto NÃO é aprovação fiscal: o XML completo fora do Simples ainda
+        // precisa passar por XSD, homologação na SEFAZ por CST e aceite do
+        // contador antes de um tenant real emitir (REG-001 na seção 10 do plano).
         _ = SanitizarCep(cfg.Cep);
         if (new string(cfg.CodigoMunicipioIbge.Where(char.IsDigit).ToArray()).Length != 7)
             throw new FiscalNaoConfiguradoException("Código IBGE do município deve ter 7 dígitos.");
@@ -999,6 +1211,17 @@ public class NfceEmissionService : INfceEmissionService
 
     private async Task TransmitirAsync(NotaFiscalEmitida nota, DadosEmissao dados)
     {
+        // Retransmissão de contingência (RES-002): se já existe o XML assinado
+        // offline, reenvia EXATAMENTE aquele documento — não remonta a partir da
+        // comanda. A remontagem releria os dados atuais, e uma edição na comanda
+        // entre a venda offline e a retransmissão produziria um documento
+        // diferente com a MESMA chave: divergente do que o consumidor já levou.
+        if (nota.DhContingencia.HasValue && !string.IsNullOrWhiteSpace(nota.XmlContingencia))
+        {
+            await RetransmitirContingenciaAsync(nota);
+            return;
+        }
+
         var (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
 
@@ -1008,18 +1231,49 @@ public class NfceEmissionService : INfceEmissionService
         // Monta os itens (e valida CSOSN) ANTES de reservar o número — uma Natureza de
         // Operação mal configurada não pode queimar um número de NFC-e sem transmitir nada.
         var jaEmContingencia = nota.DhContingencia.HasValue;
-        var anoIbsCbs = jaEmContingencia
-            ? ParaBrasil(nota.EmitidoEm ?? nota.DhContingencia ?? nota.CreatedAt).Year
-            : AgoraBrasil().Year;
-        var incluirIbsCbs = ambiente == TipoAmbiente.Homologacao || anoIbsCbs >= 2027;
-        if (incluirIbsCbs && anoIbsCbs != 2026)
-            throw new FiscalNaoConfiguradoException(
-                $"As alíquotas de IBS/CBS para {anoIbsCbs} ainda não estão configuradas. " +
-                "Atualize o motor fiscal conforme a tabela oficial vigente antes de emitir.");
+
+        // RTC-001: a regra de IBS/CBS vem do catálogo versionado, pela DATA DE
+        // EMISSÃO do documento e pelo perfil do contribuinte. Não há mais condição
+        // fixa de ano: virar o calendário não derruba a emissão, porque a última
+        // faixa do catálogo é aberta. Se um dia não houver regra aplicável, o
+        // documento sai sem os grupos e o fato fica registrado — parar o caixa
+        // inteiro por causa de uma tabela desatualizada seria o pior desfecho.
+        var dataEmissao = DateOnly.FromDateTime((jaEmContingencia
+            ? ParaBrasil(nota.EmitidoEm ?? nota.DhContingencia ?? nota.CreatedAt)
+            : AgoraBrasil()).DateTime);
+        var perfilIbsCbs = CatalogoRegrasIbsCbs.PerfilDe(cfg);
+        var regraIbsCbs = CatalogoRegrasIbsCbs.Para(dataEmissao, perfilIbsCbs);
+        if (regraIbsCbs is null)
+            _logger.LogError(
+                "NFC-e {NotaId}: nenhuma regra de IBS/CBS no catálogo cobre {Data:yyyy-MM-dd} para o perfil " +
+                "{Perfil}. O documento sai sem os grupos de IBS/CBS — atualize o catálogo conforme a " +
+                "legislação vigente.", nota.Id, dataEmissao, perfilIbsCbs);
+
+        var regraParaXml = RegraParaDestaque(regraIbsCbs, ambiente);
+
+        // Venda sem item não vira documento — e precisa ser barrada AQUI, antes da
+        // reserva de numeração, pelo mesmo motivo do comentário acima: nada que
+        // jamais será transmitido pode queimar um número de NFC-e.
+        //
+        // Defeito real capturado em homologação: fechar uma comanda vazia com
+        // "emitir nota" marcado montava um `infNFe` sem nenhum `det`, reservava o
+        // número e só então a validação de schema recusava — deixando um número
+        // consumido, uma nota rejeitada e uma lacuna a inutilizar, tudo por uma
+        // venda que nunca existiu.
+        if (dados.Itens.Count == 0)
+            throw new VendaNaoDocumentavelException(
+                "A venda não tem itens. NFC-e exige ao menos um produto, então nenhum documento " +
+                "foi gerado e nenhum número de nota foi consumido.");
+
+        if (dados.ValorLiquidoCentavos <= 0)
+            throw new VendaNaoDocumentavelException(
+                "O valor líquido da venda é zero. NFC-e não é emitida sem valor a pagar, então " +
+                "nenhum documento foi gerado e nenhum número de nota foi consumido.");
 
         var descontosPorItem = DistribuirDesconto(dados.Itens, dados.DescontoTotalCentavos);
         var detItens = dados.Itens
-            .Select((item, idx) => _taxEngine.MontarItem(item, idx + 1, descontosPorItem[idx], incluirIbsCbs))
+            .Select((item, idx) => _taxEngine.MontarItem(
+                item, idx + 1, descontosPorItem[idx], regraParaXml, cfg.RegimeTributario))
             .ToList();
         if (ambiente == TipoAmbiente.Homologacao && detItens.Count > 0)
             detItens[0].prod.xProd = ProdutoHomologacao;
@@ -1135,19 +1389,24 @@ public class NfceEmissionService : INfceEmissionService
                 det = detItens,
                 total = new total
                 {
+                    // Todos os valores vêm da soma dos itens (REG-001). No Simples
+                    // a maioria continua zero porque o CSOSN não destaca ICMS
+                    // próprio — a diferença é que agora isso é resultado do
+                    // cálculo, não um zero fixo que mentia fora do Simples.
                     ICMSTot = new ICMSTot
                     {
-                        vBC = 0, vICMS = 0, vICMSDeson = 0, vFCP = 0,
+                        vBC = totaisIcms.BaseIcms, vICMS = totaisIcms.ValorIcms,
+                        vICMSDeson = totaisIcms.ValorDeson, vFCP = totaisIcms.ValorFcp,
                         vBCST = totaisIcms.BaseSt, vST = totaisIcms.ValorSt,
                         vFCPST = totaisIcms.ValorFcpSt, vFCPSTRet = 0,
                         vProd    = valorBruto,
                         vFrete   = 0, vSeg = 0, vDesc = valorDesconto, vII = 0, vIPI = 0,
                         vIPIDevol = 0,
-                        vPIS     = 0, vCOFINS = 0, vOutro = 0,
+                        vPIS     = totaisIcms.ValorPis, vCOFINS = totaisIcms.ValorCofins, vOutro = 0,
                         vTotTrib = tributosTotais,
                         vNF      = valorTotal,
                     },
-                    IBSCBSTot = incluirIbsCbs ? _taxEngine.MontarTotaisIbsCbs2026(detItens) : null,
+                    IBSCBSTot = regraParaXml is not null ? _taxEngine.MontarTotaisIbsCbs(detItens) : null,
                 },
                 transp = new transp { modFrete = ModalidadeFrete.mfSemFrete },
                 pag = new List<pag> { new pag { detPag = MontarDetPag(dados, valorTotal) } },
@@ -1177,44 +1436,69 @@ public class NfceEmissionService : INfceEmissionService
         nfe.infNFeSupl.urlChave = ExtinfNFeSupl.ObterUrlConsulta(
             nfe.infNFeSupl, nfe, VersaoQrCode.QrCodeVersao3);
 
+        // XML-002 (lote): a nossa validação vê a <NFe>; o envelope enviNFe só
+        // existe dentro da lib. Ligar o ValidarSchemas dela aqui cobre a camada
+        // que falta — idLote, indSinc e a amarração do documento no lote.
+        if (_schemaValidator.DiretorioAutorizacao is { } diretorioAutorizacao)
+        {
+            cfgServico.ValidarSchemas   = true;
+            cfgServico.DiretorioSchemas = diretorioAutorizacao;
+        }
+
+        // XML-002: valida contra o schema oficial ANTES de qualquer coisa irreversível.
+        // A posição aqui não é arbitrária — é depois de assinar e montar o QR (a
+        // assinatura faz parte do documento que a SEFAZ valida) e ANTES do bloco de
+        // contingência abaixo. Validar depois dele entregaria ao consumidor um cupom
+        // offline que jamais seria autorizado.
+        ValidarContraSchemaOficial(nfe, nota);
+
         // O documento offline precisa estar completamente montado antes de ser entregue
-        // ao consumidor. Persistimos a chave e o QR de tpEmis=9 antes de tentar retransmitir.
+        // ao consumidor. Persistimos a chave, o QR e o XML ASSINADO de tpEmis=9 antes de
+        // tentar retransmitir (RES-002): é o documento que o cliente leva, e é ele — não
+        // uma remontagem — que precisa ser reenviado à SEFAZ quando a conexão voltar.
         if (jaEmContingencia)
         {
-            nota.Status         = NotaFiscalStatus.AutorizadaContingencia;
-            nota.Serie          = cfg.SerieNfce;
-            nota.Numero         = numero;
-            nota.ChaveAcesso    = chave.Chave;
-            nota.UrlQrCode      = qrCodeUrl;
-            nota.EmitidoEm    ??= DateTime.UtcNow;
+            nota.Status          = NotaFiscalStatus.AutorizadaContingencia;
+            nota.Serie           = cfg.SerieNfce;
+            nota.Numero          = numero;
+            nota.ChaveAcesso     = chave.Chave;
+            nota.UrlQrCode       = qrCodeUrl;
+            nota.XmlContingencia = FuncoesXml.ClasseParaXmlString(nfe);
+            nota.EmitidoEm     ??= DateTime.UtcNow;
             await _db.SaveChangesAsync();
         }
 
-        using var servico = new ServicosNFe(cfgServico, certificado);
-        RetornoNFeAutorizacao retorno;
+        // RES-001: a tentativa tem que existir no banco ANTES de sair pela rede.
+        // Sem chave, XML assinado e identificador da tentativa persistidos, uma
+        // resposta perdida deixaria o sistema sem nada para perguntar à SEFAZ — e
+        // a única saída seria presumir (possivelmente errado) que a nota falhou.
+        RegistrarTentativa(nota, chave.Chave, nfe);
+        await _db.SaveChangesAsync();
+
+        RespostaAutorizacaoNfce resposta;
         try
         {
-            retorno = servico.NFeAutorizacao(1, IndicadorSincronizacao.Sincrono, new List<NfeDocumento> { nfe }, false);
+            resposta = _sefaz.Autorizar(cfgServico, certificado, nfe);
         }
         catch (Exception ex) when (EhFalhaDeConectividade(ex))
         {
+            if (ClassificarFalhaDeTransmissao(ex) == DestinoTentativa.Incerto)
+            {
+                // O documento pode estar autorizado do lado da SEFAZ com esta chave.
+                // Antes de montar qualquer outro documento para esta venda, pergunta.
+                await TratarResultadoIncertoAsync(
+                    nota, dados, nfe, cfgServico, certificado, qrCodeUrl, jaEmContingencia, ex);
+                return;
+            }
+
             if (!jaEmContingencia)
             {
-                // Registra os dados imutáveis e remonta imediatamente o documento como
-                // tpEmis=9. A nota só vira AutorizadaContingencia dentro da segunda montagem,
-                // depois que chave e QR offline estiverem prontos e persistidos.
-                nota.Serie                     = cfg.SerieNfce;
-                nota.Numero                    = numero;
-                nota.CnfContingencia           = cNf;
-                nota.DhContingencia            = DateTime.UtcNow;
-                nota.EmitidoEm                ??= nota.DhContingencia;
-                nota.JustificativaContingencia = "Sem comunicação com o webservice da SEFAZ no momento da venda.";
-                await _db.SaveChangesAsync();
-
-                _logger.LogWarning(ex,
-                    "NFC-e {NotaId}: SEFAZ inalcançável; reconstruindo documento em contingência offline.", nota.Id);
-
-                await TransmitirAsync(nota, dados);
+                // A conexão nem chegou a se estabelecer: nada foi processado do outro
+                // lado. Este é o caso em que a contingência offline é a conduta certa e
+                // imediata. A nota só vira AutorizadaContingencia dentro da segunda
+                // montagem, depois que chave e QR offline estiverem prontos e persistidos.
+                await IniciarContingenciaOfflineAsync(
+                    nota, dados, "SEFAZ inalcançável (a requisição não chegou a ser enviada)", ex);
             }
             else
             {
@@ -1226,54 +1510,103 @@ public class NfceEmissionService : INfceEmissionService
             return;
         }
 
-        var protInfo = retorno.Retorno?.protNFe?.infProt;
-
         // Número já foi consumido, persistido atomicamente em ReservarProximoNumeroNfceAsync
         // e gravado na nota logo após a reserva (F6, acima) — autorizada ou não, a numeração
         // da NFC-e não pode ser reaproveitada sem inutilização.
+        await ProcessarRespostaAutorizacaoAsync(
+            nota, nfe, resposta, cfgServico, certificado, qrCodeUrl, jaEmContingencia);
+    }
 
-        if (protInfo is not null && protInfo.cStat == 100)
+    /// <summary>
+    /// XML-002 — barreira local antes da rede. Quando o pacote de schemas não está
+    /// versionado, não valida nada e não impede nada: a SEFAZ continua sendo a
+    /// validadora final, e o estado fica visível em /api/fiscal/saude.
+    /// </summary>
+    private void ValidarContraSchemaOficial(NfeDocumento nfe, NotaFiscalEmitida nota)
+    {
+        if (!_schemaValidator.Disponivel) return;
+
+        var erros = _schemaValidator.Validar(FuncoesXml.ClasseParaXmlString(nfe));
+        if (erros.Count == 0) return;
+
+        _logger.LogError(
+            "NFC-e {NotaId} reprovada no schema oficial ({Pacote}) antes de transmitir — {Total} erro(s): {Erros}",
+            nota.Id, _schemaValidator.PacoteEmUso, erros.Count, string.Join(" | ", erros.Take(5)));
+
+        throw new SchemaInvalidoException(erros);
+    }
+
+    // ── Destino do documento transmitido (RES-001) ────────────────────────────
+
+    private const int CStatAutorizada  = 100;
+    private const int CStatNaoConsta   = 217;  // "NF-e não consta na base de dados da SEFAZ"
+    private const int CStatDuplicidade = 204;  // "Duplicidade de NF-e"
+    private const int CStatDuplicidadeChaveDivergente = 539;
+    private const int CStatSchemaInvalido = 225;
+
+    /// <summary>Denegação: a SEFAZ conhece o documento e recusou por irregularidade
+    /// do emitente/destinatário. É destino final — o número não volta a ser usado.</summary>
+    private static bool EhDenegada(int cStat) => cStat is 110 or 301 or 302 or 303;
+
+    /// <summary>
+    /// Aplica ao registro local o que a SEFAZ respondeu à transmissão.
+    ///
+    /// A duplicidade recebe tratamento próprio: ela é a SEFAZ afirmando que já
+    /// existe documento sob aquela chave. Registrar isso como rejeição local
+    /// transformaria uma nota autorizada de verdade em rejeitada só do nosso
+    /// lado — exatamente a divergência que RES-001 existe para impedir.
+    /// </summary>
+    private async Task ProcessarRespostaAutorizacaoAsync(
+        NotaFiscalEmitida nota, NfeDocumento nfe, RespostaAutorizacaoNfce resposta,
+        ConfiguracaoServico cfgServico, X509Certificate2 certificado,
+        string? qrCodeUrl, bool jaEmContingencia)
+    {
+        if (resposta.Protocolo is { infProt.cStat: CStatAutorizada } protocolo)
         {
-            nota.Status         = NotaFiscalStatus.Autorizada;
-            nota.ChaveAcesso    = protInfo.chNFe ?? chave.Chave;
-            nota.Protocolo      = protInfo.nProt;
-            nota.AutorizadoEm   = DateTime.UtcNow;
-            // Se veio de contingência, EmitidoEm já é o momento real da venda — não pisa nele
-            // com o momento da confirmação tardia da SEFAZ.
-            nota.EmitidoEm    ??= DateTime.UtcNow;
-            nota.XmlAutorizado  = MontarNfeProcXml(nfe, retorno.Retorno!.protNFe);
-            nota.UrlQrCode      = qrCodeUrl;
-            nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
-            // F13: se esta nota foi Rejeitada antes (número anterior inutilizado
-            // automaticamente) e agora autoriza com um número NOVO, os campos de
-            // inutilização do número antigo não fazem mais sentido aqui — sem isso a nota
-            // fica com estado contraditório ("Autorizada" mas mostrando "inutilizado em X").
-            nota.InutilizadoEm         = null;
-            nota.ProtocoloInutilizacao = null;
+            AplicarAutorizacao(nota, nfe, protocolo, qrCodeUrl);
+            await _db.SaveChangesAsync();
+            return;
         }
-        else
-        {
-            nota.Status         = NotaFiscalStatus.Rejeitada;
-            nota.MotivoRejeicao = protInfo?.xMotivo ?? retorno.RetornoStr ?? "SEFAZ não retornou motivo.";
-            if (retorno.Retorno?.cStat == 225)
-                _logger.LogError(
-                    "SEFAZ rejeitou NFC-e {NotaId} com cStat 225. XML exato enviado: {XmlEnvio}",
-                    nota.Id, retorno.EnvioStr);
 
-            // F5: rejeição de uma nota que estava em contingência (retransmissão alcançou a
-            // SEFAZ, mas foi rejeitada por motivo de negócio) inutiliza o número atual — sem
-            // limpar os campos de contingência, o PRÓXIMO reprocessamento veria jaEmContingencia
-            // ainda true e tentaria reusar esse MESMO número já inutilizado, num loop que só
-            // erra. Limpa aqui pra o próximo TransmitirAsync reservar um número novo do zero
-            // (nota.Numero/Serie continuam documentando qual número foi inutilizado, só os
-            // campos de reconstrução de chave de contingência são limpos).
-            if (jaEmContingencia)
+        if (resposta.CStat is CStatDuplicidade or CStatDuplicidadeChaveDivergente)
+        {
+            var situacao = ConsultarChaveComTolerancia(cfgServico, certificado, nota.ChaveAcesso!);
+            if (situacao is { CStat: CStatAutorizada, Protocolo: not null })
             {
-                nota.CnfContingencia           = null;
-                nota.DhContingencia            = null;
-                nota.JustificativaContingencia = null;
+                _logger.LogWarning(
+                    "NFC-e {NotaId}: SEFAZ respondeu duplicidade (cStat {CStat}) e a consulta da chave {Chave} " +
+                    "confirmou o documento autorizado. Protocolo recuperado em vez de registrar rejeição.",
+                    nota.Id, resposta.CStat, nota.ChaveAcesso);
+                AplicarAutorizacao(nota, nfe, situacao.Protocolo, qrCodeUrl);
+                await _db.SaveChangesAsync();
+                return;
             }
+
+            // A SEFAZ afirma duplicidade mas a consulta não confirma autorização.
+            // Não dá para rejeitar (o documento pode existir lá) nem para emitir
+            // outro. Fica incerto, com o número reservado, aguardando resolução.
+            nota.Status = NotaFiscalStatus.ResultadoIncerto;
+            nota.ResultadoIncertoEm ??= DateTime.UtcNow;
+            nota.MotivoRejeicao =
+                $"SEFAZ respondeu duplicidade (cStat {resposta.CStat}), mas a consulta da chave não confirmou " +
+                $"a autorização{(situacao is null ? " (consulta indisponível)" : $" (cStat {situacao.CStat})")}. " +
+                "Nenhum documento novo será emitido para esta venda até a situação ser esclarecida.";
+            await _db.SaveChangesAsync();
+            _logger.LogError(
+                "NFC-e {NotaId} (chave {Chave}): duplicidade sem confirmação na consulta — exige verificação manual.",
+                nota.Id, nota.ChaveAcesso);
+            return;
         }
+
+        AplicarRejeicao(
+            nota,
+            resposta.Motivo ?? "SEFAZ não retornou motivo.",
+            jaEmContingencia);
+
+        if (resposta.CStatLote == CStatSchemaInvalido)
+            _logger.LogError(
+                "SEFAZ rejeitou NFC-e {NotaId} com cStat 225. XML exato enviado: {XmlEnvio}",
+                nota.Id, resposta.XmlEnvio);
 
         await _db.SaveChangesAsync();
 
@@ -1283,21 +1616,362 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     /// <summary>
+    /// A resposta da autorização se perdeu (RES-001). Marca o estado como incerto
+    /// — que é o que se sabe — e consulta a chave para descobrir o destino real do
+    /// documento. Só depois disso o fluxo pode seguir para contingência.
+    /// </summary>
+    private async Task TratarResultadoIncertoAsync(
+        NotaFiscalEmitida nota, DadosEmissao? dados, NfeDocumento nfe,
+        ConfiguracaoServico cfgServico, X509Certificate2 certificado,
+        string? qrCodeUrl, bool jaEmContingencia, Exception causa)
+    {
+        nota.Status = NotaFiscalStatus.ResultadoIncerto;
+        nota.ResultadoIncertoEm ??= DateTime.UtcNow;
+        nota.MotivoRejeicao =
+            "A resposta da SEFAZ não chegou depois da transmissão. O documento pode ter sido autorizado — " +
+            "a chave está sendo consultada antes de qualquer nova emissão para esta venda.";
+        await _db.SaveChangesAsync();
+
+        _logger.LogWarning(causa,
+            "NFC-e {NotaId} (chave {Chave}): resposta da autorização perdida. Consultando a SEFAZ antes de " +
+            "decidir o destino do documento.", nota.Id, nota.ChaveAcesso);
+
+        var situacao = ConsultarChaveComTolerancia(cfgServico, certificado, nota.ChaveAcesso!);
+        if (situacao is null)
+        {
+            _logger.LogError(
+                "NFC-e {NotaId} (chave {Chave}) permanece com resultado incerto: a SEFAZ também não respondeu " +
+                "à consulta da chave. Nenhum documento novo será emitido para esta venda enquanto isso — o " +
+                "reprocessamento automático volta a consultar.", nota.Id, nota.ChaveAcesso);
+            return;
+        }
+
+        await AplicarSituacaoConsultadaAsync(
+            nota, dados, nfe, situacao, qrCodeUrl, jaEmContingencia, causa);
+    }
+
+    /// <summary>
+    /// Traduz a situação que a SEFAZ informou para a chave no destino local do
+    /// documento. Devolve <c>true</c> quando a nota fica liberada para uma nova
+    /// transmissão (a chave consultada não produziu documento nenhum lá).
+    /// </summary>
+    private async Task<bool> AplicarSituacaoConsultadaAsync(
+        NotaFiscalEmitida nota, DadosEmissao? dados, NfeDocumento nfe,
+        RespostaConsultaChaveNfce situacao, string? qrCodeUrl, bool jaEmContingencia, Exception? causa)
+    {
+        switch (situacao.CStat)
+        {
+            case CStatAutorizada when situacao.Protocolo is not null:
+                AplicarAutorizacao(nota, nfe, situacao.Protocolo, qrCodeUrl);
+                await _db.SaveChangesAsync();
+                _logger.LogWarning(
+                    "NFC-e {NotaId}: a SEFAZ havia autorizado o documento (protocolo {Protocolo}) — só a resposta " +
+                    "se perdeu. Protocolo recuperado pela consulta; nenhum documento adicional foi emitido.",
+                    nota.Id, nota.Protocolo);
+                return false;
+
+            case CStatNaoConsta:
+                // A SEFAZ não tem nada sob esta chave: a transmissão realmente não
+                // completou. Só com essa confirmação a alternativa offline é segura.
+                if (jaEmContingencia)
+                {
+                    VoltarParaContingencia(nota);
+                    await _db.SaveChangesAsync();
+                    _logger.LogWarning(
+                        "NFC-e {NotaId}: retransmissão do documento de contingência não chegou à SEFAZ " +
+                        "(chave não consta). Segue em contingência para nova tentativa.", nota.Id);
+                    return true;
+                }
+
+                if (dados is null)
+                {
+                    // Resolução fora do fluxo de venda (reprocessamento): a nota volta
+                    // a ser pendente e a próxima transmissão reusa o mesmo número/cNF —
+                    // a contingência é resposta para a hora da venda, não para o retry.
+                    nota.Status         = NotaFiscalStatus.PendenteEmissao;
+                    nota.MotivoRejeicao = null;
+                    LimparTentativaEmAberto(nota);
+                    await _db.SaveChangesAsync();
+                    _logger.LogInformation(
+                        "NFC-e {NotaId}: a SEFAZ confirmou que a chave não consta na base dela. A tentativa " +
+                        "anterior não produziu documento; a nota volta a pendente para nova transmissão.", nota.Id);
+                    return true;
+                }
+
+                await IniciarContingenciaOfflineAsync(
+                    nota, dados, "consulta confirmou que a chave não consta na base da SEFAZ", causa);
+                return false;
+
+            case var cStat when EhDenegada(cStat):
+                AplicarRejeicao(
+                    nota,
+                    situacao.Motivo ?? $"Documento denegado pela SEFAZ (cStat {situacao.CStat}).",
+                    jaEmContingencia);
+                await _db.SaveChangesAsync();
+                return false;
+
+            default:
+                nota.MotivoRejeicao =
+                    $"Consulta da chave devolveu cStat {situacao.CStat}: {situacao.Motivo}. " +
+                    "A situação do documento na SEFAZ ainda não é conclusiva.";
+                await _db.SaveChangesAsync();
+                _logger.LogError(
+                    "NFC-e {NotaId} (chave {Chave}): consulta inconclusiva (cStat {CStat} — {Motivo}).",
+                    nota.Id, nota.ChaveAcesso, situacao.CStat, situacao.Motivo);
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Reabre uma nota que ficou em <see cref="NotaFiscalStatus.ResultadoIncerto"/>
+    /// e tenta fechar o destino dela consultando a chave persistida (RES-001).
+    ///
+    /// Devolve <c>true</c> somente quando a SEFAZ confirmou que nada existe sob
+    /// aquela chave — a única situação em que transmitir de novo não corre o
+    /// risco de duplicar um documento já autorizado.
+    /// </summary>
+    private async Task<bool> ResolverResultadoIncertoPersistidoAsync(NotaFiscalEmitida nota)
+    {
+        if (string.IsNullOrWhiteSpace(nota.ChaveAcesso) || string.IsNullOrWhiteSpace(nota.XmlTentativa))
+        {
+            _logger.LogError(
+                "NFC-e {NotaId} está com resultado incerto sem chave ou sem o XML transmitido — não há o que " +
+                "consultar automaticamente. Exige verificação no portal da SEFAZ antes de qualquer nova emissão.",
+                nota.Id);
+            return false;
+        }
+
+        NfeDocumento nfe;
+        try
+        {
+            nfe = FuncoesXml.XmlStringParaClasse<NfeDocumento>(nota.XmlTentativa);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "NFC-e {NotaId}: XML da tentativa em aberto está ilegível; a autorização não poderia ser " +
+                "reconstruída nem que a consulta confirmasse. Exige verificação manual.", nota.Id);
+            return false;
+        }
+
+        var (_, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
+        using var _certDispose = certificado;
+
+        var situacao = ConsultarChaveComTolerancia(cfgServico, certificado, nota.ChaveAcesso);
+        if (situacao is null) return false;
+
+        return await AplicarSituacaoConsultadaAsync(
+            nota, dados: null, nfe, situacao,
+            qrCodeUrl: null, jaEmContingencia: nota.DhContingencia.HasValue, causa: null);
+    }
+
+    /// <summary>
+    /// Consulta a situação da chave sem deixar a falha da consulta derrubar o
+    /// fluxo: não conseguir perguntar não é resposta, e o estado incerto se
+    /// mantém até alguém conseguir perguntar.
+    /// </summary>
+    private RespostaConsultaChaveNfce? ConsultarChaveComTolerancia(
+        ConfiguracaoServico cfgServico, X509Certificate2 certificado, string chave)
+    {
+        // A consulta vai sempre ao webservice normal da UF, mesmo quando a
+        // tentativa era offline: a contingência muda como o documento é emitido,
+        // não onde a chave é consultada.
+        cfgServico.tpEmis = TipoEmissao.teNormal;
+        try
+        {
+            return _sefaz.ConsultarChave(cfgServico, certificado, chave);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Consulta da chave {Chave} na SEFAZ falhou — a situação do documento continua desconhecida.", chave);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Entra em contingência offline: fixa os dados imutáveis do documento e
+    /// remonta como tpEmis=9. Só deve ser chamado quando se sabe que a SEFAZ não
+    /// processou a tentativa anterior.
+    /// </summary>
+    private async Task IniciarContingenciaOfflineAsync(
+        NotaFiscalEmitida nota, DadosEmissao dados, string motivo, Exception? causa)
+    {
+        nota.DhContingencia            = DateTime.UtcNow;
+        nota.EmitidoEm               ??= nota.DhContingencia;
+        nota.JustificativaContingencia = "Sem comunicação com o webservice da SEFAZ no momento da venda.";
+        nota.MotivoRejeicao            = null;
+        LimparTentativaEmAberto(nota);
+        await _db.SaveChangesAsync();
+
+        _logger.LogWarning(causa,
+            "NFC-e {NotaId}: {Motivo}; reconstruindo documento em contingência offline.", nota.Id, motivo);
+
+        await TransmitirAsync(nota, dados);
+    }
+
+    /// <summary>Registra a tentativa que está prestes a ser transmitida.</summary>
+    private static void RegistrarTentativa(NotaFiscalEmitida nota, string chave, NfeDocumento nfe)
+    {
+        nota.ChaveAcesso  = chave;
+        nota.TentativaId  = Guid.NewGuid();
+        nota.XmlTentativa = FuncoesXml.ClasseParaXmlString(nfe);
+    }
+
+    private static void LimparTentativaEmAberto(NotaFiscalEmitida nota)
+    {
+        nota.TentativaId        = null;
+        nota.XmlTentativa       = null;
+        nota.ResultadoIncertoEm = null;
+    }
+
+    /// <summary>Documento offline continua válido: volta ao estado de contingência
+    /// aguardando retransmissão, sem descartar o XML entregue ao consumidor.</summary>
+    private static void VoltarParaContingencia(NotaFiscalEmitida nota)
+    {
+        nota.Status         = NotaFiscalStatus.AutorizadaContingencia;
+        nota.MotivoRejeicao = null;
+        LimparTentativaEmAberto(nota);
+    }
+
+    private void AplicarAutorizacao(
+        NotaFiscalEmitida nota, NfeDocumento nfe, NFe.Classes.Protocolo.protNFe protocolo, string? qrCodeUrl)
+    {
+        var infProt = protocolo.infProt;
+
+        nota.Status         = NotaFiscalStatus.Autorizada;
+        nota.ChaveAcesso    = infProt.chNFe ?? nota.ChaveAcesso;
+        nota.Protocolo      = infProt.nProt;
+        nota.AutorizadoEm   = DateTime.UtcNow;
+        // Se veio de contingência, EmitidoEm já é o momento real da venda — não pisa nele
+        // com o momento da confirmação tardia da SEFAZ.
+        nota.EmitidoEm    ??= DateTime.UtcNow;
+        nota.XmlAutorizado  = MontarNfeProcXml(nfe, protocolo);
+        // A partir daqui o documento fiscal é o nfeProc autorizado. O XML de
+        // contingência já cumpriu seu papel (foi entregue e retransmitido) e
+        // deixa de ser fonte do DANFE — mantê-lo seria uma segunda via
+        // possível do mesmo documento.
+        nota.XmlContingencia = null;
+        if (!string.IsNullOrWhiteSpace(qrCodeUrl))
+            nota.UrlQrCode  = qrCodeUrl;
+        nota.MotivoRejeicao = null; // limpa motivo de tentativas anteriores que falharam antes desta autorização
+        // F13: se esta nota foi Rejeitada antes (número anterior inutilizado
+        // automaticamente) e agora autoriza com um número NOVO, os campos de
+        // inutilização do número antigo não fazem mais sentido aqui — sem isso a nota
+        // fica com estado contraditório ("Autorizada" mas mostrando "inutilizado em X").
+        nota.InutilizadoEm         = null;
+        nota.ProtocoloInutilizacao = null;
+        LimparTentativaEmAberto(nota);
+    }
+
+    private static void AplicarRejeicao(NotaFiscalEmitida nota, string motivo, bool jaEmContingencia)
+    {
+        nota.Status         = NotaFiscalStatus.Rejeitada;
+        nota.MotivoRejeicao = motivo;
+        LimparTentativaEmAberto(nota);
+
+        // F5: rejeição de uma nota que estava em contingência (retransmissão alcançou a
+        // SEFAZ, mas foi rejeitada por motivo de negócio) inutiliza o número atual — sem
+        // limpar os campos de contingência, o PRÓXIMO reprocessamento veria jaEmContingencia
+        // ainda true e tentaria reusar esse MESMO número já inutilizado, num loop que só
+        // erra. Limpa aqui pra o próximo TransmitirAsync reservar um número novo do zero
+        // (nota.Numero/Serie continuam documentando qual número foi inutilizado, só os
+        // campos de reconstrução de chave de contingência são limpos).
+        if (!jaEmContingencia) return;
+
+        nota.CnfContingencia           = null;
+        nota.DhContingencia            = null;
+        nota.JustificativaContingencia = null;
+        // A retransmissão foi rejeitada por regra de negócio: aquele
+        // documento offline não vira nota válida. O próximo TransmitirAsync
+        // reserva número novo e monta um documento novo, então o XML antigo
+        // não deve sobreviver como fonte de DANFE.
+        nota.XmlContingencia           = null;
+    }
+
+    /// <summary>
+    /// Reenvia à SEFAZ o XML assinado que já foi entregue ao consumidor em
+    /// contingência offline (RES-002). Não remonta nem reassina: desserializa o
+    /// documento persistido e transmite exatamente ele. A chave, o número, o
+    /// dhEmi e o dhCont são os do documento original — a SEFAZ identifica a nota
+    /// pela chave, então isto é a mesma NFC-e, agora buscando autorização.
+    /// </summary>
+    private async Task RetransmitirContingenciaAsync(NotaFiscalEmitida nota)
+    {
+        var (_, cfgServico, certificado, _, _, _) = await AbrirConfiguracaoSefazAsync();
+        using var _certDispose = certificado;
+
+        NfeDocumento nfe;
+        try
+        {
+            nfe = FuncoesXml.XmlStringParaClasse<NfeDocumento>(nota.XmlContingencia!);
+        }
+        catch (Exception ex)
+        {
+            // XML de contingência corrompido em repouso: não dá pra retransmitir
+            // nem inventar outro. Fica em contingência para tratamento manual —
+            // o documento que o consumidor levou continua válido até o prazo legal.
+            _logger.LogError(ex,
+                "NFC-e {NotaId}: XML de contingência ilegível; retransmissão automática não é possível.", nota.Id);
+            return;
+        }
+
+        // A tentativa em aberto aponta para o mesmo documento offline: é ele que
+        // está na rede e é a chave dele que se consulta se a resposta se perder.
+        nota.TentativaId  = Guid.NewGuid();
+        nota.XmlTentativa = nota.XmlContingencia;
+        await _db.SaveChangesAsync();
+
+        RespostaAutorizacaoNfce resposta;
+        try
+        {
+            resposta = _sefaz.Autorizar(cfgServico, certificado, nfe);
+        }
+        catch (Exception ex) when (EhFalhaDeConectividade(ex))
+        {
+            if (ClassificarFalhaDeTransmissao(ex) == DestinoTentativa.Incerto)
+            {
+                // Retransmissão sem resposta: a SEFAZ pode ter autorizado o documento
+                // offline. Descobrir isso é o que impede a nota de ficar presa em
+                // contingência (e vencer o prazo legal) por uma autorização que existe.
+                await TratarResultadoIncertoAsync(
+                    nota, dados: null, nfe, cfgServico, certificado,
+                    qrCodeUrl: null, jaEmContingencia: true, causa: ex);
+                return;
+            }
+
+            _logger.LogWarning(ex,
+                "NFC-e {NotaId} (em contingência desde {DhContingencia:o}) ainda não conseguiu retransmitir — " +
+                "SEFAZ continua inalcançável.", nota.Id, nota.DhContingencia);
+            LimparTentativaEmAberto(nota);
+            await _db.SaveChangesAsync();
+            return;
+        }
+
+        await ProcessarRespostaAutorizacaoAsync(
+            nota, nfe, resposta, cfgServico, certificado, qrCodeUrl: null, jaEmContingencia: true);
+    }
+
+    private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal) =>
+        MontarDetPag(dados.FormaPagamento, dados.SegundaFormaPagamento, dados.SegundoValorCentavos, valorTotal);
+
+    /// <summary>
     /// Monta um ou dois detPag conforme haja segundo método de pagamento (split).
     /// O valor do primeiro método é o total menos o que foi pago no segundo, pra bater
     /// exatamente com vNF — evita a diferença de centavos ser "engolida" num só método.
     /// </summary>
-    private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal)
+    internal static List<detPag> MontarDetPag(
+        string formaPagamento, string? segundaForma, int segundoValorCentavos, decimal valorTotal)
     {
-        if (string.IsNullOrWhiteSpace(dados.SegundaFormaPagamento) || dados.SegundoValorCentavos <= 0)
-            return new List<detPag> { MontarDetPagUnico(dados.FormaPagamento, valorTotal) };
+        if (string.IsNullOrWhiteSpace(segundaForma) || segundoValorCentavos <= 0)
+            return new List<detPag> { MontarDetPagUnico(formaPagamento, valorTotal) };
 
-        var valorSegundo  = dados.SegundoValorCentavos / 100m;
+        var valorSegundo  = segundoValorCentavos / 100m;
         var valorPrimeiro = valorTotal - valorSegundo;
         return new List<detPag>
         {
-            MontarDetPagUnico(dados.FormaPagamento, valorPrimeiro),
-            MontarDetPagUnico(dados.SegundaFormaPagamento, valorSegundo),
+            MontarDetPagUnico(formaPagamento, valorPrimeiro),
+            MontarDetPagUnico(segundaForma, valorSegundo),
         };
     }
 
@@ -1310,10 +1984,11 @@ public class NfceEmissionService : INfceEmissionService
     /// bandeira nem autorização pra informar — então o grupo é enviado só com
     /// `tpIntegra = Não integrado`, que é o mínimo aceito pela SEFAZ nesse caso.
     ///
-    /// Crediário, Pontos e Cashback não têm código próprio no layout da NFC-e — caem
-    /// em tPag=99 ("Outros"), e a SEFAZ rejeita esse código sem uma descrição em xPag
-    /// (rejeição observada em produção: "Descrição do pagamento obrigatória para meio
-    /// de pagamento 99-outros").
+    /// Crediário (05), pontos e cashback (19) agora usam código próprio e não
+    /// precisam mais de xPag. O xPag fica reservado ao 99 ("Outros"), único
+    /// código que a SEFAZ rejeita sem descrição ("Descrição do pagamento
+    /// obrigatória para meio de pagamento 99-outros" — rejeição observada em
+    /// produção). Se um meio novo cair no fpOutro, a descrição continua saindo.
     /// </summary>
     private static detPag MontarDetPagUnico(string formaPagamento, decimal valor)
     {
@@ -1328,9 +2003,8 @@ public class NfceEmissionService : INfceEmissionService
 
     private static string DescricaoFormaPagamentoOutro(string formaPagamento) => formaPagamento switch
     {
-        PaymentMethod.Crediario => "Crediário próprio da loja",
-        PaymentMethod.Pontos    => "Resgate de pontos de fidelidade",
-        PaymentMethod.Cashback  => "Cashback (saldo da loja)",
+        // Só é chamado quando o meio cai no fpOutro (99). Crediário, pontos e
+        // cashback têm código próprio e não passam mais por aqui.
         _                       => formaPagamento,
     };
 
@@ -1353,6 +2027,58 @@ public class NfceEmissionService : INfceEmissionService
                     ? "CEST obrigatorio para produto sujeito a ICMS-ST. Informe exatamente 7 digitos no cadastro do produto."
                     : $"CEST \"{cest}\" invalido. Informe exatamente 7 digitos ou deixe o campo vazio.");
         return digitos;
+    }
+
+    /// <summary>
+    /// Código do produto no XML (XML-001). Usa o Id do produto — identidade
+    /// estável que cruza com estoque e escrituração —, não a posição do item na
+    /// nota. Antes o cProd era "000001", "000002"… e não dava para relacionar a
+    /// venda ao cadastro. Fallback para a posição só se o item não trouxer Id
+    /// (não deveria acontecer em venda com produto real).
+    /// </summary>
+    internal static string MontarCodigoProduto(ItemFiscal item, int numero) =>
+        item.ProdutoId is { } id ? id.ToString("N") : numero.ToString("D6");
+
+    /// <summary>
+    /// Valida o código de barras como GTIN antes de mandá-lo no cEAN (XML-001 /
+    /// NT 2021.003). A SEFAZ rejeita (611) cEAN que não seja um GTIN válido ou o
+    /// literal "SEM GTIN": mandar um código de barras interno malformado como se
+    /// fosse GTIN derruba a nota. Só passa GTIN-8/12/13/14 com dígito verificador
+    /// correto; qualquer outra coisa vira null e o chamador usa "SEM GTIN".
+    ///
+    /// O cálculo do dígito é o padrão GS1 (módulo 10) — a biblioteca fiscal só
+    /// oferece consulta ao CCG por webservice, inviável a cada venda.
+    /// </summary>
+    internal static string? SanitizarGtin(string? gtin)
+    {
+        if (string.IsNullOrWhiteSpace(gtin)) return null;
+        var digitos = new string(gtin.Where(char.IsDigit).ToArray());
+        if (digitos.Length is not (8 or 12 or 13 or 14)) return null;
+
+        // Dígito verificador GS1: soma ponderada 3/1 da direita para a esquerda,
+        // excluindo o próprio DV; o total arredondado para a próxima dezena menos
+        // a soma é o DV esperado.
+        var soma = 0;
+        for (var i = 0; i < digitos.Length - 1; i++)
+        {
+            var d = digitos[digitos.Length - 2 - i] - '0';
+            soma += i % 2 == 0 ? d * 3 : d;
+        }
+        var dvEsperado = (10 - soma % 10) % 10;
+        return dvEsperado == digitos[^1] - '0' ? digitos : null;
+    }
+
+    /// <summary>
+    /// Descrição do item no XML (XML-001). O leiaute limita xProd a 120
+    /// caracteres; um nome de produto mais longo, mandado cru, é rejeição na
+    /// SEFAZ. Trunca sem quebrar no meio de um caractere multibyte e colapsa
+    /// espaços — o nome comercial completo continua no cadastro.
+    /// </summary>
+    internal static string SanitizarXProd(string nome)
+    {
+        var limpo = string.Join(' ', (nome ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (limpo.Length == 0) return "Item sem descricao";
+        return limpo.Length <= 120 ? limpo : limpo[..120].TrimEnd();
     }
 
     internal static int SanitizarCfop(string cfop)
@@ -1398,10 +2124,12 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     internal static det MontarItem(
-        ItemFiscal item, int numero, int descontoCentavos = 0, bool incluirIbsCbs = false)
+        ItemFiscal item, int numero, int descontoCentavos = 0, RegraIbsCbs? regraIbsCbs = null,
+        RegimeTributario regime = RegimeTributario.SimplesNacional)
     {
-        var calculoSt = CsosnTemIcmsSt(item.Csosn)
-            ? CalcularIcmsStInclusoNoPreco(item, descontoCentavos)
+        var regimeNormal = regime != RegimeTributario.SimplesNacional;
+        var calculoSt = ItemTemIcmsSt(item, regimeNormal)
+            ? CalcularIcmsStInclusoNoPreco(item, descontoCentavos, regimeNormal)
             : null;
         var desconto = descontoCentavos / 100m;
         // Em ST o preço do cadastro é final ao consumidor. Separamos o imposto sem
@@ -1409,19 +2137,22 @@ public class NfceEmissionService : INfceEmissionService
         var valorProduto = calculoSt is null
             ? item.SubtotalCentavos / 100m
             : calculoSt.ValorOperacaoLiquido + desconto;
+        // Mesma base para IBS/CBS e para PIS/COFINS: valor do produto menos o
+        // desconto incondicional do item.
         var baseIbsCbs = Math.Max(0, valorProduto - desconto);
         var tributosAproximados = CalcularTributosAproximados(item, descontoCentavos);
-        var cest = SanitizarCest(item.Cest, CsosnExigeCest(item.Csosn));
+        var cest = SanitizarCest(item.Cest, regimeNormal ? CstExigeCest(item.Cst) : CsosnExigeCest(item.Csosn));
+        var gtin = SanitizarGtin(item.Gtin) ?? "SEM GTIN";
 
         return new det
         {
             nItem = numero,
             prod = new prod
             {
-                cProd      = numero.ToString("D6"),
-                cEAN       = "SEM GTIN",
-                cEANTrib   = "SEM GTIN",
-                xProd      = item.Nome,
+                cProd      = MontarCodigoProduto(item, numero),
+                cEAN       = gtin,
+                cEANTrib   = gtin,
+                xProd      = SanitizarXProd(item.Nome),
                 NCM        = SanitizarNcm(item.Ncm),
                 CEST       = cest,
                 CFOP       = SanitizarCfop(item.Cfop),
@@ -1438,10 +2169,15 @@ public class NfceEmissionService : INfceEmissionService
             imposto = new imposto
             {
                 vTotTrib = tributosAproximados.Total,
-                ICMS   = new ICMS { TipoICMS = MontarIcmsSimplesNacional(item, descontoCentavos, calculoSt) },
-                PIS    = new PIS    { TipoPIS    = new PISOutr    { CST = CSTPIS.pis99,    vBC = 0, pPIS    = 0, vPIS    = 0 } },
-                COFINS = new COFINS { TipoCOFINS = new COFINSOutr { CST = CSTCOFINS.cofins99, vBC = 0, pCOFINS = 0, vCOFINS = 0 } },
-                IBSCBS = incluirIbsCbs ? MontarIbsCbs2026(item, baseIbsCbs) : null,
+                ICMS   = new ICMS
+                {
+                    TipoICMS = regimeNormal
+                        ? MontarIcmsRegimeNormal(item, descontoCentavos, calculoSt)
+                        : MontarIcmsSimplesNacional(item, descontoCentavos, calculoSt),
+                },
+                PIS    = new PIS    { TipoPIS    = MontarPis(item, regime, baseIbsCbs) },
+                COFINS = new COFINS { TipoCOFINS = MontarCofins(item, regime, baseIbsCbs) },
+                IBSCBS = regraIbsCbs is not null ? MontarIbsCbs(item, regraIbsCbs, baseIbsCbs) : null,
             },
         };
     }
@@ -1490,23 +2226,161 @@ public class NfceEmissionService : INfceEmissionService
     private static bool CsosnExigeCest(string? csosn) =>
         csosn is "201" or "202" or "203" or "500";
 
-    /// <summary>
-    /// Tributação integral usada na fase de testes de 2026. Pela regra UB16-10 da
-    /// NT 2025.002, a base subtrai o desconto incondicional informado no item.
-    /// </summary>
-    internal static IbsCbsItem MontarIbsCbs2026(ItemFiscal item, decimal? baseCalculoInformada = null)
+    /// <summary>Os CSTs que envolvem ST (próprio ou já retido) exigem CEST no item.</summary>
+    private static bool CstExigeCest(string? cst) =>
+        cst is "10" or "30" or "60" or "70";
+
+    // ── PIS/COFINS ────────────────────────────────────────────────────────────
+    //
+    // No Simples Nacional os dois estão dentro do DAS: o XML sai com CST 99
+    // ("Outras Operações") e valor zero — é o que a SEFAZ espera de CRT=1, e é o
+    // que este motor sempre fez. Fora do Simples cada item precisa de CST e
+    // alíquota reais, e a alíquota depende do regime de apuração:
+    //
+    //   Lucro Presumido → cumulativo:     PIS 0,65%  COFINS 3,00%
+    //   Lucro Real      → não-cumulativo: PIS 1,65%  COFINS 7,60%
+    //
+    // A natureza de operação pode sobrescrever CST e alíquota (venda com
+    // alíquota zero, monofásico, isenta) — o padrão do regime é só o ponto de
+    // partida pra quem não configurou nada.
+
+    private const decimal PisCumulativo       = 0.65m;
+    private const decimal CofinsCumulativo    = 3.00m;
+    private const decimal PisNaoCumulativo    = 1.65m;
+    private const decimal CofinsNaoCumulativo = 7.60m;
+
+    /// <summary>CSTs de PIS/COFINS que não têm base nem alíquota (isenta, alíquota zero, suspensão…).</summary>
+    private static bool CstFederalSemTributo(string cst) =>
+        cst is "04" or "05" or "06" or "07" or "08" or "09";
+
+    internal static PISBasico MontarPis(ItemFiscal item, RegimeTributario regime, decimal baseCalculo)
     {
-        if (!string.Equals(item.IbsCbsCst, "000", StringComparison.Ordinal))
+        if (regime == RegimeTributario.SimplesNacional)
+            return new PISOutr { CST = CSTPIS.pis99, vBC = 0, pPIS = 0, vPIS = 0 };
+
+        var cst = NormalizarCstFederal(item.CstPis, "01");
+        var aliquota = item.AliquotaPis ?? (regime == RegimeTributario.LucroReal
+            ? PisNaoCumulativo
+            : PisCumulativo);
+
+        if (CstFederalSemTributo(cst))
+            return new PISNT { CST = MapCstPis(cst) };
+
+        // CST 49..99 é o grupo "Outras Operações": aceita base e alíquota, mas
+        // não entra no grupo de alíquota básica do leiaute.
+        if (cst is not ("01" or "02"))
+            return new PISOutr
+            {
+                CST = MapCstPis(cst),
+                vBC = ArredondarTributo(baseCalculo),
+                pPIS = aliquota,
+                vPIS = ArredondarTributo(baseCalculo * aliquota / 100m),
+            };
+
+        return new PISAliq
+        {
+            CST  = MapCstPis(cst),
+            vBC  = ArredondarTributo(baseCalculo),
+            pPIS = aliquota,
+            vPIS = ArredondarTributo(baseCalculo * aliquota / 100m),
+        };
+    }
+
+    internal static COFINSBasico MontarCofins(ItemFiscal item, RegimeTributario regime, decimal baseCalculo)
+    {
+        if (regime == RegimeTributario.SimplesNacional)
+            return new COFINSOutr { CST = CSTCOFINS.cofins99, vBC = 0, pCOFINS = 0, vCOFINS = 0 };
+
+        var cst = NormalizarCstFederal(item.CstCofins, "01");
+        var aliquota = item.AliquotaCofins ?? (regime == RegimeTributario.LucroReal
+            ? CofinsNaoCumulativo
+            : CofinsCumulativo);
+
+        if (CstFederalSemTributo(cst))
+            return new COFINSNT { CST = MapCstCofins(cst) };
+
+        if (cst is not ("01" or "02"))
+            return new COFINSOutr
+            {
+                CST = MapCstCofins(cst),
+                vBC = ArredondarTributo(baseCalculo),
+                pCOFINS = aliquota,
+                vCOFINS = ArredondarTributo(baseCalculo * aliquota / 100m),
+            };
+
+        return new COFINSAliq
+        {
+            CST     = MapCstCofins(cst),
+            vBC     = ArredondarTributo(baseCalculo),
+            pCOFINS = aliquota,
+            vCOFINS = ArredondarTributo(baseCalculo * aliquota / 100m),
+        };
+    }
+
+    private static string NormalizarCstFederal(string? cst, string padrao)
+    {
+        if (string.IsNullOrWhiteSpace(cst)) return padrao;
+        var limpo = new string(cst.Where(char.IsDigit).ToArray());
+        return limpo.Length switch
+        {
+            0 => padrao,
+            1 => "0" + limpo,
+            2 => limpo,
+            _ => throw new FiscalNaoConfiguradoException($"CST de PIS/COFINS \"{cst}\" inválido — use dois dígitos."),
+        };
+    }
+
+    private static CSTPIS MapCstPis(string cst) =>
+        Enum.TryParse<CSTPIS>($"pis{cst}", out var valor)
+            ? valor
+            : throw new FiscalNaoConfiguradoException(
+                $"CST de PIS \"{cst}\" não existe no leiaute da NFC-e.");
+
+    private static CSTCOFINS MapCstCofins(string cst) =>
+        Enum.TryParse<CSTCOFINS>($"cofins{cst}", out var valor)
+            ? valor
+            : throw new FiscalNaoConfiguradoException(
+                $"CST de COFINS \"{cst}\" não existe no leiaute da NFC-e.");
+
+    /// <summary>
+    /// Decide se a regra vigente vira destaque no XML (RTC-001).
+    ///
+    /// Homologação sempre destaca — é onde se testa o leiaute novo antes de ele
+    /// valer. Produção só quando a própria regra disser que o destaque já é
+    /// exigido, e não pelo simples fato de existir regra publicada: em 2026 o
+    /// destaque é informativo e há dispensa de penalidades pela omissão, então
+    /// ligá-lo é decisão fiscal datada, não efeito colateral de código.
+    /// </summary>
+    internal static RegraIbsCbs? RegraParaDestaque(RegraIbsCbs? regra, TipoAmbiente ambiente) =>
+        regra is not null && (regra.DestaqueObrigatorio || ambiente == TipoAmbiente.Homologacao)
+            ? regra
+            : null;
+
+    /// <summary>
+    /// Grupo IBS/CBS do item, com as alíquotas da regra vigente (RTC-001) — não
+    /// mais com percentuais fixos no código. Pela regra UB16-10 da NT 2025.002, a
+    /// base subtrai o desconto incondicional informado no item.
+    /// </summary>
+    internal static IbsCbsItem MontarIbsCbs(
+        ItemFiscal item, RegraIbsCbs regra, decimal? baseCalculoInformada = null)
+    {
+        // O CST suportado é atributo da REGRA, não uma constante do motor: uma
+        // faixa futura pode passar a suportar outros, e um CST fora da lista
+        // exige provedor de cálculo próprio. Recusar aqui (antes de reservar
+        // numeração) é melhor do que emitir documento com valor inventado.
+        if (!regra.SuportaCst(item.IbsCbsCst))
             throw new FiscalNaoConfiguradoException(
-                $"CST IBS/CBS {item.IbsCbsCst} ainda exige um provedor de cálculo específico. " +
-                "Configure CST 000 ou habilite o provedor correspondente para esta natureza.");
+                $"CST IBS/CBS {item.IbsCbsCst} não é calculável pela regra {regra.Versao} " +
+                $"(suportados: {string.Join(", ", regra.CstSuportados)}). " +
+                "Ajuste a natureza de operação ou habilite o provedor correspondente.");
         if (string.IsNullOrWhiteSpace(item.IbsCbsClassTrib) || item.IbsCbsClassTrib.Length != 6 ||
             !item.IbsCbsClassTrib.All(char.IsDigit))
             throw new FiscalNaoConfiguradoException("cClassTrib do IBS/CBS deve conter 6 dígitos.");
 
         var baseCalculo = baseCalculoInformada ?? item.SubtotalCentavos / 100m;
-        var valorIbsUf  = ArredondarTributo(baseCalculo * 0.001m);
-        var valorCbs    = ArredondarTributo(baseCalculo * 0.009m);
+        var valorIbsUf  = ArredondarTributo(baseCalculo * regra.AliquotaIbsUf  / 100m);
+        var valorIbsMun = ArredondarTributo(baseCalculo * regra.AliquotaIbsMun / 100m);
+        var valorCbs    = ArredondarTributo(baseCalculo * regra.AliquotaCbs    / 100m);
 
         return new IbsCbsItem
         {
@@ -1515,15 +2389,15 @@ public class NfceEmissionService : INfceEmissionService
             gIBSCBS = new IbsCbsItemValues
             {
                 vBC = baseCalculo,
-                gIBSUF = new IbsItemUf { pIBSUF = 0.1m, vIBSUF = valorIbsUf },
-                gIBSMun = new IbsItemMun { pIBSMun = 0m, vIBSMun = 0m },
-                vIBS = valorIbsUf,
-                gCBS = new CbsItem { pCBS = 0.9m, vCBS = valorCbs },
+                gIBSUF = new IbsItemUf { pIBSUF = regra.AliquotaIbsUf, vIBSUF = valorIbsUf },
+                gIBSMun = new IbsItemMun { pIBSMun = regra.AliquotaIbsMun, vIBSMun = valorIbsMun },
+                vIBS = valorIbsUf + valorIbsMun,
+                gCBS = new CbsItem { pCBS = regra.AliquotaCbs, vCBS = valorCbs },
             },
         };
     }
 
-    internal static IbsCbsTotal MontarTotaisIbsCbs2026(IEnumerable<det> itens)
+    internal static IbsCbsTotal MontarTotaisIbsCbs(IEnumerable<det> itens)
     {
         var grupos = itens.Select(i => i.imposto.IBSCBS!.gIBSCBS!).ToList();
         var baseTotal   = grupos.Sum(g => g.vBC);
@@ -1553,25 +2427,91 @@ public class NfceEmissionService : INfceEmissionService
         };
     }
 
-    internal sealed record TotaisIcms(decimal BaseSt, decimal ValorSt, decimal ValorFcpSt);
+    internal sealed record TotaisIcms(
+        decimal BaseIcms, decimal ValorIcms, decimal ValorDeson,
+        decimal BaseSt, decimal ValorSt,
+        decimal ValorFcp, decimal ValorFcpSt,
+        decimal ValorPis, decimal ValorCofins);
 
+    /// <summary>
+    /// Consolida nos totais do documento os tributos destacados nos itens
+    /// (REG-001).
+    ///
+    /// A versão anterior era um <c>switch</c> que só conhecia ICMSSN201 e
+    /// ICMSSN202. Isso bastava no Simples — CSOSN não destaca ICMS próprio, e o
+    /// resto do ICMSTot é legitimamente zero. Quando o motor passou a montar
+    /// itens por CST (Lucro Presumido/Real), nenhuma das dez classes novas tinha
+    /// <c>case</c>: o item destacava vICMS e o total mandava zero, o que é
+    /// divergência entre soma dos itens e totalizador — rejeição certa, com
+    /// numeração queimada. E o <c>default</c> silencioso não quebrava teste
+    /// nenhum.
+    ///
+    /// Agora usa os getters polimórficos da própria biblioteca fiscal
+    /// (<c>Tributacao.Extensions</c>), que operam sobre <c>ICMSBasico</c> e
+    /// funcionam para qualquer subtipo. Não há mais <c>case</c> a esquecer: um
+    /// CST novo entra sozinho. Isso não economiza linhas — elimina a classe
+    /// inteira de bug.
+    ///
+    /// Exceção: o FCP não tem getter na biblioteca, então continua sendo lido
+    /// por tipo. É o único ponto que precisa de manutenção ao surgir um grupo
+    /// novo, e está isolado em <see cref="SomarFcp"/>.
+    /// </summary>
     internal static TotaisIcms SomarTotaisIcms(IEnumerable<det> itens)
     {
-        decimal baseSt = 0, valorSt = 0, valorFcpSt = 0;
-        foreach (var tipo in itens.Select(i => i.imposto.ICMS.TipoICMS))
+        decimal baseIcms = 0, valorIcms = 0, valorDeson = 0;
+        decimal baseSt = 0, valorSt = 0;
+        decimal valorFcp = 0, valorFcpSt = 0;
+        decimal valorPis = 0, valorCofins = 0;
+
+        foreach (var item in itens)
         {
-            switch (tipo)
+            var icms = item.imposto.ICMS?.TipoICMS;
+            if (icms is not null)
             {
-                case ICMSSN201 x:
-                    baseSt += x.vBCST; valorSt += x.vICMSST; valorFcpSt += x.vFCPST ?? 0;
-                    break;
-                case ICMSSN202 x:
-                    baseSt += x.vBCST; valorSt += x.vICMSST; valorFcpSt += x.vFCPST ?? 0;
-                    break;
+                baseIcms   += icms.GetIcmsBcValue();
+                valorIcms  += icms.GetIcmsValue();
+                valorDeson += icms.GetIcmsDesonValue();
+                baseSt     += icms.GetIcmsBcStValue();
+                valorSt    += icms.GetIcmsStValue();
+
+                var (fcp, fcpSt) = SomarFcp(icms);
+                valorFcp   += fcp;
+                valorFcpSt += fcpSt;
             }
+
+            if (item.imposto.PIS?.TipoPIS is { } pis)
+                valorPis += pis.GetPisValue();
+            if (item.imposto.COFINS?.TipoCOFINS is { } cofins)
+                valorCofins += cofins.GetCofinsValue();
         }
-        return new TotaisIcms(baseSt, valorSt, valorFcpSt);
+
+        return new TotaisIcms(
+            ArredondarTributo(baseIcms), ArredondarTributo(valorIcms), ArredondarTributo(valorDeson),
+            ArredondarTributo(baseSt), ArredondarTributo(valorSt),
+            ArredondarTributo(valorFcp), ArredondarTributo(valorFcpSt),
+            ArredondarTributo(valorPis), ArredondarTributo(valorCofins));
     }
+
+    /// <summary>
+    /// FCP próprio e FCP-ST do item. Único grupo sem getter polimórfico na
+    /// biblioteca — as classes que o possuem estão listadas explicitamente para
+    /// que a ausência de um tipo seja visível aqui, e não um zero silencioso no
+    /// total do documento.
+    /// </summary>
+    private static (decimal Fcp, decimal FcpSt) SomarFcp(ICMSBasico icms) => icms switch
+    {
+        ICMS00 x => (x.vFCP ?? 0, 0),
+        ICMS10 x => (x.vFCP ?? 0, x.vFCPST ?? 0),
+        ICMS20 x => (x.vFCP ?? 0, 0),
+        ICMS30 x => (0, x.vFCPST ?? 0),
+        ICMS51 x => (x.vFCP ?? 0, 0),
+        ICMS70 x => (x.vFCP ?? 0, x.vFCPST ?? 0),
+        ICMS90 x => (x.vFCP ?? 0, x.vFCPST ?? 0),
+        // Simples Nacional: só os CSOSN com ST carregam FCP-ST.
+        ICMSSN201 x => (0, x.vFCPST ?? 0),
+        ICMSSN202 x => (0, x.vFCPST ?? 0),
+        _ => (0, 0),
+    };
 
     private static decimal ArredondarTributo(decimal valor) =>
         Math.Round(valor, 2, MidpointRounding.AwayFromZero);
@@ -1596,18 +2536,36 @@ public class NfceEmissionService : INfceEmissionService
     private static bool CsosnTemIcmsSt(string? csosn) => csosn is "201" or "202" or "203";
 
     /// <summary>
+    /// CSTs em que a LOJA é a substituta e recolhe o ST — o 60 fica de fora de
+    /// propósito: nele o ST já foi retido pelo fornecedor, não há o que calcular.
+    /// No 90 ("Outras") o ST é opcional: só entra se a natureza trouxer alíquota.
+    /// </summary>
+    private static bool CstTemIcmsSt(ItemFiscal item) =>
+        item.Cst is "10" or "30" or "70" ||
+        (item.Cst == "90" && item.AliquotaIcmsSt is > 0);
+
+    /// <summary>Se este item recolhe ST, considerando o regime da loja.</summary>
+    private static bool ItemTemIcmsSt(ItemFiscal item, bool regimeNormal) =>
+        regimeNormal ? CstTemIcmsSt(item) : CsosnTemIcmsSt(item.Csosn);
+
+    /// <summary>
     /// Decompõe o preço final já cobrado do consumidor em operação + ICMS-ST + FCP-ST.
     /// A fórmula segue a orientação nacional: ST = ICMS sobre BC-ST menos ICMS próprio.
+    /// Serve aos dois regimes — o que muda entre eles é o código informado no XML
+    /// (CSOSN 201/202/203 ou CST 10/30/70/90), não a conta.
     /// </summary>
-    internal static CalculoIcmsSt CalcularIcmsStInclusoNoPreco(ItemFiscal item, int descontoCentavos = 0)
+    internal static CalculoIcmsSt CalcularIcmsStInclusoNoPreco(
+        ItemFiscal item, int descontoCentavos = 0, bool regimeNormal = false)
     {
-        if (!CsosnTemIcmsSt(item.Csosn))
-            throw new ArgumentException("O item não usa CSOSN com ICMS-ST.", nameof(item));
+        if (!ItemTemIcmsSt(item, regimeNormal))
+            throw new ArgumentException("O item não usa código de tributação com ICMS-ST.", nameof(item));
+
+        var codigo = regimeNormal ? $"CST {item.Cst}" : $"CSOSN {item.Csosn}";
         if (item.ModalidadeBcSt is null || item.ModalidadeBcSt is < 0 or > 6)
-            throw new FiscalNaoConfiguradoException($"CSOSN {item.Csosn}: informe a modalidade da BC-ST (0 a 6).");
+            throw new FiscalNaoConfiguradoException($"{codigo}: informe a modalidade da BC-ST (0 a 6).");
         if (item.AliquotaIcmsSt is null or <= 0 || item.AliquotaIcmsProprio is null or < 0)
             throw new FiscalNaoConfiguradoException(
-                $"CSOSN {item.Csosn}: informe as alíquotas do ICMS-ST e da operação própria.");
+                $"{codigo}: informe as alíquotas do ICMS-ST e da operação própria.");
 
         var modalidade = (DeterminacaoBaseIcmsSt)item.ModalidadeBcSt.Value;
         var reducao = Math.Clamp(item.PercentualReducaoBcSt ?? 0, 0, 100) / 100m;
@@ -1623,7 +2581,7 @@ public class NfceEmissionService : INfceEmissionService
         if (modalidade == DeterminacaoBaseIcmsSt.DbisMargemValorAgregado)
         {
             if (item.PercentualMvaSt is null or < 0)
-                throw new FiscalNaoConfiguradoException($"CSOSN {item.Csosn}: informe o percentual de MVA-ST.");
+                throw new FiscalNaoConfiguradoException($"{codigo}: informe o percentual de MVA-ST.");
             mva = item.PercentualMvaSt.Value;
             var fatorBase = (1 + mva.Value / 100m) * (1 - reducao);
             var fatorTotal = 1 + fatorBase * aliquotaSt - aliquotaPropria + fatorBase * aliquotaFcp;
@@ -1645,7 +2603,7 @@ public class NfceEmissionService : INfceEmissionService
         {
             if (item.BaseStFixaEmCentavos is null or <= 0)
                 throw new FiscalNaoConfiguradoException(
-                    $"CSOSN {item.Csosn}: esta modalidade exige base/pauta ST fixa por unidade.");
+                    $"{codigo}: esta modalidade exige base/pauta ST fixa por unidade.");
             baseSt = item.BaseStFixaEmCentavos.Value / 100m * item.Quantidade * (1 - reducao);
             var impostoFixo = baseSt * (aliquotaSt + aliquotaFcp);
             operacao = (precoFinal - impostoFixo) / (1 - aliquotaPropria);
@@ -1700,6 +2658,251 @@ public class NfceEmissionService : INfceEmissionService
                 $"CSOSN \"{item.Csosn}\" não é suportado pelo provedor Simples Nacional."),
         };
     }
+
+    /// <summary>
+    /// Monta o ICMS de quem está FORA do Simples (CRT=3): CST no lugar do CSOSN.
+    ///
+    /// A diferença de fundo em relação ao Simples é que aqui o ICMS da operação
+    /// própria é destacado no XML (vBC/pICMS/vICMS) em vez de ficar embutido no
+    /// DAS. O cálculo do ST, quando existe, é o MESMO do Simples — a decomposição
+    /// do preço final ao consumidor já estava pronta e é reaproveitada inteira.
+    /// </summary>
+    internal static ICMSBasico MontarIcmsRegimeNormal(
+        ItemFiscal item, int descontoCentavos = 0, CalculoIcmsSt? calculoSt = null)
+    {
+        if (item.OrigemMercadoria is < 0 or > 8)
+            throw new FiscalNaoConfiguradoException("Origem da mercadoria deve estar entre 0 e 8.");
+        var origem = (OrigemMercadoria)item.OrigemMercadoria;
+
+        var cst = string.IsNullOrWhiteSpace(item.Cst) ? null : item.Cst.Trim();
+        if (cst is null)
+            throw new FiscalNaoConfiguradoException(
+                $"A loja está fora do Simples Nacional e a natureza de operação do item \"{item.Nome}\" " +
+                "não tem CST de ICMS. Cadastre o CST em Admin > Fiscal > Naturezas de operação.");
+
+        var baseCheia = Math.Max(0, item.SubtotalCentavos - descontoCentavos) / 100m;
+
+        // Nos CSTs com ST, o preço de cadastro já é o final ao consumidor: a
+        // operação própria é o que sobra depois de separar ST e FCP-ST.
+        var valorOperacao = calculoSt?.ValorOperacaoLiquido ?? baseCheia;
+
+        decimal AliquotaPropria()
+        {
+            if (item.AliquotaIcmsProprio is null or < 0)
+                throw new FiscalNaoConfiguradoException(
+                    $"CST {cst}: informe a alíquota de ICMS da operação própria na natureza de operação.");
+            return item.AliquotaIcmsProprio.Value;
+        }
+
+        return cst switch
+        {
+            "00" => MontarIcms00(item, origem, valorOperacao, AliquotaPropria()),
+            "20" => MontarIcms20(item, origem, valorOperacao, AliquotaPropria()),
+            // Isenta, não tributada e suspensão compartilham o mesmo grupo no XML.
+            "40" or "41" or "50" => new ICMS40 { orig = origem, CST = MapCst(cst) },
+            "60" => MontarIcms60(item, origem),
+            "10" => MontarIcms10(item, origem, ExigirSt(item, cst, calculoSt), AliquotaPropria()),
+            "30" => MontarIcms30(item, origem, ExigirSt(item, cst, calculoSt)),
+            "70" => MontarIcms70(item, origem, ExigirSt(item, cst, calculoSt), AliquotaPropria()),
+            "90" => MontarIcms90(item, origem, valorOperacao, calculoSt),
+            // 51 (diferimento) é operação de indústria/atacado; numa venda a
+            // consumidor final por NFC-e ela não aparece, e implementar sem caso
+            // de uso real seria código não exercitado no lugar mais sensível.
+            "51" => throw new FiscalNaoConfiguradoException(
+                "CST 51 (diferimento) não é aplicável a venda a consumidor final por NFC-e."),
+            _ => throw new FiscalNaoConfiguradoException(
+                $"CST de ICMS \"{cst}\" não é suportado pelo motor fiscal. " +
+                "Use 00, 10, 20, 30, 40, 41, 50, 60, 70 ou 90."),
+        };
+    }
+
+    private static CalculoIcmsSt ExigirSt(ItemFiscal item, string cst, CalculoIcmsSt? calculoSt) =>
+        calculoSt ?? CalcularIcmsStInclusoNoPreco(item, 0, regimeNormal: true);
+
+    private static ICMS00 MontarIcms00(
+        ItemFiscal item, OrigemMercadoria origem, decimal baseCalculo, decimal aliquota)
+    {
+        var vbc = ArredondarTributo(baseCalculo);
+        return new ICMS00
+        {
+            orig  = origem,
+            CST   = Csticms.Cst00,
+            modBC = DeterminacaoBaseIcms.DbiValorOperacao,
+            vBC   = vbc,
+            pICMS = aliquota,
+            vICMS = ArredondarTributo(vbc * aliquota / 100m),
+        };
+    }
+
+    private static ICMS20 MontarIcms20(
+        ItemFiscal item, OrigemMercadoria origem, decimal baseCheia, decimal aliquota)
+    {
+        var reducao = Math.Clamp(item.PercentualReducaoBc ?? 0, 0, 100);
+        if (reducao <= 0)
+            throw new FiscalNaoConfiguradoException(
+                "CST 20 exige o percentual de redução da base de cálculo na natureza de operação.");
+
+        var vbc = ArredondarTributo(baseCheia * (1 - reducao / 100m));
+        var icms = new ICMS20
+        {
+            orig   = origem,
+            CST    = Csticms.Cst20,
+            modBC  = DeterminacaoBaseIcms.DbiValorOperacao,
+            pRedBC = reducao,
+            vBC    = vbc,
+            pICMS  = aliquota,
+            vICMS  = ArredondarTributo(vbc * aliquota / 100m),
+        };
+        AplicarFcpProprio(item, vbc, valor => { icms.vBCFCP = vbc; icms.pFCP = item.AliquotaFcp; icms.vFCP = valor; });
+        return icms;
+    }
+
+    private static ICMS60 MontarIcms60(ItemFiscal item, OrigemMercadoria origem) => new()
+    {
+        orig = origem,
+        CST  = Csticms.Cst60,
+        // Retenção anterior é informativa e boa parte do varejo não recebe esse
+        // dado do fornecedor — só vai ao XML quando o contador cadastrou.
+        vBCSTRet    = item.BaseStRetidaEmCentavos is > 0 ? item.BaseStRetidaEmCentavos.Value / 100m : null,
+        vICMSSTRet  = item.ValorStRetidoEmCentavos is > 0 ? item.ValorStRetidoEmCentavos.Value / 100m : null,
+    };
+
+    private static ICMS10 MontarIcms10(
+        ItemFiscal item, OrigemMercadoria origem, CalculoIcmsSt c, decimal aliquota)
+    {
+        var vbc = ArredondarTributo(c.ValorOperacaoLiquido);
+        var icms = new ICMS10
+        {
+            orig    = origem,
+            CST     = Csticms.Cst10,
+            modBC   = DeterminacaoBaseIcms.DbiValorOperacao,
+            vBC     = vbc,
+            pICMS   = aliquota,
+            vICMS   = ArredondarTributo(vbc * aliquota / 100m),
+            modBCST = c.Modalidade,
+            pMVAST  = c.Mva,
+            pRedBCST = c.Reducao,
+            vBCST   = c.BaseSt,
+            pICMSST = c.AliquotaSt,
+            vICMSST = c.ValorSt,
+        };
+        if (c.ValorFcpSt.HasValue)
+        {
+            icms.vBCFCPST = c.BaseFcpSt;
+            icms.pFCPST   = c.AliquotaFcpSt;
+            icms.vFCPST   = c.ValorFcpSt;
+        }
+        return icms;
+    }
+
+    private static ICMS30 MontarIcms30(ItemFiscal item, OrigemMercadoria origem, CalculoIcmsSt c)
+    {
+        var icms = new ICMS30
+        {
+            orig    = origem,
+            CST     = Csticms.Cst30,
+            modBCST = c.Modalidade,
+            pMVAST  = c.Mva,
+            pRedBCST = c.Reducao,
+            vBCST   = c.BaseSt,
+            pICMSST = c.AliquotaSt,
+            vICMSST = c.ValorSt,
+        };
+        if (c.ValorFcpSt.HasValue)
+        {
+            icms.vBCFCPST = c.BaseFcpSt;
+            icms.pFCPST   = c.AliquotaFcpSt;
+            icms.vFCPST   = c.ValorFcpSt;
+        }
+        return icms;
+    }
+
+    private static ICMS70 MontarIcms70(
+        ItemFiscal item, OrigemMercadoria origem, CalculoIcmsSt c, decimal aliquota)
+    {
+        var reducao = Math.Clamp(item.PercentualReducaoBc ?? 0, 0, 100);
+        if (reducao <= 0)
+            throw new FiscalNaoConfiguradoException(
+                "CST 70 exige o percentual de redução da base de cálculo da operação própria.");
+
+        var vbc = ArredondarTributo(c.ValorOperacaoLiquido * (1 - reducao / 100m));
+        var icms = new ICMS70
+        {
+            orig    = origem,
+            CST     = Csticms.Cst70,
+            modBC   = DeterminacaoBaseIcms.DbiValorOperacao,
+            pRedBC  = reducao,
+            vBC     = vbc,
+            pICMS   = aliquota,
+            vICMS   = ArredondarTributo(vbc * aliquota / 100m),
+            modBCST = c.Modalidade,
+            pMVAST  = c.Mva,
+            pRedBCST = c.Reducao,
+            vBCST   = c.BaseSt,
+            pICMSST = c.AliquotaSt,
+            vICMSST = c.ValorSt,
+        };
+        if (c.ValorFcpSt.HasValue)
+        {
+            icms.vBCFCPST = c.BaseFcpSt;
+            icms.pFCPST   = c.AliquotaFcpSt;
+            icms.vFCPST   = c.ValorFcpSt;
+        }
+        return icms;
+    }
+
+    private static ICMS90 MontarIcms90(
+        ItemFiscal item, OrigemMercadoria origem, decimal valorOperacao, CalculoIcmsSt? c)
+    {
+        var aliquota = item.AliquotaIcmsProprio ?? 0;
+        var reducao = Math.Clamp(item.PercentualReducaoBc ?? 0, 0, 100);
+        var vbc = ArredondarTributo(valorOperacao * (1 - reducao / 100m));
+
+        var icms = new ICMS90
+        {
+            orig   = origem,
+            CST    = Csticms.Cst90,
+            modBC  = DeterminacaoBaseIcms.DbiValorOperacao,
+            pRedBC = reducao > 0 ? reducao : null,
+            vBC    = vbc,
+            pICMS  = aliquota,
+            vICMS  = ArredondarTributo(vbc * aliquota / 100m),
+        };
+
+        if (c is not null)
+        {
+            icms.modBCST = c.Modalidade;
+            icms.pMVAST  = c.Mva;
+            icms.pRedBCST = c.Reducao;
+            icms.vBCST   = c.BaseSt;
+            icms.pICMSST = c.AliquotaSt;
+            icms.vICMSST = c.ValorSt;
+            if (c.ValorFcpSt.HasValue)
+            {
+                icms.vBCFCPST = c.BaseFcpSt;
+                icms.pFCPST   = c.AliquotaFcpSt;
+                icms.vFCPST   = c.ValorFcpSt;
+            }
+        }
+        return icms;
+    }
+
+    /// <summary>FCP da operação própria — só entra no XML quando a natureza traz alíquota.</summary>
+    private static void AplicarFcpProprio(ItemFiscal item, decimal baseCalculo, Action<decimal> aplicar)
+    {
+        var aliquota = Math.Clamp(item.AliquotaFcp ?? 0, 0, 100);
+        if (aliquota <= 0) return;
+        aplicar(ArredondarTributo(baseCalculo * aliquota / 100m));
+    }
+
+    private static Csticms MapCst(string cst) => cst switch
+    {
+        "00" => Csticms.Cst00, "10" => Csticms.Cst10, "20" => Csticms.Cst20,
+        "30" => Csticms.Cst30, "40" => Csticms.Cst40, "41" => Csticms.Cst41,
+        "50" => Csticms.Cst50, "51" => Csticms.Cst51, "60" => Csticms.Cst60,
+        "70" => Csticms.Cst70, "90" => Csticms.Cst90,
+        _ => throw new FiscalNaoConfiguradoException($"CST de ICMS \"{cst}\" inválido."),
+    };
 
     private static ICMSSN201 MontarIcmsSn201(ItemFiscal item, CalculoIcmsSt c, OrigemMercadoria origem)
     {
@@ -1756,12 +2959,35 @@ public class NfceEmissionService : INfceEmissionService
     /// Pontos/Cashback/Crediário não são formas de pagamento reconhecidas pela SEFAZ —
     /// são mecanismos internos da loja, então caem em "Outros" (99).
     /// </summary>
+    /// <summary>
+    /// Traduz o meio comercial do ERP para o código da Tabela de Meios de
+    /// Pagamento (FIS-002 do plano de go-live).
+    ///
+    /// Crediário, pontos e cashback caíam todos em 99 ("Outros"). Existem
+    /// códigos próprios e vigentes para os dois casos, e usar 99 quando há
+    /// código específico degrada a qualidade declaratória — ainda mais numa
+    /// loja onde crediário e fidelidade são o modelo do negócio, não exceção:
+    ///
+    ///   • 05 (fpCartaoDaLoja) — "Cartão da Loja (Private Label), Crediário
+    ///     Digital, Outros Crediários". A descrição foi ampliada pelo Informe
+    ///     Técnico 2024.002, vigente em produção desde 01/07/2024; antes dele o
+    ///     código cobria só o cartão de loja, origem da confusão comum.
+    ///   • 19 (fpProgramadefidelidade) — "Programa de fidelidade, Cashback,
+    ///     Crédito Virtual". Não confundir com 12 (vale-presente) nem com 21
+    ///     (crédito em loja por troca/devolução, que é dinheiro já pago antes).
+    ///
+    /// O mapeamento é responsabilidade nossa: a biblioteca fiscal expõe todos os
+    /// enums lado a lado e não escolhe nenhum.
+    /// </summary>
     private static FormaPagamento MapFormaPagamento(string formaPagamento) => formaPagamento switch
     {
         PaymentMethod.Dinheiro      => FormaPagamento.fpDinheiro,
         PaymentMethod.Pix           => FormaPagamento.fpPagamentoInstantaneoPIXDinamico,
         PaymentMethod.CartaoCredito => FormaPagamento.fpCartaoCredito,
         PaymentMethod.CartaoDebito  => FormaPagamento.fpCartaoDebito,
+        PaymentMethod.Crediario     => FormaPagamento.fpCartaoDaLoja,
+        PaymentMethod.Pontos        => FormaPagamento.fpProgramadefidelidade,
+        PaymentMethod.Cashback      => FormaPagamento.fpProgramadefidelidade,
         _                           => FormaPagamento.fpOutro,
     };
 }
@@ -1780,4 +3006,47 @@ public class ComandaCanceladaException : Exception
     public Guid ComandaId { get; }
     public ComandaCanceladaException(Guid comandaId)
         : base($"Comanda {comandaId} foi cancelada — emissão fiscal abortada.") => ComandaId = comandaId;
+}
+
+/// <summary>
+/// A venda não pode gerar documento fiscal — sem itens, ou sem valor a pagar.
+///
+/// Tem exceção própria porque a conduta é distinta de tudo o mais: não é falha
+/// de rede, não é erro de configuração e não é defeito de montagem. É uma venda
+/// que simplesmente não tem o que documentar, e nenhuma tentativa futura vai
+/// mudar isso — por isso não volta para a fila de reprocessamento.
+///
+/// Lançada ANTES da reserva de numeração: uma venda que nunca virará documento
+/// não pode consumir um número e deixar lacuna para inutilizar.
+/// </summary>
+public class VendaNaoDocumentavelException : Exception
+{
+    public VendaNaoDocumentavelException(string message) : base(message) { }
+}
+
+/// <summary>
+/// O documento montado não é válido para o schema oficial (XML-002).
+///
+/// Tem exceção própria porque exige conduta própria, distinta das outras duas
+/// falhas possíveis na hora de transmitir:
+///
+///   • <b>não é indisponibilidade da SEFAZ</b> — não pode acionar contingência
+///     offline. Reemitir o mesmo documento inválido em tpEmis=9 entregaria ao
+///     consumidor um cupom que jamais será autorizado (seção 20 do plano);
+///   • <b>não é falha transitória</b> — não adianta o retry automático tentar de
+///     novo a cada 15 minutos: sem corrigir o cadastro, a montagem produz
+///     exatamente o mesmo XML inválido.
+///
+/// A conduta é registrar como rejeitada, com o motivo em linguagem de leiaute, e
+/// deixar o número preservado para inutilização.
+/// </summary>
+public class SchemaInvalidoException : Exception
+{
+    public IReadOnlyList<string> Erros { get; }
+
+    public SchemaInvalidoException(IReadOnlyList<string> erros)
+        : base("O documento não passou na validação do schema oficial da SEFAZ: " +
+               string.Join(" | ", erros.Take(3)) +
+               (erros.Count > 3 ? $" (e mais {erros.Count - 3} erro(s))" : string.Empty)) =>
+        Erros = erros;
 }

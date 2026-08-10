@@ -16,6 +16,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +28,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/support")]
 [Authorize(Policy = "AdminOnly")]
+[RequireOperatorPermission(Permissao.Suporte)]
 [Produces("application/json")]
 public class SupportController : ControllerBase
 {

@@ -12,6 +12,7 @@
 using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
@@ -25,6 +26,7 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/crediarios")]
 [Authorize]
+[RequireOperatorPermission(Permissao.Crediario)]
 public class CrediariosController : ControllerBase
 {
     private readonly AppDbContext    _db;

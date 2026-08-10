@@ -361,7 +361,7 @@ public class ComandaServiceTests
         var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*módulo de fidelidade não está habilitado*");
+            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
     }
 
     [Fact]
@@ -436,7 +436,7 @@ public class ComandaServiceTests
         var act = async () => await service.ApplyPointsAsync(comanda.Id, user.Id, 50);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de pontos está desativado*");
+            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
     }
 
     // ── Fechar comanda — programa de pontos opcional por loja ─────────────────
@@ -487,7 +487,7 @@ public class ComandaServiceTests
         var act = async () => await service.CloseComandaAsync(comanda.Id, Guid.NewGuid(), paymentMethod: "Pontos");
 
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*programa de pontos está desativado*");
+            .WithMessage("*programa de fidelidade (pontos e cashback) não está ativo*");
     }
 
     [Fact]

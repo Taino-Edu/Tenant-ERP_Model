@@ -50,6 +50,7 @@ public class ComandaDto
     public string?           PaymentMethod               { get; set; }
     public string?           SecondPaymentMethod         { get; set; }
     public int               SecondPaymentAmountInCents  { get; set; }
+    public string?           Notes                       { get; set; }
     public List<ComandaItemDto> Items                    { get; set; } = new();
 
     /// <summary>Saldo de pontos do cliente — exibido na modal de fechamento.</summary>
@@ -63,6 +64,12 @@ public class ComandaDto
   public Guid?   NotaFiscalId             { get; set; }
   public string? NotaFiscalStatus         { get; set; }
   public string? NotaFiscalMotivoRejeicao { get; set; }
+}
+
+public class UpdateComandaNotesRequest
+{
+    [MaxLength(500)]
+    public string? Notes { get; set; }
 }
 
 /// <summary>Request para aplicar pontos a uma comanda.</summary>
@@ -186,4 +193,3 @@ public class PagedResult<T>
     public bool    HasPrev      => Page > 1;
     public string? ErrorMessage { get; set; }
 }
-
