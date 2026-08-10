@@ -358,7 +358,7 @@ export default function FinanceiroPage() {
             {(['hoje', '7d', 'mes', 'custom'] as Preset[]).map(p => (
               <button key={p} onClick={() => applyPreset(p)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                  preset === p ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20' : 'bg-surface-700 text-gray-400 hover:text-white hover:bg-surface-500'
+                  preset === p ? 'bg-brand-600 text-white' : 'bg-surface-700 text-gray-400 hover:text-white hover:bg-surface-500'
                 }`}
               >
                 {{ hoje: 'Hoje', '7d': '7 dias', mes: 'Este mês', custom: 'Personalizado' }[p]}
