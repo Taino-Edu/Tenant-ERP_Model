@@ -64,7 +64,7 @@ export default function CookieBanner() {
   // (vitrine clara/escura, institucional), sem virar um barrão preto no rodapé.
   return (
     <div
-      className="fixed bottom-4 left-4 right-4 z-[9999] sm:left-1/2 sm:right-auto sm:w-full sm:max-w-2xl sm:-translate-x-1/2"
+      className="fixed bottom-4 left-4 right-4 z-[9999] sm:left-1/2 sm:right-auto sm:w-full sm:max-w-2xl sm:-translate-x-1/2 print:hidden"
       role="dialog"
       aria-label="Aviso de cookies"
     >

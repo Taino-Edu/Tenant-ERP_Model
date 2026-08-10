@@ -16,6 +16,12 @@ import {
   Calculator, UserPlus, Check, Clock, CalendarClock, Send, MessageSquare, X, Copy,
 } from 'lucide-react'
 
+// Pontos e cashback permanecem no histórico do ERP, mas não podem disparar
+// NFC-e por orientação contábil.
+const FORMAS_PAGAMENTO_FISCAIS = COMANDA_PAYMENT_METHODS.filter(
+  m => m.value !== 'Pontos' && m.value !== 'Cashback',
+)
+
 const STATUS_INFO: Record<string, { label: string; color: string }> = {
   PendenteEmissao:         { label: 'Pendente',              color: 'bg-gray-500/15 text-gray-400 border-gray-500/30' },
   Autorizada:              { label: 'Autorizada',            color: 'bg-green-500/15 text-green-400 border-green-500/30' },
@@ -502,7 +508,9 @@ export default function FiscalPage() {
       setUf(cfg.uf ?? '')
       setCep(cfg.cep ?? '')
       setCscId(cfg.cscId ?? '')
-      setAutoEmit(cfg.formasPagamentoAutoEmissao ?? [])
+      setAutoEmit((cfg.formasPagamentoAutoEmissao ?? []).filter(
+        forma => forma !== 'Pontos' && forma !== 'Cashback',
+      ))
       setIbptAutoSync(cfg.ibptAutoSyncEnabled ?? false)
       setIbptStatus(statusIbpt)
       setNaturezas(nats)
@@ -990,7 +998,7 @@ export default function FiscalPage() {
           </div>
         </div>
         <p className="text-xs text-gray-400 mt-1">
-          Sem o CSC, o cupom funciona mas o QR Code fica sem o hash de segurança oficial.
+          O CSC de homologação é obrigatório para emitir: sem ID e token, o sistema bloqueia a NFC-e antes de reservar o número.
         </p>
 
         <button onClick={saveConfig} disabled={saving} className="btn-primary mt-4">
@@ -1095,7 +1103,7 @@ export default function FiscalPage() {
           pelo botão "Emitir nota fiscal" no histórico.
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {COMANDA_PAYMENT_METHODS.map(m => (
+          {FORMAS_PAGAMENTO_FISCAIS.map(m => (
             <button
               key={m.value}
               type="button"

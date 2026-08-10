@@ -50,6 +50,9 @@ public class ComandaDto
     public string?           PaymentMethod               { get; set; }
     public string?           SecondPaymentMethod         { get; set; }
     public int               SecondPaymentAmountInCents  { get; set; }
+    public int?              CashReceivedInCents          { get; set; }
+    public int               ChangeInCents                { get; set; }
+    public int               CashRoundingDiscountInCents  { get; set; }
     public string?           Notes                       { get; set; }
     public List<ComandaItemDto> Items                    { get; set; } = new();
 
@@ -115,6 +118,12 @@ public class CloseComandaRequest
     /// <summary>Valor pago pelo segundo método em centavos. Zero = sem split.</summary>
     public int SecondPaymentAmountInCents { get; set; } = 0;
 
+    [Range(0, int.MaxValue)]
+    public int? CashReceivedInCents { get; set; }
+
+    [Range(0, 4)]
+    public int CashRoundingDiscountInCents { get; set; }
+
     /// <summary>
     /// Quando PaymentMethod == Crediario, este campo indica se a dívida deve ser
     /// adicionada a um crediário aberto existente (fornece o Id do crediário)
@@ -159,6 +168,9 @@ public class EditarComandaRequest
     public int?    SecondPaymentAmountInCents  { get; set; }
     public Guid?   NovoClienteId              { get; set; }
     public int?    DescontoEmCentavos          { get; set; }
+    public int?    CashReceivedInCents          { get; set; }
+    [Range(0, 4)]
+    public int     CashRoundingDiscountInCents  { get; set; }
     public string? Notes                       { get; set; }
     public List<EditarItemRequest>? Itens      { get; set; }
 }

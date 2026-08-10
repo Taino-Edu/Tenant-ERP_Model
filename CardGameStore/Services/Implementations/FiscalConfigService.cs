@@ -212,6 +212,11 @@ public class FiscalConfigService
             if (invalidas.Count > 0)
                 return FiscalConfigResultado.Falha($"Forma(s) de pagamento inválida(s): {string.Join(", ", invalidas)}.");
 
+            if (req.FormasPagamentoAutoEmissao.Any(f =>
+                    f is PaymentMethod.Pontos or PaymentMethod.Cashback))
+                return FiscalConfigResultado.Falha(
+                    "Pontos e cashback não podem ser configurados para emissão fiscal automática.");
+
             cfg.FormasPagamentoAutoEmissao = string.Join(",", req.FormasPagamentoAutoEmissao.Distinct());
         }
 
@@ -371,7 +376,10 @@ public class FiscalConfigService
             DiasParaVencer = diasParaVencer,
             FormasPagamentoAutoEmissao = string.IsNullOrWhiteSpace(cfg.FormasPagamentoAutoEmissao)
                 ? Array.Empty<string>()
-                : cfg.FormasPagamentoAutoEmissao.Split(',', StringSplitOptions.RemoveEmptyEntries),
+                : cfg.FormasPagamentoAutoEmissao
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(f => f is not PaymentMethod.Pontos and not PaymentMethod.Cashback)
+                    .ToArray(),
             IbptConfigurado = cfg.IbptConfigurado,
             cfg.IbptAutoSyncEnabled,
             cfg.IbptUltimaSincronizacao,

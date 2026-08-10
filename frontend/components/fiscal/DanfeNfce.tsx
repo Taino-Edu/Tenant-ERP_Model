@@ -91,7 +91,11 @@ export default function DanfeNfce({ danfe, largura = 80 }: {
         @media print {
           .danfe-nao-imprime { display: none !important; }
           html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+          .admin-shell { display: block !important; min-height: 0 !important; background: #fff !important; }
+          .admin-shell > :not(main) { display: none !important; }
+          .admin-main { overflow: visible !important; padding: 0 !important; }
           .danfe { width: auto !important; margin: 0 !important; box-shadow: none !important; }
+          .danfe th, .danfe td { border: 0 !important; }
         }
         .danfe {
           width: ${largura}mm;
@@ -112,9 +116,11 @@ export default function DanfeNfce({ danfe, largura = 80 }: {
           border: 1px solid #000; padding: 3px; margin: 4px 0;
           text-align: center; font-weight: 700; text-transform: uppercase;
         }
-        .danfe table { width: 100%; border-collapse: collapse; }
-        .danfe th, .danfe td { text-align: left; padding: 1px 0; vertical-align: top; }
-        .danfe .num { text-align: right; white-space: nowrap; }
+        .danfe .item { padding: 2px 0; }
+        .danfe .item-identificacao { overflow-wrap: anywhere; }
+        .danfe .item-valores { display: flex; justify-content: space-between; gap: 6px; }
+        .danfe .item-total { font-weight: 700; white-space: nowrap; }
+        .danfe .quebra { overflow-wrap: anywhere; word-break: break-word; }
 `
 
   return (
@@ -149,27 +155,18 @@ export default function DanfeNfce({ danfe, largura = 80 }: {
         <hr />
 
         {/* III — Itens */}
-        <table>
-          <thead>
-            <tr>
-              <th>Cód</th><th>Descrição</th>
-              <th className="num">Qtd</th><th className="num">Un</th>
-              <th className="num">Vl un</th><th className="num">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {danfe.itens.map(item => (
-              <tr key={item.numero}>
-                <td>{item.codigo ?? item.numero}</td>
-                <td>{item.descricao ?? '—'}</td>
-                <td className="num">{fmtQtd(item.quantidade)}</td>
-                <td className="num">{item.unidadeComercial ?? ''}</td>
-                <td className="num">{fmtMoeda(item.valorUnitario)}</td>
-                <td className="num">{fmtMoeda(item.valorTotal)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="forte">ITENS</div>
+        {danfe.itens.map(item => (
+          <div className="item" key={item.numero}>
+            <div className="item-identificacao">
+              {item.codigo ?? item.numero} — {item.descricao ?? '—'}
+            </div>
+            <div className="item-valores">
+              <span>{fmtQtd(item.quantidade)} {item.unidadeComercial ?? ''} × {fmtMoeda(item.valorUnitario)}</span>
+              <span className="item-total">{fmtMoeda(item.valorTotal)}</span>
+            </div>
+          </div>
+        ))}
         <hr />
 
         {/* IV — Totais */}
@@ -231,7 +228,7 @@ export default function DanfeNfce({ danfe, largura = 80 }: {
 
         {/* VIII — Consulta e chave */}
         <div className="centro">Consulte pela chave de acesso em:</div>
-        {danfe.urlConsultaChave && <div className="centro">{danfe.urlConsultaChave}</div>}
+        {danfe.urlConsultaChave && <div className="centro quebra">{danfe.urlConsultaChave}</div>}
         <div className="centro" style={{ wordBreak: 'break-all' }}>{fmtChave(danfe.chaveAcesso)}</div>
 
         {/* IX — QR Code */}

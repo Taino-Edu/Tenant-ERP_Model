@@ -49,6 +49,16 @@ export function ComandaReceiptModal({ comanda, siteName, onClose }: {
             </div>
           </div>
           <p className="text-xs text-gray-400">Pagamento: {payLabel}</p>
+          {comanda.cashReceivedInCents != null && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg bg-surface-900 px-3 py-2 text-gray-400">
+                Recebido <strong className="block text-sm text-white">{fmt(comanda.cashReceivedInCents / 100)}</strong>
+              </div>
+              <div className="rounded-lg bg-surface-900 px-3 py-2 text-gray-400">
+                Troco <strong className="block text-sm text-emerald-300">{fmt(comanda.changeInCents / 100)}</strong>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => printComandaReceiptPDF(comanda, payLabel, siteName)}

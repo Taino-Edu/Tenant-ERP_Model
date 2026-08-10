@@ -414,6 +414,32 @@ public class CrediariosController : ControllerBase
             {
                 Message = $"Pagamento de R$ {request.ValorEmCentavos / 100m:N2} excede o saldo restante de R$ {saldoAtual / 100m:N2}."
             });
+        if (!string.IsNullOrWhiteSpace(request.SecondFormaPagamento) &&
+            request.SecondFormaPagamento == request.FormaPagamento)
+            return BadRequest(new { Message = "Os dois métodos de pagamento devem ser diferentes." });
+
+        var totalRegistrado = request.ValorEmCentavos + request.SecondValorEmCentavos;
+        if (totalRegistrado > saldoAtual)
+            return BadRequest(new { Message = "A soma dos pagamentos excede o saldo restante." });
+        CashPaymentCalculator.Result cash;
+        try
+        {
+            var segundoAjustado = request.SecondFormaPagamento == PaymentMethod.Dinheiro
+                ? request.SecondValorEmCentavos - request.CashRoundingDiscountInCents
+                : request.SecondValorEmCentavos;
+            cash = CashPaymentCalculator.Calculate(
+                totalRegistrado - request.CashRoundingDiscountInCents,
+                request.FormaPagamento, request.SecondFormaPagamento,
+                segundoAjustado, request.CashReceivedInCents);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { Message = ex.Message });
+        }
+        if (request.CashRoundingDiscountInCents > 0 && cash.ReceivedInCents is null)
+            return BadRequest(new { Message = "Arredondamento de troco exige pagamento em dinheiro." });
+        if (request.CashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            return BadRequest(new { Message = "O arredondamento deve produzir troco em múltiplos de cinco centavos." });
 
         // Registra o pagamento parcial (método principal). A chave de idempotência
         // vai só nesta linha (no split, a segunda entrada é da mesma requisição).
@@ -425,6 +451,9 @@ public class CrediariosController : ControllerBase
             Observacao      = request.Observacao,
             AdminId         = adminId,
             IdempotencyKey  = request.IdempotencyKey,
+            CashReceivedInCents = request.FormaPagamento == PaymentMethod.Dinheiro ? cash.ReceivedInCents : null,
+            ChangeInCents = request.FormaPagamento == PaymentMethod.Dinheiro ? cash.ChangeInCents : 0,
+            CashRoundingDiscountInCents = request.FormaPagamento == PaymentMethod.Dinheiro ? request.CashRoundingDiscountInCents : 0,
         };
         _db.PagamentosCrediario.Add(pagamento);
         crediario.ValorPagoEmCentavos += request.ValorEmCentavos;
@@ -439,6 +468,9 @@ public class CrediariosController : ControllerBase
                 FormaPagamento  = request.SecondFormaPagamento,
                 Observacao      = request.Observacao,
                 AdminId         = adminId,
+                CashReceivedInCents = request.SecondFormaPagamento == PaymentMethod.Dinheiro ? cash.ReceivedInCents : null,
+                ChangeInCents = request.SecondFormaPagamento == PaymentMethod.Dinheiro ? cash.ChangeInCents : 0,
+                CashRoundingDiscountInCents = request.SecondFormaPagamento == PaymentMethod.Dinheiro ? request.CashRoundingDiscountInCents : 0,
             };
             _db.PagamentosCrediario.Add(pagamento2);
             crediario.ValorPagoEmCentavos += request.SecondValorEmCentavos;
@@ -757,6 +789,9 @@ public class CrediariosController : ControllerBase
                     Id             = p.Id,
                     ValorEmReais   = p.ValorEmReais,
                     FormaPagamento = p.FormaPagamento,
+                    CashReceivedInCents = p.CashReceivedInCents,
+                    ChangeInCents = p.ChangeInCents,
+                    CashRoundingDiscountInCents = p.CashRoundingDiscountInCents,
                     Observacao     = p.Observacao,
                     CreatedAt      = p.CreatedAt,
                 }).ToList(),

@@ -63,6 +63,10 @@ export function printComandaReceiptPDF(comanda: ComandaDto, payLabel: string, si
       <td align="right">−R$&nbsp;${(comanda.discountInCents / 100).toFixed(2).replace('.', ',')}</td>
     </tr>
   ` : ''
+  const cashRows = comanda.cashReceivedInCents != null ? `
+    <p class="payment">Recebido em dinheiro: R$&nbsp;${(comanda.cashReceivedInCents / 100).toFixed(2).replace('.', ',')}</p>
+    <p class="payment">Troco: R$&nbsp;${(comanda.changeInCents / 100).toFixed(2).replace('.', ',')}</p>
+  ` : ''
 
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head>
@@ -99,6 +103,7 @@ export function printComandaReceiptPDF(comanda: ComandaDto, payLabel: string, si
   </tr>
 </table>
 <p class="payment">Pagamento: ${payLabel}</p>
+${cashRows}
 <hr>
 <p class="footer">Obrigado pela preferência!</p>
 <script>window.onload = function() { window.print(); }<\/script>

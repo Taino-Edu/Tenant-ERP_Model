@@ -28,25 +28,19 @@ public class VendaAvulsaService : IVendaAvulsaService
 
     public async Task<VendaAvulsaDto> RegisterAsync(VendaAvulsaRequest request, Guid adminId, string adminName)
     {
-        // Pontos exige dois "sim": o módulo pago habilitado pra este tenant
-        // (EnabledModules, decisão da plataforma) E o toggle operacional da loja
-        // (SiteConfig.PontosFidelidadeAtivo, decisão do próprio admin do tenant —
-        // sem linha ainda = default true). Defesa em profundidade: rejeita aqui
-        // mesmo que um request forjado tente usar/resgatar pontos sem um dos dois.
-        // Cashback entra junto com pontos — ver ComandaService.FidelidadeHabilitadaAsync:
-        // são o mesmo benefício, e o cashback não passava por gate nenhum.
+        // Decisão contábil: fidelidade foi retirada das novas vendas. O histórico
+        // e os saldos permanecem para auditoria/estorno, mas request forjado não
+        // pode usar pontos/cashback nem como pagamento secundário.
         var usaFidelidadeNestaVenda =
             request.PaymentMethod       is PaymentMethod.Pontos or PaymentMethod.Cashback ||
             request.SecondPaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback;
 
-        var pontosAtivo =
-            _tenantContext.EnabledModules.Contains("pontos", StringComparer.OrdinalIgnoreCase) &&
-            ((await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true);
-
-        if (usaFidelidadeNestaVenda && !pontosAtivo)
+        if (usaFidelidadeNestaVenda)
             throw new InvalidOperationException(
-                "O programa de fidelidade (pontos e cashback) não está ativo nesta loja. " +
-                "Ative em Configurações do site, ou fale com o suporte se o módulo não estiver contratado.");
+                "Pontos e cashback foram desativados para novas vendas por decisão fiscal e contábil. " +
+                "Selecione dinheiro, Pix, cartão ou crediário.");
+
+        var pontosAtivo = false;
 
         // Valida tudo antes de qualquer escrita: falha rápida evita decremento parcial de estoque
         var productIds = request.Items.Select(i => i.ProductId).Distinct().ToList();
@@ -166,6 +160,12 @@ public class VendaAvulsaService : IVendaAvulsaService
 
         // Valor cobrado pelo método principal (total menos a parcela do segundo método)
         var primaryAmt = finalTotal - secondAmt;
+        if (request.CashRoundingDiscountInCents > discountInCents)
+            throw new InvalidOperationException("O arredondamento do troco não pode ser maior que o desconto total.");
+        var cash = CashPaymentCalculator.Calculate(
+            finalTotal, request.PaymentMethod, secondPm, secondAmt, request.CashReceivedInCents);
+        if (request.CashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            throw new InvalidOperationException("O arredondamento deve produzir troco em múltiplos de cinco centavos.");
         var pointsDebitedAtSale = 0;
         var cashbackDebitedAtSale = 0;
         var pointsAwardedAtSale = 0;
@@ -190,6 +190,9 @@ public class VendaAvulsaService : IVendaAvulsaService
             PaymentMethod              = request.PaymentMethod,
             SecondPaymentMethod        = secondPm,
             SecondPaymentAmountInCents = secondAmt,
+            CashReceivedInCents         = cash.ReceivedInCents,
+            ChangeInCents               = cash.ChangeInCents,
+            CashRoundingDiscountInCents = request.CashRoundingDiscountInCents,
             ClientName                 = clientNameResolved,
             UserId                     = request.UserId,
             UserName                   = clientNameResolved,
@@ -538,6 +541,11 @@ public class VendaAvulsaService : IVendaAvulsaService
         if (request.SecondPaymentMethod != null && !PaymentMethod.IsValid(request.SecondPaymentMethod))
             throw new ArgumentException($"Segundo pagamento inválido: {request.SecondPaymentMethod}");
 
+        if (request.PaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback ||
+            request.SecondPaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback)
+            throw new InvalidOperationException(
+                "Pontos e cashback foram desativados para novas vendas por decisão fiscal e contábil.");
+
         var venda = await _db.VendasAvulsas.FindAsync(id)
             ?? throw new KeyNotFoundException($"Venda avulsa {id} não encontrada.");
 
@@ -580,6 +588,17 @@ public class VendaAvulsaService : IVendaAvulsaService
             venda.TotalInCents    = originalTotal - newDiscount;
         }
 
+        if (request.CashRoundingDiscountInCents > venda.DiscountInCents)
+            throw new InvalidOperationException("O arredondamento do troco não pode ser maior que o desconto total.");
+        var cash = CashPaymentCalculator.Calculate(
+            venda.TotalInCents, request.PaymentMethod, request.SecondPaymentMethod,
+            request.SecondPaymentAmountInCents, request.CashReceivedInCents);
+        if (request.CashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            throw new InvalidOperationException("O arredondamento deve produzir troco em múltiplos de cinco centavos.");
+        venda.CashReceivedInCents         = cash.ReceivedInCents;
+        venda.ChangeInCents               = cash.ChangeInCents;
+        venda.CashRoundingDiscountInCents = request.CashRoundingDiscountInCents;
+
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Venda avulsa {Id} atualizada: pagamento={PM}, cliente={CN}, desconto={Desc}.",
@@ -594,6 +613,9 @@ public class VendaAvulsaService : IVendaAvulsaService
         PaymentMethod              = v.PaymentMethod,
         SecondPaymentMethod        = v.SecondPaymentMethod,
         SecondPaymentAmountInCents = v.SecondPaymentAmountInCents,
+        CashReceivedInCents         = v.CashReceivedInCents,
+        ChangeInCents               = v.ChangeInCents,
+        CashRoundingDiscountInCents = v.CashRoundingDiscountInCents,
         TotalInReais               = v.TotalInReais,
         DiscountPercent            = v.DiscountPercent,
         DiscountInReais            = v.DiscountInReais,

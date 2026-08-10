@@ -492,7 +492,7 @@ public class ComandaService : IComandaService
         return dto;
     }
 
-    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = PaymentMethod.Dinheiro, string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0, bool emitirNotaFiscal = false)
+    public async Task<ComandaDto> CloseComandaAsync(Guid comandaId, Guid adminId, string paymentMethod = PaymentMethod.Dinheiro, string? observacao = null, string? secondPaymentMethod = null, int secondPaymentAmountInCents = 0, Guid? crediarioExistenteId = null, int discountInCents = 0, bool emitirNotaFiscal = false, int? cashReceivedInCents = null, int cashRoundingDiscountInCents = 0)
     {
         var comanda = await _db.Comandas
             .Include(c => c.Items)
@@ -503,21 +503,16 @@ public class ComandaService : IComandaService
         if (comanda.Status == ComandaStatus.Fechada || comanda.Status == ComandaStatus.Cancelada)
             throw new InvalidOperationException("Comanda já está fechada ou cancelada.");
 
-        // Pontos exige dois "sim": o módulo pago habilitado pra este tenant
-        // (EnabledModules, decisão da plataforma) E o toggle operacional da loja
-        // (SiteConfig.PontosFidelidadeAtivo, decisão do próprio admin do tenant —
-        // sem linha ainda = default true). Defesa em profundidade: rejeita aqui
-        // mesmo que um request forjado tente usar pontos sem um dos dois.
-        // Cashback entra na mesma checagem que pontos: são o mesmo benefício com
-        // roupas diferentes (saldo do cliente que abate a venda), e antes disto o
-        // cashback não passava por gate NENHUM — desligar "pontos" deixava metade
-        // do programa de fidelidade funcionando.
+        // Decisão contábil: novas vendas não aceitam fidelidade, mesmo que o
+        // tenant ainda possua módulo/toggle legado. PointsApplied cobre comandas
+        // abertas antes da desativação; o operador deve devolver esses pontos.
         var usaFidelidadeNestaVenda =
             paymentMethod       is PaymentMethod.Pontos or PaymentMethod.Cashback ||
-            secondPaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback;
+            secondPaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback ||
+            comanda.PointsApplied > 0;
 
-        var pontosAtivo = await FidelidadeHabilitadaAsync();
-        if (usaFidelidadeNestaVenda && !pontosAtivo)
+        var pontosAtivo = false;
+        if (usaFidelidadeNestaVenda)
             throw new InvalidOperationException(MensagemFidelidadeIndisponivel);
 
         if (discountInCents > 0 && discountInCents > comanda.TotalInCents - comanda.PointsApplied)
@@ -535,6 +530,13 @@ public class ComandaService : IComandaService
             throw new InvalidOperationException("O valor do segundo pagamento não pode cobrir o total inteiro. Selecione apenas o método principal.");
 
         var primaryAmt = hasSecond ? netTotal - secondPaymentAmountInCents : netTotal;
+        if (cashRoundingDiscountInCents > discountInCents)
+            throw new InvalidOperationException("O arredondamento do troco não pode ser maior que o desconto total.");
+        var cash = CashPaymentCalculator.Calculate(
+            netTotal, paymentMethod, hasSecond ? secondPaymentMethod : null,
+            hasSecond ? secondPaymentAmountInCents : 0, cashReceivedInCents);
+        if (cashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            throw new InvalidOperationException("O arredondamento deve produzir troco em múltiplos de cinco centavos.");
         var pointsDebitedAtSale = comanda.PointsApplied;
         var cashbackDebitedAtSale = 0;
         var pointsAwardedAtSale = 0;
@@ -723,6 +725,9 @@ public class ComandaService : IComandaService
         comanda.Status        = ComandaStatus.Fechada;
         comanda.ClosedAt      = DateTime.UtcNow;
         comanda.PaymentMethod = paymentMethod;
+        comanda.CashReceivedInCents         = cash.ReceivedInCents;
+        comanda.ChangeInCents               = cash.ChangeInCents;
+        comanda.CashRoundingDiscountInCents = cashRoundingDiscountInCents;
 
         // ── Pontos de fidelidade ──────────────────────────────────────────────
         // Não acumula quando qualquer parte do pagamento usa cashback, pontos ou
@@ -942,52 +947,8 @@ public class ComandaService : IComandaService
         return comandas.Select(MapToDto).ToList();
     }
 
-    public async Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points)
-    {
-        var comanda = await _db.Comandas
-            .Include(c => c.Items)
-            .Include(c => c.User)
-            .FirstOrDefaultAsync(c => c.Id == comandaId)
-            ?? throw new InvalidOperationException("Comanda não encontrada.");
-
-        if (comanda.UserId != userId)
-            throw new InvalidOperationException("Você só pode usar pontos na sua própria comanda.");
-
-        if (comanda.Status == ComandaStatus.Fechada || comanda.Status == ComandaStatus.Cancelada)
-            throw new InvalidOperationException("Não é possível aplicar pontos em comanda encerrada.");
-
-        if (comanda.PointsApplied > 0)
-            throw new InvalidOperationException("Pontos já foram aplicados nesta comanda.");
-
-        if (!await FidelidadeHabilitadaAsync())
-            throw new InvalidOperationException(MensagemFidelidadeIndisponivel);
-
-        var pontosAtivo = (await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId))?.PontosFidelidadeAtivo ?? true;
-        if (!pontosAtivo)
-            throw new InvalidOperationException("O programa de pontos está desativado nesta loja.");
-
-        var user = await _db.Users.FindAsync(userId)
-            ?? throw new InvalidOperationException("Usuário não encontrado.");
-
-        if (user.PointsExpiresAt.HasValue && user.PointsExpiresAt.Value < DateTime.UtcNow)
-            throw new InvalidOperationException("Seus pontos estão expirados.");
-
-        if (user.PointsBalance < points)
-            throw new InvalidOperationException($"Saldo insuficiente. Você tem {user.PointsBalance} pontos.");
-
-        // Não permite abater mais do que o total da comanda
-        var pontosAplicados = Math.Min(points, comanda.TotalInCents);
-
-        user.PointsBalance   -= pontosAplicados;
-        user.UpdatedAt        = DateTime.UtcNow;
-        comanda.PointsApplied = pontosAplicados;
-
-        await _db.SaveChangesAsync();
-        _logger.LogInformation("Usuário {UserId} aplicou {Points} pontos na comanda {ComandaId}.",
-            userId, pontosAplicados, comandaId);
-
-        return MapToDto(comanda);
-    }
+    public Task<ComandaDto> ApplyPointsAsync(Guid comandaId, Guid userId, int points) =>
+        Task.FromException<ComandaDto>(new InvalidOperationException(MensagemFidelidadeIndisponivel));
 
     public async Task<ComandaDto> RemovePointsAsync(Guid comandaId, Guid requestingUserId)
     {
@@ -1086,8 +1047,8 @@ public class ComandaService : IComandaService
     /// não está disponível e onde ligar.
     /// </summary>
     private const string MensagemFidelidadeIndisponivel =
-        "O programa de fidelidade (pontos e cashback) não está ativo nesta loja. " +
-        "Ative em Configurações do site, ou fale com o suporte se o módulo não estiver contratado.";
+        "Pontos e cashback foram desativados para novas vendas por decisão fiscal e contábil. " +
+        "Selecione dinheiro, Pix, cartão ou crediário.";
 
     /// <summary>
     /// Fidelidade exige dois "sim": o módulo pago habilitado para o tenant
@@ -1211,12 +1172,29 @@ public class ComandaService : IComandaService
         if (comanda.Status != ComandaStatus.Fechada)
             throw new InvalidOperationException("Somente comandas com status 'Fechada' podem ser editadas.");
 
+        var possuiDocumentoFiscalImutavel = await _db.NotasFiscaisEmitidas.AnyAsync(n =>
+            n.ComandaId == comandaId && (n.Status == NotaFiscalStatus.Autorizada ||
+                                         n.Status == NotaFiscalStatus.AutorizadaContingencia ||
+                                         n.Status == NotaFiscalStatus.Cancelada ||
+                                         n.Status == NotaFiscalStatus.ResultadoIncerto));
+        if (possuiDocumentoFiscalImutavel)
+            throw new InvalidOperationException(
+                "A comanda já possui documento fiscal e não pode ser alterada. Cancele a NFC-e dentro do prazo ou use o fluxo de devolução.");
+
         // 1. Forma de pagamento
         if (request.PaymentMethod != null)
+        {
+            if (request.PaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback)
+                throw new InvalidOperationException(MensagemFidelidadeIndisponivel);
             comanda.PaymentMethod = request.PaymentMethod;
+        }
 
         if (request.SecondPaymentMethod != null)
+        {
+            if (request.SecondPaymentMethod is PaymentMethod.Pontos or PaymentMethod.Cashback)
+                throw new InvalidOperationException(MensagemFidelidadeIndisponivel);
             comanda.SecondPaymentMethod = request.SecondPaymentMethod == "" ? null : request.SecondPaymentMethod;
+        }
 
         if (request.SecondPaymentAmountInCents.HasValue)
             comanda.SecondPaymentAmountInCents = request.SecondPaymentAmountInCents.Value;
@@ -1335,6 +1313,17 @@ public class ComandaService : IComandaService
             .Where(i => i.ComandaId == comandaId)
             .SumAsync(i => i.SubtotalInCents);
         comanda.TotalInCents = Math.Max(0, totalItens - comanda.PointsApplied - comanda.DiscountInCents);
+        if (request.CashRoundingDiscountInCents > comanda.DiscountInCents)
+            throw new InvalidOperationException("O arredondamento do troco não pode ser maior que o desconto total.");
+        var cash = CashPaymentCalculator.Calculate(
+            comanda.TotalInCents, comanda.PaymentMethod ?? PaymentMethod.Dinheiro,
+            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents,
+            request.CashReceivedInCents);
+        if (request.CashRoundingDiscountInCents > 0 && cash.ChangeInCents % 5 != 0)
+            throw new InvalidOperationException("O arredondamento deve produzir troco em múltiplos de cinco centavos.");
+        comanda.CashReceivedInCents = cash.ReceivedInCents;
+        comanda.ChangeInCents = cash.ChangeInCents;
+        comanda.CashRoundingDiscountInCents = request.CashRoundingDiscountInCents;
         await _db.SaveChangesAsync();
 
         _logger.LogInformation("Comanda {Id} editada pelo admin {AdminId}.", comandaId, adminId);
@@ -1383,6 +1372,9 @@ public class ComandaService : IComandaService
         PaymentMethod              = comanda.PaymentMethod,
         SecondPaymentMethod        = comanda.SecondPaymentMethod,
         SecondPaymentAmountInCents = comanda.SecondPaymentAmountInCents,
+        CashReceivedInCents         = comanda.CashReceivedInCents,
+        ChangeInCents               = comanda.ChangeInCents,
+        CashRoundingDiscountInCents = comanda.CashRoundingDiscountInCents,
         Notes                      = comanda.Notes,
         UserPointsBalance          = comanda.User?.PointsBalance  ?? 0,
         UserBalanceInCents         = comanda.User?.BalanceInCents ?? 0,

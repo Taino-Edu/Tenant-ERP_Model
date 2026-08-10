@@ -92,6 +92,7 @@ public class NfeReceivingService
                     ? variants.Where(v => v.ProductId == p.Id).Sum(v => v.StockQuantity)
                     : p.StockQuantity,
                 CostPriceInCents = p.CostPriceInCents,
+                Ncm = p.Ncm,
                 HasVariants = p.HasVariants,
                 Variants = variants.Where(v => v.ProductId == p.Id).Select(v => new NfeReceiptVariantOptionDto
                 {
@@ -147,6 +148,7 @@ public class NfeReceivingService
                     ItemNumber = source.ItemNumber,
                     SupplierProductCode = source.SupplierProductCode,
                     Description = source.Description,
+                    SourceNcm = NcmValidoOuNull(source.Ncm),
                     Ignored = true,
                     IgnoreReason = string.IsNullOrWhiteSpace(input.IgnoreReason)
                         ? "Item sem controle de estoque" : input.IgnoreReason.Trim(),
@@ -192,6 +194,11 @@ public class NfeReceivingService
                 product.StockQuantity = stockAfter;
             }
             product.CostPriceInCents = weightedCost;
+            // O XML de entrada é a fonte primária. Preenche apenas cadastro vazio;
+            // divergência nunca é sobrescrita silenciosamente e fica na trilha.
+            var sourceNcm = NcmValidoOuNull(source.Ncm);
+            if (string.IsNullOrWhiteSpace(product.Ncm) && sourceNcm is not null)
+                product.Ncm = sourceNcm;
             product.UpdatedAt = now;
 
             _db.NfeReceiptItems.Add(new NfeReceiptItem
@@ -200,6 +207,7 @@ public class NfeReceivingService
                 ItemNumber = source.ItemNumber,
                 SupplierProductCode = source.SupplierProductCode,
                 Description = source.Description,
+                SourceNcm = sourceNcm,
                 ProductId = product.Id,
                 ProductVariantId = variant?.Id,
                 Quantity = input.Quantity,
@@ -334,6 +342,12 @@ public class NfeReceivingService
     private static string Digits(string? value) =>
         string.IsNullOrWhiteSpace(value) ? string.Empty : new string(value.Where(char.IsDigit).ToArray());
 
+    private static string? NcmValidoOuNull(string? value)
+    {
+        var digits = Digits(value);
+        return digits.Length == 8 ? digits : null;
+    }
+
     private static string? NormalizeGtin(string? value)
     {
         var digits = Digits(value);
@@ -402,6 +416,7 @@ public class NfeReceiptProductOptionDto
     public string? Barcode { get; init; }
     public int StockQuantity { get; init; }
     public int CostPriceInCents { get; init; }
+    public string? Ncm { get; init; }
     public bool HasVariants { get; init; }
     public List<NfeReceiptVariantOptionDto> Variants { get; init; } = [];
 }

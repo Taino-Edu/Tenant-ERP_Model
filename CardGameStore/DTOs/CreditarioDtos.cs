@@ -52,6 +52,9 @@ public class PagamentoCrediarioDto
     public Guid     Id             { get; set; }
     public decimal  ValorEmReais   { get; set; }
     public string   FormaPagamento { get; set; } = string.Empty;
+    public int?     CashReceivedInCents { get; set; }
+    public int      ChangeInCents { get; set; }
+    public int      CashRoundingDiscountInCents { get; set; }
     public string?  Observacao     { get; set; }
     public DateTime CreatedAt      { get; set; }
 }
@@ -152,6 +155,12 @@ public class RegistrarPagamentoRequest
     /// <summary>Valor do segundo método em centavos. Zero = sem split.</summary>
     [Range(0, int.MaxValue)]
     public int SecondValorEmCentavos { get; set; } = 0;
+
+    [Range(0, int.MaxValue)]
+    public int? CashReceivedInCents { get; set; }
+
+    [Range(0, 4)]
+    public int CashRoundingDiscountInCents { get; set; }
 
     /// <summary>Observação opcional.</summary>
     [MaxLength(500)]

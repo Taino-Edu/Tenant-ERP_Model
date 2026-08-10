@@ -63,6 +63,10 @@ public class NfeReceiptItem
     [Required, MaxLength(200), Column("description")]
     public string Description { get; set; } = string.Empty;
 
+    /// <summary>NCM exatamente como recebido no item do XML, preservado como evidência histórica.</summary>
+    [MaxLength(8), Column("source_ncm")]
+    public string? SourceNcm { get; set; }
+
     [Column("product_id")]
     public Guid? ProductId { get; set; }
 

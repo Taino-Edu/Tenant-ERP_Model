@@ -48,14 +48,12 @@ public class NfcePagamentoTests
     [Theory]
     [InlineData(PaymentMethod.Pontos)]
     [InlineData(PaymentMethod.Cashback)]
-    public void PontosECashback_UsamTPag19(string forma)
+    public void PontosECashback_BloqueiamEmissaoFiscal(string forma)
     {
-        // fpProgramadefidelidade == 19: "Programa de fidelidade, Cashback,
-        // Crédito Virtual".
-        var pag = Unico(forma);
+        var act = () => Unico(forma);
 
-        pag.tPag.Should().Be(PagamentoTipos.FormaPagamento.fpProgramadefidelidade);
-        pag.xPag.Should().BeNullOrEmpty();
+        act.Should().Throw<FiscalNaoConfiguradoException>()
+            .WithMessage("*pontos ou cashback*orientação contábil*");
     }
 
     [Fact]
@@ -89,19 +87,14 @@ public class NfcePagamentoTests
     }
 
     [Fact]
-    public void Split_DividePreservandoAExatidaoDoTotal()
+    public void Split_ComCashback_BloqueiaTodaAEmissao()
     {
-        // Pix (R$ 70) + cashback (R$ 30) — a soma dos detPag tem que bater o vNF
-        // exatamente, senão a SEFAZ rejeita por diferença de pagamento.
-        var pags = NfceEmissionService.MontarDetPag(
-            PaymentMethod.Pix, PaymentMethod.Cashback, segundoValorCentavos: 3000, valorTotal: 100m);
+        var act = () => NfceEmissionService.MontarDetPag(
+            PaymentMethod.Pix, PaymentMethod.Cashback,
+            segundoValorCentavos: 3000, valorTotal: 100m);
 
-        pags.Should().HaveCount(2);
-        pags[0].tPag.Should().Be(PagamentoTipos.FormaPagamento.fpPagamentoInstantaneoPIXDinamico);
-        pags[0].vPag.Should().Be(70m);
-        pags[1].tPag.Should().Be(PagamentoTipos.FormaPagamento.fpProgramadefidelidade);
-        pags[1].vPag.Should().Be(30m);
-        pags.Sum(p => p.vPag).Should().Be(100m);
+        act.Should().Throw<FiscalNaoConfiguradoException>()
+            .WithMessage("*pontos ou cashback*");
     }
 
     [Fact]
@@ -115,5 +108,41 @@ public class NfcePagamentoTests
         pags[1].tPag.Should().Be(PagamentoTipos.FormaPagamento.fpPagamentoInstantaneoPIXDinamico);
         pags.Should().OnlyContain(p => string.IsNullOrEmpty(p.xPag),
             "nenhum meio do split cai mais no 99");
+    }
+
+    [Fact]
+    public void Dinheiro_UsaValorEfetivamenteEntregueNoVPag()
+    {
+        var pags = NfceEmissionService.MontarDetPag(
+            PaymentMethod.Dinheiro, null, 0, valorTotal: 67.74m,
+            dinheiroRecebidoCentavos: 7000);
+
+        pags.Should().ContainSingle();
+        pags[0].vPag.Should().Be(70m);
+    }
+
+    [Fact]
+    public void Split_DinheiroMaisPix_PreservaNumerarioReal()
+    {
+        var pags = NfceEmissionService.MontarDetPag(
+            PaymentMethod.Dinheiro, PaymentMethod.Pix,
+            segundoValorCentavos: 5000, valorTotal: 67.74m,
+            dinheiroRecebidoCentavos: 2000);
+
+        pags[0].vPag.Should().Be(20m);
+        pags[1].vPag.Should().Be(50m);
+    }
+
+    [Fact]
+    public void TrocoReal_VaiParaVtrocoDoXml()
+    {
+        var pagamento = NfceEmissionService.MontarPagamento(
+            PaymentMethod.Dinheiro, PaymentMethod.Pix,
+            segundoValorCentavos: 5000, valorTotal: 67.74m,
+            dinheiroRecebidoCentavos: 2000, trocoCentavos: 226);
+
+        pagamento.vTroco.Should().Be(2.26m);
+        pagamento.detPag.Sum(p => p.vPag).Should().Be(70m);
+        (pagamento.detPag.Sum(p => p.vPag) - pagamento.vTroco).Should().Be(67.74m);
     }
 }

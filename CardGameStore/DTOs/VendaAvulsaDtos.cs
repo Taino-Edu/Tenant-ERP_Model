@@ -33,6 +33,12 @@ public class VendaAvulsaRequest
     [Range(0, int.MaxValue)]
     public int SecondPaymentAmountInCents { get; set; } = 0;
 
+    [Range(0, int.MaxValue)]
+    public int? CashReceivedInCents { get; set; }
+
+    [Range(0, 4)]
+    public int CashRoundingDiscountInCents { get; set; }
+
     /// <summary>Se true, emite a NFC-e desta venda automaticamente. Ver CloseComandaRequest.EmitirNotaFiscal.</summary>
     public bool EmitirNotaFiscal { get; set; } = false;
 
@@ -60,6 +66,9 @@ public class VendaAvulsaDto
     public string              PaymentMethod              { get; set; } = string.Empty;
     public string?             SecondPaymentMethod        { get; set; }
     public int                 SecondPaymentAmountInCents { get; set; }
+    public int?                CashReceivedInCents         { get; set; }
+    public int                 ChangeInCents               { get; set; }
+    public int                 CashRoundingDiscountInCents { get; set; }
     public decimal             TotalInReais               { get; set; }
     public int                 TotalInCents               => (int)(TotalInReais * 100);
     public DateTime            SoldAt                     { get; set; }
@@ -85,6 +94,12 @@ public class EditarPagamentoVendaAvulsaRequest
 
     [Range(0, int.MaxValue)]
     public int SecondPaymentAmountInCents { get; set; } = 0;
+
+    [Range(0, int.MaxValue)]
+    public int? CashReceivedInCents { get; set; }
+
+    [Range(0, 4)]
+    public int CashRoundingDiscountInCents { get; set; }
 
     /// <summary>Nome do cliente (opcional). Null = mantém o atual.</summary>
     public string? ClientName { get; set; }

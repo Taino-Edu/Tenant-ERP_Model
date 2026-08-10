@@ -260,7 +260,15 @@ public class ReservationController : ControllerBase
                 ClientName    = res.User?.Name,
                 UserId        = res.UserId,
                 PaymentMethod = req.PaymentMethod ?? PaymentMethod.Dinheiro,
-                Items         = [new VendaAvulsaItemRequest { ProductId = res.ProductId, Quantity = res.Quantity }],
+                DiscountInCents = req.CashRoundingDiscountInCents,
+                CashRoundingDiscountInCents = req.CashRoundingDiscountInCents,
+                CashReceivedInCents = req.CashReceivedInCents,
+                Items         = [new VendaAvulsaItemRequest
+                {
+                    ProductId = res.ProductId,
+                    VariantId = res.VariantId,
+                    Quantity = res.Quantity,
+                }],
             };
             try { await _vendaService.RegisterAsync(vendaReq, adminId, adminName); }
             catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
@@ -315,6 +323,9 @@ public class ReservationController : ControllerBase
         productImageUrl= r.Product?.ImageUrl,
         r.VariantId,
         variantLabel   = r.Variant?.Label,
+        unitPriceInCents = r.Variant?.PriceInCents
+            ?? (r.Product?.IsOnPromo == true && r.Product.DiscountPriceInCents.HasValue
+                ? r.Product.DiscountPriceInCents.Value : r.Product?.PriceInCents ?? 0),
         r.Quantity,
         r.Status,
         r.Notes,
@@ -349,4 +360,7 @@ public class HomologarRequest
 
     /// <summary>ID da comanda aberta (obrigatório no modo comanda).</summary>
     public Guid? ComandaId { get; init; }
+
+    public int? CashReceivedInCents { get; init; }
+    public int CashRoundingDiscountInCents { get; init; }
 }

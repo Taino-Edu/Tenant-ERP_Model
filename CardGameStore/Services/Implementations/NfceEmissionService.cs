@@ -988,7 +988,8 @@ public class NfceEmissionService : INfceEmissionService
 
     private record DadosEmissao(
         List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
-        string? SegundaFormaPagamento, int SegundoValorCentavos, int DescontoTotalCentavos)
+        string? SegundaFormaPagamento, int SegundoValorCentavos, int DescontoTotalCentavos,
+        int? DinheiroRecebidoCentavos, int TrocoCentavos)
     {
         public int ValorBrutoCentavos => Itens.Sum(i => i.SubtotalCentavos);
         public int ValorLiquidoCentavos => Math.Max(0, ValorBrutoCentavos - DescontoTotalCentavos);
@@ -1030,7 +1031,8 @@ public class NfceEmissionService : INfceEmissionService
 
         return new DadosEmissao(
             itens, comanda.PaymentMethod ?? PaymentMethod.Dinheiro, comanda.User?.Cpf,
-            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents, descontoTotal);
+            comanda.SecondPaymentMethod, comanda.SecondPaymentAmountInCents, descontoTotal,
+            comanda.CashReceivedInCents, comanda.ChangeInCents);
     }
 
     private async Task<DadosEmissao> CarregarDadosVendaAvulsaAsync(Guid vendaAvulsaId, bool permitirCancelada = false)
@@ -1074,7 +1076,8 @@ public class NfceEmissionService : INfceEmissionService
         return new DadosEmissao(
             itens, venda.PaymentMethod, cpf,
             venda.SecondPaymentMethod, venda.SecondPaymentAmountInCents,
-            Math.Clamp(venda.DiscountInCents, 0, itens.Sum(i => i.SubtotalCentavos)));
+            Math.Clamp(venda.DiscountInCents, 0, itens.Sum(i => i.SubtotalCentavos)),
+            venda.CashReceivedInCents, venda.ChangeInCents);
     }
 
     private static ItemFiscal CriarItemFiscal(
@@ -1221,6 +1224,12 @@ public class NfceEmissionService : INfceEmissionService
             await RetransmitirContingenciaAsync(nota);
             return;
         }
+
+        // Pontos e cashback podem permanecer no histórico do ERP, mas não são
+        // aceitos como pagamento de uma NOVA NFC-e. A validação acontece antes
+        // de abrir o certificado e, principalmente, antes de reservar numeração.
+        ValidarFormasPagamentoPermitidasNaNfce(
+            dados.FormaPagamento, dados.SegundaFormaPagamento);
 
         var (cfg, cfgServico, certificado, cfgCertificado, estado, ambiente) = await AbrirConfiguracaoSefazAsync();
         using var _certDispose = certificado;
@@ -1409,7 +1418,10 @@ public class NfceEmissionService : INfceEmissionService
                     IBSCBSTot = regraParaXml is not null ? _taxEngine.MontarTotaisIbsCbs(detItens) : null,
                 },
                 transp = new transp { modFrete = ModalidadeFrete.mfSemFrete },
-                pag = new List<pag> { new pag { detPag = MontarDetPag(dados, valorTotal) } },
+                pag = new List<pag> { MontarPagamento(
+                    dados.FormaPagamento, dados.SegundaFormaPagamento,
+                    dados.SegundoValorCentavos, valorTotal,
+                    dados.DinheiroRecebidoCentavos, dados.TrocoCentavos) },
                 infAdic = new infAdic
                 {
                     infCpl = MontarTextoTransparenciaTributaria(
@@ -1953,7 +1965,17 @@ public class NfceEmissionService : INfceEmissionService
     }
 
     private static List<detPag> MontarDetPag(DadosEmissao dados, decimal valorTotal) =>
-        MontarDetPag(dados.FormaPagamento, dados.SegundaFormaPagamento, dados.SegundoValorCentavos, valorTotal);
+        MontarDetPag(dados.FormaPagamento, dados.SegundaFormaPagamento,
+            dados.SegundoValorCentavos, valorTotal, dados.DinheiroRecebidoCentavos);
+
+    internal static pag MontarPagamento(
+        string formaPagamento, string? segundaForma, int segundoValorCentavos,
+        decimal valorTotal, int? dinheiroRecebidoCentavos, int trocoCentavos) => new()
+    {
+        detPag = MontarDetPag(formaPagamento, segundaForma, segundoValorCentavos,
+            valorTotal, dinheiroRecebidoCentavos),
+        vTroco = trocoCentavos > 0 ? trocoCentavos / 100m : null,
+    };
 
     /// <summary>
     /// Monta um ou dois detPag conforme haja segundo método de pagamento (split).
@@ -1961,18 +1983,44 @@ public class NfceEmissionService : INfceEmissionService
     /// exatamente com vNF — evita a diferença de centavos ser "engolida" num só método.
     /// </summary>
     internal static List<detPag> MontarDetPag(
-        string formaPagamento, string? segundaForma, int segundoValorCentavos, decimal valorTotal)
+        string formaPagamento, string? segundaForma, int segundoValorCentavos, decimal valorTotal,
+        int? dinheiroRecebidoCentavos = null)
     {
+        // Defesa em profundidade para chamadores que montem o pagamento sem
+        // passar pela orquestração de TransmitirAsync.
+        ValidarFormasPagamentoPermitidasNaNfce(formaPagamento, segundaForma);
+
         if (string.IsNullOrWhiteSpace(segundaForma) || segundoValorCentavos <= 0)
-            return new List<detPag> { MontarDetPagUnico(formaPagamento, valorTotal) };
+        {
+            var valor = formaPagamento == PaymentMethod.Dinheiro && dinheiroRecebidoCentavos.HasValue
+                ? dinheiroRecebidoCentavos.Value / 100m : valorTotal;
+            return new List<detPag> { MontarDetPagUnico(formaPagamento, valor) };
+        }
 
         var valorSegundo  = segundoValorCentavos / 100m;
         var valorPrimeiro = valorTotal - valorSegundo;
+        if (formaPagamento == PaymentMethod.Dinheiro && dinheiroRecebidoCentavos.HasValue)
+            valorPrimeiro = dinheiroRecebidoCentavos.Value / 100m;
+        if (segundaForma == PaymentMethod.Dinheiro && dinheiroRecebidoCentavos.HasValue)
+            valorSegundo = dinheiroRecebidoCentavos.Value / 100m;
+
         return new List<detPag>
         {
             MontarDetPagUnico(formaPagamento, valorPrimeiro),
             MontarDetPagUnico(segundaForma, valorSegundo),
         };
+    }
+
+    internal static void ValidarFormasPagamentoPermitidasNaNfce(
+        string formaPagamento, string? segundaFormaPagamento)
+    {
+        static bool Fidelidade(string? forma) =>
+            forma is PaymentMethod.Pontos or PaymentMethod.Cashback;
+
+        if (Fidelidade(formaPagamento) || Fidelidade(segundaFormaPagamento))
+            throw new FiscalNaoConfiguradoException(
+                "A emissão de NFC-e com pontos ou cashback está bloqueada por orientação contábil. " +
+                "Registre a venda com uma forma de pagamento fiscal permitida ou não emita o documento.");
     }
 
     /// <summary>
@@ -1984,8 +2032,9 @@ public class NfceEmissionService : INfceEmissionService
     /// bandeira nem autorização pra informar — então o grupo é enviado só com
     /// `tpIntegra = Não integrado`, que é o mínimo aceito pela SEFAZ nesse caso.
     ///
-    /// Crediário (05), pontos e cashback (19) agora usam código próprio e não
-    /// precisam mais de xPag. O xPag fica reservado ao 99 ("Outros"), único
+    /// Crediário (05) usa código próprio e não precisa de xPag. Pontos e cashback
+    /// são bloqueados antes desta etapa por decisão fiscal. O xPag fica reservado
+    /// ao 99 ("Outros"), único
     /// código que a SEFAZ rejeita sem descrição ("Descrição do pagamento
     /// obrigatória para meio de pagamento 99-outros" — rejeição observada em
     /// produção). Se um meio novo cair no fpOutro, a descrição continua saindo.
@@ -2003,8 +2052,8 @@ public class NfceEmissionService : INfceEmissionService
 
     private static string DescricaoFormaPagamentoOutro(string formaPagamento) => formaPagamento switch
     {
-        // Só é chamado quando o meio cai no fpOutro (99). Crediário, pontos e
-        // cashback têm código próprio e não passam mais por aqui.
+        // Só é chamado quando o meio cai no fpOutro (99). Crediário tem código
+        // próprio; pontos e cashback são recusados antes desta etapa.
         _                       => formaPagamento,
     };
 
@@ -2963,19 +3012,14 @@ public class NfceEmissionService : INfceEmissionService
     /// Traduz o meio comercial do ERP para o código da Tabela de Meios de
     /// Pagamento (FIS-002 do plano de go-live).
     ///
-    /// Crediário, pontos e cashback caíam todos em 99 ("Outros"). Existem
-    /// códigos próprios e vigentes para os dois casos, e usar 99 quando há
-    /// código específico degrada a qualidade declaratória — ainda mais numa
-    /// loja onde crediário e fidelidade são o modelo do negócio, não exceção:
+    /// Crediário usa o código próprio 05; pontos e cashback são barrados antes
+    /// deste mapeamento por decisão contábil. Usar 99 quando há código específico
+    /// degrada a qualidade declaratória:
     ///
     ///   • 05 (fpCartaoDaLoja) — "Cartão da Loja (Private Label), Crediário
     ///     Digital, Outros Crediários". A descrição foi ampliada pelo Informe
     ///     Técnico 2024.002, vigente em produção desde 01/07/2024; antes dele o
     ///     código cobria só o cartão de loja, origem da confusão comum.
-    ///   • 19 (fpProgramadefidelidade) — "Programa de fidelidade, Cashback,
-    ///     Crédito Virtual". Não confundir com 12 (vale-presente) nem com 21
-    ///     (crédito em loja por troca/devolução, que é dinheiro já pago antes).
-    ///
     /// O mapeamento é responsabilidade nossa: a biblioteca fiscal expõe todos os
     /// enums lado a lado e não escolhe nenhum.
     /// </summary>

@@ -121,6 +121,9 @@ export interface ComandaDto {
   paymentMethod: string | null
   secondPaymentMethod: string | null
   secondPaymentAmountInCents: number
+  cashReceivedInCents?: number
+  changeInCents: number
+  cashRoundingDiscountInCents: number
   items: ComandaItemDto[]
   notes: string | null
   /** Saldo de pontos do cliente (para exibir na modal de fechamento). */
@@ -154,6 +157,8 @@ export interface EditarComandaRequest {
   secondPaymentAmountInCents?: number
   novoClienteId?: string
   descontoEmCentavos?: number
+  cashReceivedInCents?: number
+  cashRoundingDiscountInCents?: number
   notes?: string
   itens?: EditarItemRequest[]
 }
@@ -326,6 +331,9 @@ export interface VendaAvulsaDto {
   paymentMethod: string
   secondPaymentMethod: string | null
   secondPaymentAmountInCents: number
+  cashReceivedInCents?: number
+  changeInCents: number
+  cashRoundingDiscountInCents: number
   totalInReais: number
   discountPercent: number
   discountInReais: number
@@ -374,8 +382,8 @@ export const comandaApi = {
   updateNotes:  (id: string, notes: string | null) => api.put<ComandaDto>(`/api/comanda/${id}/notes`, { notes }),
   updateItem:   (id: string, itemId: string, quantity: number) =>
     api.patch<ComandaDto>(`/api/comanda/${id}/items/${itemId}`, { quantity }),
-  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0, emitirNotaFiscal = false) =>
-    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal }),
+  close:        (id: string, paymentMethod = 'Dinheiro', observacao?: string, secondPaymentMethod?: string, secondPaymentAmountInCents = 0, crediarioExistenteId?: string, discountInCents = 0, emitirNotaFiscal = false, cashReceivedInCents?: number, cashRoundingDiscountInCents = 0) =>
+    api.put<ComandaDto>(`/api/comanda/${id}/close`, { paymentMethod, observacao, secondPaymentMethod, secondPaymentAmountInCents, crediarioExistenteId, discountInCents, emitirNotaFiscal, cashReceivedInCents, cashRoundingDiscountInCents }),
   cancel:       (id: string) => api.put<ComandaDto>(`/api/comanda/${id}/cancel`),
   editar:       (id: string, request: EditarComandaRequest) => api.put<ComandaDto>(`/api/comanda/${id}/editar`, request),
   adminOpen:    (userId: string, tableIdentifier?: string) =>
@@ -401,6 +409,9 @@ export interface PagamentoCrediarioDto {
   id: string
   valorEmReais: number
   formaPagamento: string
+  cashReceivedInCents?: number
+  changeInCents: number
+  cashRoundingDiscountInCents: number
   observacao: string | null
   createdAt: string
 }
@@ -477,7 +488,7 @@ export const crediarioApi = {
   meu:         () => api.get<CrediariosDto>('/api/crediarios/meu'),
   marcarPago:  (id: string, observacao?: string) =>
     api.put<CrediariosDto>(`/api/crediarios/${id}/pagar`, { observacao }),
-  registrarPagamento: (id: string, req: { valorEmCentavos: number; formaPagamento: string; secondFormaPagamento?: string; secondValorEmCentavos?: number; observacao?: string; idempotencyKey?: string }) =>
+  registrarPagamento: (id: string, req: { valorEmCentavos: number; formaPagamento: string; secondFormaPagamento?: string; secondValorEmCentavos?: number; observacao?: string; idempotencyKey?: string; cashReceivedInCents?: number; cashRoundingDiscountInCents?: number }) =>
     api.post<CrediariosDto>(`/api/crediarios/${id}/pagamento`, req),
   criarManual: (req: CriarCrediarioManualRequest) =>
     api.post<CrediariosDto>('/api/crediarios', req),
@@ -496,23 +507,16 @@ export const crediarioApi = {
 }
 
 /**
- * Fidelidade (pontos E cashback) exige dois "sim": o módulo contratado pela
- * plataforma e o toggle operacional da loja. São o mesmo benefício — saldo do
- * cliente que abate a venda — e antes disto o cashback ficava na lista mesmo com
- * o programa desligado, gerando erro só ao fechar a venda.
- *
- * Um helper só, porque a regra estava repetida em cinco telas e o cashback
- * escapava de todas.
+ * Pontos e cashback foram retirados de novas vendas por decisão fiscal/contábil.
+ * Os valores continuam no histórico, mas nunca voltam às opções operacionais,
+ * mesmo que um tenant ainda possua módulo ou toggle legado habilitado.
  */
 export function metodosDisponiveis<T extends { readonly value: string }>(
   metodos: readonly T[],
   site: { pontosFidelidadeAtivo?: boolean; enabledModules?: string[] },
 ): T[] {
-  const fidelidadeAtiva =
-    (site.enabledModules ?? []).includes('pontos') && site.pontosFidelidadeAtivo !== false
-  return fidelidadeAtiva
-    ? [...metodos]
-    : metodos.filter(m => m.value !== 'Pontos' && m.value !== 'Cashback')
+  void site
+  return metodos.filter(m => m.value !== 'Pontos' && m.value !== 'Cashback')
 }
 
 export const COMANDA_PAYMENT_METHODS = [
@@ -532,6 +536,8 @@ export interface EditarPagamentoVendaAvulsaRequest {
   clientName?: string
   clearClientName?: boolean
   discountInCents?: number
+  cashReceivedInCents?: number
+  cashRoundingDiscountInCents?: number
 }
 
 export const vendaAvulsaApi = {
@@ -545,12 +551,16 @@ export const vendaAvulsaApi = {
     secondPaymentAmountInCents = 0,
     discountInCents?: number,
     emitirNotaFiscal = false,
+    cashReceivedInCents?: number,
+    cashRoundingDiscountInCents = 0,
   ) =>
     api.post<VendaAvulsaDto>('/api/venda-avulsa', {
       clientName, paymentMethod, items, discountPercent, discountInCents, userId,
       secondPaymentMethod: secondPaymentMethod || null,
       secondPaymentAmountInCents,
       emitirNotaFiscal,
+      cashReceivedInCents,
+      cashRoundingDiscountInCents,
     }),
   recent: (limit = 50) =>
     api.get<VendaAvulsaDto[]>('/api/venda-avulsa/recent', { params: { limit } }),
@@ -1916,6 +1926,8 @@ export interface ContadorProdutoDto {
   percentualTributosFederais?: number; percentualTributosEstaduais?: number
   percentualTributosMunicipais?: number; fonteTributos?: string
   tributosAtualizadosEm?: string
+  ncmNotaEntrada?: string; ncmOrigemChave?: string; ncmOrigemEmitente?: string
+  ncmOrigemData?: string; ncmOrigemItem?: number; ncmOrigemConfere?: boolean
 }
 
 export interface SolicitacaoContadorDto {

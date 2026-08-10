@@ -36,6 +36,18 @@ public class VendaAvulsa
     [Column("second_payment_amount_in_cents")]
     public int SecondPaymentAmountInCents { get; set; } = 0;
 
+    /// <summary>Numerário efetivamente entregue pelo cliente. Null quando não houve dinheiro.</summary>
+    [Column("cash_received_in_cents")]
+    public int? CashReceivedInCents { get; set; }
+
+    /// <summary>Troco efetivamente devolvido ao cliente.</summary>
+    [Column("change_in_cents")]
+    public int ChangeInCents { get; set; }
+
+    /// <summary>Parcela do desconto concedida para viabilizar o troco físico, sempre a favor do cliente.</summary>
+    [Column("cash_rounding_discount_in_cents")]
+    public int CashRoundingDiscountInCents { get; set; }
+
     [Column("client_name")]
     public string? ClientName { get; set; }
 
