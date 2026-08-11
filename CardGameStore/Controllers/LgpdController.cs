@@ -240,7 +240,7 @@ public class LgpdController : ControllerBase
             UserAgent     = HttpContext.Request.Headers.UserAgent.ToString()[..Math.Min(500,
                             HttpContext.Request.Headers.UserAgent.ToString().Length)],
             Accepted      = dto.Accepted,
-            PolicyVersion = "1.0",
+            PolicyVersion = "2.0",
             ConsentAt     = DateTime.UtcNow,
         };
 

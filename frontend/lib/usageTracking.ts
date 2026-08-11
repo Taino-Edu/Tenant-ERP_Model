@@ -1,3 +1,5 @@
+import { hasCookieConsent } from './cookieConsent'
+
 // =============================================================================
 // usageTracking.ts — fila de eventos de navegação (tela + duração) do admin,
 // descarregada via sendBeacon (sobrevive a troca de aba/fechamento, não
@@ -9,10 +11,12 @@ type QueuedEvent = { path: string; durationMs: number | null; occurredAt: string
 let queue: QueuedEvent[] = []
 
 export function enqueueUsageEvent(path: string, durationMs: number | null) {
+  if (!hasCookieConsent('analytics')) return
   queue.push({ path, durationMs, occurredAt: new Date().toISOString() })
 }
 
 export function flushUsageEvents() {
+  if (!hasCookieConsent('analytics')) { queue = []; return }
   if (queue.length === 0) return
   if (typeof navigator === 'undefined' || !navigator.sendBeacon) { queue = []; return }
 

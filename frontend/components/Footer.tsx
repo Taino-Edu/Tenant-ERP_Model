@@ -7,6 +7,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import { OPEN_COOKIE_SETTINGS_EVENT } from '@/lib/cookieConsent'
 
 export default function Footer() {
   const pathname = usePathname()
@@ -26,6 +27,10 @@ export default function Footer() {
           <Link href="/privacidade" className="hover:text-brand-600 transition-colors">Política de Privacidade</Link>
           <span className="text-[#0C3D5A]/15">|</span>
           <Link href="/termos" className="hover:text-brand-600 transition-colors">Termos de Uso</Link>
+          <span className="text-[#0C3D5A]/15">|</span>
+          <Link href="/cookies" className="hover:text-brand-600 transition-colors">Política de Cookies</Link>
+          <span className="text-[#0C3D5A]/15">|</span>
+          <button type="button" onClick={() => window.dispatchEvent(new Event(OPEN_COOKIE_SETTINGS_EVENT))} className="hover:text-brand-600 transition-colors">Preferências de cookies</button>
           <span className="text-[#0C3D5A]/15">|</span>
           <Link href="/lgpd" className="hover:text-brand-600 transition-colors">Seus Direitos (LGPD)</Link>
           <span className="text-[#0C3D5A]/15">|</span>

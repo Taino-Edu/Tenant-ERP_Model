@@ -1,275 +1,72 @@
-// =============================================================================
-// termos/page.tsx — Termos de Uso da Minha Loja
-// Sua Cidade — UF — Foro: Comarca de Sua Cidade — UF
-// v1.1 junho/2026
-// =============================================================================
-
-import Link from 'next/link'
 import type { Metadata } from 'next'
-import ThemeToggle from '@/components/ThemeToggle'
+import Link from 'next/link'
 import { LegalActions } from '@/components/LegalActions'
-
-export const revalidate = 0
 
 export const metadata: Metadata = {
   title: 'Termos de Uso',
-  description: 'Termos e condições de uso dos serviços da Minha Loja, loja de card games em Sua Cidade — UF.',
+  description: 'Termos de uso da plataforma multiempresa Octus para estabelecimentos, equipes e clientes finais.',
+  alternates: { canonical: '/termos' },
 }
 
-const sections = [
-  { id: 's1', num: '01', title: 'Serviços Oferecidos' },
-  { id: 's2', num: '02', title: 'Cadastro e Conta' },
-  { id: 's3', num: '03', title: 'Crediário' },
-  { id: 's4', num: '04', title: 'Comandas' },
-  { id: 's6', num: '05', title: 'Propriedade Intelectual' },
-  { id: 's7', num: '06', title: 'Limitação de Responsabilidade' },
-  { id: 's8', num: '07', title: 'Direitos do Consumidor' },
-  { id: 's9', num: '08', title: 'Foro e Legislação' },
-  { id: 's10', num: '09', title: 'Contato' },
-]
+const updated = '11 de agosto de 2026'
 
 export default function TermosPage() {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <LegalPage title="Termos de Uso" version="2.0" eyebrow="Plataforma Octus · legislação brasileira">
+      <Notice>Estes Termos regulam o uso do Octus por empresas contratantes, seus usuários autorizados e clientes finais. A proposta comercial, o plano contratado e políticas específicas do estabelecimento complementam este documento. Em caso de relação de consumo, os direitos legais do consumidor prevalecem.</Notice>
 
-      {/* ── Cabeçalho ──────────────────────────────────────────────────────── */}
-      <header className="bg-[#1a0a2e] text-white print:hidden">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-1 text-xl font-bold">
-            <span className="text-[#42B6EE]">Minha</span><span> Loja</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <LegalActions />
-            <ThemeToggle compact />
-          </div>
-        </div>
-      </header>
+      <Section title="1. Quem presta cada serviço">
+        <p>A <strong>3E Systen</strong> fornece a plataforma tecnológica Octus. A empresa identificada pela marca, domínio ou unidade acessada — o <strong>Estabelecimento</strong> — é responsável pelas vendas, preços, produtos, atendimento, comandas, crédito concedido, documentos fiscais e demais relações com seus clientes.</p>
+        <p>O Octus não se torna vendedor dos produtos do Estabelecimento nem substitui suas obrigações comerciais, fiscais, trabalhistas, contábeis ou regulatórias.</p>
+      </Section>
 
-      {/* ── Hero ────────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-b from-[#1a0a2e] to-transparent print:hidden">
-        <div className="max-w-5xl mx-auto px-4 py-10 pb-8">
-          <span className="inline-block text-[10px] font-bold tracking-widest text-[#42B6EE] uppercase mb-3">
-            CDC (Lei 8.078/1990) · LGPD (Lei 13.709/2018)
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">Termos de Uso</h1>
-          <p className="text-gray-400 text-sm">
-            Última atualização: <strong className="text-gray-300">Junho de 2026</strong> — Versão 1.1 ·{' '}
-            <span className="text-gray-500">Foro: Comarca de Sua Cidade — UF</span>
-          </p>
-        </div>
-      </div>
+      <Section title="2. Conta, acesso e segurança">
+        <p>Os dados de cadastro devem ser verdadeiros e atualizados. Cada pessoa deve usar apenas o acesso que lhe foi autorizado, proteger suas credenciais e comunicar suspeitas de uso indevido. O Estabelecimento administra perfis e permissões de sua equipe.</p>
+        <p>Podemos limitar sessões, exigir nova autenticação e suspender acessos diante de risco de segurança, fraude, violação destes Termos ou ordem legal, com preservação das evidências e comunicações cabíveis.</p>
+      </Section>
 
-      {/* ── Print header ─────────────────────────────────────────────────────── */}
-      <div className="hidden print:block py-6 border-b border-gray-200 mb-6">
-        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Minha Loja — Sua Cidade — UF</p>
-        <h1 className="text-2xl font-black text-gray-900">Termos de Uso</h1>
-        <p className="text-sm text-gray-500 mt-1">Junho de 2026 · Versão 1.1 · Foro: Comarca de Sua Cidade — UF</p>
-      </div>
+      <Section title="3. Recursos da plataforma">
+        <p>Conforme o plano e os módulos habilitados, o Octus pode oferecer PDV, estoque, comandas, pagamentos, crediário, financeiro, emissão e consulta fiscal, CRM, relatórios, integrações bancárias, portal do contador, restaurante e outros recursos.</p>
+        <p>Comandas, orçamentos e relatórios são registros operacionais. O usuário deve conferir itens, valores, percentuais, descontos e dados fiscais antes da confirmação. Operações financeiras e fiscais podem depender de bancos, adquirentes, SEFAZ e outros terceiros.</p>
+      </Section>
 
-      <div className="max-w-5xl mx-auto px-4 pb-16">
-        <div className="flex gap-8 items-start">
+      <Section title="4. Contratação, cobrança e cancelamento">
+        <p>Planos, período de teste, implantação, mensalidade, reajuste, vencimento e condições de comissão constam da oferta ou instrumento comercial aplicável. Recursos adicionais podem ter preço próprio, informado antes da contratação.</p>
+        <p>O não pagamento pode resultar em aviso, limitação ou suspensão do acesso nos termos do contrato. O cancelamento não elimina valores vencidos nem obrigações legais de retenção. Antes do encerramento, o contratante poderá solicitar exportação dos dados disponíveis, respeitados prazos técnicos e legais.</p>
+      </Section>
 
-          {/* ── Índice lateral ───────────────────────────────────────────────── */}
-          <aside className="hidden lg:block w-52 shrink-0 sticky top-6 print:hidden">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Conteúdo</p>
-            <nav className="space-y-1">
-              {sections.map(s => (
-                <a
-                  key={s.id}
-                  href={`#${s.id}`}
-                  className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors group"
-                >
-                  <span className="text-[10px] font-mono text-gray-600 group-hover:text-[#42B6EE]">{s.num}</span>
-                  {s.title}
-                </a>
-              ))}
-            </nav>
-            <div className="mt-6 pt-4 border-t border-white/10 space-y-1">
-              <Link href="/privacidade" className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-white">
-                → Política de Privacidade
-              </Link>
-              <Link href="/lgpd" className="flex items-center gap-1.5 text-xs text-[#42B6EE] hover:underline">
-                → Exercer direitos LGPD
-              </Link>
-            </div>
-          </aside>
+      <Section title="5. Uso aceitável">
+        <p>É proibido usar o serviço para fraude, violação de direitos, acesso não autorizado, distribuição de malware, sobrecarga deliberada, engenharia reversa indevida ou tratamento ilícito de dados. Também é proibido inserir conteúdo sem autorização ou burlar limites técnicos, comerciais ou fiscais.</p>
+      </Section>
 
-          {/* ── Conteúdo ─────────────────────────────────────────────────────── */}
-          <main className="flex-1 min-w-0 space-y-2 pt-2">
+      <Section title="6. Dados pessoais e confidencialidade">
+        <p>O tratamento de dados segue a <Link href="/privacidade">Política de Privacidade</Link> e a <Link href="/cookies">Política de Cookies</Link>. Em regra, o Estabelecimento decide como tratar dados de seus clientes e atua como controlador; a 3E Systen opera esses dados para prestar a plataforma, sem prejuízo de situações em que trate dados para finalidades próprias legítimas e informadas.</p>
+        <p>Cada contratante deve possuir base legal, prestar informações aos titulares e restringir o acesso de sua equipe ao mínimo necessário.</p>
+      </Section>
 
-            {/* Introdução */}
-            <div className="rounded-2xl border p-5 mb-2 text-sm" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
-              Ao utilizar o sistema digital da <strong style={{ color: 'var(--text-primary)' }}>Minha Loja</strong>, você
-              concorda com os presentes Termos de Uso. Leia com atenção antes de prosseguir. Estes Termos são regidos
-              pela legislação brasileira.
-            </div>
+      <Section title="7. Propriedade intelectual">
+        <p>A licença de uso é limitada, revogável, não exclusiva e vinculada ao contrato. Software, interface, marcas, documentação e componentes do Octus pertencem à 3E Systen ou a seus licenciantes. Dados e conteúdos inseridos pelo Estabelecimento continuam sob sua responsabilidade e titularidade legítima.</p>
+      </Section>
 
-            <Section id="s1" num="01" title="Serviços Oferecidos">
-              <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                A <strong style={{ color: 'var(--text-primary)' }}>Minha Loja</strong> é uma loja física de card games
-                localizada em <strong style={{ color: 'var(--text-primary)' }}>Sua Cidade — UF</strong>. Nosso sistema digital oferece:
-              </p>
-              <ul className="grid sm:grid-cols-2 gap-2">
-                {[
-                  'Abertura e gestão de comandas na loja',
-                  'Programa de pontos e cashback',
-                  'Crediário para clientes cadastrados',
-                ].map(item => (
-                  <li key={item} className="flex gap-2 text-sm rounded-lg px-3 py-2 border" style={{ borderColor: 'var(--border-color)', color: 'var(--text-muted)', backgroundColor: 'var(--bg-primary)' }}>
-                    <span className="text-[#42B6EE] shrink-0">▸</span> {item}
-                  </li>
-                ))}
-              </ul>
-            </Section>
+      <Section title="8. Disponibilidade e responsabilidade">
+        <p>Adotamos medidas razoáveis de segurança, continuidade e recuperação, mas não prometemos funcionamento ininterrupto. Manutenções, internet, dispositivos locais e serviços de terceiros podem causar indisponibilidade. Incidentes relevantes serão tratados conforme a legislação e os compromissos contratuais.</p>
+        <p>Nenhuma disposição exclui responsabilidade que a lei não permita excluir. Fora dessas hipóteses, perdas indiretas, decisões tomadas sem conferência e falhas atribuíveis a terceiros ou ao uso contrário à documentação serão avaliadas conforme a participação de cada parte.</p>
+      </Section>
 
-            <Section id="s2" num="02" title="Cadastro e Conta">
-              <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                <p>
-                  O cadastro é realizado presencialmente na loja via QR Code ou pelo administrador do sistema.
-                  Ao se cadastrar, você declara que as informações fornecidas (nome, CPF, WhatsApp) são verídicas.
-                </p>
-                <p>
-                  O uso indevido do sistema — incluindo fornecimento de dados falsos, tentativas de acesso
-                  não autorizado ou abuso do programa de pontos — pode resultar no cancelamento da conta sem aviso prévio.
-                </p>
-                <p>
-                  Você é responsável pela confidencialidade de suas credenciais. Em caso de
-                  suspeita de uso não autorizado, entre em contato imediatamente.
-                </p>
-              </div>
-            </Section>
+      <Section title="9. Alterações, legislação e solução de conflitos">
+        <p>Podemos atualizar estes Termos para refletir mudanças legais, técnicas ou de produto. Alterações relevantes serão informadas por meio adequado e indicarão nova versão. A lei brasileira se aplica. O foro competente será definido pela legislação obrigatória e pelo instrumento de contratação, sem restringir o foro assegurado ao consumidor.</p>
+      </Section>
 
-            <Section id="s3" num="03" title="Crediário">
-              <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                O crediário é uma linha de crédito oferecida a clientes cadastrados, sujeita à análise e aprovação.
-              </p>
-              <div className="grid sm:grid-cols-2 gap-2">
-                {[
-                  ['Prazo padrão', '30 dias corridos a partir da abertura'],
-                  ['Limite simultâneo', 'Um crediário aberto por cliente por vez'],
-                  ['Bloqueio', 'Crediários em aberto bloqueiam novas comandas'],
-                  ['Inadimplência', 'Pode implicar restrição de acesso aos serviços'],
-                  ['Aprovação', 'A Minha Loja pode negar o crediário a qualquer cliente'],
-                ].map(([label, desc]) => (
-                  <div key={label} className="rounded-xl p-3 border text-sm" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-primary)' }}>
-                    <p className="text-xs font-bold text-[#42B6EE] mb-0.5">{label}</p>
-                    <p style={{ color: 'var(--text-muted)' }}>{desc}</p>
-                  </div>
-                ))}
-              </div>
-            </Section>
-
-            <Section id="s4" num="04" title="Comandas">
-              <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                <p>
-                  A comanda é o registro digital dos itens consumidos durante uma visita à loja.
-                  O cliente é responsável pelos itens registrados em sua comanda.
-                </p>
-                <p>
-                  O encerramento da comanda implica concordância com os valores e itens listados.
-                  Em caso de divergência, sinalize imediatamente ao responsável pela loja.
-                </p>
-              </div>
-            </Section>
-
-            <Section id="s6" num="05" title="Propriedade Intelectual">
-              <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                <p>
-                  Os nomes, logotipos e conteúdos de jogos de cartas (Pokémon, Magic: The Gathering, Yu-Gi-Oh!
-                  e outros) são propriedade de seus respectivos detentores. A Minha Loja não reivindica
-                  qualquer direito sobre esses conteúdos.
-                </p>
-                <p>
-                  O sistema digital, o código-fonte e o design da plataforma Minha Loja são propriedade
-                  exclusiva da Minha Loja e não podem ser reproduzidos, modificados ou distribuídos sem
-                  autorização expressa.
-                </p>
-              </div>
-            </Section>
-
-            <Section id="s7" num="06" title="Limitação de Responsabilidade">
-              <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                A Minha Loja não se responsabiliza por:
-              </p>
-              <ul className="space-y-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
-                {[
-                  'Danos decorrentes do uso indevido do sistema pelo usuário',
-                  'Indisponibilidade temporária do sistema por manutenção ou falhas técnicas',
-                  'Perda ou dano a cartões físicos que não sejam de responsabilidade da loja',
-                ].map(item => (
-                  <li key={item} className="flex gap-2">
-                    <span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span> {item}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-
-            <Section id="s8" num="07" title="Direitos do Consumidor (CDC)">
-              <div className="text-sm space-y-2" style={{ color: 'var(--text-muted)' }}>
-                <p>
-                  Estes Termos não afastam nem limitam os direitos previstos no{' '}
-                  <strong style={{ color: 'var(--text-primary)' }}>Código de Defesa do Consumidor (Lei nº 8.078/1990)</strong>.
-                </p>
-                <div className="rounded-xl border border-[#42B6EE]/20 bg-[#42B6EE]/5 px-4 py-3">
-                  <p>Em caso de reclamação, contate a Minha Loja em{' '}
-                    <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] underline">
-                      contato@tenant-erp.local
-                    </a>{' '}
-                    ou registre no portal{' '}
-                    <a href="https://www.consumidor.gov.br" target="_blank" rel="noopener noreferrer"
-                      className="text-[#42B6EE] underline">
-                      consumidor.gov.br
-                    </a>.
-                  </p>
-                </div>
-              </div>
-            </Section>
-
-            <Section id="s9" num="08" title="Foro e Legislação Aplicável">
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                Estes Termos são regidos pelas leis da República Federativa do Brasil. Para dirimir
-                quaisquer controvérsias, fica eleito o foro da{' '}
-                <strong style={{ color: 'var(--text-primary)' }}>Comarca de Sua Cidade — UF</strong>,
-                com renúncia expressa a qualquer outro, por mais privilegiado que seja.
-              </p>
-            </Section>
-
-            <Section id="s10" num="09" title="Contato">
-              <div className="text-sm space-y-1" style={{ color: 'var(--text-muted)' }}>
-                <p>
-                  <strong style={{ color: 'var(--text-primary)' }}>E-mail:</strong>{' '}
-                  <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] underline">
-                    contato@tenant-erp.local
-                  </a>
-                </p>
-                <p><strong style={{ color: 'var(--text-primary)' }}>Local:</strong> Minha Loja — Sua Cidade — UF</p>
-              </div>
-            </Section>
-
-            {/* Rodapé */}
-            <div className="pt-6 mt-4 flex flex-wrap gap-4 text-sm border-t" style={{ borderColor: 'var(--border-color)' }}>
-              <Link href="/privacidade" className="text-[#42B6EE] hover:underline">Política de Privacidade</Link>
-              <Link href="/lgpd" className="text-[#42B6EE] hover:underline">Exercer meus Direitos (LGPD)</Link>
-              <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] hover:underline">
-                contato@tenant-erp.local
-              </a>
-            </div>
-
-          </main>
-        </div>
-      </div>
-    </div>
+      <Section title="10. Contato">
+        <p>Dúvidas contratuais, técnicas ou de privacidade: <a href="mailto:3esysten@gmail.com">3esysten@gmail.com</a>. Para direitos sobre dados, também está disponível o <Link href="/lgpd">portal LGPD</Link>.</p>
+      </Section>
+    </LegalPage>
   )
 }
 
-function Section({ id, num, title, children }: { id: string; num: string; title: string; children: React.ReactNode }) {
-  return (
-    <section id={id} className="rounded-2xl border p-5 sm:p-6 scroll-mt-6" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-xs font-mono font-bold text-[#42B6EE] bg-[#42B6EE]/10 px-2 py-0.5 rounded-md">{num}</span>
-        <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
-      </div>
-      {children}
-    </section>
-  )
+function LegalPage({ title, version, eyebrow, children }: { title: string; version: string; eyebrow: string; children: React.ReactNode }) {
+  return <main className="min-h-screen bg-[#f7fbfd] text-[#22384A]"><header className="bg-[#0C3D5A] px-4 py-5 text-white print:hidden"><div className="mx-auto flex max-w-4xl items-center justify-between"><Link href="/" className="text-xl font-black">Octus</Link><LegalActions /></div></header><article className="mx-auto max-w-4xl px-4 py-12"><p className="text-xs font-bold uppercase tracking-widest text-brand-700">{eyebrow}</p><h1 className="mt-2 text-3xl font-black text-[#0C3D5A]">{title}</h1><p className="mt-2 text-sm text-[#6B8598]">Versão {version} · atualizada em {updated}</p><div className="mt-8 space-y-3">{children}</div><nav className="mt-10 flex flex-wrap gap-4 border-t border-[#0C3D5A]/10 pt-6 text-sm font-semibold text-brand-700"><Link href="/privacidade">Privacidade</Link><Link href="/cookies">Cookies</Link><Link href="/lgpd">Direitos LGPD</Link></nav></article></main>
 }
+
+function Notice({ children }: { children: React.ReactNode }) { return <div className="rounded-2xl border border-brand-200 bg-brand-50 p-5 text-sm leading-relaxed">{children}</div> }
+function Section({ title, children }: { title: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-[#0C3D5A]/10 bg-white p-5 sm:p-6"><h2 className="font-bold text-[#0C3D5A]">{title}</h2><div className="mt-3 space-y-3 text-sm leading-relaxed text-[#526E80] [&_a]:font-semibold [&_a]:text-brand-700 [&_a]:underline">{children}</div></section> }

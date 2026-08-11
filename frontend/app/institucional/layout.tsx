@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     'ERP para varejo', 'sistema de gestão para lojas', 'PDV com NFC-e',
     'software para restaurante', 'controle de estoque', 'Octus ERP',
   ],
-  alternates: { canonical: '/' },
+  alternates: { canonical: SITE_URL },
   robots: { index: true, follow: true },
   openGraph: {
     title: TITLE,
@@ -22,8 +22,9 @@ export const metadata: Metadata = {
     siteName: '3E Systen',
     locale: 'pt_BR',
     type: 'website',
+    images: [{ url: '/institutional/octus-hero-waves.png', width: 1672, height: 941, alt: 'Octus ERP para varejo e restaurantes' }],
   },
-  twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION },
+  twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION, images: ['/institutional/octus-hero-waves.png'] },
 }
 
 const softwareApplicationSchema = {

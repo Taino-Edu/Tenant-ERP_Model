@@ -1,300 +1,39 @@
-// =============================================================================
-// privacidade/page.tsx — Política de Privacidade da Minha Loja
-// Sua Cidade — UF — LGPD (Lei 13.709/2018) — v1.2 junho/2026
-// =============================================================================
-
-import Link from 'next/link'
 import type { Metadata } from 'next'
-import ThemeToggle from '@/components/ThemeToggle'
+import Link from 'next/link'
 import { LegalActions } from '@/components/LegalActions'
-
-export const revalidate = 0
 
 export const metadata: Metadata = {
   title: 'Política de Privacidade',
-  description: 'Como a Minha Loja coleta, usa e protege seus dados pessoais em conformidade com a LGPD.',
+  description: 'Como a plataforma multiempresa Octus trata e protege dados pessoais conforme a LGPD.',
+  alternates: { canonical: '/privacidade' },
 }
-
-const sections = [
-  { id: 's1', num: '01', title: 'Quem Somos' },
-  { id: 's2', num: '02', title: 'Dados que Coletamos' },
-  { id: 's3', num: '03', title: 'Finalidade do Tratamento' },
-  { id: 's4', num: '04', title: 'Base Legal' },
-  { id: 's5', num: '05', title: 'Compartilhamento' },
-  { id: 's6', num: '06', title: 'Seus Direitos' },
-  { id: 's7', num: '07', title: 'Retenção de Dados' },
-  { id: 's8', num: '08', title: 'Segurança' },
-  { id: 's9', num: '09', title: 'Cookies' },
-  { id: 's10', num: '10', title: 'Contato' },
-  { id: 's11', num: '11', title: 'Alterações' },
-]
 
 export default function PrivacidadePage() {
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
-
-      {/* ── Cabeçalho ──────────────────────────────────────────────────────── */}
-      <header className="bg-[#1a0a2e] text-white print:hidden">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-1 text-xl font-bold">
-            <span className="text-[#42B6EE]">Minha</span><span> Loja</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <LegalActions />
-            <ThemeToggle compact />
-          </div>
+    <main className="min-h-screen bg-[#f7fbfd] text-[#22384A]">
+      <header className="bg-[#0C3D5A] px-4 py-5 text-white print:hidden"><div className="mx-auto flex max-w-4xl items-center justify-between"><Link href="/" className="text-xl font-black">Octus</Link><LegalActions /></div></header>
+      <article className="mx-auto max-w-4xl px-4 py-12">
+        <p className="text-xs font-bold uppercase tracking-widest text-brand-700">LGPD · transparência multiempresa</p>
+        <h1 className="mt-2 text-3xl font-black text-[#0C3D5A]">Política de Privacidade</h1>
+        <p className="mt-2 text-sm text-[#6B8598]">Versão 2.0 · atualizada em 11 de agosto de 2026</p>
+        <div className="mt-8 space-y-3">
+          <Notice>Esta política explica o tratamento realizado pela plataforma Octus. O estabelecimento cuja marca ou domínio você acessou pode fornecer aviso complementar, pois define as finalidades comerciais relacionadas a seus clientes.</Notice>
+          <Section title="1. Papéis e responsáveis"><p>A <strong>3E Systen</strong> fornece o Octus. Para dados de clientes, vendas, comandas e atendimento, o Estabelecimento normalmente atua como <strong>controlador</strong> e a 3E Systen como <strong>operadora</strong>. Para segurança da plataforma, contratação, suporte e melhoria autorizada, cada parte poderá controlar os tratamentos que efetivamente decidir.</p></Section>
+          <Section title="2. Dados tratados"><p>Podemos tratar cadastro e contato (nome, CPF, telefone e e-mail), credenciais e permissões, empresa/CNPJ, dados de pedidos, comandas, pagamentos e crediário, documentos e configurações fiscais, interações de suporte, registros técnicos, dispositivo, data e hora, além de IP protegido por hash nos registros em que essa técnica é aplicável.</p><p>Dados bancários e fiscais só são usados nos recursos escolhidos. Senhas, certificados e segredos recebem controles próprios; não solicitamos que sejam enviados por canais informais.</p></Section>
+          <Section title="3. Finalidades e bases legais"><p>Tratamos dados para executar contratos e funcionalidades solicitadas; autenticar usuários; processar operações; cumprir obrigações legais e fiscais; prevenir fraude e incidentes; atender suporte e direitos dos titulares; exercer direitos em processos; e, quando autorizado, medir desempenho ou enviar comunicações opcionais.</p><p>As bases podem incluir execução de contrato, obrigação legal ou regulatória, exercício regular de direitos, legítimo interesse após avaliação aplicável e consentimento para finalidades opcionais. A base depende do contexto, não do simples tipo do dado.</p></Section>
+          <Section title="4. Compartilhamento e integrações"><p>Dados podem ser compartilhados, no mínimo necessário, com infraestrutura de hospedagem e banco de dados, provedores de e-mail, bancos, meios de pagamento, serviços fiscais, contadores autorizados, suporte técnico e o serviço público VLibras quando o recurso de acessibilidade estiver habilitado, conforme os módulos usados. Também podemos atender ordem de autoridade competente. Não vendemos dados pessoais.</p><p>Integrações ativadas pelo Estabelecimento têm condições próprias. Transferências internacionais, quando existentes em infraestrutura contratada, devem observar salvaguardas compatíveis com a LGPD.</p></Section>
+          <Section title="5. Cookies e análise"><p>Tecnologias necessárias mantêm autenticação, segurança, preferências e funcionamento. Análise e marketing permanecem opcionais e dependem da escolha registrada no navegador. Categorias, controles e prazos são detalhados na <Link href="/cookies">Política de Cookies</Link>.</p></Section>
+          <Section title="6. Retenção e eliminação"><p>Dados são mantidos enquanto necessários à conta, ao contrato e às finalidades informadas, e depois pelo período exigido para obrigações fiscais, contábeis, segurança e defesa de direitos. Ao fim, são eliminados ou anonimizados, ressalvadas hipóteses legais. Backups seguem ciclo técnico de substituição e acesso restrito.</p></Section>
+          <Section title="7. Segurança"><p>Aplicamos isolamento por empresa, controle de acesso e permissões, criptografia em trânsito, proteção de credenciais, auditoria, limitação de requisições, cópias de segurança e monitoramento proporcional ao risco. Nenhum sistema é infalível; incidentes confirmados são avaliados e comunicados quando exigido.</p></Section>
+          <Section title="8. Direitos dos titulares"><p>Você pode solicitar confirmação e acesso, correção, anonimização, bloqueio ou eliminação quando cabível, portabilidade conforme regulamentação, informação sobre compartilhamento, oposição, revisão de decisões automatizadas e revogação do consentimento. A identidade poderá ser verificada para evitar entrega indevida.</p><p>Use o <Link href="/lgpd">portal de direitos LGPD</Link>. Quando o pedido se referir a uma compra ou cadastro, o Estabelecimento poderá ser o responsável pela resposta; o Octus apoiará tecnicamente quando atuar como operador.</p></Section>
+          <Section title="9. Crianças e adolescentes"><p>O serviço empresarial não é direcionado a crianças para contratação autônoma. Estabelecimentos que tratem dados de crianças ou adolescentes devem observar seu melhor interesse, a base legal adequada e os deveres de transparência e representação aplicáveis.</p></Section>
+          <Section title="10. Contato e alterações"><p>Contato de privacidade da plataforma: <a href="mailto:3esysten@gmail.com">3esysten@gmail.com</a>. O Estabelecimento pode indicar canal próprio na interface. Se a resposta não resolver a questão, o titular pode procurar a Autoridade Nacional de Proteção de Dados ou órgãos de defesa do consumidor competentes.</p><p>Alterações relevantes terão nova versão, data e comunicação apropriada. Uma nova finalidade incompatível será submetida à base legal e à transparência necessárias; o simples uso continuado não substitui consentimento quando ele for exigido.</p></Section>
         </div>
-      </header>
-
-      {/* ── Hero ────────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-b from-[#1a0a2e] to-transparent print:hidden">
-        <div className="max-w-5xl mx-auto px-4 py-10 pb-8">
-          <span className="inline-block text-[10px] font-bold tracking-widest text-[#42B6EE] uppercase mb-3">
-            LGPD · Lei nº 13.709/2018
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">Política de Privacidade</h1>
-          <p className="text-gray-400 text-sm">
-            Última atualização: <strong className="text-gray-300">Junho de 2026</strong> — Versão 1.2 ·{' '}
-            <span className="text-gray-500">Sua Cidade — UF</span>
-          </p>
-        </div>
-      </div>
-
-      {/* ── Print header (apenas no PDF) ────────────────────────────────────── */}
-      <div className="hidden print:block py-6 border-b border-gray-200 mb-6">
-        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Minha Loja — Sua Cidade — UF</p>
-        <h1 className="text-2xl font-black text-gray-900">Política de Privacidade</h1>
-        <p className="text-sm text-gray-500 mt-1">Junho de 2026 · Versão 1.2 · LGPD (Lei 13.709/2018)</p>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-4 pb-16">
-        <div className="flex gap-8 items-start">
-
-          {/* ── Índice lateral ───────────────────────────────────────────────── */}
-          <aside className="hidden lg:block w-52 shrink-0 sticky top-6 print:hidden">
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Conteúdo</p>
-            <nav className="space-y-1">
-              {sections.map(s => (
-                <a
-                  key={s.id}
-                  href={`#${s.id}`}
-                  className="flex items-center gap-2 text-xs py-1.5 px-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors group"
-                >
-                  <span className="text-[10px] font-mono text-gray-600 group-hover:text-[#42B6EE]">{s.num}</span>
-                  {s.title}
-                </a>
-              ))}
-            </nav>
-            <div className="mt-6 pt-4 border-t border-white/10 space-y-1">
-              <Link href="/lgpd" className="flex items-center gap-1.5 text-xs text-[#42B6EE] hover:underline">
-                → Exercer meus direitos
-              </Link>
-              <Link href="/termos" className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-white">
-                → Termos de Uso
-              </Link>
-            </div>
-          </aside>
-
-          {/* ── Conteúdo ─────────────────────────────────────────────────────── */}
-          <main className="flex-1 min-w-0 space-y-2 pt-2">
-
-            <Section id="s1" num="01" title="Quem Somos">
-              <p>
-                A <strong>Minha Loja</strong> é uma loja de card games em <strong>Sua Cidade — UF</strong>.
-                Operamos um sistema digital de comandas, crediário e programa de pontos para nossos clientes.
-              </p>
-              <InfoBox>
-                <p className="font-semibold mb-0.5">Controlador dos dados</p>
-                <p>Minha Loja — Sua Cidade — UF</p>
-                <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE]">
-                  contato@tenant-erp.local
-                </a>
-              </InfoBox>
-            </Section>
-
-            <Section id="s2" num="02" title="Dados que Coletamos">
-              <ul className="space-y-2">
-                {[
-                  ['Nome completo', 'identificação e personalização do atendimento'],
-                  ['CPF', 'identificação única e prevenção de fraudes no crediário'],
-                  ['WhatsApp', 'contato e login rápido via QR Code'],
-                  ['E-mail', 'confirmações, notificações e recuperação de senha'],
-                  ['Histórico de comandas e compras', 'gestão do crediário e pontos'],
-                  ['Saldo de pontos e cashback', 'programa de fidelidade'],
-                  ['Endereço IP (hash SHA-256)', 'segurança e prevenção de abusos — nunca armazenamos o IP em texto puro'],
-                ].map(([key, val]) => (
-                  <li key={key} className="flex gap-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                    <span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span>
-                    <span><strong style={{ color: 'var(--text-primary)' }}>{key}</strong> — {val}</span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-
-            <Section id="s3" num="03" title="Finalidade do Tratamento">
-              <ul className="space-y-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>
-                {[
-                  'Identificar e autenticar usuários no sistema',
-                  'Gerenciar comandas, pedidos e pagamentos (inclusive crediário)',
-                  'Administrar o programa de pontos e cashback',
-                  'Enviar comunicações transacionais (crediário, redefinição de senha)',
-                  'Cumprir obrigações legais e fiscais',
-                  'Prevenir fraudes e garantir a segurança do sistema',
-                ].map(item => (
-                  <li key={item} className="flex gap-2">
-                    <span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-
-            <Section id="s4" num="04" title="Base Legal (LGPD Art. 7º)">
-              <div className="grid sm:grid-cols-2 gap-3">
-                {[
-                  ['Consentimento (Art. 7º, I)', 'Registro inicial via QR Code e envio de comunicações'],
-                  ['Execução de contrato (Art. 7º, V)', 'Gestão de comandas e crediário'],
-                  ['Legítimo interesse (Art. 7º, IX)', 'Segurança do sistema e prevenção de fraudes'],
-                  ['Obrigação legal (Art. 7º, II)', 'Fins fiscais e contábeis'],
-                ].map(([base, desc]) => (
-                  <div key={base} className="rounded-xl p-3 border text-sm" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
-                    <p className="font-semibold text-[#42B6EE] text-xs mb-1">{base}</p>
-                    <p style={{ color: 'var(--text-muted)' }}>{desc}</p>
-                  </div>
-                ))}
-              </div>
-            </Section>
-
-            <Section id="s5" num="05" title="Compartilhamento de Dados">
-              <p className="text-sm mb-3" style={{ color: 'var(--text-muted)' }}>
-                Não vendemos nem alugamos seus dados. Compartilhamos apenas com:
-              </p>
-              <ul className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                <li className="flex gap-2"><span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span><span><strong style={{ color: 'var(--text-primary)' }}>Provedor de e-mail (SMTP)</strong> — notificações transacionais (redefinição de senha, confirmação de crediário).</span></li>
-                <li className="flex gap-2"><span className="text-[#42B6EE] shrink-0 mt-0.5">▸</span><span><strong style={{ color: 'var(--text-primary)' }}>Autoridades públicas</strong> — quando exigido por lei ou ordem judicial.</span></li>
-              </ul>
-            </Section>
-
-            <Section id="s6" num="06" title="Seus Direitos (LGPD Art. 18)">
-              <div className="grid sm:grid-cols-2 gap-2 mb-4">
-                {[
-                  ['Acesso', 'Saber quais dados possuímos sobre você'],
-                  ['Retificação', 'Corrigir dados incompletos ou desatualizados'],
-                  ['Exclusão', 'Solicitar a anonimização ou exclusão dos seus dados'],
-                  ['Portabilidade', 'Receber seus dados em formato estruturado'],
-                  ['Oposição', 'Opor-se a tratamentos baseados em legítimo interesse'],
-                  ['Revogação', 'Retirar o consentimento a qualquer momento'],
-                ].map(([right, desc]) => (
-                  <div key={right} className="flex gap-2 text-sm rounded-lg p-3 border" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
-                    <span className="text-[#42B6EE] font-bold shrink-0">✓</span>
-                    <span><strong style={{ color: 'var(--text-primary)' }}>{right}:</strong>{' '}<span style={{ color: 'var(--text-muted)' }}>{desc}</span></span>
-                  </div>
-                ))}
-              </div>
-              <InfoBox>
-                Acesse o <Link href="/lgpd" className="text-[#42B6EE] font-semibold underline">formulário LGPD</Link> para exercer seus direitos
-                ou envie e-mail para <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] underline">contato@tenant-erp.local</a>.
-                Respondemos em até <strong>15 dias corridos</strong> (Art. 18 § 5º).
-              </InfoBox>
-            </Section>
-
-            <Section id="s7" num="07" title="Retenção de Dados">
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                Mantemos seus dados pelo tempo necessário para as finalidades descritas, ou conforme exigido
-                por lei. Dados de crediário e compras podem ser retidos por até <strong style={{ color: 'var(--text-primary)' }}>5 anos</strong> para fins fiscais.
-                Após solicitação de exclusão, anonimizamos os dados pessoais identificáveis, mantendo apenas
-                o histórico transacional de forma desidentificada.
-              </p>
-            </Section>
-
-            <Section id="s8" num="08" title="Segurança">
-              <ul className="grid sm:grid-cols-2 gap-2 text-sm">
-                {[
-                  'Senhas com hash BCrypt — nunca em texto puro',
-                  'Tokens de sessão com validade de 60 min e renovação automática',
-                  'Cookies HttpOnly e SameSite=Strict',
-                  'IPs armazenados como hash SHA-256',
-                  'HTTPS em produção',
-                  'Trilha de auditoria de acessos a dados sensíveis',
-                  'Rate limiting para prevenção de força bruta',
-                ].map(item => (
-                  <li key={item} className="flex gap-2 rounded-lg p-2.5 border text-xs" style={{ borderColor: 'var(--border-color)', color: 'var(--text-muted)', backgroundColor: 'var(--bg-secondary)' }}>
-                    <span className="text-green-500 shrink-0">🔒</span> {item}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-
-            <Section id="s9" num="09" title="Cookies">
-              <div className="space-y-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                <div className="rounded-xl p-3 border" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
-                  <p className="font-semibold mb-0.5" style={{ color: 'var(--text-primary)' }}>Essenciais</p>
-                  <p>Necessários para autenticação e segurança da sessão. Não podem ser desativados.</p>
-                </div>
-                <div className="rounded-xl p-3 border" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
-                  <p className="font-semibold mb-0.5" style={{ color: 'var(--text-primary)' }}>Preferências</p>
-                  <p>Armazenam preferências de interface (tema claro/escuro). Podem ser limpos nas configurações do navegador.</p>
-                </div>
-              </div>
-            </Section>
-
-            <Section id="s10" num="10" title="Contato e Reclamações">
-              <div className="text-sm space-y-1" style={{ color: 'var(--text-muted)' }}>
-                <p><strong style={{ color: 'var(--text-primary)' }}>E-mail:</strong>{' '}
-                  <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] underline">contato@tenant-erp.local</a>
-                </p>
-                <p><strong style={{ color: 'var(--text-primary)' }}>Local:</strong> Minha Loja — Sua Cidade — UF</p>
-              </div>
-              <p className="text-sm mt-3" style={{ color: 'var(--text-muted)' }}>
-                Insatisfeito com nossa resposta? Registre reclamação na{' '}
-                <a href="https://www.gov.br/anpd" target="_blank" rel="noopener noreferrer" className="text-[#42B6EE] underline">
-                  ANPD — Autoridade Nacional de Proteção de Dados
-                </a>.
-              </p>
-            </Section>
-
-            <Section id="s11" num="11" title="Alterações desta Política">
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                Podemos atualizar esta Política periodicamente. Quando realizarmos alterações relevantes,
-                notificaremos os usuários cadastrados por e-mail e atualizaremos a data de última atualização.
-                O uso continuado do sistema implica aceitação da nova versão.
-              </p>
-            </Section>
-
-            {/* Rodapé de links */}
-            <div className="pt-6 mt-4 flex flex-wrap gap-4 text-sm border-t" style={{ borderColor: 'var(--border-color)' }}>
-              <Link href="/termos" className="text-[#42B6EE] hover:underline">Termos de Uso</Link>
-              <Link href="/lgpd" className="text-[#42B6EE] hover:underline">Exercer meus Direitos (LGPD)</Link>
-              <a href="mailto:contato@tenant-erp.local" className="text-[#42B6EE] hover:underline">
-                contato@tenant-erp.local
-              </a>
-            </div>
-
-          </main>
-        </div>
-      </div>
-    </div>
+        <nav className="mt-10 flex flex-wrap gap-4 border-t border-[#0C3D5A]/10 pt-6 text-sm font-semibold text-brand-700"><Link href="/termos">Termos</Link><Link href="/cookies">Cookies</Link><Link href="/lgpd">Direitos LGPD</Link></nav>
+      </article>
+    </main>
   )
 }
 
-// ── Componentes auxiliares ────────────────────────────────────────────────────
-
-function Section({ id, num, title, children }: { id: string; num: string; title: string; children: React.ReactNode }) {
-  return (
-    <section id={id} className="rounded-2xl border p-5 sm:p-6 scroll-mt-6" style={{ borderColor: 'var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
-      <div className="flex items-center gap-3 mb-4">
-        <span className="text-xs font-mono font-bold text-[#42B6EE] bg-[#42B6EE]/10 px-2 py-0.5 rounded-md">{num}</span>
-        <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h2>
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function InfoBox({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-3 rounded-xl border border-[#42B6EE]/20 bg-[#42B6EE]/5 px-4 py-3 text-sm" style={{ color: 'var(--text-muted)' }}>
-      {children}
-    </div>
-  )
-}
+function Notice({ children }: { children: React.ReactNode }) { return <div className="rounded-2xl border border-brand-200 bg-brand-50 p-5 text-sm leading-relaxed">{children}</div> }
+function Section({ title, children }: { title: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-[#0C3D5A]/10 bg-white p-5 sm:p-6"><h2 className="font-bold text-[#0C3D5A]">{title}</h2><div className="mt-3 space-y-3 text-sm leading-relaxed text-[#526E80] [&_a]:font-semibold [&_a]:text-brand-700 [&_a]:underline">{children}</div></section> }

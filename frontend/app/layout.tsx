@@ -30,8 +30,12 @@ export async function generateMetadata(): Promise<Metadata> {
 
   const siteName = icons?.siteName || 'Octus'
   const description = icons?.heroSubtitle || 'Sistema de gestão para lojas e varejo'
+  const hostname = host?.split(':')[0] || '3esysten.com.br'
+  const protocol = hostname === 'localhost' ? 'http' : 'https'
+  const metadataBase = new URL(`${protocol}://${host || hostname}`)
 
   return {
+    metadataBase,
     title: { default: siteName, template: `%s — ${siteName}` },
     description,
     icons: {
@@ -54,10 +58,12 @@ export async function generateMetadata(): Promise<Metadata> {
       type: 'website',
     },
     twitter: {
-      card: 'summary',
+      card: 'summary_large_image',
       title: siteName,
       description,
     },
+    manifest: '/manifest.webmanifest',
+    formatDetection: { telephone: false },
   }
 }
 
