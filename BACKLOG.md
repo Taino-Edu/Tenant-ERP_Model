@@ -98,11 +98,13 @@
 - **Entregue:** estado persistente por schema do tenant + CNPJ + ambiente, lease
   atômica no PostgreSQL, cooldown preventivo/`137`/`656` de 1h05, quota interna
   de 18 consultas pontuais por hora, NSU monotônico, `429 + Retry-After`, `409`,
-  contagem regressiva e logs com CNPJ mascarado.
+  contagem regressiva e logs com CNPJ mascarado. O painel também mostra a saúde
+  do serviço de autorização da UF e oferece “Testar SEFAZ”; essa medição usa
+  `NfeStatusServico`, com cache curto, sem tocar na Distribuição DF-e.
 - **Migration:** preserva o NSU existente e aplica cooldown inicial conservador
   aos tenants que já possuem configuração fiscal.
-- **Validação:** migration idempotente gerada; 6 testes novos no PostgreSQL real;
-  suíte completa 756/756; lint e build do frontend aprovados; 4 testes de helpers
+- **Validação:** migration idempotente gerada; 8 testes fiscais no PostgreSQL real;
+  suíte completa 758/758; lint e build do frontend aprovados; 4 testes de helpers
   puros aprovados em configuração Playwright sem servidor.
 - **Limite operacional:** outro software que consulte o mesmo CNPJ fora deste ERP
   não compartilha nossa lease/NSU; cada CNPJ deve ter um único controlador de

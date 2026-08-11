@@ -15,6 +15,7 @@
 // =============================================================================
 
 using System.Security.Cryptography.X509Certificates;
+using System.Diagnostics;
 using System.Text;
 using System.Xml.Linq;
 using CardGameStore.Data;
@@ -23,6 +24,7 @@ using CardGameStore.Multitenancy;
 using DFe.Classes.Entidades;
 using DFe.Classes.Flags;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using NFe.Classes.Servicos.DistribuicaoDFe;
 using NFe.Classes.Servicos.Tipos;
 using NFe.Classes.Informacoes.Identificacao.Tipos;
@@ -37,6 +39,7 @@ public class SefazNfeService
     private readonly EncryptionService _enc;
     private readonly SefazDistributionGuard _guard;
     private readonly ITenantContext _tenant;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<SefazNfeService> _logger;
 
     // Limites por ciclo — evita rodadas intermináveis e abuso de quota na SEFAZ
@@ -50,12 +53,14 @@ public class SefazNfeService
         EncryptionService enc,
         SefazDistributionGuard guard,
         ITenantContext tenant,
+        IMemoryCache cache,
         ILogger<SefazNfeService> logger)
     {
         _db = db;
         _enc = enc;
         _guard = guard;
         _tenant = tenant;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -158,6 +163,84 @@ public class SefazNfeService
                 _logger.LogError(ex,
                     "Falha ao liberar lease SEFAZ {Execucao} do tenant {TenantId}", leaseId, _tenant.TenantId);
             }
+        }
+    }
+
+    /// <summary>
+    /// Consulta o serviço oficial de status da NF-e para a UF configurada. Não
+    /// toca no NFeDistribuicaoDFe e, portanto, não consome NSU nem quota de
+    /// distribuição. O resultado automático fica em cache por um minuto; o
+    /// botão "Testar SEFAZ" usa <paramref name="forceRefresh"/>.
+    /// </summary>
+    public async Task<SefazHealthResult> TestarStatusAsync(
+        bool forceRefresh = false, CancellationToken ct = default)
+    {
+        var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct);
+        var checkedAt = DateTime.UtcNow;
+        if (cfg is null || !cfg.CertificadoConfigurado ||
+            string.IsNullOrWhiteSpace(cfg.Cnpj) || string.IsNullOrWhiteSpace(cfg.Uf))
+        {
+            return new(false, false, null,
+                "Configure CNPJ, UF e certificado A1 antes de testar a SEFAZ.",
+                checkedAt, 0, cfg?.Ambiente.ToString(), cfg?.Uf);
+        }
+
+        var cacheKey = $"sefaz-health:{_tenant.TenantId:N}:{cfg.Uf}:{cfg.Ambiente}";
+        if (!forceRefresh && _cache.TryGetValue(cacheKey, out SefazHealthResult? cached) && cached is not null)
+            return cached;
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var pfxBytes = Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted!));
+            var senha = _enc.Decrypt(cfg.CertificadoSenhaEncrypted!);
+            using var certificado = Pkcs12Loader.Abrir(pfxBytes, senha);
+            var config = new ConfiguracaoServico
+            {
+                cUF = Enum.Parse<Estado>(cfg.Uf),
+                tpAmb = cfg.Ambiente == AmbienteFiscal.Producao ? TipoAmbiente.Producao : TipoAmbiente.Homologacao,
+                ModeloDocumento = ModeloDocumento.NFe,
+                tpEmis = TipoEmissao.teNormal,
+                VersaoLayout = VersaoServico.Versao400,
+                TimeOut = 15000,
+                ValidarSchemas = false,
+            };
+
+            using var servico = new ServicosNFe(config, certificado);
+            var resposta = await Task.Run(() => servico.NfeStatusServico(false), ct);
+            stopwatch.Stop();
+            var retorno = resposta.Retorno;
+            var result = new SefazHealthResult(
+                true,
+                retorno.cStat == 107,
+                retorno.cStat,
+                retorno.xMotivo,
+                DateTime.UtcNow,
+                stopwatch.ElapsedMilliseconds,
+                cfg.Ambiente.ToString(),
+                cfg.Uf,
+                retorno.dhRecbto.UtcDateTime);
+
+            _cache.Set(cacheKey, result, TimeSpan.FromMinutes(1));
+            return result;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogWarning(ex,
+                "Falha no teste de status SEFAZ do tenant {TenantId}, UF {Uf}, ambiente {Ambiente}",
+                _tenant.TenantId, cfg.Uf, cfg.Ambiente);
+            var result = new SefazHealthResult(
+                true, false, null,
+                "Não foi possível contactar o serviço de status da SEFAZ.",
+                DateTime.UtcNow, stopwatch.ElapsedMilliseconds,
+                cfg.Ambiente.ToString(), cfg.Uf);
+            _cache.Set(cacheKey, result, TimeSpan.FromSeconds(30));
+            return result;
         }
     }
 
@@ -560,6 +643,17 @@ public class SefazNfeService
     private static string MascararCnpj(string cnpj) =>
         cnpj.Length <= 4 ? "****" : new string('*', cnpj.Length - 4) + cnpj[^4..];
 }
+
+public sealed record SefazHealthResult(
+    bool Configured,
+    bool Online,
+    int? CStat,
+    string Message,
+    DateTime CheckedAt,
+    long LatencyMs,
+    string? Ambiente,
+    string? Uf,
+    DateTime? SefazReceivedAt = null);
 
 /// <summary>Resultado de um ciclo de sincronização — exibido no painel do admin.</summary>
 public class SefazSyncResult

@@ -17,9 +17,11 @@
 - Frontend e backend compilam. O lint passou em 2026-08-11.
 - A Distribuição DF-e agora possui lock distribuído, cooldown e quota isolados
   por tenant/CNPJ/ambiente; `656` retorna 429 e concorrência retorna 409.
+- Integrações exibe saúde da SEFAZ por UF/ambiente, latência, `cStat`, horário da
+  medição e botão de reteste sem consumir a quota de Distribuição DF-e.
 - Testes focados de billing/comissões e a suíte completa passaram. Após corrigir
   a limpeza de schemas, a base passou com 750 testes; após a proteção SEFAZ,
-  passaram 756/756 testes no PostgreSQL real.
+  passaram 758/758 testes no PostgreSQL real após a inclusão do indicador SEFAZ.
 
 ## Próxima direção recomendada
 

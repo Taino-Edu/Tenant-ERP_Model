@@ -421,6 +421,26 @@ public class ContasReceberController : ControllerBase
     }
 
     /// <summary>
+    /// Saúde do serviço de autorização NF-e da UF. Não consulta distribuição
+    /// DF-e e não interfere em NSU, cooldown ou quota de notas destinadas.
+    /// </summary>
+    [HttpGet("sefaz/health")]
+    [RequireModule("fiscal")]
+    public async Task<IActionResult> SefazHealth(CancellationToken ct) =>
+        Ok(await _sefaz.TestarStatusAsync(forceRefresh: false, ct));
+
+    /// <summary>Força uma nova medição, ignorando o cache curto do indicador.</summary>
+    [HttpPost("sefaz/test")]
+    [RequireModule("fiscal")]
+    public async Task<IActionResult> TestSefaz(CancellationToken ct)
+    {
+        var result = await _sefaz.TestarStatusAsync(forceRefresh: true, ct);
+        if (!result.Configured)
+            return BadRequest(new { message = result.Message });
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Lista as NF-e de fornecedores descobertas via SEFAZ (limitado às 200 mais
     /// recentes), com o status do pipeline (aguardando ciência → XML → contas geradas).
     /// </summary>
