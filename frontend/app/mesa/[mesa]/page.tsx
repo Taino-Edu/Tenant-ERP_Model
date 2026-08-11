@@ -7,7 +7,7 @@ import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast, { Toaster } from 'react-hot-toast'
 import {
   User, Hash, MessageCircle, Loader2,
-  X, Shield, ChevronRight, ArrowLeft
+  X, Shield, ChevronRight, ArrowLeft, UtensilsCrossed
 } from 'lucide-react'
 
 const STORAGE_KEY = 'mesa-last-user'
@@ -61,7 +61,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function MesaPage() {
-  const { site } = useSiteConfig()
+  const { site, loading: siteLoading } = useSiteConfig()
   const params  = useParams()
   const router  = useRouter()
   const mesa    = decodeURIComponent(params.mesa as string)
@@ -133,6 +133,21 @@ export default function MesaPage() {
       setStep(isQuick ? 'quick' : 'form')
       toast.error(err.response?.data?.message || 'Erro ao realizar login rápido.')
     }
+  }
+
+  if (!siteLoading && !site.enabledModules.includes('restaurante')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-slate-950 text-center">
+        <div className="max-w-md rounded-3xl border border-white/10 bg-white/5 p-8">
+          <UtensilsCrossed className="w-10 h-10 text-white/40 mx-auto mb-4" />
+          <h1 className="text-xl font-black text-white">Comandas indisponíveis</h1>
+          <p className="text-sm text-white/55 mt-2">O módulo Restaurante não está habilitado nesta loja.</p>
+          <button type="button" onClick={() => router.push('/')} className="mt-6 px-5 py-3 rounded-xl bg-white text-slate-900 font-bold text-sm">
+            Voltar para a loja
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (

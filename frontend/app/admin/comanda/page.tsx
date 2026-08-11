@@ -12,6 +12,7 @@ import toast from 'react-hot-toast'
 import {
   Wifi, WifiOff, RefreshCw, Users, Clock, CheckCircle, ChevronDown, ChevronUp,
   History, Search, Loader2, Trash2, FolderOpen, Pencil, Receipt,
+  UtensilsCrossed,
 } from 'lucide-react'
 import clsx from 'clsx'
 import { fmt, brToday, handleNotaFiscalResult } from '@/components/admin/comanda/shared'
@@ -26,7 +27,8 @@ import { ComandaReceiptModal } from '@/components/admin/comanda/ComandaReceiptMo
 export default function ComandaPage() {
   const { prefs } = usePreferences()
   const dp = prefs.dashboard
-  const { site } = useSiteConfig()
+  const { site, loading: siteLoading } = useSiteConfig()
+  const enabled = site.enabledModules.includes('restaurante')
   const siteNameRef = useRef(site.siteName)
   useEffect(() => { siteNameRef.current = site.siteName }, [site.siteName])
   const [subTab, setSubTab]       = useState<'ativas' | 'historico'>('ativas')
@@ -66,6 +68,7 @@ export default function ComandaPage() {
   const knownIdsRef               = useRef<Set<string>>(new Set())
 
   const fetchComandas = useCallback(async () => {
+    if (!enabled) { setLoading(false); return }
     try {
       const { data } = await comandaApi.dashboard()
       // Detecta novas comandas e toca o som de gol
@@ -81,9 +84,10 @@ export default function ComandaPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [enabled])
 
   const fetchHistory = useCallback(async (data?: string) => {
+    if (!enabled) return
     setHistLoad(true)
     try {
       const { data: res } = await comandaApi.history(data)
@@ -93,15 +97,17 @@ export default function ComandaPage() {
     } finally {
       setHistLoad(false)
     }
-  }, [])
+  }, [enabled])
 
   // Config de emissão automática de nota fiscal (usada pelo fechamento de comanda)
   useEffect(() => {
+    if (!enabled) return
     fiscalApi.getConfig().then(r => setAutoEmitMethods(r.data.formasPagamentoAutoEmissao ?? [])).catch(() => {})
     productApi.listAdmin().then(r => setAllProducts(r.data.filter(p => p.isActive))).catch(() => {})
-  }, [])
+  }, [enabled])
 
   useEffect(() => {
+    if (!enabled) return
     fetchComandas()
     let hub: Awaited<ReturnType<typeof startHub>>
 
@@ -146,11 +152,11 @@ export default function ComandaPage() {
       stopHub()
       window.removeEventListener('focus', onFocus)
     }
-  }, [fetchComandas, fetchHistory])
+  }, [enabled, fetchComandas, fetchHistory])
 
   // Polling separado — reage em tempo real quando o usuário muda o intervalo nas configurações
   useEffect(() => {
-    if (dp.refreshInterval === 0) return
+    if (!enabled || dp.refreshInterval === 0) return
     const intervalMs = dp.refreshInterval * 1000
     const poll = setInterval(async () => {
       const { HubConnectionState } = await import('@microsoft/signalr')
@@ -161,7 +167,7 @@ export default function ComandaPage() {
       fetchComandas()
     }, intervalMs)
     return () => clearInterval(poll)
-  }, [dp.refreshInterval, fetchComandas])
+  }, [enabled, dp.refreshInterval, fetchComandas])
 
   useEffect(() => {
     if (subTab === 'historico') fetchHistory(histData)
@@ -335,6 +341,22 @@ export default function ComandaPage() {
   const filtered = comandas.filter(c =>
     !search || c.userName.toLowerCase().includes(search.toLowerCase())
   )
+
+  if (siteLoading) {
+    return <div className="p-10 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-brand-400" /></div>
+  }
+
+  if (!enabled) {
+    return (
+      <div className="p-6 md:p-8 max-w-4xl mx-auto">
+        <div className="card p-8 text-center">
+          <UtensilsCrossed className="w-10 h-10 text-gray-500 mx-auto mb-3" />
+          <h1 className="text-xl font-bold text-white">Comandas fazem parte do Restaurante</h1>
+          <p className="text-sm text-gray-400 mt-2">Ative o módulo Restaurante para acessar mesas, comandas e produção. O histórico permanece preservado.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">

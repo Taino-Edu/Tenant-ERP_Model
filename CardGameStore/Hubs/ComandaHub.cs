@@ -48,6 +48,13 @@ public class ComandaHub : Hub
 
     public override async Task OnConnectedAsync()
     {
+        if (!_tenant.EnabledModules.Contains("restaurante", StringComparer.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("Conexão ao ComandaHub recusada: módulo Restaurante desabilitado no tenant {TenantId}", _tenant.TenantId);
+            Context.Abort();
+            return;
+        }
+
         var userId = GetUserId();
         var role   = GetUserRole();
 

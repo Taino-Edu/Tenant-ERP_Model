@@ -19,7 +19,7 @@ function useBaseUrl() {
 
 export default function QRCodesPage() {
   const router = useRouter()
-  const { site }  = useSiteConfig()
+  const { site, loading: siteLoading }  = useSiteConfig()
   const baseUrl   = useBaseUrl()
   const [mesas, setMesas]     = useState<Mesa[]>([])
   const [newNome, setNewNome] = useState('')
@@ -29,11 +29,12 @@ export default function QRCodesPage() {
   const [authChecked, setAuthChecked] = useState(false)
 
   useEffect(() => {
-    const allowed = getRole() === 'Admin' || hasPermission('qrcodes')
+    if (siteLoading) return
+    const allowed = site.enabledModules.includes('restaurante') && (getRole() === 'Admin' || hasPermission('qrcodes'))
     setAuthorized(allowed)
     setAuthChecked(true)
     if (!allowed) router.replace('/admin/dashboard')
-  }, [router])
+  }, [router, site.enabledModules, siteLoading])
 
   // Gera os QR codes ao montar ou quando baseUrl muda
   useEffect(() => {

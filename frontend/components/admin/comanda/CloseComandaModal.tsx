@@ -27,6 +27,8 @@ export function CloseComandaModal({
   const [splitEnabled,  setSplitEnabled]  = useState(false)
   const [secondMethod,  setSecondMethod]  = useState('Dinheiro')
   const [secondAmtStr,  setSecondAmtStr]  = useState('')
+  const [discountMode,  setDiscountMode]  = useState<'percent' | 'cents'>('percent')
+  const [discountPctStr, setDiscountPctStr] = useState('')
   const [descontoStr,   setDescontoStr]   = useState('')
   const [emitirNota,    setEmitirNota]    = useState(() => autoEmitMethods.includes('Dinheiro'))
   const [notaTouched,   setNotaTouched]   = useState(false)
@@ -46,10 +48,15 @@ export function CloseComandaModal({
   }, [method, autoEmitMethods, notaTouched])
 
   const totalAntesDesconto = comanda.totalInReais - comanda.pointsApplied / 100
-  const descontoManualCents = Math.min(
-    Math.round(parseFloat(descontoStr.replace(',', '.') || '0') * 100),
-    Math.round(totalAntesDesconto * 100),
-  )
+  const totalAntesDescontoCents = Math.round(totalAntesDesconto * 100)
+  const parsedDiscountPct = parseFloat(discountPctStr.replace(',', '.') || '0')
+  const discountPct = Number.isFinite(parsedDiscountPct) ? Math.min(100, Math.max(0, parsedDiscountPct)) : 0
+  const descontoManualCents = discountMode === 'percent'
+    ? Math.round(totalAntesDescontoCents * discountPct / 100)
+    : Math.min(
+        Math.max(0, Math.round(parseFloat(descontoStr.replace(',', '.') || '0') * 100)),
+        totalAntesDescontoCents,
+      )
   const totalAntesArredondamentoCents = Math.round(totalAntesDesconto * 100) - descontoManualCents
   const saldoCashback  = comanda.userBalanceInCents / 100
   const saldoPontos    = comanda.userPointsBalance
@@ -74,7 +81,7 @@ export function CloseComandaModal({
   const splitInvalido    = splitEnabled && (secondAmtCents <= 0 || secondAmtCents >= Math.round(totalRestante * 100))
   const splitSemCashback = splitEnabled && secondMethod === 'Cashback' && secondAmtCents > comanda.userBalanceInCents
   const splitSemPontos   = splitEnabled && secondMethod === 'Pontos'   && secondAmtCents > saldoPontos
-  const bloqueado = semSaldoCashback || semSaldoPontos || splitInvalido || splitSemCashback || splitSemPontos || (usesCash && !cashState.valid)
+  const bloqueado = semSaldoCashback || semSaldoPontos || splitInvalido || splitSemCashback || splitSemPontos || (usesCash && cashDueBeforeRounding > 0 && !cashState.valid)
 
   function handleConfirm() {
     const emitir = fiscalEnabled && emitirNota
@@ -108,18 +115,44 @@ export function CloseComandaModal({
         </div>
 
         <div>
-          <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Desconto (R$)</p>
-          <input
-            type="text"
-            inputMode="decimal"
-            placeholder="0,00"
-            value={descontoStr}
-            onChange={e => setDescontoStr(e.target.value)}
-            className="input text-sm w-full font-mono"
-          />
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Desconto</p>
+            <div className="flex gap-1 bg-surface-900 rounded-lg p-0.5" aria-label="Tipo de desconto">
+              {(['percent', 'cents'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setDiscountMode(mode)}
+                  className={clsx(
+                    'px-2.5 py-1 rounded-md text-[11px] font-bold transition-all',
+                    discountMode === mode
+                      ? 'bg-accent-green/20 text-accent-green'
+                      : 'text-gray-500 hover:text-gray-300'
+                  )}
+                >{mode === 'percent' ? '%' : 'R$'}</button>
+              ))}
+            </div>
+          </div>
+          <div className="relative">
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder={discountMode === 'percent' ? '0' : '0,00'}
+              value={discountMode === 'percent' ? discountPctStr : descontoStr}
+              onChange={e => discountMode === 'percent'
+                ? setDiscountPctStr(e.target.value)
+                : setDescontoStr(e.target.value)}
+              className="input text-sm w-full font-mono pr-12"
+              aria-label={discountMode === 'percent' ? 'Percentual de desconto' : 'Valor do desconto em reais'}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">
+              {discountMode === 'percent' ? '%' : 'R$'}
+            </span>
+          </div>
           {descontoCents > 0 && (
             <p className="text-xs text-accent-green mt-1">
-              Total após desconto: R$ {totalRestante.toFixed(2).replace('.', ',')}
+              {discountMode === 'percent' ? `${discountPct.toLocaleString('pt-BR')}% = ` : ''}
+              R$ {(descontoManualCents / 100).toFixed(2).replace('.', ',')} de desconto · total R$ {totalRestante.toFixed(2).replace('.', ',')}
             </p>
           )}
         </div>

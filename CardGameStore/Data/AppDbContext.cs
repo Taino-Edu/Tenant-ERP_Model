@@ -331,6 +331,12 @@ public class AppDbContext : DbContext
             entity.HasIndex(i => i.AddedAt)
                   .HasDatabaseName("ix_comanda_items_added_at");
 
+            entity.Property(i => i.ProductionStatus)
+                  .HasConversion<string>();
+
+            entity.HasIndex(i => new { i.ProductionAreaId, i.ProductionStatus, i.AddedAt })
+                  .HasDatabaseName("ix_comanda_items_production_queue");
+
             entity.HasOne(i => i.Comanda)
                   .WithMany(c => c.Items)
                   .HasForeignKey(i => i.ComandaId)
@@ -339,6 +345,12 @@ public class AppDbContext : DbContext
             entity.HasOne(i => i.Product)
                   .WithMany(p => p.ComandaItems)
                   .HasForeignKey(i => i.ProductId)
+                  .OnDelete(DeleteBehavior.Restrict)
+                  .IsRequired(false);
+
+            entity.HasOne<RestaurantProductionArea>()
+                  .WithMany()
+                  .HasForeignKey(i => i.ProductionAreaId)
                   .OnDelete(DeleteBehavior.Restrict)
                   .IsRequired(false);
         });
@@ -704,5 +716,12 @@ public class AppDbContext : DbContext
             entity.HasIndex(area => new { area.IsActive, area.DisplayOrder })
                   .HasDatabaseName("ix_restaurant_production_areas_active_order");
         });
+
+        modelBuilder.Entity<Product>()
+            .HasOne<RestaurantProductionArea>()
+            .WithMany()
+            .HasForeignKey(product => product.RestaurantProductionAreaId)
+            .OnDelete(DeleteBehavior.SetNull)
+            .IsRequired(false);
     }
 }

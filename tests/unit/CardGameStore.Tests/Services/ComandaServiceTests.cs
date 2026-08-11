@@ -163,6 +163,29 @@ public class ComandaServiceTests
     }
 
     [Fact]
+    public async Task AddItem_DeveCongelarAreaEIniciarFilaDeProducao()
+    {
+        var db = CreateDb(nameof(AddItem_DeveCongelarAreaEIniciarFilaDeProducao));
+        var service = CreateService(db);
+        var (user, product, _) = await SeedAsync(db);
+        var area = new RestaurantProductionArea { Name = "Bar", Color = "#112233" };
+        db.RestaurantProductionAreas.Add(area);
+        product.RestaurantProductionAreaId = area.Id;
+        await db.SaveChangesAsync();
+
+        var resultado = await service.AddItemAsync(user.Id, new AddItemToComandaRequest
+        {
+            ProductId = product.Id,
+            Quantity = 1,
+        });
+
+        resultado.Items.Should().ContainSingle(item =>
+            item.ProductionAreaId == area.Id &&
+            item.ProductionAreaName == "Bar" &&
+            item.ProductionStatus == "Recebido");
+    }
+
+    [Fact]
     public async Task AddItem_SemEstoque_DeveLancarExcecao()
     {
         var db      = CreateDb(nameof(AddItem_SemEstoque_DeveLancarExcecao));

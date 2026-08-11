@@ -140,6 +140,9 @@ export interface ComandaDto {
 export interface ComandaItemDto {
   id: string; productId?: string | null; itemNameSnapshot: string; quantity: number
   unitPriceInCents: number; unitPriceInReais: number; subtotalInReais: number; addedAt: string
+  productionAreaId: string | null; productionAreaName: string | null
+  productionStatus: RestaurantProductionStatus | null
+  productionStartedAt: string | null; productionReadyAt: string | null; productionServedAt: string | null
 }
 
 export interface EditarItemRequest {
@@ -173,6 +176,7 @@ export interface Product {
   isLowStock: boolean; priceInReais: number; costPriceInReais: number
   marginInReais: number; marginPercent: number
   hasVariants: boolean
+  restaurantProductionAreaId: string | null
   /** NCM (Nomenclatura Comum do Mercosul) — obrigatório para emitir NFC-e deste produto. */
   ncm: string | null
   /** CEST com 7 digitos; obrigatorio quando a natureza usa ICMS-ST. */
@@ -2183,6 +2187,32 @@ export interface RestaurantProductionAreaDto {
   isActive: boolean
 }
 
+export type RestaurantProductionStatus = 'Recebido' | 'Preparando' | 'Pronto' | 'Servido'
+
+export interface RestaurantProductionItemDto {
+  comandaId: string
+  tableIdentifier: string | null
+  userName: string
+  itemId: string
+  itemName: string
+  quantity: number
+  productionAreaId: string
+  productionAreaName: string
+  status: RestaurantProductionStatus
+  addedAt: string
+  productionStartedAt: string | null
+  productionReadyAt: string | null
+  productionServedAt: string | null
+  comandaNotes: string | null
+}
+
+export interface RestaurantProductMappingDto {
+  id: string
+  name: string
+  category: string
+  productionAreaId: string | null
+}
+
 export interface SaveRestaurantProductionAreaRequest {
   name: string
   description?: string | null
@@ -2201,4 +2231,12 @@ export const restaurantApi = {
     api.delete(`/api/restaurante/areas-producao/${id}`),
   reactivateProductionArea: (id: string) =>
     api.post<RestaurantProductionAreaDto>(`/api/restaurante/areas-producao/${id}/reativar`),
+  listProductMappings: () =>
+    api.get<RestaurantProductMappingDto[]>('/api/restaurante/produtos'),
+  assignProductArea: (productId: string, productionAreaId: string | null) =>
+    api.put(`/api/restaurante/produtos/${productId}/area-producao`, { productionAreaId }),
+  listProductionQueue: (productionAreaId?: string) =>
+    api.get<RestaurantProductionItemDto[]>('/api/restaurante/fila-producao', { params: productionAreaId ? { productionAreaId } : undefined }),
+  updateProductionStatus: (comandaId: string, itemId: string, status: RestaurantProductionStatus) =>
+    api.put<RestaurantProductionItemDto>(`/api/restaurante/comandas/${comandaId}/itens/${itemId}/status-producao`, { status }),
 }

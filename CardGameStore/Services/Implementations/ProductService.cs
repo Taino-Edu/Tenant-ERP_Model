@@ -64,6 +64,7 @@ public class ProductService : IProductService
                 DiscountPriceInCents = p.DiscountPriceInCents,
                 IsPreVenda = p.IsPreVenda,
                 HasVariants = p.HasVariants,
+                RestaurantProductionAreaId = p.RestaurantProductionAreaId,
                 CreatedAt = p.CreatedAt,
                 UpdatedAt = p.UpdatedAt,
             });

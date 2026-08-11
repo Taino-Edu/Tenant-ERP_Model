@@ -177,6 +177,10 @@ public class Product
     [Column("has_variants")]
     public bool HasVariants { get; set; } = false;
 
+    /// <summary>Área do Restaurante responsável por preparar este produto.</summary>
+    [Column("restaurant_production_area_id")]
+    public Guid? RestaurantProductionAreaId { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

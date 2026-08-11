@@ -1,11 +1,11 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import { leadsApi, platformApi, LeadDto, LeadStatus, LeadDigitalPresence, getErrorMessage } from '@/lib/api'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import { platformApi, LeadDto, LeadStatus, LeadDigitalPresence, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
 import toast from 'react-hot-toast'
-import { UserPlus, Loader2, MessageCircle, MapPin } from 'lucide-react'
+import { UserPlus, Loader2, MessageCircle, MapPin, Search, Target, UserCheck, Users } from 'lucide-react'
 
 const STATUS_OPTIONS: LeadStatus[] = ['Novo', 'Contatado', 'Convertido', 'Perdido']
 
@@ -233,17 +233,34 @@ export default function PlataformaLeadsPage() {
   const [leads, setLeads] = useState<LeadDto[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<LeadStatus | ''>('')
+  const [search, setSearch] = useState('')
   const [convertingLead, setConvertingLead] = useState<LeadDto | null>(null)
 
   const fetchLeads = useCallback(() => {
     setLoading(true)
-    platformApi.listLeads(statusFilter || undefined)
+    platformApi.listLeads()
       .then(r => setLeads(r.data))
       .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar leads')))
       .finally(() => setLoading(false))
-  }, [statusFilter])
+  }, [])
 
   useEffect(() => { fetchLeads() }, [fetchLeads])
+
+  const filteredLeads = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('pt-BR')
+    return leads.filter(lead => {
+      const matchesStatus = !statusFilter || lead.status === statusFilter
+      const matchesSearch = !term || [lead.nome, lead.telefone, lead.email, lead.origem, lead.mensagem]
+        .some(value => value?.toLocaleLowerCase('pt-BR').includes(term))
+      return matchesStatus && matchesSearch
+    })
+  }, [leads, search, statusFilter])
+
+  const stageCounts = useMemo(() => Object.fromEntries(
+    STATUS_OPTIONS.map(status => [status, leads.filter(lead => lead.status === status).length])
+  ) as Record<LeadStatus, number>, [leads])
+
+  const conversionRate = leads.length > 0 ? Math.round(stageCounts.Convertido / leads.length * 100) : 0
 
   async function handleTenantCreated(tenantId: string) {
     if (!convertingLead) return
@@ -259,23 +276,56 @@ export default function PlataformaLeadsPage() {
     <div className="space-y-5">
       <PageHeader
         icon={UserPlus}
-        title="Leads"
-        description="Quem demonstrou interesse em contratar a plataforma"
-        actions={
-          <select className="input text-sm py-1.5" value={statusFilter} onChange={e => setStatusFilter(e.target.value as LeadStatus | '')}>
-            <option value="">Todos os status</option>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-        }
+        title="CRM · Leads"
+        description="Captação, qualificação, contato e conversão de futuros clientes"
       />
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Leads captados', value: leads.length, icon: Users, color: 'text-brand-300' },
+          { label: 'Novos', value: stageCounts.Novo, icon: UserPlus, color: 'text-brand-300' },
+          { label: 'Em contato', value: stageCounts.Contatado, icon: Target, color: 'text-amber-400' },
+          { label: 'Conversão', value: `${conversionRate}%`, icon: UserCheck, color: 'text-accent-green' },
+        ].map(metric => (
+          <div key={metric.label} className="card p-4 flex items-center gap-3">
+            <metric.icon className={`w-5 h-5 ${metric.color}`} />
+            <div>
+              <p className="text-xl font-black text-white">{metric.value}</p>
+              <p className="text-xs text-gray-500">{metric.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card p-3 flex flex-col sm:flex-row gap-3">
+        <label className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            className="input text-sm pl-9 w-full"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por nome, telefone, e-mail ou origem"
+          />
+        </label>
+        <div className="flex gap-1 overflow-x-auto">
+          <button type="button" onClick={() => setStatusFilter('')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap ${!statusFilter ? 'bg-brand-500/20 text-brand-300' : 'text-gray-500 hover:text-gray-300'}`}>
+            Todos {leads.length}
+          </button>
+          {STATUS_OPTIONS.map(status => (
+            <button key={status} type="button" onClick={() => setStatusFilter(status)} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap ${statusFilter === status ? STATUS_STYLES[status] : 'text-gray-500 hover:text-gray-300'}`}>
+              {status} {stageCounts[status]}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="card overflow-x-auto">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
           </div>
-        ) : leads.length === 0 ? (
-          <p className="text-gray-400 text-center py-16">Nenhum lead ainda.</p>
+        ) : filteredLeads.length === 0 ? (
+          <p className="text-gray-400 text-center py-16">Nenhum lead encontrado com esses filtros.</p>
         ) : (
           <table className="w-full min-w-[900px] text-sm">
             <thead>
@@ -289,7 +339,7 @@ export default function PlataformaLeadsPage() {
               </tr>
             </thead>
             <tbody>
-              {leads.map(l => (
+              {filteredLeads.map(l => (
                 <LeadRow key={l.id} lead={l} onChanged={fetchLeads} onConvert={setConvertingLead} />
               ))}
             </tbody>

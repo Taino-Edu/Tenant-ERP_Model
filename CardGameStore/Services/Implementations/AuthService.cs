@@ -134,6 +134,9 @@ public class AuthService : IAuthService
     // =========================================================================
     public async Task<AuthResponse> QuickLoginAsync(QuickLoginRequest request)
     {
+        if (!_tenant.EnabledModules.Contains("restaurante", StringComparer.OrdinalIgnoreCase))
+            throw new ArgumentException("O módulo Restaurante e suas comandas não estão habilitados para esta loja.");
+
         var cpf = request.Cpf?.Trim();
         var hasCpf = !string.IsNullOrEmpty(cpf);
 

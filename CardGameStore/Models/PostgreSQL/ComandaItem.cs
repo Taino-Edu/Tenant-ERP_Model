@@ -92,9 +92,42 @@ public class ComandaItem
     public Guid AddedByUserId { get; set; }
 
     // -------------------------------------------------------------------------
+    // Produção do Restaurante — snapshot preso à comanda
+    // -------------------------------------------------------------------------
+
+    /// <summary>Área responsável no momento em que o item entrou na comanda.</summary>
+    [Column("production_area_id")]
+    public Guid? ProductionAreaId { get; set; }
+
+    /// <summary>Nome congelado para preservar o histórico se a área for renomeada.</summary>
+    [MaxLength(80)]
+    [Column("production_area_name_snapshot")]
+    public string? ProductionAreaNameSnapshot { get; set; }
+
+    [Column("production_status")]
+    public RestaurantProductionStatus? ProductionStatus { get; set; }
+
+    [Column("production_started_at")]
+    public DateTime? ProductionStartedAt { get; set; }
+
+    [Column("production_ready_at")]
+    public DateTime? ProductionReadyAt { get; set; }
+
+    [Column("production_served_at")]
+    public DateTime? ProductionServedAt { get; set; }
+
+    // -------------------------------------------------------------------------
     // Propriedade calculada
     // -------------------------------------------------------------------------
 
     [NotMapped]
     public decimal SubtotalInReais => SubtotalInCents / 100m;
+}
+
+public enum RestaurantProductionStatus
+{
+    Recebido,
+    Preparando,
+    Pronto,
+    Servido,
 }

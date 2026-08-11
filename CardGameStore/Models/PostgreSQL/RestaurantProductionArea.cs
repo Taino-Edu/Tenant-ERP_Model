@@ -5,8 +5,8 @@ namespace CardGameStore.Models.PostgreSQL;
 
 /// <summary>
 /// Setor que prepara itens de um restaurante (ex.: Cozinha, Bar, Confeitaria).
-/// É uma entidade exclusivamente aditiva do módulo Restaurante: comandas e
-/// produtos existentes não dependem dela e continuam funcionando sem o módulo.
+/// Produtos apontam para uma área; ao entrar na comanda, essa referência e o
+/// nome viram snapshot no item para preservar o histórico operacional.
 /// </summary>
 [Table("restaurant_production_areas")]
 public class RestaurantProductionArea

@@ -32,6 +32,7 @@ public class ProductPublicDto
     public int? DiscountPriceInCents { get; set; }
     public bool IsPreVenda { get; set; }
     public bool HasVariants { get; set; }
+    public Guid? RestaurantProductionAreaId { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
@@ -68,6 +69,7 @@ public class ProductPublicDto
         DiscountPriceInCents = p.DiscountPriceInCents,
         IsPreVenda          = p.IsPreVenda,
         HasVariants         = p.HasVariants,
+        RestaurantProductionAreaId = p.RestaurantProductionAreaId,
         CreatedAt           = p.CreatedAt,
         UpdatedAt           = p.UpdatedAt,
         PriceInReais        = p.PriceInReais,

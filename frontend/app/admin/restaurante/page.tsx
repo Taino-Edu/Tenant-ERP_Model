@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import {
+  ComandaDto,
+  RestaurantProductMappingDto,
   RestaurantProductionAreaDto,
+  RestaurantProductionItemDto,
+  RestaurantProductionStatus,
   SaveRestaurantProductionAreaRequest,
+  comandaApi,
   getErrorMessage,
   restaurantApi,
 } from '@/lib/api'
@@ -13,9 +18,24 @@ import Modal from '@/components/admin/ui/Modal'
 import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
 import NumberInput from '@/components/admin/ui/NumberInput'
 import toast from 'react-hot-toast'
-import { ChefHat, Loader2, Pencil, Plus, Power, UtensilsCrossed } from 'lucide-react'
+import { ArrowRight, ChefHat, Clock3, ExternalLink, Flame, Loader2, MessageSquare, PackageCheck, Pencil, Plus, Power, ReceiptText, UtensilsCrossed } from 'lucide-react'
+import Link from 'next/link'
+import { startHub, stopHub } from '@/lib/signalr'
 
 const DEFAULT_COLOR = '#3EC2F2'
+const PRODUCTION_STATUSES: RestaurantProductionStatus[] = ['Recebido', 'Preparando', 'Pronto']
+const NEXT_STATUS: Record<Exclude<RestaurantProductionStatus, 'Servido'>, RestaurantProductionStatus> = {
+  Recebido: 'Preparando',
+  Preparando: 'Pronto',
+  Pronto: 'Servido',
+}
+
+function elapsedLabel(openedAt: string) {
+  const minutes = Math.max(0, Math.floor((Date.now() - new Date(openedAt).getTime()) / 60000))
+  if (minutes < 60) return `${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ${minutes % 60}min`
+}
 
 function AreaModal({ area, onClose, onSaved }: {
   area: RestaurantProductionAreaDto | null
@@ -88,10 +108,15 @@ function AreaModal({ area, onClose, onSaved }: {
 }
 
 export default function RestaurantePage() {
-  const { site } = useSiteConfig()
+  const { site, loading: siteLoading } = useSiteConfig()
   const enabled = site.enabledModules.includes('restaurante')
   const [areas, setAreas] = useState<RestaurantProductionAreaDto[]>([])
+  const [comandas, setComandas] = useState<ComandaDto[]>([])
+  const [productionQueue, setProductionQueue] = useState<RestaurantProductionItemDto[]>([])
+  const [products, setProducts] = useState<RestaurantProductMappingDto[]>([])
   const [loading, setLoading] = useState(true)
+  const [updatingItem, setUpdatingItem] = useState<string | null>(null)
+  const [updatingProduct, setUpdatingProduct] = useState<string | null>(null)
   const [editing, setEditing] = useState<RestaurantProductionAreaDto | null | undefined>(undefined)
   const [confirmarDesativar, setConfirmarDesativar] = useState<RestaurantProductionAreaDto | null>(null)
   const [desativando, setDesativando] = useState(false)
@@ -102,8 +127,17 @@ export default function RestaurantePage() {
       return
     }
     try {
-      const { data } = await restaurantApi.listProductionAreas(true)
-      setAreas(data)
+      const [areasResult, comandasResult, queueResult, productsResult] = await Promise.allSettled([
+        restaurantApi.listProductionAreas(true),
+        comandaApi.dashboard(),
+        restaurantApi.listProductionQueue(),
+        restaurantApi.listProductMappings(),
+      ])
+      if (areasResult.status === 'rejected') throw areasResult.reason
+      setAreas(areasResult.value.data)
+      setComandas(comandasResult.status === 'fulfilled' ? comandasResult.value.data : [])
+      setProductionQueue(queueResult.status === 'fulfilled' ? queueResult.value.data : [])
+      setProducts(productsResult.status === 'fulfilled' ? productsResult.value.data : [])
     } catch (error) {
       toast.error(getErrorMessage(error, 'Não foi possível carregar o módulo Restaurante.'))
     } finally {
@@ -111,7 +145,32 @@ export default function RestaurantePage() {
     }
   }, [enabled])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    const interval = window.setInterval(load, 30000)
+    let hub: Awaited<ReturnType<typeof startHub>> | undefined
+    if (enabled) {
+      startHub().then(connection => {
+        hub = connection
+        connection.on('ComandaUpdated', load)
+        connection.on('ComandaOpened', load)
+        connection.on('ComandaClosed', load)
+        connection.on('ComandaCancelled', load)
+        connection.on('ProductionStatusUpdated', load)
+      }).catch(() => {})
+    }
+    return () => {
+      window.clearInterval(interval)
+      if (hub) {
+        hub.off('ComandaUpdated', load)
+        hub.off('ComandaOpened', load)
+        hub.off('ComandaClosed', load)
+        hub.off('ComandaCancelled', load)
+        hub.off('ProductionStatusUpdated', load)
+      }
+      stopHub()
+    }
+  }, [enabled, load])
 
   async function deactivate(area: RestaurantProductionAreaDto) {
     setDesativando(true)
@@ -137,6 +196,38 @@ export default function RestaurantePage() {
     }
   }
 
+  async function advanceProduction(item: RestaurantProductionItemDto) {
+    if (item.status === 'Servido') return
+    setUpdatingItem(item.itemId)
+    try {
+      await restaurantApi.updateProductionStatus(item.comandaId, item.itemId, NEXT_STATUS[item.status])
+      await load()
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível atualizar o preparo.'))
+    } finally {
+      setUpdatingItem(null)
+    }
+  }
+
+  async function assignProductArea(productId: string, productionAreaId: string | null) {
+    setUpdatingProduct(productId)
+    try {
+      await restaurantApi.assignProductArea(productId, productionAreaId)
+      setProducts(current => current.map(product => product.id === productId
+        ? { ...product, productionAreaId }
+        : product))
+      toast.success(productionAreaId ? 'Produto encaminhado para a área.' : 'Produto removido da produção.')
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Não foi possível vincular o produto.'))
+    } finally {
+      setUpdatingProduct(null)
+    }
+  }
+
+  if (siteLoading) {
+    return <div className="p-10 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-brand-400" /></div>
+  }
+
   if (!enabled) {
     return (
       <div className="p-6 md:p-8 max-w-5xl mx-auto">
@@ -154,16 +245,137 @@ export default function RestaurantePage() {
       <PageHeader
         icon={UtensilsCrossed}
         title="Restaurante"
-        description="Configurações adicionais de produção — sem alterar suas comandas atuais."
+        description="Comandas, salão e produção conectados em um único fluxo."
         actions={<button className="btn-primary" onClick={() => setEditing(null)}><Plus className="w-4 h-4" /> Nova área</button>}
       />
+
+      <section className="card p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
+          <div className="flex items-start gap-3">
+            <ReceiptText className="w-5 h-5 text-accent-green mt-0.5" />
+            <div>
+              <h2 className="font-semibold text-white">Operação do salão</h2>
+              <p className="text-sm text-gray-400">Comandas abertas, pedidos e observações do cliente em um só lugar.</p>
+            </div>
+          </div>
+          <Link href="/admin/comanda" className="btn-secondary text-xs py-2">
+            Abrir gestão completa <ExternalLink className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
+        ) : comandas.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-surface-500 p-7 text-center">
+            <p className="text-gray-300 font-medium">Salão sem comandas ativas</p>
+            <p className="text-sm text-gray-500 mt-1">Novas comandas aparecem aqui automaticamente.</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {comandas.map(comanda => (
+              <article key={comanda.id} className="rounded-xl border border-surface-500 bg-surface-800 p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-white">{comanda.tableIdentifier || 'Balcão'} · {comanda.userName}</p>
+                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                      <Clock3 className="w-3.5 h-3.5" /> aberta há {elapsedLabel(comanda.openedAt)}
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-accent-gold">R$ {comanda.totalInReais.toFixed(2).replace('.', ',')}</span>
+                </div>
+
+                <div className="space-y-1.5 border-t border-surface-600 pt-3">
+                  {comanda.items.length === 0 ? (
+                    <p className="text-xs text-gray-500 italic">Aguardando o primeiro item.</p>
+                  ) : comanda.items.slice(-4).map(item => (
+                    <div key={item.id} className="flex justify-between gap-3 text-xs">
+                      <span className="text-gray-300 truncate">{item.quantity}× {item.itemNameSnapshot}</span>
+                      <span className="text-gray-500 shrink-0">R$ {item.subtotalInReais.toFixed(2).replace('.', ',')}</span>
+                    </div>
+                  ))}
+                  {comanda.items.length > 4 && <p className="text-[11px] text-gray-500">+ {comanda.items.length - 4} item(ns)</p>}
+                </div>
+
+                {comanda.notes && (
+                  <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 flex gap-2">
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                    <span className="whitespace-pre-wrap break-words">{comanda.notes}</span>
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card p-5">
+        <div className="flex items-start gap-3 mb-5">
+          <Flame className="w-5 h-5 text-orange-400 mt-0.5" />
+          <div>
+            <h2 className="font-semibold text-white">Fila de produção</h2>
+            <p className="text-sm text-gray-400">Cada item nasce na comanda e avança pela área responsável até ser servido.</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
+        ) : productionQueue.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-surface-500 p-7 text-center">
+            <PackageCheck className="w-7 h-7 text-gray-600 mx-auto mb-2" />
+            <p className="text-gray-300 font-medium">Nenhum item aguardando produção</p>
+            <p className="text-sm text-gray-500 mt-1">Vincule produtos às áreas; novos itens aparecerão automaticamente.</p>
+          </div>
+        ) : (
+          <div className="grid lg:grid-cols-3 gap-3 items-start">
+            {PRODUCTION_STATUSES.map(status => {
+              const statusItems = productionQueue.filter(item => item.status === status)
+              return (
+                <div key={status} className="rounded-xl border border-surface-600 bg-surface-900/50 p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-gray-300">{status}</h3>
+                    <span className="text-[11px] rounded-full bg-surface-700 px-2 py-0.5 text-gray-400">{statusItems.length}</span>
+                  </div>
+                  <div className="space-y-2">
+                    {statusItems.length === 0 ? <p className="text-xs text-gray-600 py-4 text-center">Fila vazia</p> : statusItems.map(item => {
+                      const area = areas.find(current => current.id === item.productionAreaId)
+                      const next = NEXT_STATUS[item.status as Exclude<RestaurantProductionStatus, 'Servido'>]
+                      return (
+                        <article key={item.itemId} className="rounded-lg border border-surface-600 bg-surface-800 p-3 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-white truncate">{item.quantity}× {item.itemName}</p>
+                              <p className="text-[11px] text-gray-500">{item.tableIdentifier || 'Balcão'} · {item.userName} · {elapsedLabel(item.addedAt)}</p>
+                            </div>
+                            <span className="text-[10px] font-bold rounded-full px-2 py-1 shrink-0" style={{ color: area?.color ?? '#3EC2F2', backgroundColor: `${area?.color ?? '#3EC2F2'}18` }}>
+                              {item.productionAreaName}
+                            </span>
+                          </div>
+                          {item.comandaNotes && (
+                            <p className="text-xs text-amber-200 bg-amber-500/10 rounded-md px-2 py-1.5 flex gap-1.5">
+                              <MessageSquare className="w-3 h-3 shrink-0 mt-0.5" /> {item.comandaNotes}
+                            </p>
+                          )}
+                          <button type="button" onClick={() => advanceProduction(item)} disabled={updatingItem === item.itemId} className="btn-secondary text-xs py-1.5 w-full justify-center">
+                            {updatingItem === item.itemId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
+                            {next === 'Servido' ? 'Marcar servido' : `Mover para ${next.toLowerCase()}`}
+                          </button>
+                        </article>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       <section className="card p-5">
         <div className="flex items-start gap-3 mb-5">
           <ChefHat className="w-5 h-5 text-brand-400 mt-0.5" />
           <div>
             <h2 className="font-semibold text-white">Áreas de produção</h2>
-            <p className="text-sm text-gray-400">Cadastre os setores que futuramente receberão filas e impressão separadas, como cozinha e bar.</p>
+            <p className="text-sm text-gray-400">Cadastre os setores que recebem os itens das comandas, como cozinha, bar e confeitaria.</p>
           </div>
         </div>
 
@@ -202,19 +414,36 @@ export default function RestaurantePage() {
         )}
       </section>
 
-      <div className="grid md:grid-cols-3 gap-3">
-        {[
-          ['Adicionais e observações', 'Estrutura separada para ponto, extras e remoção de ingredientes.'],
-          ['Fila da cozinha', 'Status recebido, preparando, pronto e servido por área.'],
-          ['Salão e garçons', 'Transferência de mesas, responsável e taxa de serviço.'],
-        ].map(([title, description]) => (
-          <div key={title} className="rounded-xl border border-surface-600 bg-surface-800/50 p-4 opacity-70">
-            <p className="text-sm font-medium text-gray-300">{title}</p>
-            <p className="text-xs text-gray-500 mt-1">{description}</p>
-            <span className="inline-block mt-3 text-[10px] uppercase tracking-wider text-brand-400">Próxima etapa</span>
+      <section className="card p-5">
+        <div className="flex items-start gap-3 mb-5">
+          <PackageCheck className="w-5 h-5 text-brand-400 mt-0.5" />
+          <div>
+            <h2 className="font-semibold text-white">Produtos por área</h2>
+            <p className="text-sm text-gray-400">Define para onde cada novo item da comanda será enviado.</p>
           </div>
-        ))}
-      </div>
+        </div>
+        <div className="grid md:grid-cols-2 gap-2 max-h-[28rem] overflow-y-auto pr-1">
+          {products.map(product => (
+            <div key={product.id} className="flex items-center gap-3 rounded-xl border border-surface-600 bg-surface-800 px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-white truncate">{product.name}</p>
+                <p className="text-[11px] text-gray-500 truncate">{product.category}</p>
+              </div>
+              <select
+                value={product.productionAreaId ?? ''}
+                disabled={updatingProduct === product.id}
+                onChange={event => assignProductArea(product.id, event.target.value || null)}
+                className="input text-xs py-1.5 w-40"
+                aria-label={`Área de produção de ${product.name}`}
+              >
+                <option value="">Sem produção</option>
+                {areas.filter(area => area.isActive).map(area => <option key={area.id} value={area.id}>{area.name}</option>)}
+              </select>
+              {updatingProduct === product.id && <Loader2 className="w-4 h-4 animate-spin text-brand-400" />}
+            </div>
+          ))}
+        </div>
+      </section>
 
       {editing !== undefined && <AreaModal area={editing} onClose={() => setEditing(undefined)} onSaved={load} />}
 

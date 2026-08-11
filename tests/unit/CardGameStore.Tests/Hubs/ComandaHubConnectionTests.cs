@@ -105,7 +105,7 @@ public class ComandaHubConnectionTests
     {
         var tenant = new TenantContext();
         // O TenantHubFilter faz exatamente isto antes de o método do hub rodar.
-        tenant.Set(tenantId, schema, ["fiscal"]);
+        tenant.Set(tenantId, schema, ["fiscal", "restaurante"]);
 
         var service = new Mock<IComandaService>();
         service.Setup(s => s.GetActiveComandaIdByUserAsync(It.IsAny<Guid>()))

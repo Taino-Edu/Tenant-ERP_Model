@@ -54,7 +54,7 @@ public class AuthServiceTests
         return new CatalogDbContext(options);
     }
 
-    private static AuthService CreateAuthService(AppDbContext db, ILogger<AuthService>? logger = null)
+    private static AuthService CreateAuthService(AppDbContext db, ILogger<AuthService>? logger = null, string[]? enabledModules = null)
     {
         var jwtSettings = Options.Create(new JwtSettings
         {
@@ -66,7 +66,7 @@ public class AuthServiceTests
         });
 
         var tenantContext = new Mock<ITenantContext>();
-        tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal" });
+        tenantContext.Setup(t => t.EnabledModules).Returns(enabledModules ?? new[] { "fiscal", "restaurante" });
 
         var comandaService = new ComandaService(
             db,
@@ -141,6 +141,20 @@ public class AuthServiceTests
     }
 
     // ── Quick-Login ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task QuickLogin_SemModuloRestaurante_NaoAbreComanda()
+    {
+        var db = CreateInMemoryDb(nameof(QuickLogin_SemModuloRestaurante_NaoAbreComanda));
+        var service = CreateAuthService(db, enabledModules: ["fiscal"]);
+
+        var act = () => service.QuickLoginAsync(new QuickLoginRequest(
+            Name: "Cliente", Cpf: "52998224725", WhatsApp: "11999990000", TableIdentifier: "Mesa-01"));
+
+        await act.Should().ThrowAsync<ArgumentException>()
+            .WithMessage("*Restaurante*comandas*não estão habilitados*");
+        (await db.Comandas.CountAsync()).Should().Be(0);
+    }
 
     [Fact]
     public async Task QuickLogin_CPFNovo_DeveCriarUsuario()

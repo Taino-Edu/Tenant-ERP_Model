@@ -3,10 +3,12 @@ using CardGameStore.Controllers;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Multitenancy;
+using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Services.Interfaces;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 
@@ -26,7 +28,17 @@ public class RestaurantControllerTests
                 It.IsAny<HttpContext?>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CardGameStore.Models.PostgreSQL.AuditSeverity>()))
             .Returns(Task.CompletedTask);
 
-        var controller = new RestaurantController(db, audit.Object)
+        var client = new Mock<IClientProxy>();
+        client.Setup(proxy => proxy.SendCoreAsync(It.IsAny<string>(), It.IsAny<object[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        var clients = new Mock<IHubClients>();
+        clients.Setup(value => value.Group(It.IsAny<string>())).Returns(client.Object);
+        var hub = new Mock<IHubContext<CardGameStore.Hubs.ComandaHub>>();
+        hub.Setup(value => value.Clients).Returns(clients.Object);
+        var tenant = new Mock<ITenantContext>();
+        tenant.Setup(value => value.TenantId).Returns(Guid.NewGuid());
+
+        var controller = new RestaurantController(db, audit.Object, hub.Object, tenant.Object)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
@@ -44,6 +56,10 @@ public class RestaurantControllerTests
 
         var moduleField = typeof(RequireModuleAttribute).GetField("_module", BindingFlags.Instance | BindingFlags.NonPublic);
         moduleField!.GetValue(attribute).Should().Be("restaurante");
+
+        var comandaAttribute = typeof(ComandaController).GetCustomAttribute<RequireModuleAttribute>();
+        comandaAttribute.Should().NotBeNull("Comandas são uma capacidade do módulo Restaurante");
+        moduleField.GetValue(comandaAttribute).Should().Be("restaurante");
     }
 
     [Fact]
@@ -100,5 +116,53 @@ public class RestaurantControllerTests
         });
 
         duplicate.Result.Should().BeOfType<ConflictObjectResult>();
+    }
+
+    [Fact]
+    public async Task ProductMapping_AssignsOnlyActiveArea()
+    {
+        var (controller, db) = CreateController();
+        await using var _ = db;
+        var product = new Product { Name = "Hambúrguer", Category = "Lanche", IsActive = true };
+        var area = new RestaurantProductionArea { Name = "Cozinha", IsActive = true };
+        db.AddRange(product, area);
+        await db.SaveChangesAsync();
+
+        var result = await controller.AssignProductProductionArea(product.Id,
+            new AssignProductProductionAreaRequest { ProductionAreaId = area.Id });
+
+        result.Should().BeOfType<OkObjectResult>();
+        (await db.Products.FindAsync(product.Id))!.RestaurantProductionAreaId.Should().Be(area.Id);
+    }
+
+    [Fact]
+    public async Task ProductionStatus_AdvancesInOrderAndRejectsJump()
+    {
+        var (controller, db) = CreateController();
+        await using var _ = db;
+        var user = new User { Name = "Cliente", Role = UserRole.Customer, PasswordHash = "hash" };
+        var area = new RestaurantProductionArea { Name = "Cozinha" };
+        var comanda = new Comanda { User = user, UserId = user.Id, Status = ComandaStatus.EmAndamento };
+        var item = new ComandaItem
+        {
+            Comanda = comanda,
+            ComandaId = comanda.Id,
+            ItemNameSnapshot = "Prato",
+            Quantity = 1,
+            ProductionAreaId = area.Id,
+            ProductionAreaNameSnapshot = area.Name,
+            ProductionStatus = RestaurantProductionStatus.Recebido,
+        };
+        db.AddRange(user, area, comanda, item);
+        await db.SaveChangesAsync();
+
+        var jump = await controller.UpdateProductionStatus(comanda.Id, item.Id,
+            new UpdateProductionStatusRequest { Status = "Pronto" });
+        jump.Result.Should().BeOfType<ConflictObjectResult>();
+
+        var preparing = await controller.UpdateProductionStatus(comanda.Id, item.Id,
+            new UpdateProductionStatusRequest { Status = "Preparando" });
+        preparing.Result.Should().BeOfType<OkObjectResult>();
+        (await db.ComandaItems.FindAsync(item.Id))!.ProductionStartedAt.Should().NotBeNull();
     }
 }

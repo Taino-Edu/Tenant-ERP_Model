@@ -151,7 +151,8 @@ public class ComandaService : IComandaService
         {
             var existing = comanda.Items.FirstOrDefault(i =>
                 i.ProductId == request.ProductId.Value &&
-                i.VariantId == request.VariantId);   // null == null para produtos sem grade
+                i.VariantId == request.VariantId &&
+                (i.ProductionStatus == null || i.ProductionStatus == RestaurantProductionStatus.Recebido));
             if (existing != null)
             {
                 // M1: ResolveItemAsync decrementa estoque via ExecuteUpdateAsync (grava na
@@ -164,7 +165,7 @@ public class ComandaService : IComandaService
                     using var transaction = await _db.Database.BeginTransactionAsync();
 
                     // Desconta estoque via ResolveItemAsync (já trata variantes)
-                    var (_, resolvedPrice, _) = await ResolveItemAsync(request);
+                    var (_, resolvedPrice, _, _, _) = await ResolveItemAsync(request);
                     var addedSubtotal         = existing.UnitPriceInCents * request.Quantity;
                     existing.Quantity        += request.Quantity;
                     existing.SubtotalInCents += addedSubtotal;
@@ -196,7 +197,7 @@ public class ComandaService : IComandaService
         {
             using var transaction = await _db.Database.BeginTransactionAsync();
 
-            var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
+            var (itemName, priceInCents, costInCents, productionAreaId, productionAreaName) = await ResolveItemAsync(request);
 
             item = new ComandaItem
             {
@@ -209,6 +210,9 @@ public class ComandaService : IComandaService
                 Quantity                 = request.Quantity,
                 SubtotalInCents          = priceInCents * request.Quantity,
                 AddedByUserId            = userId,
+                ProductionAreaId         = productionAreaId,
+                ProductionAreaNameSnapshot = productionAreaName,
+                ProductionStatus         = productionAreaId.HasValue ? RestaurantProductionStatus.Recebido : null,
             };
 
             // _db.Add ensures EntityState.Added; navigation fixup populates comanda.Items.
@@ -255,7 +259,8 @@ public class ComandaService : IComandaService
         {
             var existing = comanda.Items.FirstOrDefault(i =>
                 i.ProductId == request.ProductId.Value &&
-                i.VariantId == request.VariantId);
+                i.VariantId == request.VariantId &&
+                (i.ProductionStatus == null || i.ProductionStatus == RestaurantProductionStatus.Recebido));
             if (existing != null)
             {
                 // M1: mesma transação que AddItemAsync — ver comentário lá.
@@ -264,7 +269,7 @@ public class ComandaService : IComandaService
                 {
                     using var transaction = await _db.Database.BeginTransactionAsync();
 
-                    var (_, _, _) = await ResolveItemAsync(request); // desconta estoque
+                    var (_, _, _, _, _) = await ResolveItemAsync(request); // desconta estoque
                     var addedSubtotal        = existing.UnitPriceInCents * request.Quantity;
                     existing.Quantity       += request.Quantity;
                     existing.SubtotalInCents += addedSubtotal;
@@ -298,7 +303,7 @@ public class ComandaService : IComandaService
         {
             using var transaction = await _db.Database.BeginTransactionAsync();
 
-            var (itemName, priceInCents, costInCents) = await ResolveItemAsync(request);
+            var (itemName, priceInCents, costInCents, productionAreaId, productionAreaName) = await ResolveItemAsync(request);
 
             item = new ComandaItem
             {
@@ -311,6 +316,9 @@ public class ComandaService : IComandaService
                 Quantity                 = request.Quantity,
                 SubtotalInCents          = priceInCents * request.Quantity,
                 AddedByUserId            = adminId,
+                ProductionAreaId         = productionAreaId,
+                ProductionAreaNameSnapshot = productionAreaName,
+                ProductionStatus         = productionAreaId.HasValue ? RestaurantProductionStatus.Recebido : null,
             };
 
             _db.Add(item);
@@ -1083,13 +1091,21 @@ public class ComandaService : IComandaService
     /// Resolve nome e preço do item. Se vier ProductId, busca do banco e ignora
     /// o que o cliente enviou — nunca confiar em preço vindo da requisição.
     /// </summary>
-    private async Task<(string name, int priceInCents, int costInCents)> ResolveItemAsync(AddItemToComandaRequest request)
+    private async Task<(string name, int priceInCents, int costInCents, Guid? productionAreaId, string? productionAreaName)> ResolveItemAsync(AddItemToComandaRequest request)
     {
         if (!request.ProductId.HasValue)
         {
             if (string.IsNullOrWhiteSpace(request.ItemName))
                 throw new ArgumentException("Nome do item é obrigatório para itens sem produto cadastrado.");
-            return (request.ItemName, request.UnitPriceInCents, 0);
+
+            var manualArea = request.ProductionAreaId.HasValue
+                ? await _db.RestaurantProductionAreas.AsNoTracking()
+                    .FirstOrDefaultAsync(area => area.Id == request.ProductionAreaId && area.IsActive)
+                : null;
+            if (request.ProductionAreaId.HasValue && manualArea is null)
+                throw new InvalidOperationException("Área de produção inválida ou inativa.");
+
+            return (request.ItemName, request.UnitPriceInCents, 0, manualArea?.Id, manualArea?.Name);
         }
 
         var product = await _db.Products.FindAsync(request.ProductId.Value)
@@ -1100,6 +1116,10 @@ public class ComandaService : IComandaService
 
         var effectivePrice = product.IsOnPromo ? product.DiscountPriceInCents!.Value : product.PriceInCents;
         string itemName    = product.Name;
+        var productionArea = product.RestaurantProductionAreaId.HasValue
+            ? await _db.RestaurantProductionAreas.AsNoTracking()
+                .FirstOrDefaultAsync(area => area.Id == product.RestaurantProductionAreaId && area.IsActive)
+            : null;
 
         // ── Produto com grade de tamanho/cor ──────────────────────────────────
         if (product.HasVariants)
@@ -1123,7 +1143,7 @@ public class ComandaService : IComandaService
 
             if (variant.PriceInCents.HasValue) effectivePrice = variant.PriceInCents.Value;
             itemName = $"{product.Name} — {variant.Label}";
-            return (itemName, effectivePrice, product.CostPriceInCents);
+            return (itemName, effectivePrice, product.CostPriceInCents, productionArea?.Id, productionArea?.Name);
         }
 
         // ── Produto simples ───────────────────────────────────────────────────
@@ -1147,7 +1167,7 @@ public class ComandaService : IComandaService
         // produto sem nenhuma trava — apagando silenciosamente o decremento de
         // qualquer venda concorrente que tenha mexido no mesmo produto entre
         // essas duas escritas.
-        return (product.Name, effectivePrice, product.CostPriceInCents);
+        return (product.Name, effectivePrice, product.CostPriceInCents, productionArea?.Id, productionArea?.Name);
     }
 
     // =========================================================================
@@ -1389,6 +1409,12 @@ public class ComandaService : IComandaService
             UnitPriceInReais = i.UnitPriceInCents / 100m,
             SubtotalInReais  = i.SubtotalInReais,
             AddedAt          = i.AddedAt,
+            ProductionAreaId = i.ProductionAreaId,
+            ProductionAreaName = i.ProductionAreaNameSnapshot,
+            ProductionStatus = i.ProductionStatus?.ToString(),
+            ProductionStartedAt = i.ProductionStartedAt,
+            ProductionReadyAt = i.ProductionReadyAt,
+            ProductionServedAt = i.ProductionServedAt,
         }).ToList(),
     };
 }

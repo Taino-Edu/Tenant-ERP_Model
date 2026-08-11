@@ -1,5 +1,6 @@
 using CardGameStore.Data;
 using CardGameStore.DTOs;
+using CardGameStore.Hubs;
 using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
@@ -7,6 +8,7 @@ using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 
 namespace CardGameStore.Controllers;
 
@@ -24,11 +26,15 @@ public class RestaurantController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IAuditService _audit;
+    private readonly IHubContext<ComandaHub> _hub;
+    private readonly ITenantContext _tenant;
 
-    public RestaurantController(AppDbContext db, IAuditService audit)
+    public RestaurantController(AppDbContext db, IAuditService audit, IHubContext<ComandaHub> hub, ITenantContext tenant)
     {
         _db = db;
         _audit = audit;
+        _hub = hub;
+        _tenant = tenant;
     }
 
     [HttpGet("areas-producao")]
@@ -126,6 +132,136 @@ public class RestaurantController : ControllerBase
         return Ok(ToDto(area));
     }
 
+    /// <summary>Vincula um produto a uma área. Null remove o vínculo sem alterar comandas antigas.</summary>
+    [HttpGet("produtos")]
+    public async Task<ActionResult<IReadOnlyList<RestaurantProductMappingDto>>> ListProductMappings()
+    {
+        var products = await _db.Products.AsNoTracking()
+            .Where(product => product.IsActive)
+            .OrderBy(product => product.Category)
+            .ThenBy(product => product.Name)
+            .Select(product => new RestaurantProductMappingDto
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Category = product.Category,
+                ProductionAreaId = product.RestaurantProductionAreaId,
+            })
+            .ToListAsync();
+        return Ok(products);
+    }
+
+    /// <summary>Vincula um produto a uma área. Null remove o vínculo sem alterar comandas antigas.</summary>
+    [HttpPut("produtos/{productId:guid}/area-producao")]
+    public async Task<IActionResult> AssignProductProductionArea(
+        Guid productId, [FromBody] AssignProductProductionAreaRequest request)
+    {
+        var product = await _db.Products.FindAsync(productId);
+        if (product is null) return NotFound(new { Message = "Produto não encontrado." });
+
+        if (request.ProductionAreaId.HasValue)
+        {
+            var areaExists = await _db.RestaurantProductionAreas.AnyAsync(area =>
+                area.Id == request.ProductionAreaId && area.IsActive);
+            if (!areaExists)
+                return BadRequest(new { Message = "Área de produção inválida ou inativa." });
+        }
+
+        product.RestaurantProductionAreaId = request.ProductionAreaId;
+        product.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync("VinculouProdutoAreaProducao", "Product", product.Id.ToString(),
+            details: request.ProductionAreaId?.ToString() ?? "sem área", httpContext: HttpContext);
+
+        return Ok(new { product.Id, product.RestaurantProductionAreaId });
+    }
+
+    /// <summary>Fila operacional derivada dos itens das comandas ativas.</summary>
+    [HttpGet("fila-producao")]
+    public async Task<ActionResult<IReadOnlyList<RestaurantProductionItemDto>>> ListProductionQueue(
+        [FromQuery] Guid? productionAreaId = null)
+    {
+        var query = _db.ComandaItems.AsNoTracking()
+            .Include(item => item.Comanda).ThenInclude(comanda => comanda.User)
+            .Where(item => item.ProductionAreaId != null &&
+                           item.ProductionStatus != RestaurantProductionStatus.Servido &&
+                           (item.Comanda.Status == ComandaStatus.Aberta ||
+                            item.Comanda.Status == ComandaStatus.EmAndamento));
+
+        if (productionAreaId.HasValue)
+            query = query.Where(item => item.ProductionAreaId == productionAreaId);
+
+        var items = await query
+            .OrderBy(item => item.ProductionStatus)
+            .ThenBy(item => item.AddedAt)
+            .Select(item => new RestaurantProductionItemDto
+            {
+                ComandaId = item.ComandaId,
+                TableIdentifier = item.Comanda.TableIdentifier,
+                UserName = item.Comanda.User.Name,
+                ItemId = item.Id,
+                ItemName = item.ItemNameSnapshot,
+                Quantity = item.Quantity,
+                ProductionAreaId = item.ProductionAreaId!.Value,
+                ProductionAreaName = item.ProductionAreaNameSnapshot ?? "Produção",
+                Status = item.ProductionStatus!.Value.ToString(),
+                AddedAt = item.AddedAt,
+                ProductionStartedAt = item.ProductionStartedAt,
+                ProductionReadyAt = item.ProductionReadyAt,
+                ProductionServedAt = item.ProductionServedAt,
+                ComandaNotes = item.Comanda.Notes,
+            })
+            .ToListAsync();
+
+        return Ok(items);
+    }
+
+    /// <summary>Avança o preparo do item: Recebido → Preparando → Pronto → Servido.</summary>
+    [HttpPut("comandas/{comandaId:guid}/itens/{itemId:guid}/status-producao")]
+    public async Task<ActionResult<RestaurantProductionItemDto>> UpdateProductionStatus(
+        Guid comandaId, Guid itemId, [FromBody] UpdateProductionStatusRequest request)
+    {
+        if (!Enum.TryParse<RestaurantProductionStatus>(request.Status, out var requestedStatus))
+            return BadRequest(new { Message = "Status de produção inválido." });
+
+        var item = await _db.ComandaItems
+            .Include(current => current.Comanda).ThenInclude(comanda => comanda.User)
+            .FirstOrDefaultAsync(current => current.Id == itemId && current.ComandaId == comandaId);
+        if (item is null) return NotFound(new { Message = "Item da comanda não encontrado." });
+        if (!item.ProductionAreaId.HasValue || !item.ProductionStatus.HasValue)
+            return BadRequest(new { Message = "Este item não está vinculado a uma área de produção." });
+
+        var currentStatus = item.ProductionStatus.Value;
+        if (requestedStatus != currentStatus)
+        {
+            var expectedNext = currentStatus switch
+            {
+                RestaurantProductionStatus.Recebido => RestaurantProductionStatus.Preparando,
+                RestaurantProductionStatus.Preparando => RestaurantProductionStatus.Pronto,
+                RestaurantProductionStatus.Pronto => RestaurantProductionStatus.Servido,
+                _ => (RestaurantProductionStatus?)null,
+            };
+            if (expectedNext != requestedStatus)
+                return Conflict(new { Message = $"Transição inválida: {currentStatus} → {requestedStatus}." });
+
+            item.ProductionStatus = requestedStatus;
+            var now = DateTime.UtcNow;
+            if (requestedStatus == RestaurantProductionStatus.Preparando) item.ProductionStartedAt = now;
+            if (requestedStatus == RestaurantProductionStatus.Pronto) item.ProductionReadyAt = now;
+            if (requestedStatus == RestaurantProductionStatus.Servido) item.ProductionServedAt = now;
+            await _db.SaveChangesAsync();
+            await _audit.LogAsync("AtualizouStatusProducao", "ComandaItem", item.Id.ToString(),
+                details: $"{currentStatus} -> {requestedStatus}", httpContext: HttpContext);
+            var eventPayload = new { item.ComandaId, ItemId = item.Id, Status = requestedStatus.ToString() };
+            await _hub.Clients.Group(ComandaHub.GetAdminGroup(_tenant.TenantId))
+                .SendAsync("ProductionStatusUpdated", eventPayload);
+            await _hub.Clients.Group(ComandaHub.GetComandaGroup(_tenant.TenantId, item.ComandaId))
+                .SendAsync("ProductionStatusUpdated", eventPayload);
+        }
+
+        return Ok(ToProductionItemDto(item));
+    }
+
     private static RestaurantProductionAreaDto ToDto(RestaurantProductionArea area) => new()
     {
         Id = area.Id,
@@ -134,6 +270,24 @@ public class RestaurantController : ControllerBase
         Color = area.Color,
         DisplayOrder = area.DisplayOrder,
         IsActive = area.IsActive,
+    };
+
+    private static RestaurantProductionItemDto ToProductionItemDto(ComandaItem item) => new()
+    {
+        ComandaId = item.ComandaId,
+        TableIdentifier = item.Comanda.TableIdentifier,
+        UserName = item.Comanda.User.Name,
+        ItemId = item.Id,
+        ItemName = item.ItemNameSnapshot,
+        Quantity = item.Quantity,
+        ProductionAreaId = item.ProductionAreaId!.Value,
+        ProductionAreaName = item.ProductionAreaNameSnapshot ?? "Produção",
+        Status = item.ProductionStatus!.Value.ToString(),
+        AddedAt = item.AddedAt,
+        ProductionStartedAt = item.ProductionStartedAt,
+        ProductionReadyAt = item.ProductionReadyAt,
+        ProductionServedAt = item.ProductionServedAt,
+        ComandaNotes = item.Comanda.Notes,
     };
 
     private static string? NormalizeOptional(string? value) =>

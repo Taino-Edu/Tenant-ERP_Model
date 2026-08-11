@@ -10,7 +10,7 @@ import Link from 'next/link'
 
 export default function LoginPage() {
   const router  = useRouter()
-  const { site } = useSiteConfig()
+  const { site, loading: siteLoading } = useSiteConfig()
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading]   = useState(false)
@@ -34,7 +34,7 @@ export default function LoginPage() {
         data.role === 'Customer' ? '/cliente'
           : data.role === 'PlatformOwner' ? '/plataforma'
           : data.role === 'Contador' ? '/contador'
-          : '/admin/comanda'
+          : site.enabledModules.includes('restaurante') ? '/admin/comanda' : '/admin/dashboard'
       )
     } catch (err: unknown) {
       const response = (err as { response?: { status?: number; data?: { errorCode?: string; message?: string } } })?.response
@@ -130,7 +130,7 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
-          <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-2.5 text-base">
+          <button type="submit" disabled={loading || siteLoading} className="btn-primary w-full justify-center py-2.5 text-base">
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <KeyRound className="w-5 h-5" />}
             {loading ? 'Entrando...' : 'Entrar no Painel'}
           </button>

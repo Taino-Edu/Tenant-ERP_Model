@@ -522,7 +522,7 @@ function VendaWizard({
   // Etapa 3 — pagamento
   const [payment, setPayment] = useState<string>(PAYMENT_METHODS[0].value)
   const [discountMode, setDiscountMode] = useState<'percent' | 'cents'>('percent')
-  const [discountPct, setDiscountPct] = useState(defaultDiscount)
+  const [discountPctStr, setDiscountPctStr] = useState(String(defaultDiscount))
   const [discountValueStr, setDiscountValueStr] = useState('')
   const [cashState, setCashState] = useState<CashPaymentState>({
     cashReceivedInCents: 0, changeInCents: 0, roundingDiscountInCents: 0, valid: false,
@@ -653,6 +653,8 @@ function VendaWizard({
       ? i.product.discountPriceInCents : i.product.priceInCents
     return s + price * i.quantity
   }, 0)
+  const parsedDiscountPct = parseFloat(discountPctStr.replace(',', '.') || '0')
+  const discountPct = Number.isFinite(parsedDiscountPct) ? Math.min(100, Math.max(0, parsedDiscountPct)) : 0
   const manualDiscountCents = discountMode === 'cents'
     ? Math.min(Math.round(parseFloat(discountValueStr.replace(',', '.') || '0') * 100), subtotal)
     : Math.round(subtotal * discountPct / 100)
@@ -1056,19 +1058,34 @@ function VendaWizard({
                 </div>
 
                 {discountMode === 'percent' ? (
-                  <div className="flex gap-1.5">
-                    {[0, 5, 10, 15, 20].map(d => (
-                      <button
-                        key={d}
-                        onClick={() => setDiscountPct(d)}
-                        className={clsx(
-                          'flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all',
-                          discountPct === d
-                            ? 'bg-accent-green/20 border-accent-green/50 text-accent-green'
-                            : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
-                        )}
-                      >{d === 0 ? '—' : `${d}%`}</button>
-                    ))}
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="Digite a porcentagem"
+                        value={discountPctStr}
+                        onChange={e => setDiscountPctStr(e.target.value)}
+                        className="input text-sm w-full font-mono pr-10"
+                        aria-label="Percentual de desconto"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500">%</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {[0, 5, 10, 15, 20].map(d => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setDiscountPctStr(String(d))}
+                          className={clsx(
+                            'flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all',
+                            discountPct === d
+                              ? 'bg-accent-green/20 border-accent-green/50 text-accent-green'
+                              : 'bg-surface-700 border-surface-600 text-gray-400 hover:border-surface-500'
+                          )}
+                        >{d === 0 ? '—' : `${d}%`}</button>
+                      ))}
+                    </div>
                   </div>
                 ) : (
                   <input
@@ -1325,7 +1342,7 @@ function VendaWizard({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={submitting || (needsUser && !selectedUserId) || !splitValid || (usesCash && !cashState.valid)}
+                disabled={submitting || (needsUser && !selectedUserId) || !splitValid || (usesCash && cashDueBeforeRounding > 0 && !cashState.valid)}
                 className="btn-success flex-1 justify-center text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting

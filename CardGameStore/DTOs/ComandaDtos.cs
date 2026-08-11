@@ -19,6 +19,9 @@ public class AddItemToComandaRequest
     /// <summary>Variante escolhida (tamanho/cor). Obrigatório quando produto tem HasVariants=true.</summary>
     public Guid? VariantId { get; set; }
 
+    /// <summary>Área opcional para item manual do admin. Produtos usam a área configurada no cadastro.</summary>
+    public Guid? ProductionAreaId { get; set; }
+
     /// <summary>Nome do item (preenchido automaticamente pelo serviço).</summary>
     [MaxLength(200)]
     public string ItemName { get; set; } = string.Empty;
@@ -154,6 +157,12 @@ public class ComandaItemDto
     public decimal UnitPriceInReais    { get; set; }
     public decimal SubtotalInReais     { get; set; }
     public DateTime AddedAt            { get; set; }
+    public Guid?   ProductionAreaId             { get; set; }
+    public string? ProductionAreaName           { get; set; }
+    public string? ProductionStatus             { get; set; }
+    public DateTime? ProductionStartedAt        { get; set; }
+    public DateTime? ProductionReadyAt          { get; set; }
+    public DateTime? ProductionServedAt         { get; set; }
 }
 
 // -------------------------------------------------------------------------

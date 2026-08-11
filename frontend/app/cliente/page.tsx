@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { api, comandaApi, userApi, productApi, categoryApi, waitListApi, variantApi, ComandaDto, Product, ProductCategory, UserProfile, ProductVariant, PixCobrancaDto } from '@/lib/api'
 import { getUserName } from '@/lib/auth'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
@@ -10,7 +10,7 @@ import {
   ShoppingCart, Plus, Trash2, Loader2, Search,
   Receipt, PackageOpen, Star, User as UserIcon, Package, ChevronRight, ChevronDown,
   Bell,
-  QrCode, Copy, Share2,
+  QrCode, Copy, Share2, MessageSquare, Send,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -246,14 +246,22 @@ export default function ClientePage() {
   const [loadingVariants, setLoadingVariants] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null)
   const [pix,             setPix]             = useState<PixCobrancaDto | null>(null)
+  const [comandaNotes,    setComandaNotes]    = useState('')
+  const [savingNotes,     setSavingNotes]     = useState(false)
+  const notesDirtyRef = useRef(false)
 
   const fetchComanda = useCallback(async () => {
     try {
       const { data } = await comandaApi.myComanda()
       setComanda(data)
+      if (!notesDirtyRef.current) setComandaNotes(data.notes ?? '')
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status
-      if (status === 404) setComanda(null)
+      if (status === 404) {
+        setComanda(null)
+        notesDirtyRef.current = false
+        setComandaNotes('')
+      }
     } finally {
       setLoading(false)
     }
@@ -384,6 +392,23 @@ export default function ClientePage() {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast.error(msg || 'Erro ao remover pontos.')
     } finally { setRemovingPts(false) }
+  }
+
+  async function saveComandaNotes() {
+    if (!comanda || comandaNotes.trim() === (comanda.notes ?? '')) return
+    setSavingNotes(true)
+    try {
+      const { data } = await comandaApi.updateNotes(comanda.id, comandaNotes.trim() || null)
+      setComanda(data)
+      notesDirtyRef.current = false
+      setComandaNotes(data.notes ?? '')
+      toast.success('Comentário enviado para o atendimento!')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Não foi possível salvar o comentário.')
+    } finally {
+      setSavingNotes(false)
+    }
   }
 
   // Total líquido de pontos já aplicados — os pontos só abatem "de verdade" no fechamento
@@ -734,6 +759,39 @@ export default function ClientePage() {
                   </div>
                 )}
               </div>
+
+              {/* Comentário compartilhado com atendimento/cozinha */}
+              {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
+                <div className="px-5 pb-5">
+                  <label htmlFor="comanda-comment" className="flex items-center gap-2 text-xs font-black uppercase tracking-wide mb-2" style={{ color: C.navy }}>
+                    <MessageSquare className="w-4 h-4" style={{ color: C.blue2 }} />
+                    Comentário para o pedido
+                  </label>
+                  <textarea
+                    id="comanda-comment"
+                    value={comandaNotes}
+                    onChange={e => { notesDirtyRef.current = true; setComandaNotes(e.target.value) }}
+                    maxLength={500}
+                    rows={3}
+                    placeholder="Ex.: sem cebola, ponto da carne, alergias ou outra observação..."
+                    className="w-full rounded-xl border px-3 py-2.5 text-sm resize-none outline-none focus:ring-2"
+                    style={{ borderColor: C.border, color: C.navy, backgroundColor: C.bg }}
+                  />
+                  <div className="flex items-center justify-between gap-3 mt-2">
+                    <span className="text-[10px] font-semibold" style={{ color: C.muted }}>{comandaNotes.length}/500 caracteres</span>
+                    <button
+                      type="button"
+                      onClick={saveComandaNotes}
+                      disabled={savingNotes || comandaNotes.trim() === (comanda.notes ?? '')}
+                      className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-black text-white transition-opacity disabled:opacity-40"
+                      style={{ backgroundColor: C.blue2 }}
+                    >
+                      {savingNotes ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                      Enviar ao atendimento
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Usar pontos */}
               {comanda.status !== 'Fechada' && comanda.status !== 'Cancelada' && (
