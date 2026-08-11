@@ -5,7 +5,7 @@
 
 ## Estado da entrega
 
-- `origin/main`: `d080028` antes das alterações fiscais atuais.
+- `origin/main` inclui a entrega funcional `66c081b`.
 - Multi-tenant por schema e catálogo central estão implementados.
 - Billing da plataforma possui implantação, mensalidades, baixa, MRR e
   inadimplência.
@@ -19,16 +19,22 @@
   por tenant/CNPJ/ambiente; `656` retorna 429 e concorrência retorna 409.
 - Integrações exibe saúde da SEFAZ por UF/ambiente, latência, `cStat`, horário da
   medição e botão de reteste sem consumir a quota de Distribuição DF-e.
+- Consentimento de cookies, documentos legais v2 e SEO técnico público estão na
+  `main`.
+- A prospecção atual usa OSM/Nominatim/Overpass, mas as pesquisas são efêmeras,
+  limitadas a 60 resultados, ignoram relações OSM e cobrem poucas categorias.
 - Testes focados de billing/comissões e a suíte completa passaram. Após corrigir
   a limpeza de schemas, a base passou com 750 testes; após a proteção SEFAZ,
   passaram 758/758 testes no PostgreSQL real após a inclusão do indicador SEFAZ.
 
 ## Próxima direção recomendada
 
-1. Consolidar o modelo de CRM: contas, contatos, oportunidades, atividades,
+1. Persistir pesquisas/candidatos e ampliar a cobertura OSM da prospecção.
+2. Consolidar o modelo de CRM: contas, contatos, oportunidades, atividades,
    responsáveis, histórico e atribuição.
-2. Criar a camada analítica de aquisição, receita, churn e comissões.
-3. Implementar cobrança recorrente real dos tenants.
+3. Enriquecer com Receita/CNPJ, IBGE e sites oficiais com proveniência.
+4. Criar a camada analítica de aquisição, receita, churn e comissões.
+5. Implementar cobrança recorrente real dos tenants.
 
 ## Bloqueios externos
 

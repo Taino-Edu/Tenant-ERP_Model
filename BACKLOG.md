@@ -4,7 +4,7 @@
 > vigente. O conteúdo anterior foi preservado no final como histórico e não deve
 > ser usado sozinho para decidir o próximo trabalho.
 >
-> **Base auditada:** `origin/main` em `d080028`, código local, migrações, testes,
+> **Base funcional auditada:** commit `66c081b`, código local, migrações, testes,
 > documentação, branches e worktrees registradas. Não confundir “há uma branch”
 > com “a funcionalidade está pronta na main”.
 
@@ -24,8 +24,7 @@
 
 ### Situação confirmada
 
-- A `main` remota e `codex/atalhos-manual-inteligente` apontavam para `d080028`
-  antes do trabalho fiscal atual.
+- A `main` remota e `codex/atalhos-manual-inteligente` incluem `66c081b`.
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
@@ -33,14 +32,20 @@
   zero schemas temporários no PostgreSQL.
 - Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões já têm implementação na `main`.
+- Consentimento de cookies versionado, documentos legais, sitemap, robots,
+  metadados sociais e bloqueio de indexação das áreas privadas estão na `main`.
 
 ### Direção recomendada
 
-1. Consolidar o CRM operacional (`CRM-001` a `CRM-004`) antes de adicionar fontes
-   externas de inteligência de mercado.
-2. Criar a camada analítica governada (`DATA-001` a `DATA-003`).
-3. Implementar cobrança recorrente real da plataforma (`PAY-001`).
-4. Só então ampliar automações, IA e aquisição paga com métricas confiáveis.
+1. Corrigir a fundação da prospecção (`PROS-001` e `PROS-002`): pesquisa
+   persistente, cobertura OSM completa, histórico e deduplicação.
+2. Consolidar o CRM operacional (`CRM-001` a `CRM-004`) e conectar a origem da
+   prospecção às oportunidades e atividades.
+3. Adicionar enriquecimento governado (`PROS-003`) e a camada analítica
+   (`DATA-001` a `DATA-003`).
+4. Implementar cobrança recorrente real da plataforma (`PAY-001`).
+5. Automatizar pesquisa com bot (`PROS-004`) somente após proveniência,
+   privacidade, quotas e revisão humana estarem prontas.
 
 ## P0 — segurança, integridade e liberação
 
@@ -172,6 +177,122 @@
   perda, metas, conversão por origem e tempo médio até fechamento.
 - **Critério de conclusão:** o gestor enxerga pipeline, previsão e gargalos por
   período/vendedor/origem com definições de métricas documentadas.
+
+## P1 — prospecção assistida e inteligência gratuita
+
+### PROS-001 — Pesquisa persistente e espaço de trabalho
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Problema confirmado:** a tela atual guarda categoria, cidade e resultados
+  apenas no estado React. Ao sair, atualizar a página ou iniciar outra busca, o
+  trabalho desaparece. O backend não possui cache de prospecção.
+- **Entregar:**
+  - `ProspectingSearch` persistida no catálogo com consulta normalizada,
+    filtros, responsável, datas, fonte, versão e estado;
+  - `ProspectCandidate` persistido com snapshot da fonte, `sourceId`, dados
+    observados, dados estimados separados, `lastSeenAt` e validade;
+  - cache em PostgreSQL, não apenas em memória, por fonte + cidade + categoria +
+    filtros, com opção explícita de atualizar;
+  - histórico, pesquisas favoritas e retomada da última sessão;
+  - estados `novo`, `selecionado`, `descartado`, `já é lead`, `já é cliente` e
+    `desatualizado`;
+  - seleção em lote, ordenação, filtros e conversão em lead sem perder o
+    contexto da pesquisa;
+  - deduplicação por fonte/ID, CNPJ, domínio, telefone e nome+endereço.
+- **Critério de conclusão:** uma pesquisa pode ser fechada e retomada sem nova
+  chamada externa; atualizar preserva decisões anteriores e mostra a idade dos
+  dados; nenhum candidato convertido reaparece como novo.
+
+### PROS-002 — Cobertura completa do OpenStreetMap
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Problemas confirmados no código atual:**
+  - consulta somente `node` e `way`, ignorando `relation`;
+  - `out center 60` limita silenciosamente a resposta a 60 elementos;
+  - usa `bbox` da cidade, que pode incluir municípios vizinhos;
+  - o dicionário fixo cobre poucas categorias;
+  - categoria desconhecida cai em regex no `name` do estabelecimento, que
+    raramente representa o tipo real do negócio;
+  - não há paginação/varredura, indicador de cobertura ou resultado parcial.
+- **Entregar:**
+  - consulta `nwr` por área administrativa do município e fallback geográfico;
+  - varredura por quadrantes quando a área/volume exigir, com deduplicação;
+  - taxonomia configurável de segmentos → sinônimos → tags OSM/CNAE;
+  - múltiplas tags por segmento em `shop`, `amenity`, `office`, `craft`,
+    `tourism`, `leisure` e combinações relevantes;
+  - total, fonte, cobertura, limite e falhas parciais visíveis na interface;
+  - cache obrigatório, atribuição OSM/ODbL e respeito às quotas públicas.
+- **Critério de conclusão:** testes conhecidos por município/segmento não perdem
+  resultados por tipo OSM ou limite fixo, e o operador sabe quando a busca foi
+  completa, parcial, cacheada ou atualizada.
+
+### PROS-003 — Enriquecimento gratuito, verificável e multi-fonte
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Depende de:** `PROS-001`, `PROS-002` e definição inicial de segmentos/UFs.
+- **Fontes e ferramentas para o desenho inicial:**
+  - dados abertos mensais do CNPJ/Receita Federal, filtrados por situação ativa,
+    município, CNAE, porte e data de abertura;
+  - códigos e indicadores municipais do IBGE/SIDRA;
+  - OSM para presença física, contato e localização;
+  - site oficial do candidato para `schema.org`, telefone, e-mail corporativo,
+    redes sociais e tecnologias, respeitando `robots.txt` e limites;
+  - Lighthouse em fila própria para desempenho, SEO e qualidade do site;
+    MapLibre para visualização geográfica;
+  - DuckDB opcional somente no ETL dos arquivos grandes da Receita, carregando
+    no PostgreSQL operacional o recorte necessário.
+- **Regras:** não usar IA para inventar faturamento, porte, contato ou CNPJ;
+  separar `observado`, `derivado` e `estimado`, sempre com fonte, data e
+  confiança; não importar QSA/CPF para prospecção.
+- **Critério de conclusão:** cada campo enriquecido mostra origem e atualização;
+  o score é explicável; correções manuais sobrevivem à sincronização.
+
+### PROS-004 — Bot pesquisador e qualificador com revisão humana
+
+- **Estado:** `BLOQUEADO`
+- **Depende de:** `PROS-001` a `PROS-003`, `CRM-001`, política de privacidade da
+  prospecção e teste de balanceamento de legítimo interesse.
+- **Escopo recomendado:** job interno usando `BackgroundService`/fila existente,
+  não um robô que raspa Google Maps ou dispara mensagens. Deve:
+  - executar pesquisas salvas em agenda e respeitar quotas por fonte;
+  - detectar novos estabelecimentos e mudanças relevantes;
+  - enriquecer e recalcular score de forma determinística;
+  - montar uma fila diária priorizada com justificativa;
+  - sugerir abordagem, próxima ação e responsável;
+  - exigir aprovação humana antes de criar oportunidade ou iniciar contato.
+- **Não fazer:** contato automático em massa, WhatsApp não oficial, scraping de
+  fontes que proíbem automação, compra de listas, coleta de dados sensíveis ou
+  reprocessamento de quem pediu oposição/descadastro.
+- **Critério de conclusão:** execução idempotente, auditável, com orçamento,
+  quotas, lista de oposição, proveniência e aprovação humana demonstrados.
+
+### PROS-005 — Operação de contato e cadência
+
+- **Estado:** `BLOQUEADO`
+- **Depende de:** `CRM-002`, `CRM-003` e `PROS-004`.
+- **Falta decidir:** canais permitidos, horários, identidade do remetente,
+  templates, frequência, SLA e regra de oposição.
+- **Possibilidades gratuitas/open source:** templates e tarefas no próprio CRM;
+  e-mail self-hosted com listmonk somente quando houver base legal e descadastro.
+- **Critério de conclusão:** cada contato vira atividade, tem finalidade/base
+  registradas, identifica origem, permite oposição e mede resposta.
+
+### Referências verificadas para PROS-001 a PROS-005
+
+- [Política pública do Nominatim](https://operations.osmfoundation.org/policies/nominatim/):
+  máximo absoluto de 1 requisição/s, identificação da aplicação, atribuição,
+  cache obrigatório em lote e proibição de uso pesado recorrente na instância
+  pública; self-host é uma opção futura se o volume justificar.
+- [Overpass API e instâncias públicas](https://wiki.openstreetmap.org/wiki/Overpass_API):
+  serviço comunitário sem SLA, sujeito a timeout, memória, carga e rate limit.
+- [Dados abertos do CNPJ — Receita Federal](https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/dados-abertos/cadastros):
+  fonte oficial gratuita para situação, CNAE, município, porte e abertura; os
+  arquivos nacionais são grandes e exigem ETL, atualização e recorte próprios.
+- [Localidades do Brasil — IBGE](https://www.ibge.gov.br/geociencias/organizacao-do-territorio/estrutura-territorial/27385-localidades.html):
+  códigos e arquivos geográficos oficiais para municípios e localidades.
+- [Guia da ANPD sobre legítimo interesse](https://www.gov.br/anpd/pt-br/assuntos/noticias/anpd-lanca-guia-orientativo-sobre-legitimo-interesse):
+  antes de contato ativo, documentar finalidade, necessidade, balanceamento,
+  salvaguardas, transparência e oposição; dado público continua sujeito à LGPD.
 
 ### REF-001 — Completar o controle de indicações e comissões
 
@@ -377,6 +498,10 @@
 - Error boundaries raiz/admin e cinco specs Playwright existentes.
 - Diretório público de tenants; o item antigo que dizia “não implementado” está obsoleto.
 - Arquivos `.pptx` não estão rastreados atualmente pelo Git.
+- Consentimento de cookies funcional e versionado, recusa de opcionais sem
+  quebrar autenticação, política de cookies, termos e privacidade v2.
+- SEO técnico público: metadata/canonical institucional, imagem social,
+  `robots.txt`, `sitemap.xml` e `X-Robots-Tag` nas áreas privadas.
 
 ## Decisões que o produto precisa tomar
 
@@ -389,6 +514,10 @@ pagamentos completos:
 4. **Comissões:** percentual/duração padrão, impostos, estorno e portal do vendedor?
 5. **Cobrança SaaS:** gateway escolhido e política de inadimplência/suspensão?
 6. **Métricas:** quais metas trimestrais de leads, conversão, MRR, churn e CAC?
+7. **Prospecção:** quais CNAEs/segmentos e UFs entram no primeiro recorte da base
+   CNPJ, e qual frequência aceitável de atualização?
+8. **Contato ativo:** quais canais/cadências são autorizados, quem revisa as
+   abordagens e como será registrada a oposição do prospect?
 
 ---
 
