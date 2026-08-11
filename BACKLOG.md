@@ -4,7 +4,7 @@
 > vigente. O conteúdo anterior foi preservado no final como histórico e não deve
 > ser usado sozinho para decidir o próximo trabalho.
 >
-> **Base auditada:** `origin/main` em `5e74b1e`, código local, migrações, testes,
+> **Base auditada:** `origin/main` em `d080028`, código local, migrações, testes,
 > documentação, branches e worktrees registradas. Não confundir “há uma branch”
 > com “a funcionalidade está pronta na main”.
 
@@ -24,7 +24,8 @@
 
 ### Situação confirmada
 
-- A `main` remota e `codex/atalhos-manual-inteligente` apontam para `5e74b1e`.
+- A `main` remota e `codex/atalhos-manual-inteligente` apontavam para `d080028`
+  antes do trabalho fiscal atual.
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
@@ -87,6 +88,25 @@
   pelo sistema do contador.
 - **Concluído quando:** checklist real assinado, evidências anexadas e nenhuma
   pendência fiscal antiga no staging/produção.
+
+### FIS-002 — Proteção contra consumo indevido na Distribuição DF-e
+
+- **Estado:** `CONCLUÍDO` em 2026-08-11
+- **Motivador:** `cStat 656` podia ser provocado por clique manual concorrendo com
+  o job ou por duas instâncias da API; a resposta ainda chegava ao frontend como
+  HTTP 200 e produzia toast verde com zero notas.
+- **Entregue:** estado persistente por schema do tenant + CNPJ + ambiente, lease
+  atômica no PostgreSQL, cooldown preventivo/`137`/`656` de 1h05, quota interna
+  de 18 consultas pontuais por hora, NSU monotônico, `429 + Retry-After`, `409`,
+  contagem regressiva e logs com CNPJ mascarado.
+- **Migration:** preserva o NSU existente e aplica cooldown inicial conservador
+  aos tenants que já possuem configuração fiscal.
+- **Validação:** migration idempotente gerada; 6 testes novos no PostgreSQL real;
+  suíte completa 756/756; lint e build do frontend aprovados; 4 testes de helpers
+  puros aprovados em configuração Playwright sem servidor.
+- **Limite operacional:** outro software que consulte o mesmo CNPJ fora deste ERP
+  não compartilha nossa lease/NSU; cada CNPJ deve ter um único controlador de
+  Distribuição DF-e ou coordenação explícita entre os sistemas.
 
 ### REP-001 — Reconciliar worktrees e branches antigas
 

@@ -5,6 +5,7 @@ import { api, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import Modal from '@/components/admin/ui/Modal'
+import { formatCountdown, secondsUntil } from '@/lib/sefaz'
 import {
   Plug, CheckCircle, XCircle, Settings, Loader2, RefreshCw,
   Upload, Info, AlertTriangle, ExternalLink, X, Save,
@@ -18,6 +19,14 @@ type IntegracaoStatus = {
   pixKey?:     string
   lastSyncAt?: string
   expiresAt?:  string
+}
+
+type SefazStatus = {
+  configured: boolean
+  proximaTentativaEm?: string
+  cooldownAtivo: boolean
+  syncEmAndamento: boolean
+  syncLockAte?: string
 }
 
 type ConfigModal = {
@@ -64,6 +73,8 @@ export default function IntegracoesPage() {
   const [integracoes, setIntegracoes] = useState<IntegracaoStatus[]>([])
   const [loading,     setLoading]     = useState(true)
   const [sefazOk,     setSefazOk]     = useState(false)
+  const [sefazStatus, setSefazStatus] = useState<SefazStatus | null>(null)
+  const [clock, setClock] = useState(() => Date.now())
   const [configModal, setConfigModal] = useState<ConfigModal | null>(null)
   const [saving,      setSaving]      = useState(false)
   const [ofxLoading,  setOfxLoading]  = useState(false)
@@ -79,11 +90,21 @@ export default function IntegracoesPage() {
       ])
       setIntegracoes(ints)
       setSefazOk(sefaz.configured)
+      setSefazStatus(sefaz)
     } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar integrações')) }
     finally  { setLoading(false) }
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const sefazRetrySeconds = secondsUntil(sefazStatus?.proximaTentativaEm, clock)
+  const sefazSyncRunning = !!sefazStatus?.syncEmAndamento &&
+    (!sefazStatus.syncLockAte || new Date(sefazStatus.syncLockAte).getTime() > clock)
+  const sefazBlocked = sefazRetrySeconds > 0 || sefazSyncRunning
 
   async function openConfig(src: string, current?: IntegracaoStatus) {
     let certOk = false
@@ -153,14 +174,44 @@ export default function IntegracoesPage() {
     setSyncingSefaz(true)
     try {
       const { data } = await api.post('/api/contas-receber/sefaz/sync')
-      toast.success(
-        `${data.novasNotas} nota(s) nova(s), ${data.manifestadas} ciência(s), ${data.contasCriadas} conta(s) a pagar.`,
-        { duration: 6000 },
-      )
-      if (data.mensagem) toast(data.mensagem, { duration: 8000 })
+      if (data.nenhumDocumentoDisponivel) {
+        toast(data.mensagem ?? 'Nenhum documento novo disponível.', { icon: 'ℹ️', duration: 8000 })
+      } else {
+        toast.success(
+          `${data.novasNotas} nota(s) nova(s), ${data.manifestadas} ciência(s), ${data.contasCriadas} conta(s) a pagar.`,
+          { duration: 6000 },
+        )
+        if (data.mensagem) toast(data.mensagem, { duration: 8000 })
+      }
+      if (data.proximaTentativaEm) {
+        setSefazStatus(current => ({
+          configured: current?.configured ?? true,
+          cooldownAtivo: true,
+          syncEmAndamento: false,
+          proximaTentativaEm: data.proximaTentativaEm,
+        }))
+      }
       load()
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao sincronizar com a SEFAZ.'))
+      const response = (err as { response?: { status?: number; data?: { proximaTentativaEm?: string } } }).response
+      if (response?.status === 429) {
+        setSefazStatus(current => ({
+          configured: current?.configured ?? true,
+          cooldownAtivo: true,
+          syncEmAndamento: false,
+          proximaTentativaEm: response.data?.proximaTentativaEm,
+        }))
+        toast.error(getErrorMessage(err, 'A consulta à SEFAZ está em intervalo de segurança.'))
+      } else if (response?.status === 409) {
+        setSefazStatus(current => current ? {
+          ...current,
+          syncEmAndamento: true,
+          syncLockAte: response.data?.proximaTentativaEm,
+        } : current)
+        toast(getErrorMessage(err, 'Já existe uma sincronização em andamento.'), { icon: '⏳' })
+      } else {
+        toast.error(getErrorMessage(err, 'Erro ao sincronizar com a SEFAZ.'))
+      }
     } finally {
       setSyncingSefaz(false)
     }
@@ -264,6 +315,14 @@ export default function IntegracoesPage() {
                       Certificado ok. Clique em Configurar e salve para ativar a consulta automática (a cada 2h).
                     </div>
                   )}
+                  {int.source === 'sefaz' && sefazOk && sefazBlocked && (
+                    <div className="flex items-center gap-2 mt-2 text-amber-300 text-xs bg-amber-500/10 rounded-lg p-2">
+                      <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                      {sefazSyncRunning
+                        ? 'Já existe uma sincronização em andamento.'
+                        : `Intervalo de segurança: ${formatCountdown(sefazRetrySeconds)}. Liberação em ${fmtDate(sefazStatus?.proximaTentativaEm)}.`}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 mt-3">
                     <button
@@ -286,11 +345,11 @@ export default function IntegracoesPage() {
                     {int.source === 'sefaz' && sefazOk && (
                       <button
                         onClick={syncSefazAgora}
-                        disabled={syncingSefaz}
+                        disabled={syncingSefaz || sefazBlocked}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30
                                    border border-brand-500/30 text-sm text-brand-300 transition-colors disabled:opacity-50">
                         {syncingSefaz ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                        {syncingSefaz ? 'Consultando SEFAZ…' : 'Sincronizar agora'}
+                        {syncingSefaz ? 'Consultando SEFAZ…' : sefazBlocked ? 'Aguarde o intervalo' : 'Sincronizar agora'}
                       </button>
                     )}
                     {info.docs && (

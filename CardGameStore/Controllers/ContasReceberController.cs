@@ -340,6 +340,16 @@ public class ContasReceberController : ControllerBase
     {
         var fiscal     = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
         var integracao = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "sefaz");
+        SefazDistributionState? distState = null;
+        if (fiscal is not null && !string.IsNullOrWhiteSpace(fiscal.Cnpj))
+        {
+            var cnpj = new string(fiscal.Cnpj.Where(char.IsLetterOrDigit)
+                .Select(char.ToUpperInvariant).ToArray());
+            distState = await _db.SefazDistributionStates.AsNoTracking()
+                .SingleOrDefaultAsync(s => s.Cnpj == cnpj && s.Ambiente == fiscal.Ambiente);
+        }
+        var now = DateTime.UtcNow;
+        var proximaTentativa = new[] { distState?.ProximaConsultaEm, distState?.BloqueadoAte }.Max();
 
         var porStatus = await _db.NotasDestinadas
             .GroupBy(n => n.Status)
@@ -351,8 +361,12 @@ public class ContasReceberController : ControllerBase
             configured  = await _sefaz.IsConfiguredAsync(),
             ativa       = integracao?.IsActive ?? false,
             ambiente    = fiscal?.Ambiente.ToString(),
-            ultimoNsu   = fiscal?.DistUltimoNsu ?? 0,
+            ultimoNsu   = distState?.UltimoNsu ?? fiscal?.DistUltimoNsu ?? 0,
             lastSyncAt  = integracao?.LastSyncAt,
+            proximaTentativaEm = proximaTentativa,
+            cooldownAtivo = proximaTentativa > now,
+            syncEmAndamento = distState?.SyncLockAte > now,
+            syncLockAte = distState?.SyncLockAte,
             notas = new
             {
                 resumo        = porStatus.GetValueOrDefault(NotaDestinadaStatus.Resumo),
@@ -374,6 +388,24 @@ public class ContasReceberController : ControllerBase
     public async Task<IActionResult> SefazSync(CancellationToken ct)
     {
         var result = await _sefaz.SincronizarAsync(ct);
+        if (result.SincronizacaoEmAndamento)
+            return Conflict(new
+            {
+                message = result.Mensagem,
+                proximaTentativaEm = result.ProximaTentativaEm,
+            });
+        if (result.CooldownAtivo || result.BloqueadoPorConsumoIndevido)
+        {
+            var retryAfter = Math.Max(1, (int)Math.Ceiling(
+                (result.ProximaTentativaEm.GetValueOrDefault(DateTime.UtcNow) - DateTime.UtcNow).TotalSeconds));
+            Response.Headers.RetryAfter = retryAfter.ToString();
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                message = result.Mensagem,
+                proximaTentativaEm = result.ProximaTentativaEm,
+                retryAfterSeconds = retryAfter,
+            });
+        }
         if (!result.Executado)
             return BadRequest(new { message = result.Mensagem });
         return Ok(new
@@ -383,6 +415,8 @@ public class ContasReceberController : ControllerBase
             xmlsBaixados  = result.XmlsBaixados,
             contasCriadas = result.ContasCriadas,
             mensagem      = result.Mensagem,
+            nenhumDocumentoDisponivel = result.NenhumDocumentoDisponivel,
+            proximaTentativaEm = result.ProximaTentativaEm,
         });
     }
 

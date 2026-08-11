@@ -5,7 +5,7 @@
 
 ## Estado da entrega
 
-- `origin/main`: `5e74b1e`.
+- `origin/main`: `d080028` antes das alterações fiscais atuais.
 - Multi-tenant por schema e catálogo central estão implementados.
 - Billing da plataforma possui implantação, mensalidades, baixa, MRR e
   inadimplência.
@@ -15,9 +15,11 @@
 - Restaurante/comandas possuem comentários, áreas de produção, fila e estados de
   preparo; falta validação E2E no ambiente implantado.
 - Frontend e backend compilam. O lint passou em 2026-08-11.
+- A Distribuição DF-e agora possui lock distribuído, cooldown e quota isolados
+  por tenant/CNPJ/ambiente; `656` retorna 429 e concorrência retorna 409.
 - Testes focados de billing/comissões e a suíte completa passaram. Após corrigir
-  a limpeza de schemas, foram 750 testes em 1min52s e zero schemas temporários
-  restantes no PostgreSQL.
+  a limpeza de schemas, a base passou com 750 testes; após a proteção SEFAZ,
+  passaram 756/756 testes no PostgreSQL real.
 
 ## Próxima direção recomendada
 

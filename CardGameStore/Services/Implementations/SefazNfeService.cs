@@ -19,6 +19,7 @@ using System.Text;
 using System.Xml.Linq;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using DFe.Classes.Entidades;
 using DFe.Classes.Flags;
 using Microsoft.EntityFrameworkCore;
@@ -34,18 +35,27 @@ public class SefazNfeService
 {
     private readonly AppDbContext _db;
     private readonly EncryptionService _enc;
+    private readonly SefazDistributionGuard _guard;
+    private readonly ITenantContext _tenant;
     private readonly ILogger<SefazNfeService> _logger;
 
     // Limites por ciclo — evita rodadas intermináveis e abuso de quota na SEFAZ
-    private const int MaxLotesNsuPorCiclo    = 30;
-    private const int MaxCienciasPorCiclo    = 60;   // em lotes de 20 chaves por evento
-    private const int MaxDownloadsPorCiclo   = 20;
+    private const int MaxLotesNsuPorCiclo = 30;
+    private const int MaxCienciasPorCiclo = 60;   // em lotes de 20 chaves por evento
+    private const int MaxDownloadsPorCiclo = SefazDistributionGuard.PointQueryLimit;
     private const int ChavesPorLoteDeCiencia = 20;   // limite do layout de eventos em lote
 
-    public SefazNfeService(AppDbContext db, EncryptionService enc, ILogger<SefazNfeService> logger)
+    public SefazNfeService(
+        AppDbContext db,
+        EncryptionService enc,
+        SefazDistributionGuard guard,
+        ITenantContext tenant,
+        ILogger<SefazNfeService> logger)
     {
-        _db     = db;
-        _enc    = enc;
+        _db = db;
+        _enc = enc;
+        _guard = guard;
+        _tenant = tenant;
         _logger = logger;
     }
 
@@ -69,80 +79,121 @@ public class SefazNfeService
         if (string.IsNullOrWhiteSpace(cfg.Cnpj) || string.IsNullOrWhiteSpace(cfg.Uf))
             return SefazSyncResult.NaoExecutado("CNPJ/UF da empresa não configurados em Admin > Fiscal.");
 
-        var cnpj = new string(cfg.Cnpj.Where(char.IsDigit).ToArray());
+        var cnpj = new string(cfg.Cnpj
+            .Where(char.IsLetterOrDigit)
+            .Select(char.ToUpperInvariant)
+            .ToArray());
 
-        var pfxBytes    = Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted!));
-        var senha       = _enc.Decrypt(cfg.CertificadoSenhaEncrypted!);
-        using var certificado = Pkcs12Loader.Abrir(pfxBytes, senha);
+        var state = await _guard.GetOrCreateAsync(cnpj, cfg.Ambiente, cfg.DistUltimoNsu, ct);
+        var lease = await _guard.TryAcquireAsync(state.Id, DateTime.UtcNow, ct);
+        if (lease.Status == SefazLeaseStatus.InProgress)
+            return SefazSyncResult.EmAndamento(lease.State.SyncLockAte);
+        if (lease.Status == SefazLeaseStatus.Cooldown)
+            return SefazSyncResult.EmCooldown(ProximaTentativa(lease.State));
 
-        var cfgServico = new ConfiguracaoServico
-        {
-            cUF             = Enum.Parse<Estado>(cfg.Uf),
-            tpAmb           = cfg.Ambiente == AmbienteFiscal.Producao ? TipoAmbiente.Producao : TipoAmbiente.Homologacao,
-            ModeloDocumento = ModeloDocumento.NFe, // distribuição/manifestação são serviços da NF-e (55), não da NFC-e
-            tpEmis           = TipoEmissao.teNormal,
-            VersaoLayout    = VersaoServico.Versao400,
-            TimeOut         = 30000,
-            ValidarSchemas  = false,
-        };
-
-        using var servico = new ServicosNFe(cfgServico, certificado);
-        var resultado = new SefazSyncResult { Executado = true };
-
+        var leaseId = lease.LeaseId!.Value;
         try
         {
-            await ConsultarNsuAsync(servico, cfg, cnpj, resultado, ct);
-            if (!resultado.BloqueadoPorConsumoIndevido)
+            var pfxBytes = Convert.FromBase64String(_enc.Decrypt(cfg.CertificadoPfxEncrypted!));
+            var senha = _enc.Decrypt(cfg.CertificadoSenhaEncrypted!);
+            using var certificado = Pkcs12Loader.Abrir(pfxBytes, senha);
+
+            var cfgServico = new ConfiguracaoServico
             {
-                await ManifestarCienciaAsync(servico, cnpj, resultado, ct);
-                await BaixarXmlsPorChaveAsync(servico, cfg, cnpj, resultado, ct);
+                cUF = Enum.Parse<Estado>(cfg.Uf),
+                tpAmb = cfg.Ambiente == AmbienteFiscal.Producao ? TipoAmbiente.Producao : TipoAmbiente.Homologacao,
+                ModeloDocumento = ModeloDocumento.NFe,
+                tpEmis = TipoEmissao.teNormal,
+                VersaoLayout = VersaoServico.Versao400,
+                TimeOut = 30000,
+                ValidarSchemas = false,
+            };
+
+            using var servico = new ServicosNFe(cfgServico, certificado);
+            var resultado = new SefazSyncResult { Executado = true };
+
+            try
+            {
+                await ConsultarNsuAsync(servico, cfg, state, leaseId, cnpj, resultado, ct);
+                if (!resultado.BloqueadoPorConsumoIndevido)
+                {
+                    await ManifestarCienciaAsync(servico, cnpj, resultado, ct);
+                    await BaixarXmlsPorChaveAsync(servico, cfg, state, leaseId, cnpj, resultado, ct);
+                }
+                await GerarContasAsync(resultado, ct);
             }
-            await GerarContasAsync(resultado, ct);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "DFe Distribuição: falha na sincronização com a SEFAZ");
+                resultado.Mensagem = $"Falha na comunicação com a SEFAZ: {ex.Message}";
+            }
+
+            // Marca a sincronização no card de integrações (se a linha existir)
+            var integracao = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "sefaz", ct);
+            if (integracao is not null)
+            {
+                integracao.LastSyncAt = DateTime.UtcNow;
+                integracao.UpdatedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync(ct);
+            }
+
+            _logger.LogInformation(
+                "DFe Distribuição: {Novas} nota(s) nova(s), {Ciencias} ciência(s), {Xmls} XML(s), {Contas} conta(s) a pagar. {Msg}",
+                resultado.NovasNotas, resultado.Manifestadas, resultado.XmlsBaixados, resultado.ContasCriadas,
+                resultado.Mensagem ?? "");
+
+            resultado.ProximaTentativaEm ??= DateTime.UtcNow.Add(SefazDistributionGuard.SafetyCooldown);
+            return resultado;
         }
-        catch (Exception ex)
+        finally
         {
-            _logger.LogError(ex, "DFe Distribuição: falha na sincronização com a SEFAZ");
-            resultado.Mensagem = $"Falha na comunicação com a SEFAZ: {ex.Message}";
+            try
+            {
+                await _guard.ReleaseAsync(state.Id, leaseId, DateTime.UtcNow, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                // A lease expira sozinha. Falhar ao liberar não pode esconder o
+                // resultado fiscal real nem deixar a trava presa para sempre.
+                _logger.LogError(ex,
+                    "Falha ao liberar lease SEFAZ {Execucao} do tenant {TenantId}", leaseId, _tenant.TenantId);
+            }
         }
-
-        // Marca a sincronização no card de integrações (se a linha existir)
-        var integracao = await _db.IntegrationConfigs.FirstOrDefaultAsync(c => c.Source == "sefaz", ct);
-        if (integracao is not null)
-        {
-            integracao.LastSyncAt = DateTime.UtcNow;
-            integracao.UpdatedAt  = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-        }
-
-        _logger.LogInformation(
-            "DFe Distribuição: {Novas} nota(s) nova(s), {Ciencias} ciência(s), {Xmls} XML(s), {Contas} conta(s) a pagar. {Msg}",
-            resultado.NovasNotas, resultado.Manifestadas, resultado.XmlsBaixados, resultado.ContasCriadas,
-            resultado.Mensagem ?? "");
-
-        return resultado;
     }
+
+    private static DateTime? ProximaTentativa(SefazDistributionState state) =>
+        new[] { state.ProximaConsultaEm, state.BloqueadoAte }.Max();
 
     // ── 1. Consulta NSU incremental ───────────────────────────────────────────
 
     private async Task ConsultarNsuAsync(
-        ServicosNFe servico, FiscalConfig cfg, string cnpj, SefazSyncResult resultado, CancellationToken ct)
+        ServicosNFe servico, FiscalConfig cfg, SefazDistributionState state, Guid leaseId,
+        string cnpj, SefazSyncResult resultado, CancellationToken ct)
     {
         for (var lote = 0; lote < MaxLotesNsuPorCiclo && !ct.IsCancellationRequested; lote++)
         {
-            var ret = servico.NfeDistDFeInteresse(cfg.Uf!, cnpj, ultNSU: cfg.DistUltimoNsu.ToString()).Retorno;
+            await _guard.RenewLeaseAsync(state.Id, leaseId, DateTime.UtcNow, ct);
+            var ret = servico.NfeDistDFeInteresse(cfg.Uf!, cnpj, ultNSU: state.UltimoNsu.ToString()).Retorno;
 
             if (ret.cStat == 656)
             {
+                var now = DateTime.UtcNow;
+                await _guard.BlockAsync(state.Id, now, ct);
                 resultado.BloqueadoPorConsumoIndevido = true;
-                resultado.Mensagem = "SEFAZ bloqueou temporariamente por consumo indevido (cStat 656) — aguarde 1 hora.";
-                _logger.LogWarning("DFe Distribuição: consumo indevido (656). ultNSU atual: {Nsu}", cfg.DistUltimoNsu);
+                resultado.ProximaTentativaEm = now.Add(SefazDistributionGuard.SafetyCooldown);
+                resultado.Mensagem = "SEFAZ bloqueou temporariamente por consumo indevido (cStat 656).";
+                _logger.LogWarning(
+                    "DFe Distribuição: consumo indevido (656). Tenant {TenantId}, CNPJ {Cnpj}, execução {Execucao}, ultNSU {Nsu}, bloqueado até {BloqueadoAte}",
+                    _tenant.TenantId, MascararCnpj(cnpj), leaseId, state.UltimoNsu, resultado.ProximaTentativaEm);
                 return;
             }
 
             if (ret.cStat == 137) // nenhum documento novo
             {
-                cfg.DistUltimoNsu = Math.Max(cfg.DistUltimoNsu, ret.ultNSU);
-                await _db.SaveChangesAsync(ct);
+                await _guard.AdvanceNsuAsync(state.Id, ret.ultNSU, DateTime.UtcNow, ct);
+                state.UltimoNsu = Math.Max(state.UltimoNsu, ret.ultNSU);
+                resultado.NenhumDocumentoDisponivel = true;
+                resultado.Mensagem = "Nenhum documento novo. A próxima consulta será liberada após o intervalo da SEFAZ.";
                 return;
             }
 
@@ -156,8 +207,9 @@ public class SefazNfeService
             foreach (var doc in ret.loteDistDFeInt ?? Array.Empty<loteDistDFeInt>())
                 await ProcessarDocumentoAsync(doc, resultado, ct);
 
-            cfg.DistUltimoNsu = ret.ultNSU;
-            await _db.SaveChangesAsync(ct); // persiste por lote: reinício não reprocessa
+            await _guard.AdvanceNsuAsync(state.Id, ret.ultNSU, DateTime.UtcNow, ct);
+            state.UltimoNsu = Math.Max(state.UltimoNsu, ret.ultNSU);
+            await _db.SaveChangesAsync(ct); // persiste documentos do lote
 
             if (ret.ultNSU >= ret.maxNSU) return; // backlog drenado
         }
@@ -169,21 +221,21 @@ public class SefazNfeService
 
         if (schema.StartsWith("resNFe", StringComparison.OrdinalIgnoreCase) && doc.ResNFe is not null)
         {
-            var res  = doc.ResNFe;
+            var res = doc.ResNFe;
             var nota = await _db.NotasDestinadas.FirstOrDefaultAsync(n => n.ChaveAcesso == res.chNFe, ct);
 
             if (nota is null)
             {
                 nota = new NotaDestinada
                 {
-                    ChaveAcesso  = res.chNFe,
-                    Nsu          = doc.NSU,
+                    ChaveAcesso = res.chNFe,
+                    Nsu = doc.NSU,
                     EmitenteCnpj = res.CNPJ,
                     EmitenteNome = res.xNome,
-                    Valor        = res.vNF,
-                    DataEmissao  = ParaUtc(res.dhEmi),
-                    Situacao     = res.cSitNFe,
-                    Status       = res.cSitNFe == 3 ? NotaDestinadaStatus.Cancelada : NotaDestinadaStatus.Resumo,
+                    Valor = res.vNF,
+                    DataEmissao = ParaUtc(res.dhEmi),
+                    Situacao = res.cSitNFe,
+                    Status = res.cSitNFe == 3 ? NotaDestinadaStatus.Cancelada : NotaDestinadaStatus.Resumo,
                 };
                 _db.NotasDestinadas.Add(nota);
                 if (nota.Status == NotaDestinadaStatus.Resumo) resultado.NovasNotas++;
@@ -196,7 +248,7 @@ public class SefazNfeService
         else if (schema.StartsWith("procNFe", StringComparison.OrdinalIgnoreCase) && doc.XmlNfe is { Length: > 0 })
         {
             // XML completo veio direto na distribuição (nota já manifestada anteriormente)
-            var xml   = Encoding.UTF8.GetString(doc.XmlNfe);
+            var xml = Encoding.UTF8.GetString(doc.XmlNfe);
             var chave = ExtrairChaveDoXml(xml);
             if (chave is null) return;
 
@@ -210,8 +262,8 @@ public class SefazNfeService
 
             if (nota.Status is NotaDestinadaStatus.Resumo or NotaDestinadaStatus.Ciencia || nota.XmlProc is null)
             {
-                nota.XmlProc   = xml;
-                nota.Status    = nota.Status == NotaDestinadaStatus.Cancelada
+                nota.XmlProc = xml;
+                nota.Status = nota.Status == NotaDestinadaStatus.Cancelada
                                    ? NotaDestinadaStatus.Cancelada
                                    : NotaDestinadaStatus.XmlBaixado;
                 nota.UpdatedAt = DateTime.UtcNow;
@@ -219,7 +271,7 @@ public class SefazNfeService
                 if (nota.Status == NotaDestinadaStatus.XmlBaixado) resultado.XmlsBaixados++;
             }
         }
-        else if ((schema.StartsWith("resEvento",     StringComparison.OrdinalIgnoreCase) && doc.ResEvento is not null) ||
+        else if ((schema.StartsWith("resEvento", StringComparison.OrdinalIgnoreCase) && doc.ResEvento is not null) ||
                  (schema.StartsWith("procEventoNFe", StringComparison.OrdinalIgnoreCase) && doc.ProcEventoNFe is not null))
         {
             // Só interessa o cancelamento da NF-e pelo emitente (110111)
@@ -239,15 +291,15 @@ public class SefazNfeService
     /// <summary>Marca a nota como cancelada e cancela as contas a pagar ainda não pagas dela.</summary>
     private async Task CancelarNotaAsync(NotaDestinada nota, CancellationToken ct)
     {
-        nota.Situacao  = 3;
-        nota.Status    = NotaDestinadaStatus.Cancelada;
+        nota.Situacao = 3;
+        nota.Status = NotaDestinadaStatus.Cancelada;
         nota.UpdatedAt = DateTime.UtcNow;
 
         var canceladas = await _db.ExternalTransactions
             .Where(t => t.Source == "sefaz" && t.NfeKey == nota.ChaveAcesso &&
                         (t.Status == "pending" || t.Status == "overdue"))
             .ExecuteUpdateAsync(s => s
-                .SetProperty(t => t.Status,    "cancelled")
+                .SetProperty(t => t.Status, "cancelled")
                 .SetProperty(t => t.UpdatedAt, DateTime.UtcNow), ct);
 
         if (canceladas > 0)
@@ -287,7 +339,7 @@ public class SefazNfeService
 
             foreach (var ev in eventos)
             {
-                var inf  = ev.infEvento;
+                var inf = ev.infEvento;
                 var nota = loteNotas.FirstOrDefault(n => n.ChaveAcesso == inf?.chNFe);
                 if (nota is null || inf is null) continue;
 
@@ -295,10 +347,10 @@ public class SefazNfeService
                 // 573 = duplicidade (ciência já existia) — para nós é sucesso
                 if (inf.cStat is 135 or 136 or 573)
                 {
-                    nota.Status           = NotaDestinadaStatus.Ciencia;
+                    nota.Status = NotaDestinadaStatus.Ciencia;
                     nota.CienciaProtocolo = inf.nProt;
-                    nota.CienciaEm        = DateTime.UtcNow;
-                    nota.Erro             = null;
+                    nota.CienciaEm = DateTime.UtcNow;
+                    nota.Erro = null;
                     resultado.Manifestadas++;
                 }
                 else
@@ -317,7 +369,8 @@ public class SefazNfeService
     // ── 3. Download do XML completo por chave (consChNFe) ──────────────────────
 
     private async Task BaixarXmlsPorChaveAsync(
-        ServicosNFe servico, FiscalConfig cfg, string cnpj, SefazSyncResult resultado, CancellationToken ct)
+        ServicosNFe servico, FiscalConfig cfg, SefazDistributionState state, Guid leaseId,
+        string cnpj, SefazSyncResult resultado, CancellationToken ct)
     {
         var aguardandoXml = await _db.NotasDestinadas
             .Where(n => n.Status == NotaDestinadaStatus.Ciencia)
@@ -329,12 +382,24 @@ public class SefazNfeService
         {
             if (ct.IsCancellationRequested) return;
 
+            var quota = await _guard.TryReservePointQueryAsync(state.Id, DateTime.UtcNow, ct);
+            if (!quota.Acquired)
+            {
+                resultado.ProximaTentativaEm = quota.RetryAt;
+                resultado.Mensagem = "Limite interno seguro de consultas pontuais atingido; os XMLs pendentes ficam para o próximo ciclo.";
+                return;
+            }
+
+            await _guard.RenewLeaseAsync(state.Id, leaseId, DateTime.UtcNow, ct);
             var ret = servico.NfeDistDFeInteresse(cfg.Uf!, cnpj, chNFE: nota.ChaveAcesso).Retorno;
 
             if (ret.cStat == 656)
             {
+                var now = DateTime.UtcNow;
+                await _guard.BlockAsync(state.Id, now, ct);
                 resultado.BloqueadoPorConsumoIndevido = true;
-                resultado.Mensagem = "SEFAZ bloqueou temporariamente por consumo indevido (cStat 656) — aguarde 1 hora.";
+                resultado.ProximaTentativaEm = now.Add(SefazDistributionGuard.SafetyCooldown);
+                resultado.Mensagem = "SEFAZ bloqueou temporariamente por consumo indevido (cStat 656).";
                 return;
             }
 
@@ -350,9 +415,9 @@ public class SefazNfeService
                 continue;
             }
 
-            nota.XmlProc   = Encoding.UTF8.GetString(docProc.XmlNfe);
-            nota.Status    = NotaDestinadaStatus.XmlBaixado;
-            nota.Erro      = null;
+            nota.XmlProc = Encoding.UTF8.GetString(docProc.XmlNfe);
+            nota.Status = NotaDestinadaStatus.XmlBaixado;
+            nota.Erro = null;
             nota.UpdatedAt = DateTime.UtcNow;
             PreencherResumoDoXml(nota, nota.XmlProc);
             resultado.XmlsBaixados++;
@@ -375,8 +440,8 @@ public class SefazNfeService
             try
             {
                 resultado.ContasCriadas += await GerarContasDaNotaAsync(nota, ct);
-                nota.Status    = NotaDestinadaStatus.ContasGeradas;
-                nota.Erro      = null;
+                nota.Status = NotaDestinadaStatus.ContasGeradas;
+                nota.Erro = null;
             }
             catch (Exception ex)
             {
@@ -391,19 +456,19 @@ public class SefazNfeService
     private async Task<int> GerarContasDaNotaAsync(NotaDestinada nota, CancellationToken ct)
     {
         XNamespace ns = "http://www.portalfiscal.inf.br/nfe";
-        var xml    = XDocument.Parse(nota.XmlProc!);
+        var xml = XDocument.Parse(nota.XmlProc!);
         var infNFe = xml.Descendants(ns + "infNFe").FirstOrDefault()
             ?? throw new InvalidOperationException("XML sem infNFe.");
 
-        var nNF   = infNFe.Element(ns + "ide")?.Element(ns + "nNF")?.Value ?? "?";
-        var emit  = infNFe.Element(ns + "emit");
+        var nNF = infNFe.Element(ns + "ide")?.Element(ns + "nNF")?.Value ?? "?";
+        var emit = infNFe.Element(ns + "emit");
         var xNome = emit?.Element(ns + "xNome")?.Value ?? nota.EmitenteNome ?? "Fornecedor";
-        var vNF   = ParseDecimal(infNFe.Element(ns + "total")?.Element(ns + "ICMSTot")?.Element(ns + "vNF")?.Value);
+        var vNF = ParseDecimal(infNFe.Element(ns + "total")?.Element(ns + "ICMSTot")?.Element(ns + "vNF")?.Value);
 
         var duplicatas = infNFe.Element(ns + "cobr")?.Elements(ns + "dup")
             .Select(d => (
-                NDup:  d.Element(ns + "nDup")?.Value ?? "1",
-                Venc:  d.Element(ns + "dVenc")?.Value,
+                NDup: d.Element(ns + "nDup")?.Value ?? "1",
+                Venc: d.Element(ns + "dVenc")?.Value,
                 Valor: ParseDecimal(d.Element(ns + "vDup")?.Value)))
             .Where(d => d.Valor > 0)
             .ToList() ?? new();
@@ -416,28 +481,28 @@ public class SefazNfeService
         foreach (var (nDup, venc, valor) in duplicatas)
         {
             var externalId = $"{nota.ChaveAcesso}-{nDup}";
-            var jaExiste   = await _db.ExternalTransactions
+            var jaExiste = await _db.ExternalTransactions
                 .AnyAsync(t => t.Source == "sefaz" && t.ExternalId == externalId, ct);
             if (jaExiste) continue;
 
             var parcelaInfo = duplicatas.Count > 1 ? $" — parcela {nDup}/{duplicatas.Count}" : "";
             _db.ExternalTransactions.Add(new ExternalTransaction
             {
-                Source      = "sefaz",
-                ExternalId  = externalId,
-                Type        = "expense",
-                Amount      = valor,
+                Source = "sefaz",
+                ExternalId = externalId,
+                Type = "expense",
+                Amount = valor,
                 Description = $"NF-e {nNF} — {xNome}{parcelaInfo}",
                 // Vencimento é data pura: meia-noite UTC, convenção do módulo financeiro
-                DueDate     = venc is not null
+                DueDate = venc is not null
                                 ? DateTime.SpecifyKind(DateTime.Parse(venc[..10]), DateTimeKind.Utc)
                                 : null,
-                Status      = "pending",
-                Category    = "Compras para estoque",
-                DreGroup    = DreGroups.InventoryPurchase,
-                Supplier    = xNome,
-                NfeKey      = nota.ChaveAcesso,
-                Notes       = $"Gerada automaticamente via Manifestação do Destinatário (NSU {nota.Nsu}).",
+                Status = "pending",
+                Category = "Compras para estoque",
+                DreGroup = DreGroups.InventoryPurchase,
+                Supplier = xNome,
+                NfeKey = nota.ChaveAcesso,
+                Notes = $"Gerada automaticamente via Manifestação do Destinatário (NSU {nota.Nsu}).",
             });
             criadas++;
         }
@@ -491,19 +556,42 @@ public class SefazNfeService
         dt == default ? null
         : dt.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(dt, DateTimeKind.Utc)
         : dt.ToUniversalTime();
+
+    private static string MascararCnpj(string cnpj) =>
+        cnpj.Length <= 4 ? "****" : new string('*', cnpj.Length - 4) + cnpj[^4..];
 }
 
 /// <summary>Resultado de um ciclo de sincronização — exibido no painel do admin.</summary>
 public class SefazSyncResult
 {
-    public bool    Executado     { get; set; }
-    public string? Mensagem      { get; set; }
-    public int     NovasNotas    { get; set; }
-    public int     Manifestadas  { get; set; }
-    public int     XmlsBaixados  { get; set; }
-    public int     ContasCriadas { get; set; }
-    public bool    BloqueadoPorConsumoIndevido { get; set; }
+    public bool Executado { get; set; }
+    public string? Mensagem { get; set; }
+    public int NovasNotas { get; set; }
+    public int Manifestadas { get; set; }
+    public int XmlsBaixados { get; set; }
+    public int ContasCriadas { get; set; }
+    public bool BloqueadoPorConsumoIndevido { get; set; }
+    public bool NenhumDocumentoDisponivel { get; set; }
+    public bool SincronizacaoEmAndamento { get; set; }
+    public bool CooldownAtivo { get; set; }
+    public DateTime? ProximaTentativaEm { get; set; }
 
     public static SefazSyncResult NaoExecutado(string motivo) =>
         new() { Executado = false, Mensagem = motivo };
+
+    public static SefazSyncResult EmAndamento(DateTime? lockAte) => new()
+    {
+        Executado = false,
+        SincronizacaoEmAndamento = true,
+        ProximaTentativaEm = lockAte,
+        Mensagem = "Já existe uma sincronização com a SEFAZ em andamento.",
+    };
+
+    public static SefazSyncResult EmCooldown(DateTime? proximaTentativa) => new()
+    {
+        Executado = false,
+        CooldownAtivo = true,
+        ProximaTentativaEm = proximaTentativa,
+        Mensagem = "A consulta à SEFAZ está em intervalo de segurança.",
+    };
 }

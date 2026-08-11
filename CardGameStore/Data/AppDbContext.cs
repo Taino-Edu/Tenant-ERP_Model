@@ -57,6 +57,7 @@ public class AppDbContext : DbContext
 
     // ── Fiscal: emissão de NFC-e ───────────────────────────────────────────────
     public DbSet<FiscalConfig>       FiscalConfigs        { get; set; }
+    public DbSet<SefazDistributionState> SefazDistributionStates { get; set; }
     public DbSet<NaturezaOperacao>   NaturezasOperacao    { get; set; }
     public DbSet<NotaFiscalEmitida>  NotasFiscaisEmitidas { get; set; }
     public DbSet<InutilizacaoFiscal> InutilizacoesFiscais  { get; set; }
@@ -353,6 +354,16 @@ public class AppDbContext : DbContext
                   .HasForeignKey(i => i.ProductionAreaId)
                   .OnDelete(DeleteBehavior.Restrict)
                   .IsRequired(false);
+        });
+
+        modelBuilder.Entity<SefazDistributionState>(entity =>
+        {
+            entity.Property(s => s.Ambiente).HasConversion<string>();
+            entity.HasIndex(s => new { s.Cnpj, s.Ambiente })
+                  .IsUnique()
+                  .HasDatabaseName("ux_sefaz_distribution_state_cnpj_ambiente");
+            entity.HasIndex(s => s.SyncLockAte)
+                  .HasDatabaseName("ix_sefaz_distribution_state_sync_lock_ate");
         });
 
         // =====================================================================
