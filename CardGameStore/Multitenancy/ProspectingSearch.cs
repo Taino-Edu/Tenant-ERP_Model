@@ -72,6 +72,7 @@ public enum ProspectCandidateStatus
     Lead,
     Customer,
     Stale,
+    Suppressed,
 }
 
 public enum ProspectEnrichmentStatus
@@ -145,4 +146,35 @@ public class ProspectCandidate
     public string? SuggestedApproach { get; set; }
 
     public ProspectingSearch Search { get; set; } = null!;
+    public ICollection<ProspectObservation> Observations { get; set; } = [];
+}
+
+[Table("prospect_observations")]
+public class ProspectObservation
+{
+    [Key, Column("id")]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    [Column("candidate_id")]
+    public Guid CandidateId { get; set; }
+
+    [Required, MaxLength(60), Column("field_name")]
+    public string FieldName { get; set; } = string.Empty;
+
+    [MaxLength(2000), Column("previous_value")]
+    public string? PreviousValue { get; set; }
+
+    [MaxLength(2000), Column("observed_value")]
+    public string? ObservedValue { get; set; }
+
+    [Required, MaxLength(80), Column("source")]
+    public string Source { get; set; } = string.Empty;
+
+    [Range(0, 100), Column("confidence")]
+    public int Confidence { get; set; }
+
+    [Column("observed_at")]
+    public DateTime ObservedAt { get; set; } = DateTime.UtcNow;
+
+    public ProspectCandidate Candidate { get; set; } = null!;
 }

@@ -28,7 +28,7 @@
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
-  `QA-001`, a suíte completa passou novamente em 2026-08-11 com 765 testes,
+  `QA-001`, a suíte completa passou novamente em 2026-08-11 com 775 testes,
   zero falhas e zero ignorados.
 - Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões já têm implementação na `main`.
@@ -274,15 +274,16 @@
   e confiança do enriquecimento. Novas coletas OSM/site atualizam o snapshot;
   o enriquecimento de abordagem sob demanda também fica persistido e reaparece
   na fila de captação.
-- **Falta:** observações versionadas por campo, extrator governado de site,
-  integração com recortes públicos CNPJ/IBGE e proteção explícita para dados
-  corrigidos manualmente.
+- **Entregue também:** observações versionadas por campo, preservando valor
+  anterior, valor observado, fonte, confiança e data.
+- **Falta:** extrator governado de site, integração com recortes públicos
+  CNPJ/IBGE e proteção explícita para dados corrigidos manualmente.
 - **Critério de conclusão:** cada campo enriquecido mostra origem e atualização;
   o score é explicável; correções manuais sobrevivem à sincronização.
 
 ### PROS-004 — Bot pesquisador e qualificador com revisão humana
 
-- **Estado:** `EM EXECUÇÃO` desde 2026-08-11
+- **Estado:** `VALIDAR` desde 2026-08-11
 - **Depende de:** `PROS-001` a `PROS-003`, `CRM-001`, política de privacidade da
   prospecção e teste de balanceamento de legítimo interesse.
 - **Escopo recomendado:** job interno usando `BackgroundService`/fila existente,
@@ -306,9 +307,15 @@
   - fila de captação na interface, atualizada periodicamente, onde o operador
     enriquece e aprova a conversão em lead;
   - nenhuma criação de lead ou contato automático pelo worker.
-- **Falta:** lista de oposição, orçamento por fonte, política/legal validada,
-  tentativas com backoff configurável, responsável sugerido, notificações e
-  auditoria de alterações por campo.
+  - lista de oposição por identificador da fonte, telefone e domínio, aplicada
+    também às coletas futuras e acionável na fila pelo operador;
+  - orçamento diário configurável por campanha e retentativas automáticas com
+    backoff de 5, 15 e 45 minutos, sem criar execuções duplicadas;
+  - histórico de mudanças por campo com valor anterior, novo valor, fonte,
+    confiança e data, visível no cartão do candidato.
+- **Falta para contato ativo, não para o robô de pesquisa:** política/legal
+  validada, responsável sugerido e notificações. O worker continua proibido de
+  iniciar contato automaticamente.
 - **Critério de conclusão:** execução idempotente, auditável, com orçamento,
   quotas, lista de oposição, proveniência e aprovação humana demonstrados.
 
@@ -355,6 +362,49 @@
   - política para mudança de vendedor de um cliente já com histórico.
 - **Critério de conclusão:** regras aprovadas, migração aplicada e ciclo completo
   validado em staging: cliente paga → comissão vence → vendedor recebe → extrato.
+
+## P1 — aquisição, indexação e mensuração
+
+### MKT-001 — Colocar a 3E Systen no Google
+
+- **Estado:** `BLOQUEADO` por verificação da conta Google/DNS.
+- **Diagnóstico em 2026-08-11:** `https://3esysten.com.br` e o sitemap respondem
+  `200` inclusive para Googlebot; `robots.txt`, canonical, metadata, JSON-LD e
+  `index, follow` estão corretos. A busca `site:3esysten.com.br` não retorna
+  páginas e não existe TXT `google-site-verification` no DNS.
+- **Fazer:** criar propriedade de domínio no Search Console, adicionar o TXT no
+  Cloudflare, enviar `/sitemap.xml`, inspecionar a home e solicitar indexação.
+- **Depois:** Bing Webmaster Tools/IndexNow e Perfil da Empresa no Google se a
+  operação atender presencialmente ou em área de serviço.
+- **Critério de conclusão:** propriedade verificada, sitemap lido sem erro,
+  página inicial indexada e consultas de marca monitoradas no Search Console.
+
+### MKT-002 — Stack gratuita de analytics e mídia com consentimento
+
+- **Estado:** `PRONTO PARA FAZER` após criação das contas/IDs.
+- **Stack:** Google Tag Manager como ponto único; GA4; conversões do Google Ads;
+  Meta Pixel; TikTok Pixel; LinkedIn Insight Tag; Microsoft Clarity.
+- **Eventos mínimos:** `view_pricing`, `whatsapp_click`, `lead_submit`,
+  `sign_up`, `trial_started` e `subscription_paid`, com UTM/origem persistida no
+  CRM e deduplicação entre navegador e servidor.
+- **Privacidade:** Analytics só após consentimento de análise; pixels e
+  remarketing só após consentimento de marketing; revogação precisa interromper
+  novas coletas.
+- **Evolução:** Meta Conversions API, TikTok Events API e conversões aprimoradas
+  do Google somente depois de eventos web e consentimento estarem validados.
+- **Critério de conclusão:** Tag Assistant/pixel helpers sem erro, eventos de
+  teste chegam uma única vez, origem aparece no lead e nenhuma tag opcional
+  dispara após recusa.
+
+### MKT-003 — Conteúdo orgânico por intenção comercial
+
+- **Estado:** `PRONTO PARA FAZER`.
+- **Entregar:** páginas próprias para ERP de restaurante, sistema para lojas,
+  PDV com NFC-e, estoque, crediário e portal do contador; casos reais, FAQ e
+  links internos; marca escrita consistentemente como `3E Systen` e produto
+  `Octus`.
+- **Critério de conclusão:** páginas úteis no sitemap, sem conteúdo duplicado,
+  indexadas e recebendo impressões por consultas não ligadas apenas à marca.
 
 ## P1 — dados e inteligência de mercado
 

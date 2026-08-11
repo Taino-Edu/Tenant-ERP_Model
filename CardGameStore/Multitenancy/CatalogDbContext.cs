@@ -25,6 +25,8 @@ public class CatalogDbContext : DbContext
     public DbSet<ProspectCandidate> ProspectCandidates { get; set; }
     public DbSet<ProspectingCampaign> ProspectingCampaigns { get; set; }
     public DbSet<ProspectingCampaignRun> ProspectingCampaignRuns { get; set; }
+    public DbSet<ProspectSuppression> ProspectSuppressions { get; set; }
+    public DbSet<ProspectObservation> ProspectObservations { get; set; }
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
     public DbSet<TenantCharge> TenantCharges { get; set; }
@@ -235,6 +237,21 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(r => r.CampaignId).IsUnique()
                   .HasFilter("\"status\" IN ('Queued', 'Running')")
                   .HasDatabaseName("ix_prospecting_campaign_runs_active_unique");
+        });
+
+        modelBuilder.Entity<ProspectSuppression>(entity =>
+        {
+            entity.Property(s => s.KeyType).HasConversion<string>().HasMaxLength(20);
+            entity.HasIndex(s => new { s.KeyType, s.NormalizedValue }).IsUnique()
+                  .HasDatabaseName("ix_prospect_suppressions_key_unique");
+        });
+
+        modelBuilder.Entity<ProspectObservation>(entity =>
+        {
+            entity.HasOne(o => o.Candidate).WithMany(c => c.Observations).HasForeignKey(o => o.CandidateId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(o => new { o.CandidateId, o.ObservedAt })
+                  .HasDatabaseName("ix_prospect_observations_candidate_date");
         });
 
         modelBuilder.Entity<ReferralPartner>(entity =>

@@ -7,7 +7,7 @@ import {
 } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import toast from 'react-hot-toast'
-import { Bot, Check, Clock3, Database, Globe, History, Loader2, Pause, Play, Plus, RefreshCw, Search, Sparkles, UserPlus } from 'lucide-react'
+import { Ban, Bot, Check, Clock3, Database, Globe, History, Loader2, Pause, Play, Plus, RefreshCw, Search, Sparkles, UserPlus } from 'lucide-react'
 import clsx from 'clsx'
 
 const DIGITAL_PRESENCE_LABEL: Record<string, string> = {
@@ -16,19 +16,21 @@ const DIGITAL_PRESENCE_LABEL: Record<string, string> = {
 const STATUS_LABEL: Record<string, string> = {
   New: 'Novo', Selected: 'Selecionado', Discarded: 'Descartado', Lead: 'Já é lead',
   Customer: 'Já é cliente', Stale: 'Não apareceu na atualização',
+  Suppressed: 'Não prospectar',
 }
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-function CandidateCard({ candidate, categoria, onAdded }: { candidate: ProspectCandidateDto; categoria: string; onAdded: (id: string) => void }) {
+function CandidateCard({ candidate, categoria, onAdded, onSuppressed }: { candidate: ProspectCandidateDto; categoria: string; onAdded: (id: string) => void; onSuppressed: (id: string) => void }) {
   const [data, setData] = useState(candidate)
   const [enriching, setEnriching] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [suppressing, setSuppressing] = useState(false)
   const [added, setAdded] = useState(candidate.status === 'Lead' || candidate.status === 'Customer')
   const [abordagem, setAbordagem] = useState<string | null>(candidate.suggestedApproach)
-  const unavailable = data.status === 'Stale' || data.status === 'Discarded'
+  const unavailable = data.status === 'Stale' || data.status === 'Discarded' || data.status === 'Suppressed'
 
   async function enrich() {
     setEnriching(true)
@@ -67,6 +69,18 @@ function CandidateCard({ candidate, categoria, onAdded }: { candidate: ProspectC
     } finally { setAdding(false) }
   }
 
+  async function suppress() {
+    if (!window.confirm(`Bloquear “${data.nome}” de todas as campanhas futuras?`)) return
+    setSuppressing(true)
+    try {
+      await prospectingApi.suppressCandidate(data.id)
+      setData(prev => ({ ...prev, status: 'Suppressed' }))
+      onSuppressed(data.id)
+      toast.success('Candidato incluído na lista de oposição.')
+    } catch (err) { toast.error(getErrorMessage(err, 'Não foi possível bloquear este candidato.')) }
+    finally { setSuppressing(false) }
+  }
+
   return (
     <article className={clsx('card p-4 space-y-3', unavailable && 'opacity-60')}>
       <div className="flex items-start justify-between gap-3">
@@ -90,9 +104,13 @@ function CandidateCard({ candidate, categoria, onAdded }: { candidate: ProspectC
         {data.website && <a href={data.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-brand-400 hover:underline"><Globe className="w-3.5 h-3.5" /> Abrir site</a>}
       </div>
       {data.lastEnrichedAt && <p className="text-[11px] text-gray-500">Enriquecido em {fmtDate(data.lastEnrichedAt)} · {data.enrichmentSource || 'fonte não informada'}{data.enrichmentConfidence != null ? ` · confiança ${data.enrichmentConfidence}%` : ''}</p>}
+      {(data.recentObservations?.length ?? 0) > 0 && <details className="text-[11px] text-gray-400"><summary className="cursor-pointer text-brand-400">Histórico das informações ({data.recentObservations.length})</summary><div className="mt-2 space-y-1">{data.recentObservations.map((o, index) => <p key={`${o.fieldName}-${o.observedAt}-${index}`}><strong>{o.fieldName}</strong>: {o.previousValue || 'vazio'} → {o.observedValue || 'vazio'} · {o.source} · {o.confidence}%</p>)}</div></details>}
       {abordagem && <p className="text-xs text-gray-300 bg-surface-700 rounded-lg p-3 leading-relaxed">{abordagem}</p>}
 
       <div className="flex gap-2 pt-1">
+        <button onClick={suppress} disabled={suppressing || added || unavailable} className="btn-secondary p-2 justify-center" title="Não prospectar novamente">
+          {suppressing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+        </button>
         <button onClick={enrich} disabled={enriching || added || unavailable} className="btn-secondary text-xs py-1.5 px-3 flex-1 justify-center">
           {enriching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />} Analisar
         </button>
@@ -115,7 +133,7 @@ export default function ProspeccaoPage() {
   const [loading, setLoading] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [savingCampaign, setSavingCampaign] = useState(false)
-  const [campaignForm, setCampaignForm] = useState({ name: '', categoria: '', cidade: '', intervalHours: 168, maxCandidatesPerRun: 200 })
+  const [campaignForm, setCampaignForm] = useState({ name: '', categoria: '', cidade: '', intervalHours: 168, maxCandidatesPerRun: 200, dailyRunBudget: 1, maxRetryAttempts: 3 })
 
   const loadHistory = useCallback(async () => {
     try { setHistory((await prospectingApi.listSearches()).data) }
@@ -190,7 +208,12 @@ export default function ProspeccaoPage() {
     setReviewQueue(prev => prev.filter(c => c.id !== candidateId))
   }
 
-  const visibleCandidates = useMemo(() => current?.candidates.filter(c => c.status !== 'Stale') ?? [], [current])
+  function markSuppressed(candidateId: string) {
+    setCurrent(prev => prev ? { ...prev, candidates: prev.candidates.map(c => c.id === candidateId ? { ...c, status: 'Suppressed' } : c) } : prev)
+    setReviewQueue(prev => prev.filter(c => c.id !== candidateId))
+  }
+
+  const visibleCandidates = useMemo(() => current?.candidates.filter(c => c.status !== 'Stale' && c.status !== 'Suppressed') ?? [], [current])
 
   return (
     <div className="space-y-5">
@@ -204,11 +227,12 @@ export default function ProspeccaoPage() {
 
       <section className="card p-4 space-y-4">
         <div className="flex items-center gap-2"><Bot className="w-5 h-5 text-brand-400" /><div><h2 className="text-sm font-bold text-white">Bot de captação</h2><p className="text-xs text-gray-500">Pesquisa e atualiza candidatos; nenhum contato ou lead é criado sem sua aprovação.</p></div></div>
-        <form onSubmit={createCampaign} className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_120px_auto] items-end">
+        <form onSubmit={createCampaign} className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_120px_100px_auto] items-end">
           <label><span className="label">Nome da campanha</span><input className="input w-full" value={campaignForm.name} onChange={e => setCampaignForm(p => ({ ...p, name: e.target.value }))} placeholder="Comércio regional" required /></label>
           <label><span className="label">Segmento</span><input list="prospecting-categories" className="input w-full" value={campaignForm.categoria} onChange={e => setCampaignForm(p => ({ ...p, categoria: e.target.value }))} placeholder="Restaurante" required /></label>
           <label><span className="label">Cidade e UF</span><input className="input w-full" value={campaignForm.cidade} onChange={e => setCampaignForm(p => ({ ...p, cidade: e.target.value }))} placeholder="Ribeirão Preto, SP" required /></label>
           <label><span className="label">Frequência</span><select className="input w-full" value={campaignForm.intervalHours} onChange={e => setCampaignForm(p => ({ ...p, intervalHours: Number(e.target.value) }))}><option value={24}>Diária</option><option value={72}>3 dias</option><option value={168}>Semanal</option><option value={720}>Mensal</option></select></label>
+          <label><span className="label">Limite/dia</span><input type="number" min={1} max={24} className="input w-full" value={campaignForm.dailyRunBudget} onChange={e => setCampaignForm(p => ({ ...p, dailyRunBudget: Number(e.target.value) }))} /></label>
           <button disabled={savingCampaign} className="btn-primary py-2 px-4 justify-center">{savingCampaign ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Criar</button>
         </form>
         {campaigns.length > 0 && <div className="grid gap-3 lg:grid-cols-2">{campaigns.map(campaign => {
@@ -217,7 +241,7 @@ export default function ProspeccaoPage() {
         })}</div>}
       </section>
 
-      {reviewQueue.length > 0 && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-bold text-white">Fila de captação</h2><p className="text-xs text-gray-500">Candidatos priorizados pelo bot aguardando revisão.</p></div><span className="text-xs rounded-full bg-brand-500/10 text-brand-300 px-2 py-1">{reviewQueue.length}</span></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{reviewQueue.map(c => <CandidateCard key={`queue-${c.id}`} candidate={c} categoria="prospecção automática" onAdded={markAdded} />)}</div></section>}
+      {reviewQueue.length > 0 && <section className="space-y-3"><div className="flex items-center justify-between"><div><h2 className="font-bold text-white">Fila de captação</h2><p className="text-xs text-gray-500">Candidatos priorizados pelo bot aguardando revisão.</p></div><span className="text-xs rounded-full bg-brand-500/10 text-brand-300 px-2 py-1">{reviewQueue.length}</span></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{reviewQueue.map(c => <CandidateCard key={`queue-${c.id}`} candidate={c} categoria="prospecção automática" onAdded={markAdded} onSuppressed={markSuppressed} />)}</div></section>}
 
       <section className="card p-4">
         <div className="flex items-center gap-2 mb-3"><History className="w-4 h-4 text-brand-400" /><h2 className="text-sm font-bold text-white">Pesquisas recentes</h2></div>
@@ -232,7 +256,7 @@ export default function ProspeccaoPage() {
             <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-bold text-white">{current.categoria} em {current.cidade}</h2><span className="inline-flex items-center gap-1 rounded-full bg-surface-700 px-2 py-0.5 text-[11px] text-gray-300"><Database className="w-3 h-3" />{current.fromCache ? 'Resultado salvo' : 'Fonte atualizada'}</span></div><p className="mt-1 text-xs text-gray-500">{visibleCandidates.length} estabelecimentos · atualizado em {fmtDate(current.refreshedAt)} · dados © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">OpenStreetMap</a></p></div>
             <button onClick={() => executeSearch(true)} disabled={loading} className="btn-secondary text-xs py-2 px-3 justify-center"><RefreshCw className={clsx('w-3.5 h-3.5', loading && 'animate-spin')} /> Atualizar fonte</button>
           </div>
-          {visibleCandidates.length === 0 ? <div className="card py-14 text-center text-sm text-gray-400">Nenhum candidato ativo nesta pesquisa.</div> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{visibleCandidates.map(c => <CandidateCard key={c.id} candidate={c} categoria={current.categoria} onAdded={markAdded} />)}</div>}
+          {visibleCandidates.length === 0 ? <div className="card py-14 text-center text-sm text-gray-400">Nenhum candidato ativo nesta pesquisa.</div> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{visibleCandidates.map(c => <CandidateCard key={c.id} candidate={c} categoria={current.categoria} onAdded={markAdded} onSuppressed={markSuppressed} />)}</div>}
         </section>
       )}
     </div>

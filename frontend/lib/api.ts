@@ -1014,11 +1014,17 @@ export interface ProspectCandidateDto {
   placeId: string; nome: string; endereco: string | null; telefone: string | null
   website: string | null
   digitalPresence: LeadDigitalPresence; opportunityScore: number; estimatedRevenueRange: string
-  status: 'New' | 'Selected' | 'Discarded' | 'Lead' | 'Customer' | 'Stale'
+  status: 'New' | 'Selected' | 'Discarded' | 'Lead' | 'Customer' | 'Stale' | 'Suppressed'
   leadId: string | null; firstSeenAt: string; lastSeenAt: string
   enrichmentStatus: 'Pending' | 'Updated' | 'Failed'
   lastEnrichedAt: string | null; enrichmentSource: string | null
   enrichmentConfidence: number | null; suggestedApproach: string | null
+  recentObservations: ProspectObservationDto[]
+}
+
+export interface ProspectObservationDto {
+  fieldName: string; previousValue: string | null; observedValue: string | null
+  source: string; confidence: number; observedAt: string
 }
 
 export interface ProspectingSearchSummaryDto {
@@ -1098,19 +1104,21 @@ export const platformBillingApi = {
 export interface ProspectingCampaignRunDto {
   id: string; status: 'Queued' | 'Running' | 'Completed' | 'Failed'
   searchId: string | null; discoveredCount: number; newCount: number
+  attemptCount: number; nextAttemptAt: string
   startedAt: string | null; completedAt: string | null; error: string | null
 }
 
 export interface ProspectingCampaignDto {
   id: string; name: string; categoria: string; cidade: string
   status: 'Active' | 'Paused'; intervalHours: number; maxCandidatesPerRun: number
+  dailyRunBudget: number; maxRetryAttempts: number
   nextRunAt: string; lastRunAt: string | null; lastError: string | null
   recentRuns: ProspectingCampaignRunDto[]
 }
 
 export interface CreateProspectingCampaignRequest {
   name: string; categoria: string; cidade: string
-  intervalHours: number; maxCandidatesPerRun: number
+  intervalHours: number; maxCandidatesPerRun: number; dailyRunBudget: number; maxRetryAttempts: number
 }
 
 // ── Indicações e comissões da plataforma ────────────────────────────────────
@@ -1182,6 +1190,8 @@ export const prospectingApi = {
     api.patch(`/api/platform/prospecting/campaigns/${id}/status`, { active }),
   reviewQueue: (limit = 100) =>
     api.get<ProspectCandidateDto[]>('/api/platform/prospecting/campaigns/review-queue', { params: { limit } }),
+  suppressCandidate: (id: string, reason = 'Solicitação de não prospecção') =>
+    api.post(`/api/platform/prospecting/candidates/${id}/suppress`, { reason }),
   enrich: (candidate: ProspectCandidateDto, categoria: string) =>
     api.post<ProspectingEnrichResponse>('/api/platform/prospecting/enrich', {
       candidateId: candidate.id, placeId: candidate.placeId, nome: candidate.nome, endereco: candidate.endereco, categoria,

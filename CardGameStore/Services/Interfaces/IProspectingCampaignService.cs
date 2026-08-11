@@ -9,4 +9,10 @@ public interface IProspectingCampaignService
     Task<bool> SetActiveAsync(Guid id, bool active, CancellationToken ct = default);
     Task<ProspectingCampaignRunDto?> EnqueueAsync(Guid id, CancellationToken ct = default);
     Task<List<ProspectCandidateDto>> ListReviewQueueAsync(int limit = 100, CancellationToken ct = default);
+    Task<bool> SuppressCandidateAsync(Guid candidateId, string reason, CancellationToken ct = default);
+}
+
+public sealed class ProspectingBudgetExceededException : InvalidOperationException
+{
+    public ProspectingBudgetExceededException(string message) : base(message) { }
 }

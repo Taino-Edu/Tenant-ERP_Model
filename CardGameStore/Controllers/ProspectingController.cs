@@ -83,8 +83,15 @@ public class ProspectingController : ControllerBase
     [HttpPost("campaigns/{id:guid}/run")]
     public async Task<IActionResult> RunCampaign(Guid id, CancellationToken ct)
     {
-        var run = await _campaigns.EnqueueAsync(id, ct);
-        return run is null ? NotFound() : Accepted(run);
+        try
+        {
+            var run = await _campaigns.EnqueueAsync(id, ct);
+            return run is null ? NotFound() : Accepted(run);
+        }
+        catch (ProspectingBudgetExceededException ex)
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new { Message = ex.Message });
+        }
     }
 
     [HttpPatch("campaigns/{id:guid}/status")]
@@ -95,6 +102,16 @@ public class ProspectingController : ControllerBase
     [HttpGet("campaigns/review-queue")]
     public async Task<IActionResult> ReviewQueue([FromQuery] int limit = 100, CancellationToken ct = default) =>
         Ok(await _campaigns.ListReviewQueueAsync(Math.Clamp(limit, 1, 500), ct));
+
+    [HttpPost("candidates/{id:guid}/suppress")]
+    public async Task<IActionResult> SuppressCandidate(Guid id,
+        [FromBody] SuppressProspectRequest request, CancellationToken ct)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        return await _campaigns.SuppressCandidateAsync(id, request.Reason, ct)
+            ? NoContent()
+            : NotFound();
+    }
 
     /// <summary>Gera sob demanda uma sugestão de abordagem via Gemini e a
     /// persiste no candidato. A IA não cria nem altera dados empresariais ou

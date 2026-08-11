@@ -31,6 +31,8 @@ public sealed class ProspectingCampaignService : IProspectingCampaignService
             City = request.Cidade.Trim(),
             IntervalHours = request.IntervalHours,
             MaxCandidatesPerRun = request.MaxCandidatesPerRun,
+            DailyRunBudget = request.DailyRunBudget,
+            MaxRetryAttempts = request.MaxRetryAttempts,
             NextRunAt = now,
             CreatedAt = now,
             UpdatedAt = now,
@@ -62,7 +64,14 @@ public sealed class ProspectingCampaignService : IProspectingCampaignService
                 (r.Status == ProspectingCampaignRunStatus.Queued || r.Status == ProspectingCampaignRunStatus.Running), ct);
         if (activeRun is not null) return ToDto(activeRun);
 
-        var run = new ProspectingCampaignRun { CampaignId = id };
+        var today = DateTime.UtcNow.Date;
+        var runsToday = await _catalog.ProspectingCampaignRuns.AsNoTracking()
+            .CountAsync(r => r.CampaignId == id && r.CreatedAt >= today, ct);
+        if (runsToday >= campaign.DailyRunBudget)
+            throw new ProspectingBudgetExceededException(
+                $"Orçamento diário da campanha atingido ({campaign.DailyRunBudget} execução(ões)).");
+
+        var run = new ProspectingCampaignRun { CampaignId = id, NextAttemptAt = DateTime.UtcNow };
         _catalog.ProspectingCampaignRuns.Add(run);
         campaign.NextRunAt = DateTime.UtcNow.AddHours(campaign.IntervalHours);
         campaign.UpdatedAt = DateTime.UtcNow;
@@ -92,6 +101,7 @@ public sealed class ProspectingCampaignService : IProspectingCampaignService
             .Select(r => r.SearchId!.Value);
 
         var candidates = await _catalog.ProspectCandidates.AsNoTracking()
+            .Include(c => c.Observations.OrderByDescending(o => o.ObservedAt).Take(5))
             .Where(c => searchIds.Contains(c.SearchId) &&
                 (c.Status == ProspectCandidateStatus.New || c.Status == ProspectCandidateStatus.Selected))
             .OrderByDescending(c => c.OpportunityScore)
@@ -113,7 +123,65 @@ public sealed class ProspectingCampaignService : IProspectingCampaignService
                 LastSeenAt = c.LastSeenAt, EnrichmentStatus = c.EnrichmentStatus.ToString(),
                 LastEnrichedAt = c.LastEnrichedAt, EnrichmentSource = c.EnrichmentSource,
                 EnrichmentConfidence = c.EnrichmentConfidence, SuggestedApproach = c.SuggestedApproach,
+                RecentObservations = c.Observations.OrderByDescending(o => o.ObservedAt).Take(5)
+                    .Select(ToObservationDto).ToList(),
             }).ToList();
+    }
+
+    public async Task<bool> SuppressCandidateAsync(
+        Guid candidateId, string reason, CancellationToken ct = default)
+    {
+        var candidate = await _catalog.ProspectCandidates.FirstOrDefaultAsync(c => c.Id == candidateId, ct);
+        if (candidate is null) return false;
+
+        var keys = BuildSuppressionKeys(candidate).ToList();
+        foreach (var (type, value) in keys)
+        {
+            if (!await _catalog.ProspectSuppressions.AnyAsync(
+                    s => s.KeyType == type && s.NormalizedValue == value, ct))
+                _catalog.ProspectSuppressions.Add(new ProspectSuppression
+                {
+                    KeyType = type, NormalizedValue = value, Reason = reason.Trim(),
+                });
+        }
+
+        var normalizedPhone = NormalizePhone(candidate.Phone);
+        var matchingCandidates = await _catalog.ProspectCandidates
+            .Where(c => (c.Source == candidate.Source && c.SourceId == candidate.SourceId) ||
+                        (normalizedPhone != null && c.Phone != null && c.Phone == candidate.Phone))
+            .ToListAsync(ct);
+        foreach (var match in matchingCandidates)
+            match.Status = ProspectCandidateStatus.Suppressed;
+        await _catalog.SaveChangesAsync(ct);
+        return true;
+    }
+
+    internal static IEnumerable<(ProspectSuppressionKeyType Type, string Value)> BuildSuppressionKeys(
+        ProspectCandidate candidate)
+    {
+        yield return (ProspectSuppressionKeyType.SourceId,
+            $"{candidate.Source}:{candidate.SourceId}".ToLowerInvariant());
+        if (NormalizePhone(candidate.Phone) is { } phone)
+            yield return (ProspectSuppressionKeyType.Phone, phone);
+        if (NormalizeDomain(candidate.Website) is { } domain)
+            yield return (ProspectSuppressionKeyType.Domain, domain);
+    }
+
+    internal static string? NormalizePhone(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var digits = string.Concat(value.Where(char.IsDigit));
+        return digits.Length >= 8 ? digits : null;
+    }
+
+    internal static string? NormalizeDomain(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+            Uri.TryCreate($"https://{value}", UriKind.Absolute, out uri);
+        if (uri is null || string.IsNullOrWhiteSpace(uri.Host)) return null;
+        var host = uri.Host.ToLowerInvariant();
+        return host.StartsWith("www.", StringComparison.Ordinal) ? host[4..] : host;
     }
 
     internal static ProspectingCampaignDto ToDto(ProspectingCampaign campaign) => new()
@@ -125,6 +193,8 @@ public sealed class ProspectingCampaignService : IProspectingCampaignService
         Status = campaign.Status.ToString(),
         IntervalHours = campaign.IntervalHours,
         MaxCandidatesPerRun = campaign.MaxCandidatesPerRun,
+        DailyRunBudget = campaign.DailyRunBudget,
+        MaxRetryAttempts = campaign.MaxRetryAttempts,
         NextRunAt = campaign.NextRunAt,
         LastRunAt = campaign.LastRunAt,
         LastError = campaign.LastError,
@@ -138,8 +208,17 @@ public sealed class ProspectingCampaignService : IProspectingCampaignService
         SearchId = run.SearchId,
         DiscoveredCount = run.DiscoveredCount,
         NewCount = run.NewCount,
+        AttemptCount = run.AttemptCount,
+        NextAttemptAt = run.NextAttemptAt,
         StartedAt = run.StartedAt,
         CompletedAt = run.CompletedAt,
         Error = run.Error,
+    };
+
+    private static ProspectObservationDto ToObservationDto(ProspectObservation observation) => new()
+    {
+        FieldName = observation.FieldName, PreviousValue = observation.PreviousValue,
+        ObservedValue = observation.ObservedValue, Source = observation.Source,
+        Confidence = observation.Confidence, ObservedAt = observation.ObservedAt,
     };
 }

@@ -160,7 +160,9 @@ public class ProspectingService : IProspectingService
     public async Task<ProspectingSearchResultDto?> GetSearchAsync(Guid id)
     {
         var search = await _catalog.ProspectingSearches.AsNoTracking()
-            .Include(s => s.Candidates).FirstOrDefaultAsync(s => s.Id == id);
+            .Include(s => s.Candidates)
+                .ThenInclude(c => c.Observations.OrderByDescending(o => o.ObservedAt).Take(5))
+            .FirstOrDefaultAsync(s => s.Id == id);
         return search is null ? null : ToResult(search, true);
     }
 
@@ -173,6 +175,7 @@ public class ProspectingService : IProspectingService
 
         var search = await _catalog.ProspectingSearches
             .Include(s => s.Candidates)
+                .ThenInclude(c => c.Observations.OrderByDescending(o => o.ObservedAt).Take(5))
             .OrderByDescending(s => s.RefreshedAt)
             .FirstOrDefaultAsync(s => s.CacheKey == cacheKey);
 
@@ -269,6 +272,7 @@ public class ProspectingService : IProspectingService
         var leadBySource = existingLeads
             .Where(l => l.PlaceId is not null)
             .ToDictionary(l => l.PlaceId!, StringComparer.OrdinalIgnoreCase);
+        var suppressions = await _catalog.ProspectSuppressions.AsNoTracking().ToListAsync();
 
         var existingBySource = search.Candidates.ToDictionary(c => c.SourceId, StringComparer.OrdinalIgnoreCase);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -280,6 +284,18 @@ public class ProspectingService : IProspectingService
                 entity = new ProspectCandidate { Search = search, SearchId = search.Id, SourceId = dto.PlaceId, FirstSeenAt = now };
                 search.Candidates.Add(entity);
             }
+
+            var confidence = CalculateEnrichmentConfidence(dto);
+            ObserveChange(entity, "Name", entity.Name, dto.Nome, "OpenStreetMap", confidence, now);
+            ObserveChange(entity, "Address", entity.Address, dto.Endereco, "OpenStreetMap", confidence, now);
+            ObserveChange(entity, "Phone", entity.Phone, dto.Telefone, "OpenStreetMap", confidence, now);
+            ObserveChange(entity, "Website", entity.Website, dto.Website, "OpenStreetMap", confidence, now);
+            ObserveChange(entity, "DigitalPresence", entity.DigitalPresence, dto.DigitalPresence,
+                string.IsNullOrWhiteSpace(dto.Website) ? "OpenStreetMap" : "WebsiteCheck", confidence, now);
+            ObserveChange(entity, "OpportunityScore", entity.OpportunityScore.ToString(),
+                dto.OpportunityScore.ToString(), "DeterministicScore", 100, now);
+            ObserveChange(entity, "EstimatedRevenueRange", entity.EstimatedRevenueRange,
+                dto.EstimatedRevenueRange, "Heuristic", 35, now);
 
             entity.Name = dto.Nome;
             entity.Address = dto.Endereco;
@@ -294,7 +310,7 @@ public class ProspectingService : IProspectingService
             entity.EnrichmentSource = string.IsNullOrWhiteSpace(dto.Website)
                 ? "OpenStreetMap"
                 : "OpenStreetMap;WebsiteCheck";
-            entity.EnrichmentConfidence = CalculateEnrichmentConfidence(dto);
+            entity.EnrichmentConfidence = confidence;
             if (leadBySource.TryGetValue(dto.PlaceId, out var lead))
             {
                 entity.LeadId = lead.Id;
@@ -304,13 +320,16 @@ public class ProspectingService : IProspectingService
             }
             else if (entity.Status == ProspectCandidateStatus.Stale)
                 entity.Status = ProspectCandidateStatus.New;
+            if (IsSuppressed(dto, suppressions))
+                entity.Status = ProspectCandidateStatus.Suppressed;
         }
 
         foreach (var missing in search.Candidates.Where(c => !seen.Contains(c.SourceId) &&
                      c.Status is ProspectCandidateStatus.New or ProspectCandidateStatus.Selected))
             missing.Status = ProspectCandidateStatus.Stale;
 
-        search.ResultCount = search.Candidates.Count(c => c.Status != ProspectCandidateStatus.Stale);
+        search.ResultCount = search.Candidates.Count(c =>
+            c.Status is not ProspectCandidateStatus.Stale and not ProspectCandidateStatus.Suppressed);
         try
         {
             await _catalog.SaveChangesAsync();
@@ -323,6 +342,7 @@ public class ProspectingService : IProspectingService
             _catalog.ChangeTracker.Clear();
             var concurrentSearch = await _catalog.ProspectingSearches.AsNoTracking()
                 .Include(s => s.Candidates)
+                    .ThenInclude(c => c.Observations.OrderByDescending(o => o.ObservedAt).Take(5))
                 .FirstOrDefaultAsync(s => s.CacheKey == cacheKey);
             if (concurrentSearch is not null)
                 return ToResult(concurrentSearch, true);
@@ -362,7 +382,43 @@ public class ProspectingService : IProspectingService
         LastSeenAt = c.LastSeenAt, EnrichmentStatus = c.EnrichmentStatus.ToString(),
         LastEnrichedAt = c.LastEnrichedAt, EnrichmentSource = c.EnrichmentSource,
         EnrichmentConfidence = c.EnrichmentConfidence, SuggestedApproach = c.SuggestedApproach,
+        RecentObservations = c.Observations.OrderByDescending(o => o.ObservedAt).Take(5)
+            .Select(o => new ProspectObservationDto
+            {
+                FieldName = o.FieldName, PreviousValue = o.PreviousValue,
+                ObservedValue = o.ObservedValue, Source = o.Source,
+                Confidence = o.Confidence, ObservedAt = o.ObservedAt,
+            }).ToList(),
     };
+
+    internal static void ObserveChange(ProspectCandidate candidate, string fieldName,
+        string? previousValue, string? observedValue, string source, int confidence, DateTime observedAt)
+    {
+        if (string.Equals(previousValue, observedValue, StringComparison.Ordinal)) return;
+        candidate.Observations.Add(new ProspectObservation
+        {
+            Candidate = candidate,
+            CandidateId = candidate.Id,
+            FieldName = fieldName,
+            PreviousValue = previousValue,
+            ObservedValue = observedValue,
+            Source = source,
+            Confidence = confidence,
+            ObservedAt = observedAt,
+        });
+    }
+
+    internal static bool IsSuppressed(ProspectCandidateDto candidate,
+        IReadOnlyCollection<ProspectSuppression> suppressions)
+    {
+        var source = $"OpenStreetMap:{candidate.PlaceId}".ToLowerInvariant();
+        var phone = ProspectingCampaignService.NormalizePhone(candidate.Telefone);
+        var domain = ProspectingCampaignService.NormalizeDomain(candidate.Website);
+        return suppressions.Any(s =>
+            (s.KeyType == ProspectSuppressionKeyType.SourceId && s.NormalizedValue == source) ||
+            (phone is not null && s.KeyType == ProspectSuppressionKeyType.Phone && s.NormalizedValue == phone) ||
+            (domain is not null && s.KeyType == ProspectSuppressionKeyType.Domain && s.NormalizedValue == domain));
+    }
 
     private static int CalculateEnrichmentConfidence(ProspectCandidateDto candidate)
     {
@@ -676,6 +732,9 @@ public class ProspectingService : IProspectingService
 
             if (persistedCandidate is not null)
             {
+                ObserveChange(persistedCandidate, "SuggestedApproach",
+                    persistedCandidate.SuggestedApproach, result.AbordagemSugerida,
+                    "Gemini", 50, DateTime.UtcNow);
                 persistedCandidate.SuggestedApproach = result.AbordagemSugerida;
                 persistedCandidate.EnrichmentStatus = ProspectEnrichmentStatus.Updated;
                 persistedCandidate.LastEnrichedAt = DateTime.UtcNow;

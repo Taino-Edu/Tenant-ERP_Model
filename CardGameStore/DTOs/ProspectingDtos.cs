@@ -76,6 +76,17 @@ public class ProspectCandidateDto
     public string? EnrichmentSource      { get; set; }
     public int?    EnrichmentConfidence  { get; set; }
     public string? SuggestedApproach     { get; set; }
+    public List<ProspectObservationDto> RecentObservations { get; set; } = [];
+}
+
+public class ProspectObservationDto
+{
+    public string FieldName { get; set; } = string.Empty;
+    public string? PreviousValue { get; set; }
+    public string? ObservedValue { get; set; }
+    public string Source { get; set; } = string.Empty;
+    public int Confidence { get; set; }
+    public DateTime ObservedAt { get; set; }
 }
 
 public class ProspectingEnrichRequest
@@ -114,6 +125,12 @@ public class CreateProspectingCampaignRequest
 
     [Range(1, 1000)]
     public int MaxCandidatesPerRun { get; set; } = 200;
+
+    [Range(1, 24)]
+    public int DailyRunBudget { get; set; } = 1;
+
+    [Range(1, 5)]
+    public int MaxRetryAttempts { get; set; } = 3;
 }
 
 public class ProspectingCampaignDto
@@ -125,6 +142,8 @@ public class ProspectingCampaignDto
     public string Status { get; set; } = string.Empty;
     public int IntervalHours { get; set; }
     public int MaxCandidatesPerRun { get; set; }
+    public int DailyRunBudget { get; set; }
+    public int MaxRetryAttempts { get; set; }
     public DateTime NextRunAt { get; set; }
     public DateTime? LastRunAt { get; set; }
     public string? LastError { get; set; }
@@ -138,6 +157,8 @@ public class ProspectingCampaignRunDto
     public Guid? SearchId { get; set; }
     public int DiscoveredCount { get; set; }
     public int NewCount { get; set; }
+    public int AttemptCount { get; set; }
+    public DateTime NextAttemptAt { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public string? Error { get; set; }
@@ -146,6 +167,12 @@ public class ProspectingCampaignRunDto
 public class SetProspectingCampaignStatusRequest
 {
     public bool Active { get; set; }
+}
+
+public class SuppressProspectRequest
+{
+    [Required, MaxLength(300)]
+    public string Reason { get; set; } = "Solicitação de não prospecção";
 }
 
 public class ProspectingEnrichResponse
