@@ -6,6 +6,7 @@ import { QrCode, Download, Printer, Plus, Trash2, Table2 } from 'lucide-react'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { getRole, hasPermission } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
+import { escapeHtml } from '@/lib/html'
 
 interface Mesa { id: string; nome: string; url: string; qrDataUrl: string }
 
@@ -91,8 +92,9 @@ export default function QRCodesPage() {
     if (!printRef.current) return
     const w = window.open('', '_blank', 'width=900,height=700')
     if (!w) return
+    const safeSiteName = escapeHtml(site.siteName)
     w.document.write(`
-      <html><head><title>QR Codes — ${site.siteName}</title>
+      <html><head><title>QR Codes — ${safeSiteName}</title>
       <style>
         body { background: #1a1a1a; color: #fff; font-family: Inter, sans-serif; padding: 16px; }
         .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
@@ -102,13 +104,13 @@ export default function QRCodesPage() {
         .url  { font-size: 9px; color: #666; margin-top: 4px; word-break: break-all; }
         @media print { body { background: #fff; color: #000; } .card { background: #fff; border: 1px solid #ddd; } .url { color: #999; } }
       </style></head><body>
-      <h2 style="text-align:center;margin-bottom:20px;font-size:18px;">${site.siteName} — QR Codes das Mesas</h2>
+      <h2 style="text-align:center;margin-bottom:20px;font-size:18px;">${safeSiteName} — QR Codes das Mesas</h2>
       <div class="grid">
         ${mesas.map(m => `
           <div class="card">
-            <img src="${m.qrDataUrl}" alt="${m.nome}" />
-            <div class="name">${m.nome}</div>
-            <div class="url">${m.url}</div>
+            <img src="${m.qrDataUrl}" alt="${escapeHtml(m.nome)}" />
+            <div class="name">${escapeHtml(m.nome)}</div>
+            <div class="url">${escapeHtml(m.url)}</div>
           </div>
         `).join('')}
       </div>

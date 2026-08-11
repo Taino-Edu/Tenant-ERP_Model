@@ -19,6 +19,7 @@ import StatCard from '@/components/admin/StatCard'
 import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import clsx from 'clsx'
+import { escapeHtml } from '@/lib/html'
 
 const fmt     = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('pt-BR')
@@ -756,17 +757,19 @@ function PagamentoModal({ crediario, onClose, onSuccess }: PagamentoModalProps) 
 function imprimirItens(c: CrediariosDto, siteName: string) {
   const w = window.open('', '_blank', 'width=480,height=640')
   if (!w) { alert('Permita pop-ups para imprimir'); return }
+  const safeSiteName = escapeHtml(siteName)
+  const safeUserName = escapeHtml(c.userName)
   const data = new Date(c.dataAbertura).toLocaleDateString('pt-BR')
   const linhas = c.itensComanda.map(i =>
     `<tr>
-      <td>${i.quantity}× ${i.itemName}</td>
+      <td>${i.quantity}× ${escapeHtml(i.itemName)}</td>
       <td style="text-align:right">R$ ${i.unitPriceInReais.toFixed(2).replace('.', ',')}</td>
       <td style="text-align:right">R$ ${i.subtotalInReais.toFixed(2).replace('.', ',')}</td>
     </tr>`
   ).join('')
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
-<title>Crediário — ${c.userName}</title>
+<title>Crediário — ${safeUserName}</title>
 <style>
   @page { size: A5; margin: 16mm; }
   body { font-family: Arial, sans-serif; font-size: 12px; color: #111; }
@@ -780,8 +783,8 @@ function imprimirItens(c: CrediariosDto, siteName: string) {
   @media print { button { display: none; } }
 </style>
 </head><body>
-<h1>${siteName} — Crediário</h1>
-<p class="sub">Cliente: <strong>${c.userName}</strong> · Data: ${data}</p>
+<h1>${safeSiteName} — Crediário</h1>
+<p class="sub">Cliente: <strong>${safeUserName}</strong> · Data: ${data}</p>
 <table>
   <thead><tr><th>Item</th><th style="text-align:right">Unit.</th><th style="text-align:right">Total</th></tr></thead>
   <tbody>${linhas}</tbody>

@@ -18,6 +18,7 @@ import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import Modal from '@/components/admin/ui/Modal'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import { escapeHtml } from '@/lib/html'
 
 interface CartItem {
   product: Product
@@ -43,10 +44,12 @@ function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string, siteName: st
   const w = window.open('', '_blank', 'width=420,height=640')
   if (!w) { alert('Permita pop-ups para gerar o PDF'); return }
 
+  const safeSiteName = escapeHtml(siteName)
+  const safePayLabel = escapeHtml(payLabel)
   const date = new Date(receipt.soldAt).toLocaleString('pt-BR')
   const itemsHTML = receipt.items.map(it => `
     <tr>
-      <td>${it.quantity}× ${it.productName}</td>
+      <td>${it.quantity}× ${escapeHtml(it.productName)}</td>
       <td align="right">R$&nbsp;${it.subtotalInReais.toFixed(2).replace('.', ',')}</td>
     </tr>
   `).join('')
@@ -65,7 +68,7 @@ function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string, siteName: st
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
-<title>Comprovante — ${siteName}</title>
+<title>Comprovante — ${safeSiteName}</title>
 <style>
   @page { size: 80mm auto; margin: 6mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -81,9 +84,9 @@ function printReceiptPDF(receipt: VendaAvulsaDto, payLabel: string, siteName: st
   @media print { body { padding: 0; } }
 </style>
 </head><body>
-<h1>${siteName}</h1>
+<h1>${safeSiteName}</h1>
 <p class="sub">${date}</p>
-${receipt.clientName ? `<p class="sub">Cliente: <strong>${receipt.clientName}</strong></p>` : ''}
+${receipt.clientName ? `<p class="sub">Cliente: <strong>${escapeHtml(receipt.clientName)}</strong></p>` : ''}
 <hr>
 <table>
   ${itemsHTML}
@@ -96,7 +99,7 @@ ${receipt.clientName ? `<p class="sub">Cliente: <strong>${receipt.clientName}</s
     <td align="right">R$&nbsp;${receipt.totalInReais.toFixed(2).replace('.', ',')}</td>
   </tr>
 </table>
-<p class="payment">Pagamento: ${payLabel}</p>
+<p class="payment">Pagamento: ${safePayLabel}</p>
 ${cashRows}
 <hr>
 <p class="footer">Obrigado pela preferência!</p>
@@ -109,6 +112,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   const w = window.open('', '_blank', 'width=700,height=900')
   if (!w) { alert('Permita pop-ups para gerar o PDF'); return }
 
+  const safeSiteName = escapeHtml(siteName)
   const today = new Date().toLocaleDateString('pt-BR')
   const totalDia = history.reduce((s, v) => s + v.totalInReais, 0)
 
@@ -121,19 +125,19 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   const vendasHTML = history.map(v => {
     const payLabel = payMethods.find(m => m.value === v.paymentMethod)?.label ?? v.paymentMethod
     const hora = new Date(v.soldAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    const itens = v.items.map(it => `${it.quantity}× ${it.productName}`).join(', ')
+    const itens = v.items.map(it => `${it.quantity}× ${escapeHtml(it.productName)}`).join(', ')
     return `<tr>
       <td>${hora}</td>
-      <td>${v.clientName ?? '—'}</td>
+      <td>${escapeHtml(v.clientName ?? '—')}</td>
       <td style="max-width:200px;font-size:10px;">${itens}</td>
-      <td>${payLabel}</td>
+      <td>${escapeHtml(payLabel)}</td>
       <td align="right" style="font-weight:bold;">R$&nbsp;${v.totalInReais.toFixed(2).replace('.', ',')}</td>
     </tr>`
   }).join('')
 
   const byMethodHTML = byMethod.map(m => `
     <tr>
-      <td>${m.label}</td>
+      <td>${escapeHtml(m.label)}</td>
       <td align="center">${m.count} venda${m.count !== 1 ? 's' : ''}</td>
       <td align="right">R$&nbsp;${m.total.toFixed(2).replace('.', ',')}</td>
     </tr>`).join('')
@@ -141,7 +145,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
-<title>Relatório Diário — ${siteName}</title>
+<title>Relatório Diário — ${safeSiteName}</title>
 <style>
   @page { size: A4; margin: 15mm; }
   * { box-sizing: border-box; }
@@ -161,7 +165,7 @@ function printDailyReportPDF(history: VendaAvulsaDto[], payMethods: typeof PAYME
   @media print { body { padding: 0; } }
 </style>
 </head><body>
-<h1>${siteName} — Relatório Diário</h1>
+<h1>${safeSiteName} — Relatório Diário</h1>
 <p class="meta">Data: ${today} &nbsp;|&nbsp; Gerado em: ${new Date().toLocaleTimeString('pt-BR')}</p>
 
 <div class="cards">

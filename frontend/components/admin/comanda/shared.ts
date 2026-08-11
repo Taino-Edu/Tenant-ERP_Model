@@ -6,6 +6,7 @@
 
 import toast from 'react-hot-toast'
 import { ComandaDto } from '@/lib/api'
+import { escapeHtml } from '@/lib/html'
 
 export const fmt = (n: number) => `R$ ${n.toFixed(2).replace('.', ',')}`
 
@@ -49,10 +50,12 @@ export function printComandaReceiptPDF(comanda: ComandaDto, payLabel: string, si
   const w = window.open('', '_blank', 'width=420,height=640')
   if (!w) { alert('Permita pop-ups para gerar o PDF'); return }
 
+  const safeSiteName = escapeHtml(siteName)
+  const safePayLabel = escapeHtml(payLabel)
   const date = new Date(comanda.closedAt ?? Date.now()).toLocaleString('pt-BR')
   const itemsHTML = comanda.items.map(it => `
     <tr>
-      <td>${it.quantity}× ${it.itemNameSnapshot}</td>
+      <td>${it.quantity}× ${escapeHtml(it.itemNameSnapshot)}</td>
       <td align="right">R$&nbsp;${it.subtotalInReais.toFixed(2).replace('.', ',')}</td>
     </tr>
   `).join('')
@@ -71,7 +74,7 @@ export function printComandaReceiptPDF(comanda: ComandaDto, payLabel: string, si
   w.document.write(`<!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8">
-<title>Comprovante — ${siteName}</title>
+<title>Comprovante — ${safeSiteName}</title>
 <style>
   @page { size: 80mm auto; margin: 6mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -87,9 +90,9 @@ export function printComandaReceiptPDF(comanda: ComandaDto, payLabel: string, si
   @media print { body { padding: 0; } }
 </style>
 </head><body>
-<h1>${siteName}</h1>
+<h1>${safeSiteName}</h1>
 <p class="sub">${date}</p>
-<p class="sub">Cliente: <strong>${comanda.userName}</strong>${comanda.tableIdentifier ? ` — ${comanda.tableIdentifier}` : ''}</p>
+<p class="sub">Cliente: <strong>${escapeHtml(comanda.userName)}</strong>${comanda.tableIdentifier ? ` — ${escapeHtml(comanda.tableIdentifier)}` : ''}</p>
 <hr>
 <table>
   ${itemsHTML}
@@ -102,7 +105,7 @@ export function printComandaReceiptPDF(comanda: ComandaDto, payLabel: string, si
     <td align="right">R$&nbsp;${comanda.totalInReais.toFixed(2).replace('.', ',')}</td>
   </tr>
 </table>
-<p class="payment">Pagamento: ${payLabel}</p>
+<p class="payment">Pagamento: ${safePayLabel}</p>
 ${cashRows}
 <hr>
 <p class="footer">Obrigado pela preferência!</p>
