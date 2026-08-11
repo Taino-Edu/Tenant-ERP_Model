@@ -16,6 +16,8 @@ public static class PlatformPermission
     public const string Logs           = "platform.logs";
     public const string Impersonate    = "platform.impersonate";
     public const string Team           = "platform.team";
+    public const string ReferralsRead  = "platform.referrals.read";
+    public const string ReferralsManage = "platform.referrals.manage";
 }
 
 public sealed record PlatformProfileDefinition(
@@ -41,16 +43,20 @@ public static class PlatformAccessProfiles
             [Partner] = new(Partner, "Sócio administrador", "Opera toda a plataforma, sem gerenciar o proprietário principal.",
                 [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.TenantsManage,
                  PlatformPermission.TenantsDelete, PlatformPermission.FinanceRead, PlatformPermission.FinanceManage,
-                 PlatformPermission.Leads, PlatformPermission.Support, PlatformPermission.Logs, PlatformPermission.Impersonate]),
+                 PlatformPermission.Leads, PlatformPermission.Support, PlatformPermission.Logs, PlatformPermission.Impersonate,
+                 PlatformPermission.ReferralsRead, PlatformPermission.ReferralsManage]),
             [Commercial] = new(Commercial, "Comercial", "Cuida de leads, prospecção e implantação de clientes.",
-                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.TenantsManage, PlatformPermission.Leads]),
+                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.TenantsManage, PlatformPermission.Leads,
+                 PlatformPermission.ReferralsRead, PlatformPermission.ReferralsManage]),
             [Finance] = new(Finance, "Financeiro", "Consulta tenants e administra cobranças da plataforma.",
-                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.FinanceRead, PlatformPermission.FinanceManage]),
+                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.FinanceRead, PlatformPermission.FinanceManage,
+                 PlatformPermission.ReferralsRead, PlatformPermission.ReferralsManage]),
             [SupportDev] = new(SupportDev, "Suporte e desenvolvimento", "Atende chamados, consulta logs e acessa lojas de forma temporária.",
                 [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.Support,
                  PlatformPermission.Logs, PlatformPermission.Impersonate]),
             [Auditor] = new(Auditor, "Auditoria", "Acesso somente de leitura a indicadores, tenants, financeiro e logs.",
-                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.FinanceRead, PlatformPermission.Logs]),
+                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.FinanceRead, PlatformPermission.Logs,
+                 PlatformPermission.ReferralsRead]),
         };
 
     public static PlatformProfileDefinition GetRequired(string key)

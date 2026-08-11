@@ -465,6 +465,7 @@ builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddScoped<IPublicSalesAssistantService, PublicSalesAssistantService>();
 builder.Services.AddScoped<IProspectingService,  ProspectingService>();
 builder.Services.AddScoped<IPlatformBillingService, PlatformBillingService>();
+builder.Services.AddScoped<IReferralCommissionService, ReferralCommissionService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
 builder.Services.AddScoped<IFinanceiroCalculoService, FinanceiroCalculoService>();
 builder.Services.AddHostedService<FechamentoBackgroundService>();

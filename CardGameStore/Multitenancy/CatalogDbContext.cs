@@ -24,6 +24,9 @@ public class CatalogDbContext : DbContext
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
     public DbSet<TenantCharge> TenantCharges { get; set; }
+    public DbSet<ReferralPartner> ReferralPartners { get; set; }
+    public DbSet<TenantReferral> TenantReferrals { get; set; }
+    public DbSet<ReferralCommission> ReferralCommissions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -190,6 +193,39 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(c => c.DueDate)
                   .HasDatabaseName("ix_tenant_charges_due_date");
+        });
+
+        modelBuilder.Entity<ReferralPartner>(entity =>
+        {
+            entity.HasIndex(p => p.Name).HasDatabaseName("ix_referral_partners_name");
+            entity.HasIndex(p => p.Document).IsUnique().HasFilter("document IS NOT NULL")
+                  .HasDatabaseName("ix_referral_partners_document_unique");
+        });
+
+        modelBuilder.Entity<TenantReferral>(entity =>
+        {
+            entity.HasOne<ReferralPartner>().WithMany().HasForeignKey(r => r.PartnerId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Tenant>().WithMany().HasForeignKey(r => r.TenantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Lead>().WithMany().HasForeignKey(r => r.SourceLeadId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(r => r.TenantId).IsUnique()
+                  .HasDatabaseName("ix_tenant_referrals_tenant_unique");
+            entity.HasIndex(r => r.PartnerId).HasDatabaseName("ix_tenant_referrals_partner_id");
+        });
+
+        modelBuilder.Entity<ReferralCommission>(entity =>
+        {
+            entity.Property(c => c.ChargeKind).HasConversion<string>().HasMaxLength(20);
+            entity.HasOne<TenantReferral>().WithMany().HasForeignKey(c => c.ReferralId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<TenantCharge>().WithMany().HasForeignKey(c => c.TenantChargeId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(c => c.TenantChargeId).IsUnique()
+                  .HasDatabaseName("ix_referral_commissions_charge_unique");
+            entity.HasIndex(c => c.DueDate).HasDatabaseName("ix_referral_commissions_due_date");
+            entity.HasIndex(c => c.ReferenceMonth).HasDatabaseName("ix_referral_commissions_reference_month");
         });
     }
 }

@@ -18,11 +18,16 @@ public class PlatformBillingService : IPlatformBillingService
 {
     private readonly CatalogDbContext _catalog;
     private readonly ILogger<PlatformBillingService> _logger;
+    private readonly IReferralCommissionService? _referrals;
 
-    public PlatformBillingService(CatalogDbContext catalog, ILogger<PlatformBillingService> logger)
+    public PlatformBillingService(
+        CatalogDbContext catalog,
+        ILogger<PlatformBillingService> logger,
+        IReferralCommissionService? referrals = null)
     {
         _catalog = catalog;
         _logger  = logger;
+        _referrals = referrals;
     }
 
     /// <summary>Reduz qualquer data ao dia 1 do mês, 00:00 UTC. Toda competência
@@ -183,7 +188,10 @@ public class PlatformBillingService : IPlatformBillingService
         if (pagoEm.HasValue && pagoEm.Value.Date > DateTime.UtcNow.Date)
             throw new InvalidOperationException("A data de pagamento não pode ser futura.");
 
+        var pagamentoAnterior = cobranca.PaidAt;
         cobranca.PaidAt = pagoEm;
+        if (_referrals is not null)
+            await _referrals.SynchronizeChargeAsync(cobranca, pagamentoAnterior);
         await _catalog.SaveChangesAsync();
 
         var lista = await MapearAsync(_catalog.TenantCharges.AsNoTracking().Where(c => c.Id == chargeId));

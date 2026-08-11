@@ -4,7 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { isPlatformOwner, clearAuth, hasPlatformPermission } from '@/lib/auth'
 import { Toaster } from 'react-hot-toast'
-import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet, Users } from 'lucide-react'
+import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet, Users, HandCoins } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
 
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/plataforma/financeiro', label: 'Financeiro',   icon: Wallet, permission: 'platform.finance.read' },
   { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus, permission: 'platform.leads' },
   { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search, permission: 'platform.leads' },
+  { href: '/plataforma/indicacoes', label: 'Indicações',    icon: HandCoins, permission: 'platform.referrals.read' },
   { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy, permission: 'platform.support' },
   { href: '/plataforma/logs',       label: 'Logs',         icon: History, permission: 'platform.logs' },
   { href: '/plataforma/equipe',     label: 'Equipe',       icon: Users, permission: 'platform.team' },

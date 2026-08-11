@@ -1079,6 +1079,56 @@ export const platformBillingApi = {
     api.put<TenantChargeDto>(`/api/platform/billing/cobrancas/${id}/pagamento`, { pagoEm }),
 }
 
+// ── Indicações e comissões da plataforma ────────────────────────────────────
+export interface ReferralSummaryDto {
+  activePartners: number; referredClients: number; pendingAmount: number
+  overdueAmount: number; paidAmount: number; referredMrr: number
+}
+export interface ReferralPartnerDto {
+  id: string; name: string; document: string | null; phone: string | null
+  email: string | null; pixKey: string | null; setupCommissionPercent: number
+  monthlyCommissionPercent: number; paymentDay: number; active: boolean
+  referredClients: number; pendingAmount: number; paidAmount: number
+  nextPaymentDate: string | null
+}
+export interface SaveReferralPartnerRequest {
+  name: string; document?: string | null; phone?: string | null; email?: string | null
+  pixKey?: string | null; setupCommissionPercent: number
+  monthlyCommissionPercent: number; paymentDay: number; active: boolean
+}
+export interface TenantReferralDto {
+  id: string; partnerId: string; partnerName: string; tenantId: string; tenantName: string
+  sourceLeadId: string | null; setupCommissionPercent: number
+  monthlyCommissionPercent: number; monthlyCommissionCycles: number | null
+  startedOn: string; active: boolean; notes: string | null
+}
+export interface SaveTenantReferralRequest {
+  partnerId: string; tenantId: string; sourceLeadId?: string | null
+  setupCommissionPercent?: number | null; monthlyCommissionPercent?: number | null
+  monthlyCommissionCycles?: number | null; startedOn?: string | null
+  active: boolean; notes?: string | null
+}
+export interface ReferralCommissionDto {
+  id: string; partnerId: string; partnerName: string; tenantId: string; tenantName: string
+  type: 'Implantacao' | 'Mensalidade'; baseAmount: number; commissionPercent: number
+  amount: number; referenceMonth: string; earnedAt: string; dueDate: string
+  paidAt: string | null; status: 'Pendente' | 'Vencido' | 'Pago'
+}
+export const referralApi = {
+  summary: () => api.get<ReferralSummaryDto>('/api/platform/referrals/summary'),
+  partners: () => api.get<ReferralPartnerDto[]>('/api/platform/referrals/partners'),
+  createPartner: (request: SaveReferralPartnerRequest) => api.post('/api/platform/referrals/partners', request),
+  updatePartner: (id: string, request: SaveReferralPartnerRequest) => api.put(`/api/platform/referrals/partners/${id}`, request),
+  assignments: () => api.get<TenantReferralDto[]>('/api/platform/referrals/assignments'),
+  saveAssignment: (request: SaveTenantReferralRequest) => api.post('/api/platform/referrals/assignments', request),
+  commissions: (partnerId?: string, status?: string) =>
+    api.get<ReferralCommissionDto[]>('/api/platform/referrals/commissions', {
+      params: { partnerId: partnerId || undefined, status: status || undefined },
+    }),
+  setCommissionPayment: (id: string, paidAt: string | null) =>
+    api.put(`/api/platform/referrals/commissions/${id}/payment`, { paidAt }),
+}
+
 export const prospectingApi = {
   search: (categoria: string, cidade: string) =>
     api.post<ProspectCandidateDto[]>('/api/platform/prospecting/search', { categoria, cidade }),
