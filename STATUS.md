@@ -1,42 +1,43 @@
-# Status — Tenant-ERP (2026-07-10, madrugada)
+# Status atual — Tenant-ERP
 
-## Onde paramos
+> Atualizado em 2026-08-11. O backlog vigente e priorizado está em
+> [`BACKLOG.md`](BACKLOG.md). Este arquivo é apenas um resumo executivo.
 
-Branding genericizado e dois bugs de login corrigidos (IPv4 no `setup.sh`, cookie
-`Secure` no `AuthController`). VPS de teste (`179.197.67.64`) rodando com login
-funcional (`admin@tenant-erp.local` / senha padrão definida em `ADMIN_SEED_PASSWORD` —
-ver `Program.cs`; trocar via variável de ambiente assim que possível, não deixar o
-valor default em produção).
+## Estado da entrega
 
-DNS configurado pra multi-tenant:
-- `3esysten.com.br` → Cloudflare (conta do usuário), registros A + wildcard
-  (`*.3esysten.com.br`) apontando pro VPS `179.197.67.64`, SSL/TLS em modo
-  "Flexible" (origem só tem porta 80/HTTP aberta).
-- Domínio do Maikon (`santuarionerd.tech`) migrado pra Cloudflare própria dele
-  (estava incorretamente na conta do usuário) — assunto à parte, não é do Tenant-ERP.
+- `origin/main`: `5e74b1e`.
+- Multi-tenant por schema e catálogo central estão implementados.
+- Billing da plataforma possui implantação, mensalidades, baixa, MRR e
+  inadimplência.
+- Leads, prospecção e conversão existem; o CRM completo ainda está em construção.
+- Indicações e comissões de vendedores autônomos estão implementadas e aguardam
+  validação de staging e definição das políticas comerciais finais.
+- Restaurante/comandas possuem comentários, áreas de produção, fila e estados de
+  preparo; falta validação E2E no ambiente implantado.
+- Frontend e backend compilam. O lint passou em 2026-08-11.
+- Testes focados de billing/comissões e a suíte completa passaram. Após corrigir
+  a limpeza de schemas, foram 750 testes em 1min52s e zero schemas temporários
+  restantes no PostgreSQL.
 
-Tentativa de implementar o multi-tenant via Ultraplan (sessão remota) **travou**
-("Plan flow interrupted") e está perto do limite de uso da sessão — decidido fazer
-a implementação manualmente aqui na próxima sessão, em vez de depender dela.
+## Próxima direção recomendada
 
-## Próxima sessão — começar por aqui
+1. Consolidar o modelo de CRM: contas, contatos, oportunidades, atividades,
+   responsáveis, histórico e atribuição.
+2. Criar a camada analítica de aquisição, receita, churn e comissões.
+3. Implementar cobrança recorrente real dos tenants.
 
-Seguir o plano já desenhado (arquitetura discutida em detalhe, ver `BACKLOG.md` e
-histórico da conversa), na ordem:
+## Bloqueios externos
 
-1. **Fase 0a** — eliminar o MongoDB, migrar `VendaAvulsa` pro Postgres (coluna JSONB
-   pros itens, mesmo padrão de `Crediario.ItensJson`).
-2. **Fase 0b** — squash das migrations (as atuais foram geradas contra SQLite,
-   inutilizáveis contra Postgres real — descartar e reger).
-3. Catálogo de tenants (`Tenant`, `CatalogDbContext`, sem schema ainda).
-4. Interceptor de conexão (`SET search_path`) + middleware de resolução por
-   subdomínio, com tenant-zero fixo primeiro (sem mover dado ainda).
-5. Fix dos background services (`FiscalAlertBackgroundService` etc.) e `DbHealthCheck`
-   pra não quebrar quando o interceptor exigir `ITenantContext`.
-6. Migração de dados do tenant-zero pra schema dedicado.
-7. Claim `tenant_id` no JWT + guard middleware + CORS wildcard.
-8. nginx `server_name` pra aceitar `*.3esysten.com.br` (DNS já pronto).
+- Homologação fiscal real depende de contador, certificado/CSC e SEFAZ.
+- Cloudflare Full (Strict) depende de certificado de origem e alteração de infra.
+- Dados externos de mercado dependem de fonte autorizada, orçamento e política LGPD.
+- Pagamentos recorrentes dependem da escolha e credenciais do gateway.
 
-## Backlog fora do multi-tenant
-Ver `BACKLOG.md` — cobrança da plataforma (dono do SaaS cobra os tenants) e
-retrabalho completo de UI/UX, ambos ainda sem escopo detalhado.
+## Trabalho paralelo a reconciliar
+
+- Uma worktree do Claude ainda contém a versão original não commitada da
+  sanitização de HTML; a correção já foi portada, ampliada e validada na branch atual.
+- Worktrees limpas de segurança, VAPID, Swagger e auditoria de carga possuem
+  commits fora da `main`; devem ser revisadas individualmente, não mescladas em lote.
+
+Consulte os IDs e critérios completos no início de [`BACKLOG.md`](BACKLOG.md).

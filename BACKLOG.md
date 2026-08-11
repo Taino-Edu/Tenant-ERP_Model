@@ -1,4 +1,380 @@
-# Backlog — Tenant-ERP
+# Backlog operacional — Tenant-ERP
+
+> **Fonte de verdade a partir de 2026-08-11.** Esta parte do documento é o backlog
+> vigente. O conteúdo anterior foi preservado no final como histórico e não deve
+> ser usado sozinho para decidir o próximo trabalho.
+>
+> **Base auditada:** `origin/main` em `5e74b1e`, código local, migrações, testes,
+> documentação, branches e worktrees registradas. Não confundir “há uma branch”
+> com “a funcionalidade está pronta na main”.
+
+## Como manter este backlog
+
+- Todo item ativo tem ID, prioridade, estado, evidência e critério de conclusão.
+- Estados: `PRONTO PARA FAZER`, `EM EXECUÇÃO`, `BLOQUEADO`, `VALIDAR` e `CONCLUÍDO`.
+- Só pode haver uma frente principal `EM EXECUÇÃO` por equipe/agente.
+- Código pronto em branch/worktree, mas fora da `main`, continua `VALIDAR`.
+- Plano ou documento não significa implementação.
+- Item concluído sai da fila ativa e entra no resumo de entregas; o histórico
+  detalhado permanece abaixo para rastreabilidade.
+- Atualizar a data e a evidência quando o estado mudar. Evitar expressões vagas
+  como “melhorar CRM” sem um critério observável de aceite.
+
+## Resumo executivo
+
+### Situação confirmada
+
+- A `main` remota e `codex/atalhos-manual-inteligente` apontam para `5e74b1e`.
+- A worktree principal estava limpa no início desta auditoria.
+- Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
+- Os 17 testes focados de billing/comissões passaram. Após a correção de
+  `QA-001`, a suíte completa passou com 750 testes em 1min52s e terminou com
+  zero schemas temporários no PostgreSQL.
+- Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
+  comandas e indicações/comissões já têm implementação na `main`.
+
+### Direção recomendada
+
+1. Consolidar o CRM operacional (`CRM-001` a `CRM-004`) antes de adicionar fontes
+   externas de inteligência de mercado.
+2. Criar a camada analítica governada (`DATA-001` a `DATA-003`).
+3. Implementar cobrança recorrente real da plataforma (`PAY-001`).
+4. Só então ampliar automações, IA e aquisição paga com métricas confiáveis.
+
+## P0 — segurança, integridade e liberação
+
+### SEC-001 — Sanitizar HTML dos comprovantes
+
+- **Estado:** `CONCLUÍDO` em 2026-08-11
+- **Evidência:** há mudanças não commitadas na worktree
+  `.claude/worktrees/musing-solomon-133b2e` em:
+  - `frontend/app/admin/venda-avulsa/page.tsx`;
+  - `frontend/components/admin/comanda/shared.ts`.
+- **O que fazem:** escapam nome da loja, cliente, mesa e produtos antes de
+  interpolá-los em HTML enviado a `document.write()`.
+- **Risco atual:** conteúdo cadastrado pode entrar cru no template de impressão.
+- **Entregue:** helper central `frontend/lib/html.ts` aplicado a todos os usos de
+  `document.write()` encontrados: venda avulsa, relatório diário, comanda,
+  crediário e impressão de QR Codes, incluindo loja, cliente, mesa, produto,
+  forma de pagamento, URL e atributos HTML.
+- **Validação:** lint e build de produção aprovados; 2 testes Playwright cobrem
+  `<script>`, `<`, `>`, `&`, aspas, apóstrofo, acentos e valores formatados.
+- **Observação:** a worktree original continua intacta até `REP-001`; a correção
+  já foi portada para a branch atual e não depende mais dela.
+
+### QA-001 — Descobrir por que a suíte unitária completa não termina
+
+- **Estado:** `CONCLUÍDO` em 2026-08-11
+- **Causa:** o timeout de 180 segundos era menor que o tempo antigo da suíte e
+  havia 146–290 schemas órfãos sendo removidos individualmente antes do primeiro
+  teste. Execuções paralelas ainda disputavam a mesma limpeza.
+- **Correção:** lock consultivo no PostgreSQL, remoção em lotes, descarte de schema
+  junto com cada `AppDbContext` de teste e `using` explícito nas classes que não
+  liberavam o contexto.
+- **Validação:** 750/750 testes aprovados em 1min52s, zero falhas, zero ignorados e
+  zero schemas `test_%` restantes ao final. Orçamento local recomendado: 3 minutos;
+  CI pode usar margem de 5 minutos para máquinas mais lentas.
+
+### FIS-001 — Homologação fiscal real
+
+- **Estado:** `BLOQUEADO`
+- **Dependência externa:** contador, certificado/CSC e ambiente SEFAZ do
+  estabelecimento.
+- **Evidência:** `docs/STATUS-GO-LIVE-NFCE.md` e
+  `docs/GO-LIVE-FISCAL-2026-07-25.md`.
+- **Falta:** executar e registrar autorização, rejeição, contingência/reenvio,
+  cancelamento, inutilização, impressão 58/80 mm, leitura do QR e abertura do XML
+  pelo sistema do contador.
+- **Concluído quando:** checklist real assinado, evidências anexadas e nenhuma
+  pendência fiscal antiga no staging/produção.
+
+### REP-001 — Reconciliar worktrees e branches antigas
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Não commitado:** somente a worktree citada em `SEC-001`.
+- **Worktrees limpas com commits fora da main:**
+  - `C:/tmp/octus-security-verify` — `fc72d29`, gestão/segurança da equipe;
+  - `C:/tmp/Tenant-ERP-load-audit` — performance e auditoria de carga;
+  - `C:/tmp/Tenant-ERP-pr38-reconcile` — correção VAPID;
+  - `C:/tmp/Tenant-ERP-swagger` — Swagger em produção.
+- **Branches locais não integralmente incorporadas:** planos técnicos, integrações,
+  isolamento, VAPID/Swagger e auditoria de carga. Algumas divergem da `main` e não
+  devem ser mescladas em lote.
+- **Próxima ação:** revisar uma por vez contra a `main`, classificar como
+  `incorporar`, `substituída` ou `arquivar`, e só depois remover worktrees.
+- **Concluído quando:** nenhuma worktree tem alteração sem dono e toda branch não
+  incorporada tem decisão registrada.
+
+## P1 — CRM comercial de padrão de mercado
+
+### CRM-001 — Modelo comercial canônico
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Já existe:** lead, origem, status simples, score, presença digital,
+  faturamento estimado, notas, prospecção e conversão para tenant.
+- **Falta:**
+  - separar `Conta/Empresa`, `Contato`, `Lead` e `Oportunidade`;
+  - pipeline configurável com etapa, probabilidade, valor, previsão de fechamento
+    e motivo de ganho/perda;
+  - responsável comercial e fila sem responsável;
+  - deduplicação por telefone, e-mail, documento e estabelecimento;
+  - histórico imutável de mudanças de etapa/responsável;
+  - consentimento, finalidade e origem do dado para LGPD.
+- **Critério de conclusão:** um lead pode virar oportunidade, avançar pelo funil,
+  ser ganho/perdido com histórico completo e converter em tenant sem perder a
+  atribuição da origem.
+
+### CRM-002 — Atividades, tarefas e linha do tempo
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Falta:** ligações, mensagens, reuniões, comentários internos, tarefas,
+  vencimento, lembrete, resultado do contato e próxima ação.
+- **Regra:** notas livres não substituem eventos estruturados.
+- **Critério de conclusão:** a tela do lead/oportunidade mostra uma linha do tempo
+  única e o gestor consegue listar tarefas atrasadas, de hoje e futuras por vendedor.
+
+### CRM-003 — Origem, campanhas e indicações antes da conversão
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Já existe:** origem textual no lead e controle de vendedor/comissão ligado ao
+  tenant; o vínculo aceita `SourceLeadId` no backend.
+- **Falta:** selecionar o vendedor indicador ainda no lead, campanhas/UTM,
+  primeiro/último toque, canal e regras de atribuição visíveis na UI.
+- **Critério de conclusão:** a origem acompanha o contato até receita e comissão,
+  sem preenchimento manual duplicado após a conversão.
+
+### CRM-004 — Gestão de carteira e previsão comercial
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Falta:** carteira por vendedor, forecast ponderado, aging por etapa, motivos de
+  perda, metas, conversão por origem e tempo médio até fechamento.
+- **Critério de conclusão:** o gestor enxerga pipeline, previsão e gargalos por
+  período/vendedor/origem com definições de métricas documentadas.
+
+### REF-001 — Completar o controle de indicações e comissões
+
+- **Estado:** `VALIDAR`
+- **Já existe na main:** vendedores autônomos, percentuais separados de implantação
+  e mensalidade, ciclos opcionais, dia de pagamento, agenda, baixa, MRR indicado e
+  proteção contra duplicidade/reabertura após comissão paga.
+- **Falta validar/decidir:**
+  - regra padrão de duração da comissão mensal;
+  - retenções/impostos e documento do prestador;
+  - estorno/cancelamento formal depois de comissão paga;
+  - exportação de extrato e comprovante de repasse;
+  - acesso do próprio vendedor a um portal somente leitura;
+  - política para mudança de vendedor de um cliente já com histórico.
+- **Critério de conclusão:** regras aprovadas, migração aplicada e ciclo completo
+  validado em staging: cliente paga → comissão vence → vendedor recebe → extrato.
+
+## P1 — dados e inteligência de mercado
+
+### DATA-001 — Camada analítica governada
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Princípio:** não consultar tabelas transacionais soltas para responder perguntas
+  de mercado. Criar uma camada de fatos/dimensões ou read models versionados.
+- **Fatos mínimos:** aquisição de lead, mudança de etapa, atividade comercial,
+  conversão, cobrança, pagamento, comissão, churn/suspensão e uso de módulos.
+- **Dimensões mínimas:** tempo, tenant, segmento, cidade/UF, plano, origem/campanha,
+  vendedor, etapa e produto/módulo.
+- **Critério de conclusão:** dicionário de dados, donos, atualização, qualidade,
+  retenção e consultas de referência versionadas.
+
+### DATA-002 — KPIs comerciais e de SaaS
+
+- **Estado:** `BLOQUEADO`
+- **Depende de:** `CRM-001`, `CRM-003` e `DATA-001`.
+- **Métricas:** leads qualificados, conversão por etapa/origem, ciclo de venda,
+  CAC, receita por vendedor, MRR novo, expansão, contração, churn, LTV, payback,
+  inadimplência e custo de comissão.
+- **Critério de conclusão:** cada KPI tem fórmula, granularidade, janela temporal,
+  fonte, responsável e teste contra uma amostra conhecida.
+
+### DATA-003 — Enriquecimento e análise de mercado
+
+- **Estado:** `BLOQUEADO`
+- **Decisões necessárias:** regiões/segmentos prioritários, fontes autorizadas,
+  orçamento e base legal/LGPD.
+- **Possíveis fontes:** dados públicos (IBGE, Receita/CNPJ quando permitido,
+  municípios), presença digital, campanhas próprias e provedores contratados.
+- **Não fazer:** scraping ou compra de listas sem validar termos, qualidade,
+  consentimento e finalidade.
+- **Critério de conclusão:** catálogo de fontes com licença, custo, cobertura,
+  atualização e qualidade; enriquecimento rastreável; análise por segmento/região
+  sem misturar estimativa com dado observado.
+
+## P1 — receita e pagamentos da plataforma
+
+### PAY-001 — Cobrança recorrente real dos tenants
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Já existe:** preço por tenant, implantação, mensalidades, competência,
+  vencimento, baixa manual, MRR, inadimplência e comissões.
+- **Não existe:** assinatura/cobrança automática do SaaS e suspensão automatizada.
+- **Decisão pendente:** Mercado Pago OAuth, Banco Inter ou outro gateway para a
+  mensalidade da plataforma. Não confundir com Pix das vendas dos lojistas.
+- **Critério de conclusão:** cobrança idempotente, webhook validado, retry,
+  conciliação, régua de inadimplência, suspensão segura, reativação e trilha de
+  auditoria em sandbox e produção.
+
+### PAY-002 — Mercado Pago para vendas dos lojistas
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Evidência:** existe um plano detalhado em
+  `docs/PLANO-PAGAMENTOS-MULTITENANT-MERCADO-PAGO.md`, mas o código atual só
+  registra configuração; OAuth, criação de pagamento e webhook não existem.
+- **Critério de conclusão:** fluxo OAuth por tenant, Pix, consulta autenticada,
+  webhook idempotente e isolamento comprovado; Banco Inter continua funcionando.
+
+## P1 — restaurante e comandas
+
+### REST-001 — Validar em staging a nova estrutura de produção
+
+- **Estado:** `VALIDAR`
+- **Já existe na main:** comandas acopladas ao módulo Restaurante, comentários do
+  cliente, áreas de produção, snapshots dos itens, fila e estados
+  Recebido → Preparando → Pronto → Servido, além de SignalR.
+- **Falta:** aplicar migração no ambiente, testar cozinha/salão em dispositivos
+  simultâneos e confirmar que desligar Restaurante oculta comandas sem apagar dados.
+- **Critério de conclusão:** roteiro E2E com mesa, cliente, caixa e produção;
+  reconexão SignalR e reabertura sem perda/duplicidade.
+
+## P2 — confiabilidade e operação
+
+### OPS-001 — Monitoramento externo e alertas
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Já existe:** `/health`, health check do banco e health checks de containers.
+- **Falta:** monitor externo, alerta de indisponibilidade, latência e runbook.
+- **Critério de conclusão:** alerta testado para API e frontend, com responsável e
+  procedimento de recuperação.
+
+### OPS-002 — Cloudflare Full (Strict)
+
+- **Estado:** `BLOQUEADO`
+- **Dependência:** certificado de origem no VPS e ajuste de nginx/Cloudflare.
+- **Critério de conclusão:** Cloudflare → origem em HTTPS validado e renovação
+  documentada, sem regressão nos subdomínios.
+
+### OPS-003 — Domínio próprio sem Cloudflare do lojista
+
+- **Estado:** `BLOQUEADO`
+- **Já existe:** roteamento por domínio customizado.
+- **Falta:** emissão/renovação TLS por domínio ou Cloudflare for SaaS.
+- **Gatilho:** implementar quando houver demanda real ou decisão comercial.
+
+### QA-002 — Error boundaries por área
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Já existe:** boundaries raiz e `/admin`.
+- **Falta:** `/plataforma` e `/cliente`, preservando seus layouts e ações de retry.
+
+### QA-003 — Testes E2E essenciais
+
+- **Estado:** `VALIDAR`
+- **Correção do backlog antigo:** já existem cinco specs Playwright em
+  `frontend/tests/`; não é mais verdade que “não há nenhum teste escrito”.
+- **Falta:** confirmar execução no CI e cobrir login, venda, fechamento de comanda,
+  comissão e isolamento de tenant com dados determinísticos.
+
+### QA-004 — Upgrade do Next.js
+
+- **Estado:** `BLOQUEADO`
+- **Atual:** Next `14.2.35`, React `18.3.1`.
+- **Regra:** levantar vulnerabilidades atuais e seguir guia/codemods oficiais;
+  não misturar upgrade major com feature de CRM ou pagamento.
+
+## P2 — experiência e manutenção
+
+### UX-001 — Responsividade e design system
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Falta:** migrar modais inline, aumentar adoção de `Button`, `EmptyState`,
+  `Spinner`, `Badge`, `PageHeader` e `StatCard`, remover cores hardcoded e validar
+  as telas de maior tráfego em celular real.
+- **Critério de conclusão:** inventário por tela, checklist responsivo e nenhuma
+  regressão de teclado/foco.
+
+### TECH-001 — Decompor arquivos grandes por domínio
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Maiores candidatos atuais:** venda avulsa, fiscal, estoque, usuários,
+  financeiro, crediário e landing principal.
+- **Regra:** refatorar com testes e sem misturar mudança de comportamento.
+
+### TECH-002 — Dividir classes centrais do backend
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Candidatos:** `Program.cs` e controllers/serviços extensos identificados por
+  tamanho e responsabilidade, começando pelos que bloquearem CRM/pagamentos.
+
+### DEMO-001 — Dados de exemplo seguros
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Falta:** seed idempotente por tenant de demonstração, nunca automático em
+  tenant real, com botão/script explícito e opção de limpeza.
+
+### AI-001 — Quota e custo por tenant
+
+- **Estado:** `PRONTO PARA FAZER`
+- **Correção do backlog antigo:** o widget já é exibido apenas quando o módulo
+  `ia` está habilitado e o usuário tem permissão.
+- **Falta:** rate limit, medição de uso/custo por tenant, política de plano e opção
+  de chave própria ou cobrança repassada.
+
+## P3 — oportunidades condicionais
+
+### PROD-001 — Personalização avançada por tenant
+
+- **Estado:** `BLOQUEADO`
+- **Já existe:** nome, textos, cores, logo e diretório público de lojas ativas.
+- **Falta/decidir:** favicon, ícone PWA, imagens adicionais e armazenamento de
+  arquivos por tenant.
+- **Gatilho:** definir escopo comercial e armazenamento antes de implementar.
+
+### INFRA-001 — Zero-downtime/blue-green
+
+- **Estado:** `BLOQUEADO`
+- **Gatilho:** volume real de tráfego/SLA que justifique a complexidade. O deploy
+  atual já constrói antes de recriar containers; não é prioridade imediata.
+
+## Entregas confirmadas — não recolocar como pendência
+
+- Multi-tenancy por schema, resolução por domínio/subdomínio e isolamento no backend.
+- Migração para PostgreSQL e catálogo central de tenants.
+- Diretório público de lojas ativas com nome/logo.
+- Billing ciclo 1: preço, implantação, mensalidades, MRR, baixa e inadimplência.
+- CRM inicial: leads, prospecção, score, presença digital e conversão.
+- Controle de indicações e comissões de vendedores autônomos.
+- Comandas estruturadas sob Restaurante, comentários e produção por área/status.
+- Desconto editável em percentual e reais no fechamento/pagamento.
+- IBPT local, rotinas fiscais e controles de contingência implementados no código;
+  homologação externa continua em `FIS-001`.
+- IA condicionada ao módulo e à permissão.
+- Error boundaries raiz/admin e cinco specs Playwright existentes.
+- Diretório público de tenants; o item antigo que dizia “não implementado” está obsoleto.
+- Arquivos `.pptx` não estão rastreados atualmente pelo Git.
+
+## Decisões que o produto precisa tomar
+
+Estas perguntas não bloqueiam a limpeza do código, mas bloqueiam CRM/analytics e
+pagamentos completos:
+
+1. **CRM:** quais segmentos e regiões são prioridade nos próximos 90 dias?
+2. **Funil:** quais etapas comerciais, responsáveis e SLA de contato serão padrão?
+3. **Dados de mercado:** quais fontes externas são autorizadas e qual orçamento?
+4. **Comissões:** percentual/duração padrão, impostos, estorno e portal do vendedor?
+5. **Cobrança SaaS:** gateway escolhido e política de inadimplência/suspensão?
+6. **Métricas:** quais metas trimestrais de leads, conversão, MRR, churn e CAC?
+
+---
+
+# Arquivo histórico do backlog — até 2026-08-11
+
+> Conteúdo preservado para contexto de decisões e sessões anteriores. Estados e
+> frases como “falta” abaixo podem estar desatualizados. Para priorização, use
+> somente o backlog operacional acima.
 
 ## Pricing da plataforma — decidido em 2026-07-27
 
