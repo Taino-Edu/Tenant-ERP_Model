@@ -5,8 +5,14 @@
 // rede, não são testados aqui.
 // =============================================================================
 
+using System.Net;
+using System.Text;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace CardGameStore.Tests.Services;
@@ -100,5 +106,56 @@ public class ProspectingServiceTests
         var query = ProspectingService.BuildOverpassQuery("Todos os negócios", BboxDummy);
         query.Should().Contain("shop|amenity|office|craft|tourism|leisure");
         query.Should().Contain("[\"name\"]");
+    }
+
+    [Fact]
+    public async Task EnrichLeadWithAiAsync_PersisteAbordagemSemInventarFaixaFinanceira()
+    {
+        var options = new DbContextOptionsBuilder<CatalogDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new CatalogDbContext(options);
+        var lead = new Lead
+        {
+            Nome = "Loja Exemplo", Telefone = "14999990000", Origem = "landing",
+            Mensagem = "Preciso organizar meu estoque.", EstimatedRevenueRange = null,
+        };
+        db.Leads.Add(lead);
+        await db.SaveChangesAsync();
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ProspectingSettings:GeminiApiKey"] = "test-key",
+        }).Build();
+        var service = new ProspectingService(
+            new FakeHttpClientFactory(new GeminiSuccessHandler()), config,
+            NullLogger<ProspectingService>.Instance, db);
+
+        var result = await service.EnrichLeadWithAiAsync(lead.Id);
+
+        result.Should().NotBeNull();
+        result!.AbordagemSugerida.Should().Be("Apresente o controle de estoque integrado ao PDV.");
+        result.EstimatedRevenueRange.Should().BeEmpty();
+        lead.AbordagemSugerida.Should().Be(result.AbordagemSugerida);
+        lead.EstimatedRevenueRange.Should().BeNull();
+    }
+
+    private sealed class FakeHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
+    }
+
+    private sealed class GeminiSuccessHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            const string json = """
+                {"candidates":[{"content":{"parts":[{"text":"{\"abordagemSugerida\":\"Apresente o controle de estoque integrado ao PDV.\"}"}]}}]}
+                """;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            });
+        }
     }
 }

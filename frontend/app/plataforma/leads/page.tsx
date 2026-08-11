@@ -5,7 +5,7 @@ import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
 import toast from 'react-hot-toast'
-import { UserPlus, Loader2, MessageCircle, MapPin, Search, Target, UserCheck, Users } from 'lucide-react'
+import { UserPlus, Loader2, MessageCircle, MapPin, Search, Sparkles, Target, UserCheck, Users } from 'lucide-react'
 
 const STATUS_OPTIONS: LeadStatus[] = ['Novo', 'Contatado', 'Convertido', 'Perdido']
 
@@ -58,6 +58,7 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
   const [notas, setNotas] = useState(lead.notas ?? '')
   const [placeId, setPlaceId] = useState(lead.placeId ?? '')
   const [saving, setSaving] = useState(false)
+  const [enriching, setEnriching] = useState(false)
 
   // Base pra qualquer PATCH parcial — sempre reenvia os campos de oportunidade
   // atuais além do que está sendo alterado, senão a API (que substitui o valor
@@ -133,6 +134,19 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
     }
   }
 
+  async function enrichLead() {
+    setEnriching(true)
+    try {
+      await platformApi.enrichLead(lead.id)
+      toast.success('Lead enriquecido e abordagem salva no CRM.')
+      onChanged()
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Não foi possível enriquecer este lead.'))
+    } finally {
+      setEnriching(false)
+    }
+  }
+
   return (
     <tr className="border-b border-surface-700 last:border-0 align-top">
       <td className="py-3">
@@ -205,9 +219,15 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
               </a>
             )}
           </div>
+          {lead.estimatedRevenueRange && <p className="text-[11px] text-gray-500">{lead.estimatedRevenueRange}</p>}
         </div>
       </td>
       <td className="py-3">
+        {lead.abordagemSugerida && (
+          <p className="mb-2 w-64 rounded-lg bg-brand-500/10 p-2 text-[11px] leading-relaxed text-brand-200">
+            <Sparkles className="mr-1 inline h-3 w-3" />{lead.abordagemSugerida}
+          </p>
+        )}
         <textarea
           className="input text-xs py-1.5 w-64 resize-y min-h-[3.5rem]"
           placeholder="Anotações"
@@ -219,11 +239,17 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
       </td>
       <td className="py-3 text-gray-400">{fmtDateTime(lead.createdAt)}</td>
       <td className="py-3 text-right">
-        {lead.status !== 'Convertido' && (
-          <button onClick={() => onConvert(lead)} className="btn-secondary text-xs py-1 px-2.5">
-            Converter em tenant
+        <div className="flex flex-col items-end gap-2">
+          <button onClick={enrichLead} disabled={saving || enriching} className="btn-secondary text-xs py-1 px-2.5">
+            {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            Enriquecer
           </button>
-        )}
+          {lead.status !== 'Convertido' && (
+            <button onClick={() => onConvert(lead)} disabled={saving || enriching} className="btn-secondary text-xs py-1 px-2.5">
+              Converter em tenant
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   )

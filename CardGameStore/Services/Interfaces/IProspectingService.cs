@@ -23,4 +23,9 @@ public interface IProspectingService
     /// financeiros não são inventados pela IA. Só roda quando chamado
     /// explicitamente (nunca automático durante a busca).</summary>
     Task<ProspectingEnrichResponse> EnrichWithAiAsync(ProspectingEnrichRequest request);
+
+    /// <summary>Enriquece um lead já captado e persiste a abordagem no CRM.
+    /// Quando o lead veio da prospecção, mantém o candidato vinculado e sua
+    /// trilha de auditoria sincronizados.</summary>
+    Task<ProspectingEnrichResponse?> EnrichLeadWithAiAsync(Guid leadId);
 }

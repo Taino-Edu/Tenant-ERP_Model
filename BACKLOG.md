@@ -28,7 +28,7 @@
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
-  `QA-001`, a suíte completa passou novamente em 2026-08-11 com 775 testes,
+  `QA-001`, a suíte completa passou novamente em 2026-08-11 com 776 testes,
   zero falhas e zero ignorados.
 - Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões já têm implementação na `main`.
@@ -144,7 +144,9 @@
 
 - **Estado:** `PRONTO PARA FAZER`
 - **Já existe:** lead, origem, status simples, score, presença digital,
-  faturamento estimado, notas, prospecção e conversão para tenant.
+  faturamento estimado, notas, prospecção, conversão para tenant e enriquecimento
+  sob demanda com abordagem persistida no CRM e sincronizada com o candidato de
+  origem quando houver vínculo.
 - **Falta:**
   - separar `Conta/Empresa`, `Contato`, `Lead` e `Oportunidade`;
   - pipeline configurável com etapa, probabilidade, valor, previsão de fechamento

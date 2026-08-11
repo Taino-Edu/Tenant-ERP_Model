@@ -900,6 +900,8 @@ export const platformApi = {
     api.get<LeadDto[]>('/api/platform/leads', { params: status ? { status } : undefined }),
   updateLead: (id: string, req: UpdateLeadRequest) =>
     api.patch<LeadDto>(`/api/platform/leads/${id}`, req),
+  enrichLead: (id: string) =>
+    api.post<ProspectingEnrichResponse>(`/api/platform/prospecting/leads/${id}/enrich`),
   getTenantStaff: (id: string) =>
     api.get<TenantStaffDto[]>(`/api/platform/tenants/${id}/staff`),
   resetTenantStaffPassword: (id: string, userId: string, newPassword: string) =>

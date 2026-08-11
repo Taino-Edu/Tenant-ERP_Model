@@ -705,48 +705,98 @@ public class ProspectingService : IProspectingService
             {"abordagemSugerida": "2-3 frases de como abordar esse lead especificamente, mencionando apenas o que os dados informados sustentam e o que a plataforma resolveria pra esse tipo de negócio"}
             """;
 
-        var rawJson = await CallGeminiWithFallbackAsync(prompt, apiKey);
+        var result = new ProspectingEnrichResponse
+        {
+            // A IA não cria dado financeiro. Mantemos a heurística
+            // determinística e explicitamente rotulada que já estava salva.
+            EstimatedRevenueRange = persistedCandidate?.EstimatedRevenueRange
+                ?? EstimateRevenueRangeHeuristic(false, false, false),
+            AbordagemSugerida = await GenerateSuggestedApproachAsync(prompt, apiKey),
+        };
 
+        if (persistedCandidate is not null)
+        {
+            UpdateCandidateEnrichment(persistedCandidate, result.AbordagemSugerida, DateTime.UtcNow);
+            await _catalog.SaveChangesAsync();
+        }
+
+        return result;
+    }
+
+    public async Task<ProspectingEnrichResponse?> EnrichLeadWithAiAsync(Guid leadId)
+    {
+        var apiKey = _config["ProspectingSettings:GeminiApiKey"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("ProspectingSettings:GeminiApiKey não configurada.");
+
+        var lead = await _catalog.Leads.FirstOrDefaultAsync(l => l.Id == leadId);
+        if (lead is null) return null;
+
+        var candidate = await _catalog.ProspectCandidates
+            .Include(c => c.Search)
+            .FirstOrDefaultAsync(c => c.LeadId == leadId);
+
+        var prompt = $$"""
+            Você está analisando um lead já captado por uma plataforma de ERP/PDV.
+            Use somente os dados abaixo; não invente CNPJ, faturamento, porte,
+            endereço, segmento ou qualquer informação ausente.
+            - Nome: {{lead.Nome}}
+            - Origem: {{lead.Origem}}
+            - Contexto informado pelo lead: {{lead.Mensagem ?? "não informado"}}
+            - Categoria observada: {{candidate?.Search.Category ?? "não informada"}}
+            - Endereço público observado: {{candidate?.Address ?? "não informado"}}
+            - Presença digital: {{lead.DigitalPresence ?? candidate?.DigitalPresence ?? "não informada"}}
+            - Pontuação interna de oportunidade: {{lead.OpportunityScore?.ToString() ?? "não informada"}}
+
+            Responda em JSON estrito, sem markdown, só o objeto:
+            {"abordagemSugerida": "2-3 frases de abordagem personalizada, mencionando apenas o que os dados sustentam e como a plataforma pode ajudar"}
+            """;
+
+        var abordagem = await GenerateSuggestedApproachAsync(prompt, apiKey);
+        var now = DateTime.UtcNow;
+        lead.AbordagemSugerida = abordagem;
+        lead.UpdatedAt = now;
+
+        if (candidate is not null)
+            UpdateCandidateEnrichment(candidate, abordagem, now);
+
+        await _catalog.SaveChangesAsync();
+        return new ProspectingEnrichResponse
+        {
+            EstimatedRevenueRange = lead.EstimatedRevenueRange ?? string.Empty,
+            AbordagemSugerida = abordagem,
+        };
+    }
+
+    private static void UpdateCandidateEnrichment(
+        ProspectCandidate candidate, string abordagem, DateTime observedAt)
+    {
+        ObserveChange(candidate, "SuggestedApproach", candidate.SuggestedApproach,
+            abordagem, "Gemini", 50, observedAt);
+        candidate.SuggestedApproach = abordagem;
+        candidate.EnrichmentStatus = ProspectEnrichmentStatus.Updated;
+        candidate.LastEnrichedAt = observedAt;
+        candidate.EnrichmentSource = string.IsNullOrWhiteSpace(candidate.EnrichmentSource)
+            ? "Gemini"
+            : candidate.EnrichmentSource.Contains("Gemini", StringComparison.Ordinal)
+                ? candidate.EnrichmentSource
+                : $"{candidate.EnrichmentSource};Gemini";
+    }
+
+    private async Task<string> GenerateSuggestedApproachAsync(string prompt, string apiKey)
+    {
+        var rawJson = await CallGeminiWithFallbackAsync(prompt, apiKey);
         using var doc = JsonDocument.Parse(rawJson);
-        var text = doc.RootElement
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text")
-            .GetString() ?? "{}";
+        var text = doc.RootElement.GetProperty("candidates")[0]
+            .GetProperty("content").GetProperty("parts")[0]
+            .GetProperty("text").GetString() ?? "{}";
 
         // Gemini às vezes envolve o JSON em ```json ... ``` mesmo pedindo pra não fazer isso.
         text = text.Trim().Trim('`').Replace("json\n", "").Trim();
-
         try
         {
             using var parsed = JsonDocument.Parse(text);
-            var result = new ProspectingEnrichResponse
-            {
-                // A IA não cria dado financeiro. Mantemos a heurística
-                // determinística e explicitamente rotulada que já estava salva.
-                EstimatedRevenueRange = persistedCandidate?.EstimatedRevenueRange
-                    ?? EstimateRevenueRangeHeuristic(false, false, false),
-                AbordagemSugerida     = parsed.RootElement.GetProperty("abordagemSugerida").GetString() ?? "",
-            };
-
-            if (persistedCandidate is not null)
-            {
-                ObserveChange(persistedCandidate, "SuggestedApproach",
-                    persistedCandidate.SuggestedApproach, result.AbordagemSugerida,
-                    "Gemini", 50, DateTime.UtcNow);
-                persistedCandidate.SuggestedApproach = result.AbordagemSugerida;
-                persistedCandidate.EnrichmentStatus = ProspectEnrichmentStatus.Updated;
-                persistedCandidate.LastEnrichedAt = DateTime.UtcNow;
-                persistedCandidate.EnrichmentSource = string.IsNullOrWhiteSpace(persistedCandidate.EnrichmentSource)
-                        ? "Gemini"
-                        : persistedCandidate.EnrichmentSource.Contains("Gemini", StringComparison.Ordinal)
-                            ? persistedCandidate.EnrichmentSource
-                            : $"{persistedCandidate.EnrichmentSource};Gemini";
-                await _catalog.SaveChangesAsync();
-            }
-
-            return result;
+            return parsed.RootElement.GetProperty("abordagemSugerida").GetString() ?? string.Empty;
         }
         catch (JsonException ex)
         {

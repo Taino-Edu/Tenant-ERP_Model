@@ -132,4 +132,20 @@ public class ProspectingController : ControllerBase
             return StatusCode(503, new { Message = ex.Message });
         }
     }
+
+    /// <summary>Gera e salva uma abordagem para um lead que já está no CRM.</summary>
+    [HttpPost("leads/{id:guid}/enrich")]
+    public async Task<IActionResult> EnrichLead(Guid id)
+    {
+        try
+        {
+            var result = await _prospecting.EnrichLeadWithAiAsync(id);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Falha ao enriquecer lead {LeadId}: {Msg}", id, ex.Message);
+            return StatusCode(503, new { Message = ex.Message });
+        }
+    }
 }
