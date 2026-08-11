@@ -29,9 +29,8 @@ public class ProspectingController : ControllerBase
     }
 
     /// <summary>Busca negócios por categoria+cidade via OpenStreetMap, já
-    /// classificados (presença digital, score, faixa de faturamento) sem
-    /// gastar IA. Resultados são efêmeros — só viram Lead de verdade em
-    /// POST /api/platform/leads/prospeccao.</summary>
+    /// classificados e persistidos. A mesma consulta dentro do prazo retorna
+    /// o snapshot salvo, salvo quando ForceRefresh=true.</summary>
     [HttpPost("search")]
     public async Task<IActionResult> Search([FromBody] ProspectingSearchRequest request)
     {
@@ -39,8 +38,7 @@ public class ProspectingController : ControllerBase
 
         try
         {
-            var candidates = await _prospecting.SearchAsync(request.Categoria, request.Cidade);
-            return Ok(candidates);
+            return Ok(await _prospecting.SearchAsync(request.Categoria, request.Cidade, request.ForceRefresh));
         }
         catch (ArgumentException ex)
         {
@@ -51,6 +49,20 @@ public class ProspectingController : ControllerBase
             return StatusCode(503, new { Message = ex.Message });
         }
     }
+
+    [HttpGet("searches")]
+    public async Task<IActionResult> ListSearches([FromQuery] int limit = 20) =>
+        Ok(await _prospecting.ListSearchesAsync(Math.Clamp(limit, 1, 100)));
+
+    [HttpGet("searches/{id:guid}")]
+    public async Task<IActionResult> GetSearch(Guid id)
+    {
+        var result = await _prospecting.GetSearchAsync(id);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpGet("categories")]
+    public IActionResult ListCategories() => Ok(_prospecting.ListSupportedCategories());
 
     /// <summary>Enriquece um candidato específico via Gemini (chave dedicada de
     /// prospecção) — gera faixa de faturamento mais fina e sugestão de

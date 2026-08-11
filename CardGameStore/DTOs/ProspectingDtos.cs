@@ -18,13 +18,36 @@ public class ProspectingSearchRequest
     /// <summary>Cidade (ou "cidade, UF") onde buscar.</summary>
     [Required, MaxLength(100)]
     public string Cidade { get; set; } = string.Empty;
+
+    /// <summary>Ignora a cópia persistida e consulta novamente as fontes.</summary>
+    public bool ForceRefresh { get; set; }
 }
 
-/// <summary>Um candidato a lead encontrado na busca — nunca é salvo sozinho,
-/// só vira Lead de verdade quando o dono da plataforma confirma via
+public class ProspectingSearchSummaryDto
+{
+    public Guid Id { get; set; }
+    public string Categoria { get; set; } = string.Empty;
+    public string Cidade { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int ResultCount { get; set; }
+    public DateTime RefreshedAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public string? Warning { get; set; }
+}
+
+public class ProspectingSearchResultDto : ProspectingSearchSummaryDto
+{
+    public bool FromCache { get; set; }
+    public List<ProspectCandidateDto> Candidates { get; set; } = [];
+}
+
+/// <summary>Snapshot persistido de um estabelecimento encontrado na busca.
+/// Só vira Lead de verdade quando o dono da plataforma confirma via
 /// POST /api/platform/leads/prospeccao.</summary>
 public class ProspectCandidateDto
 {
+    public Guid    Id                    { get; set; }
     // Convenção do próprio OSM pra referenciar um elemento: "{tipo}/{id}" (ex: "node/123456").
     public string  PlaceId               { get; set; } = string.Empty;
     public string  Nome                  { get; set; } = string.Empty;
@@ -44,6 +67,9 @@ public class ProspectCandidateDto
     /// <summary>Faixa grosseira baseada na completude do cadastro como proxy
     /// de porte — nunca é dado financeiro real, só heurística de priorização.</summary>
     public string  EstimatedRevenueRange { get; set; } = string.Empty;
+    public string  Status                { get; set; } = "New";
+    public Guid?   LeadId                { get; set; }
+    public DateTime LastSeenAt           { get; set; }
 }
 
 public class ProspectingEnrichRequest
@@ -75,6 +101,7 @@ public class ProspectingEnrichResponse
 /// Nome/Telefone/Email/Mensagem do formulário da landing).</summary>
 public class CreateProspectLeadRequest
 {
+    public Guid? ProspectCandidateId { get; set; }
     [Required, MaxLength(150)]
     public string Nome { get; set; } = string.Empty;
 

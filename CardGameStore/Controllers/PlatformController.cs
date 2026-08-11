@@ -874,6 +874,16 @@ public class PlatformController : ControllerBase
         try
         {
             await _catalog.SaveChangesAsync();
+            if (request.ProspectCandidateId is Guid candidateId)
+            {
+                var candidate = await _catalog.ProspectCandidates.FirstOrDefaultAsync(c => c.Id == candidateId);
+                if (candidate is not null)
+                {
+                    candidate.Status = ProspectCandidateStatus.Lead;
+                    candidate.LeadId = lead.Id;
+                    await _catalog.SaveChangesAsync();
+                }
+            }
         }
         catch (DbUpdateException ex) when (
             ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg &&
@@ -883,6 +893,16 @@ public class PlatformController : ControllerBase
             // duplo-clique, retry) — em vez de duplicar, devolve o existente.
             _catalog.ChangeTracker.Clear();
             var existente = await _catalog.Leads.FirstAsync(l => l.PlaceId == request.PlaceId);
+            if (request.ProspectCandidateId is Guid candidateId)
+            {
+                var candidate = await _catalog.ProspectCandidates.FirstOrDefaultAsync(c => c.Id == candidateId);
+                if (candidate is not null)
+                {
+                    candidate.Status = ProspectCandidateStatus.Lead;
+                    candidate.LeadId = existente.Id;
+                    await _catalog.SaveChangesAsync();
+                }
+            }
             return Conflict(ToDto(existente));
         }
 

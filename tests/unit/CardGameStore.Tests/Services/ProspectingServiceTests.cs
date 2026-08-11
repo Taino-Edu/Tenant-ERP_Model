@@ -75,4 +75,30 @@ public class ProspectingServiceTests
         var query = ProspectingService.BuildOverpassQuery("roupas", BboxDummy);
         query.Should().Contain("(-21.2,-47.9,-21.1,-47.7)");
     }
+
+    [Fact]
+    public void BuildOverpassQuery_IncluiNodeWayRelationESemLimiteSilencioso()
+    {
+        var query = ProspectingService.BuildOverpassQuery("restaurante", BboxDummy);
+        query.Should().Contain("nwr[\"amenity\"=\"restaurant\"]");
+        query.Should().Contain("out tags center;");
+        query.Should().NotContain("out center 60");
+    }
+
+    [Fact]
+    public void BuildOverpassQuery_QuandoTemAreaAdministrativa_NaoUsaBbox()
+    {
+        var query = ProspectingService.BuildOverpassQuery("roupas", BboxDummy, 3_600_123_456);
+        query.Should().Contain("area(3600123456)->.searchArea;");
+        query.Should().Contain("(area.searchArea)");
+        query.Should().NotContain("(-21.2,-47.9,-21.1,-47.7)");
+    }
+
+    [Fact]
+    public void BuildOverpassQuery_TodosOsNegocios_ConsultaCategoriasAmplias()
+    {
+        var query = ProspectingService.BuildOverpassQuery("Todos os negócios", BboxDummy);
+        query.Should().Contain("shop|amenity|office|craft|tourism|leisure");
+        query.Should().Contain("[\"name\"]");
+    }
 }

@@ -1010,9 +1010,21 @@ export const leadsApi = {
 // ── Prospecção (busca de possíveis clientes — painel da plataforma) ───────────
 
 export interface ProspectCandidateDto {
+  id: string
   placeId: string; nome: string; endereco: string | null; telefone: string | null
   website: string | null
   digitalPresence: LeadDigitalPresence; opportunityScore: number; estimatedRevenueRange: string
+  status: 'New' | 'Selected' | 'Discarded' | 'Lead' | 'Customer' | 'Stale'
+  leadId: string | null; lastSeenAt: string
+}
+
+export interface ProspectingSearchSummaryDto {
+  id: string; categoria: string; cidade: string; source: string; status: string
+  resultCount: number; refreshedAt: string; expiresAt: string; warning: string | null
+}
+
+export interface ProspectingSearchResultDto extends ProspectingSearchSummaryDto {
+  fromCache: boolean; candidates: ProspectCandidateDto[]
 }
 
 export interface ProspectingEnrichResponse {
@@ -1020,6 +1032,7 @@ export interface ProspectingEnrichResponse {
 }
 
 export interface CreateProspectLeadRequest {
+  prospectCandidateId?: string
   nome: string; telefone?: string; placeId?: string
   digitalPresence?: LeadDigitalPresence; opportunityScore?: number
   estimatedRevenueRange?: string; abordagemSugerida?: string
@@ -1130,8 +1143,14 @@ export const referralApi = {
 }
 
 export const prospectingApi = {
-  search: (categoria: string, cidade: string) =>
-    api.post<ProspectCandidateDto[]>('/api/platform/prospecting/search', { categoria, cidade }),
+  search: (categoria: string, cidade: string, forceRefresh = false) =>
+    api.post<ProspectingSearchResultDto>('/api/platform/prospecting/search', { categoria, cidade, forceRefresh }),
+  listSearches: () =>
+    api.get<ProspectingSearchSummaryDto[]>('/api/platform/prospecting/searches'),
+  getSearch: (id: string) =>
+    api.get<ProspectingSearchResultDto>(`/api/platform/prospecting/searches/${id}`),
+  listCategories: () =>
+    api.get<string[]>('/api/platform/prospecting/categories'),
   enrich: (candidate: ProspectCandidateDto, categoria: string) =>
     api.post<ProspectingEnrichResponse>('/api/platform/prospecting/enrich', {
       placeId: candidate.placeId, nome: candidate.nome, endereco: candidate.endereco, categoria,

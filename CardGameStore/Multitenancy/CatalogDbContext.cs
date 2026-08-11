@@ -21,6 +21,8 @@ public class CatalogDbContext : DbContext
     public DbSet<PlatformImpersonationTicket> PlatformImpersonationTickets { get; set; }
     public DbSet<LoginRedirectTicket> LoginRedirectTickets { get; set; }
     public DbSet<Lead> Leads { get; set; }
+    public DbSet<ProspectingSearch> ProspectingSearches { get; set; }
+    public DbSet<ProspectCandidate> ProspectCandidates { get; set; }
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
     public DbSet<TenantCharge> TenantCharges { get; set; }
@@ -193,6 +195,24 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(c => c.DueDate)
                   .HasDatabaseName("ix_tenant_charges_due_date");
+        });
+
+        modelBuilder.Entity<ProspectingSearch>(entity =>
+        {
+            entity.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
+            entity.HasIndex(s => s.CacheKey).IsUnique().HasDatabaseName("ix_prospecting_searches_cache_key");
+            entity.HasIndex(s => s.RefreshedAt).HasDatabaseName("ix_prospecting_searches_refreshed_at");
+        });
+
+        modelBuilder.Entity<ProspectCandidate>(entity =>
+        {
+            entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(20);
+            entity.HasOne(c => c.Search).WithMany(s => s.Candidates).HasForeignKey(c => c.SearchId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(c => new { c.SearchId, c.Source, c.SourceId }).IsUnique()
+                  .HasDatabaseName("ix_prospect_candidates_search_source_unique");
+            entity.HasIndex(c => c.Status).HasDatabaseName("ix_prospect_candidates_status");
+            entity.HasIndex(c => c.LeadId).HasDatabaseName("ix_prospect_candidates_lead_id");
         });
 
         modelBuilder.Entity<ReferralPartner>(entity =>

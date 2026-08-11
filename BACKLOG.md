@@ -28,12 +28,15 @@
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
-  `QA-001`, a suíte completa passou com 750 testes em 1min52s e terminou com
-  zero schemas temporários no PostgreSQL.
+  `QA-001`, a suíte completa passou novamente em 2026-08-11 com 761 testes,
+  zero falhas e zero ignorados.
 - Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões já têm implementação na `main`.
 - Consentimento de cookies versionado, documentos legais, sitemap, robots,
   metadados sociais e bloqueio de indexação das áreas privadas estão na `main`.
+- O primeiro ciclo da nova prospecção foi implementado e validado em 2026-08-11:
+  cache PostgreSQL, histórico retomável, atualização explícita, estados dos
+  candidatos e busca OSM por área administrativa sem limite fixo.
 
 ### Direção recomendada
 
@@ -182,7 +185,7 @@
 
 ### PROS-001 — Pesquisa persistente e espaço de trabalho
 
-- **Estado:** `PRONTO PARA FAZER`
+- **Estado:** `EM EXECUÇÃO` desde 2026-08-11
 - **Problema confirmado:** a tela atual guarda categoria, cidade e resultados
   apenas no estado React. Ao sair, atualizar a página ou iniciar outra busca, o
   trabalho desaparece. O backend não possui cache de prospecção.
@@ -199,13 +202,26 @@
   - seleção em lote, ordenação, filtros e conversão em lead sem perder o
     contexto da pesquisa;
   - deduplicação por fonte/ID, CNPJ, domínio, telefone e nome+endereço.
+- **Entregue neste ciclo:**
+  - tabelas catalogadas `ProspectingSearch` e `ProspectCandidate`, com migração,
+    chave normalizada única, validade de sete dias e proteção contra pesquisas
+    concorrentes duplicadas;
+  - histórico de pesquisas, retomada do snapshot, idade dos dados e botão de
+    atualização forçada na interface;
+  - estados persistentes `New`, `Selected`, `Discarded`, `Lead`, `Customer` e
+    `Stale`, preservando conversões durante novas coletas;
+  - conversão ligada ao candidato e reconciliação automática com leads antigos
+    pelo ID da fonte.
+- **Falta:** favoritos/responsável, filtros e seleção em lote, comandos de
+  selecionar/descartar e deduplicação secundária por CNPJ, domínio, telefone e
+  nome+endereço.
 - **Critério de conclusão:** uma pesquisa pode ser fechada e retomada sem nova
   chamada externa; atualizar preserva decisões anteriores e mostra a idade dos
   dados; nenhum candidato convertido reaparece como novo.
 
 ### PROS-002 — Cobertura completa do OpenStreetMap
 
-- **Estado:** `PRONTO PARA FAZER`
+- **Estado:** `PRONTO PARA FAZER` (primeiro incremento entregue em 2026-08-11)
 - **Problemas confirmados no código atual:**
   - consulta somente `node` e `way`, ignorando `relation`;
   - `out center 60` limita silenciosamente a resposta a 60 elementos;
@@ -222,6 +238,13 @@
     `tourism`, `leisure` e combinações relevantes;
   - total, fonte, cobertura, limite e falhas parciais visíveis na interface;
   - cache obrigatório, atribuição OSM/ODbL e respeito às quotas públicas.
+- **Entregue neste ciclo:** consulta `nwr` (inclui relações), remoção do teto
+  silencioso de 60 resultados, área administrativa do município com fallback
+  para `bbox`, mais segmentos e opção ampla “Todos os negócios”. A interface
+  informa fonte, cache e data da coleta.
+- **Falta:** varredura por quadrantes, taxonomia configurável fora do código,
+  indicador quantitativo de cobertura/resultado parcial e testes de referência
+  por município e segmento.
 - **Critério de conclusão:** testes conhecidos por município/segmento não perdem
   resultados por tipo OSM ou limite fixo, e o operador sabe quando a busca foi
   completa, parcial, cacheada ou atualizada.

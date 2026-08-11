@@ -20,13 +20,16 @@ using System.Text;
 using System.Text.Json;
 using CardGameStore.Common;
 using CardGameStore.DTOs;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Services.Implementations;
 
 public class ProspectingService : IProspectingService
 {
     private const string NominatimUrl = "https://nominatim.openstreetmap.org/search";
+    private static readonly TimeSpan SearchCacheTtl = TimeSpan.FromDays(7);
 
     // Modelos tentados em ordem, com fallback: o Google já aposentou modelo duas
     // vezes na vida deste repo (gemini-2.5-flash virou 404 e derrubou o
@@ -86,6 +89,31 @@ public class ProspectingService : IProspectingService
         ["otica"]        = ("shop", "optician"),
         ["sapataria"]    = ("shop", "shoes"),
         ["calcados"]     = ("shop", "shoes"),
+        ["bar"]          = ("amenity", "bar"),
+        ["lanchonete"]   = ("amenity", "fast_food"),
+        ["cafe"]         = ("amenity", "cafe"),
+        ["pizzaria"]     = ("amenity", "restaurant"),
+        ["hotel"]        = ("tourism", "hotel"),
+        ["pousada"]      = ("tourism", "guest_house"),
+        ["clinica"]      = ("amenity", "clinic"),
+        ["dentista"]     = ("amenity", "dentist"),
+        ["veterinario"]  = ("amenity", "veterinary"),
+        ["oficina"]      = ("shop", "car_repair"),
+        ["autopecas"]    = ("shop", "car_parts"),
+        ["conveniencia"] = ("shop", "convenience"),
+        ["cosmeticos"]   = ("shop", "beauty"),
+        ["beleza"]       = ("shop", "beauty"),
+        ["tatuagem"]     = ("shop", "tattoo"),
+        ["lavanderia"]   = ("shop", "laundry"),
+        ["floricultura"] = ("shop", "florist"),
+        ["brinquedos"]   = ("shop", "toys"),
+        ["informatica"]  = ("shop", "computer"),
+        ["celular"]      = ("shop", "mobile_phone"),
+        ["material de construcao"] = ("shop", "doityourself"),
+        ["construcao"]   = ("shop", "doityourself"),
+        ["contabilidade"] = ("office", "accountant"),
+        ["imobiliaria"]   = ("office", "estate_agent"),
+        ["advocacia"]     = ("office", "lawyer"),
     };
 
     // Assinaturas conhecidas no HTML de plataformas de e-commerce — presença
@@ -102,18 +130,57 @@ public class ProspectingService : IProspectingService
     private readonly IHttpClientFactory       _factory;
     private readonly IConfiguration           _config;
     private readonly ILogger<ProspectingService> _logger;
+    private readonly CatalogDbContext          _catalog;
 
-    public ProspectingService(IHttpClientFactory factory, IConfiguration config, ILogger<ProspectingService> logger)
+    public ProspectingService(IHttpClientFactory factory, IConfiguration config,
+        ILogger<ProspectingService> logger, CatalogDbContext catalog)
     {
         _factory = factory;
         _config  = config;
         _logger  = logger;
+        _catalog = catalog;
     }
 
-    public async Task<List<ProspectCandidateDto>> SearchAsync(string categoria, string cidade)
+    public IReadOnlyList<string> ListSupportedCategories() => CategoriaParaTagOsm.Keys
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x)
+        .ToList();
+
+    public async Task<List<ProspectingSearchSummaryDto>> ListSearchesAsync(int limit = 20) =>
+        await _catalog.ProspectingSearches.AsNoTracking()
+            .OrderByDescending(s => s.RefreshedAt)
+            .Take(limit)
+            .Select(s => new ProspectingSearchSummaryDto
+            {
+                Id = s.Id, Categoria = s.Category, Cidade = s.City, Source = s.Source,
+                Status = s.Status.ToString(), ResultCount = s.ResultCount,
+                RefreshedAt = s.RefreshedAt, ExpiresAt = s.ExpiresAt, Warning = s.Warning,
+            }).ToListAsync();
+
+    public async Task<ProspectingSearchResultDto?> GetSearchAsync(Guid id)
     {
-        var bbox = await GeocodeCityAsync(cidade);
-        var query = BuildOverpassQuery(categoria, bbox);
+        var search = await _catalog.ProspectingSearches.AsNoTracking()
+            .Include(s => s.Candidates).FirstOrDefaultAsync(s => s.Id == id);
+        return search is null ? null : ToResult(search, true);
+    }
+
+    public async Task<ProspectingSearchResultDto> SearchAsync(string categoria, string cidade, bool forceRefresh = false)
+    {
+        categoria = categoria.Trim();
+        cidade = cidade.Trim();
+        var now = DateTime.UtcNow;
+        var cacheKey = NormalizeCacheKey(categoria, cidade);
+
+        var search = await _catalog.ProspectingSearches
+            .Include(s => s.Candidates)
+            .OrderByDescending(s => s.RefreshedAt)
+            .FirstOrDefaultAsync(s => s.CacheKey == cacheKey);
+
+        if (!forceRefresh && search is not null && search.ExpiresAt > now && search.Status != ProspectingSearchStatus.Failed)
+            return ToResult(search, true);
+
+        var location = await ResolveLocationAsync(cidade);
+        var query = BuildOverpassQuery(categoria, location.Bbox, location.AreaId);
         var body = await QueryOverpassWithFallbackAsync(query);
 
         using var doc = JsonDocument.Parse(body);
@@ -171,8 +238,122 @@ public class ProspectingService : IProspectingService
             }
         }));
 
-        return candidates.ToList();
+        var isNewSearch = search is null;
+        search ??= new ProspectingSearch
+        {
+            Category = categoria,
+            City = cidade,
+            CacheKey = cacheKey,
+            CreatedAt = now,
+        };
+        if (_catalog.Entry(search).State == EntityState.Detached)
+            _catalog.ProspectingSearches.Add(search);
+
+        search.Category = categoria;
+        search.City = cidade;
+        search.Status = ProspectingSearchStatus.Completed;
+        search.Warning = null;
+        search.South = location.Bbox.Sul;
+        search.West = location.Bbox.Oeste;
+        search.North = location.Bbox.Norte;
+        search.East = location.Bbox.Leste;
+        search.OsmAreaId = location.AreaId;
+        search.RefreshedAt = now;
+        search.ExpiresAt = now.Add(SearchCacheTtl);
+
+        var sourceIds = candidates.Select(c => c.PlaceId).Distinct().ToList();
+        var existingLeads = await _catalog.Leads.AsNoTracking()
+            .Where(l => l.PlaceId != null && sourceIds.Contains(l.PlaceId))
+            .Select(l => new { l.Id, l.PlaceId, l.Status, l.ConvertedTenantId })
+            .ToListAsync();
+        var leadBySource = existingLeads
+            .Where(l => l.PlaceId is not null)
+            .ToDictionary(l => l.PlaceId!, StringComparer.OrdinalIgnoreCase);
+
+        var existingBySource = search.Candidates.ToDictionary(c => c.SourceId, StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dto in candidates)
+        {
+            seen.Add(dto.PlaceId);
+            if (!existingBySource.TryGetValue(dto.PlaceId, out var entity))
+            {
+                entity = new ProspectCandidate { Search = search, SearchId = search.Id, SourceId = dto.PlaceId, FirstSeenAt = now };
+                search.Candidates.Add(entity);
+            }
+
+            entity.Name = dto.Nome;
+            entity.Address = dto.Endereco;
+            entity.Phone = dto.Telefone;
+            entity.Website = dto.Website;
+            entity.DigitalPresence = dto.DigitalPresence;
+            entity.OpportunityScore = dto.OpportunityScore;
+            entity.EstimatedRevenueRange = dto.EstimatedRevenueRange;
+            entity.LastSeenAt = now;
+            if (leadBySource.TryGetValue(dto.PlaceId, out var lead))
+            {
+                entity.LeadId = lead.Id;
+                entity.Status = lead.ConvertedTenantId.HasValue || lead.Status == LeadStatus.Convertido
+                    ? ProspectCandidateStatus.Customer
+                    : ProspectCandidateStatus.Lead;
+            }
+            else if (entity.Status == ProspectCandidateStatus.Stale)
+                entity.Status = ProspectCandidateStatus.New;
+        }
+
+        foreach (var missing in search.Candidates.Where(c => !seen.Contains(c.SourceId) &&
+                     c.Status is ProspectCandidateStatus.New or ProspectCandidateStatus.Selected))
+            missing.Status = ProspectCandidateStatus.Stale;
+
+        search.ResultCount = search.Candidates.Count(c => c.Status != ProspectCandidateStatus.Stale);
+        try
+        {
+            await _catalog.SaveChangesAsync();
+        }
+        catch (DbUpdateException) when (isNewSearch)
+        {
+            // Duas requisições iguais podem terminar a consulta externa ao mesmo
+            // tempo. O índice único decide a vencedora; a outra devolve o mesmo
+            // snapshot persistido em vez de criar uma pesquisa duplicada.
+            _catalog.ChangeTracker.Clear();
+            var concurrentSearch = await _catalog.ProspectingSearches.AsNoTracking()
+                .Include(s => s.Candidates)
+                .FirstOrDefaultAsync(s => s.CacheKey == cacheKey);
+            if (concurrentSearch is not null)
+                return ToResult(concurrentSearch, true);
+            throw;
+        }
+        return ToResult(search, false);
     }
+
+    private static string NormalizeCacheKey(string category, string city)
+    {
+        static string Normalize(string value)
+        {
+            var decomposed = value.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+            return string.Concat(decomposed.Where(c =>
+                System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark))
+                .Normalize(NormalizationForm.FormC);
+        }
+        return $"{Normalize(city)}|{Normalize(category)}";
+    }
+
+    private static ProspectingSearchResultDto ToResult(ProspectingSearch search, bool fromCache) => new()
+    {
+        Id = search.Id, Categoria = search.Category, Cidade = search.City,
+        Source = search.Source, Status = search.Status.ToString(), ResultCount = search.ResultCount,
+        RefreshedAt = search.RefreshedAt, ExpiresAt = search.ExpiresAt,
+        Warning = search.Warning, FromCache = fromCache,
+        Candidates = search.Candidates.OrderByDescending(c => c.OpportunityScore).ThenBy(c => c.Name)
+            .Select(ToDto).ToList(),
+    };
+
+    private static ProspectCandidateDto ToDto(ProspectCandidate c) => new()
+    {
+        Id = c.Id, PlaceId = c.SourceId, Nome = c.Name, Endereco = c.Address,
+        Telefone = c.Phone, Website = c.Website, DigitalPresence = c.DigitalPresence,
+        OpportunityScore = c.OpportunityScore, EstimatedRevenueRange = c.EstimatedRevenueRange,
+        Status = c.Status.ToString(), LeadId = c.LeadId, LastSeenAt = c.LastSeenAt,
+    };
 
     /// <summary>Tenta cada instância pública do Overpass em ordem até uma
     /// responder com sucesso — a instância principal (overpass-api.de) é de
@@ -207,13 +388,33 @@ public class ProspectingService : IProspectingService
         throw new InvalidOperationException("Falha ao buscar no OpenStreetMap — tenta de novo em instantes.");
     }
 
-    /// <summary>Resolve "cidade, UF" pra um bounding box [sul, oeste, norte,
-    /// leste] via Nominatim (geocodificador do OSM) — necessário porque o
-    /// Overpass busca por coordenadas, não por nome de cidade.</summary>
-    private async Task<(double Sul, double Oeste, double Norte, double Leste)> GeocodeCityAsync(string cidade)
+    private sealed record ResolvedLocation(
+        (double Sul, double Oeste, double Norte, double Leste) Bbox,
+        long? AreaId);
+
+    /// <summary>Reaproveita a geocodificação de qualquer pesquisa anterior na
+    /// mesma cidade. Isso evita chamar o Nominatim uma vez por categoria e
+    /// cumpre a exigência de cache da instância pública.</summary>
+    private async Task<ResolvedLocation> ResolveLocationAsync(string cidade)
+    {
+        var normalizedCity = NormalizeCacheKey("", cidade).Split('|')[0];
+        var previous = (await _catalog.ProspectingSearches.AsNoTracking()
+                .Where(s => s.South != 0 && s.North != 0)
+                .OrderByDescending(s => s.RefreshedAt)
+                .ToListAsync())
+            .FirstOrDefault(s => NormalizeCacheKey("", s.City).StartsWith(normalizedCity + "|", StringComparison.Ordinal));
+
+        return previous is not null
+            ? new ResolvedLocation((previous.South, previous.West, previous.North, previous.East), previous.OsmAreaId)
+            : await GeocodeCityAsync(cidade);
+    }
+
+    /// <summary>Resolve "cidade, UF" para a área administrativa do OSM e um
+    /// bounding box de fallback.</summary>
+    private async Task<ResolvedLocation> GeocodeCityAsync(string cidade)
     {
         var client = _factory.CreateClient("osm");
-        var url = $"{NominatimUrl}?q={Uri.EscapeDataString(cidade)}&format=json&limit=1";
+        var url = $"{NominatimUrl}?q={Uri.EscapeDataString(cidade)}&format=json&addressdetails=1&limit=1";
         var response = await client.GetAsync(url);
 
         if (!response.IsSuccessStatusCode)
@@ -230,10 +431,17 @@ public class ProspectingService : IProspectingService
         var norte = double.Parse(bbox[1].GetString()!, culture);
         var oeste = double.Parse(bbox[2].GetString()!, culture);
         var leste = double.Parse(bbox[3].GetString()!, culture);
-        return (sul, oeste, norte, leste);
+        long? areaId = null;
+        var result = doc.RootElement[0];
+        if (result.TryGetProperty("osm_type", out var type) && type.GetString() == "relation" &&
+            result.TryGetProperty("osm_id", out var id))
+            areaId = 3_600_000_000L + id.GetInt64();
+
+        return new ResolvedLocation((sul, oeste, norte, leste), areaId);
     }
 
-    internal static string BuildOverpassQuery(string categoria, (double Sul, double Oeste, double Norte, double Leste) bbox)
+    internal static string BuildOverpassQuery(string categoria,
+        (double Sul, double Oeste, double Norte, double Leste) bbox, long? areaId = null)
     {
         // Overpass QL espera bbox na ordem (sul,oeste,norte,leste) — inverter
         // norte/oeste aqui faz o Overpass ler uma longitude no lugar da
@@ -246,21 +454,35 @@ public class ProspectingService : IProspectingService
                       $"{bbox.Leste.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
 
         var tag = ResolveTagOsm(categoria);
-        var filtro = tag is { } t
+        var normalized = categoria.Trim().ToLowerInvariant();
+        var filtro = normalized is "todos" or "todos os negocios" or "todos os negócios"
+            ? "[~\"^(shop|amenity|office|craft|tourism|leisure)$\"~\".\"][\"name\"]"
+            : tag is { } t
             ? $"[\"{t.Tag}\"=\"{t.Value}\"]"
             // Fallback: nenhuma palavra da frase bateu com o dicionário, busca
             // qualquer comércio/serviço cujo nome contenha o termo buscado.
-            : $"[~\"^(shop|amenity|office)$\"~\".\"][\"name\"~\"{categoria.Trim()}\",i]";
+            : $"[~\"^(shop|amenity|office|craft|tourism|leisure)$\"~\".\"][\"name\"~\"{EscapeOverpassRegex(categoria.Trim())}\",i]";
+
+        var scope = areaId.HasValue ? "(area.searchArea)" : $"({bboxStr})";
+        var areaDeclaration = areaId.HasValue ? $"area({areaId.Value})->.searchArea;" : string.Empty;
 
         return $"""
             [out:json][timeout:25];
-            (
-              node{filtro}({bboxStr});
-              way{filtro}({bboxStr});
-            );
-            out center 60;
+            {areaDeclaration}
+            nwr{filtro}{scope};
+            out tags center;
             """;
     }
+
+    private static string EscapeOverpassRegex(string value) => value
+        .Replace("\\", "\\\\", StringComparison.Ordinal)
+        .Replace("\"", "\\\"", StringComparison.Ordinal)
+        .Replace("[", "\\[", StringComparison.Ordinal)
+        .Replace("]", "\\]", StringComparison.Ordinal)
+        .Replace("(", "\\(", StringComparison.Ordinal)
+        .Replace(")", "\\)", StringComparison.Ordinal)
+        .Replace("{", "\\{", StringComparison.Ordinal)
+        .Replace("}", "\\}", StringComparison.Ordinal);
 
     /// <summary>Acha o tag OSM pra categoria digitada: primeiro tenta a frase
     /// inteira (ex: "petshop"), depois cada palavra isolada (ex: "loja de

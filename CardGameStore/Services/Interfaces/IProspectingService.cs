@@ -9,7 +9,13 @@ public interface IProspectingService
     /// score, faixa de faturamento) sem gastar IA. Lança ArgumentException se
     /// a cidade não for encontrada, ou InvalidOperationException se o
     /// Overpass/Nominatim falhar.</summary>
-    Task<List<ProspectCandidateDto>> SearchAsync(string categoria, string cidade);
+    Task<ProspectingSearchResultDto> SearchAsync(string categoria, string cidade, bool forceRefresh = false);
+
+    Task<List<ProspectingSearchSummaryDto>> ListSearchesAsync(int limit = 20);
+
+    Task<ProspectingSearchResultDto?> GetSearchAsync(Guid id);
+
+    IReadOnlyList<string> ListSupportedCategories();
 
     /// <summary>Enriquece um candidato específico via Gemini (chave dedicada de
     /// prospecção, separada da usada pelo Assistente de IA das lojas) — gera
