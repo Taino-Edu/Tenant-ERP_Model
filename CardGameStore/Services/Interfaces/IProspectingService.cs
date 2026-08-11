@@ -19,8 +19,8 @@ public interface IProspectingService
 
     /// <summary>Enriquece um candidato específico via Gemini (chave dedicada de
     /// prospecção, separada da usada pelo Assistente de IA das lojas) — gera
-    /// uma faixa de faturamento mais fina e uma sugestão de abordagem
-    /// personalizada. Só roda quando chamado explicitamente (nunca automático
-    /// durante a busca, pra não gastar IA à toa).</summary>
+    /// somente uma sugestão de abordagem personalizada. Dados empresariais e
+    /// financeiros não são inventados pela IA. Só roda quando chamado
+    /// explicitamente (nunca automático durante a busca).</summary>
     Task<ProspectingEnrichResponse> EnrichWithAiAsync(ProspectingEnrichRequest request);
 }

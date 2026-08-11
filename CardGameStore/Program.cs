@@ -464,11 +464,13 @@ builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddScoped<IPublicSalesAssistantService, PublicSalesAssistantService>();
 builder.Services.AddScoped<IProspectingService,  ProspectingService>();
+builder.Services.AddScoped<IProspectingCampaignService, ProspectingCampaignService>();
 builder.Services.AddScoped<IPlatformBillingService, PlatformBillingService>();
 builder.Services.AddScoped<IReferralCommissionService, ReferralCommissionService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
 builder.Services.AddScoped<IFinanceiroCalculoService, FinanceiroCalculoService>();
 builder.Services.AddHostedService<FechamentoBackgroundService>();
+builder.Services.AddHostedService<ProspectingBotBackgroundService>();
 builder.Services.AddSingleton<CurrencyService>();
 builder.Services.AddMemoryCache();
 

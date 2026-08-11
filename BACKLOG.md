@@ -28,7 +28,7 @@
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
-  `QA-001`, a suíte completa passou novamente em 2026-08-11 com 761 testes,
+  `QA-001`, a suíte completa passou novamente em 2026-08-11 com 765 testes,
   zero falhas e zero ignorados.
 - Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões já têm implementação na `main`.
@@ -37,6 +37,9 @@
 - O primeiro ciclo da nova prospecção foi implementado e validado em 2026-08-11:
   cache PostgreSQL, histórico retomável, atualização explícita, estados dos
   candidatos e busca OSM por área administrativa sem limite fixo.
+- O bot interno de captação entrou no segundo ciclo em 2026-08-11: campanhas
+  agendadas, execuções auditáveis, pausa/retomada, fila de revisão humana e
+  enriquecimento incremental persistente já estão implementados.
 
 ### Direção recomendada
 
@@ -185,7 +188,7 @@
 
 ### PROS-001 — Pesquisa persistente e espaço de trabalho
 
-- **Estado:** `EM EXECUÇÃO` desde 2026-08-11
+- **Estado:** `PRONTO PARA FAZER` (fundação entregue; complementos pendentes)
 - **Problema confirmado:** a tela atual guarda categoria, cidade e resultados
   apenas no estado React. Ao sair, atualizar a página ou iniciar outra busca, o
   trabalho desaparece. O backend não possui cache de prospecção.
@@ -251,7 +254,7 @@
 
 ### PROS-003 — Enriquecimento gratuito, verificável e multi-fonte
 
-- **Estado:** `PRONTO PARA FAZER`
+- **Estado:** `PRONTO PARA FAZER` (primeiro incremento entregue em 2026-08-11)
 - **Depende de:** `PROS-001`, `PROS-002` e definição inicial de segmentos/UFs.
 - **Fontes e ferramentas para o desenho inicial:**
   - dados abertos mensais do CNPJ/Receita Federal, filtrados por situação ativa,
@@ -267,12 +270,19 @@
 - **Regras:** não usar IA para inventar faturamento, porte, contato ou CNPJ;
   separar `observado`, `derivado` e `estimado`, sempre com fonte, data e
   confiança; não importar QSA/CPF para prospecção.
+- **Entregue neste ciclo:** cada candidato passou a guardar estado, data, fonte
+  e confiança do enriquecimento. Novas coletas OSM/site atualizam o snapshot;
+  o enriquecimento de abordagem sob demanda também fica persistido e reaparece
+  na fila de captação.
+- **Falta:** observações versionadas por campo, extrator governado de site,
+  integração com recortes públicos CNPJ/IBGE e proteção explícita para dados
+  corrigidos manualmente.
 - **Critério de conclusão:** cada campo enriquecido mostra origem e atualização;
   o score é explicável; correções manuais sobrevivem à sincronização.
 
 ### PROS-004 — Bot pesquisador e qualificador com revisão humana
 
-- **Estado:** `BLOQUEADO`
+- **Estado:** `EM EXECUÇÃO` desde 2026-08-11
 - **Depende de:** `PROS-001` a `PROS-003`, `CRM-001`, política de privacidade da
   prospecção e teste de balanceamento de legítimo interesse.
 - **Escopo recomendado:** job interno usando `BackgroundService`/fila existente,
@@ -286,6 +296,19 @@
 - **Não fazer:** contato automático em massa, WhatsApp não oficial, scraping de
   fontes que proíbem automação, compra de listas, coleta de dados sensíveis ou
   reprocessamento de quem pediu oposição/descadastro.
+- **Entregue neste ciclo:**
+  - `BackgroundService` `.NET` com campanhas por cidade/segmento, frequência,
+    pausa/ativação, execução manual e limite de candidatos priorizados;
+  - fila persistente, trava contra execução concorrente da mesma campanha e
+    histórico com início, término, resultado, novos candidatos e falha;
+  - consumo deliberadamente serializado em uma campanha por minuto, mantendo
+    cache e fallback das fontes já existentes;
+  - fila de captação na interface, atualizada periodicamente, onde o operador
+    enriquece e aprova a conversão em lead;
+  - nenhuma criação de lead ou contato automático pelo worker.
+- **Falta:** lista de oposição, orçamento por fonte, política/legal validada,
+  tentativas com backoff configurável, responsável sugerido, notificações e
+  auditoria de alterações por campo.
 - **Critério de conclusão:** execução idempotente, auditável, com orçamento,
   quotas, lista de oposição, proveniência e aprovação humana demonstrados.
 

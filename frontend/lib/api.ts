@@ -1015,7 +1015,10 @@ export interface ProspectCandidateDto {
   website: string | null
   digitalPresence: LeadDigitalPresence; opportunityScore: number; estimatedRevenueRange: string
   status: 'New' | 'Selected' | 'Discarded' | 'Lead' | 'Customer' | 'Stale'
-  leadId: string | null; lastSeenAt: string
+  leadId: string | null; firstSeenAt: string; lastSeenAt: string
+  enrichmentStatus: 'Pending' | 'Updated' | 'Failed'
+  lastEnrichedAt: string | null; enrichmentSource: string | null
+  enrichmentConfidence: number | null; suggestedApproach: string | null
 }
 
 export interface ProspectingSearchSummaryDto {
@@ -1092,6 +1095,24 @@ export const platformBillingApi = {
     api.put<TenantChargeDto>(`/api/platform/billing/cobrancas/${id}/pagamento`, { pagoEm }),
 }
 
+export interface ProspectingCampaignRunDto {
+  id: string; status: 'Queued' | 'Running' | 'Completed' | 'Failed'
+  searchId: string | null; discoveredCount: number; newCount: number
+  startedAt: string | null; completedAt: string | null; error: string | null
+}
+
+export interface ProspectingCampaignDto {
+  id: string; name: string; categoria: string; cidade: string
+  status: 'Active' | 'Paused'; intervalHours: number; maxCandidatesPerRun: number
+  nextRunAt: string; lastRunAt: string | null; lastError: string | null
+  recentRuns: ProspectingCampaignRunDto[]
+}
+
+export interface CreateProspectingCampaignRequest {
+  name: string; categoria: string; cidade: string
+  intervalHours: number; maxCandidatesPerRun: number
+}
+
 // ── Indicações e comissões da plataforma ────────────────────────────────────
 export interface ReferralSummaryDto {
   activePartners: number; referredClients: number; pendingAmount: number
@@ -1151,9 +1172,19 @@ export const prospectingApi = {
     api.get<ProspectingSearchResultDto>(`/api/platform/prospecting/searches/${id}`),
   listCategories: () =>
     api.get<string[]>('/api/platform/prospecting/categories'),
+  listCampaigns: () =>
+    api.get<ProspectingCampaignDto[]>('/api/platform/prospecting/campaigns'),
+  createCampaign: (request: CreateProspectingCampaignRequest) =>
+    api.post<ProspectingCampaignDto>('/api/platform/prospecting/campaigns', request),
+  runCampaign: (id: string) =>
+    api.post<ProspectingCampaignRunDto>(`/api/platform/prospecting/campaigns/${id}/run`),
+  setCampaignActive: (id: string, active: boolean) =>
+    api.patch(`/api/platform/prospecting/campaigns/${id}/status`, { active }),
+  reviewQueue: (limit = 100) =>
+    api.get<ProspectCandidateDto[]>('/api/platform/prospecting/campaigns/review-queue', { params: { limit } }),
   enrich: (candidate: ProspectCandidateDto, categoria: string) =>
     api.post<ProspectingEnrichResponse>('/api/platform/prospecting/enrich', {
-      placeId: candidate.placeId, nome: candidate.nome, endereco: candidate.endereco, categoria,
+      candidateId: candidate.id, placeId: candidate.placeId, nome: candidate.nome, endereco: candidate.endereco, categoria,
       digitalPresence: candidate.digitalPresence,
     }),
   createLead: (req: CreateProspectLeadRequest) =>

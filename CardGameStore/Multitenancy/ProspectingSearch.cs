@@ -74,6 +74,13 @@ public enum ProspectCandidateStatus
     Stale,
 }
 
+public enum ProspectEnrichmentStatus
+{
+    Pending,
+    Updated,
+    Failed,
+}
+
 [Table("prospect_candidates")]
 public class ProspectCandidate
 {
@@ -121,6 +128,21 @@ public class ProspectCandidate
 
     [Column("last_seen_at")]
     public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
+
+    [Column("enrichment_status")]
+    public ProspectEnrichmentStatus EnrichmentStatus { get; set; } = ProspectEnrichmentStatus.Pending;
+
+    [Column("last_enriched_at")]
+    public DateTime? LastEnrichedAt { get; set; }
+
+    [MaxLength(80), Column("enrichment_source")]
+    public string? EnrichmentSource { get; set; }
+
+    [Range(0, 100), Column("enrichment_confidence")]
+    public int? EnrichmentConfidence { get; set; }
+
+    [MaxLength(2000), Column("suggested_approach")]
+    public string? SuggestedApproach { get; set; }
 
     public ProspectingSearch Search { get; set; } = null!;
 }

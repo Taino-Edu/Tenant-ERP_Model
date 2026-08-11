@@ -289,6 +289,12 @@ public class ProspectingService : IProspectingService
             entity.OpportunityScore = dto.OpportunityScore;
             entity.EstimatedRevenueRange = dto.EstimatedRevenueRange;
             entity.LastSeenAt = now;
+            entity.EnrichmentStatus = ProspectEnrichmentStatus.Updated;
+            entity.LastEnrichedAt = now;
+            entity.EnrichmentSource = string.IsNullOrWhiteSpace(dto.Website)
+                ? "OpenStreetMap"
+                : "OpenStreetMap;WebsiteCheck";
+            entity.EnrichmentConfidence = CalculateEnrichmentConfidence(dto);
             if (leadBySource.TryGetValue(dto.PlaceId, out var lead))
             {
                 entity.LeadId = lead.Id;
@@ -352,8 +358,20 @@ public class ProspectingService : IProspectingService
         Id = c.Id, PlaceId = c.SourceId, Nome = c.Name, Endereco = c.Address,
         Telefone = c.Phone, Website = c.Website, DigitalPresence = c.DigitalPresence,
         OpportunityScore = c.OpportunityScore, EstimatedRevenueRange = c.EstimatedRevenueRange,
-        Status = c.Status.ToString(), LeadId = c.LeadId, LastSeenAt = c.LastSeenAt,
+        Status = c.Status.ToString(), LeadId = c.LeadId, FirstSeenAt = c.FirstSeenAt,
+        LastSeenAt = c.LastSeenAt, EnrichmentStatus = c.EnrichmentStatus.ToString(),
+        LastEnrichedAt = c.LastEnrichedAt, EnrichmentSource = c.EnrichmentSource,
+        EnrichmentConfidence = c.EnrichmentConfidence, SuggestedApproach = c.SuggestedApproach,
     };
+
+    private static int CalculateEnrichmentConfidence(ProspectCandidateDto candidate)
+    {
+        var confidence = 45;
+        if (!string.IsNullOrWhiteSpace(candidate.Endereco)) confidence += 15;
+        if (!string.IsNullOrWhiteSpace(candidate.Telefone)) confidence += 20;
+        if (!string.IsNullOrWhiteSpace(candidate.Website)) confidence += 20;
+        return Math.Min(confidence, 100);
+    }
 
     /// <summary>Tenta cada instância pública do Overpass em ordem até uma
     /// responder com sucesso — a instância principal (overpass-api.de) é de
@@ -614,6 +632,10 @@ public class ProspectingService : IProspectingService
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException("ProspectingSettings:GeminiApiKey não configurada.");
 
+        var persistedCandidate = request.CandidateId is Guid candidateId
+            ? await _catalog.ProspectCandidates.FirstOrDefaultAsync(c => c.Id == candidateId)
+            : null;
+
         var prompt = $$"""
             Você está analisando um possível cliente para uma plataforma de ERP/PDV pra lojas e varejo.
             Dados públicos do negócio (do OpenStreetMap, não invente nada além disso):
@@ -622,8 +644,9 @@ public class ProspectingService : IProspectingService
             - Endereço: {{request.Endereco ?? "não informado"}}
             - Presença digital: {{request.DigitalPresence}}
 
+            Não estime faturamento, porte, CNPJ ou qualquer dado ausente.
             Responda em JSON estrito, sem markdown, só o objeto:
-            {"estimatedRevenueRange": "faixa curta tipo 'R$20-50k/mês' (máximo 50 caracteres, SEM explicação junto)", "abordagemSugerida": "2-3 frases de como abordar esse lead especificamente, mencionando o que a plataforma resolveria pra esse tipo de negócio"}
+            {"abordagemSugerida": "2-3 frases de como abordar esse lead especificamente, mencionando apenas o que os dados informados sustentam e o que a plataforma resolveria pra esse tipo de negócio"}
             """;
 
         var rawJson = await CallGeminiWithFallbackAsync(prompt, apiKey);
@@ -642,22 +665,29 @@ public class ProspectingService : IProspectingService
         try
         {
             using var parsed = JsonDocument.Parse(text);
-            var revenueRange = parsed.RootElement.GetProperty("estimatedRevenueRange").GetString() ?? "";
-
-            // Lead.EstimatedRevenueRange tem limite de 60 caracteres — a IA às
-            // vezes ignora o pedido de resposta curta e manda a explicação
-            // junto. Em vez de deixar a confirmação do lead falhar depois por
-            // causa disso, cai pra heurística sem IA (que já respeita o limite).
-            // Sem os sinais de completude aqui (não persistidos na request),
-            // usa o pior caso como fallback conservador.
-            if (revenueRange.Length > 60)
-                revenueRange = EstimateRevenueRangeHeuristic(false, false, false);
-
-            return new ProspectingEnrichResponse
+            var result = new ProspectingEnrichResponse
             {
-                EstimatedRevenueRange = revenueRange,
+                // A IA não cria dado financeiro. Mantemos a heurística
+                // determinística e explicitamente rotulada que já estava salva.
+                EstimatedRevenueRange = persistedCandidate?.EstimatedRevenueRange
+                    ?? EstimateRevenueRangeHeuristic(false, false, false),
                 AbordagemSugerida     = parsed.RootElement.GetProperty("abordagemSugerida").GetString() ?? "",
             };
+
+            if (persistedCandidate is not null)
+            {
+                persistedCandidate.SuggestedApproach = result.AbordagemSugerida;
+                persistedCandidate.EnrichmentStatus = ProspectEnrichmentStatus.Updated;
+                persistedCandidate.LastEnrichedAt = DateTime.UtcNow;
+                persistedCandidate.EnrichmentSource = string.IsNullOrWhiteSpace(persistedCandidate.EnrichmentSource)
+                        ? "Gemini"
+                        : persistedCandidate.EnrichmentSource.Contains("Gemini", StringComparison.Ordinal)
+                            ? persistedCandidate.EnrichmentSource
+                            : $"{persistedCandidate.EnrichmentSource};Gemini";
+                await _catalog.SaveChangesAsync();
+            }
+
+            return result;
         }
         catch (JsonException ex)
         {

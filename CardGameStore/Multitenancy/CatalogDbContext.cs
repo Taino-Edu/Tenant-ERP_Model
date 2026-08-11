@@ -23,6 +23,8 @@ public class CatalogDbContext : DbContext
     public DbSet<Lead> Leads { get; set; }
     public DbSet<ProspectingSearch> ProspectingSearches { get; set; }
     public DbSet<ProspectCandidate> ProspectCandidates { get; set; }
+    public DbSet<ProspectingCampaign> ProspectingCampaigns { get; set; }
+    public DbSet<ProspectingCampaignRun> ProspectingCampaignRuns { get; set; }
     public DbSet<SupportTicket> SupportTickets { get; set; }
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
     public DbSet<TenantCharge> TenantCharges { get; set; }
@@ -207,12 +209,32 @@ public class CatalogDbContext : DbContext
         modelBuilder.Entity<ProspectCandidate>(entity =>
         {
             entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(c => c.EnrichmentStatus).HasConversion<string>().HasMaxLength(20);
             entity.HasOne(c => c.Search).WithMany(s => s.Candidates).HasForeignKey(c => c.SearchId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(c => new { c.SearchId, c.Source, c.SourceId }).IsUnique()
                   .HasDatabaseName("ix_prospect_candidates_search_source_unique");
             entity.HasIndex(c => c.Status).HasDatabaseName("ix_prospect_candidates_status");
             entity.HasIndex(c => c.LeadId).HasDatabaseName("ix_prospect_candidates_lead_id");
+        });
+
+        modelBuilder.Entity<ProspectingCampaign>(entity =>
+        {
+            entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(20);
+            entity.HasIndex(c => new { c.Status, c.NextRunAt })
+                  .HasDatabaseName("ix_prospecting_campaigns_due");
+        });
+
+        modelBuilder.Entity<ProspectingCampaignRun>(entity =>
+        {
+            entity.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
+            entity.HasOne(r => r.Campaign).WithMany(c => c.Runs).HasForeignKey(r => r.CampaignId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(r => new { r.Status, r.CreatedAt })
+                  .HasDatabaseName("ix_prospecting_campaign_runs_queue");
+            entity.HasIndex(r => r.CampaignId).IsUnique()
+                  .HasFilter("\"status\" IN ('Queued', 'Running')")
+                  .HasDatabaseName("ix_prospecting_campaign_runs_active_unique");
         });
 
         modelBuilder.Entity<ReferralPartner>(entity =>

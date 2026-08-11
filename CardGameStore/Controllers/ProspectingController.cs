@@ -20,11 +20,14 @@ namespace CardGameStore.Controllers;
 public class ProspectingController : ControllerBase
 {
     private readonly IProspectingService _prospecting;
+    private readonly IProspectingCampaignService _campaigns;
     private readonly ILogger<ProspectingController> _logger;
 
-    public ProspectingController(IProspectingService prospecting, ILogger<ProspectingController> logger)
+    public ProspectingController(IProspectingService prospecting,
+        IProspectingCampaignService campaigns, ILogger<ProspectingController> logger)
     {
         _prospecting = prospecting;
+        _campaigns = campaigns;
         _logger      = logger;
     }
 
@@ -64,9 +67,38 @@ public class ProspectingController : ControllerBase
     [HttpGet("categories")]
     public IActionResult ListCategories() => Ok(_prospecting.ListSupportedCategories());
 
-    /// <summary>Enriquece um candidato específico via Gemini (chave dedicada de
-    /// prospecção) — gera faixa de faturamento mais fina e sugestão de
-    /// abordagem. Só roda quando pedido explicitamente, nunca em massa.</summary>
+    [HttpGet("campaigns")]
+    public async Task<IActionResult> ListCampaigns(CancellationToken ct) =>
+        Ok(await _campaigns.ListAsync(ct));
+
+    [HttpPost("campaigns")]
+    public async Task<IActionResult> CreateCampaign(
+        [FromBody] CreateProspectingCampaignRequest request, CancellationToken ct)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var campaign = await _campaigns.CreateAsync(request, ct);
+        return CreatedAtAction(nameof(ListCampaigns), new { id = campaign.Id }, campaign);
+    }
+
+    [HttpPost("campaigns/{id:guid}/run")]
+    public async Task<IActionResult> RunCampaign(Guid id, CancellationToken ct)
+    {
+        var run = await _campaigns.EnqueueAsync(id, ct);
+        return run is null ? NotFound() : Accepted(run);
+    }
+
+    [HttpPatch("campaigns/{id:guid}/status")]
+    public async Task<IActionResult> SetCampaignStatus(Guid id,
+        [FromBody] SetProspectingCampaignStatusRequest request, CancellationToken ct) =>
+        await _campaigns.SetActiveAsync(id, request.Active, ct) ? NoContent() : NotFound();
+
+    [HttpGet("campaigns/review-queue")]
+    public async Task<IActionResult> ReviewQueue([FromQuery] int limit = 100, CancellationToken ct = default) =>
+        Ok(await _campaigns.ListReviewQueueAsync(Math.Clamp(limit, 1, 500), ct));
+
+    /// <summary>Gera sob demanda uma sugestão de abordagem via Gemini e a
+    /// persiste no candidato. A IA não cria nem altera dados empresariais ou
+    /// financeiros observados.</summary>
     [HttpPost("enrich")]
     public async Task<IActionResult> Enrich([FromBody] ProspectingEnrichRequest request)
     {

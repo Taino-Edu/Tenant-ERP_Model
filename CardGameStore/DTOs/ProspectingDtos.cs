@@ -69,11 +69,19 @@ public class ProspectCandidateDto
     public string  EstimatedRevenueRange { get; set; } = string.Empty;
     public string  Status                { get; set; } = "New";
     public Guid?   LeadId                { get; set; }
+    public DateTime FirstSeenAt          { get; set; }
     public DateTime LastSeenAt           { get; set; }
+    public string  EnrichmentStatus      { get; set; } = "Pending";
+    public DateTime? LastEnrichedAt      { get; set; }
+    public string? EnrichmentSource      { get; set; }
+    public int?    EnrichmentConfidence  { get; set; }
+    public string? SuggestedApproach     { get; set; }
 }
 
 public class ProspectingEnrichRequest
 {
+    public Guid? CandidateId { get; set; }
+
     [Required]
     public string PlaceId { get; set; } = string.Empty;
 
@@ -88,6 +96,56 @@ public class ProspectingEnrichRequest
 
     [Required, MaxLength(20)]
     public string DigitalPresence { get; set; } = string.Empty;
+}
+
+public class CreateProspectingCampaignRequest
+{
+    [Required, MaxLength(120)]
+    public string Name { get; set; } = string.Empty;
+
+    [Required, MaxLength(100)]
+    public string Categoria { get; set; } = string.Empty;
+
+    [Required, MaxLength(100)]
+    public string Cidade { get; set; } = string.Empty;
+
+    [Range(6, 720)]
+    public int IntervalHours { get; set; } = 168;
+
+    [Range(1, 1000)]
+    public int MaxCandidatesPerRun { get; set; } = 200;
+}
+
+public class ProspectingCampaignDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Categoria { get; set; } = string.Empty;
+    public string Cidade { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int IntervalHours { get; set; }
+    public int MaxCandidatesPerRun { get; set; }
+    public DateTime NextRunAt { get; set; }
+    public DateTime? LastRunAt { get; set; }
+    public string? LastError { get; set; }
+    public List<ProspectingCampaignRunDto> RecentRuns { get; set; } = [];
+}
+
+public class ProspectingCampaignRunDto
+{
+    public Guid Id { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public Guid? SearchId { get; set; }
+    public int DiscoveredCount { get; set; }
+    public int NewCount { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public string? Error { get; set; }
+}
+
+public class SetProspectingCampaignStatusRequest
+{
+    public bool Active { get; set; }
 }
 
 public class ProspectingEnrichResponse
