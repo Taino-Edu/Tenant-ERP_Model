@@ -86,7 +86,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_Sucesso_DeveDecrementarEstoqueERetornarDto()
     {
-        var db = CreateDb(nameof(Register_Sucesso_DeveDecrementarEstoqueERetornarDto));
+        using var db = CreateDb(nameof(Register_Sucesso_DeveDecrementarEstoqueERetornarDto));
         var product = await SeedProductAsync(db, priceInCents: 2000, stock: 5);
         var service  = CreateService(db);
         var request  = new VendaAvulsaRequest
@@ -111,7 +111,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_ComClientName_DevePreservarNomeNoDto()
     {
-        var db = CreateDb(nameof(Register_ComClientName_DevePreservarNomeNoDto));
+        using var db = CreateDb(nameof(Register_ComClientName_DevePreservarNomeNoDto));
         var product = await SeedProductAsync(db);
         var service   = CreateService(db);
         var resultado = await service.RegisterAsync(new VendaAvulsaRequest
@@ -127,7 +127,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_SemClientName_DeveSetarNuloNoDto()
     {
-        var db = CreateDb(nameof(Register_SemClientName_DeveSetarNuloNoDto));
+        using var db = CreateDb(nameof(Register_SemClientName_DeveSetarNuloNoDto));
         var product = await SeedProductAsync(db);
         var service   = CreateService(db);
         var resultado = await service.RegisterAsync(new VendaAvulsaRequest
@@ -143,7 +143,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_MultiplosProdutos_DeveSomarTotalCorretamente()
     {
-        var db = CreateDb(nameof(Register_MultiplosProdutos_DeveSomarTotalCorretamente));
+        using var db = CreateDb(nameof(Register_MultiplosProdutos_DeveSomarTotalCorretamente));
         var p1 = await SeedProductAsync(db, "Produto A", priceInCents: 1000, stock: 5);
         var p2 = await SeedProductAsync(db, "Produto B", priceInCents: 500,  stock: 5);
         var service   = CreateService(db);
@@ -168,7 +168,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_DevePersistirVendaNoPostgres()
     {
-        var db = CreateDb(nameof(Register_DevePersistirVendaNoPostgres));
+        using var db = CreateDb(nameof(Register_DevePersistirVendaNoPostgres));
         var product = await SeedProductAsync(db);
         var service = CreateService(db);
 
@@ -194,7 +194,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_ProdutoNaoEncontrado_DeveLancarExcecao()
     {
-        var db = CreateDb(nameof(Register_ProdutoNaoEncontrado_DeveLancarExcecao));
+        using var db = CreateDb(nameof(Register_ProdutoNaoEncontrado_DeveLancarExcecao));
         var service = CreateService(db);
 
         var act = async () => await service.RegisterAsync(new VendaAvulsaRequest
@@ -210,7 +210,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_ProdutoInativo_DeveLancarExcecao()
     {
-        var db = CreateDb(nameof(Register_ProdutoInativo_DeveLancarExcecao));
+        using var db = CreateDb(nameof(Register_ProdutoInativo_DeveLancarExcecao));
         var product = await SeedProductAsync(db, isActive: false);
         var service = CreateService(db);
 
@@ -227,7 +227,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_EstoqueInsuficiente_DeveLancarExcecao()
     {
-        var db = CreateDb(nameof(Register_EstoqueInsuficiente_DeveLancarExcecao));
+        using var db = CreateDb(nameof(Register_EstoqueInsuficiente_DeveLancarExcecao));
         var product = await SeedProductAsync(db, stock: 2);
         var service = CreateService(db);
 
@@ -244,7 +244,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_EstoqueInsuficiente_NaoDeveAlterarEstoque()
     {
-        var db = CreateDb(nameof(Register_EstoqueInsuficiente_NaoDeveAlterarEstoque));
+        using var db = CreateDb(nameof(Register_EstoqueInsuficiente_NaoDeveAlterarEstoque));
         var product = await SeedProductAsync(db, stock: 3);
         var service = CreateService(db);
 
@@ -268,7 +268,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_ComDesconto10Porcento_DeveCalcularTotalComDesconto()
     {
-        var db = CreateDb(nameof(Register_ComDesconto10Porcento_DeveCalcularTotalComDesconto));
+        using var db = CreateDb(nameof(Register_ComDesconto10Porcento_DeveCalcularTotalComDesconto));
         var product = await SeedProductAsync(db, priceInCents: 2000, stock: 5);
         var service = CreateService(db);
 
@@ -287,7 +287,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_SemDesconto_TotalDeveSerioBruto()
     {
-        var db = CreateDb(nameof(Register_SemDesconto_TotalDeveSerioBruto));
+        using var db = CreateDb(nameof(Register_SemDesconto_TotalDeveSerioBruto));
         var product = await SeedProductAsync(db, priceInCents: 1500, stock: 3);
         var service = CreateService(db);
 
@@ -309,7 +309,7 @@ public class VendaAvulsaServiceTests
     {
         // Sem linha de SiteConfig nenhuma — o serviço trata como ativo (default true),
         // mesmo comportamento de sempre pra loja que nunca mexeu na configuração.
-        var db = CreateDb(nameof(Register_SemConfigDePontos_NaoDeveGanharPontos));
+        using var db = CreateDb(nameof(Register_SemConfigDePontos_NaoDeveGanharPontos));
         var product = await SeedProductAsync(db, priceInCents: 5000, stock: 5);
         var user    = await SeedUserAsync(db);
         var service = CreateService(db);
@@ -328,7 +328,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_ComPontosDesativados_NaoDeveGanharPontos()
     {
-        var db = CreateDb(nameof(Register_ComPontosDesativados_NaoDeveGanharPontos));
+        using var db = CreateDb(nameof(Register_ComPontosDesativados_NaoDeveGanharPontos));
         await SetPontosAtivoAsync(db, ativo: false);
         var product = await SeedProductAsync(db, priceInCents: 5000, stock: 5);
         var user    = await SeedUserAsync(db);
@@ -348,7 +348,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_ComToggleLegadoAtivo_NaoDeveGanharPontos()
     {
-        var db = CreateDb(nameof(Register_ComToggleLegadoAtivo_NaoDeveGanharPontos));
+        using var db = CreateDb(nameof(Register_ComToggleLegadoAtivo_NaoDeveGanharPontos));
         await SetPontosAtivoAsync(db, ativo: true);
         var product = await SeedProductAsync(db, priceInCents: 3000, stock: 5);
         var user    = await SeedUserAsync(db);
@@ -368,7 +368,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_PagarComPontosDesativados_DeveLancarExcecao()
     {
-        var db = CreateDb(nameof(Register_PagarComPontosDesativados_DeveLancarExcecao));
+        using var db = CreateDb(nameof(Register_PagarComPontosDesativados_DeveLancarExcecao));
         await SetPontosAtivoAsync(db, ativo: false);
         var product = await SeedProductAsync(db, priceInCents: 1000, stock: 5);
         var user    = await SeedUserAsync(db, pointsBalance: 100);
@@ -388,7 +388,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_SegundoPagamentoComPontosDesativados_DeveLancarExcecao()
     {
-        var db = CreateDb(nameof(Register_SegundoPagamentoComPontosDesativados_DeveLancarExcecao));
+        using var db = CreateDb(nameof(Register_SegundoPagamentoComPontosDesativados_DeveLancarExcecao));
         await SetPontosAtivoAsync(db, ativo: false);
         var product = await SeedProductAsync(db, priceInCents: 2000, stock: 5);
         var user    = await SeedUserAsync(db, pointsBalance: 100);
@@ -413,7 +413,7 @@ public class VendaAvulsaServiceTests
         // Toggle da loja ligado (SetPontosAtivoAsync), mas o módulo pago da
         // plataforma NÃO habilitado pra este tenant — o gate mais "de fora"
         // (EnabledModules) precisa barrar antes mesmo de chegar no toggle.
-        var db = CreateDb(nameof(Register_PagarComPontosSemModuloHabilitado_DeveLancarExcecao));
+        using var db = CreateDb(nameof(Register_PagarComPontosSemModuloHabilitado_DeveLancarExcecao));
         await SetPontosAtivoAsync(db, ativo: true);
         var product = await SeedProductAsync(db, priceInCents: 1000, stock: 5);
         var user    = await SeedUserAsync(db, pointsBalance: 100);
@@ -437,7 +437,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task Register_PagarComPontosMesmoAtivados_DeveRecusar()
     {
-        var db = CreateDb(nameof(Register_PagarComPontosMesmoAtivados_DeveRecusar));
+        using var db = CreateDb(nameof(Register_PagarComPontosMesmoAtivados_DeveRecusar));
         await SetPontosAtivoAsync(db, ativo: true);
         var product = await SeedProductAsync(db, priceInCents: 1000, stock: 5);
         // Nota: o resgate debita o valor em CENTAVOS do saldo de pontos (não o
@@ -461,7 +461,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task GetByDate_DeveRetornarVendasMapeadasComTotalCorreto()
     {
-        var db = CreateDb(nameof(GetByDate_DeveRetornarVendasMapeadasComTotalCorreto));
+        using var db = CreateDb(nameof(GetByDate_DeveRetornarVendasMapeadasComTotalCorreto));
         var targetDate = DateTime.UtcNow.Date;
         db.VendasAvulsas.Add(new VendaAvulsa
         {
@@ -497,7 +497,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task GetByDate_SemVendas_DeveRetornarListaVazia()
     {
-        var db = CreateDb(nameof(GetByDate_SemVendas_DeveRetornarListaVazia));
+        using var db = CreateDb(nameof(GetByDate_SemVendas_DeveRetornarListaVazia));
         var service = CreateService(db);
 
         var result = (await service.GetByDateAsync(DateTime.UtcNow.Date)).ToList();
@@ -510,7 +510,7 @@ public class VendaAvulsaServiceTests
     [Fact]
     public async Task GetRecent_DeveRetornarVendasMapeadasDoPostgres()
     {
-        var db = CreateDb(nameof(GetRecent_DeveRetornarVendasMapeadasDoPostgres));
+        using var db = CreateDb(nameof(GetRecent_DeveRetornarVendasMapeadasDoPostgres));
         db.VendasAvulsas.Add(new VendaAvulsa
         {
             PaymentMethod   = PaymentMethod.Dinheiro,

@@ -26,7 +26,7 @@ public class ExportControllerTests
     [Fact]
     public async Task ExportProdutos_IncluiAtivosEInativos()
     {
-        var db = CreateDb(nameof(ExportProdutos_IncluiAtivosEInativos));
+        using var db = CreateDb(nameof(ExportProdutos_IncluiAtivosEInativos));
         db.Products.Add(new Product { Id = Guid.NewGuid(), Name = "Ativo", Category = "Geral", PriceInCents = 1000, StockQuantity = 5, MinimumStock = 1, IsActive = true });
         db.Products.Add(new Product { Id = Guid.NewGuid(), Name = "Inativo", Category = "Geral", PriceInCents = 2000, StockQuantity = 0, MinimumStock = 1, IsActive = false });
         await db.SaveChangesAsync();
@@ -43,7 +43,7 @@ public class ExportControllerTests
     [Fact]
     public async Task ExportClientes_NaoVazaHashDeSenhaNemTokens()
     {
-        var db = CreateDb(nameof(ExportClientes_NaoVazaHashDeSenhaNemTokens));
+        using var db = CreateDb(nameof(ExportClientes_NaoVazaHashDeSenhaNemTokens));
         db.Users.Add(new User
         {
             Id = Guid.NewGuid(), Name = "Cliente Teste", Email = "cliente@test.com",
@@ -67,7 +67,7 @@ public class ExportControllerTests
     [Fact]
     public async Task ExportClientes_ExcluiStaffENaoSoClientes()
     {
-        var db = CreateDb(nameof(ExportClientes_ExcluiStaffENaoSoClientes));
+        using var db = CreateDb(nameof(ExportClientes_ExcluiStaffENaoSoClientes));
         db.Users.Add(new User { Id = Guid.NewGuid(), Name = "Cliente Real", Email = "c@test.com", Role = UserRole.Customer, PasswordHash = "h" });
         db.Users.Add(new User { Id = Guid.NewGuid(), Name = "Admin Interno", Email = "a@test.com", Role = UserRole.Admin, PasswordHash = "h" });
         await db.SaveChangesAsync();
@@ -83,7 +83,7 @@ public class ExportControllerTests
     [Fact]
     public async Task ExportCrediario_SoInclueEmAberto()
     {
-        var db = CreateDb(nameof(ExportCrediario_SoInclueEmAberto));
+        using var db = CreateDb(nameof(ExportCrediario_SoInclueEmAberto));
         var user = new User { Id = Guid.NewGuid(), Name = "Devedor", Email = "d@test.com", Role = UserRole.Customer, PasswordHash = "h" };
         db.Users.Add(user);
         db.Crediarios.Add(new Crediario

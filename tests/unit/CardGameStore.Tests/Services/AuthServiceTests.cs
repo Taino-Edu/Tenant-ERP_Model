@@ -93,7 +93,7 @@ public class AuthServiceTests
     public async Task Login_UsuarioExistente_DeveEncontrarPorEmail()
     {
         // Arrange
-        var db = CreateInMemoryDb(nameof(Login_UsuarioExistente_DeveEncontrarPorEmail));
+        using var db = CreateInMemoryDb(nameof(Login_UsuarioExistente_DeveEncontrarPorEmail));
         var user = new User
         {
             Id           = Guid.NewGuid(),
@@ -116,7 +116,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Login_EmailInexistente_DeveRetornarNull()
     {
-        var db = CreateInMemoryDb(nameof(Login_EmailInexistente_DeveRetornarNull));
+        using var db = CreateInMemoryDb(nameof(Login_EmailInexistente_DeveRetornarNull));
 
         var encontrado = await db.Users.FirstOrDefaultAsync(u => u.Email == "naoexiste@teste.com");
 
@@ -145,7 +145,7 @@ public class AuthServiceTests
     [Fact]
     public async Task QuickLogin_SemModuloRestaurante_NaoAbreComanda()
     {
-        var db = CreateInMemoryDb(nameof(QuickLogin_SemModuloRestaurante_NaoAbreComanda));
+        using var db = CreateInMemoryDb(nameof(QuickLogin_SemModuloRestaurante_NaoAbreComanda));
         var service = CreateAuthService(db, enabledModules: ["fiscal"]);
 
         var act = () => service.QuickLoginAsync(new QuickLoginRequest(
@@ -160,7 +160,7 @@ public class AuthServiceTests
     public async Task QuickLogin_CPFNovo_DeveCriarUsuario()
     {
         // Arrange
-        var db  = CreateInMemoryDb(nameof(QuickLogin_CPFNovo_DeveCriarUsuario));
+        using var db = CreateInMemoryDb(nameof(QuickLogin_CPFNovo_DeveCriarUsuario));
         var cpf = "12345678900";
 
         // Act — simula lógica: busca por CPF, cria se não existe
@@ -190,7 +190,7 @@ public class AuthServiceTests
     public async Task QuickLogin_CPFExistente_DeveRetornarMesmoUsuario()
     {
         // Arrange
-        var db  = CreateInMemoryDb(nameof(QuickLogin_CPFExistente_DeveRetornarMesmoUsuario));
+        using var db = CreateInMemoryDb(nameof(QuickLogin_CPFExistente_DeveRetornarMesmoUsuario));
         var cpf = "98765432100";
 
         var existente = new User
@@ -247,7 +247,7 @@ public class AuthServiceTests
     public async Task QuickLogin_NaoLogaCPF()
     {
         // Arrange
-        var db = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
 
         // Logger que captura as mensagens registradas
         var logMessages = new List<string>();
@@ -285,7 +285,7 @@ public class AuthServiceTests
     public async Task QuickLogin_CriaNovoCLienteComConsentAt_QuandoConsentimentoFornecido()
     {
         // Arrange — valida que o campo ConsentAt pode ser preenchido no fluxo
-        var db      = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         var service = CreateAuthService(db);
         var cpf     = "01234567890";
 
@@ -307,7 +307,7 @@ public class AuthServiceTests
     public async Task QuickLogin_NaoCriaDuplicata_QuandoCPFExistente()
     {
         // Arrange
-        var db      = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         var service = CreateAuthService(db);
         var cpf     = "11111111111";
 
@@ -327,7 +327,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Login_UsuarioInativo_DeveLancarUnauthorized()
     {
-        var db = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         db.Users.Add(new User
         {
             Id           = Guid.NewGuid(),
@@ -349,7 +349,7 @@ public class AuthServiceTests
     [Fact]
     public async Task Login_SenhaErrada_DeveLancarUnauthorized()
     {
-        var db = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         db.Users.Add(new User
         {
             Id           = Guid.NewGuid(),
@@ -372,7 +372,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RefreshToken_TokenExpirado_DeveLancarUnauthorized()
     {
-        var db = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         db.Users.Add(new User
         {
             Id                 = Guid.NewGuid(),
@@ -396,7 +396,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RefreshToken_TokenInvalido_DeveLancarUnauthorized()
     {
-        var db      = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         var service = CreateAuthService(db);
 
         var act = async () => await service.RefreshTokenAsync(new RefreshTokenRequest("token-que-nao-existe-xyz"));
@@ -409,7 +409,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ForgotPassword_EmailExistente_DeveGerarTokenDeReset()
     {
-        var db = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         var user = new User
         {
             Id           = Guid.NewGuid(),
@@ -435,7 +435,7 @@ public class AuthServiceTests
     [Fact]
     public async Task ForgotPassword_EmailInexistente_NaoDeveLancarExcecao()
     {
-        var db      = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         var service = CreateAuthService(db);
 
         // Resposta silenciosa — não revelar se e-mail existe (proteção contra user enumeration)
@@ -451,7 +451,7 @@ public class AuthServiceTests
     public async Task ResetPassword_TokenValido_DeveAlterarSenha()
     {
         const string resetToken = "token-valido-abc123";
-        var db = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         var user = new User
         {
             Id                       = Guid.NewGuid(),
@@ -479,7 +479,7 @@ public class AuthServiceTests
     public async Task ResetPassword_TokenExpirado_DeveLancarUnauthorized()
     {
         const string resetToken = "token-expirado-reset";
-        var db = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         db.Users.Add(new User
         {
             Id                       = Guid.NewGuid(),
@@ -506,7 +506,7 @@ public class AuthServiceTests
     {
         // Segurança: troca de senha deve forçar novo login (invalida refresh tokens ativos)
         const string resetToken = "token-valido-session-test";
-        var db = CreateAuthServiceDb();
+        using var db = CreateAuthServiceDb();
         var user = new User
         {
             Id                       = Guid.NewGuid(),

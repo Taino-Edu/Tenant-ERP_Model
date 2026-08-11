@@ -123,7 +123,7 @@ public class AuditServiceTests
     {
         // Arrange
         const string ip = "192.168.1.100";
-        var db       = CreateDb(nameof(LogAsync_SalvaLogComHashDeIP));
+        using var db = CreateDb(nameof(LogAsync_SalvaLogComHashDeIP));
         var accessor = MockAccessorWithIp(ip);
         var service  = CreateService(db, accessor);
 
@@ -146,8 +146,8 @@ public class AuditServiceTests
     {
         // Arrange — mesmo IP sempre gera o mesmo hash
         const string ip = "10.0.0.1";
-        var db1 = CreateDb(nameof(LogAsync_IpHashEDeterministico) + "_1");
-        var db2 = CreateDb(nameof(LogAsync_IpHashEDeterministico) + "_2");
+        using var db1 = CreateDb(nameof(LogAsync_IpHashEDeterministico) + "_1");
+        using var db2 = CreateDb(nameof(LogAsync_IpHashEDeterministico) + "_2");
 
         var service1 = CreateService(db1, MockAccessorWithIp(ip));
         var service2 = CreateService(db2, MockAccessorWithIp(ip));
@@ -166,7 +166,7 @@ public class AuditServiceTests
     public async Task LogAsync_NaoLancaExcecaoSemHttpContext()
     {
         // Arrange — accessor retorna null (sem request ativo)
-        var db             = CreateDb(nameof(LogAsync_NaoLancaExcecaoSemHttpContext));
+        using var db = CreateDb(nameof(LogAsync_NaoLancaExcecaoSemHttpContext));
         var accessorMock   = new Mock<IHttpContextAccessor>();
         accessorMock.SetupGet(a => a.HttpContext).Returns((HttpContext?)null);
         var service = CreateService(db, accessorMock.Object);
@@ -189,7 +189,7 @@ public class AuditServiceTests
         // Arrange
         const string userId   = "user-123";
         const string userName = "Maikon Admin";
-        var db       = CreateDb(nameof(LogAsync_ExtractorDeActorUserId_QuandoClaimPresente));
+        using var db = CreateDb(nameof(LogAsync_ExtractorDeActorUserId_QuandoClaimPresente));
         var accessor = MockAccessorWithClaims(userId, userName);
         var service  = CreateService(db, accessor);
 
@@ -209,7 +209,7 @@ public class AuditServiceTests
     public async Task LogAsync_ActorUserId_NuloQuandoNaoAutenticado()
     {
         // Arrange — contexto sem claims (usuário anônimo)
-        var db       = CreateDb(nameof(LogAsync_ActorUserId_NuloQuandoNaoAutenticado));
+        using var db = CreateDb(nameof(LogAsync_ActorUserId_NuloQuandoNaoAutenticado));
         var accessor = MockAccessorWithIp("127.0.0.1"); // sem claims
         var service  = CreateService(db, accessor);
 
@@ -227,7 +227,7 @@ public class AuditServiceTests
     public async Task LogAsync_SalvaCamposCorretamente()
     {
         // Arrange
-        var db      = CreateDb(nameof(LogAsync_SalvaCamposCorretamente));
+        using var db = CreateDb(nameof(LogAsync_SalvaCamposCorretamente));
         var service = CreateService(db, MockAccessorWithIp("172.16.0.1"));
 
         // Act
@@ -254,7 +254,7 @@ public class AuditServiceTests
     public async Task LogAsync_HttpContextExplicito_TemPrioridadeSobreAccessor()
     {
         // Arrange — accessor com IP diferente do contexto explícito
-        var db           = CreateDb(nameof(LogAsync_HttpContextExplicito_TemPrioridadeSobreAccessor));
+        using var db = CreateDb(nameof(LogAsync_HttpContextExplicito_TemPrioridadeSobreAccessor));
         var accessorIp   = MockAccessorWithIp("1.1.1.1");
         var service      = CreateService(db, accessorIp);
 

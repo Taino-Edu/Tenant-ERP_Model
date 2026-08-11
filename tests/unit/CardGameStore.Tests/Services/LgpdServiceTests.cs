@@ -56,7 +56,7 @@ public class LgpdServiceTests
     public async Task UpdateMe_AlteraApenasCamposInformados()
     {
         // Arrange
-        var db      = CreateDb(nameof(UpdateMe_AlteraApenasCamposInformados));
+        using var db = CreateDb(nameof(UpdateMe_AlteraApenasCamposInformados));
         var service = CreateService(db);
         var user    = MakeCustomer(name: "João", email: "joao@test.com");
         db.Users.Add(user);
@@ -80,7 +80,7 @@ public class LgpdServiceTests
     public async Task UpdateMe_IgnoraCamposNulos()
     {
         // Arrange
-        var db      = CreateDb(nameof(UpdateMe_IgnoraCamposNulos));
+        using var db = CreateDb(nameof(UpdateMe_IgnoraCamposNulos));
         var service = CreateService(db);
         var user    = MakeCustomer(name: "Maria", email: "maria@test.com", whatsApp: "11911112222");
         db.Users.Add(user);
@@ -104,7 +104,7 @@ public class LgpdServiceTests
     public async Task UpdateMe_WhatsApp_AtualizaCorretamente()
     {
         // Arrange
-        var db      = CreateDb(nameof(UpdateMe_WhatsApp_AtualizaCorretamente));
+        using var db = CreateDb(nameof(UpdateMe_WhatsApp_AtualizaCorretamente));
         var service = CreateService(db);
         var user    = MakeCustomer(whatsApp: "11999990001");
         db.Users.Add(user);
@@ -123,7 +123,7 @@ public class LgpdServiceTests
     [Fact]
     public async Task UpdateMe_UsuarioInexistente_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(UpdateMe_UsuarioInexistente_DeveLancarExcecao));
+        using var db = CreateDb(nameof(UpdateMe_UsuarioInexistente_DeveLancarExcecao));
         var service = CreateService(db);
 
         var act = async () => await service.UpdateMeAsync(Guid.NewGuid(), new UpdateMeRequest
@@ -141,7 +141,7 @@ public class LgpdServiceTests
     public async Task AnonimizarAsync_SubstituiTodosDadosPessoais()
     {
         // Arrange
-        var db      = CreateDb(nameof(AnonimizarAsync_SubstituiTodosDadosPessoais));
+        using var db = CreateDb(nameof(AnonimizarAsync_SubstituiTodosDadosPessoais));
         var service = CreateService(db);
         var user    = MakeCustomer(
             name:     "Pedro Alves",
@@ -169,7 +169,7 @@ public class LgpdServiceTests
     public async Task AnonimizarAsync_InvalidaTokensDeRefresh()
     {
         // Arrange
-        var db      = CreateDb(nameof(AnonimizarAsync_InvalidaTokensDeRefresh));
+        using var db = CreateDb(nameof(AnonimizarAsync_InvalidaTokensDeRefresh));
         var service = CreateService(db);
         var user    = MakeCustomer();
         user.RefreshToken       = "token-ativo-abc123";
@@ -190,7 +190,7 @@ public class LgpdServiceTests
     public async Task AnonimizarAsync_UsuarioInexistente_DeveLancarExcecao()
     {
         // Arrange
-        var db      = CreateDb(nameof(AnonimizarAsync_UsuarioInexistente_DeveLancarExcecao));
+        using var db = CreateDb(nameof(AnonimizarAsync_UsuarioInexistente_DeveLancarExcecao));
         var service = CreateService(db);
 
         // Act — ID inexistente: UserService lança InvalidOperationException
@@ -205,7 +205,7 @@ public class LgpdServiceTests
     public async Task AnonimizarAsync_DeletedAt_EPreenchidoComDataAtual()
     {
         // Arrange
-        var db      = CreateDb(nameof(AnonimizarAsync_DeletedAt_EPreenchidoComDataAtual));
+        using var db = CreateDb(nameof(AnonimizarAsync_DeletedAt_EPreenchidoComDataAtual));
         var service = CreateService(db);
         var user    = MakeCustomer();
         db.Users.Add(user);

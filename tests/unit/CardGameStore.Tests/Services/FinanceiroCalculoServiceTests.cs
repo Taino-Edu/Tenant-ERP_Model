@@ -116,7 +116,7 @@ public class FinanceiroCalculoServiceTests
         // Antes do fix, Sum() traduzido pro SQL usava (decimal) e o SQLite
         // rejeitava a query com NotSupportedException — mesmo numa loja vazia
         // (nem precisava ter dado nenhum, só de existir a query já quebrava).
-        var db = CreateDb(nameof(CalcularAsync_SemNenhumaVendaOuComanda_DevolveTudoZeradoSemLancarExcecao));
+        using var db = CreateDb(nameof(CalcularAsync_SemNenhumaVendaOuComanda_DevolveTudoZeradoSemLancarExcecao));
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
 
@@ -136,7 +136,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task CalcularAsync_ComComandaFechada_CalculaReceitaCustoEMargemCorretos()
     {
-        var db = CreateDb(nameof(CalcularAsync_ComComandaFechada_CalculaReceitaCustoEMargemCorretos));
+        using var db = CreateDb(nameof(CalcularAsync_ComComandaFechada_CalculaReceitaCustoEMargemCorretos));
         var product = await SeedProductAsync(db, costCents: 400); // custo R$4, preço R$10
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
@@ -154,7 +154,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task CalcularAsync_DreClassificada_SeparaEstoqueOperacaoFinanceiroETributos()
     {
-        var db = CreateDb(nameof(CalcularAsync_DreClassificada_SeparaEstoqueOperacaoFinanceiroETributos));
+        using var db = CreateDb(nameof(CalcularAsync_DreClassificada_SeparaEstoqueOperacaoFinanceiroETributos));
         var product = await SeedProductAsync(db, costCents: 400);
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
@@ -181,7 +181,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task CalcularAsync_MesclaComandaEVendaAvulsaNaMesmaReceita()
     {
-        var db = CreateDb(nameof(CalcularAsync_MesclaComandaEVendaAvulsaNaMesmaReceita));
+        using var db = CreateDb(nameof(CalcularAsync_MesclaComandaEVendaAvulsaNaMesmaReceita));
         var product = await SeedProductAsync(db, costCents: 300);
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
@@ -210,7 +210,7 @@ public class FinanceiroCalculoServiceTests
         // muitas vendas DEPOIS do período fechado, o corte podia ser todo consumido por elas,
         // zerando a receita do período. GetInPeriodAsync filtra o período inteiro na query SQL,
         // sem depender de quantas vendas mais recentes existem fora dele.
-        var db = CreateDb(nameof(CalcularAsync_VendasAvulsasForaDoPeriodo_NaoEntramNaReceitaMesmoSendoMaisRecentes));
+        using var db = CreateDb(nameof(CalcularAsync_VendasAvulsasForaDoPeriodo_NaoEntramNaReceitaMesmoSendoMaisRecentes));
         var product = await SeedProductAsync(db, costCents: 300);
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
@@ -243,7 +243,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task CalcularAsync_FiltroPorFormaDePagamento_SoConsideraTransacoesDaquelaForma()
     {
-        var db = CreateDb(nameof(CalcularAsync_FiltroPorFormaDePagamento_SoConsideraTransacoesDaquelaForma));
+        using var db = CreateDb(nameof(CalcularAsync_FiltroPorFormaDePagamento_SoConsideraTransacoesDaquelaForma));
         var product = await SeedProductAsync(db);
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
@@ -259,7 +259,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task CalcularAsync_ComandaComSplitPayment_GeraDuasTransacoesNoBreakdown()
     {
-        var db = CreateDb(nameof(CalcularAsync_ComandaComSplitPayment_GeraDuasTransacoesNoBreakdown));
+        using var db = CreateDb(nameof(CalcularAsync_ComandaComSplitPayment_GeraDuasTransacoesNoBreakdown));
         var product = await SeedProductAsync(db);
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
@@ -279,7 +279,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task CalcularAsync_ComCrediarioAberto_SomaSaldoDevedorCorretamente()
     {
-        var db = CreateDb(nameof(CalcularAsync_ComCrediarioAberto_SomaSaldoDevedorCorretamente));
+        using var db = CreateDb(nameof(CalcularAsync_ComCrediarioAberto_SomaSaldoDevedorCorretamente));
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
         var user1 = await SeedUserAsync(db, "Devedor 1");
@@ -307,7 +307,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task CalcularAsync_TopProdutos_SomaComandaEAvulsaDoMesmoProduto()
     {
-        var db = CreateDb(nameof(CalcularAsync_TopProdutos_SomaComandaEAvulsaDoMesmoProduto));
+        using var db = CreateDb(nameof(CalcularAsync_TopProdutos_SomaComandaEAvulsaDoMesmoProduto));
         var product = await SeedProductAsync(db, costCents: 400);
         var service = CreateService(db);
         var (ini, end, dBrIni, dBrFim) = JanelaHoje();
@@ -335,7 +335,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task FecharJanelaAsync_PrimeiraVez_CriaFechamentoNovo()
     {
-        var db = CreateDb(nameof(FecharJanelaAsync_PrimeiraVez_CriaFechamentoNovo));
+        using var db = CreateDb(nameof(FecharJanelaAsync_PrimeiraVez_CriaFechamentoNovo));
         var product = await SeedProductAsync(db, costCents: 400);
         var service = CreateService(db);
         var hoje = HojeBrasil();
@@ -352,7 +352,7 @@ public class FinanceiroCalculoServiceTests
     [Fact]
     public async Task FecharJanelaAsync_ChamadoDeNovoNaMesmaJanela_AtualizaEmVezDeDuplicar()
     {
-        var db = CreateDb(nameof(FecharJanelaAsync_ChamadoDeNovoNaMesmaJanela_AtualizaEmVezDeDuplicar));
+        using var db = CreateDb(nameof(FecharJanelaAsync_ChamadoDeNovoNaMesmaJanela_AtualizaEmVezDeDuplicar));
         var product = await SeedProductAsync(db, costCents: 400);
         var service = CreateService(db);
         var hoje = HojeBrasil();

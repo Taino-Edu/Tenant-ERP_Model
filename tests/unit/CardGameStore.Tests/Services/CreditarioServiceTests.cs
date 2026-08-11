@@ -56,7 +56,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task CreateAsync_DadosValidos_DeveCriarNovoCrediarioso()
     {
-        var db      = CreateDb(nameof(CreateAsync_DadosValidos_DeveCriarNovoCrediarioso));
+        using var db = CreateDb(nameof(CreateAsync_DadosValidos_DeveCriarNovoCrediarioso));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -73,7 +73,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task CreateAsync_JaTemAberto_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(CreateAsync_JaTemAberto_DeveLancarExcecao));
+        using var db = CreateDb(nameof(CreateAsync_JaTemAberto_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -101,7 +101,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task CreateAsync_ComandaNaoExiste_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(CreateAsync_ComandaNaoExiste_DeveLancarExcecao));
+        using var db = CreateDb(nameof(CreateAsync_ComandaNaoExiste_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, _, adminId) = await SeedAsync(db);
 
@@ -114,7 +114,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task CreateAsync_DeveDefinirVencimentoEm30Dias()
     {
-        var db      = CreateDb(nameof(CreateAsync_DeveDefinirVencimentoEm30Dias));
+        using var db = CreateDb(nameof(CreateAsync_DeveDefinirVencimentoEm30Dias));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -132,7 +132,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetByUserAsync_DeveRetornarTodosDeUmUsuario()
     {
-        var db      = CreateDb(nameof(GetByUserAsync_DeveRetornarTodosDeUmUsuario));
+        using var db = CreateDb(nameof(GetByUserAsync_DeveRetornarTodosDeUmUsuario));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -147,7 +147,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetByUserAsync_SemCrediarios_DeveRetornarListaVazia()
     {
-        var db      = CreateDb(nameof(GetByUserAsync_SemCrediarios_DeveRetornarListaVazia));
+        using var db = CreateDb(nameof(GetByUserAsync_SemCrediarios_DeveRetornarListaVazia));
         var service = CreateService(db);
         var (user, _, _) = await SeedAsync(db);
 
@@ -159,7 +159,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetAbertoAsync_DeveRetornarApenasAbertos()
     {
-        var db      = CreateDb(nameof(GetAbertoAsync_DeveRetornarApenasAbertos));
+        using var db = CreateDb(nameof(GetAbertoAsync_DeveRetornarApenasAbertos));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -194,7 +194,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetVencidosAsync_DeveRetornarApenasVencidos()
     {
-        var db      = CreateDb(nameof(GetVencidosAsync_DeveRetornarApenasVencidos));
+        using var db = CreateDb(nameof(GetVencidosAsync_DeveRetornarApenasVencidos));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -220,7 +220,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task MarkAsPaidAsync_DeveMudarStatusERegistrarData()
     {
-        var db      = CreateDb(nameof(MarkAsPaidAsync_DeveMudarStatusERegistrarData));
+        using var db = CreateDb(nameof(MarkAsPaidAsync_DeveMudarStatusERegistrarData));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -237,7 +237,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task MarkAsPaidAsync_JaPago_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(MarkAsPaidAsync_JaPago_DeveLancarExcecao));
+        using var db = CreateDb(nameof(MarkAsPaidAsync_JaPago_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -255,7 +255,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task MarkAsPaidAsync_NaoExiste_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(MarkAsPaidAsync_NaoExiste_DeveLancarExcecao));
+        using var db = CreateDb(nameof(MarkAsPaidAsync_NaoExiste_DeveLancarExcecao));
         var service = CreateService(db);
 
         var act = async () => await service.MarkAsPaidAsync(Guid.NewGuid(), Guid.NewGuid());
@@ -269,7 +269,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetByIdAsync_DeveRetornarCrediarioso()
     {
-        var db      = CreateDb(nameof(GetByIdAsync_DeveRetornarCrediarioso));
+        using var db = CreateDb(nameof(GetByIdAsync_DeveRetornarCrediarioso));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -284,7 +284,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetByIdAsync_NaoExiste_DeveRetornarNull()
     {
-        var db      = CreateDb(nameof(GetByIdAsync_NaoExiste_DeveRetornarNull));
+        using var db = CreateDb(nameof(GetByIdAsync_NaoExiste_DeveRetornarNull));
         var service = CreateService(db);
 
         var resultado = await service.GetByIdAsync(Guid.NewGuid());
@@ -297,7 +297,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task HasOpenAsync_TemAberto_DeveRetornarTrue()
     {
-        var db      = CreateDb(nameof(HasOpenAsync_TemAberto_DeveRetornarTrue));
+        using var db = CreateDb(nameof(HasOpenAsync_TemAberto_DeveRetornarTrue));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -311,7 +311,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task HasOpenAsync_SemAberto_DeveRetornarFalse()
     {
-        var db      = CreateDb(nameof(HasOpenAsync_SemAberto_DeveRetornarFalse));
+        using var db = CreateDb(nameof(HasOpenAsync_SemAberto_DeveRetornarFalse));
         var service = CreateService(db);
         var (user, _, _) = await SeedAsync(db);
 
@@ -323,7 +323,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task HasOpenAsync_ApenasAbertos_NaoContaPagos()
     {
-        var db      = CreateDb(nameof(HasOpenAsync_ApenasAbertos_NaoContaPagos));
+        using var db = CreateDb(nameof(HasOpenAsync_ApenasAbertos_NaoContaPagos));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -341,7 +341,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetOpenAsync_TemAberto_DeveRetornarCrediarioso()
     {
-        var db      = CreateDb(nameof(GetOpenAsync_TemAberto_DeveRetornarCrediarioso));
+        using var db = CreateDb(nameof(GetOpenAsync_TemAberto_DeveRetornarCrediarioso));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -356,7 +356,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetOpenAsync_SemAberto_DeveRetornarNull()
     {
-        var db      = CreateDb(nameof(GetOpenAsync_SemAberto_DeveRetornarNull));
+        using var db = CreateDb(nameof(GetOpenAsync_SemAberto_DeveRetornarNull));
         var service = CreateService(db);
         var (user, _, _) = await SeedAsync(db);
 
@@ -370,7 +370,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetTotalDevidoAsync_DeveCalcularSomaDeAbertos()
     {
-        var db      = CreateDb(nameof(GetTotalDevidoAsync_DeveCalcularSomaDeAbertos));
+        using var db = CreateDb(nameof(GetTotalDevidoAsync_DeveCalcularSomaDeAbertos));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -384,7 +384,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetTotalDevidoAsync_ApenasAbertos_NaoContaPagos()
     {
-        var db      = CreateDb(nameof(GetTotalDevidoAsync_ApenasAbertos_NaoContaPagos));
+        using var db = CreateDb(nameof(GetTotalDevidoAsync_ApenasAbertos_NaoContaPagos));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 
@@ -400,7 +400,7 @@ public class CreditarioServiceTests
     [Fact]
     public async Task GetTotalDevidoAsync_MultiplosCreditarios_DeveCalcularTotal()
     {
-        var db      = CreateDb(nameof(GetTotalDevidoAsync_MultiplosCreditarios_DeveCalcularTotal));
+        using var db = CreateDb(nameof(GetTotalDevidoAsync_MultiplosCreditarios_DeveCalcularTotal));
         var service = CreateService(db);
         var (user, comanda, adminId) = await SeedAsync(db);
 

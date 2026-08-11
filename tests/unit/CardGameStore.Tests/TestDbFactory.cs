@@ -33,6 +33,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Collections.Concurrent;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -59,6 +60,12 @@ public static class TestDbFactory
     private static readonly string RunId =
         $"{Environment.ProcessId:x}_{Guid.NewGuid():N}"[..12];
     private static int SchemaSequence;
+    // Suítes simultâneas compartilham o mesmo catálogo. A limpeza precisa ser
+    // exclusiva para não tentar DROP CASCADE dos mesmos schemas em paralelo.
+    private const long CleanupAdvisoryLockKey = 0x544552505F544553; // "TERP_TES"
+    private const int CleanupBatchSize = 20;
+    private static readonly ConcurrentQueue<string> ReleasedSchemas = new();
+    private static readonly object ReleasedSchemasSync = new();
 
     static TestDbFactory()
     {
@@ -154,7 +161,7 @@ public static class TestDbFactory
             .UseNpgsql(PgConnString)
             .AddInterceptors(new TestSchemaInterceptor(schema))
             .Options;
-        var db = new AppDbContext(options);
+        var db = new TestAppDbContext(options, schema);
         // NÃO usar Database.EnsureCreated(): o "database já tem tabelas?" dele
         // não é escopado por schema — ele acusa "sim" (e pula toda criação) se
         // QUALQUER schema no banco tiver tabelas, mesmo de outro teste/schema
@@ -166,6 +173,47 @@ public static class TestDbFactory
         // o schema acima acabou de ser dropado+recriado vazio.
         db.GetInfrastructure().GetRequiredService<IRelationalDatabaseCreator>().CreateTables();
         return db;
+    }
+
+    /// <summary>
+    /// O contexto de cada teste entrega seu schema aqui ao ser descartado. A fila
+    /// amortiza o custo: em vez de um DROP por teste, remove até 20 schemas por
+    /// comando. O restante é drenado no ProcessExit; se a execução for abortada,
+    /// a limpeza de órfãos da próxima rodada continua sendo a rede de segurança.
+    /// </summary>
+    internal static void ReleaseSchema(string schema)
+    {
+        ReleasedSchemas.Enqueue(schema);
+        if (ReleasedSchemas.Count >= CleanupBatchSize)
+            FlushReleasedSchemas(force: false);
+    }
+
+    private static void FlushReleasedSchemas(bool force)
+    {
+        lock (ReleasedSchemasSync)
+        {
+            if (!force && ReleasedSchemas.Count < CleanupBatchSize) return;
+
+            var schemas = new List<string>();
+            while (schemas.Count < CleanupBatchSize && ReleasedSchemas.TryDequeue(out var schema))
+                schemas.Add(schema);
+            if (schemas.Count == 0) return;
+
+            try
+            {
+                using var connection = new NpgsqlConnection(PgConnString);
+                connection.Open();
+                AcquireCleanupLock(connection);
+                try { DropSchemasInBatches(connection, schemas); }
+                finally { ReleaseCleanupLock(connection); }
+            }
+            catch
+            {
+                // Não perde a referência se o banco estiver momentaneamente
+                // ocupado; uma próxima descarga ou a recuperação de órfãos tenta de novo.
+                foreach (var schema in schemas) ReleasedSchemas.Enqueue(schema);
+            }
+        }
     }
 
     private static string Sanitize(string s) =>
@@ -250,29 +298,20 @@ public static class TestDbFactory
     {
         try
         {
-            var schemas = new List<string>();
-            using (var list = connection.CreateCommand())
+            AcquireCleanupLock(connection);
+            try
             {
-                // '_' é curinga no LIKE; escapado para não casar 'testX...'.
-                list.CommandText = @"SELECT schema_name FROM information_schema.schemata
-                                     WHERE schema_name LIKE 'test\_%'";
-                using var reader = list.ExecuteReader();
-                while (reader.Read()) schemas.Add(reader.GetString(0));
-            }
+                var schemas = ListTestSchemas(connection).Where(DeExecucaoJaMorta).ToList();
+                var removidos = DropSchemasInBatches(connection, schemas);
 
-            var removidos = 0;
-            foreach (var schema in schemas.Where(DeExecucaoJaMorta))
+                if (removidos > 0)
+                    Console.Error.WriteLine(
+                        $"[TestDbFactory] {removidos} schema(s) de execuções anteriores removido(s) em lotes.");
+            }
+            finally
             {
-                using var drop = connection.CreateCommand();
-                drop.CommandText =
-                    $"DROP SCHEMA IF EXISTS {new NpgsqlCommandBuilder().QuoteIdentifier(schema)} CASCADE;";
-                drop.ExecuteNonQuery();
-                removidos++;
+                ReleaseCleanupLock(connection);
             }
-
-            if (removidos > 0)
-                Console.Error.WriteLine(
-                    $"[TestDbFactory] {removidos} schema(s) de execuções anteriores removido(s).");
         }
         catch (Exception exception)
         {
@@ -321,27 +360,24 @@ public static class TestDbFactory
     {
         try
         {
+            // Em uma execução normal, quase tudo já foi removido em lotes ao
+            // longo da suíte. Aqui sobra no máximo o lote parcial final.
+            FlushReleasedSchemas(force: true);
+
             using var connection = new NpgsqlConnection(PgConnString);
             connection.Open();
-
-            using var list = connection.CreateCommand();
-            list.CommandText = """
-                SELECT schema_name
-                FROM information_schema.schemata
-                WHERE left(schema_name, length(@prefix)) = @prefix
-                """;
-            list.Parameters.AddWithValue("prefix", $"test_{RunId}_");
-
-            var schemas = new List<string>();
-            using (var reader = list.ExecuteReader())
-                while (reader.Read()) schemas.Add(reader.GetString(0));
-
-            foreach (var schema in schemas)
+            AcquireCleanupLock(connection);
+            try
             {
-                using var drop = connection.CreateCommand();
-                var quotedSchema = new NpgsqlCommandBuilder().QuoteIdentifier(schema);
-                drop.CommandText = $"DROP SCHEMA IF EXISTS {quotedSchema} CASCADE;";
-                drop.ExecuteNonQuery();
+                var prefix = $"test_{RunId}_";
+                var schemas = ListTestSchemas(connection)
+                    .Where(schema => schema.StartsWith(prefix, StringComparison.Ordinal))
+                    .ToList();
+                DropSchemasInBatches(connection, schemas);
+            }
+            finally
+            {
+                ReleaseCleanupLock(connection);
             }
         }
         catch
@@ -349,6 +385,81 @@ public static class TestDbFactory
             // Limpeza de melhor esforço durante a saída do testhost: nunca
             // esconde o resultado real da suíte se o PostgreSQL já caiu.
         }
+    }
+
+    private static List<string> ListTestSchemas(NpgsqlConnection connection)
+    {
+        var schemas = new List<string>();
+        using var list = connection.CreateCommand();
+        // '_' é curinga no LIKE; escapado para não casar 'testX...'.
+        list.CommandText = @"SELECT schema_name FROM information_schema.schemata
+                             WHERE schema_name LIKE 'test\_%'";
+        using var reader = list.ExecuteReader();
+        while (reader.Read()) schemas.Add(reader.GetString(0));
+        return schemas;
+    }
+
+    private static int DropSchemasInBatches(NpgsqlConnection connection, IReadOnlyCollection<string> schemas)
+    {
+        if (schemas.Count == 0) return 0;
+
+        var builder = new NpgsqlCommandBuilder();
+        foreach (var batch in schemas.Chunk(CleanupBatchSize))
+        {
+            using var drop = connection.CreateCommand();
+            // Centenas de DROPs individuais faziam a suíte exceder três minutos
+            // antes do primeiro teste. Lotes pequenos reduzem round-trips sem
+            // concentrar todos os locks do catálogo numa única transação.
+            drop.CommandTimeout = 120;
+            drop.CommandText =
+                $"DROP SCHEMA IF EXISTS {string.Join(", ", batch.Select(builder.QuoteIdentifier))} CASCADE;";
+            drop.ExecuteNonQuery();
+        }
+
+        return schemas.Count;
+    }
+
+    private static void AcquireCleanupLock(NpgsqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandTimeout = 120;
+        command.CommandText = "SELECT pg_advisory_lock(@key)";
+        command.Parameters.AddWithValue("key", CleanupAdvisoryLockKey);
+        command.ExecuteNonQuery();
+    }
+
+    private static void ReleaseCleanupLock(NpgsqlConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT pg_advisory_unlock(@key)";
+        command.Parameters.AddWithValue("key", CleanupAdvisoryLockKey);
+        command.ExecuteNonQuery();
+    }
+}
+
+/// <summary>AppDbContext de teste que devolve o schema para limpeza ao sair.</summary>
+internal sealed class TestAppDbContext(
+    DbContextOptions<AppDbContext> options,
+    string schema) : AppDbContext(options)
+{
+    private int _released;
+
+    public override void Dispose()
+    {
+        base.Dispose();
+        ReleaseOnce();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await base.DisposeAsync();
+        ReleaseOnce();
+    }
+
+    private void ReleaseOnce()
+    {
+        if (Interlocked.Exchange(ref _released, 1) == 0)
+            TestDbFactory.ReleaseSchema(schema);
     }
 }
 

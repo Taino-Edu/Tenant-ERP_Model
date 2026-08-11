@@ -57,7 +57,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportProdutos_LinhasValidas_Importa()
     {
-        var db = CreateDb(nameof(ImportProdutos_LinhasValidas_Importa));
+        using var db = CreateDb(nameof(ImportProdutos_LinhasValidas_Importa));
         var controller = CreateController(db);
         var csv = "Nome;Categoria;PrecoVenda;PrecoCusto;Estoque\r\n" +
                   "Produto A;Bebida;10,50;5,00;20\r\n" +
@@ -77,7 +77,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportProdutos_NomeDuplicadoNoBanco_VaiPraErro()
     {
-        var db = CreateDb(nameof(ImportProdutos_NomeDuplicadoNoBanco_VaiPraErro));
+        using var db = CreateDb(nameof(ImportProdutos_NomeDuplicadoNoBanco_VaiPraErro));
         db.Products.Add(new Product { Id = Guid.NewGuid(), Name = "Já Existe", Category = "X", PriceInCents = 100, StockQuantity = 1, MinimumStock = 1 });
         await db.SaveChangesAsync();
         var controller = CreateController(db);
@@ -92,7 +92,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportProdutos_NomeDuplicadoDentroDoArquivo_SoAPrimeiraEntra()
     {
-        var db = CreateDb(nameof(ImportProdutos_NomeDuplicadoDentroDoArquivo_SoAPrimeiraEntra));
+        using var db = CreateDb(nameof(ImportProdutos_NomeDuplicadoDentroDoArquivo_SoAPrimeiraEntra));
         var controller = CreateController(db);
 
         var csv = "Nome;Categoria;PrecoVenda\r\nRepetido;Bebida;10,00\r\nRepetido;Bebida;12,00\r\n";
@@ -106,7 +106,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportProdutos_MisturaLinhaValidaEInvalida_ImportaSoAValida()
     {
-        var db = CreateDb(nameof(ImportProdutos_MisturaLinhaValidaEInvalida_ImportaSoAValida));
+        using var db = CreateDb(nameof(ImportProdutos_MisturaLinhaValidaEInvalida_ImportaSoAValida));
         var controller = CreateController(db);
 
         var csv = "Nome;Categoria;PrecoVenda\r\n" +
@@ -127,7 +127,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportClientes_LinhaValida_Importa()
     {
-        var db = CreateDb(nameof(ImportClientes_LinhaValida_Importa));
+        using var db = CreateDb(nameof(ImportClientes_LinhaValida_Importa));
         var controller = CreateController(db);
 
         var csv = "Nome;Email;CPF\r\nAna Silva;ana@test.com;111.444.777-35\r\n";
@@ -143,7 +143,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportClientes_CpfInvalido_VaiPraErro()
     {
-        var db = CreateDb(nameof(ImportClientes_CpfInvalido_VaiPraErro));
+        using var db = CreateDb(nameof(ImportClientes_CpfInvalido_VaiPraErro));
         var controller = CreateController(db);
 
         var csv = "Nome;CPF\r\nAna;111.111.111-11\r\n"; // dígitos repetidos, sempre inválido
@@ -156,7 +156,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportClientes_EmailJaCadastrado_VaiPraErro()
     {
-        var db = CreateDb(nameof(ImportClientes_EmailJaCadastrado_VaiPraErro));
+        using var db = CreateDb(nameof(ImportClientes_EmailJaCadastrado_VaiPraErro));
         db.Users.Add(new User { Id = Guid.NewGuid(), Name = "Já Existe", Email = "existe@test.com", Role = UserRole.Customer, PasswordHash = "h" });
         await db.SaveChangesAsync();
         var controller = CreateController(db);
@@ -173,7 +173,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportCrediario_ClienteExistentePorCpf_Importa()
     {
-        var db = CreateDb(nameof(ImportCrediario_ClienteExistentePorCpf_Importa));
+        using var db = CreateDb(nameof(ImportCrediario_ClienteExistentePorCpf_Importa));
         var user = new User { Id = Guid.NewGuid(), Name = "Devedor", Cpf = "11144477735", Role = UserRole.Customer, PasswordHash = "h" };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -194,7 +194,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportCrediario_ClienteNaoExiste_NuncaCriaClienteNovo()
     {
-        var db = CreateDb(nameof(ImportCrediario_ClienteNaoExiste_NuncaCriaClienteNovo));
+        using var db = CreateDb(nameof(ImportCrediario_ClienteNaoExiste_NuncaCriaClienteNovo));
         var controller = CreateController(db);
 
         var csv = "ClienteCPF;ValorTotal;DataVencimento\r\n111.444.777-35;100,00;2026-12-31\r\n";
@@ -209,7 +209,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportCrediario_ValorPagoIgualAoTotal_MarcaComoPago()
     {
-        var db = CreateDb(nameof(ImportCrediario_ValorPagoIgualAoTotal_MarcaComoPago));
+        using var db = CreateDb(nameof(ImportCrediario_ValorPagoIgualAoTotal_MarcaComoPago));
         var user = new User { Id = Guid.NewGuid(), Name = "Quitado", Email = "quitado@test.com", Role = UserRole.Customer, PasswordHash = "h" };
         db.Users.Add(user);
         await db.SaveChangesAsync();
@@ -226,7 +226,7 @@ public class ImportControllerTests
     [Fact]
     public async Task ImportCrediario_ValorPagoMaiorQueTotal_VaiPraErro()
     {
-        var db = CreateDb(nameof(ImportCrediario_ValorPagoMaiorQueTotal_VaiPraErro));
+        using var db = CreateDb(nameof(ImportCrediario_ValorPagoMaiorQueTotal_VaiPraErro));
         var user = new User { Id = Guid.NewGuid(), Name = "X", Email = "x@test.com", Role = UserRole.Customer, PasswordHash = "h" };
         db.Users.Add(user);
         await db.SaveChangesAsync();

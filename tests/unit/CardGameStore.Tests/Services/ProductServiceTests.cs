@@ -48,7 +48,7 @@ public class ProductServiceTests
     [Fact]
     public async Task GetAllActive_DeveRetornarApenasAtivos()
     {
-        var db      = CreateDb(nameof(GetAllActive_DeveRetornarApenasAtivos));
+        using var db = CreateDb(nameof(GetAllActive_DeveRetornarApenasAtivos));
         var service = CreateService(db);
 
         db.Products.AddRange(MakeProduct("Ativo"), MakeProduct("Inativo", active: false));
@@ -63,7 +63,7 @@ public class ProductServiceTests
     [Fact]
     public async Task GetAllActive_DeveRetornarOrdenadoPorNome()
     {
-        var db      = CreateDb(nameof(GetAllActive_DeveRetornarOrdenadoPorNome));
+        using var db = CreateDb(nameof(GetAllActive_DeveRetornarOrdenadoPorNome));
         var service = CreateService(db);
 
         db.Products.AddRange(MakeProduct("Zebra"), MakeProduct("Alpha"), MakeProduct("Beta"));
@@ -79,7 +79,7 @@ public class ProductServiceTests
     [Fact]
     public async Task GetByCategory_DeveRetornarSomenterCategoriaFiltrada()
     {
-        var db      = CreateDb(nameof(GetByCategory_DeveRetornarSomenterCategoriaFiltrada));
+        using var db = CreateDb(nameof(GetByCategory_DeveRetornarSomenterCategoriaFiltrada));
         var service = CreateService(db);
 
         var mtg     = MakeProduct("MTG Card");
@@ -97,7 +97,7 @@ public class ProductServiceTests
     [Fact]
     public async Task StreamPublico_DeveFiltrarOrdenarEProjetarDto()
     {
-        var db = CreateDb(nameof(StreamPublico_DeveFiltrarOrdenarEProjetarDto));
+        using var db = CreateDb(nameof(StreamPublico_DeveFiltrarOrdenarEProjetarDto));
         var service = CreateService(db);
 
         var beta = MakeProduct("Beta");
@@ -120,7 +120,7 @@ public class ProductServiceTests
     [Fact]
     public async Task GetLowStock_DeveRetornarProdutosComEstoqueIgualOuMenorQueMinimo()
     {
-        var db      = CreateDb(nameof(GetLowStock_DeveRetornarProdutosComEstoqueIgualOuMenorQueMinimo));
+        using var db = CreateDb(nameof(GetLowStock_DeveRetornarProdutosComEstoqueIgualOuMenorQueMinimo));
         var service = CreateService(db);
 
         db.Products.AddRange(
@@ -141,7 +141,7 @@ public class ProductServiceTests
     [Fact]
     public async Task AdjustStock_AdicaoPositiva_DeveIncrementarEstoque()
     {
-        var db      = CreateDb(nameof(AdjustStock_AdicaoPositiva_DeveIncrementarEstoque));
+        using var db = CreateDb(nameof(AdjustStock_AdicaoPositiva_DeveIncrementarEstoque));
         var service = CreateService(db);
         var p       = MakeProduct(stock: 5);
         db.Products.Add(p);
@@ -158,7 +158,7 @@ public class ProductServiceTests
     [Fact]
     public async Task AdjustStock_SubtracaoValida_DeveDecrementarEstoque()
     {
-        var db      = CreateDb(nameof(AdjustStock_SubtracaoValida_DeveDecrementarEstoque));
+        using var db = CreateDb(nameof(AdjustStock_SubtracaoValida_DeveDecrementarEstoque));
         var service = CreateService(db);
         var p       = MakeProduct(stock: 10);
         db.Products.Add(p);
@@ -174,7 +174,7 @@ public class ProductServiceTests
     [Fact]
     public async Task AdjustStock_DeveRejeitarSeResultadoNegativo()
     {
-        var db      = CreateDb(nameof(AdjustStock_DeveRejeitarSeResultadoNegativo));
+        using var db = CreateDb(nameof(AdjustStock_DeveRejeitarSeResultadoNegativo));
         var service = CreateService(db);
         var p       = MakeProduct(stock: 3);
         db.Products.Add(p);
@@ -191,7 +191,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Deactivate_DeveMudarIsActiveParaFalse()
     {
-        var db      = CreateDb(nameof(Deactivate_DeveMudarIsActiveParaFalse));
+        using var db = CreateDb(nameof(Deactivate_DeveMudarIsActiveParaFalse));
         var service = CreateService(db);
         var p       = MakeProduct();
         db.Products.Add(p);
@@ -205,7 +205,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Deactivate_ProdutoInexistente_NaoDeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(Deactivate_ProdutoInexistente_NaoDeveLancarExcecao));
+        using var db = CreateDb(nameof(Deactivate_ProdutoInexistente_NaoDeveLancarExcecao));
         var service = CreateService(db);
 
         var act = async () => await service.DeactivateAsync(Guid.NewGuid());
@@ -218,7 +218,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Create_DevePersistirProduto()
     {
-        var db      = CreateDb(nameof(Create_DevePersistirProduto));
+        using var db = CreateDb(nameof(Create_DevePersistirProduto));
         var service = CreateService(db);
         var p       = MakeProduct("Novo Produto");
 
@@ -231,7 +231,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Update_DeveAlterarDadosEUpdatedAt()
     {
-        var db      = CreateDb(nameof(Update_DeveAlterarDadosEUpdatedAt));
+        using var db = CreateDb(nameof(Update_DeveAlterarDadosEUpdatedAt));
         var service = CreateService(db);
         var p       = MakeProduct("Nome Original");
         db.Products.Add(p);
@@ -251,7 +251,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Update_DevePersistirNcmENaturezaOperacao()
     {
-        var db      = CreateDb(nameof(Update_DevePersistirNcmENaturezaOperacao));
+        using var db = CreateDb(nameof(Update_DevePersistirNcmENaturezaOperacao));
         var service = CreateService(db);
         var p       = MakeProduct("Produto fiscal");
         p.Ncm       = "84747100";
@@ -294,7 +294,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Update_SemAlterarTributos_DevePreservarMetadadosAutomaticosIbpt()
     {
-        var db = CreateDb(nameof(Update_SemAlterarTributos_DevePreservarMetadadosAutomaticosIbpt));
+        using var db = CreateDb(nameof(Update_SemAlterarTributos_DevePreservarMetadadosAutomaticosIbpt));
         var service = CreateService(db);
         var p = MakeProduct("Produto IBPT");
         p.Ncm = "95044000";
@@ -327,7 +327,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Update_AoTrocarSomenteNcm_DeveInvalidarTributosAnteriores()
     {
-        var db = CreateDb(nameof(Update_AoTrocarSomenteNcm_DeveInvalidarTributosAnteriores));
+        using var db = CreateDb(nameof(Update_AoTrocarSomenteNcm_DeveInvalidarTributosAnteriores));
         var service = CreateService(db);
         var p = MakeProduct("Produto IBPT");
         p.Ncm = "95044000";
@@ -360,7 +360,7 @@ public class ProductServiceTests
     [Fact]
     public async Task GetById_ProdutoExistente_DeveRetornarProduto()
     {
-        var db      = CreateDb(nameof(GetById_ProdutoExistente_DeveRetornarProduto));
+        using var db = CreateDb(nameof(GetById_ProdutoExistente_DeveRetornarProduto));
         var service = CreateService(db);
         var p       = MakeProduct("Card Lendário");
         db.Products.Add(p);
@@ -376,7 +376,7 @@ public class ProductServiceTests
     [Fact]
     public async Task GetById_ProdutoInexistente_DeveRetornarNull()
     {
-        var db      = CreateDb(nameof(GetById_ProdutoInexistente_DeveRetornarNull));
+        using var db = CreateDb(nameof(GetById_ProdutoInexistente_DeveRetornarNull));
         var service = CreateService(db);
 
         var result = await service.GetByIdAsync(Guid.NewGuid());
@@ -389,7 +389,7 @@ public class ProductServiceTests
     [Fact]
     public async Task GetByBarcode_ProdutoExistente_DeveRetornarProduto()
     {
-        var db      = CreateDb(nameof(GetByBarcode_ProdutoExistente_DeveRetornarProduto));
+        using var db = CreateDb(nameof(GetByBarcode_ProdutoExistente_DeveRetornarProduto));
         var service = CreateService(db);
         var p       = MakeProduct("Produto Scanável");
         p.Barcode   = "7891234567890";
@@ -406,7 +406,7 @@ public class ProductServiceTests
     [Fact]
     public async Task GetByBarcode_CodigoInexistente_DeveRetornarNull()
     {
-        var db      = CreateDb(nameof(GetByBarcode_CodigoInexistente_DeveRetornarNull));
+        using var db = CreateDb(nameof(GetByBarcode_CodigoInexistente_DeveRetornarNull));
         var service = CreateService(db);
 
         var result = await service.GetByBarcodeAsync("0000000000000");
@@ -418,7 +418,7 @@ public class ProductServiceTests
     public async Task GetByBarcode_ProdutoInativo_DeveRetornarNull()
     {
         // Produto inativo não deve aparecer no leitor de código de barras
-        var db      = CreateDb(nameof(GetByBarcode_ProdutoInativo_DeveRetornarNull));
+        using var db = CreateDb(nameof(GetByBarcode_ProdutoInativo_DeveRetornarNull));
         var service = CreateService(db);
         var p       = MakeProduct("Produto Descontinuado", active: false);
         p.Barcode   = "9999999999999";
@@ -442,7 +442,7 @@ public class ProductServiceTests
     public async Task Create_ValorNegativo_DeveRejeitar(
         int preco, int custo, int estoque, int estoqueMinimo, string campoEsperado)
     {
-        var db      = CreateDb($"Create_Negativo_{campoEsperado.Replace(" ", "")}");
+        using var db = CreateDb($"Create_Negativo_{campoEsperado.Replace(" ", "")}");
         var service = CreateService(db);
         var p       = MakeProduct();
         p.PriceInCents     = preco;
@@ -458,7 +458,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Create_PrecoPromocionalNegativo_DeveRejeitar()
     {
-        var db      = CreateDb(nameof(Create_PrecoPromocionalNegativo_DeveRejeitar));
+        using var db = CreateDb(nameof(Create_PrecoPromocionalNegativo_DeveRejeitar));
         var service = CreateService(db);
         var p       = MakeProduct();
         p.DiscountPriceInCents = -1;
@@ -471,7 +471,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Update_PrecoNegativo_DeveRejeitar()
     {
-        var db      = CreateDb(nameof(Update_PrecoNegativo_DeveRejeitar));
+        using var db = CreateDb(nameof(Update_PrecoNegativo_DeveRejeitar));
         var service = CreateService(db);
         var p       = MakeProduct();
         db.Products.Add(p);
@@ -490,7 +490,7 @@ public class ProductServiceTests
     [Fact]
     public async Task AdjustStock_DeltaAlemDoTeto_DeveRejeitarSemEstourarOBanco()
     {
-        var db      = CreateDb(nameof(AdjustStock_DeltaAlemDoTeto_DeveRejeitarSemEstourarOBanco));
+        using var db = CreateDb(nameof(AdjustStock_DeltaAlemDoTeto_DeveRejeitarSemEstourarOBanco));
         var service = CreateService(db);
         var p       = MakeProduct(stock: 10);
         db.Products.Add(p);
@@ -508,7 +508,7 @@ public class ProductServiceTests
     {
         // Antes do teto no cadastro, o produto podia nascer com int.MaxValue e um
         // ajuste de +1 estourava o `integer` do Postgres mesmo com delta pequeno.
-        var db      = CreateDb(nameof(AdjustStock_EstoqueNoTeto_NaoEstouraOInteger));
+        using var db = CreateDb(nameof(AdjustStock_EstoqueNoTeto_NaoEstouraOInteger));
         var service = CreateService(db);
         var p       = MakeProduct();
         p.StockQuantity = int.MaxValue;   // dado legado, antes da validação existir
@@ -528,7 +528,7 @@ public class ProductServiceTests
     {
         // O caminho de falha com leitura extra não pode confundir "não existe"
         // com "passou do teto".
-        var db      = CreateDb(nameof(AdjustStock_ProdutoInexistente_NaoViraErroDeTeto));
+        using var db = CreateDb(nameof(AdjustStock_ProdutoInexistente_NaoViraErroDeTeto));
         var service = CreateService(db);
 
         (await service.AdjustStockAsync(Guid.NewGuid(), 5)).Should().BeFalse();
@@ -537,7 +537,7 @@ public class ProductServiceTests
     [Fact]
     public async Task Create_EstoqueAcimaDoTeto_DeveRejeitar()
     {
-        var db      = CreateDb(nameof(Create_EstoqueAcimaDoTeto_DeveRejeitar));
+        using var db = CreateDb(nameof(Create_EstoqueAcimaDoTeto_DeveRejeitar));
         var service = CreateService(db);
         var p       = MakeProduct();
         p.StockQuantity = int.MaxValue;
@@ -550,7 +550,7 @@ public class ProductServiceTests
     [Fact]
     public async Task AdjustStock_DentroDoTeto_ContinuaFuncionando()
     {
-        var db      = CreateDb(nameof(AdjustStock_DentroDoTeto_ContinuaFuncionando));
+        using var db = CreateDb(nameof(AdjustStock_DentroDoTeto_ContinuaFuncionando));
         var service = CreateService(db);
         var p       = MakeProduct(stock: 10);
         db.Products.Add(p);

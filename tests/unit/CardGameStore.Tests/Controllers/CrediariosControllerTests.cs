@@ -77,7 +77,7 @@ public class CrediariosControllerTests
     [Fact]
     public async Task RegistrarPagamento_MesmaChaveIdempotencia_NaoDebitaDuasVezes()
     {
-        var db = CreateDb(nameof(RegistrarPagamento_MesmaChaveIdempotencia_NaoDebitaDuasVezes));
+        using var db = CreateDb(nameof(RegistrarPagamento_MesmaChaveIdempotencia_NaoDebitaDuasVezes));
         var (crediario, adminId) = await SeedAsync(db);
         var controller = CreateController(db, adminId);
 
@@ -106,7 +106,7 @@ public class CrediariosControllerTests
     [Fact]
     public async Task RegistrarPagamento_RetryAposQuitacao_Retorna200ENaoDebita()
     {
-        var db = CreateDb(nameof(RegistrarPagamento_RetryAposQuitacao_Retorna200ENaoDebita));
+        using var db = CreateDb(nameof(RegistrarPagamento_RetryAposQuitacao_Retorna200ENaoDebita));
         var (crediario, adminId) = await SeedAsync(db);
         var controller = CreateController(db, adminId);
 
@@ -136,7 +136,7 @@ public class CrediariosControllerTests
     [Fact]
     public async Task RegistrarPagamento_SemChave_RegistraCadaChamada()
     {
-        var db = CreateDb(nameof(RegistrarPagamento_SemChave_RegistraCadaChamada));
+        using var db = CreateDb(nameof(RegistrarPagamento_SemChave_RegistraCadaChamada));
         var (crediario, adminId) = await SeedAsync(db);
         var controller = CreateController(db, adminId);
 

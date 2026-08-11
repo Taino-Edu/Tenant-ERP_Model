@@ -47,7 +47,7 @@ public class UserServiceTests
     [Fact]
     public async Task GetAll_DeveRetornarApenasCustomers()
     {
-        var db      = CreateDb(nameof(GetAll_DeveRetornarApenasCustomers));
+        using var db = CreateDb(nameof(GetAll_DeveRetornarApenasCustomers));
         var service = CreateService(db);
 
         var admin = new User { Id = Guid.NewGuid(), Name = "Admin", PasswordHash = "h",
@@ -65,7 +65,7 @@ public class UserServiceTests
     [Fact]
     public async Task GetAll_BuscaPorNome_DeveFiltrarCorretamente()
     {
-        var db      = CreateDb(nameof(GetAll_BuscaPorNome_DeveFiltrarCorretamente));
+        using var db = CreateDb(nameof(GetAll_BuscaPorNome_DeveFiltrarCorretamente));
         var service = CreateService(db);
 
         db.Users.AddRange(MakeCustomer("João"), MakeCustomer("Maria"), MakeCustomer("José"));
@@ -80,7 +80,7 @@ public class UserServiceTests
     [Fact]
     public async Task GetAll_NaoDeveRetornarUsuariosInativos()
     {
-        var db      = CreateDb(nameof(GetAll_NaoDeveRetornarUsuariosInativos));
+        using var db = CreateDb(nameof(GetAll_NaoDeveRetornarUsuariosInativos));
         var service = CreateService(db);
 
         var ativo   = MakeCustomer("Ativo");
@@ -100,7 +100,7 @@ public class UserServiceTests
     [Fact]
     public async Task GetProfile_PontosExpirados_DeveRetornarSaldoZero()
     {
-        var db      = CreateDb(nameof(GetProfile_PontosExpirados_DeveRetornarSaldoZero));
+        using var db = CreateDb(nameof(GetProfile_PontosExpirados_DeveRetornarSaldoZero));
         var service = CreateService(db);
 
         var user = MakeCustomer("Pedro", points: 100, expiresAt: DateTime.UtcNow.AddDays(-1));
@@ -116,7 +116,7 @@ public class UserServiceTests
     [Fact]
     public async Task GetProfile_PontosValidos_DeveRetornarSaldoReal()
     {
-        var db      = CreateDb(nameof(GetProfile_PontosValidos_DeveRetornarSaldoReal));
+        using var db = CreateDb(nameof(GetProfile_PontosValidos_DeveRetornarSaldoReal));
         var service = CreateService(db);
 
         var user = MakeCustomer("Carla", points: 75, expiresAt: DateTime.UtcNow.AddDays(15));
@@ -134,7 +134,7 @@ public class UserServiceTests
     [Fact]
     public async Task AddPoints_DeveSomarAoSaldoEResetarValidade()
     {
-        var db      = CreateDb(nameof(AddPoints_DeveSomarAoSaldoEResetarValidade));
+        using var db = CreateDb(nameof(AddPoints_DeveSomarAoSaldoEResetarValidade));
         var service = CreateService(db);
         var adminId = Guid.NewGuid();
 
@@ -153,7 +153,7 @@ public class UserServiceTests
     [Fact]
     public async Task AddPoints_PontosExpirados_DeveZerarAntesDeSomar()
     {
-        var db      = CreateDb(nameof(AddPoints_PontosExpirados_DeveZerarAntesDeSomar));
+        using var db = CreateDb(nameof(AddPoints_PontosExpirados_DeveZerarAntesDeSomar));
         var service = CreateService(db);
         var adminId = Guid.NewGuid();
 
@@ -169,7 +169,7 @@ public class UserServiceTests
     [Fact]
     public async Task AddPoints_UsuarioInexistente_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(AddPoints_UsuarioInexistente_DeveLancarExcecao));
+        using var db = CreateDb(nameof(AddPoints_UsuarioInexistente_DeveLancarExcecao));
         var service = CreateService(db);
 
         var act = async () => await service.AddPointsAsync(Guid.NewGuid(), new AddPointsRequest { Points = 10 }, Guid.NewGuid());
@@ -183,7 +183,7 @@ public class UserServiceTests
     [Fact]
     public async Task DeductPoints_DeveSubtrairDoSaldo()
     {
-        var db      = CreateDb(nameof(DeductPoints_DeveSubtrairDoSaldo));
+        using var db = CreateDb(nameof(DeductPoints_DeveSubtrairDoSaldo));
         var service = CreateService(db);
 
         var user = MakeCustomer("Teo", points: 80, expiresAt: DateTime.UtcNow.AddDays(10));
@@ -198,7 +198,7 @@ public class UserServiceTests
     [Fact]
     public async Task DeductPoints_SaldoInsuficiente_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(DeductPoints_SaldoInsuficiente_DeveLancarExcecao));
+        using var db = CreateDb(nameof(DeductPoints_SaldoInsuficiente_DeveLancarExcecao));
         var service = CreateService(db);
 
         var user = MakeCustomer("Rafa", points: 10, expiresAt: DateTime.UtcNow.AddDays(10));
@@ -214,7 +214,7 @@ public class UserServiceTests
     [Fact]
     public async Task DeductPoints_PontosExpirados_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(DeductPoints_PontosExpirados_DeveLancarExcecao));
+        using var db = CreateDb(nameof(DeductPoints_PontosExpirados_DeveLancarExcecao));
         var service = CreateService(db);
 
         var user = MakeCustomer("Gabi", points: 100, expiresAt: DateTime.UtcNow.AddDays(-5));

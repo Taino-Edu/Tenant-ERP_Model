@@ -96,7 +96,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task OpenComanda_PrimeiraVez_DeveCriarNovaComanda()
     {
-        var db      = CreateDb(nameof(OpenComanda_PrimeiraVez_DeveCriarNovaComanda));
+        using var db = CreateDb(nameof(OpenComanda_PrimeiraVez_DeveCriarNovaComanda));
         var service = CreateService(db);
         var user    = new User { Id = Guid.NewGuid(), Name = "Ana", PasswordHash = "h", Role = UserRole.Customer };
         db.Users.Add(user);
@@ -113,7 +113,7 @@ public class ComandaServiceTests
     public async Task OpenComanda_ComComandaAtiva_DeveReutilizarExistente()
     {
         // Agora o serviço reutiliza a comanda se houver uma aberta ou em andamento
-        var db      = CreateDb(nameof(OpenComanda_ComComandaAtiva_DeveReutilizarExistente));
+        using var db = CreateDb(nameof(OpenComanda_ComComandaAtiva_DeveReutilizarExistente));
         var service = CreateService(db);
         var (user, _, _) = await SeedAsync(db);
 
@@ -128,7 +128,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task OpenComanda_TrocaDeMesa_DeveAtualizarTableIdentifier()
     {
-        var db      = CreateDb(nameof(OpenComanda_TrocaDeMesa_DeveAtualizarTableIdentifier));
+        using var db = CreateDb(nameof(OpenComanda_TrocaDeMesa_DeveAtualizarTableIdentifier));
         var service = CreateService(db);
         var (user, _, _) = await SeedAsync(db);
 
@@ -143,7 +143,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task AddItem_DeveDecrementarEstoqueEAtualizarTotal()
     {
-        var db      = CreateDb(nameof(AddItem_DeveDecrementarEstoqueEAtualizarTotal));
+        using var db = CreateDb(nameof(AddItem_DeveDecrementarEstoqueEAtualizarTotal));
         var service = CreateService(db);
         var (user, product, _) = await SeedAsync(db);
 
@@ -165,7 +165,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task AddItem_DeveCongelarAreaEIniciarFilaDeProducao()
     {
-        var db = CreateDb(nameof(AddItem_DeveCongelarAreaEIniciarFilaDeProducao));
+        using var db = CreateDb(nameof(AddItem_DeveCongelarAreaEIniciarFilaDeProducao));
         var service = CreateService(db);
         var (user, product, _) = await SeedAsync(db);
         var area = new RestaurantProductionArea { Name = "Bar", Color = "#112233" };
@@ -188,7 +188,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task AddItem_SemEstoque_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(AddItem_SemEstoque_DeveLancarExcecao));
+        using var db = CreateDb(nameof(AddItem_SemEstoque_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, product, _) = await SeedAsync(db);
 
@@ -208,7 +208,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task AddItem_ProdutoInativo_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(AddItem_ProdutoInativo_DeveLancarExcecao));
+        using var db = CreateDb(nameof(AddItem_ProdutoInativo_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, product, _) = await SeedAsync(db);
 
@@ -228,7 +228,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task AddItem_DeveAlterarStatusParaEmAndamento()
     {
-        var db      = CreateDb(nameof(AddItem_DeveAlterarStatusParaEmAndamento));
+        using var db = CreateDb(nameof(AddItem_DeveAlterarStatusParaEmAndamento));
         var service = CreateService(db);
         var (user, product, _) = await SeedAsync(db);
 
@@ -246,7 +246,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task RemoveItem_DeveRestaurarEstoque()
     {
-        var db      = CreateDb(nameof(RemoveItem_DeveRestaurarEstoque));
+        using var db = CreateDb(nameof(RemoveItem_DeveRestaurarEstoque));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
 
@@ -269,7 +269,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task RemoveItem_UltimoItem_DeveVoltarStatusParaAberta()
     {
-        var db      = CreateDb(nameof(RemoveItem_UltimoItem_DeveVoltarStatusParaAberta));
+        using var db = CreateDb(nameof(RemoveItem_UltimoItem_DeveVoltarStatusParaAberta));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
 
@@ -290,7 +290,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task CancelComanda_DeveRestaurarEstoqueDeTodosOsItens()
     {
-        var db      = CreateDb(nameof(CancelComanda_DeveRestaurarEstoqueDeTodosOsItens));
+        using var db = CreateDb(nameof(CancelComanda_DeveRestaurarEstoqueDeTodosOsItens));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
 
@@ -310,7 +310,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task CancelComanda_DeveRecusarQuandoComandaJaEstaFechada()
     {
-        var db      = CreateDb(nameof(CancelComanda_DeveRecusarQuandoComandaJaEstaFechada));
+        using var db = CreateDb(nameof(CancelComanda_DeveRecusarQuandoComandaJaEstaFechada));
         var service = CreateService(db);
         var (_, _, comanda) = await SeedAsync(db);
 
@@ -326,7 +326,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task CancelComanda_DeveRecusarQuandoComandaJaEstaCancelada()
     {
-        var db      = CreateDb(nameof(CancelComanda_DeveRecusarQuandoComandaJaEstaCancelada));
+        using var db = CreateDb(nameof(CancelComanda_DeveRecusarQuandoComandaJaEstaCancelada));
         var service = CreateService(db);
         var (_, _, comanda) = await SeedAsync(db);
 
@@ -344,7 +344,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task ApplyPoints_MesmoComSaldo_DeveRecusarProgramaDesativado()
     {
-        var db      = CreateDb(nameof(ApplyPoints_MesmoComSaldo_DeveRecusarProgramaDesativado));
+        using var db = CreateDb(nameof(ApplyPoints_MesmoComSaldo_DeveRecusarProgramaDesativado));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
 
@@ -363,7 +363,7 @@ public class ComandaServiceTests
     {
         // Módulo "pontos" fora do EnabledModules do tenant — precisa barrar antes
         // de sequer olhar o toggle SiteConfig.PontosFidelidadeAtivo da loja.
-        var db = CreateDb(nameof(ApplyPoints_SemModuloHabilitado_DeveLancarExcecao));
+        using var db = CreateDb(nameof(ApplyPoints_SemModuloHabilitado_DeveLancarExcecao));
 
         var tenantContext = new Mock<ITenantContext>();
         tenantContext.Setup(t => t.EnabledModules).Returns(new[] { "fiscal" }); // sem "pontos"
@@ -388,7 +388,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task ApplyPoints_ComPontosExpirados_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(ApplyPoints_ComPontosExpirados_DeveLancarExcecao));
+        using var db = CreateDb(nameof(ApplyPoints_ComPontosExpirados_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
 
@@ -406,7 +406,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task ApplyPoints_SaldoInsuficiente_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(ApplyPoints_SaldoInsuficiente_DeveLancarExcecao));
+        using var db = CreateDb(nameof(ApplyPoints_SaldoInsuficiente_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
 
@@ -424,7 +424,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task ApplyPoints_JaAplicado_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(ApplyPoints_JaAplicado_DeveLancarExcecao));
+        using var db = CreateDb(nameof(ApplyPoints_JaAplicado_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
 
@@ -442,7 +442,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task ApplyPoints_ComProgramaDesativado_DeveLancarExcecao()
     {
-        var db      = CreateDb(nameof(ApplyPoints_ComProgramaDesativado_DeveLancarExcecao));
+        using var db = CreateDb(nameof(ApplyPoints_ComProgramaDesativado_DeveLancarExcecao));
         db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = false });
         await db.SaveChangesAsync();
         var service = CreateService(db);
@@ -465,7 +465,7 @@ public class ComandaServiceTests
     public async Task CloseComanda_SemConfigDePontos_NaoDeveGanharPontos()
     {
         // Sem linha de SiteConfig nenhuma — o serviço trata como ativo (default true).
-        var db      = CreateDb(nameof(CloseComanda_SemConfigDePontos_NaoDeveGanharPontos));
+        using var db = CreateDb(nameof(CloseComanda_SemConfigDePontos_NaoDeveGanharPontos));
         var service = CreateService(db);
         var (user, product, comanda) = await SeedAsync(db);
         await service.AddItemAsync(user.Id, new AddItemToComandaRequest { ProductId = product.Id, Quantity = 4 }); // R$20
@@ -479,7 +479,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task CloseComanda_ComPontosDesativados_NaoDeveGanharPontos()
     {
-        var db = CreateDb(nameof(CloseComanda_ComPontosDesativados_NaoDeveGanharPontos));
+        using var db = CreateDb(nameof(CloseComanda_ComPontosDesativados_NaoDeveGanharPontos));
         db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = false });
         await db.SaveChangesAsync();
         var service = CreateService(db);
@@ -495,7 +495,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task CloseComanda_PagarComPontosDesativados_DeveLancarExcecao()
     {
-        var db = CreateDb(nameof(CloseComanda_PagarComPontosDesativados_DeveLancarExcecao));
+        using var db = CreateDb(nameof(CloseComanda_PagarComPontosDesativados_DeveLancarExcecao));
         db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = false });
         await db.SaveChangesAsync();
         var service = CreateService(db);
@@ -513,7 +513,7 @@ public class ComandaServiceTests
     [Fact]
     public async Task CloseComanda_ComToggleLegadoAtivo_DeveRecusarPontos()
     {
-        var db = CreateDb(nameof(CloseComanda_ComToggleLegadoAtivo_DeveRecusarPontos));
+        using var db = CreateDb(nameof(CloseComanda_ComToggleLegadoAtivo_DeveRecusarPontos));
         db.SiteConfigs.Add(new SiteConfig { PontosFidelidadeAtivo = true });
         await db.SaveChangesAsync();
         var service = CreateService(db);
@@ -538,7 +538,7 @@ public class ComandaServiceTests
     {
         // Verifica que a constante PaymentCrediario ("Crediario") não afetou
         // a validação de estoque — estoque 0 sempre deve ser rejeitado
-        var db      = CreateDb(nameof(AddItem_EstoqueExatamenteZero_DeveLancarExcecao));
+        using var db = CreateDb(nameof(AddItem_EstoqueExatamenteZero_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, product, _) = await SeedAsync(db);
 
@@ -560,7 +560,7 @@ public class ComandaServiceTests
     public async Task AddItem_QuantidadeMaiorQueEstoque_DeveLancarExcecao()
     {
         // Tenta adicionar quantidade superior ao estoque disponível
-        var db      = CreateDb(nameof(AddItem_QuantidadeMaiorQueEstoque_DeveLancarExcecao));
+        using var db = CreateDb(nameof(AddItem_QuantidadeMaiorQueEstoque_DeveLancarExcecao));
         var service = CreateService(db);
         var (user, product, _) = await SeedAsync(db);
 
@@ -579,7 +579,7 @@ public class ComandaServiceTests
     public async Task AddItem_EstoqueExato_DeveAdicionarEZerarEstoque()
     {
         // Adiciona exatamente o estoque disponível — deve funcionar (estoque vai a 0)
-        var db      = CreateDb(nameof(AddItem_EstoqueExato_DeveAdicionarEZerarEstoque));
+        using var db = CreateDb(nameof(AddItem_EstoqueExato_DeveAdicionarEZerarEstoque));
         var service = CreateService(db);
         var (user, product, _) = await SeedAsync(db);
 

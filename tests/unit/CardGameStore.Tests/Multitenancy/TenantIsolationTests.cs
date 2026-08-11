@@ -22,8 +22,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace CardGameStore.Tests.Multitenancy;
 
-public class TenantIsolationTests
+public class TenantIsolationTests : IDisposable
 {
+    private readonly List<string> _provisionedSchemas = [];
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>AppDbContext ligado ao TenantConnectionInterceptor REAL, lendo o
@@ -42,10 +44,11 @@ public class TenantIsolationTests
     /// dele, já passando pelo interceptor real (CreateTables gera CREATE TABLE
     /// sem qualificador de schema — as tabelas caem no search_path corrente,
     /// exatamente como no provisionamento de tenant de produção).</summary>
-    private static ITenantContext ProvisionSchema(string schema)
+    private ITenantContext ProvisionSchema(string schema)
     {
         var isolatedSchema = TestDbFactory.IsolatedSchemaName(schema);
         TestDbFactory.ResetSchema(isolatedSchema);
+        _provisionedSchemas.Add(isolatedSchema);
 
         var tenant = new TenantContext();
         tenant.Set(Guid.NewGuid(), isolatedSchema, ["fiscal"]);
@@ -53,6 +56,12 @@ public class TenantIsolationTests
         using var db = CreateDbFor(tenant);
         db.GetInfrastructure().GetRequiredService<IRelationalDatabaseCreator>().CreateTables();
         return tenant;
+    }
+
+    public void Dispose()
+    {
+        foreach (var schema in _provisionedSchemas)
+            TestDbFactory.ReleaseSchema(schema);
     }
 
     private static Product NovoProduto(string nome) => new()
