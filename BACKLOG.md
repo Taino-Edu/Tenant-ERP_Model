@@ -611,6 +611,30 @@
 - **Gatilho:** volume real de tráfego/SLA que justifique a complexidade. O deploy
   atual já constrói antes de recriar containers; não é prioridade imediata.
 
+### INFRA-002 — Avaliar Apache APISIX como API/AI Gateway
+
+- **Estado:** `BLOQUEADO` (decisão arquitetural futura, registrada em 2026-08-12)
+- **Hoje:** Nginx atende a entrada única para Next.js e API .NET; autenticação,
+  isolamento multi-tenant e rate limiting permanecem dentro da aplicação.
+- **Objetivo futuro:** centralizar roteamento, quotas por tenant/plano, proteção de
+  webhooks, balanceamento, circuit breaker, observabilidade, canary/blue-green e
+  acesso aos provedores de IA quando houver vários serviços independentes.
+- **Gatilhos para prova de conceito:** pelo menos dois serviços de backend além da
+  API .NET (por exemplo prospecção, fiscal ou mensageria), API pública para
+  terceiros, múltiplas instâncias da API, quotas comerciais por tenant ou gateway
+  multi-provedor de IA.
+- **Primeira avaliação:** ADR comparando Nginx atual, APISIX standalone/YAML e
+  APISIX com etcd; incluir disponibilidade, backup, segurança da Admin API,
+  observabilidade, custo operacional e plano de rollback.
+- **Regras:** o gateway não substitui autorização, LGPD nem isolamento por tenant
+  no backend; plugins de proteção precisam de configuração explícita. Evitar
+  duplicar regras sem definir qual camada é a fonte de verdade.
+- **Critério de avanço:** prova de conceito em staging com rotas da API .NET e de
+  um segundo serviço, limites por consumidor/tenant, métricas e rollback testados.
+- **Referências:** documentação e repositório oficiais do Apache APISIX:
+  `https://apisix.apache.org/docs/apisix/getting-started/README/` e
+  `https://github.com/apache/apisix`.
+
 ## Entregas confirmadas — não recolocar como pendência
 
 - Multi-tenancy por schema, resolução por domínio/subdomínio e isolamento no backend.
