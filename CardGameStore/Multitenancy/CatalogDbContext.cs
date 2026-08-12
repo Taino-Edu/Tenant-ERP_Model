@@ -34,6 +34,7 @@ public class CatalogDbContext : DbContext
     public DbSet<SupportTicketMessage> SupportTicketMessages { get; set; }
     public DbSet<TenantCharge> TenantCharges { get; set; }
     public DbSet<ReferralPartner> ReferralPartners { get; set; }
+    public DbSet<ReferralPartnerInvitation> ReferralPartnerInvitations { get; set; }
     public DbSet<TenantReferral> TenantReferrals { get; set; }
     public DbSet<ReferralCommission> ReferralCommissions { get; set; }
 
@@ -306,6 +307,15 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(p => p.Name).HasDatabaseName("ix_referral_partners_name");
             entity.HasIndex(p => p.Document).IsUnique().HasFilter("document IS NOT NULL")
                   .HasDatabaseName("ix_referral_partners_document_unique");
+        });
+
+        modelBuilder.Entity<ReferralPartnerInvitation>(entity =>
+        {
+            entity.HasIndex(i => i.TokenHash).IsUnique()
+                  .HasDatabaseName("ix_referral_partner_invitations_token_unique");
+            entity.HasIndex(i => i.Email).HasDatabaseName("ix_referral_partner_invitations_email");
+            entity.HasOne<ReferralPartner>().WithMany().HasForeignKey(i => i.AcceptedPartnerId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<TenantReferral>(entity =>

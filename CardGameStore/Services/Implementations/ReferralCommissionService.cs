@@ -41,8 +41,8 @@ public class ReferralCommissionService : IReferralCommissionService
             if (cycle < 1 || cycle > referral.MonthlyCommissionCycles.Value) return;
         }
 
-        var paymentDay = await _catalog.ReferralPartners.AsNoTracking()
-            .Where(p => p.Id == referral.PartnerId).Select(p => p.PaymentDay).SingleAsync();
+        var graceDays = await _catalog.ReferralPartners.AsNoTracking()
+            .Where(p => p.Id == referral.PartnerId).Select(p => p.PaymentGraceDays).SingleAsync();
         var earnedAt = charge.PaidAt.Value;
 
         _catalog.ReferralCommissions.Add(new ReferralCommission
@@ -55,7 +55,7 @@ public class ReferralCommissionService : IReferralCommissionService
             Amount = decimal.Round(charge.Amount * percent / 100m, 2, MidpointRounding.AwayFromZero),
             ReferenceMonth = charge.ReferenceMonth,
             EarnedAt = earnedAt,
-            DueDate = NextPaymentDate(earnedAt, paymentDay),
+            DueDate = EligibilityDate(earnedAt, graceDays),
         });
     }
 
@@ -85,5 +85,11 @@ public class ReferralCommissionService : IReferralCommissionService
         var next = candidate.AddMonths(1);
         return new DateTime(next.Year, next.Month,
             Math.Min(paymentDay, DateTime.DaysInMonth(next.Year, next.Month)), 0, 0, 0, DateTimeKind.Utc);
+    }
+
+    internal static DateTime EligibilityDate(DateTime paidAt, int graceDays)
+    {
+        var utc = paidAt.Kind == DateTimeKind.Utc ? paidAt : paidAt.ToUniversalTime();
+        return utc.Date.AddDays(Math.Clamp(graceDays, 0, 60));
     }
 }

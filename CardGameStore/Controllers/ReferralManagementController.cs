@@ -1,10 +1,14 @@
 using CardGameStore.DTOs;
 using CardGameStore.Multitenancy;
 using CardGameStore.Security;
+using CardGameStore.Services;
 using CardGameStore.Services.Interfaces;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace CardGameStore.Controllers;
 
@@ -16,11 +20,13 @@ public class ReferralManagementController : ControllerBase
 {
     private readonly CatalogDbContext _catalog;
     private readonly IReferralCommissionService _commissions;
+    private readonly IEmailService _email;
 
-    public ReferralManagementController(CatalogDbContext catalog, IReferralCommissionService commissions)
+    public ReferralManagementController(CatalogDbContext catalog, IReferralCommissionService commissions, IEmailService email)
     {
         _catalog = catalog;
         _commissions = commissions;
+        _email = email;
     }
 
     [HttpGet("summary")]
@@ -39,7 +45,7 @@ public class ReferralManagementController : ControllerBase
             ActivePartners = await _catalog.ReferralPartners.CountAsync(p => p.Active),
             ReferredClients = referredTenantIds.Count,
             PendingAmount = items.Where(c => c.PaidAt == null).Sum(c => c.Amount),
-            OverdueAmount = items.Where(c => c.PaidAt == null && c.DueDate.Date < today).Sum(c => c.Amount),
+            OverdueAmount = items.Where(c => c.PaidAt == null && c.DueDate.Date <= today).Sum(c => c.Amount),
             PaidAmount = items.Where(c => c.PaidAt != null).Sum(c => c.Amount),
             ReferredMrr = referredMrr,
         });
@@ -61,6 +67,10 @@ public class ReferralManagementController : ControllerBase
                 Id = p.Id, Name = p.Name, Document = p.Document, Phone = p.Phone, Email = p.Email,
                 PixKey = p.PixKey, SetupCommissionPercent = p.SetupCommissionPercent,
                 MonthlyCommissionPercent = p.MonthlyCommissionPercent, PaymentDay = p.PaymentDay,
+                PersonType = p.PersonType, PartnerKind = p.PartnerKind,
+                ProfessionalRegistration = p.ProfessionalRegistration,
+                FiscalDocumentType = p.FiscalDocumentType, PaymentGraceDays = p.PaymentGraceDays,
+                ContractVersion = p.ContractVersion, ContractAcceptedAt = p.ContractAcceptedAt,
                 Active = p.Active, ReferredClients = referrals.Count(r => r.PartnerId == p.Id && r.Active),
                 PendingAmount = own.Where(c => c.PaidAt == null).Sum(c => c.Amount),
                 PaidAmount = own.Where(c => c.PaidAt != null).Sum(c => c.Amount),
@@ -112,6 +122,63 @@ public class ReferralManagementController : ControllerBase
                                 StartedOn = r.StartedOn, Active = r.Active, Notes = r.Notes,
                             }).ToListAsync();
         return Ok(result);
+    }
+
+    [HttpGet("invitations")]
+    public async Task<ActionResult<List<ReferralInvitationDto>>> Invitations()
+    {
+        var now = DateTime.UtcNow;
+        var rows = await _catalog.ReferralPartnerInvitations.AsNoTracking()
+            .OrderByDescending(i => i.CreatedAt).Take(100).ToListAsync();
+        return Ok(rows.Select(i => ToInvitationDto(i, now)).ToList());
+    }
+
+    [HttpPost("invitations")]
+    [RequirePlatformPermission(PlatformPermission.ReferralsManage)]
+    public async Task<ActionResult<ReferralInvitationDto>> CreateInvitation([FromBody] CreateReferralInvitationRequest request)
+    {
+        if (!ModelState.IsValid) return ValidationProblem(ModelState);
+        if (request.SendEmail && string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(new { Message = "Informe o e-mail para enviar o convite." });
+
+        var rawToken = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+        var invitation = new ReferralPartnerInvitation
+        {
+            TokenHash = HashToken(rawToken), Name = Clean(request.Name),
+            Email = Clean(request.Email)?.ToLowerInvariant(), PartnerKind = request.PartnerKind.Trim(),
+            SetupCommissionPercent = request.SetupCommissionPercent,
+            MonthlyCommissionPercent = request.MonthlyCommissionPercent,
+            PaymentGraceDays = request.PaymentGraceDays,
+            ContractVersion = ReferralPartnerTerms.Version, ContractText = ReferralPartnerTerms.Text,
+            ExpiresAt = DateTime.UtcNow.AddDays(request.ExpiresInDays),
+        };
+        _catalog.ReferralPartnerInvitations.Add(invitation);
+        await _catalog.SaveChangesAsync();
+
+        var url = $"{_email.AppUrl}/parceiros/convite?token={Uri.EscapeDataString(rawToken)}";
+        if (request.SendEmail)
+        {
+            await _email.SendReferralPartnerInviteAsync(invitation.Email!, invitation.Name ?? "Parceiro(a)", url, invitation.ExpiresAt);
+            invitation.SentAt = DateTime.UtcNow;
+            await _catalog.SaveChangesAsync();
+        }
+
+        var dto = ToInvitationDto(invitation, DateTime.UtcNow);
+        dto.InviteUrl = url;
+        return Created($"api/platform/referrals/invitations/{invitation.Id}", dto);
+    }
+
+    [HttpDelete("invitations/{id:guid}")]
+    [RequirePlatformPermission(PlatformPermission.ReferralsManage)]
+    public async Task<IActionResult> RevokeInvitation(Guid id)
+    {
+        var invitation = await _catalog.ReferralPartnerInvitations.FindAsync(id);
+        if (invitation is null) return NotFound();
+        if (invitation.AcceptedAt.HasValue)
+            return BadRequest(new { Message = "Um convite já aceito não pode ser revogado." });
+        invitation.RevokedAt = DateTime.UtcNow;
+        await _catalog.SaveChangesAsync();
+        return NoContent();
     }
 
     [HttpPost("assignments")]
@@ -183,7 +250,9 @@ public class ReferralManagementController : ControllerBase
             CommissionPercent = x.c.CommissionPercent, Amount = x.c.Amount,
             ReferenceMonth = x.c.ReferenceMonth, EarnedAt = x.c.EarnedAt,
             DueDate = x.c.DueDate, PaidAt = x.c.PaidAt,
-            Status = x.c.PaidAt != null ? "Pago" : x.c.DueDate.Date < today ? "Vencido" : "Pendente",
+            FiscalDocumentType = x.p.FiscalDocumentType,
+            FiscalDocumentReference = x.c.FiscalDocumentReference,
+            Status = x.c.PaidAt != null ? "Pago" : x.c.DueDate.Date > today ? "Carência" : "Disponível",
         });
         if (!string.IsNullOrWhiteSpace(status))
             result = result.Where(c => c.Status.Equals(status, StringComparison.OrdinalIgnoreCase));
@@ -198,7 +267,12 @@ public class ReferralManagementController : ControllerBase
             return BadRequest(new { Message = "A data de pagamento não pode ser futura." });
         var commission = await _catalog.ReferralCommissions.FindAsync(id);
         if (commission is null) return NotFound();
+        if (request.PaidAt.HasValue && commission.DueDate.Date > DateTime.UtcNow.Date)
+            return BadRequest(new { Message = $"A comissão permanece em carência até {commission.DueDate:dd/MM/yyyy}." });
+        if (request.PaidAt.HasValue && string.IsNullOrWhiteSpace(request.FiscalDocumentReference))
+            return BadRequest(new { Message = "Informe a referência da NFS-e ou do RPA para registrar o pagamento." });
         commission.PaidAt = request.PaidAt?.ToUniversalTime();
+        commission.FiscalDocumentReference = request.PaidAt.HasValue ? Clean(request.FiscalDocumentReference) : null;
         await _catalog.SaveChangesAsync();
         return NoContent();
     }
@@ -210,12 +284,28 @@ public class ReferralManagementController : ControllerBase
         partner.Phone = Clean(request.Phone);
         partner.Email = Clean(request.Email)?.ToLowerInvariant();
         partner.PixKey = Clean(request.PixKey);
+        partner.PersonType = request.PersonType;
+        partner.PartnerKind = request.PartnerKind.Trim();
+        partner.ProfessionalRegistration = Clean(request.ProfessionalRegistration);
+        partner.FiscalDocumentType = request.PersonType == "PJ" ? "NFS-e" : "RPA";
         partner.SetupCommissionPercent = request.SetupCommissionPercent;
         partner.MonthlyCommissionPercent = request.MonthlyCommissionPercent;
         partner.PaymentDay = request.PaymentDay;
+        partner.PaymentGraceDays = request.PaymentGraceDays;
         partner.Active = request.Active;
         partner.UpdatedAt = DateTime.UtcNow;
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string HashToken(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    private static ReferralInvitationDto ToInvitationDto(ReferralPartnerInvitation i, DateTime now) => new()
+    {
+        Id = i.Id, Name = i.Name, Email = i.Email, PartnerKind = i.PartnerKind,
+        SetupCommissionPercent = i.SetupCommissionPercent, MonthlyCommissionPercent = i.MonthlyCommissionPercent,
+        PaymentGraceDays = i.PaymentGraceDays, ContractVersion = i.ContractVersion,
+        ExpiresAt = i.ExpiresAt, SentAt = i.SentAt, AcceptedAt = i.AcceptedAt, RevokedAt = i.RevokedAt,
+        Status = i.AcceptedAt.HasValue ? "Aceito" : i.RevokedAt.HasValue ? "Revogado" : i.ExpiresAt <= now ? "Expirado" : "Pendente",
+    };
 }

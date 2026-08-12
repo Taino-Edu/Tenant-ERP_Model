@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { CalendarDays, Check, HandCoins, Link2, Pencil, RefreshCw, Undo2, UserPlus, Users } from 'lucide-react'
+import { CalendarDays, Check, Copy, HandCoins, Link2, Mail, Pencil, RefreshCw, Undo2, UserPlus, Users, X } from 'lucide-react'
 import Button from '@/components/admin/ui/Button'
 import Spinner from '@/components/admin/ui/Spinner'
 import {
   getErrorMessage, platformApi, referralApi,
-  type ReferralCommissionDto, type ReferralPartnerDto, type ReferralSummaryDto,
+  type ReferralCommissionDto, type ReferralInvitationDto, type ReferralPartnerDto, type ReferralSummaryDto,
   type SaveReferralPartnerRequest, type TenantReferralDto, type TenantSummary,
 } from '@/lib/api'
 
@@ -17,7 +17,8 @@ const input = 'w-full rounded-lg border border-surface-500 bg-surface-700 px-3 p
 
 const emptyPartner: SaveReferralPartnerRequest = {
   name: '', document: '', phone: '', email: '', pixKey: '',
-  setupCommissionPercent: 0, monthlyCommissionPercent: 0, paymentDay: 10, active: true,
+  personType: 'PF', partnerKind: 'Vendedor', professionalRegistration: '',
+  setupCommissionPercent: 30, monthlyCommissionPercent: 5, paymentDay: 10, paymentGraceDays: 5, active: true,
 }
 
 export default function IndicacoesPage() {
@@ -26,6 +27,7 @@ export default function IndicacoesPage() {
   const [assignments, setAssignments] = useState<TenantReferralDto[]>([])
   const [commissions, setCommissions] = useState<ReferralCommissionDto[]>([])
   const [tenants, setTenants] = useState<TenantSummary[]>([])
+  const [invitations, setInvitations] = useState<ReferralInvitationDto[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [partnerFilter, setPartnerFilter] = useState('')
@@ -36,15 +38,16 @@ export default function IndicacoesPage() {
   const [assignment, setAssignment] = useState({
     partnerId: '', tenantId: '', setupPercent: '', monthlyPercent: '', cycles: '', notes: '',
   })
+  const [invite, setInvite] = useState({ name: '', email: '', partnerKind: 'Vendedor', setupCommissionPercent: 30, monthlyCommissionPercent: 5, paymentGraceDays: 5 })
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [s, p, a, c, t] = await Promise.all([
+      const [s, p, a, c, t, i] = await Promise.all([
         referralApi.summary(), referralApi.partners(), referralApi.assignments(),
-        referralApi.commissions(partnerFilter, statusFilter), platformApi.listTenants(),
+        referralApi.commissions(partnerFilter, statusFilter), platformApi.listTenants(), referralApi.invitations(),
       ])
-      setSummary(s.data); setPartners(p.data); setAssignments(a.data); setCommissions(c.data); setTenants(t.data)
+      setSummary(s.data); setPartners(p.data); setAssignments(a.data); setCommissions(c.data); setTenants(t.data); setInvitations(i.data)
     } catch (error) {
       toast.error(getErrorMessage(error, 'Não foi possível carregar o controle de indicações.'))
     } finally { setLoading(false) }
@@ -71,9 +74,35 @@ export default function IndicacoesPage() {
       name: partner.name, document: partner.document, phone: partner.phone, email: partner.email,
       pixKey: partner.pixKey, setupCommissionPercent: partner.setupCommissionPercent,
       monthlyCommissionPercent: partner.monthlyCommissionPercent, paymentDay: partner.paymentDay,
+      personType: partner.personType, partnerKind: partner.partnerKind,
+      professionalRegistration: partner.professionalRegistration, paymentGraceDays: partner.paymentGraceDays,
       active: partner.active,
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function createInvitation(sendEmail: boolean) {
+    if (sendEmail && !invite.email) return toast.error('Informe o e-mail do parceiro.')
+    setSaving(true)
+    try {
+      const { data } = await referralApi.createInvitation({ ...invite, expiresInDays: 7, sendEmail, email: invite.email || null, name: invite.name || null })
+      if (data.inviteUrl) {
+        try {
+          await navigator.clipboard.writeText(data.inviteUrl)
+          toast.success(sendEmail ? 'Convite enviado e link copiado.' : 'Link de convite copiado.')
+        } catch {
+          toast.success(sendEmail ? 'Convite enviado por e-mail.' : 'Convite gerado; a cópia automática foi bloqueada pelo navegador.')
+        }
+      }
+      setInvite({ name: '', email: '', partnerKind: 'Vendedor', setupCommissionPercent: 30, monthlyCommissionPercent: 5, paymentGraceDays: 5 })
+      await load()
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível gerar o convite.')) }
+    finally { setSaving(false) }
+  }
+
+  async function revokeInvitation(id: string) {
+    try { await referralApi.revokeInvitation(id); toast.success('Convite revogado.'); await load() }
+    catch (error) { toast.error(getErrorMessage(error, 'Não foi possível revogar o convite.')) }
   }
 
   async function saveAssignment(event: React.FormEvent) {
@@ -97,7 +126,9 @@ export default function IndicacoesPage() {
 
   async function togglePayment(item: ReferralCommissionDto) {
     try {
-      await referralApi.setCommissionPayment(item.id, item.paidAt ? null : new Date().toISOString().slice(0, 10))
+      const reference = item.paidAt ? null : window.prompt(`Informe a referência do documento ${item.fiscalDocumentType} deste repasse:`)
+      if (!item.paidAt && !reference?.trim()) return
+      await referralApi.setCommissionPayment(item.id, item.paidAt ? null : new Date().toISOString().slice(0, 10), reference?.trim())
       toast.success(item.paidAt ? 'Comissão reaberta.' : 'Comissão marcada como paga.')
       await load()
     } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível atualizar a comissão.')) }
@@ -119,9 +150,23 @@ export default function IndicacoesPage() {
           <Metric title="Clientes indicados" value={String(summary?.referredClients ?? 0)} />
           <Metric title="MRR indicado" value={money(summary?.referredMrr ?? 0)} />
           <Metric title="A pagar" value={money(summary?.pendingAmount ?? 0)} />
-          <Metric title="Vencido" value={money(summary?.overdueAmount ?? 0)} alert />
+          <Metric title="Disponível" value={money(summary?.overdueAmount ?? 0)} />
           <Metric title="Já pago" value={money(summary?.paidAmount ?? 0)} />
         </div>
+
+        <section className="space-y-4 rounded-xl border border-brand-500/40 bg-surface-800 p-5">
+          <div><h2 className="flex items-center gap-2 font-semibold text-white"><Mail className="h-4 w-4 text-brand-400" /> Convidar parceiro comercial</h2><p className="mt-1 text-xs text-gray-400">Envie por e-mail ou gere um link. O regulamento e as regras ficam congelados na versão aceita.</p></div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <Field label="Nome"><input className={input} value={invite.name} onChange={e => setInvite(v => ({ ...v, name: e.target.value }))} /></Field>
+            <Field label="E-mail"><input type="email" className={input} value={invite.email} onChange={e => setInvite(v => ({ ...v, email: e.target.value }))} /></Field>
+            <Field label="Tipo"><select className={input} value={invite.partnerKind} onChange={e => setInvite(v => ({ ...v, partnerKind: e.target.value }))}><option>Vendedor</option><option>Indicador</option><option>Contador</option></select></Field>
+            <Field label="% implantação"><input type="number" min={0} max={100} className={input} value={invite.setupCommissionPercent} onChange={e => setInvite(v => ({ ...v, setupCommissionPercent: Number(e.target.value) }))} /></Field>
+            <Field label="% mensalidade"><input type="number" min={0} max={100} className={input} value={invite.monthlyCommissionPercent} onChange={e => setInvite(v => ({ ...v, monthlyCommissionPercent: Number(e.target.value) }))} /></Field>
+            <Field label="Carência (dias)"><input type="number" min={0} max={60} className={input} value={invite.paymentGraceDays} onChange={e => setInvite(v => ({ ...v, paymentGraceDays: Number(e.target.value) }))} /></Field>
+          </div>
+          <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => createInvitation(true)} loading={saving}><Mail className="h-4 w-4" /> Enviar por e-mail</Button><Button type="button" variant="secondary" onClick={() => createInvitation(false)} disabled={saving}><Copy className="h-4 w-4" /> Gerar e copiar link</Button></div>
+          {invitations.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs uppercase text-gray-500"><tr><th className="py-2">Parceiro</th><th>Regras</th><th>Validade</th><th>Status</th><th /></tr></thead><tbody>{invitations.slice(0, 10).map(i => <tr key={i.id} className="border-t border-surface-600"><td className="py-2 text-white">{i.name || i.email || 'Link aberto'}</td><td className="text-gray-300">{i.setupCommissionPercent}% + {i.monthlyCommissionPercent}% · {i.paymentGraceDays} dias</td><td className="text-gray-300">{date(i.expiresAt)}</td><td><InviteStatus value={i.status} /></td><td className="text-right">{i.status === 'Pendente' && <button onClick={() => revokeInvitation(i.id)} aria-label="Revogar convite" className="p-2 text-gray-400 hover:text-red-400"><X className="h-4 w-4" /></button>}</td></tr>)}</tbody></table></div>}
+        </section>
 
         <div className="grid gap-6 xl:grid-cols-2">
           <form onSubmit={savePartner} className="space-y-4 rounded-xl border border-surface-500 bg-surface-800 p-5">
@@ -132,7 +177,8 @@ export default function IndicacoesPage() {
               <Field label="Telefone"><input className={input} value={partnerForm.phone ?? ''} onChange={e => setPartnerForm(f => ({ ...f, phone: e.target.value }))} /></Field>
               <Field label="E-mail"><input type="email" className={input} value={partnerForm.email ?? ''} onChange={e => setPartnerForm(f => ({ ...f, email: e.target.value }))} /></Field>
               <Field label="Chave Pix"><input className={input} value={partnerForm.pixKey ?? ''} onChange={e => setPartnerForm(f => ({ ...f, pixKey: e.target.value }))} /></Field>
-              <Field label="Dia de pagamento"><input type="number" min={1} max={31} className={input} value={partnerForm.paymentDay} onChange={e => setPartnerForm(f => ({ ...f, paymentDay: Number(e.target.value) }))} /></Field>
+              <Field label="Tipo de pessoa"><select className={input} value={partnerForm.personType} onChange={e => setPartnerForm(f => ({ ...f, personType: e.target.value as 'PF' | 'PJ' }))}><option value="PF">Pessoa física (RPA)</option><option value="PJ">Pessoa jurídica (NFS-e)</option></select></Field>
+              <Field label="Carência após baixa (dias)"><input type="number" min={0} max={60} className={input} value={partnerForm.paymentGraceDays} onChange={e => setPartnerForm(f => ({ ...f, paymentGraceDays: Number(e.target.value) }))} /></Field>
               <Field label="% sobre implantação"><input type="number" min={0} max={100} step="0.01" className={input} value={partnerForm.setupCommissionPercent} onChange={e => setPartnerForm(f => ({ ...f, setupCommissionPercent: Number(e.target.value) }))} /></Field>
               <Field label="% sobre mensalidade"><input type="number" min={0} max={100} step="0.01" className={input} value={partnerForm.monthlyCommissionPercent} onChange={e => setPartnerForm(f => ({ ...f, monthlyCommissionPercent: Number(e.target.value) }))} /></Field>
             </div>
@@ -157,12 +203,12 @@ export default function IndicacoesPage() {
 
         <section className="rounded-xl border border-surface-500 bg-surface-800">
           <div className="border-b border-surface-500 px-5 py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-4 w-4" /> Vendedores e próximos pagamentos</h2></div>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Vendedor</th><th className="px-4 py-3">Comissões</th><th className="px-4 py-3">Clientes</th><th className="px-4 py-3">Próximo pagamento</th><th className="px-4 py-3 text-right">A pagar</th><th /></tr></thead><tbody>{partners.map(p => <tr key={p.id} className="border-t border-surface-600"><td className="px-4 py-3"><p className="font-medium text-white">{p.name}</p><p className="text-xs text-gray-500">{p.active ? 'Ativo' : 'Inativo'} · dia {p.paymentDay}</p></td><td className="px-4 py-3 text-gray-300">{p.setupCommissionPercent}% implantação · {p.monthlyCommissionPercent}% mensal</td><td className="px-4 py-3 text-gray-300">{p.referredClients}</td><td className="px-4 py-3 text-gray-300">{date(p.nextPaymentDate)}</td><td className="px-4 py-3 text-right font-semibold text-white">{money(p.pendingAmount)}</td><td className="px-4 py-3 text-right"><button onClick={() => editPartner(p)} className="rounded-lg p-2 text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Editar ${p.name}`}><Pencil className="h-4 w-4" /></button></td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Vendedor</th><th className="px-4 py-3">Comissões</th><th className="px-4 py-3">Clientes</th><th className="px-4 py-3">Disponível em</th><th className="px-4 py-3 text-right">A pagar</th><th /></tr></thead><tbody>{partners.map(p => <tr key={p.id} className="border-t border-surface-600"><td className="px-4 py-3"><p className="font-medium text-white">{p.name}</p><p className="text-xs text-gray-500">{p.active ? 'Ativo' : 'Inativo'} · carência {p.paymentGraceDays} dia(s)</p></td><td className="px-4 py-3 text-gray-300">{p.setupCommissionPercent}% implantação · {p.monthlyCommissionPercent}% mensal</td><td className="px-4 py-3 text-gray-300">{p.referredClients}</td><td className="px-4 py-3 text-gray-300">{date(p.nextPaymentDate)}</td><td className="px-4 py-3 text-right font-semibold text-white">{money(p.pendingAmount)}</td><td className="px-4 py-3 text-right"><button onClick={() => editPartner(p)} className="rounded-lg p-2 text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Editar ${p.name}`}><Pencil className="h-4 w-4" /></button></td></tr>)}</tbody></table></div>
         </section>
 
         <section className="rounded-xl border border-surface-500 bg-surface-800">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-500 px-5 py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> Agenda de comissões</h2><div className="flex gap-2"><select className={input} value={partnerFilter} onChange={e => setPartnerFilter(e.target.value)}><option value="">Todos os vendedores</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><select className={input} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Todos os status</option><option>Pendente</option><option>Vencido</option><option>Pago</option></select></div></div>
-          {commissions.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Nenhuma comissão encontrada. Ela será criada quando uma cobrança de cliente indicado for paga.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Vendedor / cliente</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3">Vencimento</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Comissão</th><th className="px-4 py-3 text-right">Ação</th></tr></thead><tbody>{commissions.map(c => <tr key={c.id} className="border-t border-surface-600"><td className="px-4 py-3"><p className="font-medium text-white">{c.partnerName}</p><p className="text-xs text-gray-500">{c.tenantName}</p></td><td className="px-4 py-3 text-gray-300">{c.type === 'Implantacao' ? 'Implantação' : 'Mensalidade'}<p className="text-xs text-gray-500">{c.commissionPercent}% de {money(c.baseAmount)}</p></td><td className="px-4 py-3 text-gray-300">{date(c.dueDate)}</td><td className="px-4 py-3"><Status value={c.status} /></td><td className="px-4 py-3 text-right font-semibold text-white">{money(c.amount)}</td><td className="px-4 py-3 text-right"><Button size="sm" variant={c.paidAt ? 'secondary' : 'success'} onClick={() => togglePayment(c)}>{c.paidAt ? <Undo2 className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}{c.paidAt ? 'Reabrir' : 'Pagar'}</Button></td></tr>)}</tbody></table></div>}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-500 px-5 py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> Agenda de comissões</h2><div className="flex gap-2"><select className={input} value={partnerFilter} onChange={e => setPartnerFilter(e.target.value)}><option value="">Todos os vendedores</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><select className={input} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Todos os status</option><option>Carência</option><option>Disponível</option><option>Pago</option></select></div></div>
+          {commissions.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Nenhuma comissão encontrada. Ela será criada quando uma cobrança de cliente indicado for paga.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Vendedor / cliente</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3">Disponível em</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Comissão</th><th className="px-4 py-3 text-right">Ação</th></tr></thead><tbody>{commissions.map(c => <tr key={c.id} className="border-t border-surface-600"><td className="px-4 py-3"><p className="font-medium text-white">{c.partnerName}</p><p className="text-xs text-gray-500">{c.tenantName}</p></td><td className="px-4 py-3 text-gray-300">{c.type === 'Implantacao' ? 'Implantação' : 'Mensalidade'}<p className="text-xs text-gray-500">{c.commissionPercent}% de {money(c.baseAmount)}</p></td><td className="px-4 py-3 text-gray-300">{date(c.dueDate)}</td><td className="px-4 py-3"><Status value={c.status} /></td><td className="px-4 py-3 text-right font-semibold text-white">{money(c.amount)}</td><td className="px-4 py-3 text-right"><Button size="sm" variant={c.paidAt ? 'secondary' : 'success'} disabled={c.status === 'Carência'} onClick={() => togglePayment(c)}>{c.paidAt ? <Undo2 className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}{c.paidAt ? 'Reabrir' : 'Pagar'}</Button></td></tr>)}</tbody></table></div>}
         </section>
 
         {assignments.length > 0 && <p className="text-xs text-gray-500">{assignments.length} cliente(s) com atribuição comercial registrada. As regras ficam congeladas por contrato, mesmo se o padrão do vendedor mudar.</p>}
@@ -173,4 +219,5 @@ export default function IndicacoesPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="space-y-1 text-xs font-medium text-gray-400"><span>{label}</span>{children}</label> }
 function Metric({ title, value, alert }: { title: string; value: string; alert?: boolean }) { return <div className="rounded-xl border border-surface-500 bg-surface-800 p-4"><p className="text-xs uppercase tracking-wide text-gray-500">{title}</p><p className={`mt-2 text-xl font-bold ${alert ? 'text-accent-red' : 'text-white'}`}>{value}</p></div> }
-function Status({ value }: { value: ReferralCommissionDto['status'] }) { const color = value === 'Pago' ? 'bg-accent-green/15 text-accent-green' : value === 'Vencido' ? 'bg-accent-red/15 text-accent-red' : 'bg-surface-600 text-gray-300'; return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${color}`}>{value}</span> }
+function Status({ value }: { value: ReferralCommissionDto['status'] }) { const color = value === 'Pago' ? 'bg-accent-green/15 text-accent-green' : value === 'Disponível' ? 'bg-accent-green/15 text-accent-green' : 'bg-surface-600 text-gray-300'; return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${color}`}>{value}</span> }
+function InviteStatus({ value }: { value: ReferralInvitationDto['status'] }) { return <span className="rounded-full bg-surface-600 px-2.5 py-1 text-xs font-semibold text-gray-300">{value}</span> }

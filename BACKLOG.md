@@ -382,19 +382,23 @@
 
 ### REF-001 — Completar o controle de indicações e comissões
 
-- **Estado:** `VALIDAR`
-- **Já existe na main:** vendedores autônomos, percentuais separados de implantação
-  e mensalidade, ciclos opcionais, dia de pagamento, agenda, baixa, MRR indicado e
-  proteção contra duplicidade/reabertura após comissão paga.
-- **Falta validar/decidir:**
-  - regra padrão de duração da comissão mensal;
-  - retenções/impostos e documento do prestador;
+- **Estado:** `EM VALIDAÇÃO`
+- **Entregue em 2026-08-12:** convite por e-mail ou link com token de uso único,
+  expiração e revogação; cadastro público PF/PJ; aceite eletrônico com texto e
+  versão integral congelados, data, hash do IP e user-agent; padrão de 30% sobre
+  implantação somente quando a taxa existir e for paga; 5% recorrente enquanto
+  o cliente indicado continuar pagando; exceção por indicação; carência padrão
+  de cinco dias após a liquidação; bloqueio de baixa antes do fim da carência;
+  indicação de RPA para PF e NFS-e para PJ e exigência contratual de registro
+  fiscal/contábil. O cadastro manual e contratos anteriores foram preservados.
+- **Falta evoluir:**
+  - upload, conferência e retenções automatizadas do documento fiscal/RPA;
   - estorno/cancelamento formal depois de comissão paga;
   - exportação de extrato e comprovante de repasse;
   - acesso do próprio vendedor a um portal somente leitura;
   - política para mudança de vendedor de um cliente já com histórico.
-- **Critério de conclusão:** regras aprovadas, migração aplicada e ciclo completo
-  validado em staging: cliente paga → comissão vence → vendedor recebe → extrato.
+- **Critério de conclusão:** migração aplicada e ciclo completo validado em staging:
+  convite → aceite → cliente paga → cinco dias → vendedor recebe → extrato.
 
 ## P1 — aquisição, indexação e mensuração
 

@@ -25,6 +25,18 @@ public class ReferralPartner
     [MaxLength(255), Column("pix_key")]
     public string? PixKey { get; set; }
 
+    [MaxLength(10), Column("person_type")]
+    public string PersonType { get; set; } = "PF";
+
+    [MaxLength(30), Column("partner_kind")]
+    public string PartnerKind { get; set; } = "Vendedor";
+
+    [MaxLength(50), Column("professional_registration")]
+    public string? ProfessionalRegistration { get; set; }
+
+    [MaxLength(20), Column("fiscal_document_type")]
+    public string FiscalDocumentType { get; set; } = "RPA";
+
     [Precision(5, 2), Column("setup_commission_percent")]
     public decimal SetupCommissionPercent { get; set; }
 
@@ -34,6 +46,24 @@ public class ReferralPartner
     /// <summary>Dia habitual do repasse. Em mês curto, usa o último dia.</summary>
     [Range(1, 31), Column("payment_day")]
     public int PaymentDay { get; set; } = 10;
+
+    [Range(0, 60), Column("payment_grace_days")]
+    public int PaymentGraceDays { get; set; } = 5;
+
+    [MaxLength(30), Column("contract_version")]
+    public string? ContractVersion { get; set; }
+
+    [Column("contract_text", TypeName = "text")]
+    public string? ContractText { get; set; }
+
+    [Column("contract_accepted_at")]
+    public DateTime? ContractAcceptedAt { get; set; }
+
+    [MaxLength(64), Column("contract_accepted_ip_hash")]
+    public string? ContractAcceptedIpHash { get; set; }
+
+    [MaxLength(500), Column("contract_accepted_user_agent")]
+    public string? ContractAcceptedUserAgent { get; set; }
 
     [Column("active")]
     public bool Active { get; set; } = true;

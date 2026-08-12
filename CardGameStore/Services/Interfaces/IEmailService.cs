@@ -25,6 +25,9 @@ public interface IEmailService
     /// <summary>Convida um integrante para criar a senha da conta da plataforma.</summary>
     Task SendPlatformOwnerInviteAsync(string toEmail, string toName, string profileName, string inviteToken);
 
+    /// <summary>Convida um parceiro comercial para ler e aceitar o regulamento.</summary>
+    Task SendReferralPartnerInviteAsync(string toEmail, string toName, string inviteUrl, DateTime expiresAt);
+
     /// <summary>Envia email de boas-vindas após primeiro login via QR Code.</summary>
     Task SendWelcomeAsync(string toEmail, string toName);
 

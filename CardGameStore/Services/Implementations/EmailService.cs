@@ -143,6 +143,24 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, $"Bem-vindo(a) ao {cfg.SiteName}!", body);
     }
 
+    public async Task SendReferralPartnerInviteAsync(string toEmail, string toName, string inviteUrl, DateTime expiresAt)
+    {
+        var cfg = await GetSiteConfigAsync();
+        var safeName = WebUtility.HtmlEncode(toName);
+        var safeUrl = WebUtility.HtmlEncode(inviteUrl);
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:560px">
+            <h1 style="color:#2563eb">{WebUtility.HtmlEncode(cfg.SiteName)}</h1>
+            <h2 style="margin:0 0 16px">Convite para o Programa de Parcerias</h2>
+            <p>Olá, {safeName}. A 3ESYSTEN convidou você para participar do programa de indicações.</p>
+            <p>Consulte as condições completas, informe seus dados e registre o aceite pelo botão abaixo.</p>
+            <p style="margin:24px 0"><a href="{safeUrl}" style="background:#2563eb;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none">Consultar e aceitar convite</a></p>
+            <p style="color:#64748b;font-size:13px">Convite válido até {expiresAt.ToLocalTime():dd/MM/yyyy HH:mm}. Não encaminhe este link.</p>
+            </div>
+            """;
+        await SendAsync(toEmail, toName, "Convite para o Programa de Parcerias 3ESYSTEN", body);
+    }
+
     public async Task SendCrediarioAbertoAsync(string toEmail, string toName, decimal valor, DateTime vencimento)
     {
         var cfg  = await GetSiteConfigAsync();

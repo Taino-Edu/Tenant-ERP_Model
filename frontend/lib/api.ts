@@ -1202,14 +1202,17 @@ export interface ReferralSummaryDto {
 export interface ReferralPartnerDto {
   id: string; name: string; document: string | null; phone: string | null
   email: string | null; pixKey: string | null; setupCommissionPercent: number
-  monthlyCommissionPercent: number; paymentDay: number; active: boolean
+  personType: 'PF' | 'PJ'; partnerKind: string; professionalRegistration: string | null
+  fiscalDocumentType: string; monthlyCommissionPercent: number; paymentDay: number
+  paymentGraceDays: number; contractVersion: string | null; contractAcceptedAt: string | null; active: boolean
   referredClients: number; pendingAmount: number; paidAmount: number
   nextPaymentDate: string | null
 }
 export interface SaveReferralPartnerRequest {
   name: string; document?: string | null; phone?: string | null; email?: string | null
   pixKey?: string | null; setupCommissionPercent: number
-  monthlyCommissionPercent: number; paymentDay: number; active: boolean
+  personType: 'PF' | 'PJ'; partnerKind: string; professionalRegistration?: string | null
+  monthlyCommissionPercent: number; paymentDay: number; paymentGraceDays: number; active: boolean
 }
 export interface TenantReferralDto {
   id: string; partnerId: string; partnerName: string; tenantId: string; tenantName: string
@@ -1227,21 +1230,46 @@ export interface ReferralCommissionDto {
   id: string; partnerId: string; partnerName: string; tenantId: string; tenantName: string
   type: 'Implantacao' | 'Mensalidade'; baseAmount: number; commissionPercent: number
   amount: number; referenceMonth: string; earnedAt: string; dueDate: string
-  paidAt: string | null; status: 'Pendente' | 'Vencido' | 'Pago'
+  paidAt: string | null; fiscalDocumentType: string; fiscalDocumentReference: string | null
+  status: 'Carência' | 'Disponível' | 'Pago'
+}
+export interface ReferralInvitationDto {
+  id: string; name: string | null; email: string | null; partnerKind: string
+  setupCommissionPercent: number; monthlyCommissionPercent: number; paymentGraceDays: number
+  contractVersion: string; contractText: string | null; expiresAt: string
+  sentAt: string | null; acceptedAt: string | null; revokedAt: string | null
+  status: 'Pendente' | 'Aceito' | 'Expirado' | 'Revogado'; inviteUrl: string | null
+}
+export interface CreateReferralInvitationRequest {
+  name?: string | null; email?: string | null; partnerKind: string
+  setupCommissionPercent: number; monthlyCommissionPercent: number
+  paymentGraceDays: number; expiresInDays: number; sendEmail: boolean
 }
 export const referralApi = {
   summary: () => api.get<ReferralSummaryDto>('/api/platform/referrals/summary'),
   partners: () => api.get<ReferralPartnerDto[]>('/api/platform/referrals/partners'),
   createPartner: (request: SaveReferralPartnerRequest) => api.post('/api/platform/referrals/partners', request),
   updatePartner: (id: string, request: SaveReferralPartnerRequest) => api.put(`/api/platform/referrals/partners/${id}`, request),
+  invitations: () => api.get<ReferralInvitationDto[]>('/api/platform/referrals/invitations'),
+  createInvitation: (request: CreateReferralInvitationRequest) =>
+    api.post<ReferralInvitationDto>('/api/platform/referrals/invitations', request),
+  revokeInvitation: (id: string) => api.delete(`/api/platform/referrals/invitations/${id}`),
   assignments: () => api.get<TenantReferralDto[]>('/api/platform/referrals/assignments'),
   saveAssignment: (request: SaveTenantReferralRequest) => api.post('/api/platform/referrals/assignments', request),
   commissions: (partnerId?: string, status?: string) =>
     api.get<ReferralCommissionDto[]>('/api/platform/referrals/commissions', {
       params: { partnerId: partnerId || undefined, status: status || undefined },
     }),
-  setCommissionPayment: (id: string, paidAt: string | null) =>
-    api.put(`/api/platform/referrals/commissions/${id}/payment`, { paidAt }),
+  setCommissionPayment: (id: string, paidAt: string | null, fiscalDocumentReference?: string | null) =>
+    api.put(`/api/platform/referrals/commissions/${id}/payment`, { paidAt, fiscalDocumentReference }),
+}
+
+export const publicReferralApi = {
+  invitation: (token: string) => api.get<ReferralInvitationDto>(`/api/public/referral-invitations/${encodeURIComponent(token)}`),
+  accept: (token: string, request: {
+    name: string; email: string; document: string; phone?: string | null; pixKey?: string | null
+    personType: 'PF' | 'PJ'; professionalRegistration?: string | null; acceptedTerms: boolean
+  }) => api.post(`/api/public/referral-invitations/${encodeURIComponent(token)}/accept`, request),
 }
 
 export const prospectingApi = {

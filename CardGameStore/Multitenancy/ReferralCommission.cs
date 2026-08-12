@@ -41,6 +41,9 @@ public class ReferralCommission
     [Column("paid_at")]
     public DateTime? PaidAt { get; set; }
 
+    [MaxLength(100), Column("fiscal_document_reference")]
+    public string? FiscalDocumentReference { get; set; }
+
     [MaxLength(500), Column("notes")]
     public string? Notes { get; set; }
 
