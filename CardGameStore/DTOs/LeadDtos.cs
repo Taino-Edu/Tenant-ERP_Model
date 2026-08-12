@@ -66,7 +66,7 @@ public sealed class CrmOpportunityDto
     public DateTime UpdatedAt { get; set; }
 }
 
-public sealed class CrmActivityDto
+public class CrmActivityDto
 {
     public Guid Id { get; set; }
     public Guid LeadId { get; set; }
@@ -80,6 +80,13 @@ public sealed class CrmActivityDto
     public Guid? CreatedByUserId { get; set; }
     public string CreatedByUserName { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
+}
+
+public sealed class CrmTaskDto : CrmActivityDto
+{
+    public string LeadName { get; set; } = string.Empty;
+    public Guid? AssignedUserId { get; set; }
+    public string? AssignedUserName { get; set; }
 }
 
 public sealed class CrmWorkspaceDto

@@ -80,6 +80,10 @@ public sealed class PlatformCrmControllerTests
         }, default);
         var createdResult = created.Result.Should().BeOfType<ObjectResult>().Subject;
         var dto = createdResult.Value.Should().BeOfType<CrmActivityDto>().Subject;
+        var openTasks = await controller.ListOpenTasks(default);
+        var taskList = ((OkObjectResult)openTasks.Result!).Value
+            .Should().BeAssignableTo<IReadOnlyList<CrmTaskDto>>().Subject;
+        taskList.Should().ContainSingle(task => task.LeadName == "Empresa");
         var completed = await controller.CompleteActivity(dto.Id,
             new CompleteCrmActivityRequest { Outcome = "Cliente aprovou" }, default);
 

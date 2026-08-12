@@ -58,6 +58,33 @@ public sealed class PlatformCrmController : ControllerBase
         });
     }
 
+    [HttpGet("tasks")]
+    public async Task<ActionResult<IReadOnlyList<CrmTaskDto>>> ListOpenTasks(CancellationToken ct)
+    {
+        var tasks = await _catalog.CrmActivities.AsNoTracking()
+            .Include(a => a.Lead)
+            .Where(a => a.Type == CrmActivityType.Tarefa && a.CompletedAt == null)
+            .OrderBy(a => a.DueAt == null)
+            .ThenBy(a => a.DueAt)
+            .ThenByDescending(a => a.CreatedAt)
+            .Take(500)
+            .ToListAsync(ct);
+        var leadIds = tasks.Select(a => a.LeadId).Distinct().ToList();
+        var opportunities = await _catalog.CrmOpportunities.AsNoTracking()
+            .Where(o => leadIds.Contains(o.LeadId))
+            .ToDictionaryAsync(o => o.LeadId, ct);
+        return Ok(tasks.Select(a => new CrmTaskDto
+        {
+            Id = a.Id, LeadId = a.LeadId, OpportunityId = a.OpportunityId,
+            Type = a.Type.ToString(), Title = a.Title, Description = a.Description,
+            DueAt = a.DueAt, CompletedAt = a.CompletedAt, Outcome = a.Outcome,
+            CreatedByUserId = a.CreatedByUserId, CreatedByUserName = a.CreatedByUserName,
+            CreatedAt = a.CreatedAt, LeadName = a.Lead.Nome,
+            AssignedUserId = opportunities.GetValueOrDefault(a.LeadId)?.AssignedUserId,
+            AssignedUserName = opportunities.GetValueOrDefault(a.LeadId)?.AssignedUserName,
+        }).ToList());
+    }
+
     [HttpPut("leads/{leadId:guid}/opportunity")]
     public async Task<ActionResult<CrmOpportunityDto>> SaveOpportunity(
         Guid leadId, [FromBody] SaveCrmOpportunityRequest request, CancellationToken ct)

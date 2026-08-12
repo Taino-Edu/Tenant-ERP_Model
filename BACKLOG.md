@@ -152,10 +152,12 @@
   valor previsto, previsão de fechamento, motivo obrigatório de perda e
   responsável validado contra a equipe comercial ativa. Mudanças de etapa e
   responsável geram eventos imutáveis na linha do tempo.
+- **Entregue também:** Kanban comercial com movimentação auditada entre etapas,
+  totais e valores por coluna, filtro por responsável e fila explícita de leads
+  sem oportunidade/sem responsável.
 - **Falta:**
   - separar também `Conta/Empresa` e `Contato` do `Lead`;
-  - tornar etapas e probabilidades configuráveis e criar visão Kanban/fila sem
-    responsável;
+  - tornar etapas e probabilidades configuráveis;
   - deduplicação por telefone, e-mail, documento e estabelecimento;
   - histórico imutável de mudanças de etapa/responsável;
   - consentimento, finalidade e origem do dado para LGPD.
@@ -170,8 +172,9 @@
   e-mail e reuniões estruturados; vencimento, conclusão, resultado e autoria;
   linha do tempo única na ficha CRM do lead, incluindo alterações automáticas
   do funil e responsável.
-- **Falta:** lembretes/notificações, recorrência e painéis consolidados de tarefas
-  atrasadas, de hoje e futuras por vendedor.
+- **Entregue também:** central consolidada de tarefas abertas, separando atrasadas,
+  de hoje e futuras, filtrável por responsável e com conclusão/resultado direto.
+- **Falta:** lembretes/notificações e recorrência de tarefas.
 - **Regra:** notas livres não substituem eventos estruturados.
 - **Critério de conclusão:** a tela do lead/oportunidade mostra uma linha do tempo
   única e o gestor consegue listar tarefas atrasadas, de hoje e futuras por vendedor.

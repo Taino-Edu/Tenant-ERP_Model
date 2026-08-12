@@ -1,12 +1,13 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { platformApi, LeadDto, LeadStatus, LeadDigitalPresence, getErrorMessage } from '@/lib/api'
+import { platformApi, LeadDto, LeadStatus, LeadDigitalPresence, CrmAssigneeDto, CrmOpportunityStage, CrmTaskDto, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import CrmWorkspaceModal from '@/components/plataforma/CrmWorkspaceModal'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
 import toast from 'react-hot-toast'
-import { UserPlus, Loader2, MessageCircle, MapPin, Search, Sparkles, Target, UserCheck, Users, Workflow } from 'lucide-react'
+import clsx from 'clsx'
+import { UserPlus, Loader2, MessageCircle, MapPin, Search, Sparkles, Target, UserCheck, Users, Workflow, Columns3, List, CalendarCheck, Check, Clock3, AlertTriangle } from 'lucide-react'
 
 const STATUS_OPTIONS: LeadStatus[] = ['Novo', 'Contatado', 'Convertido', 'Perdido']
 
@@ -29,6 +30,19 @@ const STATUS_STYLES: Record<LeadStatus, string> = {
   Convertido: 'bg-accent-green/10 text-accent-green border-accent-green/30',
   Perdido:    'bg-gray-500/10 text-gray-400 border-gray-500/30',
 }
+
+type CrmView = 'list' | 'kanban' | 'tasks'
+type TaskFilter = 'all' | 'overdue' | 'today' | 'future'
+
+const KANBAN_STAGES: { value: CrmOpportunityStage | null; label: string; probability: number; color: string }[] = [
+  { value: null, label: 'Sem oportunidade', probability: 20, color: 'border-gray-600' },
+  { value: 'Qualificacao', label: 'Qualificação', probability: 20, color: 'border-sky-500/50' },
+  { value: 'Diagnostico', label: 'Diagnóstico', probability: 35, color: 'border-cyan-500/50' },
+  { value: 'Proposta', label: 'Proposta', probability: 55, color: 'border-amber-500/50' },
+  { value: 'Negociacao', label: 'Negociação', probability: 75, color: 'border-orange-500/50' },
+  { value: 'Ganho', label: 'Ganho', probability: 100, color: 'border-accent-green/50' },
+  { value: 'Perdido', label: 'Perdido', probability: 0, color: 'border-red-500/50' },
+]
 
 function fmtDateTime(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -267,6 +281,12 @@ export default function PlataformaLeadsPage() {
   const [search, setSearch] = useState('')
   const [convertingLead, setConvertingLead] = useState<LeadDto | null>(null)
   const [crmLead, setCrmLead] = useState<LeadDto | null>(null)
+  const [view, setView] = useState<CrmView>('list')
+  const [assignees, setAssignees] = useState<CrmAssigneeDto[]>([])
+  const [tasks, setTasks] = useState<CrmTaskDto[]>([])
+  const [ownerFilter, setOwnerFilter] = useState('')
+  const [taskFilter, setTaskFilter] = useState<TaskFilter>('all')
+  const [movingLeadId, setMovingLeadId] = useState<string | null>(null)
 
   const fetchLeads = useCallback(() => {
     setLoading(true)
@@ -276,23 +296,71 @@ export default function PlataformaLeadsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { fetchLeads() }, [fetchLeads])
+  const fetchCrmMeta = useCallback(() => {
+    Promise.all([platformApi.listCrmAssignees(), platformApi.listCrmTasks()])
+      .then(([owners, taskResult]) => { setAssignees(owners.data); setTasks(taskResult.data) })
+      .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar tarefas e responsáveis.')))
+  }, [])
+
+  useEffect(() => { fetchLeads(); fetchCrmMeta() }, [fetchCrmMeta, fetchLeads])
+
+  const refreshAll = useCallback(() => { fetchLeads(); fetchCrmMeta() }, [fetchCrmMeta, fetchLeads])
 
   const filteredLeads = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR')
     return leads.filter(lead => {
       const matchesStatus = !statusFilter || lead.status === statusFilter
+      const matchesOwner = !ownerFilter || (ownerFilter === 'unassigned'
+        ? !lead.opportunity?.assignedUserId
+        : lead.opportunity?.assignedUserId === ownerFilter)
       const matchesSearch = !term || [lead.nome, lead.telefone, lead.email, lead.origem, lead.mensagem]
         .some(value => value?.toLocaleLowerCase('pt-BR').includes(term))
-      return matchesStatus && matchesSearch
+      return matchesStatus && matchesOwner && matchesSearch
     })
-  }, [leads, search, statusFilter])
+  }, [leads, ownerFilter, search, statusFilter])
 
   const stageCounts = useMemo(() => Object.fromEntries(
     STATUS_OPTIONS.map(status => [status, leads.filter(lead => lead.status === status).length])
   ) as Record<LeadStatus, number>, [leads])
 
-  const conversionRate = leads.length > 0 ? Math.round(stageCounts.Convertido / leads.length * 100) : 0
+  const todayStart = useMemo(() => { const date = new Date(); date.setHours(0, 0, 0, 0); return date }, [])
+  const tomorrowStart = useMemo(() => new Date(todayStart.getTime() + 86_400_000), [todayStart])
+  const overdueTasks = useMemo(() => tasks.filter(task => task.dueAt && new Date(task.dueAt) < todayStart), [tasks, todayStart])
+  const filteredTasks = useMemo(() => tasks.filter(task => {
+    const matchesOwner = !ownerFilter || (ownerFilter === 'unassigned' ? !task.assignedUserId : task.assignedUserId === ownerFilter)
+    if (!matchesOwner) return false
+    const due = task.dueAt ? new Date(task.dueAt) : null
+    if (taskFilter === 'overdue') return !!due && due < todayStart
+    if (taskFilter === 'today') return !!due && due >= todayStart && due < tomorrowStart
+    if (taskFilter === 'future') return !due || due >= tomorrowStart
+    return true
+  }), [ownerFilter, taskFilter, tasks, todayStart, tomorrowStart])
+  const openOpportunities = leads.filter(lead => lead.opportunity && !['Ganho', 'Perdido'].includes(lead.opportunity.stage))
+  const weightedPipeline = openOpportunities.reduce((sum, lead) => sum + (lead.opportunity?.value ?? 0) * (lead.opportunity?.probability ?? 0) / 100, 0)
+
+  async function moveLead(lead: LeadDto, stage: CrmOpportunityStage) {
+    if (lead.opportunity?.stage === stage) return
+    const lostReason = stage === 'Perdido' ? window.prompt('Informe o motivo da perda:') : null
+    if (stage === 'Perdido' && !lostReason?.trim()) return
+    const config = KANBAN_STAGES.find(item => item.value === stage)!
+    setMovingLeadId(lead.id)
+    try {
+      await platformApi.saveCrmOpportunity(lead.id, {
+        stage, probability: config.probability, value: lead.opportunity?.value,
+        expectedCloseDate: lead.opportunity?.expectedCloseDate,
+        assignedUserId: lead.opportunity?.assignedUserId, lostReason: lostReason?.trim() || null,
+      })
+      refreshAll(); toast.success(`“${lead.nome}” movido para ${config.label}.`)
+    } catch (err) { toast.error(getErrorMessage(err, 'Não foi possível mover a oportunidade.')) }
+    finally { setMovingLeadId(null) }
+  }
+
+  async function completeTask(task: CrmTaskDto) {
+    const outcome = window.prompt('Resultado da tarefa (opcional):', task.outcome ?? '')
+    if (outcome === null) return
+    try { await platformApi.completeCrmActivity(task.id, outcome.trim() || null); fetchCrmMeta(); toast.success('Tarefa concluída.') }
+    catch (err) { toast.error(getErrorMessage(err, 'Não foi possível concluir a tarefa.')) }
+  }
 
   async function handleTenantCreated(tenantId: string) {
     if (!convertingLead) return
@@ -315,9 +383,9 @@ export default function PlataformaLeadsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Leads captados', value: leads.length, icon: Users, color: 'text-brand-300' },
-          { label: 'Novos', value: stageCounts.Novo, icon: UserPlus, color: 'text-brand-300' },
-          { label: 'Em contato', value: stageCounts.Contatado, icon: Target, color: 'text-amber-400' },
-          { label: 'Conversão', value: `${conversionRate}%`, icon: UserCheck, color: 'text-accent-green' },
+          { label: 'Oportunidades abertas', value: openOpportunities.length, icon: Target, color: 'text-amber-400' },
+          { label: 'Pipeline ponderado', value: weightedPipeline.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), icon: UserCheck, color: 'text-accent-green' },
+          { label: 'Tarefas atrasadas', value: overdueTasks.length, icon: AlertTriangle, color: overdueTasks.length ? 'text-red-400' : 'text-gray-400' },
         ].map(metric => (
           <div key={metric.label} className="card p-4 flex items-center gap-3">
             <metric.icon className={`w-5 h-5 ${metric.color}`} />
@@ -327,6 +395,14 @@ export default function PlataformaLeadsPage() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="card flex gap-1 overflow-x-auto p-1.5">
+        {([
+          { value: 'list', label: 'Lista', icon: List },
+          { value: 'kanban', label: 'Kanban', icon: Columns3 },
+          { value: 'tasks', label: 'Tarefas', icon: CalendarCheck },
+        ] as const).map(item => <button key={item.value} type="button" onClick={() => { setView(item.value); if (item.value !== 'list') setStatusFilter('') }} className={clsx('flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold', view === item.value ? 'bg-brand-500/20 text-brand-300' : 'text-gray-500 hover:text-gray-300')}><item.icon className="h-4 w-4" />{item.label}{item.value === 'tasks' && tasks.length > 0 && <span className="rounded-full bg-surface-700 px-1.5 py-0.5 text-[10px]">{tasks.length}</span>}</button>)}
       </div>
 
       <div className="card p-3 flex flex-col sm:flex-row gap-3">
@@ -339,7 +415,11 @@ export default function PlataformaLeadsPage() {
             placeholder="Buscar por nome, telefone, e-mail ou origem"
           />
         </label>
-        <div className="flex gap-1 overflow-x-auto">
+        <select className="input min-w-48 text-sm" value={ownerFilter} onChange={event => setOwnerFilter(event.target.value)}>
+          <option value="">Todos os responsáveis</option><option value="unassigned">Sem responsável</option>
+          {assignees.map(owner => <option key={owner.id} value={owner.id}>{owner.name}</option>)}
+        </select>
+        {view === 'list' && <div className="flex gap-1 overflow-x-auto">
           <button type="button" onClick={() => setStatusFilter('')} className={`px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap ${!statusFilter ? 'bg-brand-500/20 text-brand-300' : 'text-gray-500 hover:text-gray-300'}`}>
             Todos {leads.length}
           </button>
@@ -348,15 +428,15 @@ export default function PlataformaLeadsPage() {
               {status} {stageCounts[status]}
             </button>
           ))}
-        </div>
+        </div>}
       </div>
 
-      <div className="card overflow-x-auto">
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
-          </div>
-        ) : filteredLeads.length === 0 ? (
+      {loading ? (
+        <div className="card flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+        </div>
+      ) : view === 'list' ? <div className="card overflow-x-auto">
+        {filteredLeads.length === 0 ? (
           <p className="text-gray-400 text-center py-16">Nenhum lead encontrado com esses filtros.</p>
         ) : (
           <table className="w-full min-w-[900px] text-sm">
@@ -372,12 +452,32 @@ export default function PlataformaLeadsPage() {
             </thead>
             <tbody>
               {filteredLeads.map(l => (
-                <LeadRow key={l.id} lead={l} onChanged={fetchLeads} onConvert={setConvertingLead} onOpenCrm={setCrmLead} />
+                <LeadRow key={l.id} lead={l} onChanged={refreshAll} onConvert={setConvertingLead} onOpenCrm={setCrmLead} />
               ))}
             </tbody>
           </table>
         )}
-      </div>
+      </div> : view === 'kanban' ? <div className="overflow-x-auto pb-2">
+        <div className="grid min-w-[2100px] grid-cols-7 gap-3">{KANBAN_STAGES.map(column => {
+          const columnLeads = filteredLeads.filter(lead => column.value === null ? !lead.opportunity : lead.opportunity?.stage === column.value)
+          const columnValue = columnLeads.reduce((sum, lead) => sum + (lead.opportunity?.value ?? 0), 0)
+          return <section key={column.value ?? 'none'} onDragOver={event => event.preventDefault()} onDrop={event => { const lead = leads.find(item => item.id === event.dataTransfer.getData('text/lead-id')); if (lead && column.value) moveLead(lead, column.value) }} className={clsx('min-h-[420px] rounded-xl border-t-2 bg-surface-800 p-3', column.color)}>
+            <div className="mb-3 flex items-start justify-between gap-2"><div><h3 className="text-sm font-bold text-white">{column.label}</h3><p className="text-[11px] text-gray-500">{columnLeads.length} · {columnValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div><span className="rounded-full bg-surface-700 px-2 py-1 text-xs text-gray-300">{columnLeads.length}</span></div>
+            <div className="space-y-2">{columnLeads.map(lead => <article key={lead.id} draggable={movingLeadId !== lead.id} onDragStart={event => event.dataTransfer.setData('text/lead-id', lead.id)} onClick={() => setCrmLead(lead)} className={clsx('cursor-grab rounded-xl border border-surface-600 bg-surface-700 p-3 transition hover:border-brand-500/50', movingLeadId === lead.id && 'opacity-50')}><div className="flex items-start justify-between gap-2"><h4 className="text-sm font-semibold text-white">{lead.nome}</h4>{movingLeadId === lead.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-400" />}</div><p className="mt-1 text-[11px] text-gray-500">{lead.opportunity?.assignedUserName || 'Sem responsável'}</p><div className="mt-2 flex items-center justify-between text-xs"><span className="text-gray-400">{lead.opportunity?.probability ?? 0}%</span><strong className="text-brand-300">{lead.opportunity?.value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) ?? 'Sem valor'}</strong></div></article>)}</div>
+          </section>
+        })}</div>
+      </div> : <section className="space-y-3">
+        <div className="card flex gap-1 overflow-x-auto p-2">{([
+          ['all', 'Todas', tasks.length], ['overdue', 'Atrasadas', overdueTasks.length],
+          ['today', 'Hoje', tasks.filter(task => task.dueAt && new Date(task.dueAt) >= todayStart && new Date(task.dueAt) < tomorrowStart).length],
+          ['future', 'Futuras', tasks.filter(task => !task.dueAt || new Date(task.dueAt) >= tomorrowStart).length],
+        ] as [TaskFilter, string, number][]).map(([value, label, count]) => <button key={value} onClick={() => setTaskFilter(value)} className={clsx('rounded-lg px-3 py-2 text-xs font-bold', taskFilter === value ? 'bg-brand-500/20 text-brand-300' : 'text-gray-500 hover:text-gray-300')}>{label} {count}</button>)}</div>
+        {filteredTasks.length === 0 ? <div className="card py-16 text-center text-sm text-gray-400">Nenhuma tarefa neste filtro.</div> : <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">{filteredTasks.map(task => {
+          const overdue = task.dueAt && new Date(task.dueAt) < todayStart
+          const lead = leads.find(item => item.id === task.leadId)
+          return <article key={task.id} className={clsx('card border p-4', overdue ? 'border-red-500/40' : 'border-surface-600')}><div className="flex items-start justify-between gap-3"><div><span className={clsx('text-[10px] font-bold uppercase', overdue ? 'text-red-400' : 'text-brand-300')}>{overdue ? 'Atrasada' : 'Tarefa'}</span><h3 className="text-sm font-semibold text-white">{task.title}</h3><button onClick={() => lead && setCrmLead(lead)} className="text-xs text-brand-400 hover:underline">{task.leadName}</button></div><button onClick={() => completeTask(task)} className="btn-secondary p-2" title="Concluir"><Check className="h-3.5 w-3.5" /></button></div>{task.description && <p className="mt-2 text-xs text-gray-400">{task.description}</p>}<div className="mt-3 flex items-center justify-between text-[11px] text-gray-500"><span>{task.assignedUserName || 'Sem responsável'}</span><span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{task.dueAt ? fmtDateTime(task.dueAt) : 'Sem prazo'}</span></div></article>
+        })}</div>}
+      </section>}
 
       {convertingLead && (
         <CreateTenantModal

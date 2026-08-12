@@ -903,6 +903,7 @@ export const platformApi = {
   enrichLead: (id: string) =>
     api.post<ProspectingEnrichResponse>(`/api/platform/prospecting/leads/${id}/enrich`),
   listCrmAssignees: () => api.get<CrmAssigneeDto[]>('/api/platform/crm/assignees'),
+  listCrmTasks: () => api.get<CrmTaskDto[]>('/api/platform/crm/tasks'),
   getCrmWorkspace: (leadId: string) => api.get<CrmWorkspaceDto>(`/api/platform/crm/leads/${leadId}`),
   saveCrmOpportunity: (leadId: string, req: SaveCrmOpportunityRequest) =>
     api.put<CrmOpportunityDto>(`/api/platform/crm/leads/${leadId}/opportunity`, req),
@@ -1018,6 +1019,9 @@ export interface CrmActivityDto {
   title: string; description: string | null; dueAt: string | null
   completedAt: string | null; outcome: string | null
   createdByUserId: string | null; createdByUserName: string; createdAt: string
+}
+export interface CrmTaskDto extends CrmActivityDto {
+  leadName: string; assignedUserId: string | null; assignedUserName: string | null
 }
 export interface CrmWorkspaceDto { opportunity: CrmOpportunityDto | null; activities: CrmActivityDto[] }
 export interface SaveCrmOpportunityRequest {
