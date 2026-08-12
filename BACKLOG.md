@@ -4,7 +4,7 @@
 > vigente. O conteúdo anterior foi preservado no final como histórico e não deve
 > ser usado sozinho para decidir o próximo trabalho.
 >
-> **Base funcional auditada:** commit `66c081b`, código local, migrações, testes,
+> **Base funcional auditada:** commit `38228e4`, código local, migrações, testes,
 > documentação, branches e worktrees registradas. Não confundir “há uma branch”
 > com “a funcionalidade está pronta na main”.
 
@@ -28,7 +28,7 @@
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
-  `QA-001`, a suíte completa passou novamente em 2026-08-12 com 779 testes,
+  `QA-001`, a suíte completa passou novamente em 2026-08-12 com 781 testes,
   zero falhas e zero ignorados.
 - Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões já têm implementação na `main`.
@@ -159,8 +159,7 @@
   - separar também `Conta/Empresa` e `Contato` do `Lead`;
   - tornar etapas e probabilidades configuráveis;
   - deduplicação por telefone, e-mail, documento e estabelecimento;
-  - histórico imutável de mudanças de etapa/responsável;
-  - consentimento, finalidade e origem do dado para LGPD.
+  - atribuição de primeiro/último toque e regras configuráveis de atribuição.
 - **Critério de conclusão:** um lead pode virar oportunidade, avançar pelo funil,
   ser ganho/perdido com histórico completo e converter em tenant sem perder a
   atribuição da origem.
@@ -181,11 +180,18 @@
 
 ### CRM-003 — Origem, campanhas e indicações antes da conversão
 
-- **Estado:** `PRONTO PARA FAZER`
+- **Estado:** `VALIDAR` (núcleo entregue em 2026-08-12)
 - **Já existe:** origem textual no lead e controle de vendedor/comissão ligado ao
   tenant; o vínculo aceita `SourceLeadId` no backend.
-- **Falta:** selecionar o vendedor indicador ainda no lead, campanhas/UTM,
-  primeiro/último toque, canal e regras de atribuição visíveis na UI.
+- **Entregue:** campanha e UTMs no lead, captura automática de URL de entrada e
+  referência no formulário público, seleção do vendedor indicador na ficha CRM
+  e criação automática do vínculo de indicação/comissão quando o lead vira tenant.
+- **Governança entregue:** origem dos dados, finalidade, base legal, versão do
+  aviso, ciência do titular no inbound, revisão de retenção em 180 dias, teste de
+  legítimo interesse antes do contato ativo e oposição que bloqueia novos contatos.
+- **Falta:** primeiro/último toque separados, regra configurável de atribuição,
+  relatório de conversão/receita por origem e validação jurídica do teste de
+  balanceamento e dos textos pela pessoa responsável pela proteção de dados.
 - **Critério de conclusão:** a origem acompanha o contato até receita e comissão,
   sem preenchimento manual duplicado após a conversão.
 
@@ -329,8 +335,11 @@
     backoff de 5, 15 e 45 minutos, sem criar execuções duplicadas;
   - histórico de mudanças por campo com valor anterior, novo valor, fonte,
     confiança e data, visível no cartão do candidato.
-- **Falta para contato ativo, não para o robô de pesquisa:** política/legal
-  validada, responsável sugerido e notificações. O worker continua proibido de
+- **Entregue para governança do contato humano:** política 2.1, registro de origem,
+  finalidade e base, avaliação explícita de legítimo interesse e oposição com
+  bloqueio no backend do CRM.
+- **Falta para cadência, não para o robô de pesquisa:** validação jurídica final,
+  responsável sugerido e notificações. O worker continua proibido de
   iniciar contato automaticamente.
 - **Critério de conclusão:** execução idempotente, auditável, com orçamento,
   quotas, lista de oposição, proveniência e aprovação humana demonstrados.

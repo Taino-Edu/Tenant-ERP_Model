@@ -69,6 +69,7 @@ export default function InstitucionalPage() {
   const [leadTelefone, setLeadTelefone] = useState('')
   const [leadEmail, setLeadEmail] = useState('')
   const [leadMensagem, setLeadMensagem] = useState('')
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false)
   const [leadSubmitting, setLeadSubmitting] = useState(false)
   const [leadSubmitted, setLeadSubmitted] = useState(false)
   const [leadError, setLeadError] = useState<string | null>(null)
@@ -104,9 +105,19 @@ export default function InstitucionalPage() {
     setLeadSubmitting(true)
     setLeadError(null)
     try {
+      const query = new URLSearchParams(window.location.search)
       await leadsApi.create({
         nome: leadNome.trim(), telefone: leadTelefone.trim(),
         email: leadEmail.trim() || undefined, mensagem: leadMensagem.trim() || undefined,
+        privacyNoticeAcknowledged: privacyAcknowledged, privacyNoticeVersion: '2.1',
+        campaign: query.get('campaign')?.slice(0, 120) || undefined,
+        utmSource: query.get('utm_source')?.slice(0, 120) || undefined,
+        utmMedium: query.get('utm_medium')?.slice(0, 120) || undefined,
+        utmCampaign: query.get('utm_campaign')?.slice(0, 120) || undefined,
+        utmTerm: query.get('utm_term')?.slice(0, 120) || undefined,
+        utmContent: query.get('utm_content')?.slice(0, 120) || undefined,
+        referrerUrl: document.referrer.slice(0, 500) || undefined,
+        landingPage: window.location.href.slice(0, 500),
       })
       setLeadSubmitted(true)
     } catch (error) {
@@ -377,6 +388,7 @@ export default function InstitucionalPage() {
                 <label className="text-sm font-bold">WhatsApp<input required maxLength={30} value={leadTelefone} onChange={event => setLeadTelefone(event.target.value)} className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 font-normal text-white outline-none placeholder:text-slate-500 focus:border-blue-400" placeholder="(17) 99999-9999" /></label>
                 <label className="text-sm font-bold sm:col-span-2">E-mail <span className="font-normal text-slate-400">(opcional)</span><input type="email" maxLength={255} value={leadEmail} onChange={event => setLeadEmail(event.target.value)} className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-4 py-3 font-normal text-white outline-none placeholder:text-slate-500 focus:border-blue-400" placeholder="voce@empresa.com.br" /></label>
                 <label className="text-sm font-bold sm:col-span-2">Sobre seu negócio <span className="font-normal text-slate-400">(opcional)</span><textarea rows={3} maxLength={1000} value={leadMensagem} onChange={event => setLeadMensagem(event.target.value)} className="mt-2 w-full resize-none rounded-xl border border-white/15 bg-white/5 px-4 py-3 font-normal text-white outline-none placeholder:text-slate-500 focus:border-blue-400" placeholder="Varejo, restaurante, tamanho da equipe..." /></label>
+                <label className="flex items-start gap-3 text-xs leading-relaxed text-slate-300 sm:col-span-2"><input required type="checkbox" checked={privacyAcknowledged} onChange={event => setPrivacyAcknowledged(event.target.checked)} className="mt-0.5 h-4 w-4 accent-blue-500" /><span>Li e estou ciente da <Link href="/privacidade" target="_blank" className="font-bold text-blue-300 underline">Política de Privacidade</Link>, inclusive sobre o uso dos dados para responder este contato. Esta ciência não autoriza marketing opcional.</span></label>
                 {leadError && <p className="text-sm text-red-300 sm:col-span-2">{leadError}</p>}
                 <button disabled={leadSubmitting} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-4 font-extrabold text-white transition hover:bg-blue-500 disabled:opacity-60 sm:col-span-2">{leadSubmitting ? <><Loader2 size={18} className="animate-spin" />Enviando...</> : <>Começar meu teste grátis <ArrowRight size={18} /></>}</button>
               </form>

@@ -8,11 +8,11 @@ export const metadata: Metadata = {
   alternates: { canonical: '/termos' },
 }
 
-const updated = '11 de agosto de 2026'
+const updated = '12 de agosto de 2026'
 
 export default function TermosPage() {
   return (
-    <LegalPage title="Termos de Uso" version="2.0" eyebrow="Plataforma Octus · legislação brasileira">
+    <LegalPage title="Termos de Uso" version="2.1" eyebrow="Plataforma Octus · legislação brasileira">
       <Notice>Estes Termos regulam o uso do Octus por empresas contratantes, seus usuários autorizados e clientes finais. A proposta comercial, o plano contratado e políticas específicas do estabelecimento complementam este documento. Em caso de relação de consumo, os direitos legais do consumidor prevalecem.</Notice>
 
       <Section title="1. Quem presta cada serviço">

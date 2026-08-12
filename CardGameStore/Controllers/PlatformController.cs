@@ -827,6 +827,27 @@ public class PlatformController : ControllerBase
         UpdatedAt         = l.UpdatedAt,
         ConvertedTenantId = l.ConvertedTenantId,
         Opportunity       = l.Opportunity is null ? null : ToDto(l.Opportunity),
+        Campaign          = l.Campaign,
+        UtmSource         = l.UtmSource,
+        UtmMedium         = l.UtmMedium,
+        UtmCampaign       = l.UtmCampaign,
+        UtmTerm           = l.UtmTerm,
+        UtmContent        = l.UtmContent,
+        ReferrerUrl       = l.ReferrerUrl,
+        LandingPage       = l.LandingPage,
+        ReferralPartnerId = l.ReferralPartnerId,
+        DataOriginDetails = l.DataOriginDetails,
+        ProcessingPurpose = l.ProcessingPurpose,
+        LegalBasis        = l.LegalBasis.ToString(),
+        PrivacyNoticeVersion = l.PrivacyNoticeVersion,
+        PrivacyNoticeAcknowledgedAt = l.PrivacyNoticeAcknowledgedAt,
+        LegitimateInterestAssessedAt = l.LegitimateInterestAssessedAt,
+        RetentionReviewAt = l.RetentionReviewAt,
+        OpposedAt = l.OpposedAt,
+        OppositionReason = l.OppositionReason,
+        CanContact = l.OpposedAt == null && (l.LegalBasis == LeadLegalBasis.ProcedimentosPreContratuais ||
+            l.LegalBasis == LeadLegalBasis.Consentimento ||
+            l.LegalBasis == LeadLegalBasis.LegitimoInteresse && l.LegitimateInterestAssessedAt != null),
     };
 
     private static CrmOpportunityDto ToDto(CrmOpportunity o) => new()
@@ -878,6 +899,10 @@ public class PlatformController : ControllerBase
             PlaceId               = request.PlaceId,
             EstimatedRevenueRange = request.EstimatedRevenueRange,
             AbordagemSugerida     = request.AbordagemSugerida,
+            DataOriginDetails     = "Dados profissionais públicos localizados pelo módulo de prospecção",
+            ProcessingPurpose     = "Qualificar potencial cliente empresarial e avaliar contato comercial pertinente",
+            LegalBasis            = LeadLegalBasis.LegitimoInteresse,
+            RetentionReviewAt     = DateTime.UtcNow.AddDays(180),
         };
 
         _catalog.Leads.Add(lead);
@@ -944,11 +969,115 @@ public class PlatformController : ControllerBase
         lead.EstimatedRevenueRange = request.EstimatedRevenueRange ?? lead.EstimatedRevenueRange;
         lead.AbordagemSugerida    = request.AbordagemSugerida    ?? lead.AbordagemSugerida;
         lead.ConvertedTenantId = request.ConvertedTenantId ?? lead.ConvertedTenantId;
+        lead.Campaign = CleanLeadValue(request.Campaign) ?? lead.Campaign;
+        lead.UtmSource = CleanLeadValue(request.UtmSource) ?? lead.UtmSource;
+        lead.UtmMedium = CleanLeadValue(request.UtmMedium) ?? lead.UtmMedium;
+        lead.UtmCampaign = CleanLeadValue(request.UtmCampaign) ?? lead.UtmCampaign;
+        lead.UtmTerm = CleanLeadValue(request.UtmTerm) ?? lead.UtmTerm;
+        lead.UtmContent = CleanLeadValue(request.UtmContent) ?? lead.UtmContent;
+        lead.DataOriginDetails = CleanLeadValue(request.DataOriginDetails) ?? lead.DataOriginDetails;
+        lead.ProcessingPurpose = CleanLeadValue(request.ProcessingPurpose) ?? lead.ProcessingPurpose;
+        if (!string.IsNullOrWhiteSpace(request.LegalBasis))
+        {
+            if (!Enum.TryParse<LeadLegalBasis>(request.LegalBasis, true, out var legalBasis))
+                return BadRequest(new { Message = "Base legal inválida." });
+            lead.LegalBasis = legalBasis;
+            if (legalBasis != LeadLegalBasis.LegitimoInteresse)
+                lead.LegitimateInterestAssessedAt = null;
+        }
+
+        if (request.ReferralPartnerId.HasValue)
+        {
+            if (!await _catalog.ReferralPartners.AnyAsync(p => p.Id == request.ReferralPartnerId && p.Active))
+                return BadRequest(new { Message = "Vendedor de indicação não encontrado ou inativo." });
+            lead.ReferralPartnerId = request.ReferralPartnerId;
+        }
+
+        TenantReferral? referral = null;
+        if (lead.ConvertedTenantId.HasValue && lead.ReferralPartnerId.HasValue)
+        {
+            var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == lead.ConvertedTenantId.Value);
+            var partner = await _catalog.ReferralPartners.FirstAsync(p => p.Id == lead.ReferralPartnerId.Value);
+            if (tenant is null) return BadRequest(new { Message = "Tenant convertido não encontrado." });
+            referral = await _catalog.TenantReferrals.FirstOrDefaultAsync(r => r.TenantId == tenant.Id);
+            if (referral is null)
+            {
+                referral = new TenantReferral
+                {
+                    TenantId = tenant.Id, PartnerId = partner.Id, SourceLeadId = lead.Id,
+                    SetupCommissionPercent = partner.SetupCommissionPercent,
+                    MonthlyCommissionPercent = partner.MonthlyCommissionPercent,
+                    StartedOn = tenant.CreatedAt.ToUniversalTime(),
+                    Notes = "Vínculo criado automaticamente pela conversão do CRM.",
+                };
+                _catalog.TenantReferrals.Add(referral);
+            }
+            else
+            {
+                if (referral.PartnerId != partner.Id)
+                    return Conflict(new { Message = "Este tenant já possui outro vendedor indicado. Altere o vínculo no controle de indicações para preservar o histórico de comissão." });
+                referral.SourceLeadId ??= lead.Id;
+                referral.UpdatedAt = DateTime.UtcNow;
+            }
+
+            if (tenant.SetupFee > 0 && !await _catalog.TenantCharges.AnyAsync(c =>
+                    c.TenantId == tenant.Id && c.Kind == TenantChargeKind.Implantacao))
+            {
+                var created = tenant.CreatedAt.ToUniversalTime();
+                _catalog.TenantCharges.Add(new TenantCharge
+                {
+                    TenantId = tenant.Id, Kind = TenantChargeKind.Implantacao, Amount = tenant.SetupFee,
+                    ReferenceMonth = new DateTime(created.Year, created.Month, 1, 0, 0, 0, DateTimeKind.Utc),
+                    DueDate = created.Date,
+                    Notes = "Implantação gerada automaticamente pela conversão do CRM.",
+                });
+            }
+        }
         lead.UpdatedAt         = DateTime.UtcNow;
         await _catalog.SaveChangesAsync();
 
+        if (referral is not null)
+        {
+            var commissions = HttpContext.RequestServices.GetRequiredService<IReferralCommissionService>();
+            await commissions.SynchronizeReferralAsync(referral.Id);
+            await _catalog.SaveChangesAsync();
+        }
+
         return Ok(ToDto(lead));
     }
+
+    [HttpPost("leads/{id:guid}/privacy/validate-legitimate-interest")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
+    public async Task<IActionResult> ValidateLegitimateInterest(Guid id)
+    {
+        var lead = await _catalog.Leads.FirstOrDefaultAsync(l => l.Id == id);
+        if (lead is null) return NotFound();
+        if (lead.LegalBasis != LeadLegalBasis.LegitimoInteresse)
+            return BadRequest(new { Message = "Este lead não usa legítimo interesse como base registrada." });
+        if (lead.OpposedAt.HasValue)
+            return Conflict(new { Message = "O titular registrou oposição; o contato permanece bloqueado." });
+        lead.LegitimateInterestAssessedAt = DateTime.UtcNow;
+        lead.UpdatedAt = DateTime.UtcNow;
+        await _catalog.SaveChangesAsync();
+        return Ok(ToDto(lead));
+    }
+
+    [HttpPost("leads/{id:guid}/privacy/opposition")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
+    public async Task<IActionResult> RegisterOpposition(Guid id, [FromBody] RegisterLeadOppositionRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var lead = await _catalog.Leads.FirstOrDefaultAsync(l => l.Id == id);
+        if (lead is null) return NotFound();
+        lead.OpposedAt = DateTime.UtcNow;
+        lead.OppositionReason = request.Reason.Trim();
+        lead.Status = LeadStatus.Perdido;
+        lead.UpdatedAt = DateTime.UtcNow;
+        await _catalog.SaveChangesAsync();
+        return Ok(ToDto(lead));
+    }
+
+    private static string? CleanLeadValue(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     // =========================================================================
     // Suporte — lado do dono da plataforma. Tickets são abertos pelo lojista

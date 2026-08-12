@@ -44,6 +44,20 @@ public class LeadsController : ControllerBase
             Telefone = request.Telefone.Trim(),
             Email    = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim(),
             Mensagem = string.IsNullOrWhiteSpace(request.Mensagem) ? null : request.Mensagem.Trim(),
+            Campaign = Clean(request.Campaign),
+            UtmSource = Clean(request.UtmSource),
+            UtmMedium = Clean(request.UtmMedium),
+            UtmCampaign = Clean(request.UtmCampaign),
+            UtmTerm = Clean(request.UtmTerm),
+            UtmContent = Clean(request.UtmContent),
+            ReferrerUrl = Clean(request.ReferrerUrl),
+            LandingPage = Clean(request.LandingPage),
+            DataOriginDetails = "Contato enviado pelo próprio titular no formulário institucional",
+            ProcessingPurpose = "Responder ao contato e realizar procedimentos para possível contratação da plataforma",
+            LegalBasis = LeadLegalBasis.ProcedimentosPreContratuais,
+            PrivacyNoticeVersion = request.PrivacyNoticeVersion.Trim(),
+            PrivacyNoticeAcknowledgedAt = DateTime.UtcNow,
+            RetentionReviewAt = DateTime.UtcNow.AddDays(180),
         };
 
         _catalog.Leads.Add(lead);
@@ -53,4 +67,5 @@ public class LeadsController : ControllerBase
 
         return Ok(new { Message = "Recebemos seu contato, vamos falar com você em breve." });
     }
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

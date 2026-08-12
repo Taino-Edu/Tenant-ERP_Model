@@ -900,6 +900,10 @@ export const platformApi = {
     api.get<LeadDto[]>('/api/platform/leads', { params: status ? { status } : undefined }),
   updateLead: (id: string, req: UpdateLeadRequest) =>
     api.patch<LeadDto>(`/api/platform/leads/${id}`, req),
+  validateLeadLegitimateInterest: (id: string) =>
+    api.post<LeadDto>(`/api/platform/leads/${id}/privacy/validate-legitimate-interest`),
+  registerLeadOpposition: (id: string, reason: string) =>
+    api.post<LeadDto>(`/api/platform/leads/${id}/privacy/opposition`, { reason }),
   enrichLead: (id: string) =>
     api.post<ProspectingEnrichResponse>(`/api/platform/prospecting/leads/${id}/enrich`),
   listCrmAssignees: () => api.get<CrmAssigneeDto[]>('/api/platform/crm/assignees'),
@@ -1002,6 +1006,15 @@ export interface LeadDto {
   estimatedRevenueRange: string | null; abordagemSugerida: string | null
   createdAt: string; updatedAt: string; convertedTenantId: string | null
   opportunity: CrmOpportunityDto | null
+  campaign: string | null; utmSource: string | null; utmMedium: string | null
+  utmCampaign: string | null; utmTerm: string | null; utmContent: string | null
+  referrerUrl: string | null; landingPage: string | null
+  referralPartnerId: string | null; referralPartnerName: string | null
+  dataOriginDetails: string; processingPurpose: string
+  legalBasis: 'NaoDefinida' | 'ProcedimentosPreContratuais' | 'LegitimoInteresse' | 'Consentimento' | 'ObrigacaoLegal'
+  privacyNoticeVersion: string | null; privacyNoticeAcknowledgedAt: string | null
+  legitimateInterestAssessedAt: string | null; retentionReviewAt: string | null
+  opposedAt: string | null; oppositionReason: string | null; canContact: boolean
 }
 
 export type CrmOpportunityStage = 'Qualificacao' | 'Diagnostico' | 'Proposta' | 'Negociacao' | 'Ganho' | 'Perdido'
@@ -1031,12 +1044,19 @@ export interface SaveCrmOpportunityRequest {
 
 export interface CreateLeadRequest {
   nome: string; telefone: string; email?: string; mensagem?: string
+  privacyNoticeAcknowledged: boolean; privacyNoticeVersion: string
+  campaign?: string; utmSource?: string; utmMedium?: string; utmCampaign?: string
+  utmTerm?: string; utmContent?: string; referrerUrl?: string; landingPage?: string
 }
 
 export interface UpdateLeadRequest {
   status: LeadStatus; notas?: string | null; convertedTenantId?: string | null
   digitalPresence?: LeadDigitalPresence | null; opportunityScore?: number | null; placeId?: string | null
   estimatedRevenueRange?: string | null; abordagemSugerida?: string | null
+  campaign?: string | null; utmSource?: string | null; utmMedium?: string | null
+  utmCampaign?: string | null; utmTerm?: string | null; utmContent?: string | null
+  referralPartnerId?: string | null; dataOriginDetails?: string | null; processingPurpose?: string | null
+  legalBasis?: LeadDto['legalBasis'] | null
 }
 
 export const leadsApi = {

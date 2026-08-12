@@ -124,6 +124,13 @@ public class CatalogDbContext : DbContext
         modelBuilder.Entity<Lead>(entity =>
         {
             entity.Property(l => l.Status).HasConversion<string>().HasMaxLength(20);
+            entity.Property(l => l.LegalBasis).HasConversion<string>().HasMaxLength(40);
+
+            entity.HasOne<ReferralPartner>().WithMany().HasForeignKey(l => l.ReferralPartnerId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(l => l.ReferralPartnerId)
+                  .HasDatabaseName("ix_leads_referral_partner_id");
 
             entity.HasIndex(l => l.Status)
                   .HasDatabaseName("ix_leads_status");

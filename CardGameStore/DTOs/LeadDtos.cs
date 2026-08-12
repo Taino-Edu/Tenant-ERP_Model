@@ -20,6 +20,18 @@ public class CreateLeadRequest
 
     [MaxLength(1000)]
     public string? Mensagem { get; set; }
+
+    [Range(typeof(bool), "true", "true", ErrorMessage = "É necessário confirmar a ciência da Política de Privacidade.")]
+    public bool PrivacyNoticeAcknowledged { get; set; }
+    [MaxLength(20)] public string PrivacyNoticeVersion { get; set; } = "2.1";
+    [MaxLength(120)] public string? Campaign { get; set; }
+    [MaxLength(120)] public string? UtmSource { get; set; }
+    [MaxLength(120)] public string? UtmMedium { get; set; }
+    [MaxLength(120)] public string? UtmCampaign { get; set; }
+    [MaxLength(120)] public string? UtmTerm { get; set; }
+    [MaxLength(120)] public string? UtmContent { get; set; }
+    [MaxLength(500)] public string? ReferrerUrl { get; set; }
+    [MaxLength(500)] public string? LandingPage { get; set; }
 }
 
 public class LeadDto
@@ -41,6 +53,26 @@ public class LeadDto
     public DateTime UpdatedAt { get; set; }
     public Guid? ConvertedTenantId { get; set; }
     public CrmOpportunityDto? Opportunity { get; set; }
+    public string? Campaign { get; set; }
+    public string? UtmSource { get; set; }
+    public string? UtmMedium { get; set; }
+    public string? UtmCampaign { get; set; }
+    public string? UtmTerm { get; set; }
+    public string? UtmContent { get; set; }
+    public string? ReferrerUrl { get; set; }
+    public string? LandingPage { get; set; }
+    public Guid? ReferralPartnerId { get; set; }
+    public string? ReferralPartnerName { get; set; }
+    public string DataOriginDetails { get; set; } = string.Empty;
+    public string ProcessingPurpose { get; set; } = string.Empty;
+    public string LegalBasis { get; set; } = string.Empty;
+    public string? PrivacyNoticeVersion { get; set; }
+    public DateTime? PrivacyNoticeAcknowledgedAt { get; set; }
+    public DateTime? LegitimateInterestAssessedAt { get; set; }
+    public DateTime? RetentionReviewAt { get; set; }
+    public DateTime? OpposedAt { get; set; }
+    public string? OppositionReason { get; set; }
+    public bool CanContact { get; set; }
 }
 
 public sealed class CrmAssigneeDto
@@ -158,4 +190,20 @@ public class UpdateLeadRequest
 
     [MaxLength(2000)]
     public string? AbordagemSugerida { get; set; }
+    [MaxLength(120)] public string? Campaign { get; set; }
+    [MaxLength(120)] public string? UtmSource { get; set; }
+    [MaxLength(120)] public string? UtmMedium { get; set; }
+    [MaxLength(120)] public string? UtmCampaign { get; set; }
+    [MaxLength(120)] public string? UtmTerm { get; set; }
+    [MaxLength(120)] public string? UtmContent { get; set; }
+    public Guid? ReferralPartnerId { get; set; }
+    [MaxLength(500)] public string? DataOriginDetails { get; set; }
+    [MaxLength(500)] public string? ProcessingPurpose { get; set; }
+    [RegularExpression("^(NaoDefinida|ProcedimentosPreContratuais|LegitimoInteresse|Consentimento|ObrigacaoLegal)$")]
+    public string? LegalBasis { get; set; }
+}
+
+public sealed class RegisterLeadOppositionRequest
+{
+    [Required, MaxLength(500)] public string Reason { get; set; } = string.Empty;
 }

@@ -144,7 +144,17 @@ public sealed class PlatformCrmController : ControllerBase
         if (!Enum.TryParse<CrmActivityType>(request.Type, true, out var type) ||
             type is CrmActivityType.MudancaEtapa or CrmActivityType.MudancaResponsavel)
             return BadRequest(new { Message = "Tipo de atividade inválido." });
-        if (!await _catalog.Leads.AnyAsync(l => l.Id == leadId, ct)) return NotFound();
+        var lead = await _catalog.Leads.AsNoTracking().FirstOrDefaultAsync(l => l.Id == leadId, ct);
+        if (lead is null) return NotFound();
+        if (type is CrmActivityType.Ligacao or CrmActivityType.WhatsApp or CrmActivityType.Email)
+        {
+            if (lead.OpposedAt.HasValue)
+                return Conflict(new { Message = "Contato bloqueado: o titular registrou oposição." });
+            if (lead.LegalBasis == LeadLegalBasis.LegitimoInteresse && !lead.LegitimateInterestAssessedAt.HasValue)
+                return Conflict(new { Message = "Valide o teste de legítimo interesse antes de registrar contato ativo." });
+            if (lead.LegalBasis is LeadLegalBasis.NaoDefinida or LeadLegalBasis.ObrigacaoLegal)
+                return Conflict(new { Message = "Defina uma base legal compatível antes de registrar contato ativo." });
+        }
 
         var actor = await CurrentActorAsync(ct);
         var opportunityId = await _catalog.CrmOpportunities.AsNoTracking()

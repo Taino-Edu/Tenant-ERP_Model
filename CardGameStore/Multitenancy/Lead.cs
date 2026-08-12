@@ -17,6 +17,15 @@ public enum LeadStatus
     Perdido,
 }
 
+public enum LeadLegalBasis
+{
+    NaoDefinida,
+    ProcedimentosPreContratuais,
+    LegitimoInteresse,
+    Consentimento,
+    ObrigacaoLegal,
+}
+
 [Table("leads")]
 public class Lead
 {
@@ -101,6 +110,25 @@ public class Lead
     /// conversão, sem FK (não é obrigatório o tenant continuar existindo).</summary>
     [Column("converted_tenant_id")]
     public Guid? ConvertedTenantId { get; set; }
+
+    [MaxLength(120), Column("campaign")] public string? Campaign { get; set; }
+    [MaxLength(120), Column("utm_source")] public string? UtmSource { get; set; }
+    [MaxLength(120), Column("utm_medium")] public string? UtmMedium { get; set; }
+    [MaxLength(120), Column("utm_campaign")] public string? UtmCampaign { get; set; }
+    [MaxLength(120), Column("utm_term")] public string? UtmTerm { get; set; }
+    [MaxLength(120), Column("utm_content")] public string? UtmContent { get; set; }
+    [MaxLength(500), Column("referrer_url")] public string? ReferrerUrl { get; set; }
+    [MaxLength(500), Column("landing_page")] public string? LandingPage { get; set; }
+    [Column("referral_partner_id")] public Guid? ReferralPartnerId { get; set; }
+    [MaxLength(500), Column("data_origin_details")] public string DataOriginDetails { get; set; } = "Formulário institucional";
+    [MaxLength(500), Column("processing_purpose")] public string ProcessingPurpose { get; set; } = "Responder ao contato e avaliar contratação da plataforma";
+    [Column("legal_basis")] public LeadLegalBasis LegalBasis { get; set; } = LeadLegalBasis.NaoDefinida;
+    [MaxLength(20), Column("privacy_notice_version")] public string? PrivacyNoticeVersion { get; set; }
+    [Column("privacy_notice_acknowledged_at")] public DateTime? PrivacyNoticeAcknowledgedAt { get; set; }
+    [Column("legitimate_interest_assessed_at")] public DateTime? LegitimateInterestAssessedAt { get; set; }
+    [Column("retention_review_at")] public DateTime? RetentionReviewAt { get; set; }
+    [Column("opposed_at")] public DateTime? OpposedAt { get; set; }
+    [MaxLength(500), Column("opposition_reason")] public string? OppositionReason { get; set; }
 
     public CrmOpportunity? Opportunity { get; set; }
     public List<CrmActivity> Activities { get; set; } = [];

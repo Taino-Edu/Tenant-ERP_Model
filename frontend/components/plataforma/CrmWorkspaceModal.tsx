@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import {
   CrmActivityDto, CrmActivityType, CrmAssigneeDto, CrmOpportunityStage,
-  CrmWorkspaceDto, LeadDto, getErrorMessage, platformApi,
+  CrmWorkspaceDto, LeadDto, ReferralPartnerDto, getErrorMessage, platformApi, referralApi,
 } from '@/lib/api'
 import Modal from '@/components/admin/ui/Modal'
 import toast from 'react-hot-toast'
@@ -56,15 +56,25 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
   const [activityTitle, setActivityTitle] = useState('')
   const [activityDescription, setActivityDescription] = useState('')
   const [activityDueAt, setActivityDueAt] = useState('')
+  const [partners, setPartners] = useState<ReferralPartnerDto[]>([])
+  const [currentLead, setCurrentLead] = useState(lead)
+  const [campaign, setCampaign] = useState(lead.campaign ?? '')
+  const [utmSource, setUtmSource] = useState(lead.utmSource ?? '')
+  const [utmMedium, setUtmMedium] = useState(lead.utmMedium ?? '')
+  const [utmCampaign, setUtmCampaign] = useState(lead.utmCampaign ?? '')
+  const [referralPartnerId, setReferralPartnerId] = useState(lead.referralPartnerId ?? '')
+  const [dataOriginDetails, setDataOriginDetails] = useState(lead.dataOriginDetails)
+  const [processingPurpose, setProcessingPurpose] = useState(lead.processingPurpose)
+  const [legalBasis, setLegalBasis] = useState<LeadDto['legalBasis']>(lead.legalBasis)
 
   async function load() {
     setLoading(true)
     try {
-      const [workspaceResult, assigneesResult] = await Promise.all([
-        platformApi.getCrmWorkspace(lead.id), platformApi.listCrmAssignees(),
+      const [workspaceResult, assigneesResult, partnersResult] = await Promise.all([
+        platformApi.getCrmWorkspace(lead.id), platformApi.listCrmAssignees(), referralApi.partners(),
       ])
       const data = workspaceResult.data
-      setWorkspace(data); setAssignees(assigneesResult.data)
+      setWorkspace(data); setAssignees(assigneesResult.data); setPartners(partnersResult.data.filter(item => item.active))
       if (data.opportunity) {
         setStage(data.opportunity.stage); setProbability(data.opportunity.probability)
         setValue(data.opportunity.value?.toString() ?? '')
@@ -110,6 +120,42 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
     finally { setSaving(false) }
   }
 
+  async function saveGovernance(event: FormEvent) {
+    event.preventDefault(); setSaving(true)
+    try {
+      const result = await platformApi.updateLead(lead.id, {
+        status: currentLead.status, notas: currentLead.notas,
+        campaign: campaign.trim() || null, utmSource: utmSource.trim() || null,
+        utmMedium: utmMedium.trim() || null, utmCampaign: utmCampaign.trim() || null,
+        referralPartnerId: referralPartnerId || null,
+        dataOriginDetails: dataOriginDetails.trim(), processingPurpose: processingPurpose.trim(),
+        legalBasis,
+      })
+      setCurrentLead(result.data); onChanged(); toast.success('Origem e governança atualizadas.')
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível salvar a governança.')) }
+    finally { setSaving(false) }
+  }
+
+  async function validateLegitimateInterest() {
+    setSaving(true)
+    try {
+      const result = await platformApi.validateLeadLegitimateInterest(lead.id)
+      setCurrentLead(result.data); onChanged(); toast.success('Avaliação registrada; contato comercial liberado.')
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível registrar a avaliação.')) }
+    finally { setSaving(false) }
+  }
+
+  async function registerOpposition() {
+    const reason = window.prompt('Motivo ou canal em que a oposição foi recebida:')?.trim()
+    if (!reason) return
+    setSaving(true)
+    try {
+      const result = await platformApi.registerLeadOpposition(lead.id, reason)
+      setCurrentLead(result.data); onChanged(); toast.success('Oposição registrada e contatos bloqueados.')
+    } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível registrar a oposição.')) }
+    finally { setSaving(false) }
+  }
+
   async function completeActivity(activity: CrmActivityDto) {
     const outcome = window.prompt('Resultado da tarefa (opcional):', activity.outcome ?? '')
     if (outcome === null) return
@@ -123,6 +169,24 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
     {loading && !workspace ? <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-brand-400" /></div> :
       <div className="grid gap-5 p-4 lg:grid-cols-2">
         <div className="space-y-4">
+          <form onSubmit={saveGovernance} className="space-y-3 rounded-xl border border-surface-600 p-4">
+            <div className="flex items-center justify-between gap-2"><div><h4 className="text-sm font-bold text-white">Origem, indicação e LGPD</h4><p className="text-[11px] text-gray-500">Atribuição comercial e registro da operação de tratamento</p></div><span className={clsx('rounded-full px-2 py-1 text-[10px] font-bold', currentLead.canContact ? 'bg-accent-green/10 text-accent-green' : 'bg-amber-500/10 text-amber-300')}>{currentLead.canContact ? 'Contato liberado' : 'Contato bloqueado'}</span></div>
+            <div className="grid grid-cols-2 gap-3">
+              <label><span className="label">Campanha</span><input className="input w-full" maxLength={120} value={campaign} onChange={event => setCampaign(event.target.value)} /></label>
+              <label><span className="label">Vendedor indicador</span><select className="input w-full" value={referralPartnerId} onChange={event => setReferralPartnerId(event.target.value)}><option value="">Sem indicação</option>{partners.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label><span className="label">UTM source</span><input className="input w-full" maxLength={120} value={utmSource} onChange={event => setUtmSource(event.target.value)} /></label>
+              <label><span className="label">UTM medium</span><input className="input w-full" maxLength={120} value={utmMedium} onChange={event => setUtmMedium(event.target.value)} /></label>
+              <label className="col-span-2"><span className="label">UTM campaign</span><input className="input w-full" maxLength={120} value={utmCampaign} onChange={event => setUtmCampaign(event.target.value)} /></label>
+              <label className="col-span-2"><span className="label">Base legal registrada</span><select className="input w-full" value={legalBasis} onChange={event => setLegalBasis(event.target.value as LeadDto['legalBasis'])}><option value="NaoDefinida">Pendente de definição</option><option value="ProcedimentosPreContratuais">Procedimentos pré-contratuais</option><option value="LegitimoInteresse">Legítimo interesse</option><option value="Consentimento">Consentimento documentado</option><option value="ObrigacaoLegal">Obrigação legal</option></select></label>
+              <label className="col-span-2"><span className="label">Origem dos dados</span><textarea required maxLength={500} className="input min-h-16 w-full" value={dataOriginDetails} onChange={event => setDataOriginDetails(event.target.value)} /></label>
+              <label className="col-span-2"><span className="label">Finalidade</span><textarea required maxLength={500} className="input min-h-16 w-full" value={processingPurpose} onChange={event => setProcessingPurpose(event.target.value)} /></label>
+            </div>
+            <div className="rounded-lg bg-surface-700 p-3 text-xs text-gray-400"><strong className="text-gray-200">Base:</strong> {currentLead.legalBasis} · <strong className="text-gray-200">revisão:</strong> {currentLead.retentionReviewAt ? new Date(currentLead.retentionReviewAt).toLocaleDateString('pt-BR') : 'não definida'}{currentLead.opposedAt && <p className="mt-1 text-red-300">Oposição em {localDateTime(currentLead.opposedAt)}: {currentLead.oppositionReason}</p>}</div>
+            <button disabled={saving} className="btn-secondary w-full justify-center">Salvar atribuição e governança</button>
+            {currentLead.legalBasis === 'LegitimoInteresse' && !currentLead.legitimateInterestAssessedAt && !currentLead.opposedAt && <button type="button" disabled={saving} onClick={validateLegitimateInterest} className="btn-primary w-full justify-center">Registrar teste de legítimo interesse</button>}
+            {!currentLead.opposedAt && <button type="button" disabled={saving} onClick={registerOpposition} className="w-full text-xs font-semibold text-red-300 hover:underline">Registrar oposição / não contatar</button>}
+          </form>
+
           <form onSubmit={saveOpportunity} className="space-y-3 rounded-xl border border-surface-600 p-4">
             <div className="flex items-center gap-2"><CircleDollarSign className="h-4 w-4 text-brand-400" /><h4 className="text-sm font-bold text-white">Oportunidade</h4></div>
             <div className="grid grid-cols-2 gap-3">

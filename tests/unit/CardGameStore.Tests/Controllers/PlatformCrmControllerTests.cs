@@ -92,4 +92,45 @@ public sealed class PlatformCrmControllerTests
         activity.CompletedAt.Should().NotBeNull();
         activity.Outcome.Should().Be("Cliente aprovou");
     }
+
+    [Fact]
+    public async Task ContatoAtivo_ComLegitimoInteressePendente_FicaBloqueado()
+    {
+        await using var catalog = CreateCatalog();
+        await using var users = CreateUsers();
+        var lead = new Lead
+        {
+            Nome = "Empresa", Telefone = "14999990000",
+            LegalBasis = LeadLegalBasis.LegitimoInteresse,
+        };
+        catalog.Leads.Add(lead);
+        await catalog.SaveChangesAsync();
+
+        var result = await new PlatformCrmController(catalog, users).CreateActivity(lead.Id,
+            new CreateCrmActivityRequest { Type = "WhatsApp", Title = "Primeiro contato" }, default);
+
+        result.Result.Should().BeOfType<ConflictObjectResult>();
+        (await catalog.CrmActivities.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ContatoAtivo_AposAvaliacao_PodeSerRegistrado()
+    {
+        await using var catalog = CreateCatalog();
+        await using var users = CreateUsers();
+        var lead = new Lead
+        {
+            Nome = "Empresa", Telefone = "14999990000",
+            LegalBasis = LeadLegalBasis.LegitimoInteresse,
+            LegitimateInterestAssessedAt = DateTime.UtcNow,
+        };
+        catalog.Leads.Add(lead);
+        await catalog.SaveChangesAsync();
+
+        var result = await new PlatformCrmController(catalog, users).CreateActivity(lead.Id,
+            new CreateCrmActivityRequest { Type = "WhatsApp", Title = "Primeiro contato" }, default);
+
+        result.Result.Should().BeOfType<ObjectResult>();
+        (await catalog.CrmActivities.CountAsync()).Should().Be(1);
+    }
 }
