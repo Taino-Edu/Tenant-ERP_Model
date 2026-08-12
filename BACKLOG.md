@@ -213,6 +213,9 @@
     concorrentes duplicadas;
   - histórico de pesquisas, retomada do snapshot, idade dos dados e botão de
     atualização forçada na interface;
+  - tela reorganizada em painéis recolhíveis: pesquisa manual aberta por padrão,
+    bot fechado, histórico e fila de revisão com expansão independente e
+    contadores visíveis no cabeçalho;
   - estados persistentes `New`, `Selected`, `Discarded`, `Lead`, `Customer` e
     `Stale`, preservando conversões durante novas coletas;
   - conversão ligada ao candidato e reconciliação automática com leads antigos
