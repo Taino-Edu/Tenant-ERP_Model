@@ -14,12 +14,12 @@ public class ReferralCommissionServiceTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
     private static async Task<(Tenant Tenant, ReferralPartner Partner, TenantReferral Referral)> SeedAsync(
-        CatalogDbContext db, int paymentDay = 10, int? cycles = null)
+        CatalogDbContext db, int paymentGraceDays = 5, int? cycles = null)
     {
         var tenant = new Tenant { Slug = "cliente", SchemaName = "tenant_cliente", MonthlyPrice = 269m };
         var partner = new ReferralPartner
         {
-            Name = "Vendedor", PaymentDay = paymentDay,
+            Name = "Vendedor", PaymentGraceDays = paymentGraceDays,
             SetupCommissionPercent = 20m, MonthlyCommissionPercent = 10m,
         };
         var referral = new TenantReferral
@@ -38,7 +38,7 @@ public class ReferralCommissionServiceTests
     public async Task PagamentoDoCliente_GeraUmaUnicaComissaoComDataDeRepasse()
     {
         using var db = CreateDb();
-        var seed = await SeedAsync(db, paymentDay: 10);
+        var seed = await SeedAsync(db, paymentGraceDays: 5);
         var charge = new TenantCharge
         {
             TenantId = seed.Tenant.Id, Kind = TenantChargeKind.Mensalidade,
@@ -58,7 +58,29 @@ public class ReferralCommissionServiceTests
         var commission = await db.ReferralCommissions.SingleAsync();
         commission.Amount.Should().Be(26.90m);
         commission.CommissionPercent.Should().Be(10m);
-        commission.DueDate.Should().Be(new DateTime(2026, 2, 10, 0, 0, 0, DateTimeKind.Utc));
+        commission.DueDate.Should().Be(new DateTime(2026, 1, 20, 0, 0, 0, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public async Task CarenciaPersonalizada_ContaDaLiquidacaoDoCliente()
+    {
+        using var db = CreateDb();
+        var seed = await SeedAsync(db, paymentGraceDays: 8);
+        var charge = new TenantCharge
+        {
+            TenantId = seed.Tenant.Id, Kind = TenantChargeKind.Mensalidade,
+            Amount = 269m, ReferenceMonth = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            DueDate = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc),
+            PaidAt = new DateTime(2026, 1, 31, 23, 30, 0, DateTimeKind.Utc),
+        };
+        db.TenantCharges.Add(charge);
+        await db.SaveChangesAsync();
+
+        await new ReferralCommissionService(db).SynchronizeChargeAsync(charge, null);
+        await db.SaveChangesAsync();
+
+        (await db.ReferralCommissions.SingleAsync()).DueDate
+            .Should().Be(new DateTime(2026, 2, 8, 0, 0, 0, DateTimeKind.Utc));
     }
 
     [Fact]
