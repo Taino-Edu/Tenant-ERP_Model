@@ -117,7 +117,7 @@ public class EmailService : IEmailService
     {
         var safeName = WebUtility.HtmlEncode(toName);
         var safeProfile = WebUtility.HtmlEncode(profileName);
-        var link = $"{GetAppUrl()}/reset-password?token={Uri.EscapeDataString(inviteToken)}&invite=platform";
+        var link = $"{GetAppUrl()}/reset-password?token={Uri.EscapeDataString(inviteToken)}&from=admin&invite=platform";
         var body = $"""
             <p>Olá, <strong>{safeName}</strong>!</p>
             <p>Você foi convidado para integrar a equipe de gestão do <strong>Octus</strong> com o perfil <strong>{safeProfile}</strong>.</p>

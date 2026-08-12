@@ -6,6 +6,7 @@ import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast from 'react-hot-toast'
 import { Sword, Loader2, CheckCircle, KeyRound, Mail } from 'lucide-react'
 import Link from 'next/link'
+import { resolveResetLoginPath } from '@/lib/resetPassword'
 
 function ResetPasswordForm() {
   const { site } = useSiteConfig()
@@ -14,8 +15,10 @@ function ResetPasswordForm() {
   const token     = params.get('token') ?? ''
   // Login de admin/operador (/login) e área do cliente (/entrar) compartilham
   // esta mesma tela — "from=admin" (setado pelo link em /login) decide pra
-  // onde volta depois, sem precisar de duas páginas quase idênticas.
-  const loginPath = params.get('from') === 'admin' ? '/login' : '/entrar'
+  // onde volta depois, sem precisar de duas páginas quase idênticas. Convites
+  // antigos da equipe da plataforma trazem apenas "invite=platform", então
+  // também precisam voltar ao login administrativo.
+  const loginPath = resolveResetLoginPath(params.get('from'), params.get('invite'))
 
   // Fase 1: pedir email para receber o link
   const [email,    setEmail]    = useState('')
