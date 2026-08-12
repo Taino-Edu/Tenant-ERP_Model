@@ -109,7 +109,7 @@ export default function InstitucionalPage() {
       await leadsApi.create({
         nome: leadNome.trim(), telefone: leadTelefone.trim(),
         email: leadEmail.trim() || undefined, mensagem: leadMensagem.trim() || undefined,
-        privacyNoticeAcknowledged: privacyAcknowledged, privacyNoticeVersion: '2.1',
+        privacyNoticeAcknowledged: privacyAcknowledged, privacyNoticeVersion: '2.2',
         campaign: query.get('campaign')?.slice(0, 120) || undefined,
         utmSource: query.get('utm_source')?.slice(0, 120) || undefined,
         utmMedium: query.get('utm_medium')?.slice(0, 120) || undefined,

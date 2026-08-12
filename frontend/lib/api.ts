@@ -900,14 +900,19 @@ export const platformApi = {
     api.get<LeadDto[]>('/api/platform/leads', { params: status ? { status } : undefined }),
   updateLead: (id: string, req: UpdateLeadRequest) =>
     api.patch<LeadDto>(`/api/platform/leads/${id}`, req),
-  validateLeadLegitimateInterest: (id: string) =>
-    api.post<LeadDto>(`/api/platform/leads/${id}/privacy/validate-legitimate-interest`),
+  validateLeadLegitimateInterest: (id: string, request: { purposeAssessment: string; necessityAssessment: string; expectationAssessment: string; riskAssessment: string; safeguards: string; approved: boolean }) =>
+    api.post<LeadDto>(`/api/platform/leads/${id}/privacy/validate-legitimate-interest`, request),
   registerLeadOpposition: (id: string, reason: string) =>
     api.post<LeadDto>(`/api/platform/leads/${id}/privacy/opposition`, { reason }),
   enrichLead: (id: string) =>
     api.post<ProspectingEnrichResponse>(`/api/platform/prospecting/leads/${id}/enrich`),
   listCrmAssignees: () => api.get<CrmAssigneeDto[]>('/api/platform/crm/assignees'),
   listCrmTasks: () => api.get<CrmTaskDto[]>('/api/platform/crm/tasks'),
+  getCrmAnalytics: () => api.get<CrmAnalyticsDto>('/api/platform/crm/analytics'),
+  listRetentionDue: () => api.get<string[]>('/api/platform/crm/privacy/retention-due'),
+  listLeadPrivacyEvents: (leadId: string) => api.get<LeadPrivacyEventDto[]>(`/api/platform/crm/leads/${leadId}/privacy-events`),
+  reviewLeadRetention: (leadId: string, request: { action: 'Extend' | 'Anonymize'; reason: string; extensionDays?: number | null }) =>
+    api.post(`/api/platform/crm/leads/${leadId}/privacy/retention-review`, request),
   getCrmWorkspace: (leadId: string) => api.get<CrmWorkspaceDto>(`/api/platform/crm/leads/${leadId}`),
   saveCrmOpportunity: (leadId: string, req: SaveCrmOpportunityRequest) =>
     api.put<CrmOpportunityDto>(`/api/platform/crm/leads/${leadId}/opportunity`, req),
@@ -1037,6 +1042,17 @@ export interface CrmTaskDto extends CrmActivityDto {
   leadName: string; assignedUserId: string | null; assignedUserName: string | null
 }
 export interface CrmWorkspaceDto { opportunity: CrmOpportunityDto | null; activities: CrmActivityDto[] }
+export interface CrmAnalyticsBreakdownDto { label: string; count: number; value: number; averageAgeDays: number }
+export interface CrmMonthlyTrendDto { month: string; created: number; converted: number }
+export interface CrmAnalyticsDto {
+  generatedAt: string; totalLeads: number; convertedLeads: number; conversionRate: number
+  openOpportunities: number; openPipeline: number; weightedPipeline: number
+  averageSalesCycleDays: number; retentionReviewsDue: number; contactBlocked: number
+  byStage: CrmAnalyticsBreakdownDto[]; bySource: CrmAnalyticsBreakdownDto[]
+  byOwner: CrmAnalyticsBreakdownDto[]; lostReasons: CrmAnalyticsBreakdownDto[]
+  monthlyTrend: CrmMonthlyTrendDto[]
+}
+export interface LeadPrivacyEventDto { id: string; eventType: string; actorName: string; detailsJson: string; eventHash: string; createdAt: string }
 export interface SaveCrmOpportunityRequest {
   stage: CrmOpportunityStage; probability: number; value?: number | null
   expectedCloseDate?: string | null; assignedUserId?: string | null; lostReason?: string | null

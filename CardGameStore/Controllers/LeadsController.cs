@@ -61,6 +61,10 @@ public class LeadsController : ControllerBase
         };
 
         _catalog.Leads.Add(lead);
+        await LeadPrivacyAudit.AppendAsync(_catalog, lead.Id, "PrivacyNoticeAcknowledged", new
+        {
+            lead.PrivacyNoticeVersion, lead.LegalBasis, lead.DataOriginDetails, lead.ProcessingPurpose,
+        }, "Titular via formulário público");
         await _catalog.SaveChangesAsync();
 
         _logger.LogInformation("Lead novo recebido: {Nome} ({Telefone})", lead.Nome, lead.Telefone);

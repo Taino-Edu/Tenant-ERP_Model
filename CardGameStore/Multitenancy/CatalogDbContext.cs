@@ -23,6 +23,7 @@ public class CatalogDbContext : DbContext
     public DbSet<Lead> Leads { get; set; }
     public DbSet<CrmOpportunity> CrmOpportunities { get; set; }
     public DbSet<CrmActivity> CrmActivities { get; set; }
+    public DbSet<LeadPrivacyEvent> LeadPrivacyEvents { get; set; }
     public DbSet<ProspectingSearch> ProspectingSearches { get; set; }
     public DbSet<ProspectCandidate> ProspectCandidates { get; set; }
     public DbSet<ProspectingCampaign> ProspectingCampaigns { get; set; }
@@ -208,6 +209,16 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(c => c.DueDate)
                   .HasDatabaseName("ix_tenant_charges_due_date");
+        });
+
+        modelBuilder.Entity<LeadPrivacyEvent>(entity =>
+        {
+            entity.HasOne(e => e.Lead).WithMany(l => l.PrivacyEvents).HasForeignKey(e => e.LeadId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasIndex(e => new { e.LeadId, e.CreatedAt })
+                  .HasDatabaseName("ix_lead_privacy_events_lead_date");
+            entity.HasIndex(e => e.EventHash).IsUnique()
+                  .HasDatabaseName("ix_lead_privacy_events_hash_unique");
         });
 
         modelBuilder.Entity<CrmOpportunity>(entity =>

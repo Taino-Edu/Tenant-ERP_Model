@@ -68,6 +68,9 @@ public sealed class CrmOpportunity
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    [Column("stage_entered_at")]
+    public DateTime StageEnteredAt { get; set; } = DateTime.UtcNow;
+
     public List<CrmActivity> Activities { get; set; } = [];
 }
 

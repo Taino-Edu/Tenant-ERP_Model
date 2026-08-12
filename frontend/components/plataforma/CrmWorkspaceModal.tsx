@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react'
 import {
   CrmActivityDto, CrmActivityType, CrmAssigneeDto, CrmOpportunityStage,
-  CrmWorkspaceDto, LeadDto, ReferralPartnerDto, getErrorMessage, platformApi, referralApi,
+  CrmWorkspaceDto, LeadDto, LeadPrivacyEventDto, ReferralPartnerDto, getErrorMessage, platformApi, referralApi,
 } from '@/lib/api'
 import Modal from '@/components/admin/ui/Modal'
 import toast from 'react-hot-toast'
@@ -66,15 +66,21 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
   const [dataOriginDetails, setDataOriginDetails] = useState(lead.dataOriginDetails)
   const [processingPurpose, setProcessingPurpose] = useState(lead.processingPurpose)
   const [legalBasis, setLegalBasis] = useState<LeadDto['legalBasis']>(lead.legalBasis)
+  const [privacyEvents, setPrivacyEvents] = useState<LeadPrivacyEventDto[]>([])
+  const [purposeAssessment, setPurposeAssessment] = useState('Interesse comercial específico e compatível com os serviços oferecidos.')
+  const [necessityAssessment, setNecessityAssessment] = useState('Uso limitado a dados profissionais de contato estritamente necessários.')
+  const [expectationAssessment, setExpectationAssessment] = useState('Contato B2B pertinente ao ramo e sem uso de dados sensíveis.')
+  const [riskAssessment, setRiskAssessment] = useState('Baixo impacto, sem decisão automatizada ou compartilhamento para publicidade de terceiros.')
+  const [safeguards, setSafeguards] = useState('Revisão humana, contato limitado, identificação do remetente, transparência e oposição imediata.')
 
   async function load() {
     setLoading(true)
     try {
-      const [workspaceResult, assigneesResult, partnersResult] = await Promise.all([
-        platformApi.getCrmWorkspace(lead.id), platformApi.listCrmAssignees(), referralApi.partners(),
+      const [workspaceResult, assigneesResult, partnersResult, privacyResult] = await Promise.all([
+        platformApi.getCrmWorkspace(lead.id), platformApi.listCrmAssignees(), referralApi.partners(), platformApi.listLeadPrivacyEvents(lead.id),
       ])
       const data = workspaceResult.data
-      setWorkspace(data); setAssignees(assigneesResult.data); setPartners(partnersResult.data.filter(item => item.active))
+      setWorkspace(data); setAssignees(assigneesResult.data); setPartners(partnersResult.data.filter(item => item.active)); setPrivacyEvents(privacyResult.data)
       if (data.opportunity) {
         setStage(data.opportunity.stage); setProbability(data.opportunity.probability)
         setValue(data.opportunity.value?.toString() ?? '')
@@ -139,7 +145,9 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
   async function validateLegitimateInterest() {
     setSaving(true)
     try {
-      const result = await platformApi.validateLeadLegitimateInterest(lead.id)
+      const result = await platformApi.validateLeadLegitimateInterest(lead.id, {
+        purposeAssessment, necessityAssessment, expectationAssessment, riskAssessment, safeguards, approved: true,
+      })
       setCurrentLead(result.data); onChanged(); toast.success('Avaliação registrada; contato comercial liberado.')
     } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível registrar a avaliação.')) }
     finally { setSaving(false) }
@@ -184,7 +192,12 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
             <div className="rounded-lg bg-surface-700 p-3 text-xs text-gray-400"><strong className="text-gray-200">Base:</strong> {currentLead.legalBasis} · <strong className="text-gray-200">revisão:</strong> {currentLead.retentionReviewAt ? new Date(currentLead.retentionReviewAt).toLocaleDateString('pt-BR') : 'não definida'}{currentLead.opposedAt && <p className="mt-1 text-red-300">Oposição em {localDateTime(currentLead.opposedAt)}: {currentLead.oppositionReason}</p>}</div>
             <button disabled={saving} className="btn-secondary w-full justify-center">Salvar atribuição e governança</button>
             {currentLead.legalBasis === 'LegitimoInteresse' && !currentLead.legitimateInterestAssessedAt && !currentLead.opposedAt && <button type="button" disabled={saving} onClick={validateLegitimateInterest} className="btn-primary w-full justify-center">Registrar teste de legítimo interesse</button>}
+            {currentLead.legalBasis === 'LegitimoInteresse' && !currentLead.legitimateInterestAssessedAt && !currentLead.opposedAt && <details className="rounded-lg border border-surface-600 p-3 text-xs"><summary className="cursor-pointer font-bold text-amber-300">Preencher teste de balanceamento</summary><div className="mt-3 space-y-2">{[
+              ['Finalidade legítima', purposeAssessment, setPurposeAssessment], ['Necessidade e minimização', necessityAssessment, setNecessityAssessment],
+              ['Expectativa do titular', expectationAssessment, setExpectationAssessment], ['Riscos e impactos', riskAssessment, setRiskAssessment], ['Salvaguardas', safeguards, setSafeguards],
+            ].map(([label, value, setter]) => <label key={label as string} className="block"><span className="label">{label as string}</span><textarea required maxLength={1000} className="input min-h-16 w-full" value={value as string} onChange={event => (setter as (value: string) => void)(event.target.value)} /></label>)}</div></details>}
             {!currentLead.opposedAt && <button type="button" disabled={saving} onClick={registerOpposition} className="w-full text-xs font-semibold text-red-300 hover:underline">Registrar oposição / não contatar</button>}
+            <details className="rounded-lg border border-surface-600 p-3 text-xs"><summary className="cursor-pointer font-bold text-gray-300">Trilha de privacidade ({privacyEvents.length})</summary><div className="mt-3 max-h-48 space-y-2 overflow-y-auto">{privacyEvents.map(event => <div key={event.id} className="rounded bg-surface-700 p-2"><div className="flex justify-between gap-2"><strong className="text-gray-200">{event.eventType}</strong><span className="text-gray-500">{localDateTime(event.createdAt)}</span></div><p className="text-gray-500">{event.actorName} · hash {event.eventHash.slice(0, 12)}</p></div>)}</div></details>
           </form>
 
           <form onSubmit={saveOpportunity} className="space-y-3 rounded-xl border border-surface-600 p-4">

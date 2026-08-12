@@ -23,7 +23,7 @@ public class CreateLeadRequest
 
     [Range(typeof(bool), "true", "true", ErrorMessage = "É necessário confirmar a ciência da Política de Privacidade.")]
     public bool PrivacyNoticeAcknowledged { get; set; }
-    [MaxLength(20)] public string PrivacyNoticeVersion { get; set; } = "2.1";
+    [MaxLength(20)] public string PrivacyNoticeVersion { get; set; } = "2.2";
     [MaxLength(120)] public string? Campaign { get; set; }
     [MaxLength(120)] public string? UtmSource { get; set; }
     [MaxLength(120)] public string? UtmMedium { get; set; }
@@ -206,4 +206,66 @@ public class UpdateLeadRequest
 public sealed class RegisterLeadOppositionRequest
 {
     [Required, MaxLength(500)] public string Reason { get; set; } = string.Empty;
+}
+
+public sealed class ValidateLegitimateInterestRequest
+{
+    [Required, MaxLength(1000)] public string PurposeAssessment { get; set; } = string.Empty;
+    [Required, MaxLength(1000)] public string NecessityAssessment { get; set; } = string.Empty;
+    [Required, MaxLength(1000)] public string ExpectationAssessment { get; set; } = string.Empty;
+    [Required, MaxLength(1000)] public string RiskAssessment { get; set; } = string.Empty;
+    [Required, MaxLength(1000)] public string Safeguards { get; set; } = string.Empty;
+    [Range(typeof(bool), "true", "true", ErrorMessage = "A conclusão favorável deve ser confirmada.")]
+    public bool Approved { get; set; }
+}
+
+public sealed class ReviewLeadRetentionRequest
+{
+    [Required, RegularExpression("^(Extend|Anonymize)$")] public string Action { get; set; } = string.Empty;
+    [Required, MaxLength(1000)] public string Reason { get; set; } = string.Empty;
+    [Range(30, 730)] public int? ExtensionDays { get; set; }
+}
+
+public sealed class LeadPrivacyEventDto
+{
+    public Guid Id { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public string ActorName { get; set; } = string.Empty;
+    public string DetailsJson { get; set; } = "{}";
+    public string EventHash { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+}
+
+public sealed class CrmAnalyticsDto
+{
+    public DateTime GeneratedAt { get; set; }
+    public int TotalLeads { get; set; }
+    public int ConvertedLeads { get; set; }
+    public decimal ConversionRate { get; set; }
+    public int OpenOpportunities { get; set; }
+    public decimal OpenPipeline { get; set; }
+    public decimal WeightedPipeline { get; set; }
+    public double AverageSalesCycleDays { get; set; }
+    public int RetentionReviewsDue { get; set; }
+    public int ContactBlocked { get; set; }
+    public List<CrmAnalyticsBreakdownDto> ByStage { get; set; } = [];
+    public List<CrmAnalyticsBreakdownDto> BySource { get; set; } = [];
+    public List<CrmAnalyticsBreakdownDto> ByOwner { get; set; } = [];
+    public List<CrmAnalyticsBreakdownDto> LostReasons { get; set; } = [];
+    public List<CrmMonthlyTrendDto> MonthlyTrend { get; set; } = [];
+}
+
+public sealed class CrmAnalyticsBreakdownDto
+{
+    public string Label { get; set; } = string.Empty;
+    public int Count { get; set; }
+    public decimal Value { get; set; }
+    public double AverageAgeDays { get; set; }
+}
+
+public sealed class CrmMonthlyTrendDto
+{
+    public string Month { get; set; } = string.Empty;
+    public int Created { get; set; }
+    public int Converted { get; set; }
 }

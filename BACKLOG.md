@@ -28,7 +28,7 @@
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
-  `QA-001`, a suíte completa passou novamente em 2026-08-12 com 781 testes,
+  `QA-001`, a suíte completa passou novamente em 2026-08-12 com 784 testes,
   zero falhas e zero ignorados.
 - Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões já têm implementação na `main`.
@@ -197,9 +197,14 @@
 
 ### CRM-004 — Gestão de carteira e previsão comercial
 
-- **Estado:** `PRONTO PARA FAZER`
-- **Falta:** carteira por vendedor, forecast ponderado, aging por etapa, motivos de
-  perda, metas, conversão por origem e tempo médio até fechamento.
+- **Estado:** `VALIDAR` (painel operacional entregue em 2026-08-12)
+- **Entregue:** painel alimentado por endpoint analítico canônico com total e taxa
+  de conversão, pipeline bruto e ponderado, ciclo médio, aging por etapa,
+  carteira por responsável, origem, motivos de perda e tendência de captação e
+  conversão dos últimos seis meses. As definições são calculadas no backend e
+  reconciliam cards e detalhamentos.
+- **Falta:** metas por vendedor/período, comparação contra período anterior,
+  coortes, receita efetivamente recebida por origem e exportação gerencial.
 - **Critério de conclusão:** o gestor enxerga pipeline, previsão e gargalos por
   período/vendedor/origem com definições de métricas documentadas.
 
@@ -346,10 +351,13 @@
 
 ### PROS-005 — Operação de contato e cadência
 
-- **Estado:** `BLOQUEADO`
+- **Estado:** `PRONTO PARA FAZER` (bloqueios técnicos de LGPD removidos)
 - **Depende de:** `CRM-002`, `CRM-003` e `PROS-004`.
 - **Falta decidir:** canais permitidos, horários, identidade do remetente,
   templates, frequência, SLA e regra de oposição.
+- **Governança disponível:** teste de balanceamento estruturado, trilha imutável
+  encadeada por hash, oposição do CRM e do portal público, bloqueio de contato no
+  backend, fila automatizada de revisão de retenção e anonimização justificada.
 - **Possibilidades gratuitas/open source:** templates e tarefas no próprio CRM;
   e-mail self-hosted com listmonk somente quando houver base legal e descadastro.
 - **Critério de conclusão:** cada contato vira atividade, tem finalidade/base

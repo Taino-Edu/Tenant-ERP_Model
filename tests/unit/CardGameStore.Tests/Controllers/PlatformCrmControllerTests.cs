@@ -133,4 +133,63 @@ public sealed class PlatformCrmControllerTests
         result.Result.Should().BeOfType<ObjectResult>();
         (await catalog.CrmActivities.CountAsync()).Should().Be(1);
     }
+
+    [Fact]
+    public async Task PrivacyAudit_EncadeiaEventosSemSobrescreverHistorico()
+    {
+        await using var catalog = CreateCatalog();
+        var lead = new Lead { Nome = "Empresa", Telefone = "14999990000" };
+        catalog.Leads.Add(lead);
+        await catalog.SaveChangesAsync();
+
+        var first = await LeadPrivacyAudit.AppendAsync(catalog, lead.Id, "Created", new { source = "landing" });
+        await catalog.SaveChangesAsync();
+        var second = await LeadPrivacyAudit.AppendAsync(catalog, lead.Id, "Opposition", new { reason = "pedido" });
+        await catalog.SaveChangesAsync();
+
+        second.PreviousHash.Should().Be(first.EventHash);
+        second.EventHash.Should().NotBe(first.EventHash);
+        (await catalog.LeadPrivacyEvents.CountAsync()).Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Analytics_ReconciliaConversaoPipelineERevisao()
+    {
+        await using var catalog = CreateCatalog();
+        await using var users = CreateUsers();
+        var converted = new Lead { Nome = "Ganho", Telefone = "1", Status = LeadStatus.Convertido, ConvertedTenantId = Guid.NewGuid(), ConvertedAt = DateTime.UtcNow };
+        var open = new Lead { Nome = "Aberto", Telefone = "2", RetentionReviewAt = DateTime.UtcNow.AddDays(-1) };
+        catalog.Leads.AddRange(converted, open);
+        catalog.CrmOpportunities.Add(new CrmOpportunity { Lead = open, Value = 1000, Probability = 50, Stage = CrmOpportunityStage.Proposta });
+        await catalog.SaveChangesAsync();
+
+        var result = await new PlatformCrmController(catalog, users).Analytics(default);
+        var dto = ((OkObjectResult)result.Result!).Value.Should().BeOfType<CrmAnalyticsDto>().Subject;
+
+        dto.TotalLeads.Should().Be(2);
+        dto.ConversionRate.Should().Be(50);
+        dto.OpenPipeline.Should().Be(1000);
+        dto.WeightedPipeline.Should().Be(500);
+        dto.RetentionReviewsDue.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ReviewRetention_AnonimizaDadosERegistraEvento()
+    {
+        await using var catalog = CreateCatalog();
+        await using var users = CreateUsers();
+        var lead = new Lead { Nome = "Pessoa", Telefone = "14999990000", Email = "pessoa@empresa.com" };
+        catalog.Leads.Add(lead);
+        await catalog.SaveChangesAsync();
+
+        var result = await new PlatformCrmController(catalog, users).ReviewRetention(lead.Id,
+            new ReviewLeadRetentionRequest { Action = "Anonymize", Reason = "Finalidade encerrada" }, default);
+
+        result.Should().BeOfType<NoContentResult>();
+        var saved = await catalog.Leads.SingleAsync();
+        saved.Email.Should().BeNull();
+        saved.Telefone.Should().BeEmpty();
+        saved.AnonymizedAt.Should().NotBeNull();
+        (await catalog.LeadPrivacyEvents.SingleAsync()).EventType.Should().Be("LeadAnonymized");
+    }
 }

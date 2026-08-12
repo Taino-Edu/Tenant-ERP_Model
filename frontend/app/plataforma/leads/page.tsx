@@ -1,13 +1,13 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { platformApi, LeadDto, LeadStatus, LeadDigitalPresence, CrmAssigneeDto, CrmOpportunityStage, CrmTaskDto, getErrorMessage } from '@/lib/api'
+import { platformApi, LeadDto, LeadStatus, LeadDigitalPresence, CrmAnalyticsDto, CrmAssigneeDto, CrmOpportunityStage, CrmTaskDto, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import CrmWorkspaceModal from '@/components/plataforma/CrmWorkspaceModal'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
-import { UserPlus, Loader2, MessageCircle, MapPin, Search, Sparkles, Target, UserCheck, Users, Workflow, Columns3, List, CalendarCheck, Check, Clock3, AlertTriangle } from 'lucide-react'
+import { UserPlus, Loader2, MessageCircle, MapPin, Search, Sparkles, Target, UserCheck, Users, Workflow, Columns3, List, CalendarCheck, Check, Clock3, AlertTriangle, ChartNoAxesCombined, ShieldCheck } from 'lucide-react'
 
 const STATUS_OPTIONS: LeadStatus[] = ['Novo', 'Contatado', 'Convertido', 'Perdido']
 
@@ -31,7 +31,7 @@ const STATUS_STYLES: Record<LeadStatus, string> = {
   Perdido:    'bg-gray-500/10 text-gray-400 border-gray-500/30',
 }
 
-type CrmView = 'list' | 'kanban' | 'tasks'
+type CrmView = 'list' | 'kanban' | 'tasks' | 'analytics'
 type TaskFilter = 'all' | 'overdue' | 'today' | 'future'
 
 const KANBAN_STAGES: { value: CrmOpportunityStage | null; label: string; probability: number; color: string }[] = [
@@ -287,6 +287,8 @@ export default function PlataformaLeadsPage() {
   const [ownerFilter, setOwnerFilter] = useState('')
   const [taskFilter, setTaskFilter] = useState<TaskFilter>('all')
   const [movingLeadId, setMovingLeadId] = useState<string | null>(null)
+  const [analytics, setAnalytics] = useState<CrmAnalyticsDto | null>(null)
+  const [retentionDueIds, setRetentionDueIds] = useState<string[]>([])
 
   const fetchLeads = useCallback(() => {
     setLoading(true)
@@ -297,8 +299,8 @@ export default function PlataformaLeadsPage() {
   }, [])
 
   const fetchCrmMeta = useCallback(() => {
-    Promise.all([platformApi.listCrmAssignees(), platformApi.listCrmTasks()])
-      .then(([owners, taskResult]) => { setAssignees(owners.data); setTasks(taskResult.data) })
+    Promise.all([platformApi.listCrmAssignees(), platformApi.listCrmTasks(), platformApi.getCrmAnalytics(), platformApi.listRetentionDue()])
+      .then(([owners, taskResult, analyticsResult, retentionResult]) => { setAssignees(owners.data); setTasks(taskResult.data); setAnalytics(analyticsResult.data); setRetentionDueIds(retentionResult.data) })
       .catch(err => toast.error(getErrorMessage(err, 'Erro ao carregar tarefas e responsáveis.')))
   }, [])
 
@@ -372,6 +374,16 @@ export default function PlataformaLeadsPage() {
     }
   }
 
+  async function reviewRetention(lead: LeadDto, action: 'Extend' | 'Anonymize') {
+    const reason = window.prompt(action === 'Extend' ? 'Justifique por que os dados ainda são necessários:' : 'Justifique a anonimização:')?.trim()
+    if (!reason) return
+    if (action === 'Anonymize' && !window.confirm(`Anonimizar os dados pessoais de “${lead.nome}”? Esta ação não pode ser desfeita.`)) return
+    try {
+      await platformApi.reviewLeadRetention(lead.id, { action, reason, extensionDays: action === 'Extend' ? 180 : null })
+      refreshAll(); toast.success(action === 'Extend' ? 'Retenção revisada por mais 180 dias.' : 'Lead anonimizado.')
+    } catch (err) { toast.error(getErrorMessage(err, 'Não foi possível concluir a revisão.')) }
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -402,6 +414,7 @@ export default function PlataformaLeadsPage() {
           { value: 'list', label: 'Lista', icon: List },
           { value: 'kanban', label: 'Kanban', icon: Columns3 },
           { value: 'tasks', label: 'Tarefas', icon: CalendarCheck },
+          { value: 'analytics', label: 'Análises', icon: ChartNoAxesCombined },
         ] as const).map(item => <button key={item.value} type="button" onClick={() => { setView(item.value); if (item.value !== 'list') setStatusFilter('') }} className={clsx('flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold', view === item.value ? 'bg-brand-500/20 text-brand-300' : 'text-gray-500 hover:text-gray-300')}><item.icon className="h-4 w-4" />{item.label}{item.value === 'tasks' && tasks.length > 0 && <span className="rounded-full bg-surface-700 px-1.5 py-0.5 text-[10px]">{tasks.length}</span>}</button>)}
       </div>
 
@@ -466,7 +479,7 @@ export default function PlataformaLeadsPage() {
             <div className="space-y-2">{columnLeads.map(lead => <article key={lead.id} draggable={movingLeadId !== lead.id} onDragStart={event => event.dataTransfer.setData('text/lead-id', lead.id)} onClick={() => setCrmLead(lead)} className={clsx('cursor-grab rounded-xl border border-surface-600 bg-surface-700 p-3 transition hover:border-brand-500/50', movingLeadId === lead.id && 'opacity-50')}><div className="flex items-start justify-between gap-2"><h4 className="text-sm font-semibold text-white">{lead.nome}</h4>{movingLeadId === lead.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-400" />}</div><p className="mt-1 text-[11px] text-gray-500">{lead.opportunity?.assignedUserName || 'Sem responsável'}</p><div className="mt-2 flex items-center justify-between text-xs"><span className="text-gray-400">{lead.opportunity?.probability ?? 0}%</span><strong className="text-brand-300">{lead.opportunity?.value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) ?? 'Sem valor'}</strong></div></article>)}</div>
           </section>
         })}</div>
-      </div> : <section className="space-y-3">
+      </div> : view === 'tasks' ? <section className="space-y-3">
         <div className="card flex gap-1 overflow-x-auto p-2">{([
           ['all', 'Todas', tasks.length], ['overdue', 'Atrasadas', overdueTasks.length],
           ['today', 'Hoje', tasks.filter(task => task.dueAt && new Date(task.dueAt) >= todayStart && new Date(task.dueAt) < tomorrowStart).length],
@@ -477,6 +490,19 @@ export default function PlataformaLeadsPage() {
           const lead = leads.find(item => item.id === task.leadId)
           return <article key={task.id} className={clsx('card border p-4', overdue ? 'border-red-500/40' : 'border-surface-600')}><div className="flex items-start justify-between gap-3"><div><span className={clsx('text-[10px] font-bold uppercase', overdue ? 'text-red-400' : 'text-brand-300')}>{overdue ? 'Atrasada' : 'Tarefa'}</span><h3 className="text-sm font-semibold text-white">{task.title}</h3><button onClick={() => lead && setCrmLead(lead)} className="text-xs text-brand-400 hover:underline">{task.leadName}</button></div><button onClick={() => completeTask(task)} className="btn-secondary p-2" title="Concluir"><Check className="h-3.5 w-3.5" /></button></div>{task.description && <p className="mt-2 text-xs text-gray-400">{task.description}</p>}<div className="mt-3 flex items-center justify-between text-[11px] text-gray-500"><span>{task.assignedUserName || 'Sem responsável'}</span><span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{task.dueAt ? fmtDateTime(task.dueAt) : 'Sem prazo'}</span></div></article>
         })}</div>}
+      </section> : <section className="space-y-4">
+        {!analytics ? <div className="card flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-brand-400" /></div> : <>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{[
+            ['Conversão', `${analytics.conversionRate.toLocaleString('pt-BR')}%`, `${analytics.convertedLeads} de ${analytics.totalLeads}`],
+            ['Pipeline aberto', analytics.openPipeline.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), `${analytics.openOpportunities} oportunidades`],
+            ['Forecast ponderado', analytics.weightedPipeline.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 'valor × probabilidade'],
+            ['Ciclo médio', `${analytics.averageSalesCycleDays.toLocaleString('pt-BR')} dias`, 'captação até conversão'],
+          ].map(([label, value, hint]) => <div key={label} className="card p-4"><p className="text-xs text-gray-500">{label}</p><p className="mt-1 text-xl font-black text-white">{value}</p><p className="text-[11px] text-gray-600">{hint}</p></div>)}</div>
+          <div className="grid gap-4 xl:grid-cols-2"><AnalyticsTable title="Funil e aging" rows={analytics.byStage} showAge /><AnalyticsTable title="Origem dos leads" rows={analytics.bySource} /></div>
+          <div className="grid gap-4 xl:grid-cols-2"><AnalyticsTable title="Carteira por responsável" rows={analytics.byOwner} /><AnalyticsTable title="Motivos de perda" rows={analytics.lostReasons} hideValue /></div>
+          <div className="card p-4"><h3 className="font-bold text-white">Movimento nos últimos 6 meses</h3><div className="mt-4 grid grid-cols-6 gap-2">{analytics.monthlyTrend.map(item => { const max = Math.max(1, ...analytics.monthlyTrend.map(point => point.created)); return <div key={item.month} className="text-center"><div className="flex h-32 items-end justify-center gap-1"><div className="w-4 rounded-t bg-brand-500" style={{ height: `${Math.max(4, item.created / max * 100)}%` }} title={`${item.created} captados`} /><div className="w-4 rounded-t bg-accent-green" style={{ height: `${Math.max(4, item.converted / max * 100)}%` }} title={`${item.converted} convertidos`} /></div><p className="mt-2 text-[10px] text-gray-500">{item.month.slice(5)}/{item.month.slice(2, 4)}</p><p className="text-[10px] text-gray-600">{item.created}/{item.converted}</p></div>})}</div><p className="mt-3 text-[11px] text-gray-500"><span className="text-brand-400">■ captados</span> · <span className="text-accent-green">■ convertidos</span></p></div>
+          <div className="card p-4"><div className="flex items-center justify-between"><div><h3 className="flex items-center gap-2 font-bold text-white"><ShieldCheck className="h-4 w-4 text-brand-400" />Revisão de retenção</h3><p className="text-xs text-gray-500">{analytics.retentionReviewsDue} vencidas · {analytics.contactBlocked} contatos bloqueados</p></div></div><div className="mt-3 space-y-2">{retentionDueIds.length === 0 ? <p className="rounded-lg border border-dashed border-surface-600 p-6 text-center text-sm text-gray-500">Nenhuma revisão pendente.</p> : retentionDueIds.map(id => { const lead = leads.find(item => item.id === id); return lead ? <div key={id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-700 p-3"><div><p className="text-sm font-semibold text-white">{lead.nome}</p><p className="text-xs text-gray-500">Revisão vencida em {lead.retentionReviewAt ? new Date(lead.retentionReviewAt).toLocaleDateString('pt-BR') : '-'}</p></div><div className="flex gap-2"><button onClick={() => reviewRetention(lead, 'Extend')} className="btn-secondary text-xs">Prorrogar 180 dias</button><button onClick={() => reviewRetention(lead, 'Anonymize')} className="text-xs font-bold text-red-300">Anonimizar</button></div></div> : null })}</div></div>
+        </>}
       </section>}
 
       {convertingLead && (
@@ -490,4 +516,8 @@ export default function PlataformaLeadsPage() {
       {crmLead && <CrmWorkspaceModal lead={crmLead} onClose={() => setCrmLead(null)} onChanged={fetchLeads} />}
     </div>
   )
+}
+
+function AnalyticsTable({ title, rows, showAge = false, hideValue = false }: { title: string; rows: CrmAnalyticsDto['byStage']; showAge?: boolean; hideValue?: boolean }) {
+  return <div className="card p-4"><h3 className="font-bold text-white">{title}</h3><div className="mt-3 space-y-2">{rows.length === 0 ? <p className="py-5 text-center text-xs text-gray-500">Sem dados ainda.</p> : rows.map(row => <div key={row.label} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg bg-surface-700 px-3 py-2 text-xs"><span className="truncate text-gray-300">{row.label}</span><strong className="text-white">{row.count}</strong>{showAge ? <span className="min-w-16 text-right text-gray-500">{row.averageAgeDays.toLocaleString('pt-BR')} dias</span> : !hideValue ? <span className="min-w-24 text-right text-brand-300">{row.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span> : <span />}</div>)}</div></div>
 }

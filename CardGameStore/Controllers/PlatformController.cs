@@ -960,6 +960,8 @@ public class PlatformController : ControllerBase
 
         var lead = await _catalog.Leads.FirstOrDefaultAsync(l => l.Id == id);
         if (lead is null) return NotFound();
+        var previousPrivacy = new { lead.LegalBasis, lead.DataOriginDetails, lead.ProcessingPurpose, lead.ReferralPartnerId };
+        var wasConverted = lead.ConvertedTenantId.HasValue;
 
         lead.Status            = status;
         lead.Notas             = request.Notas;
@@ -969,6 +971,7 @@ public class PlatformController : ControllerBase
         lead.EstimatedRevenueRange = request.EstimatedRevenueRange ?? lead.EstimatedRevenueRange;
         lead.AbordagemSugerida    = request.AbordagemSugerida    ?? lead.AbordagemSugerida;
         lead.ConvertedTenantId = request.ConvertedTenantId ?? lead.ConvertedTenantId;
+        if (!wasConverted && lead.ConvertedTenantId.HasValue) lead.ConvertedAt = DateTime.UtcNow;
         lead.Campaign = CleanLeadValue(request.Campaign) ?? lead.Campaign;
         lead.UtmSource = CleanLeadValue(request.UtmSource) ?? lead.UtmSource;
         lead.UtmMedium = CleanLeadValue(request.UtmMedium) ?? lead.UtmMedium;
@@ -1034,6 +1037,13 @@ public class PlatformController : ControllerBase
             }
         }
         lead.UpdatedAt         = DateTime.UtcNow;
+        if (previousPrivacy.LegalBasis != lead.LegalBasis || previousPrivacy.DataOriginDetails != lead.DataOriginDetails ||
+            previousPrivacy.ProcessingPurpose != lead.ProcessingPurpose || previousPrivacy.ReferralPartnerId != lead.ReferralPartnerId)
+            await LeadPrivacyAudit.AppendAsync(_catalog, lead.Id, "GovernanceUpdated", new
+            {
+                before = previousPrivacy,
+                after = new { lead.LegalBasis, lead.DataOriginDetails, lead.ProcessingPurpose, lead.ReferralPartnerId },
+            }, CurrentPlatformActorName(), CurrentPlatformActorId());
         await _catalog.SaveChangesAsync();
 
         if (referral is not null)
@@ -1048,8 +1058,9 @@ public class PlatformController : ControllerBase
 
     [HttpPost("leads/{id:guid}/privacy/validate-legitimate-interest")]
     [RequirePlatformPermission(PlatformPermission.Leads)]
-    public async Task<IActionResult> ValidateLegitimateInterest(Guid id)
+    public async Task<IActionResult> ValidateLegitimateInterest(Guid id, [FromBody] ValidateLegitimateInterestRequest request)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
         var lead = await _catalog.Leads.FirstOrDefaultAsync(l => l.Id == id);
         if (lead is null) return NotFound();
         if (lead.LegalBasis != LeadLegalBasis.LegitimoInteresse)
@@ -1058,6 +1069,11 @@ public class PlatformController : ControllerBase
             return Conflict(new { Message = "O titular registrou oposição; o contato permanece bloqueado." });
         lead.LegitimateInterestAssessedAt = DateTime.UtcNow;
         lead.UpdatedAt = DateTime.UtcNow;
+        await LeadPrivacyAudit.AppendAsync(_catalog, lead.Id, "LegitimateInterestAssessmentApproved", new
+        {
+            request.PurposeAssessment, request.NecessityAssessment, request.ExpectationAssessment,
+            request.RiskAssessment, request.Safeguards, request.Approved,
+        }, CurrentPlatformActorName(), CurrentPlatformActorId());
         await _catalog.SaveChangesAsync();
         return Ok(ToDto(lead));
     }
@@ -1073,11 +1089,21 @@ public class PlatformController : ControllerBase
         lead.OppositionReason = request.Reason.Trim();
         lead.Status = LeadStatus.Perdido;
         lead.UpdatedAt = DateTime.UtcNow;
+        await LeadPrivacyAudit.AppendAsync(_catalog, lead.Id, "OppositionRegistered",
+            new { request.Reason }, CurrentPlatformActorName(), CurrentPlatformActorId());
         await _catalog.SaveChangesAsync();
         return Ok(ToDto(lead));
     }
 
     private static string? CleanLeadValue(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private Guid? CurrentPlatformActorId()
+    {
+        var value = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ??
+            User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return Guid.TryParse(value, out var id) ? id : null;
+    }
+    private string CurrentPlatformActorName() =>
+        User.FindFirst(JwtRegisteredClaimNames.Name)?.Value ?? User.Identity?.Name ?? "Operador da plataforma";
 
     // =========================================================================
     // Suporte — lado do dono da plataforma. Tickets são abertos pelo lojista

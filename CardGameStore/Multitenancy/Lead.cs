@@ -129,7 +129,11 @@ public class Lead
     [Column("retention_review_at")] public DateTime? RetentionReviewAt { get; set; }
     [Column("opposed_at")] public DateTime? OpposedAt { get; set; }
     [MaxLength(500), Column("opposition_reason")] public string? OppositionReason { get; set; }
+    [Column("retention_review_flagged_at")] public DateTime? RetentionReviewFlaggedAt { get; set; }
+    [Column("anonymized_at")] public DateTime? AnonymizedAt { get; set; }
+    [Column("converted_at")] public DateTime? ConvertedAt { get; set; }
 
     public CrmOpportunity? Opportunity { get; set; }
     public List<CrmActivity> Activities { get; set; } = [];
+    public List<LeadPrivacyEvent> PrivacyEvents { get; set; } = [];
 }

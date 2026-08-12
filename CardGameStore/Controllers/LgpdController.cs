@@ -19,6 +19,7 @@ using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -34,6 +35,7 @@ namespace CardGameStore.Controllers;
 public class LgpdController : ControllerBase
 {
     private readonly AppDbContext   _db;
+    private readonly CatalogDbContext _catalog;
     private readonly IEmailService  _email;
     private readonly IAuditService  _audit;
     private readonly ILogger<LgpdController> _logger;
@@ -41,12 +43,14 @@ public class LgpdController : ControllerBase
 
     public LgpdController(
         AppDbContext          db,
+        CatalogDbContext      catalog,
         IEmailService         email,
         IAuditService         audit,
         ILogger<LgpdController> logger,
         IConfiguration        configuration)
     {
         _db     = db;
+        _catalog = catalog;
         _email  = email;
         _audit  = audit;
         _logger = logger;
@@ -102,6 +106,24 @@ public class LgpdController : ControllerBase
 
         _db.LgpdRequests.Add(request);
         await _db.SaveChangesAsync();
+
+        if (request.RequestType == "Oposicao")
+        {
+            var normalizedEmail = request.RequesterEmail.ToLowerInvariant();
+            var matchedLeads = await _catalog.Leads
+                .Where(l => l.Email != null && l.Email.ToLower() == normalizedEmail && l.AnonymizedAt == null)
+                .ToListAsync();
+            foreach (var lead in matchedLeads)
+            {
+                lead.OpposedAt ??= DateTime.UtcNow;
+                lead.OppositionReason = $"Solicitação pública LGPD, protocolo {request.Id}";
+                lead.Status = LeadStatus.Perdido;
+                lead.UpdatedAt = DateTime.UtcNow;
+                await LeadPrivacyAudit.AppendAsync(_catalog, lead.Id, "OppositionRegisteredFromLgpdPortal",
+                    new { protocol = request.Id, request.RequesterEmail }, "Portal público LGPD");
+            }
+            if (matchedLeads.Count > 0) await _catalog.SaveChangesAsync();
+        }
 
         var cfg = await GetSiteConfigAsync();
 

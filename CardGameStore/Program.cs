@@ -471,6 +471,7 @@ builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService
 builder.Services.AddScoped<IFinanceiroCalculoService, FinanceiroCalculoService>();
 builder.Services.AddHostedService<FechamentoBackgroundService>();
 builder.Services.AddHostedService<ProspectingBotBackgroundService>();
+builder.Services.AddHostedService<LeadRetentionBackgroundService>();
 builder.Services.AddSingleton<CurrencyService>();
 builder.Services.AddMemoryCache();
 

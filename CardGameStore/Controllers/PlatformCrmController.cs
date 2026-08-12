@@ -122,6 +122,7 @@ public sealed class PlatformCrmController : ControllerBase
         opportunity.LostReason = stage == CrmOpportunityStage.Perdido ? request.LostReason?.Trim() : null;
         opportunity.ClosedAt = stage is CrmOpportunityStage.Ganho or CrmOpportunityStage.Perdido
             ? opportunity.ClosedAt ?? now : null;
+        if (isNew || previousStage != stage) opportunity.StageEnteredAt = now;
         opportunity.UpdatedAt = now;
         if (isNew) _catalog.CrmOpportunities.Add(opportunity);
 
@@ -184,6 +185,91 @@ public sealed class PlatformCrmController : ControllerBase
         activity.Outcome = request.Outcome?.Trim();
         await _catalog.SaveChangesAsync(ct);
         return Ok(ToDto(activity));
+    }
+
+    [HttpGet("analytics")]
+    public async Task<ActionResult<CrmAnalyticsDto>> Analytics(CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var leads = await _catalog.Leads.AsNoTracking().Include(l => l.Opportunity).ToListAsync(ct);
+        var converted = leads.Where(l => l.ConvertedTenantId.HasValue || l.Status == LeadStatus.Convertido).ToList();
+        var open = leads.Where(l => l.Opportunity is { Stage: not (CrmOpportunityStage.Ganho or CrmOpportunityStage.Perdido) }).ToList();
+        var result = new CrmAnalyticsDto
+        {
+            GeneratedAt = now, TotalLeads = leads.Count, ConvertedLeads = converted.Count,
+            ConversionRate = leads.Count == 0 ? 0 : Math.Round(converted.Count * 100m / leads.Count, 2),
+            OpenOpportunities = open.Count,
+            OpenPipeline = open.Sum(l => l.Opportunity?.Value ?? 0),
+            WeightedPipeline = open.Sum(l => (l.Opportunity?.Value ?? 0) * (l.Opportunity?.Probability ?? 0) / 100m),
+            AverageSalesCycleDays = converted.Count == 0 ? 0 : Math.Round(converted.Average(l =>
+                ((l.ConvertedAt ?? l.UpdatedAt) - l.CreatedAt).TotalDays), 1),
+            RetentionReviewsDue = leads.Count(l => l.AnonymizedAt == null && l.RetentionReviewAt <= now),
+            ContactBlocked = leads.Count(l => l.OpposedAt != null || l.LegalBasis == LeadLegalBasis.NaoDefinida ||
+                l.LegalBasis == LeadLegalBasis.LegitimoInteresse && l.LegitimateInterestAssessedAt == null),
+        };
+        result.ByStage = leads.Where(l => l.Opportunity != null).GroupBy(l => l.Opportunity!.Stage.ToString())
+            .Select(g => new CrmAnalyticsBreakdownDto { Label = g.Key, Count = g.Count(), Value = g.Sum(l => l.Opportunity!.Value ?? 0), AverageAgeDays = Math.Round(g.Average(l => (now - l.Opportunity!.StageEnteredAt).TotalDays), 1) })
+            .OrderByDescending(x => x.Count).ToList();
+        result.BySource = leads.GroupBy(l => l.UtmSource ?? l.Campaign ?? l.Origem)
+            .Select(g => new CrmAnalyticsBreakdownDto { Label = g.Key, Count = g.Count(), Value = g.Where(l => l.Status == LeadStatus.Convertido).Sum(l => l.Opportunity?.Value ?? 0) })
+            .OrderByDescending(x => x.Count).Take(12).ToList();
+        result.ByOwner = leads.Where(l => l.Opportunity != null).GroupBy(l => l.Opportunity!.AssignedUserName ?? "Sem responsável")
+            .Select(g => new CrmAnalyticsBreakdownDto { Label = g.Key, Count = g.Count(), Value = g.Sum(l => l.Opportunity!.Value ?? 0) })
+            .OrderByDescending(x => x.Value).ToList();
+        result.LostReasons = leads.Where(l => l.Opportunity?.Stage == CrmOpportunityStage.Perdido)
+            .GroupBy(l => l.Opportunity!.LostReason ?? "Não informado")
+            .Select(g => new CrmAnalyticsBreakdownDto { Label = g.Key, Count = g.Count() }).OrderByDescending(x => x.Count).Take(10).ToList();
+        var firstMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc).AddMonths(-5);
+        for (var month = firstMonth; month <= now; month = month.AddMonths(1))
+        {
+            var next = month.AddMonths(1);
+            result.MonthlyTrend.Add(new CrmMonthlyTrendDto
+            {
+                Month = month.ToString("yyyy-MM"),
+                Created = leads.Count(l => l.CreatedAt >= month && l.CreatedAt < next),
+                Converted = leads.Count(l => l.ConvertedAt >= month && l.ConvertedAt < next),
+            });
+        }
+        return Ok(result);
+    }
+
+    [HttpGet("privacy/retention-due")]
+    public async Task<ActionResult<IReadOnlyList<Guid>>> RetentionDue(CancellationToken ct) => Ok(await _catalog.Leads.AsNoTracking()
+        .Where(l => l.AnonymizedAt == null && l.RetentionReviewAt <= DateTime.UtcNow)
+        .OrderBy(l => l.RetentionReviewAt).Select(l => l.Id).Take(500).ToListAsync(ct));
+
+    [HttpGet("leads/{leadId:guid}/privacy-events")]
+    public async Task<ActionResult<IReadOnlyList<LeadPrivacyEventDto>>> PrivacyEvents(Guid leadId, CancellationToken ct) => Ok(await _catalog.LeadPrivacyEvents.AsNoTracking()
+        .Where(e => e.LeadId == leadId).OrderByDescending(e => e.CreatedAt)
+        .Select(e => new LeadPrivacyEventDto { Id = e.Id, EventType = e.EventType, ActorName = e.ActorName, DetailsJson = e.DetailsJson, EventHash = e.EventHash, CreatedAt = e.CreatedAt })
+        .Take(200).ToListAsync(ct));
+
+    [HttpPost("leads/{leadId:guid}/privacy/retention-review")]
+    public async Task<IActionResult> ReviewRetention(Guid leadId, [FromBody] ReviewLeadRetentionRequest request, CancellationToken ct)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var lead = await _catalog.Leads.FirstOrDefaultAsync(l => l.Id == leadId, ct);
+        if (lead is null) return NotFound();
+        var actor = await CurrentActorAsync(ct);
+        if (request.Action == "Extend")
+        {
+            if (!request.ExtensionDays.HasValue) return BadRequest(new { Message = "Informe o prazo da extensão." });
+            lead.RetentionReviewAt = DateTime.UtcNow.AddDays(request.ExtensionDays.Value);
+            lead.RetentionReviewFlaggedAt = null;
+        }
+        else
+        {
+            lead.Nome = $"Lead anonimizado {lead.Id.ToString("N")[..8]}";
+            lead.Telefone = string.Empty; lead.Email = null; lead.Mensagem = null; lead.Notas = null;
+            lead.PlaceId = null; lead.ReferrerUrl = null; lead.LandingPage = null; lead.AbordagemSugerida = null;
+            lead.OppositionReason = null; lead.Status = LeadStatus.Perdido; lead.AnonymizedAt = DateTime.UtcNow;
+            lead.RetentionReviewAt = null; lead.RetentionReviewFlaggedAt = null;
+        }
+        lead.UpdatedAt = DateTime.UtcNow;
+        await LeadPrivacyAudit.AppendAsync(_catalog, lead.Id, request.Action == "Extend" ? "RetentionExtended" : "LeadAnonymized",
+            new { request.Reason, request.ExtensionDays }, actor?.Name ?? "Sistema", actor?.Id, ct);
+        await _catalog.SaveChangesAsync(ct);
+        return NoContent();
     }
 
     private async Task<User?> CurrentActorAsync(CancellationToken ct)
