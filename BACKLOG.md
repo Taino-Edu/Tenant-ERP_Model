@@ -28,7 +28,7 @@
 - A worktree principal estava limpa no início desta auditoria.
 - Backend e frontend compilam; o lint do frontend passou sem avisos em 2026-08-11.
 - Os 17 testes focados de billing/comissões passaram. Após a correção de
-  `QA-001`, a suíte completa passou novamente em 2026-08-11 com 776 testes,
+  `QA-001`, a suíte completa passou novamente em 2026-08-12 com 779 testes,
   zero falhas e zero ignorados.
 - Multi-tenant, billing ciclo 1, leads, prospecção, diretório público, restaurante,
   comandas e indicações/comissões já têm implementação na `main`.
@@ -142,16 +142,20 @@
 
 ### CRM-001 — Modelo comercial canônico
 
-- **Estado:** `PRONTO PARA FAZER`
+- **Estado:** `EM EXECUÇÃO` (núcleo operacional entregue em 2026-08-12)
 - **Já existe:** lead, origem, status simples, score, presença digital,
   faturamento estimado, notas, prospecção, conversão para tenant e enriquecimento
   sob demanda com abordagem persistida no CRM e sincronizada com o candidato de
   origem quando houver vínculo.
+- **Entregue neste ciclo:** `Oportunidade` separada e única por lead, funil com
+  qualificação, diagnóstico, proposta, negociação, ganho e perda; probabilidade,
+  valor previsto, previsão de fechamento, motivo obrigatório de perda e
+  responsável validado contra a equipe comercial ativa. Mudanças de etapa e
+  responsável geram eventos imutáveis na linha do tempo.
 - **Falta:**
-  - separar `Conta/Empresa`, `Contato`, `Lead` e `Oportunidade`;
-  - pipeline configurável com etapa, probabilidade, valor, previsão de fechamento
-    e motivo de ganho/perda;
-  - responsável comercial e fila sem responsável;
+  - separar também `Conta/Empresa` e `Contato` do `Lead`;
+  - tornar etapas e probabilidades configuráveis e criar visão Kanban/fila sem
+    responsável;
   - deduplicação por telefone, e-mail, documento e estabelecimento;
   - histórico imutável de mudanças de etapa/responsável;
   - consentimento, finalidade e origem do dado para LGPD.
@@ -161,9 +165,13 @@
 
 ### CRM-002 — Atividades, tarefas e linha do tempo
 
-- **Estado:** `PRONTO PARA FAZER`
-- **Falta:** ligações, mensagens, reuniões, comentários internos, tarefas,
-  vencimento, lembrete, resultado do contato e próxima ação.
+- **Estado:** `EM EXECUÇÃO` (núcleo operacional entregue em 2026-08-12)
+- **Entregue neste ciclo:** comentários internos, tarefas, ligações, WhatsApp,
+  e-mail e reuniões estruturados; vencimento, conclusão, resultado e autoria;
+  linha do tempo única na ficha CRM do lead, incluindo alterações automáticas
+  do funil e responsável.
+- **Falta:** lembretes/notificações, recorrência e painéis consolidados de tarefas
+  atrasadas, de hoje e futuras por vendedor.
 - **Regra:** notas livres não substituem eventos estruturados.
 - **Critério de conclusão:** a tela do lead/oportunidade mostra uma linha do tempo
   única e o gestor consegue listar tarefas atrasadas, de hoje e futuras por vendedor.

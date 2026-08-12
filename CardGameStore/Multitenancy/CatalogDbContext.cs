@@ -21,6 +21,8 @@ public class CatalogDbContext : DbContext
     public DbSet<PlatformImpersonationTicket> PlatformImpersonationTickets { get; set; }
     public DbSet<LoginRedirectTicket> LoginRedirectTickets { get; set; }
     public DbSet<Lead> Leads { get; set; }
+    public DbSet<CrmOpportunity> CrmOpportunities { get; set; }
+    public DbSet<CrmActivity> CrmActivities { get; set; }
     public DbSet<ProspectingSearch> ProspectingSearches { get; set; }
     public DbSet<ProspectCandidate> ProspectCandidates { get; set; }
     public DbSet<ProspectingCampaign> ProspectingCampaigns { get; set; }
@@ -199,6 +201,33 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(c => c.DueDate)
                   .HasDatabaseName("ix_tenant_charges_due_date");
+        });
+
+        modelBuilder.Entity<CrmOpportunity>(entity =>
+        {
+            entity.Property(o => o.Stage).HasConversion<string>().HasMaxLength(30);
+            entity.HasOne(o => o.Lead).WithOne(l => l.Opportunity)
+                  .HasForeignKey<CrmOpportunity>(o => o.LeadId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(o => o.LeadId).IsUnique()
+                  .HasDatabaseName("ix_crm_opportunities_lead_unique");
+            entity.HasIndex(o => new { o.Stage, o.AssignedUserId })
+                  .HasDatabaseName("ix_crm_opportunities_stage_owner");
+            entity.HasIndex(o => o.ExpectedCloseDate)
+                  .HasDatabaseName("ix_crm_opportunities_expected_close");
+        });
+
+        modelBuilder.Entity<CrmActivity>(entity =>
+        {
+            entity.Property(a => a.Type).HasConversion<string>().HasMaxLength(30);
+            entity.HasOne(a => a.Lead).WithMany(l => l.Activities)
+                  .HasForeignKey(a => a.LeadId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(a => a.Opportunity).WithMany(o => o.Activities)
+                  .HasForeignKey(a => a.OpportunityId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(a => new { a.LeadId, a.CreatedAt })
+                  .HasDatabaseName("ix_crm_activities_lead_date");
+            entity.HasIndex(a => new { a.CompletedAt, a.DueAt })
+                  .HasDatabaseName("ix_crm_activities_open_due");
         });
 
         modelBuilder.Entity<ProspectingSearch>(entity =>

@@ -101,4 +101,7 @@ public class Lead
     /// conversão, sem FK (não é obrigatório o tenant continuar existindo).</summary>
     [Column("converted_tenant_id")]
     public Guid? ConvertedTenantId { get; set; }
+
+    public CrmOpportunity? Opportunity { get; set; }
+    public List<CrmActivity> Activities { get; set; } = [];
 }

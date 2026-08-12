@@ -3,9 +3,10 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { platformApi, LeadDto, LeadStatus, LeadDigitalPresence, getErrorMessage } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
+import CrmWorkspaceModal from '@/components/plataforma/CrmWorkspaceModal'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
 import toast from 'react-hot-toast'
-import { UserPlus, Loader2, MessageCircle, MapPin, Search, Sparkles, Target, UserCheck, Users } from 'lucide-react'
+import { UserPlus, Loader2, MessageCircle, MapPin, Search, Sparkles, Target, UserCheck, Users, Workflow } from 'lucide-react'
 
 const STATUS_OPTIONS: LeadStatus[] = ['Novo', 'Contatado', 'Convertido', 'Perdido']
 
@@ -54,7 +55,7 @@ function mapLink(placeId: string): string {
     : `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`
 }
 
-function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void }) {
+function LeadRow({ lead, onChanged, onConvert, onOpenCrm }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void; onOpenCrm: (lead: LeadDto) => void }) {
   const [notas, setNotas] = useState(lead.notas ?? '')
   const [placeId, setPlaceId] = useState(lead.placeId ?? '')
   const [saving, setSaving] = useState(false)
@@ -174,6 +175,7 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
       </td>
       <td className="py-3">
         <StatusPillSelect value={lead.status} options={STATUS_OPTIONS} styles={STATUS_STYLES} disabled={saving} onChange={updateStatus} />
+        {lead.opportunity && <div className="mt-2 max-w-36 text-[11px] text-gray-500"><p className="font-semibold text-brand-300">{lead.opportunity.stage}</p><p className="truncate">{lead.opportunity.assignedUserName || 'Sem responsável'} · {lead.opportunity.probability}%</p></div>}
       </td>
       <td className="py-3">
         <div className="flex flex-col gap-1.5 w-36">
@@ -240,6 +242,9 @@ function LeadRow({ lead, onChanged, onConvert }: { lead: LeadDto; onChanged: () 
       <td className="py-3 text-gray-400">{fmtDateTime(lead.createdAt)}</td>
       <td className="py-3 text-right">
         <div className="flex flex-col items-end gap-2">
+          <button onClick={() => onOpenCrm(lead)} disabled={saving || enriching} className="btn-primary text-xs py-1 px-2.5">
+            <Workflow className="h-3.5 w-3.5" /> Abrir CRM
+          </button>
           <button onClick={enrichLead} disabled={saving || enriching} className="btn-secondary text-xs py-1 px-2.5">
             {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
             Enriquecer
@@ -261,6 +266,7 @@ export default function PlataformaLeadsPage() {
   const [statusFilter, setStatusFilter] = useState<LeadStatus | ''>('')
   const [search, setSearch] = useState('')
   const [convertingLead, setConvertingLead] = useState<LeadDto | null>(null)
+  const [crmLead, setCrmLead] = useState<LeadDto | null>(null)
 
   const fetchLeads = useCallback(() => {
     setLoading(true)
@@ -366,7 +372,7 @@ export default function PlataformaLeadsPage() {
             </thead>
             <tbody>
               {filteredLeads.map(l => (
-                <LeadRow key={l.id} lead={l} onChanged={fetchLeads} onConvert={setConvertingLead} />
+                <LeadRow key={l.id} lead={l} onChanged={fetchLeads} onConvert={setConvertingLead} onOpenCrm={setCrmLead} />
               ))}
             </tbody>
           </table>
@@ -380,6 +386,8 @@ export default function PlataformaLeadsPage() {
           onCreated={handleTenantCreated}
         />
       )}
+
+      {crmLead && <CrmWorkspaceModal lead={crmLead} onClose={() => setCrmLead(null)} onChanged={fetchLeads} />}
     </div>
   )
 }

@@ -826,6 +826,17 @@ public class PlatformController : ControllerBase
         CreatedAt         = l.CreatedAt,
         UpdatedAt         = l.UpdatedAt,
         ConvertedTenantId = l.ConvertedTenantId,
+        Opportunity       = l.Opportunity is null ? null : ToDto(l.Opportunity),
+    };
+
+    private static CrmOpportunityDto ToDto(CrmOpportunity o) => new()
+    {
+        Id = o.Id, LeadId = o.LeadId, Stage = o.Stage.ToString(),
+        Probability = o.Probability, Value = o.Value,
+        ExpectedCloseDate = o.ExpectedCloseDate,
+        AssignedUserId = o.AssignedUserId, AssignedUserName = o.AssignedUserName,
+        LostReason = o.LostReason, ClosedAt = o.ClosedAt,
+        CreatedAt = o.CreatedAt, UpdatedAt = o.UpdatedAt,
     };
 
     /// <summary>Lista os leads captados pela landing, mais recente primeiro.
@@ -835,7 +846,7 @@ public class PlatformController : ControllerBase
     [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> ListLeads([FromQuery] string? status = null)
     {
-        var query = _catalog.Leads.AsQueryable();
+        var query = _catalog.Leads.Include(l => l.Opportunity).AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status))
         {

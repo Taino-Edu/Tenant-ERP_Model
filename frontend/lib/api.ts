@@ -902,6 +902,14 @@ export const platformApi = {
     api.patch<LeadDto>(`/api/platform/leads/${id}`, req),
   enrichLead: (id: string) =>
     api.post<ProspectingEnrichResponse>(`/api/platform/prospecting/leads/${id}/enrich`),
+  listCrmAssignees: () => api.get<CrmAssigneeDto[]>('/api/platform/crm/assignees'),
+  getCrmWorkspace: (leadId: string) => api.get<CrmWorkspaceDto>(`/api/platform/crm/leads/${leadId}`),
+  saveCrmOpportunity: (leadId: string, req: SaveCrmOpportunityRequest) =>
+    api.put<CrmOpportunityDto>(`/api/platform/crm/leads/${leadId}/opportunity`, req),
+  createCrmActivity: (leadId: string, req: { type: CrmActivityType; title: string; description?: string | null; dueAt?: string | null }) =>
+    api.post<CrmActivityDto>(`/api/platform/crm/leads/${leadId}/activities`, req),
+  completeCrmActivity: (id: string, outcome?: string | null) =>
+    api.patch<CrmActivityDto>(`/api/platform/crm/activities/${id}/complete`, { outcome }),
   getTenantStaff: (id: string) =>
     api.get<TenantStaffDto[]>(`/api/platform/tenants/${id}/staff`),
   resetTenantStaffPassword: (id: string, userId: string, newPassword: string) =>
@@ -992,6 +1000,29 @@ export interface LeadDto {
   digitalPresence: LeadDigitalPresence | null; opportunityScore: number | null; placeId: string | null
   estimatedRevenueRange: string | null; abordagemSugerida: string | null
   createdAt: string; updatedAt: string; convertedTenantId: string | null
+  opportunity: CrmOpportunityDto | null
+}
+
+export type CrmOpportunityStage = 'Qualificacao' | 'Diagnostico' | 'Proposta' | 'Negociacao' | 'Ganho' | 'Perdido'
+export type CrmActivityType = 'Comentario' | 'Tarefa' | 'Ligacao' | 'WhatsApp' | 'Email' | 'Reuniao' | 'MudancaEtapa' | 'MudancaResponsavel'
+
+export interface CrmAssigneeDto { id: string; name: string; email: string }
+export interface CrmOpportunityDto {
+  id: string; leadId: string; stage: CrmOpportunityStage; probability: number
+  value: number | null; expectedCloseDate: string | null
+  assignedUserId: string | null; assignedUserName: string | null
+  lostReason: string | null; closedAt: string | null; createdAt: string; updatedAt: string
+}
+export interface CrmActivityDto {
+  id: string; leadId: string; opportunityId: string | null; type: CrmActivityType
+  title: string; description: string | null; dueAt: string | null
+  completedAt: string | null; outcome: string | null
+  createdByUserId: string | null; createdByUserName: string; createdAt: string
+}
+export interface CrmWorkspaceDto { opportunity: CrmOpportunityDto | null; activities: CrmActivityDto[] }
+export interface SaveCrmOpportunityRequest {
+  stage: CrmOpportunityStage; probability: number; value?: number | null
+  expectedCloseDate?: string | null; assignedUserId?: string | null; lostReason?: string | null
 }
 
 export interface CreateLeadRequest {
