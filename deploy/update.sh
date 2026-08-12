@@ -21,6 +21,11 @@
 
 set -euo pipefail
 
+# Diagnóstico deliberadamente limitado ao nome da etapa: não publica comandos,
+# variáveis, caminhos privados nem a cauda dos logs da VPS no GitHub Actions.
+DEPLOY_STAGE="inicialização"
+trap 'status=$?; echo "::error title=Falha no deploy::Etapa ${DEPLOY_STAGE} falhou (status ${status})" >&2' ERR
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -35,6 +40,7 @@ echo -e "${YELLOW}🔄 Atualizando Tenant-ERP...${NC}"
 
 # ── 1. Backup pré-deploy (ponto de restauração) ─────────────────────────────
 echo -e "${YELLOW}💾 Backup do banco antes de atualizar...${NC}"
+DEPLOY_STAGE="backup"
 if ! bash "$APP_DIR/deploy/backup.sh"; then
     echo -e "${RED}❌ Backup pré-deploy falhou — abortando a atualização por segurança.${NC}"
     echo -e "${RED}   (Não faz sentido migrar o schema sem um ponto de restauração.)${NC}"
@@ -43,6 +49,7 @@ fi
 
 # ── 2. Taga as imagens atuais como :rollback ────────────────────────────────
 cd "$COMPOSE_DIR"
+DEPLOY_STAGE="preservação das imagens de rollback"
 for img in "${IMAGES[@]}"; do
     if docker image inspect "$img:latest" &>/dev/null; then
         docker tag "$img:latest" "$img:rollback"
@@ -51,11 +58,13 @@ done
 
 # ── 3. Pull + build + up ────────────────────────────────────────────────────
 cd "$APP_DIR"
+DEPLOY_STAGE="git pull"
 git pull origin main
 cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
 
 cd "$COMPOSE_DIR"
 # CACHEBUST força o Docker a recompilar o Next.js
+DEPLOY_STAGE="build das imagens"
 $COMPOSE build --build-arg CACHEBUST="$(date +%s)"
 
 # ── 3b. Backfill das chaves VAPID (push do navegador) ───────────────────────
@@ -89,6 +98,7 @@ if ! grep -Eq '^VAPID_PRIVATE_KEY=[A-Za-z0-9_-]{40,}$' "$APP_DIR/.env" 2>/dev/nu
     fi
 fi
 
+DEPLOY_STAGE="subida dos containers"
 $COMPOSE up -d
 
 # nginx.conf entra por bind mount, não pela imagem: o `up -d` acima só recria
@@ -109,6 +119,7 @@ fi
 
 # ── 4. Health check + auto-rollback ─────────────────────────────────────────
 echo -n "  Aguardando API responder /health"
+DEPLOY_STAGE="health check da API"
 healthy=false
 # Até 3 minutos: em instalações com vários tenants, as migrations de todos os
 # schemas rodam antes de o servidor começar a responder.
