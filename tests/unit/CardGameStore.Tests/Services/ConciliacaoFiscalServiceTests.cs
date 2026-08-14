@@ -9,6 +9,7 @@
 // =============================================================================
 
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using CardGameStore.Data;
 using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
@@ -327,5 +328,42 @@ public class ConciliacaoFiscalServiceTests
         venda.DecididaPor.Should().BeNull();
         venda.SemDocumentoPorEscolha.Should().BeFalse(
             "sem registro não dá para afirmar que alguém escolheu não emitir");
+    }
+
+    // ── Contrato JSON ────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Situacao_SerializaPeloNome_NaoPeloIndice()
+    {
+        // O portal do contador traduz a situação indexando um mapa por NOME —
+        // igual ao PorSituacao deste mesmo DTO, que sempre foi
+        // Dictionary<string, ...>. Enquanto o campo saía como índice (5), a
+        // busca falhava e a coluna "Situação" da Conciliação aparecia como um
+        // badge VAZIO em toda linha, no desktop e no celular.
+        //
+        // Prende o índice também: reordenar os membros do enum trocaria a
+        // situação de todas as vendas já persistidas em qualquer consumidor que
+        // ainda leia número.
+        var json = JsonSerializer.Serialize(SituacaoFiscalVenda.SemDocumento);
+
+        json.Should().Be("\"SemDocumento\"");
+        ((int)SituacaoFiscalVenda.Autorizada).Should().Be(0, "a ordem dos membros é contrato");
+    }
+
+    [Fact]
+    public void Situacao_DentroDoDto_SerializaPeloNome()
+    {
+        // A serialização do valor solto pode passar e a do DTO falhar se alguém
+        // trocar o tipo do campo — é o objeto inteiro que trafega na API.
+        var dto = new VendaConciliadaDto(
+            VendaId: Guid.NewGuid(), Origem: "VendaAvulsa", OcorridaEm: Hoje,
+            ValorVenda: 100m, Situacao: SituacaoFiscalVenda.SemDocumento,
+            NotaId: null, Serie: null, Numero: null, ChaveAcesso: null,
+            ValorNota: null, MotivoRejeicao: null);
+
+        var json = JsonSerializer.Serialize(dto);
+
+        json.Should().Contain("\"SemDocumento\"");
+        json.Should().NotContain("\"Situacao\":5");
     }
 }

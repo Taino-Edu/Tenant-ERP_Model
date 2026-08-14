@@ -13,9 +13,27 @@
 // qual documento cada uma tem. O que não tiver, aparece.
 // =============================================================================
 
+using System.Text.Json.Serialization;
+
 namespace CardGameStore.DTOs;
 
 /// <summary>Situação fiscal de uma venda, na ótica da conciliação.</summary>
+///
+/// <remarks>
+/// Serializa pelo NOME ("SemDocumento") e não pelo índice (5). Sem isto, o
+/// campo `situacao` de VendaConciliadaDto saía como número no JSON e o portal
+/// do contador — que indexa os rótulos por nome, igual ao `PorSituacao` deste
+/// mesmo DTO, que sempre foi `Dictionary&lt;string, ...&gt;` — não achava
+/// tradução nenhuma: a coluna "Situação" da Conciliação aparecia como um badge
+/// VAZIO em toda linha, no desktop e no celular.
+///
+/// O resto da API já expõe enum como texto, só que convertendo no mapeamento
+/// (ex.: TenantSummaryDto.Status é `string`). Aqui o enum precisa continuar
+/// sendo enum em C#, porque as propriedades calculadas do próprio DTO comparam
+/// contra ele (`Situacao == SituacaoFiscalVenda.SemDocumento`) — daí o
+/// conversor no tipo em vez de um `string` no DTO.
+/// </remarks>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum SituacaoFiscalVenda
 {
     /// <summary>Nota autorizada pela SEFAZ.</summary>
