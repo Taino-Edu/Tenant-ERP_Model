@@ -283,10 +283,16 @@ export default function MesaPage() {
                 </div>
               </div>
 
+              {/* O <label> em volta já torna a frase inteira clicável, mas a
+                  caixa em si tinha 16px — é ela que a pessoa mira, e é o
+                  consentimento LGPD que destrava abrir a comanda. 20px no
+                  celular. Os links "Termos de Uso"/"Privacidade" seguem com
+                  altura de texto de propósito: são links inline no meio da
+                  frase, e aumentá-los quebraria a linha do parágrafo. */}
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#3EC2F2] focus:ring-[#3EC2F2] shrink-0"
+                  className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4 rounded border-gray-300 text-[#3EC2F2] focus:ring-[#3EC2F2] shrink-0"
                 />
                 <span className="text-xs text-gray-500 leading-relaxed">
                   Li e concordo com os{' '}

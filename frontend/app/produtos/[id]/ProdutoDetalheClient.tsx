@@ -148,7 +148,10 @@ export default function ProdutoDetalheClient() {
       {/* Nav */}
       <nav className="sticky top-0 z-40 h-14 flex items-center px-4 gap-3 border-b"
         style={{ backgroundColor: '#0F3460', borderColor: 'rgba(255,255,255,0.08)' }}>
-        <button onClick={() => router.back()} className="flex items-center gap-1 text-sm hover:opacity-70 transition-opacity" style={{ color: '#fff' }}>
+        {/* `-ml-2 px-2 py-2`: como texto solto o alvo tinha 20px de altura, e
+            este é o único caminho de volta ao catálogo numa tela sem menu. O
+            recuo negativo mantém o alinhamento visual com a borda. */}
+        <button onClick={() => router.back()} className="-ml-2 flex items-center gap-1 px-2 py-2 text-sm transition-opacity hover:opacity-70" style={{ color: '#fff' }}>
           <ChevronLeft className="w-4 h-4" /> Voltar
         </button>
         <div className="flex-1 min-w-0">
