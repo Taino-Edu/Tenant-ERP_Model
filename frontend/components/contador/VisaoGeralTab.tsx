@@ -9,6 +9,7 @@ import type { ContadorConfigDto, ContadorNotaDto, ContadorNotaRecebidaDto, Finan
 import StatCard from '@/components/admin/StatCard'
 import Badge from '@/components/admin/ui/Badge'
 import Button from '@/components/admin/ui/Button'
+import DataTable from '@/components/admin/ui/DataTable'
 import EmptyState from '@/components/admin/ui/EmptyState'
 import Spinner from '@/components/admin/ui/Spinner'
 import {
@@ -160,42 +161,36 @@ export default function VisaoGeralTab({
             </section>
           )}
 
-          <section className="card space-y-3">
+          <section className="card-sm-up space-y-3">
             <SecaoHeader icon={FileText} titulo="Notas emitidas"
                          acoes={<span className="text-xs text-gray-400">{notas.length} no período</span>} />
             {notas.length === 0 ? (
               <EmptyState icon={FileText} message="Nenhuma nota fiscal no período selecionado." compact />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[600px] text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-500 border-b border-surface-600">
-                      <th className="py-2 font-medium">Data</th>
-                      <th className="py-2 font-medium">Número</th>
-                      <th className="py-2 font-medium">Origem</th>
-                      <th className="py-2 font-medium">Status</th>
-                      <th className="py-2 font-medium text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {notas.map(n => (
-                      <tr key={n.id} className="border-b border-surface-700 last:border-0">
-                        <td className="py-3 text-gray-400">{new Date(n.createdAt).toLocaleDateString('pt-BR')}</td>
-                        <td className="py-3 text-white">{n.serie && n.numero ? `${n.serie}/${n.numero}` : '—'}</td>
-                        <td className="py-3 text-gray-400">{n.origem}</td>
-                        <td className="py-3">
-                          <Badge tone={STATUS_NOTA_TONE[n.status] ?? 'neutral'}>{n.status}</Badge>
-                        </td>
-                        <td className="py-3 text-right text-white font-mono">{fmtCentavos(n.valorTotalEmCentavos)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              /* No card: o número da nota identifica a linha e o valor fica à
+                 direita; data e origem viram chips; o status desce como
+                 rótulo/valor porque é o que se confere por último. */
+              <DataTable
+                rows={notas}
+                rowKey={n => n.id}
+                minWidth="600px"
+                columns={[
+                  { key: 'numero', header: 'Número', mobile: 'title', className: 'text-white',
+                    cell: n => n.serie && n.numero ? `${n.serie}/${n.numero}` : '—' },
+                  { key: 'valor', header: 'Valor', align: 'right', mobile: 'trailing',
+                    cell: n => <span className="text-white font-mono">{fmtCentavos(n.valorTotalEmCentavos)}</span> },
+                  { key: 'data', header: 'Data', mobile: 'meta', className: 'text-gray-400',
+                    cell: n => new Date(n.createdAt).toLocaleDateString('pt-BR') },
+                  { key: 'origem', header: 'Origem', mobile: 'meta', className: 'text-gray-400',
+                    cell: n => n.origem },
+                  { key: 'status', header: 'Status', mobile: 'field',
+                    cell: n => <Badge tone={STATUS_NOTA_TONE[n.status] ?? 'neutral'}>{n.status}</Badge> },
+                ]}
+              />
             )}
           </section>
 
-          <section className="card space-y-3">
+          <section className="card-sm-up space-y-3">
             <SecaoHeader
               icon={Package}
               titulo="NF-e de entrada"
@@ -205,43 +200,36 @@ export default function VisaoGeralTab({
             {notasRecebidas.length === 0 ? (
               <EmptyState icon={Package} message="Nenhuma NF-e de entrada no período." compact />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[700px] text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-500 border-b border-surface-600">
-                      <th className="py-2 font-medium">Emissão</th>
-                      <th className="py-2 font-medium">Fornecedor</th>
-                      <th className="py-2 font-medium">Financeiro</th>
-                      <th className="py-2 font-medium">Estoque</th>
-                      <th className="py-2 font-medium text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {notasRecebidas.map(nota => (
-                      <tr key={nota.id} className="border-b border-surface-700 last:border-0">
-                        <td className="py-3 text-gray-400">
-                          {nota.dataEmissao ? new Date(nota.dataEmissao).toLocaleDateString('pt-BR') : '—'}
-                        </td>
-                        <td className="py-3">
-                          <p className="text-white">{nota.emitenteNome ?? 'Fornecedor'}</p>
-                          <p className="text-[10px] text-gray-600 font-mono">
-                            {nota.chaveAcesso.slice(0, 6)}…{nota.chaveAcesso.slice(-8)}
-                          </p>
-                        </td>
-                        <td className="py-3 text-gray-400">
-                          {nota.contasGeradas > 0 ? `${nota.contasGeradas} conta(s)` : 'Pendente'}
-                        </td>
-                        <td className="py-3">
-                          {nota.estoqueRecebidoEm
-                            ? <span className="text-emerald-400">✓ {nota.itensEstoqueRecebidos} un.</span>
-                            : <span className="text-amber-400">Aguardando conferência</span>}
-                        </td>
-                        <td className="py-3 text-right font-mono text-white">{fmtReais(nota.valor)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              /* Card da NF-e de entrada: fornecedor identifica, valor à direita.
+                 "Financeiro" e "Estoque" descem como rótulo/valor — são os dois
+                 estados que o contador precisa conferir item a item, e como
+                 rótulo explícito eles se leem sem depender do cabeçalho. */
+              <DataTable
+                rows={notasRecebidas}
+                rowKey={n => n.id}
+                minWidth="700px"
+                columns={[
+                  { key: 'fornecedor', header: 'Fornecedor', mobile: 'title',
+                    cell: n => (
+                      <>
+                        <p className="text-white">{n.emitenteNome ?? 'Fornecedor'}</p>
+                        <p className="text-[10px] text-gray-600 font-mono">
+                          {n.chaveAcesso.slice(0, 6)}…{n.chaveAcesso.slice(-8)}
+                        </p>
+                      </>
+                    ) },
+                  { key: 'valor', header: 'Valor', align: 'right', mobile: 'trailing',
+                    cell: n => <span className="font-mono text-white">{fmtReais(n.valor)}</span> },
+                  { key: 'emissao', header: 'Emissão', mobile: 'meta', className: 'text-gray-400',
+                    cell: n => n.dataEmissao ? new Date(n.dataEmissao).toLocaleDateString('pt-BR') : '—' },
+                  { key: 'financeiro', header: 'Financeiro', mobile: 'field', className: 'text-gray-400',
+                    cell: n => n.contasGeradas > 0 ? `${n.contasGeradas} conta(s)` : 'Pendente' },
+                  { key: 'estoque', header: 'Estoque', mobile: 'field',
+                    cell: n => n.estoqueRecebidoEm
+                      ? <span className="text-emerald-400">✓ {n.itensEstoqueRecebidos} un.</span>
+                      : <span className="text-amber-400">Aguardando conferência</span> },
+                ]}
+              />
             )}
           </section>
         </>

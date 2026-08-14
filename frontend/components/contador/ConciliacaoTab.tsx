@@ -13,6 +13,7 @@ import clsx from 'clsx'
 import type { ConciliacaoFiscalDto, SituacaoFiscalVenda, VendaConciliadaDto } from '@/lib/api'
 import StatCard from '@/components/admin/StatCard'
 import Badge, { type BadgeTone } from '@/components/admin/ui/Badge'
+import DataTable from '@/components/admin/ui/DataTable'
 import EmptyState from '@/components/admin/ui/EmptyState'
 import Spinner from '@/components/admin/ui/Spinner'
 import { fmtReais, isoParaBr, SecaoHeader, Aviso, PeriodoFields } from './contador-shared'
@@ -120,7 +121,9 @@ export default function ConciliacaoTab({ conciliacao, loading, inicio, fim, onIn
             </div>
           </section>
 
-          <section className="card space-y-3">
+          {/* `card-sm-up`: a lista vira cards no celular, e o `.card` da seção
+              em volta deixava card dentro de card (301px úteis de 375px). */}
+          <section className="card-sm-up space-y-3">
             <SecaoHeader
               icon={AlertTriangle}
               titulo="Pendências"
@@ -136,7 +139,7 @@ export default function ConciliacaoTab({ conciliacao, loading, inicio, fim, onIn
             )}
           </section>
 
-          <section className="card space-y-3">
+          <section className="card-sm-up space-y-3">
             <SecaoHeader icon={Receipt} titulo="Todas as vendas"
                          acoes={<span className="text-xs text-gray-400">{conciliacao.vendas.length}</span>} />
             {conciliacao.vendas.length === 0 ? (
@@ -152,54 +155,67 @@ export default function ConciliacaoTab({ conciliacao, loading, inicio, fim, onIn
 }
 
 function TabelaVendas({ vendas }: { vendas: VendaConciliadaDto[] }) {
+  // No card, a SITUAÇÃO é o título: quem abre a conciliação está procurando o
+  // que deu errado, não relendo o que já fechou. O valor da venda fica no
+  // canto direito (é o número que se compara com o da nota), data e origem
+  // viram chips de apoio, e documento/nota descem como rótulo/valor.
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] text-sm">
-        <thead>
-          <tr className="text-left text-gray-500 border-b border-surface-600">
-            <th className="py-2 font-medium">Data</th>
-            <th className="py-2 font-medium">Origem</th>
-            <th className="py-2 font-medium">Situação</th>
-            <th className="py-2 font-medium">Documento</th>
-            <th className="py-2 font-medium text-right">Venda</th>
-            <th className="py-2 font-medium text-right">Nota</th>
-          </tr>
-        </thead>
-        <tbody>
-          {vendas.map(venda => (
-            <tr key={venda.vendaId} className="border-b border-surface-700 last:border-0 align-top">
-              <td className="py-3 text-gray-400 whitespace-nowrap">
-                {new Date(venda.ocorridaEm).toLocaleDateString('pt-BR')}
-              </td>
-              <td className="py-3 text-gray-400">
-                {venda.origem === 'Comanda' ? 'Comanda' : 'Venda avulsa'}
-              </td>
-              <td className="py-3">
-                <Badge tone={SITUACAO_TOM[venda.situacao]}>{SITUACAO_ROTULO[venda.situacao]}</Badge>
-                {venda.motivoRejeicao && (
-                  <p className="text-[11px] text-red-400 mt-1 max-w-[260px]">{venda.motivoRejeicao}</p>
-                )}
-              </td>
-              <td className="py-3 text-gray-400">
-                {venda.numero ? `${venda.serie}/${venda.numero}` : '—'}
-                {venda.chaveAcesso && (
-                  <p className="text-[10px] text-gray-600 font-mono">
-                    {venda.chaveAcesso.slice(0, 6)}…{venda.chaveAcesso.slice(-6)}
-                  </p>
-                )}
-              </td>
-              <td className="py-3 text-right font-mono text-white">{fmtReais(venda.valorVenda)}</td>
-              <td className={clsx('py-3 text-right font-mono',
-                venda.valorDivergente ? 'text-amber-400' : 'text-gray-400')}>
-                {venda.valorNota != null ? fmtReais(venda.valorNota) : '—'}
-                {venda.valorDivergente && (
-                  <p className="text-[10px] text-amber-400">divergente</p>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={vendas}
+      rowKey={v => v.vendaId}
+      minWidth="720px"
+      columns={[
+        {
+          key: 'situacao', header: 'Situação', mobile: 'title',
+          cell: v => (
+            <>
+              <Badge tone={SITUACAO_TOM[v.situacao]}>{SITUACAO_ROTULO[v.situacao]}</Badge>
+              {/* O limite de 260px existe pra não esticar a coluna da tabela;
+                  no card ele só estreitaria o texto à toa. */}
+              {v.motivoRejeicao && (
+                <p className="text-[11px] text-red-400 mt-1 sm:max-w-[260px]">{v.motivoRejeicao}</p>
+              )}
+            </>
+          ),
+        },
+        {
+          key: 'venda', header: 'Venda', align: 'right', mobile: 'trailing',
+          className: 'font-mono text-white',
+          cell: v => <span className="font-mono text-white">{fmtReais(v.valorVenda)}</span>,
+        },
+        {
+          key: 'data', header: 'Data', mobile: 'meta',
+          className: 'text-gray-400 whitespace-nowrap',
+          cell: v => new Date(v.ocorridaEm).toLocaleDateString('pt-BR'),
+        },
+        {
+          key: 'origem', header: 'Origem', mobile: 'meta', className: 'text-gray-400',
+          cell: v => v.origem === 'Comanda' ? 'Comanda' : 'Venda avulsa',
+        },
+        {
+          key: 'documento', header: 'Documento', mobile: 'field', className: 'text-gray-400',
+          cell: v => (
+            <>
+              {v.numero ? `${v.serie}/${v.numero}` : '—'}
+              {v.chaveAcesso && (
+                <p className="text-[10px] text-gray-600 font-mono">
+                  {v.chaveAcesso.slice(0, 6)}…{v.chaveAcesso.slice(-6)}
+                </p>
+              )}
+            </>
+          ),
+        },
+        {
+          key: 'nota', header: 'Nota', align: 'right', mobile: 'field',
+          className: clsx('font-mono'),
+          cell: v => (
+            <span className={clsx('font-mono', v.valorDivergente ? 'text-amber-400' : 'text-gray-400')}>
+              {v.valorNota != null ? fmtReais(v.valorNota) : '—'}
+              {v.valorDivergente && <span className="text-[10px] text-amber-400"> · divergente</span>}
+            </span>
+          ),
+        },
+      ]}
+    />
   )
 }

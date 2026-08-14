@@ -117,15 +117,22 @@ function EntrarForm() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
 
+          {/* Os três links secundários desta tela ("Criar conta", "Ative sua
+              conta", "Esqueci minha senha") são caminhos de recuperação: quem
+              chega neles já está travado no login. Como texto inline puro eles
+              tinham 16-19px de altura de toque, o que faz errar o alvo
+              exatamente na hora em que a pessoa já está frustrada. `inline-flex`
+              + padding vertical dá altura de toque sem virar botão nem mudar o
+              tom visual da tela. */}
           <div className="text-center text-sm text-gray-500">
             Ainda não é cliente?{' '}
-            <Link href={`/cadastro?returnTo=${encodeURIComponent(returnTo)}`} className="text-brand-400 hover:text-brand-300 font-medium transition">
+            <Link href={`/cadastro?returnTo=${encodeURIComponent(returnTo)}`} className="inline-flex items-center py-2 font-medium text-brand-400 transition hover:text-brand-300">
               Criar conta
             </Link>
           </div>
           <div className="text-center text-xs text-gray-600">
             Já comprou na loja física?{' '}
-            <Link href="/primeiro-acesso" className="text-brand-400 hover:text-brand-300 transition">
+            <Link href="/primeiro-acesso" className="inline-flex items-center py-2 text-brand-400 transition hover:text-brand-300">
               Ative sua conta pelo CPF
             </Link>
           </div>
@@ -161,8 +168,8 @@ function EntrarForm() {
           )}
         </form>
 
-        <div className="mt-4 text-center">
-          <Link href="/reset-password" className="text-xs text-gray-400 hover:text-gray-400 transition">
+        <div className="mt-2 text-center">
+          <Link href="/reset-password" className="inline-flex items-center px-3 py-2.5 text-xs text-gray-400 transition hover:text-gray-400">
             Esqueci minha senha
           </Link>
         </div>

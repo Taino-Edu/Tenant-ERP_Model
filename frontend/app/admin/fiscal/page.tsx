@@ -1607,7 +1607,7 @@ export default function FiscalPage() {
 
       {/* Modal de cancelamento */}
       {cancelModalId && (
-        <Modal onClose={() => { setCancelModalId(null); setCancelJustificativa('') }} closeOnBackdrop={false} className="p-6 flex flex-col gap-4">
+        <Modal onClose={() => { setCancelModalId(null); setCancelJustificativa('') }} closeOnBackdrop={false} className="p-4 sm:p-6 flex flex-col gap-4">
             <h2 className="font-black text-white">Cancelar NFC-e</h2>
             <p className="text-sm text-gray-400">
               Só é possível cancelar dentro de 30 minutos após a autorização. Estoque, pontos, cashback e crediário não pago serão estornados; dinheiro, Pix e cartão exigem confirmação manual do reembolso.

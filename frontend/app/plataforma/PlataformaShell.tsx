@@ -50,20 +50,28 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
           error:   { iconTheme: { primary: '#FF3B30', secondary: '#fff' } },
         }}
       />
-      <header className="border-b border-surface-600 bg-surface-800">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-white font-bold">
-            <ShieldCheck className="w-5 h-5 text-brand-400" />
-            Painel Gerenciador Octus
+      {/* Cabeçalho fixo: a navegação da plataforma é uma faixa de abas que rola
+          de lado, e ela precisa continuar alcançável depois de rolar uma lista
+          longa de tenants ou de logs — no celular voltar ao topo pra trocar de
+          seção é o gesto mais repetido dessa área. */}
+      <header className="sticky top-0 z-30 border-b border-surface-600 bg-surface-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-white font-bold min-w-0">
+            <ShieldCheck className="w-5 h-5 text-brand-400 shrink-0" />
+            {/* No celular o nome completo empurraria o botão Sair pra fora. */}
+            <span className="truncate">
+              <span className="sm:hidden">Gerenciador</span>
+              <span className="hidden sm:inline">Painel Gerenciador Octus</span>
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle compact />
-            <button onClick={handleLogout} className="btn-secondary text-sm py-1.5">
-              <LogOut className="w-4 h-4" /> Sair
+            <button onClick={handleLogout} aria-label="Sair" className="btn-secondary text-sm py-1.5">
+              <LogOut className="w-4 h-4" /> <span className="hidden xs:inline">Sair</span>
             </button>
           </div>
         </div>
-        <nav className="max-w-7xl mx-auto px-6 flex items-center gap-1 overflow-x-auto">
+        <nav className="chip-row max-w-7xl mx-auto px-4 sm:px-6 items-center !gap-1">
           {NAV_ITEMS.filter(item => hasPlatformPermission(item.permission)).map(({ href, label, icon: Icon }) => {
             const active = href === '/plataforma' ? pathname === href : pathname.startsWith(href)
             return (
@@ -83,7 +91,7 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
           })}
         </nav>
       </header>
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-8">
         {children}
       </main>
     </div>

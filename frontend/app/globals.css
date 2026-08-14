@@ -84,7 +84,30 @@
     background-color: var(--bg-primary);
     color: var(--text-primary);
     @apply font-sans antialiased;
+    /* Nenhuma tela do sistema tem scroll horizontal por design — quando ele
+       aparece é sempre um elemento estourando a viewport (tabela larga, texto
+       sem quebra, largura fixa em px). Travar aqui evita que um bug isolado de
+       uma página deixe o app inteiro "deslizando" de lado no celular. Blocos
+       que precisam de rolagem lateral (tabelas, filtros) usam .table-scroll /
+       .chip-row, que criam o próprio contexto de scroll. */
+    overflow-x: hidden;
   }
+
+  /* Palavras longas sem espaço (e-mails, URLs, códigos de barras, chaves de
+     NF-e de 44 dígitos) eram a principal fonte de layout estourado no celular:
+     empurravam o card além da tela. Quebrar por padrão e deixar `nowrap`
+     explícito onde ele é intencional (colunas numéricas). */
+  p, span, td, th, li, h1, h2, h3, h4, label { overflow-wrap: anywhere; }
+
+  /* Zoom automático do iOS: o Safari dá zoom na página sempre que o campo
+     focado tem fonte < 16px, e o usuário fica preso numa viewport deslocada.
+     Vale só até `sm` pra não engordar os formulários densos do desktop. */
+  @media (max-width: 639px) {
+    input, select, textarea { font-size: 16px !important; }
+  }
+
+  /* Imagem/vídeo nunca deve definir a largura do container no mobile. */
+  img, svg, video, canvas { max-width: 100%; }
 
   * { border-color: var(--border-color); }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -92,11 +115,57 @@
   ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 9999px; }
 }
 
+/* ── Altura de viewport no celular ────────────────────────────────────────── */
+/* `100vh` no Safari/Chrome mobile mede a viewport COM a barra de endereço já
+   recolhida — ou seja, ~60-90px a mais do que a área realmente visível quando
+   a página abre. O efeito é sempre o mesmo: telas centralizadas (login,
+   cadastro, erro, pedido na mesa) nascem com uma barra de rolagem inútil e o
+   conteúdo levemente deslocado pra cima.
+   `100dvh` (dynamic viewport height) acompanha a barra e resolve isso.
+   Redefinir a utilitária aqui — em vez de trocar a classe em 26 arquivos —
+   garante que qualquer tela nova já nasça correta. Vem depois de
+   `@tailwind utilities`, então ganha por ordem de origem sem precisar de
+   !important; o @supports protege navegadores antigos, que continuam no vh. */
+@supports (height: 100dvh) {
+  .min-h-screen { min-height: 100dvh; }
+  .h-screen     { height: 100dvh; }
+
+  /* Mesmo problema, consequência pior: um modal com `max-h-[90vh]` pode ficar
+     mais alto que a área visível do celular, e o que sobra pra fora é sempre o
+     RODAPÉ — ou seja, os botões "Salvar"/"Confirmar". O usuário rola dentro do
+     modal e não encontra a ação.
+     A lista abaixo cobre os valores realmente usados hoje (grep por
+     `max-h-[NNvh]`). Ao criar um modal novo, prefira `max-h-[NNdvh]` direto —
+     aí nem passa por aqui. */
+  .max-h-\[72vh\] { max-height: 72dvh; }
+  .max-h-\[75vh\] { max-height: 75dvh; }
+  .max-h-\[80vh\] { max-height: 80dvh; }
+  .max-h-\[85vh\] { max-height: 85dvh; }
+  .max-h-\[90vh\] { max-height: 90dvh; }
+  .max-h-\[92vh\] { max-height: 92dvh; }
+}
+
 /* Página institucional tem footer próprio e não é o app instalável — esconde
    os widgets globais da loja (a classe é aplicada pelo useEffect da página). */
 body.institucional-page .js-global-footer,
 body.institucional-page .js-pwa-install {
   display: none;
+}
+
+/* No admin em celular existe uma barra de navegação fixa no rodapé. Os widgets
+   flutuantes globais são renderizados no RootLayout (fora do .admin-shell) e
+   ancoram em `bottom: ~20px` por style inline — ou seja, exatamente em cima
+   dela, tapando dois dos cinco destinos. Sobe todos para o limite superior da
+   barra. `!important` é necessário porque os três posicionam via style inline.
+   Acima de md a barra não existe e nada disso se aplica. */
+@media (max-width: 767px) {
+  body.admin-route .js-pwa-install,
+  body.admin-route .js-ai-launcher {
+    bottom: calc(theme('spacing.tabbar') + env(safe-area-inset-bottom, 0px) + 0.75rem) !important;
+  }
+  body.admin-route .js-cookie-banner {
+    bottom: calc(theme('spacing.tabbar') + env(safe-area-inset-bottom, 0px) + 0.5rem) !important;
+  }
 }
 
 @layer components {
@@ -131,6 +200,23 @@ body.institucional-page .js-pwa-install {
     @apply rounded-xl p-5 shadow-lg;
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
+  }
+
+  /* Card a partir de sm; no celular, superfície nenhuma.
+     Para contêiner cujo conteúdo, no celular, JÁ é uma lista de cards: as duas
+     camadas usam a mesma cor de fundo (--bg-card == surface-800 nos dois
+     temas), então uma some dentro da outra e o único efeito real é comer
+     ~40px de largura numa tela de 375px. O que o contêiner tem de próprio
+     (cabeçalho, barra de abas) continua visível — só a moldura vai embora. */
+  .card-sm-up {
+    @apply rounded-xl;
+  }
+  @screen sm {
+    .card-sm-up {
+      @apply p-5 shadow-lg;
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+    }
   }
 
   .input {
@@ -200,7 +286,152 @@ body.institucional-page .js-pwa-install {
      dessa região perdia o contorno contra o fundo. */
   .admin-main {
     background-color: var(--bg-primary);
+    /* Folga para a barra de navegação inferior fixa (MobileTabBar) + a barra
+       de gestos do aparelho. Fica no CONTAINER e não em cada página: assim
+       nenhuma tela — inclusive as que ainda não migraram pra .page-shell — termina
+       com o último card escondido atrás da barra. */
+    padding-bottom: calc(theme('spacing.tabbar') + env(safe-area-inset-bottom, 0px));
   }
+  @screen md {
+    .admin-main { padding-bottom: 0; }
+  }
+
+  /* ── Responsividade: primitivas compartilhadas ───────────────────────────── */
+
+  /* Container padrão de página do admin. Substitui o `p-4 sm:p-6 space-y-4`
+     repetido em cada page.tsx — assim o respiro é o MESMO em todas as telas e
+     muda num lugar só. A folga da barra inferior NÃO fica aqui: está em
+     .admin-main (ver abaixo), pra valer também nas páginas que ainda não a
+     adotaram.
+     Chama-se `page-shell` e não `page` porque app/admin/manual/page.tsx já
+     define um `.page` próprio (max-width 820px, para impressão) num <style>
+     local — e como aquele seletor é global, os dois se sobrepunham: o manual
+     herdava o `space-y-*` daqui e ganhava margens entre os blocos que ninguém
+     pediu. Nome genérico demais para uma utilitária num projeto que já usava
+     essa palavra. */
+  .page-shell { @apply p-4 sm:p-6 space-y-4 sm:space-y-5; }
+
+  /* Rolagem horizontal contida — para tabelas largas que não compensa virar
+     card (as do portal do contador e da plataforma, com 6-9 colunas de números
+     que só fazem sentido comparados lado a lado).
+     O problema real dessas tabelas no celular nunca foi o scroll em si: é que
+     NINGUÉM DESCOBRE que ele existe. Sem barra visível e sem sombra, a tabela
+     parece simplesmente cortada, e o usuário conclui que faltam colunas.
+     As quatro camadas abaixo resolvem isso sem JS: as duas primeiras
+     (`local`) são "tampas" da cor do card que acompanham o conteúdo, as duas
+     últimas (`scroll`) são sombras fixas nas bordas. Quando não há
+     transbordo, as tampas cobrem as sombras e nada aparece; ao rolar, a tampa
+     sai junto com o conteúdo e a sombra do lado com conteúdo escondido fica
+     exposta. Ou seja: a sombra aparece exatamente do lado em que ainda há
+     coluna pra ver. */
+  .table-scroll {
+    @apply overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    /* As "tampas" precisam ser da cor do que está ATRÁS da tabela. Em todos os
+       usos atuais isso é o fundo de card (--bg-card, idêntico a surface-800 nos
+       dois temas); `--table-cap` deixa um container com outro fundo corrigir
+       localmente sem tocar nesta regra. */
+    background:
+      linear-gradient(to right, var(--table-cap, var(--bg-card)) 30%, rgb(0 0 0 / 0)) left center / 28px 100% no-repeat local,
+      linear-gradient(to left,  var(--table-cap, var(--bg-card)) 30%, rgb(0 0 0 / 0)) right center / 28px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%,   rgb(0 0 0 / 0.28), rgb(0 0 0 / 0)) left center / 14px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.28), rgb(0 0 0 / 0)) right center / 14px 100% no-repeat scroll;
+  }
+
+  /* Linha de filtros/abas que rola de lado no celular em vez de quebrar em 3
+     fileiras e empurrar o conteúdo pra fora da dobra. */
+  .chip-row {
+    @apply flex gap-2 overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .chip-row::-webkit-scrollbar { display: none; }
+  .chip-row > * { scroll-snap-align: start; flex-shrink: 0; }
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+
+  /* Alvo de toque mínimo de 44x44px (WCAG 2.5.5 / HIG). Ícone-botão de 16px
+     com padding de 4px dá 24px — erra o alvo com o polegar. Aplicado só no
+     mobile pra não inflar as barras de ferramentas densas do desktop. */
+  @media (max-width: 767px) {
+    .touch-target { min-width: 44px; min-height: 44px; }
+    /* Botões e links do admin ganham altura mínima confortável sem precisar
+       reescrever o padding de cada um deles. */
+    .btn-primary, .btn-secondary, .btn-danger, .btn-success { min-height: 44px; }
+    .input, select.input { min-height: 44px; }
+  }
+
+  /* Barra de ação fixa no rodapé (ex.: "Finalizar venda" no PDV). Mantém a
+     ação primária sempre ao alcance do polegar, sem obrigar o usuário a rolar
+     até o fim de um formulário longo. */
+  .action-bar {
+    @apply fixed bottom-0 left-0 right-0 z-30 flex gap-2 px-4 py-3 border-t md:static md:z-auto md:border-0 md:p-0;
+    background-color: var(--bg-card);
+    border-color: var(--border-color);
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+  @screen md {
+    .action-bar { background-color: transparent; padding-bottom: 0; }
+  }
+
+  /* Espaço reservado no fim do conteúdo quando a página usa .action-bar —
+     senão a barra tapa o último campo do formulário. */
+  .action-bar-spacer { height: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+  @screen md { .action-bar-spacer { display: none; } }
+
+  /* Utilitários de safe area para barras fixas. */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+
+  /* Altura da viewport real do mobile. `100vh` no Safari/Chrome mobile conta a
+     barra de endereço como se ela nunca recolhesse, então telas "cheias"
+     ficavam ~90px maiores que a tela e cortavam o rodapé. */
+  .h-screen-d { height: 100vh; height: 100dvh; }
+  .min-h-screen-d { min-height: 100vh; min-height: 100dvh; }
+  .max-h-screen-d { max-height: 100vh; max-height: 100dvh; }
+
+  /* Trava o scroll do fundo enquanto drawer/sheet está aberto — sem isso o
+     conteúdo atrás rola junto com o gesto dentro do painel. */
+  body.overflow-locked { overflow: hidden; touch-action: none; }
+
+  /* Grid de KPIs padrão: 2 colunas no celular, 4 a partir de md.
+     O corte é em `md` (768px) e não em `sm` (640px) de propósito: com 4
+     colunas em 640px sobram ~130px por card, e "R$ 12.345,67" em fonte mono
+     text-xl não cabe — o valor quebra em duas linhas e desalinha a fileira
+     inteira. Dois por linha até o tablet mantém o número inteiro e legível. */
+  .kpi-grid { @apply grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4; }
+
+  /* Movimento reduzido: quem liga essa preferência do sistema costuma fazê-lo
+     por enjoo/vertigem, e as animações de entrada (sheet subindo, slide-up de
+     página) são exatamente o tipo de movimento que dispara isso. Zera a
+     duração em vez de remover a regra — assim o estado final continua sendo
+     aplicado e nada corre o risco de ficar preso no quadro inicial. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* react-hot-toast posiciona o container por style inline (top: 16px), então
+     o deslocamento abaixo da barra superior do mobile precisa de !important.
+     Acima de md a barra não existe e o toast volta ao topo normal. */
+  @media (max-width: 767px) {
+    .admin-toaster {
+      top: calc(theme('spacing.topbar') + env(safe-area-inset-top, 0px) + 0.5rem) !important;
+      left: 0.5rem !important;
+      right: 0.5rem !important;
+    }
+  }
+
+  /* Par rótulo/valor usado nos cards que substituem linhas de tabela. */
+  .field-row { @apply flex items-baseline justify-between gap-3 text-sm; }
+  .field-row > dt { @apply text-xs shrink-0; color: var(--text-muted); }
+  .field-row > dd { @apply font-medium text-right min-w-0; color: var(--text-primary); }
 
 }
 

@@ -348,7 +348,7 @@ export default function ComandaPage() {
 
   if (!enabled) {
     return (
-      <div className="p-6 md:p-8 max-w-4xl mx-auto">
+      <div className="p-4 sm:p-6 md:p-8 max-w-4xl mx-auto">
         <div className="card p-8 text-center">
           <UtensilsCrossed className="w-10 h-10 text-gray-500 mx-auto mb-3" />
           <h1 className="text-xl font-bold text-white">Comandas fazem parte do Restaurante</h1>

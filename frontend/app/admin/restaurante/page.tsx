@@ -230,7 +230,7 @@ export default function RestaurantePage() {
 
   if (!enabled) {
     return (
-      <div className="p-6 md:p-8 max-w-5xl mx-auto">
+      <div className="p-4 sm:p-6 md:p-8 max-w-5xl mx-auto">
         <div className="card p-8 text-center">
           <UtensilsCrossed className="w-10 h-10 text-gray-500 mx-auto mb-3" />
           <h1 className="text-xl font-bold text-white">Módulo Restaurante não habilitado</h1>
@@ -241,7 +241,7 @@ export default function RestaurantePage() {
   }
 
   return (
-    <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6">
       <PageHeader
         icon={UtensilsCrossed}
         title="Restaurante"

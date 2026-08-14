@@ -60,12 +60,16 @@ function ExportarDadosSection() {
               <span className="block text-sm text-white">{label}</span>
               <span className="block text-xs text-gray-500 truncate">{desc}</span>
             </span>
+            {/* Como `px-2 py-1` estes botões ficavam com 26px de altura — são a
+                porta de saída dos dados do titular (LGPD, portabilidade), e
+                errar o alvo aqui é justamente o tipo de atrito que a lei quer
+                evitar. 40px no celular. */}
             <div className="flex gap-1 shrink-0">
               <button
                 onClick={() => baixar(key, 'csv')}
                 disabled={baixando !== null}
                 title="Baixar CSV"
-                className="px-2 py-1 rounded-lg text-xs font-semibold border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors disabled:opacity-50"
+                className="px-2 py-1 max-md:min-h-[40px] max-md:px-3 rounded-lg text-xs font-semibold border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors disabled:opacity-50"
               >
                 {baixando === `${key}-csv` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'CSV'}
               </button>
@@ -73,7 +77,7 @@ function ExportarDadosSection() {
                 onClick={() => baixar(key, 'xlsx')}
                 disabled={baixando !== null}
                 title="Baixar Excel"
-                className="px-2 py-1 rounded-lg text-xs font-semibold border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors disabled:opacity-50"
+                className="px-2 py-1 max-md:min-h-[40px] max-md:px-3 rounded-lg text-xs font-semibold border border-surface-500 hover:border-brand-500/50 hover:bg-surface-700 transition-colors disabled:opacity-50"
               >
                 {baixando === `${key}-xlsx` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Excel'}
               </button>
@@ -543,7 +547,7 @@ export default function LgpdAdminPage() {
                 </div>
               ) : (
                 <>
-                <div className="hidden sm:block overflow-x-auto">
+                <div className="hidden sm:block table-scroll">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-surface-500 text-xs text-gray-400">
@@ -728,7 +732,7 @@ export default function LgpdAdminPage() {
           {!auditLoading && !auditError && auditData && (
             <>
               <div className="bg-surface-800 rounded-2xl border border-surface-500 overflow-hidden">
-                <div className="hidden sm:block overflow-x-auto">
+                <div className="hidden sm:block table-scroll">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-surface-500 text-xs text-gray-400">

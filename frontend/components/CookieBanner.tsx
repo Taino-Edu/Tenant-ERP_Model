@@ -61,7 +61,7 @@ export default function CookieBanner() {
   if (!visible) return null
 
   return (
-    <div className="fixed inset-x-3 bottom-3 z-[9999] mx-auto max-w-3xl print:hidden" role="dialog" aria-modal="true" aria-labelledby="cookie-title">
+    <div className="js-cookie-banner fixed inset-x-3 bottom-3 z-[9999] mx-auto max-w-3xl print:hidden" role="dialog" aria-modal="true" aria-labelledby="cookie-title">
       <div className="rounded-2xl border border-[#0C3D5A]/15 bg-white p-5 text-[#22384A] shadow-2xl shadow-[#0C3D5A]/20 sm:p-6">
         <div className="flex items-start gap-3">
           <span className="rounded-xl bg-brand-50 p-2 text-brand-700"><Cookie className="h-5 w-5" /></span>

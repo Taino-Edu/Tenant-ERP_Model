@@ -439,7 +439,7 @@ export default function AiChatWidget() {
       {prefs.aiButton.mode === 'fixed' ? (
         <button
           onClick={() => setOpen(o => !o)}
-          className="fixed z-50 flex items-center justify-center rounded-full shadow-lg transition-colors hover:brightness-110 active:brightness-90"
+          className="js-ai-launcher fixed z-50 flex items-center justify-center rounded-full shadow-lg transition-colors hover:brightness-110 active:brightness-90"
           style={{
             ...CORNER_STYLES[prefs.aiButton.corner] ?? CORNER_STYLES['bottom-right'],
             width: BTN_SIZE, height: BTN_SIZE,

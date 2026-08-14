@@ -342,8 +342,8 @@ export function CurvaABCSection({ produtos, targetPct }: {
         </div>
       </div>
 
-      {/* Tabela com headers clicáveis */}
-      <div className="rounded-xl border border-surface-600 overflow-x-auto">
+      {/* Tabela com headers clicáveis — desktop */}
+      <div className="rounded-xl border border-surface-600 table-scroll hidden sm:block">
         {hasFilters && (
           <div className="px-4 py-2 bg-surface-800 border-b border-surface-600 flex items-center gap-2 text-xs text-gray-400">
             Filtrando:
@@ -384,10 +384,7 @@ export function CurvaABCSection({ produtos, targetPct }: {
           </thead>
           <tbody className="divide-y divide-surface-600">
             {tableData.map((p, i) => {
-              const precoMedio = p.qtd > 0 ? p.receita / p.qtd : 0
-              const custoMedio = p.qtd > 0 ? p.custo  / p.qtd : 0
-              const margemPct  = precoMedio > 0 && custoMedio > 0 ? ((precoMedio - custoMedio) / precoMedio) * 100 : null
-              const precoSug   = custoMedio > 0 ? custoMedio / (1 - targetPct / 100) : null
+              const { precoMedio, margemPct, precoSug } = metricasLinha(p, targetPct)
               const clr = ABC_COLORS[p.abcClass]
               return (
                 <tr key={p.nome} className="hover:bg-surface-700 transition-colors">
@@ -442,8 +439,106 @@ export function CurvaABCSection({ produtos, targetPct }: {
           <span className="ml-auto">Clique no cabeçalho para ordenar · clique nas classes/categorias para filtrar</span>
         </div>
       </div>
+
+      {/* ── Curva ABC no celular ──────────────────────────────────────────────
+          Não usa DataTable porque esta tabela tem duas coisas que ele não
+          modela: cabeçalho clicável pra ordenar e uma barra de progresso de
+          percentual acumulado. No celular a ordenação vira um <select> (não há
+          cabeçalho onde clicar) e a barra acompanha o card. */}
+      <div className="space-y-2 sm:hidden">
+        <label className="flex items-center gap-2 text-xs text-gray-400">
+          Ordenar por
+          <select
+            className="input flex-1 text-xs"
+            value={sortCol}
+            onChange={e => toggleSort(e.target.value as AbcSortCol)}
+          >
+            <option value="receita">Receita</option>
+            <option value="qtd">Quantidade</option>
+            <option value="precoMedio">Preço médio</option>
+            <option value="margemPct">Margem</option>
+          </select>
+          <button
+            onClick={() => toggleSort(sortCol)}
+            aria-label={sortDir === 'desc' ? 'Ordenar crescente' : 'Ordenar decrescente'}
+            className="btn-secondary px-2 py-1"
+          >
+            {sortDir === 'desc' ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+          </button>
+        </label>
+
+        <ul className="space-y-2">
+          {tableData.map((p, i) => {
+            const { precoMedio, margemPct, precoSug } = metricasLinha(p, targetPct)
+            const clr = ABC_COLORS[p.abcClass]
+            return (
+              <li key={p.nome} className="card !p-3 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-white">{i + 1}. {p.nome}</p>
+                    {p.categoria && <span className="text-[10px] bg-surface-600 text-gray-400 px-1.5 rounded">{p.categoria}</span>}
+                  </div>
+                  {/* A classe ABC é o dado que decide o que fazer com o produto —
+                      fica em destaque, do tamanho de um badge, não como letra
+                      solta no meio de uma coluna. */}
+                  <span className={`shrink-0 text-lg font-black ${clr.text}`}>{p.abcClass}</span>
+                </div>
+
+                <dl className="space-y-1 border-t border-surface-600 pt-2">
+                  <div className="field-row"><dt>Receita</dt><dd className={`font-mono font-bold ${clr.text}`}>{fmt(p.receita)}</dd></div>
+                  <div className="field-row"><dt>Quantidade</dt><dd className="font-mono">{p.qtd}x</dd></div>
+                  <div className="field-row">
+                    <dt>Preço médio</dt>
+                    <dd className="font-mono">
+                      {precoMedio > 0 ? fmt(precoMedio) : '—'}
+                      {precoSug !== null && Math.abs(precoSug - precoMedio) >= 0.50 && (
+                        <span className={`ml-1 text-[10px] ${precoSug > precoMedio ? 'text-red-400' : 'text-emerald-400'}`}>
+                          ({precoSug > precoMedio ? '↑' : '↓'}{fmt(precoSug)})
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                  <div className="field-row">
+                    <dt>Margem</dt>
+                    <dd className={`font-mono font-bold ${margemPct === null ? 'text-gray-600' : margemPct >= targetPct ? 'text-emerald-400' : margemPct >= 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {margemPct !== null ? `${margemPct.toFixed(0)}%` : '—'}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 flex-1 bg-surface-600 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${p.cumPct}%`, background: clr.bar }} />
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-mono shrink-0">{p.cumPct.toFixed(0)}% acum.</span>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+
+        <p className="text-[10px] text-gray-500 leading-relaxed">
+          <span className="text-emerald-400 font-bold">A</span> = vitais, 80% da receita ·{' '}
+          <span className="text-yellow-400 font-bold">B</span> = importantes, 80–95% ·{' '}
+          <span className="text-red-400 font-bold">C</span> = periféricos, acima de 95%
+        </p>
+      </div>
     </div>
   )
+}
+
+/** Métricas derivadas de uma linha da curva ABC.
+ *
+ * Extraída porque tabela e cards precisam EXATAMENTE do mesmo cálculo — preço
+ * médio, margem e preço sugerido saem de divisões que é fácil escrever de dois
+ * jeitos ligeiramente diferentes. Com a conta num lugar só, os dois layouts não
+ * têm como discordar sobre a margem de um produto. */
+function metricasLinha(p: { qtd: number; receita: number; custo: number }, targetPct: number) {
+  const precoMedio = p.qtd > 0 ? p.receita / p.qtd : 0
+  const custoMedio = p.qtd > 0 ? p.custo / p.qtd : 0
+  const margemPct = precoMedio > 0 && custoMedio > 0 ? ((precoMedio - custoMedio) / precoMedio) * 100 : null
+  const precoSug = custoMedio > 0 ? custoMedio / (1 - targetPct / 100) : null
+  return { precoMedio, custoMedio, margemPct, precoSug }
 }
 
 // ── Modal com gráfico de evolução ─────────────────────────────────────────────

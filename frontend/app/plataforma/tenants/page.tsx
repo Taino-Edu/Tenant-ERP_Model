@@ -140,7 +140,22 @@ function ModulesModal({ tenant, saving, onToggle, onClose }: {
   )
 }
 
-function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummary; lastActivityAt: string | null | undefined; onChanged: () => void }) {
+/** Base dos quatro botões-ícone de ação do tenant (acessar / suspender /
+ *  backup / apagar). 32px é uma densidade adequada à tabela do desktop, mas no
+ *  celular fica abaixo do alvo confortável de toque — e um desses botões APAGA
+ *  A LOJA permanentemente. `max-md:` sobe pra 44px só no celular, sem alterar a
+ *  tabela. Extraído numa constante porque os quatro precisam concordar: se um
+ *  crescer e o vizinho não, a fileira desalinha. */
+const BTN_ACAO = 'w-8 h-8 max-md:w-11 max-md:h-11 rounded-lg flex items-center justify-center border transition-colors shrink-0'
+
+/** Linha de tenant — `<tr>` no desktop, card no celular.
+ *
+ * Como o LeadRow, esta linha edita em vez de só exibir (plano, mensalidade,
+ * status de pagamento, módulos), então o estado precisa morar num componente
+ * por linha e não dá pra usar o DataTable. Os blocos são montados uma vez só e
+ * as duas molduras consomem os mesmos — nenhuma ação existe num layout e falta
+ * no outro. */
+function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tenant: TenantSummary; lastActivityAt: string | null | undefined; onChanged: () => void; layout?: 'row' | 'card' }) {
   const [planName, setPlanName]   = useState(tenant.planName)
   const [savingBilling, setSavingBilling] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -257,133 +272,147 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
     }
   }
 
-  return (
-    <tr className="border-b border-surface-700 last:border-0">
-      <td className="py-3">
-        <Link href={`/plataforma/tenants/${tenant.id}`} className="text-white font-medium hover:text-brand-400 flex items-center gap-1">
-          {tenant.slug} <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
-        </Link>
-      </td>
-      <td className="py-3">
-        <Badge tone={tenant.status === 'Active' ? 'success' : 'danger'}>
-          {tenant.status === 'Active' ? 'Ativo' : 'Suspenso'}
-        </Badge>
-      </td>
-      {/* Plano deixou de ser texto livre: o nome tem que bater com a tabela de
-          preços do backend, senão a loja fica com mensalidade 0 e some do MRR.
-          Escolher um plano já aplica o valor de tabela; "Personalizado" existe
-          pro preço negociado, que aí é digitado ao lado. */}
-      <td className="py-3">
-        <select
-          className="input text-xs py-1 w-32"
-          value={planoSelecionado}
+  const card = layout === 'card'
+  const activity = fmtRelative(lastActivityAt ?? null)
+
+  const slugLink = (
+    // `py-1.5` no celular: é o link que abre o detalhe da loja, o destino mais
+    // usado do card, e como texto puro tinha 24px de alvo.
+    <Link href={`/plataforma/tenants/${tenant.id}`} className="text-white font-medium hover:text-brand-400 flex items-center gap-1 max-md:py-1.5">
+      {tenant.slug} <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
+    </Link>
+  )
+
+  const statusBadge = (
+    <Badge tone={tenant.status === 'Active' ? 'success' : 'danger'}>
+      {tenant.status === 'Active' ? 'Ativo' : 'Suspenso'}
+    </Badge>
+  )
+
+  {/* Plano deixou de ser texto livre: o nome tem que bater com a tabela de
+      preços do backend, senão a loja fica com mensalidade 0 e some do MRR.
+      Escolher um plano já aplica o valor de tabela; "Personalizado" existe
+      pro preço negociado, que aí é digitado ao lado. */}
+  const selectPlano = (
+    <select
+      className={clsx('input text-xs py-1', card ? 'w-full' : 'w-32')}
+      value={planoSelecionado}
+      disabled={savingBilling}
+      aria-label="Plano contratado"
+      onChange={e => aplicarPlano(e.target.value)}
+    >
+      {PLANOS.map(p => <option key={p.nome} value={p.nome}>{p.nome}</option>)}
+      <option value={PLANO_PERSONALIZADO}>{PLANO_PERSONALIZADO}</option>
+    </select>
+  )
+
+  const campoMensalidade = (
+    <>
+      <div className="flex items-center gap-1">
+        <span className="text-xs text-gray-500">R$</span>
+        <input
+          className={clsx('input text-xs py-1 tabular-nums', card ? 'w-full' : 'w-20')}
+          type="number" min="0" step="0.01"
+          value={mensalidade}
+          onChange={e => setMensalidade(e.target.value)}
+          onBlur={salvarMensalidade}
           disabled={savingBilling}
-          onChange={e => aplicarPlano(e.target.value)}
-        >
-          {PLANOS.map(p => <option key={p.nome} value={p.nome}>{p.nome}</option>)}
-          <option value={PLANO_PERSONALIZADO}>{PLANO_PERSONALIZADO}</option>
-        </select>
-      </td>
-      <td className="py-3">
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-gray-500">R$</span>
-          <input
-            className="input text-xs py-1 w-20 tabular-nums"
-            type="number" min="0" step="0.01"
-            value={mensalidade}
-            onChange={e => setMensalidade(e.target.value)}
-            onBlur={salvarMensalidade}
-            disabled={savingBilling}
-            title="Mensalidade cobrada desta loja"
-          />
-        </div>
-        <p className="text-[10px] text-gray-500 mt-0.5">
-          implantação {formatarReais(tenant.setupFee)}
-        </p>
-      </td>
-      <td className="py-3">
-        <StatusPillSelect
-          value={tenant.paymentStatus}
-          options={PAYMENT_OPTIONS}
-          styles={PAYMENT_STYLES}
-          disabled={savingBilling}
-          onChange={paymentStatus => saveBilling({ paymentStatus })}
+          aria-label="Mensalidade cobrada desta loja"
+          title="Mensalidade cobrada desta loja"
         />
-      </td>
-      {/* Os 6 toggles de módulo moravam dentro da célula e sozinhos jogavam a
-          linha pra ~180px de altura. Aqui fica só a leitura (o que está ligado);
-          a edição abre num modal, que é onde cabe o texto explicando cada um. */}
-      <td className="py-3">
-        <button
-          type="button"
-          onClick={() => setShowModules(true)}
-          disabled={savingBilling}
-          title="Editar módulos contratados"
-          className="flex items-center gap-1.5 max-w-[240px] text-left rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-surface-700/60 transition-colors disabled:opacity-60"
-        >
-          {tenant.enabledModules.length === 0 ? (
-            <span className="text-xs text-gray-500">nenhum módulo</span>
-          ) : (
-            <>
-              <span className="text-xs font-semibold text-brand-300 tabular-nums shrink-0">
-                {tenant.enabledModules.length}/{TENANT_MODULES.length}
-              </span>
-              <span className="text-xs text-gray-400 truncate">
-                {TENANT_MODULES.filter(m => tenant.enabledModules.includes(m.value)).map(m => m.label).join(', ')}
-              </span>
-            </>
-          )}
-        </button>
-      </td>
-      <td className="py-3 text-gray-400">{fmtDate(tenant.createdAt)}</td>
-      <td className="py-3">
-        {(() => {
-          const activity = fmtRelative(lastActivityAt ?? null)
-          return <span className={clsx('text-xs font-medium', ACTIVITY_TONE[activity.tone])}>{activity.text}</span>
-        })()}
-      </td>
-      <td className="py-3 text-right">
-        <div className="flex items-center justify-end gap-1.5">
-          <button
-            onClick={acessarAdmin}
-            disabled={impersonating || tenant.status !== 'Active'}
-            title={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
-            aria-label={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
-            className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-          >
-            {impersonating ? <Spinner size="sm" /> : <LogIn className="w-3.5 h-3.5" />}
-          </button>
-          <button
-            onClick={toggleStatus}
-            disabled={updatingStatus}
-            title={tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
-            aria-label={tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
-            className={clsx('w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 transition-colors shrink-0',
-              tenant.status === 'Active' ? 'text-gray-300 hover:text-red-400 hover:border-surface-400' : 'text-gray-300 hover:text-accent-green hover:border-surface-400')}
-          >
-            {updatingStatus
-              ? <Spinner size="sm" />
-              : tenant.status === 'Active' ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
-          </button>
-          <button
-            onClick={baixarBackup}
-            disabled={backingUp}
-            title="Baixar backup (.sql) desta loja"
-            aria-label="Baixar backup (.sql) desta loja"
-            className="w-8 h-8 rounded-lg flex items-center justify-center border border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white transition-colors shrink-0"
-          >
-            {backingUp ? <Spinner size="sm" /> : <Download className="w-3.5 h-3.5" />}
-          </button>
-          <button
-            onClick={() => setShowDelete(true)}
-            title="Apagar esta loja permanentemente"
-            aria-label="Apagar esta loja permanentemente"
-            className="w-8 h-8 rounded-lg flex items-center justify-center border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors shrink-0"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </td>
+      </div>
+      <p className="text-[10px] text-gray-500 mt-0.5">
+        implantação {formatarReais(tenant.setupFee)}
+      </p>
+    </>
+  )
+
+  const selectPagamento = (
+    <StatusPillSelect
+      value={tenant.paymentStatus}
+      options={PAYMENT_OPTIONS}
+      styles={PAYMENT_STYLES}
+      disabled={savingBilling}
+      onChange={paymentStatus => saveBilling({ paymentStatus })}
+    />
+  )
+
+  {/* Os 6 toggles de módulo moravam dentro da célula e sozinhos jogavam a
+      linha pra ~180px de altura. Aqui fica só a leitura (o que está ligado);
+      a edição abre num modal, que é onde cabe o texto explicando cada um. */}
+  const botaoModulos = (
+    <button
+      type="button"
+      onClick={() => setShowModules(true)}
+      disabled={savingBilling}
+      title="Editar módulos contratados"
+      className={clsx(
+        // `py-2.5` no celular: como `py-1` o botão ficava com 24px de altura, e
+        // ele é a única porta de entrada pra edição dos módulos contratados.
+        'flex items-center gap-1.5 text-left rounded-lg px-1.5 py-1 max-md:py-2.5 -mx-1.5 hover:bg-surface-700/60 transition-colors disabled:opacity-60',
+        card ? 'w-full' : 'max-w-[240px]',
+      )}
+    >
+      {tenant.enabledModules.length === 0 ? (
+        <span className="text-xs text-gray-500">nenhum módulo</span>
+      ) : (
+        <>
+          <span className="text-xs font-semibold text-brand-300 tabular-nums shrink-0">
+            {tenant.enabledModules.length}/{TENANT_MODULES.length}
+          </span>
+          <span className="text-xs text-gray-400 truncate">
+            {TENANT_MODULES.filter(m => tenant.enabledModules.includes(m.value)).map(m => m.label).join(', ')}
+          </span>
+        </>
+      )}
+    </button>
+  )
+
+  const acoes = (
+    <>
+      <button
+        onClick={acessarAdmin}
+        disabled={impersonating || tenant.status !== 'Active'}
+        title={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
+        aria-label={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
+        className={clsx(BTN_ACAO, 'border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed')}
+      >
+        {impersonating ? <Spinner size="sm" /> : <LogIn className="w-3.5 h-3.5" />}
+      </button>
+      <button
+        onClick={toggleStatus}
+        disabled={updatingStatus}
+        title={tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
+        aria-label={tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
+        className={clsx(BTN_ACAO, 'border-surface-500',
+          tenant.status === 'Active' ? 'text-gray-300 hover:text-red-400 hover:border-surface-400' : 'text-gray-300 hover:text-accent-green hover:border-surface-400')}
+      >
+        {updatingStatus
+          ? <Spinner size="sm" />
+          : tenant.status === 'Active' ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
+      </button>
+      <button
+        onClick={baixarBackup}
+        disabled={backingUp}
+        title="Baixar backup (.sql) desta loja"
+        aria-label="Baixar backup (.sql) desta loja"
+        className={clsx(BTN_ACAO, 'border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white')}
+      >
+        {backingUp ? <Spinner size="sm" /> : <Download className="w-3.5 h-3.5" />}
+      </button>
+      <button
+        onClick={() => setShowDelete(true)}
+        title="Apagar esta loja permanentemente"
+        aria-label="Apagar esta loja permanentemente"
+        className={clsx(BTN_ACAO, 'border-red-500/30 text-red-400 hover:bg-red-500/10')}
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </>
+  )
+
+  const modais = (
+    <>
       {showDelete && createPortal(
         <DeleteTenantModal tenant={tenant} onClose={() => setShowDelete(false)} onDeleted={onChanged} />,
         document.body,
@@ -397,6 +426,65 @@ function TenantRow({ tenant, lastActivityAt, onChanged }: { tenant: TenantSummar
         />,
         document.body,
       )}
+    </>
+  )
+
+  if (card) {
+    return (
+      <li className="card space-y-3 !p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">{slugLink}</div>
+          <div className="shrink-0">{statusBadge}</div>
+        </div>
+        {/* Os quatro campos de billing em dois pares: plano/mensalidade andam
+            juntos (mudar um mexe no outro), pagamento/módulos são conferência. */}
+        <div className="grid grid-cols-2 gap-3">
+          <label className="space-y-1">
+            <span className="block text-[10px] uppercase tracking-wider text-gray-500">Plano</span>
+            {selectPlano}
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[10px] uppercase tracking-wider text-gray-500">Mensalidade</span>
+            {campoMensalidade}
+          </label>
+        </div>
+        <div className="space-y-1">
+          <span className="block text-[10px] uppercase tracking-wider text-gray-500">Pagamento</span>
+          {selectPagamento}
+        </div>
+        <div className="space-y-1">
+          <span className="block text-[10px] uppercase tracking-wider text-gray-500">Módulos</span>
+          {botaoModulos}
+        </div>
+        <dl className="space-y-1 border-t border-surface-600 pt-2">
+          <div className="field-row"><dt>Criado em</dt><dd>{fmtDate(tenant.createdAt)}</dd></div>
+          <div className="field-row">
+            <dt>Última atividade</dt>
+            <dd><span className={clsx('text-xs font-medium', ACTIVITY_TONE[activity.tone])}>{activity.text}</span></dd>
+          </div>
+        </dl>
+        <div className="flex items-center gap-1.5 border-t border-surface-600 pt-3">{acoes}</div>
+        {modais}
+      </li>
+    )
+  }
+
+  return (
+    <tr className="border-b border-surface-700 last:border-0">
+      <td className="py-3">{slugLink}</td>
+      <td className="py-3">{statusBadge}</td>
+      <td className="py-3">{selectPlano}</td>
+      <td className="py-3">{campoMensalidade}</td>
+      <td className="py-3">{selectPagamento}</td>
+      <td className="py-3">{botaoModulos}</td>
+      <td className="py-3 text-gray-400">{fmtDate(tenant.createdAt)}</td>
+      <td className="py-3">
+        <span className={clsx('text-xs font-medium', ACTIVITY_TONE[activity.tone])}>{activity.text}</span>
+      </td>
+      <td className="py-3 text-right">
+        <div className="flex items-center justify-end gap-1.5">{acoes}</div>
+      </td>
+      {modais}
     </tr>
   )
 }
@@ -499,10 +587,13 @@ export default function PlataformaTenantsPage() {
         </div>
       )}
 
-      <div className="card overflow-x-auto">
-        {loading ? (
-          <Spinner size="lg" block />
-        ) : tenants.length === 0 ? (
+      {/* O contêiner só é `card` quando há tabela dentro. Na versão celular
+          cada tenant JÁ é um card — envolvê-los noutro card daria caixa dentro
+          de caixa, com a mesma cor de fundo e duas bordas concorrendo. */}
+      {loading ? (
+        <div className="card"><Spinner size="lg" block /></div>
+      ) : tenants.length === 0 ? (
+        <div className="card">
           <EmptyState
             icon={Building2}
             message="Nenhum tenant cadastrado ainda."
@@ -512,31 +603,42 @@ export default function PlataformaTenantsPage() {
               </button>
             }
           />
-        ) : tenantsVisiveis.length === 0 ? (
-          <EmptyState icon={Search} message="Nenhuma loja bate com esse filtro." compact />
-        ) : (
-          <table className="w-full min-w-[760px] text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b border-surface-600">
-                <th className="py-2 font-medium">Slug</th>
-                <th className="py-2 font-medium">Status</th>
-                <th className="py-2 font-medium">Plano</th>
-                <th className="py-2 font-medium">Mensalidade</th>
-                <th className="py-2 font-medium">Pagamento</th>
-                <th className="py-2 font-medium">Módulos</th>
-                <th className="py-2 font-medium">Criado em</th>
-                <th className="py-2 font-medium">Última atividade</th>
-                <th className="py-2 font-medium text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
+        </div>
+      ) : tenantsVisiveis.length === 0 ? (
+        <div className="card"><EmptyState icon={Search} message="Nenhuma loja bate com esse filtro." compact /></div>
+      ) : (
+          <>
+            {/* Nove colunas — a maior tabela do sistema. No celular cada tenant
+                vira um card com os mesmos campos editáveis. */}
+            <div className="card table-scroll hidden sm:block">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b border-surface-600">
+                    <th className="py-2 font-medium">Slug</th>
+                    <th className="py-2 font-medium">Status</th>
+                    <th className="py-2 font-medium">Plano</th>
+                    <th className="py-2 font-medium">Mensalidade</th>
+                    <th className="py-2 font-medium">Pagamento</th>
+                    <th className="py-2 font-medium">Módulos</th>
+                    <th className="py-2 font-medium">Criado em</th>
+                    <th className="py-2 font-medium">Última atividade</th>
+                    <th className="py-2 font-medium text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tenantsVisiveis.map(t => (
+                    <TenantRow key={t.id} tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={recarregarSilencioso} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="space-y-2 sm:hidden">
               {tenantsVisiveis.map(t => (
-                <TenantRow key={t.id} tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={recarregarSilencioso} />
+                <TenantRow key={t.id} layout="card" tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={recarregarSilencioso} />
               ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+            </ul>
+          </>
+      )}
 
       {showCreate && <CreateTenantModal onClose={() => setShowCreate(false)} onCreated={() => fetchTenants()} />}
     </div>

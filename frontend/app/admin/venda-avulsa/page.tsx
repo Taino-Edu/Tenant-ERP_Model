@@ -730,11 +730,11 @@ function VendaWizard({
       onClose={onClose}
       maxWidth={step === 2 ? '2xl' : 'md'}
       scrollable={false}
-      className="flex flex-col max-h-[92vh]"
+      className="flex flex-col max-h-[92dvh] sm:max-h-[92vh]"
     >
 
         {/* Header + step indicator */}
-        <div className="px-5 pt-4 pb-3 border-b border-surface-600 shrink-0">
+        <div className="px-4 sm:px-5 pt-4 pb-3 border-b border-surface-600 shrink-0">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-white flex items-center gap-2 text-base">
               <ShoppingBag className="w-4 h-4 text-brand-400" /> Nova Venda
@@ -771,7 +771,7 @@ function VendaWizard({
         </div>
 
         {/* Conteúdo */}
-        <div className={clsx("flex-1 p-5 min-h-0", step === 2 ? "overflow-hidden flex flex-col" : "overflow-y-auto")}>
+        <div className={clsx("flex-1 p-4 sm:p-5 min-h-0", step === 2 ? "overflow-hidden flex flex-col" : "overflow-y-auto")}>
 
           {/* ── Etapa 1: Cliente ──────────────────────────────── */}
           {step === 1 && (
@@ -842,8 +842,12 @@ function VendaWizard({
           )}
 
           {/* ── Etapa 2: Produtos ──────────────────────────────── */}
+          {/* Duas colunas (catálogo | carrinho de 208px) só a partir de sm. Em
+              375px sobrariam ~110px para o catálogo — nome de produto nenhum
+              cabe nisso. No celular vira pilha: catálogo ocupa a tela e o
+              carrinho fica embaixo, como faixa de altura limitada. */}
           {step === 2 && (
-            <div className="flex gap-4 flex-1 min-h-0">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 flex-1 min-h-0">
 
               {/* Coluna esquerda — catálogo */}
               <div className="flex-1 min-w-0 flex flex-col gap-3">
@@ -958,22 +962,28 @@ function VendaWizard({
                 </div>
               </div>
 
-              {/* Divisor */}
-              <div className="w-px bg-surface-600 shrink-0" />
+              {/* Divisor — vertical entre as colunas, some quando elas empilham
+                  (a borda superior do bloco do carrinho assume o papel). */}
+              <div className="hidden sm:block w-px bg-surface-600 shrink-0" />
 
               {/* Coluna direita — carrinho */}
-              <div className="w-52 shrink-0 flex flex-col gap-2 min-h-0">
+              <div className="w-full sm:w-52 shrink-0 flex flex-col gap-2 min-h-0 border-t border-surface-600 pt-2 sm:border-0 sm:pt-0">
                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest shrink-0">
                   Carrinho {cart.length > 0 && <span className="text-brand-400">({cart.reduce((s, i) => s + i.quantity, 0)})</span>}
                 </p>
 
                 {cart.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center gap-2 text-gray-600">
-                    <ShoppingBag className="w-8 h-8 opacity-30" />
-                    <p className="text-[11px] text-center">Nenhum item<br/>adicionado</p>
+                  /* No celular o vazio é uma linha só: reservar meia tela pra
+                     um ícone de "carrinho vazio" rouba espaço do catálogo, que
+                     é justamente onde o usuário precisa agir. */
+                  <div className="flex items-center justify-center gap-2 py-2 text-gray-600 sm:flex-1 sm:flex-col sm:py-0">
+                    <ShoppingBag className="w-5 h-5 opacity-30 sm:w-8 sm:h-8" />
+                    <p className="text-[11px] text-center">Nenhum item adicionado</p>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
+                  /* Altura limitada no celular pra não empurrar o catálogo pra
+                     fora da tela conforme o carrinho cresce. */
+                  <div className="max-h-36 overflow-y-auto space-y-1.5 min-h-0 sm:max-h-none sm:flex-1">
                     {cart.map(({ product, quantity, variantLabel, cartKey }) => {
                       const price = product.isOnPromo && product.discountPriceInCents != null
                         ? product.discountPriceInCents : product.priceInCents
@@ -987,19 +997,25 @@ function VendaWizard({
                             <span className="text-[10px] text-accent-gold font-bold font-mono">
                               {fmt(price * quantity / 100)}
                             </span>
+                            {/* 20px de alvo é metade do mínimo confortável de
+                                toque — no celular sobe pra 32px (o alvo real
+                                fica maior que isso porque o botão é o único
+                                elemento clicável da região). */}
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={() => quantity === 1 ? removeFromCart(cartKey) : changeQty(cartKey, -1)}
-                                className="w-5 h-5 rounded bg-surface-600 hover:bg-red-600/30 flex items-center justify-center transition-colors"
+                                aria-label={quantity === 1 ? 'Remover item' : 'Diminuir quantidade'}
+                                className="w-8 h-8 sm:w-5 sm:h-5 rounded bg-surface-600 hover:bg-red-600/30 flex items-center justify-center transition-colors"
                               >
-                                <Minus className="w-2.5 h-2.5 text-gray-300" />
+                                <Minus className="w-3.5 h-3.5 sm:w-2.5 sm:h-2.5 text-gray-300" />
                               </button>
-                              <span className="text-xs font-bold text-white w-4 text-center">{quantity}</span>
+                              <span className="text-xs font-bold text-white w-5 sm:w-4 text-center">{quantity}</span>
                               <button
                                 onClick={() => changeQty(cartKey, 1)}
-                                className="w-5 h-5 rounded bg-surface-600 hover:bg-brand-600/30 flex items-center justify-center transition-colors disabled:opacity-40"
+                                aria-label="Aumentar quantidade"
+                                className="w-8 h-8 sm:w-5 sm:h-5 rounded bg-surface-600 hover:bg-brand-600/30 flex items-center justify-center transition-colors disabled:opacity-40"
                               >
-                                <Plus className="w-2.5 h-2.5 text-gray-300" />
+                                <Plus className="w-3.5 h-3.5 sm:w-2.5 sm:h-2.5 text-gray-300" />
                               </button>
                             </div>
                           </div>
@@ -1318,7 +1334,7 @@ function VendaWizard({
         </div>
 
         {/* Rodapé de navegação */}
-        <div className="flex gap-2 px-5 py-4 border-t border-surface-600 shrink-0">
+        <div className="flex gap-2 px-4 sm:px-5 py-3 sm:py-4 border-t border-surface-600 shrink-0">
           {step === 1 ? (
             <>
               <button onClick={onClose} className="btn-secondary flex-1 justify-center text-sm py-2">Cancelar</button>
@@ -1539,7 +1555,7 @@ export default function VendaAvulsaPage() {
   )
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 animate-slide-up">
+    <div className="page-shell animate-slide-up">
 
       {wizardOpen && !loading && (
         <AdminPortal>
@@ -1590,7 +1606,7 @@ export default function VendaAvulsaPage() {
         <div className="space-y-5">
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="kpi-grid">
             <StatCard icon={Receipt}     label="Vendas hoje"     value={todaySales} tone="brand" />
             <StatCard icon={TrendingUp}  label="Total hoje"      value={fmt(todayTotal)} tone="warning" />
             <StatCard icon={CreditCard}  label="Ticket médio"    value={todaySales > 0 ? fmt(ticketMedio) : '—'} tone="brand" />

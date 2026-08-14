@@ -19,6 +19,7 @@ import {
   type BillingResumoDto, type TenantChargeDto,
 } from '@/lib/api'
 import Button from '@/components/admin/ui/Button'
+import DataTable from '@/components/admin/ui/DataTable'
 import EmptyState from '@/components/admin/ui/EmptyState'
 import Spinner from '@/components/admin/ui/Spinner'
 
@@ -104,7 +105,9 @@ export default function FinanceiroPlataformaPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-6">
+    // O <main> do PlataformaShell já dá o padding da área — repetir aqui
+    // custava 32px de largura no celular.
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
@@ -172,8 +175,10 @@ export default function FinanceiroPlataformaPage() {
           </div>
 
           {/* ── Cobranças ──────────────────────────────────────────────────── */}
-          <div className="rounded-xl border border-surface-500 bg-surface-800">
-            <div className="border-b border-surface-500 px-4 py-3">
+          {/* Moldura só a partir de sm — no celular os cards da lista já são a
+              superfície, e `bg-surface-800` é a mesma cor deles. */}
+          <div className="rounded-xl sm:border sm:border-surface-500 sm:bg-surface-800">
+            <div className="border-b border-surface-500 px-0 py-3 sm:px-4">
               <h2 className="font-semibold text-white">Cobranças da competência</h2>
             </div>
 
@@ -183,73 +188,38 @@ export default function FinanceiroPlataformaPage() {
                 message="Nenhuma cobrança gerada para este mês. Use “Gerar mensalidades” para criá-las."
               />
             ) : (
-              <>
-                {/* Desktop */}
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full text-sm">
-                    <thead className="text-left text-xs uppercase tracking-wide text-gray-500">
-                      <tr className="border-b border-surface-500">
-                        <th className="px-4 py-3 font-semibold">Loja</th>
-                        <th className="px-4 py-3 font-semibold">Tipo</th>
-                        <th className="px-4 py-3 font-semibold">Vencimento</th>
-                        <th className="px-4 py-3 text-right font-semibold">Valor</th>
-                        <th className="px-4 py-3 font-semibold">Situação</th>
-                        <th className="px-4 py-3 text-right font-semibold">Ação</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cobrancas.map(c => (
-                        <tr key={c.id} className="border-b border-surface-600 last:border-0">
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-white">{c.tenantNome}</p>
-                            <p className="text-xs text-gray-500">{c.tenantSlug}</p>
-                          </td>
-                          <td className="px-4 py-3 text-gray-300">
-                            {c.tipo === 'Implantacao' ? 'Implantação' : 'Mensalidade'}
-                          </td>
-                          <td className="px-4 py-3 text-gray-300">{dataCurta(c.vencimento)}</td>
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums text-white">
-                            {brl(c.valor)}
-                          </td>
-                          <td className="px-4 py-3"><Situacao c={c} /></td>
-                          <td className="px-4 py-3 text-right">
-                            <AcaoPagamento
-                              c={c}
-                              salvando={salvandoId === c.id}
-                              onClick={() => alternarPagamento(c)}
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile — mesma informação em cartão, sem tabela rolando na horizontal */}
-                <div className="divide-y divide-surface-600 md:hidden">
-                  {cobrancas.map(c => (
-                    <div key={c.id} className="space-y-2 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium text-white">{c.tenantNome}</p>
-                          <p className="text-xs text-gray-500">
-                            {c.tipo === 'Implantacao' ? 'Implantação' : 'Mensalidade'} · vence {dataCurta(c.vencimento)}
-                          </p>
-                        </div>
-                        <p className="shrink-0 font-semibold tabular-nums text-white">{brl(c.valor)}</p>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <Situacao c={c} />
-                        <AcaoPagamento
-                          c={c}
-                          salvando={salvandoId === c.id}
-                          onClick={() => alternarPagamento(c)}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
+              /* Esta tela já tinha tabela e cards, mas escritos à mão em
+                 paralelo — duas marcações pra mesma lista, que só ficariam
+                 iguais por disciplina (o card já omitia o slug do tenant, por
+                 exemplo). Agora as duas saem da mesma definição de colunas. */
+              <DataTable
+                className="pt-3 sm:pt-0"
+                rows={cobrancas}
+                rowKey={c => c.id}
+                rowActions={c => (
+                  <AcaoPagamento
+                    c={c}
+                    salvando={salvandoId === c.id}
+                    onClick={() => alternarPagamento(c)}
+                  />
+                )}
+                columns={[
+                  { key: 'loja', header: 'Loja', mobile: 'title',
+                    cell: c => (
+                      <>
+                        <p className="font-medium text-white">{c.tenantNome}</p>
+                        <p className="text-xs text-gray-500">{c.tenantSlug}</p>
+                      </>
+                    ) },
+                  { key: 'valor', header: 'Valor', align: 'right', mobile: 'trailing',
+                    cell: c => <span className="font-semibold tabular-nums text-white">{brl(c.valor)}</span> },
+                  { key: 'tipo', header: 'Tipo', mobile: 'meta', className: 'text-gray-300',
+                    cell: c => c.tipo === 'Implantacao' ? 'Implantação' : 'Mensalidade' },
+                  { key: 'vencimento', header: 'Vencimento', mobile: 'meta', className: 'text-gray-300',
+                    cell: c => <>vence {dataCurta(c.vencimento)}</> },
+                  { key: 'situacao', header: 'Situação', mobile: 'field', cell: c => <Situacao c={c} /> },
+                ]}
+              />
             )}
           </div>
 

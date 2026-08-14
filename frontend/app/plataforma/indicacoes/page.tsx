@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { CalendarDays, Check, Copy, HandCoins, Link2, Mail, Pencil, RefreshCw, Undo2, UserPlus, Users, X } from 'lucide-react'
 import Button from '@/components/admin/ui/Button'
+import DataTable from '@/components/admin/ui/DataTable'
 import Spinner from '@/components/admin/ui/Spinner'
 import {
   getErrorMessage, platformApi, referralApi,
@@ -135,7 +136,10 @@ export default function IndicacoesPage() {
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
+    // Sem padding horizontal: o <main> do PlataformaShell já aplica
+    // `px-4 sm:px-6`. Somando os dois, sobravam 311px de 375 pro conteúdo — 64px
+    // gastos em respiro duplicado numa tela onde cada pixel de largura conta.
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-white"><HandCoins className="text-brand-400" /> Indicações e comissões</h1>
@@ -165,7 +169,21 @@ export default function IndicacoesPage() {
             <Field label="Carência (dias)"><input type="number" min={0} max={60} className={input} value={invite.paymentGraceDays} onChange={e => setInvite(v => ({ ...v, paymentGraceDays: Number(e.target.value) }))} /></Field>
           </div>
           <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => createInvitation(true)} loading={saving}><Mail className="h-4 w-4" /> Enviar por e-mail</Button><Button type="button" variant="secondary" onClick={() => createInvitation(false)} disabled={saving}><Copy className="h-4 w-4" /> Gerar e copiar link</Button></div>
-          {invitations.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs uppercase text-gray-500"><tr><th className="py-2">Parceiro</th><th>Regras</th><th>Validade</th><th>Status</th><th /></tr></thead><tbody>{invitations.slice(0, 10).map(i => <tr key={i.id} className="border-t border-surface-600"><td className="py-2 text-white">{i.name || i.email || 'Link aberto'}</td><td className="text-gray-300">{i.setupCommissionPercent}% + {i.monthlyCommissionPercent}% · {i.paymentGraceDays} dias</td><td className="text-gray-300">{date(i.expiresAt)}</td><td><InviteStatus value={i.status} /></td><td className="text-right">{i.status === 'Pendente' && <button onClick={() => revokeInvitation(i.id)} aria-label="Revogar convite" className="p-2 text-gray-400 hover:text-red-400"><X className="h-4 w-4" /></button>}</td></tr>)}</tbody></table></div>}
+          {invitations.length > 0 && (
+            <DataTable
+              rows={invitations.slice(0, 10)}
+              rowKey={i => i.id}
+              rowActions={i => i.status === 'Pendente'
+                ? <button onClick={() => revokeInvitation(i.id)} aria-label="Revogar convite" className="touch-target flex items-center justify-center rounded-lg text-gray-400 hover:text-red-400"><X className="h-4 w-4" /></button>
+                : null}
+              columns={[
+                { key: 'parceiro', header: 'Parceiro', mobile: 'title', className: 'text-white', cell: i => i.name || i.email || 'Link aberto' },
+                { key: 'status', header: 'Status', mobile: 'trailing', cell: i => <InviteStatus value={i.status} /> },
+                { key: 'regras', header: 'Regras', mobile: 'field', className: 'text-gray-300', cell: i => `${i.setupCommissionPercent}% + ${i.monthlyCommissionPercent}% · ${i.paymentGraceDays} dias` },
+                { key: 'validade', header: 'Validade', mobile: 'field', className: 'text-gray-300', cell: i => date(i.expiresAt) },
+              ]}
+            />
+          )}
         </section>
 
         <div className="grid gap-6 xl:grid-cols-2">
@@ -201,14 +219,78 @@ export default function IndicacoesPage() {
           </form>
         </div>
 
-        <section className="rounded-xl border border-surface-500 bg-surface-800">
-          <div className="border-b border-surface-500 px-5 py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-4 w-4" /> Vendedores e próximos pagamentos</h2></div>
-          <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Vendedor</th><th className="px-4 py-3">Comissões</th><th className="px-4 py-3">Clientes</th><th className="px-4 py-3">Disponível em</th><th className="px-4 py-3 text-right">A pagar</th><th /></tr></thead><tbody>{partners.map(p => <tr key={p.id} className="border-t border-surface-600"><td className="px-4 py-3"><p className="font-medium text-white">{p.name}</p><p className="text-xs text-gray-500">{p.active ? 'Ativo' : 'Inativo'} · carência {p.paymentGraceDays} dia(s)</p></td><td className="px-4 py-3 text-gray-300">{p.setupCommissionPercent}% implantação · {p.monthlyCommissionPercent}% mensal</td><td className="px-4 py-3 text-gray-300">{p.referredClients}</td><td className="px-4 py-3 text-gray-300">{date(p.nextPaymentDate)}</td><td className="px-4 py-3 text-right font-semibold text-white">{money(p.pendingAmount)}</td><td className="px-4 py-3 text-right"><button onClick={() => editPartner(p)} className="rounded-lg p-2 text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Editar ${p.name}`}><Pencil className="h-4 w-4" /></button></td></tr>)}</tbody></table></div>
+        {/* No celular a seção abre mão da própria moldura: os cards da lista já
+            têm fundo e borda, e `bg-surface-800` é exatamente a cor deles — as
+            duas camadas empilhadas só somem uma dentro da outra e custam ~90px
+            de largura útil numa tela de 375px. O cabeçalho (título da seção)
+            continua, que é o que dá sentido ao agrupamento. */}
+        <section className="rounded-xl sm:border sm:border-surface-500 sm:bg-surface-800">
+          <div className="border-b border-surface-500 px-0 py-3 sm:px-5 sm:py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-4 w-4" /> Vendedores e próximos pagamentos</h2></div>
+          {/* `p-3 sm:p-0`: no celular a lista de cards precisa de respiro dentro
+              da seção; no desktop a tabela usa o padding das próprias células. */}
+          <DataTable
+            className="pt-3 sm:pt-0"
+            rows={partners}
+            rowKey={p => p.id}
+            rowActions={p => (
+              <button onClick={() => editPartner(p)} className="touch-target flex items-center justify-center rounded-lg text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Editar ${p.name}`}><Pencil className="h-4 w-4" /></button>
+            )}
+            columns={[
+              { key: 'vendedor', header: 'Vendedor', mobile: 'title',
+                cell: p => (
+                  <>
+                    <p className="font-medium text-white">{p.name}</p>
+                    <p className="text-xs text-gray-500">{p.active ? 'Ativo' : 'Inativo'} · carência {p.paymentGraceDays} dia(s)</p>
+                  </>
+                ) },
+              { key: 'aPagar', header: 'A pagar', align: 'right', mobile: 'trailing',
+                cell: p => <span className="font-semibold text-white">{money(p.pendingAmount)}</span> },
+              { key: 'comissoes', header: 'Comissões', mobile: 'field', className: 'text-gray-300',
+                cell: p => `${p.setupCommissionPercent}% implantação · ${p.monthlyCommissionPercent}% mensal` },
+              { key: 'clientes', header: 'Clientes', mobile: 'field', className: 'text-gray-300', cell: p => p.referredClients },
+              { key: 'disponivel', header: 'Disponível em', mobile: 'field', className: 'text-gray-300', cell: p => date(p.nextPaymentDate) },
+            ]}
+          />
         </section>
 
-        <section className="rounded-xl border border-surface-500 bg-surface-800">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-500 px-5 py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> Agenda de comissões</h2><div className="flex gap-2"><select className={input} value={partnerFilter} onChange={e => setPartnerFilter(e.target.value)}><option value="">Todos os vendedores</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><select className={input} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Todos os status</option><option>Carência</option><option>Disponível</option><option>Pago</option></select></div></div>
-          {commissions.length === 0 ? <p className="p-8 text-center text-sm text-gray-500">Nenhuma comissão encontrada. Ela será criada quando uma cobrança de cliente indicado for paga.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs uppercase text-gray-500"><tr><th className="px-4 py-3">Vendedor / cliente</th><th className="px-4 py-3">Origem</th><th className="px-4 py-3">Disponível em</th><th className="px-4 py-3">Status</th><th className="px-4 py-3 text-right">Comissão</th><th className="px-4 py-3 text-right">Ação</th></tr></thead><tbody>{commissions.map(c => <tr key={c.id} className="border-t border-surface-600"><td className="px-4 py-3"><p className="font-medium text-white">{c.partnerName}</p><p className="text-xs text-gray-500">{c.tenantName}</p></td><td className="px-4 py-3 text-gray-300">{c.type === 'Implantacao' ? 'Implantação' : 'Mensalidade'}<p className="text-xs text-gray-500">{c.commissionPercent}% de {money(c.baseAmount)}</p></td><td className="px-4 py-3 text-gray-300">{date(c.dueDate)}</td><td className="px-4 py-3"><Status value={c.status} /></td><td className="px-4 py-3 text-right font-semibold text-white">{money(c.amount)}</td><td className="px-4 py-3 text-right"><Button size="sm" variant={c.paidAt ? 'secondary' : 'success'} disabled={c.status === 'Carência'} onClick={() => togglePayment(c)}>{c.paidAt ? <Undo2 className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}{c.paidAt ? 'Reabrir' : 'Pagar'}</Button></td></tr>)}</tbody></table></div>}
+        {/* No celular a seção abre mão da própria moldura: os cards da lista já
+            têm fundo e borda, e `bg-surface-800` é exatamente a cor deles — as
+            duas camadas empilhadas só somem uma dentro da outra e custam ~90px
+            de largura útil numa tela de 375px. O cabeçalho (título da seção)
+            continua, que é o que dá sentido ao agrupamento. */}
+        <section className="rounded-xl sm:border sm:border-surface-500 sm:bg-surface-800">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-500 px-0 py-3 sm:px-5 sm:py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> Agenda de comissões</h2><div className="flex gap-2"><select className={input} value={partnerFilter} onChange={e => setPartnerFilter(e.target.value)}><option value="">Todos os vendedores</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><select className={input} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Todos os status</option><option>Carência</option><option>Disponível</option><option>Pago</option></select></div></div>
+          <DataTable
+            className="pt-3 sm:pt-0"
+            rows={commissions}
+            rowKey={c => c.id}
+            empty={<p className="p-8 text-center text-sm text-gray-500">Nenhuma comissão encontrada. Ela será criada quando uma cobrança de cliente indicado for paga.</p>}
+            rowActions={c => (
+              <Button size="sm" variant={c.paidAt ? 'secondary' : 'success'} disabled={c.status === 'Carência'} onClick={() => togglePayment(c)}>
+                {c.paidAt ? <Undo2 className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}{c.paidAt ? 'Reabrir' : 'Pagar'}
+              </Button>
+            )}
+            columns={[
+              { key: 'quem', header: 'Vendedor / cliente', mobile: 'title',
+                cell: c => (
+                  <>
+                    <p className="font-medium text-white">{c.partnerName}</p>
+                    <p className="text-xs text-gray-500">{c.tenantName}</p>
+                  </>
+                ) },
+              { key: 'comissao', header: 'Comissão', align: 'right', mobile: 'trailing',
+                cell: c => <span className="font-semibold text-white">{money(c.amount)}</span> },
+              { key: 'status', header: 'Status', mobile: 'meta', cell: c => <Status value={c.status} /> },
+              { key: 'origem', header: 'Origem', mobile: 'field', className: 'text-gray-300',
+                cell: c => (
+                  <>
+                    {c.type === 'Implantacao' ? 'Implantação' : 'Mensalidade'}
+                    <p className="text-xs text-gray-500">{c.commissionPercent}% de {money(c.baseAmount)}</p>
+                  </>
+                ) },
+              { key: 'disponivel', header: 'Disponível em', mobile: 'field', className: 'text-gray-300', cell: c => date(c.dueDate) },
+            ]}
+          />
         </section>
 
         {assignments.length > 0 && <p className="text-xs text-gray-500">{assignments.length} cliente(s) com atribuição comercial registrada. As regras ficam congeladas por contrato, mesmo se o padrão do vendedor mudar.</p>}

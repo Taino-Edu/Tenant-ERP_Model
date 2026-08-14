@@ -18,6 +18,7 @@ import {
 import StatCard from '@/components/admin/StatCard'
 import Badge from '@/components/admin/ui/Badge'
 import Button from '@/components/admin/ui/Button'
+import DataTable from '@/components/admin/ui/DataTable'
 import EmptyState from '@/components/admin/ui/EmptyState'
 import Modal from '@/components/admin/ui/Modal'
 import Spinner from '@/components/admin/ui/Spinner'
@@ -256,7 +257,7 @@ export default function FechamentoTab({
         </>
       )}
 
-      <section className="card space-y-3">
+      <section className="card-sm-up space-y-3">
         <SecaoHeader icon={History} titulo="Competências fechadas"
                      descricao="Snapshots travados — os valores não mudam se um lançamento antigo for editado." />
         {carregandoFechamentos ? (
@@ -264,50 +265,51 @@ export default function FechamentoTab({
         ) : fechamentos.length === 0 ? (
           <EmptyState icon={Lock} message="Nenhuma competência fechada ainda." compact />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b border-surface-600">
-                  <th className="py-2 font-medium">Competência</th>
-                  <th className="py-2 font-medium text-right">Receita bruta</th>
-                  <th className="py-2 font-medium text-right">Resultado</th>
-                  <th className="py-2 font-medium text-right">Imposto apurado</th>
-                  <th className="py-2 font-medium">Fechado por</th>
-                  <th className="py-2 font-medium text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {fechamentos.map(f => (
-                  <tr key={f.id} className={clsx(
-                    'border-b border-surface-700 last:border-0',
-                    f.ano === ano && f.mes === mes && 'bg-brand-500/5',
-                  )}>
-                    <td className="py-3 text-white font-medium">{f.competencia}</td>
-                    <td className="py-3 text-right font-mono text-white">{fmtReais(f.receitaBruta)}</td>
-                    <td className={clsx('py-3 text-right font-mono',
-                      f.resultadoLiquido >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                      {fmtReais(f.resultadoLiquido)}
-                    </td>
-                    <td className="py-3 text-right font-mono text-brand-300">
-                      {fmtReais(f.impostoApurado)}
-                      <span className="text-gray-500 text-xs"> ({fmtPercent(f.aliquotaEfetiva)})</span>
-                    </td>
-                    <td className="py-3 text-gray-400">
-                      {f.fechadoPorNome ?? '—'}
-                      <span className="block text-[11px] text-gray-600">
-                        {new Date(f.fechadoEm).toLocaleDateString('pt-BR')}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right">
-                      <Button variant="secondary" size="sm" onClick={() => reabrir(f)}>
-                        <Unlock className="w-3.5 h-3.5" /> Reabrir
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          /* Competência é o título do card e a receita bruta o número de
+             destaque. "Reabrir" vira `rowActions`: no card ele ganha um rodapé
+             próprio de largura cheia, em vez do botão espremido numa coluna de
+             canto — e é uma ação destrutiva (destrava um snapshot contábil),
+             então precisa de alvo generoso e posição previsível. */
+          <DataTable
+            rows={fechamentos}
+            rowKey={f => f.id}
+            minWidth="720px"
+            // Destaca a competência que está selecionada no filtro acima.
+            rowClassName={f => f.ano === ano && f.mes === mes ? 'bg-brand-500/5' : undefined}
+            rowActions={f => (
+              <Button variant="secondary" size="sm" onClick={() => reabrir(f)}>
+                <Unlock className="w-3.5 h-3.5" /> Reabrir
+              </Button>
+            )}
+            columns={[
+              { key: 'competencia', header: 'Competência', mobile: 'title',
+                className: 'text-white font-medium', cell: f => f.competencia },
+              { key: 'receita', header: 'Receita bruta', align: 'right', mobile: 'trailing',
+                cell: f => <span className="font-mono text-white">{fmtReais(f.receitaBruta)}</span> },
+              { key: 'resultado', header: 'Resultado', align: 'right', mobile: 'field',
+                cell: f => (
+                  <span className={clsx('font-mono', f.resultadoLiquido >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                    {fmtReais(f.resultadoLiquido)}
+                  </span>
+                ) },
+              { key: 'imposto', header: 'Imposto apurado', align: 'right', mobile: 'field',
+                cell: f => (
+                  <span className="font-mono text-brand-300">
+                    {fmtReais(f.impostoApurado)}
+                    <span className="text-gray-500 text-xs"> ({fmtPercent(f.aliquotaEfetiva)})</span>
+                  </span>
+                ) },
+              { key: 'fechadoPor', header: 'Fechado por', mobile: 'field', className: 'text-gray-400',
+                cell: f => (
+                  <>
+                    {f.fechadoPorNome ?? '—'}
+                    <span className="block text-[11px] text-gray-600">
+                      {new Date(f.fechadoEm).toLocaleDateString('pt-BR')}
+                    </span>
+                  </>
+                ) },
+            ]}
+          />
         )}
       </section>
 

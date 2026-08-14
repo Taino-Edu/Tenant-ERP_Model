@@ -8,6 +8,7 @@ import ImageUpload from '@/components/admin/ImageUpload'
 import PageHeader from '@/components/admin/PageHeader'
 import StatCard from '@/components/admin/StatCard'
 import NumberInput from '@/components/admin/ui/NumberInput'
+import FilterBar from '@/components/admin/ui/FilterBar'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { hasPermission } from '@/lib/auth'
@@ -1194,7 +1195,7 @@ function EstoqueContent() {
           <>
           {/* ── Desktop: tabela ── */}
           <div className="hidden sm:block card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="table-scroll">
             <table className="w-full text-sm min-w-[460px]">
               <thead className="bg-surface-800 border-b border-surface-500">
                 <tr className="text-left">
@@ -1321,21 +1322,31 @@ function EstoqueContent() {
       )}
 
       {tabSection === 'produtos' && <>
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input className="input pl-9" placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
+      {/* Filtros. A busca fica sempre à vista (é a ação mais repetida da tela);
+          a categoria recolhe num painel no celular pra não gastar uma fileira
+          inteira antes da lista começar. No desktop os dois seguem lado a lado,
+          como antes. */}
+      <FilterBar
+        activeCount={catFilter ? 1 : 0}
+        onClear={() => setCatFilter('')}
+        search={
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input className="input pl-9" placeholder="Buscar produto..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+        }
+      >
         <select className="input sm:w-48" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
           <option value="">Todas as categorias</option>
           {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
         </select>
-      </div>
+      </FilterBar>
 
-      {/* Chips de situação */}
+      {/* Chips de situação — rolam de lado no celular. Quebrando em duas
+          fileiras eles empurravam a lista de produtos pra fora da primeira
+          dobra num aparelho de 375px. */}
       {!loading && (
-        <div className="flex gap-2 flex-wrap">
+        <div className="chip-row sm:flex-wrap">
           {([
             { key: 'todos',  label: 'Todos',          count: products.length, cls: 'border-surface-500 text-gray-300' },
             { key: 'normal', label: 'Normal',          count: qtdNormal,       cls: 'border-emerald-500/40 text-emerald-300' },
@@ -1362,7 +1373,7 @@ function EstoqueContent() {
         <>
         {/* ── Desktop: tabela ── */}
         <div className="hidden sm:block card p-0 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll">
           <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-surface-800 border-b border-surface-500">
               <tr className="text-left">
@@ -1464,7 +1475,16 @@ function EstoqueContent() {
             <div key={p.id} className="card p-3 space-y-2.5">
               {/* Linha 1: nome + ações */}
               <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
+                {/* Tocar no bloco de identificação abre o detalhe do produto —
+                    o mesmo que clicar na linha faz no desktop. Sem isso o
+                    drawer de detalhes simplesmente não tinha como ser aberto
+                    pelo celular. */}
+                <button
+                  type="button"
+                  onClick={() => setDrawer(p)}
+                  className="flex-1 min-w-0 text-left"
+                  aria-label={`Ver detalhes de ${p.name}`}
+                >
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <p className="font-medium text-white text-sm leading-tight">{p.name}</p>
                     {p.isPreVenda && (
@@ -1480,7 +1500,7 @@ function EstoqueContent() {
                     <span className="badge bg-surface-600 text-gray-300 border-surface-500 text-[10px]">{p.category}</span>
                     {p.barcode && <span className="text-[10px] font-mono text-gray-500">{p.barcode}</span>}
                   </div>
-                </div>
+                </button>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button
                     onClick={async () => {
@@ -1491,12 +1511,13 @@ function EstoqueContent() {
                       } catch (err) { toast.error(getErrorMessage(err, 'Erro ao atualizar')) }
                     }}
                     title={p.showOnMarketplace ? 'No marketplace' : 'Fora do marketplace'}
-                    className={`text-base px-1 transition-opacity ${p.showOnMarketplace ? 'opacity-100' : 'opacity-25'}`}
+                    aria-label={p.showOnMarketplace ? 'Remover do marketplace' : 'Adicionar ao marketplace'}
+                    className={`touch-target flex items-center justify-center text-base transition-opacity ${p.showOnMarketplace ? 'opacity-100' : 'opacity-25'}`}
                   >🛍️</button>
-                  <button onClick={() => setModal(p)} className="p-1.5 rounded hover:bg-brand-600/20 text-gray-500 hover:text-brand-400 transition-colors">
+                  <button onClick={() => setModal(p)} aria-label="Editar produto" className="touch-target flex items-center justify-center rounded hover:bg-brand-600/20 text-gray-500 hover:text-brand-400 transition-colors">
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDeactivate(p.id, p.name)} className="p-1.5 rounded hover:bg-red-600/20 text-gray-500 hover:text-red-400 transition-colors">
+                  <button onClick={() => handleDeactivate(p.id, p.name)} aria-label="Desativar produto" className="touch-target flex items-center justify-center rounded hover:bg-red-600/20 text-gray-500 hover:text-red-400 transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1515,12 +1536,14 @@ function EstoqueContent() {
                 )}
               </div>
 
-              {/* Linha 3: estoque */}
+              {/* Linha 3: estoque — botões de 36px porque baixar/subir estoque
+                  é a ação repetida da tela (conferência de balcão), e errar o
+                  alvo aqui altera o número errado. */}
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500">Estoque:</span>
-                <button onClick={() => handleStock(p.id, -1)} className="w-7 h-7 rounded bg-surface-600 hover:bg-red-600/30 text-gray-400 hover:text-red-400 transition-colors flex items-center justify-center text-base leading-none">−</button>
-                <span className={`text-sm font-bold min-w-[1.5rem] text-center ${p.isLowStock ? 'text-red-400' : 'text-white'}`}>{p.stockQuantity}</span>
-                <button onClick={() => handleStock(p.id, +1)} className="w-7 h-7 rounded bg-surface-600 hover:bg-emerald-600/30 text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center text-base leading-none">+</button>
+                <button onClick={() => handleStock(p.id, -1)} aria-label="Baixar uma unidade" className="w-9 h-9 rounded bg-surface-600 hover:bg-red-600/30 text-gray-400 hover:text-red-400 transition-colors flex items-center justify-center text-lg leading-none">−</button>
+                <span className={`text-sm font-bold min-w-[2rem] text-center ${p.isLowStock ? 'text-red-400' : 'text-white'}`}>{p.stockQuantity}</span>
+                <button onClick={() => handleStock(p.id, +1)} aria-label="Subir uma unidade" className="w-9 h-9 rounded bg-surface-600 hover:bg-emerald-600/30 text-gray-400 hover:text-emerald-400 transition-colors flex items-center justify-center text-lg leading-none">+</button>
                 {p.description && <p className="text-[10px] text-gray-500 truncate ml-2 flex-1 min-w-0">{p.description}</p>}
               </div>
             </div>

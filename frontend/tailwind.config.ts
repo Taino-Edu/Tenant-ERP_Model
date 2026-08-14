@@ -7,6 +7,25 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // `xs` cobre a faixa 400-639px (iPhone SE/8 em pé são 375; Android médio
+      // 393-412). Sem ele o salto de 0 -> 640 (`sm`) obriga a desenhar tudo
+      // para o pior caso; com ele dá pra soltar 2 colunas já no celular comum.
+      screens: {
+        xs: '400px',
+      },
+      spacing: {
+        // Recortes do sistema (notch, barra de gestos do iOS/Android). Usados
+        // como `pb-safe-b`, `pt-safe-t` etc. em barras fixas — sem isso o
+        // conteúdo da bottom bar fica embaixo da barra de gestos.
+        'safe-t': 'env(safe-area-inset-top, 0px)',
+        'safe-b': 'env(safe-area-inset-bottom, 0px)',
+        'safe-l': 'env(safe-area-inset-left, 0px)',
+        'safe-r': 'env(safe-area-inset-right, 0px)',
+        // Altura das barras fixas do mobile — referenciadas por scroll-padding
+        // e pelo respiro do fim das páginas.
+        'topbar': '3.5rem',
+        'tabbar': '4rem',
+      },
       colors: {
         // 400/500/600 são dinâmicos — ligados a --brand-400/500/600 (CSS custom
         // properties setadas em runtime por TenantColorInjector a partir de
@@ -61,11 +80,15 @@ const config: Config = {
         'slide-in':     'slideIn 0.3s ease-out',
         'fade-in':      'fadeIn 0.2s ease-out',
         'bounce-in':    'bounceIn 0.4s ease-out',
+        'sheet-up':     'sheetUp 0.28s cubic-bezier(0.32, 0.72, 0, 1)',
       },
       keyframes: {
         slideIn:  { from: { transform: 'translateX(-1rem)', opacity: '0' }, to: { transform: 'translateX(0)', opacity: '1' } },
         fadeIn:   { from: { opacity: '0', transform: 'translateY(0.5rem)' }, to: { opacity: '1', transform: 'translateY(0)' } },
         bounceIn: { '0%': { transform: 'scale(0.9)', opacity: '0' }, '70%': { transform: 'scale(1.02)' }, '100%': { transform: 'scale(1)', opacity: '1' } },
+        // Bottom sheet do mobile: entra deslizando de baixo, curva de saída do
+        // iOS (rápida no início, assenta devagar) pra não parecer "pulo".
+        sheetUp:  { from: { transform: 'translateY(100%)' }, to: { transform: 'translateY(0)' } },
       },
     },
   },

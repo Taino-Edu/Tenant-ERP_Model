@@ -49,8 +49,9 @@ export default function AdminSupportTicketPage() {
   if (!ticket) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-brand-400" /></div>
 
   return (
-    <div className="space-y-5">
-      <Link href="/admin/suporte" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white">
+    // Mesmo caso de /admin/suporte: sem padding o conteúdo encostava na borda.
+    <div className="page-shell">
+      <Link href="/admin/suporte" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white max-md:py-1.5">
         <ArrowLeft className="w-4 h-4" /> Voltar pra Suporte
       </Link>
 

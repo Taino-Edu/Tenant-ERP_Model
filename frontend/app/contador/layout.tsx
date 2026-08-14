@@ -56,16 +56,20 @@ export default function ContadorLayout({ children }: { children: React.ReactNode
         }}
       />
       <header className="border-b border-surface-600 bg-surface-800 print:hidden">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-white font-bold">
-            <Calculator className="w-5 h-5 text-brand-400" />
-            Portal do Contador
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-white font-bold min-w-0">
+            <Calculator className="w-5 h-5 text-brand-400 shrink-0" />
+            {/* "Portal do Contador" + tema + Sair não cabem juntos em 375px. */}
+            <span className="truncate">
+              <span className="sm:hidden">Contador</span>
+              <span className="hidden sm:inline">Portal do Contador</span>
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <ThemeToggle compact />
             {!isPublic && (
-              <button onClick={handleLogout} className="btn-secondary text-sm py-1.5">
-                <LogOut className="w-4 h-4" /> Sair
+              <button onClick={handleLogout} aria-label="Sair" className="btn-secondary text-sm py-1.5">
+                <LogOut className="w-4 h-4" /> <span className="hidden xs:inline">Sair</span>
               </button>
             )}
           </div>
@@ -74,7 +78,7 @@ export default function ContadorLayout({ children }: { children: React.ReactNode
       {/* Só pra quem já está dentro do portal — em /contador/cadastro a pessoa
           ainda nem tem conta, o aviso ali seria ruído. */}
       {!isPublic && <AvisoModuloFiscal />}
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-5 sm:py-8">
         {children}
       </main>
     </div>

@@ -478,7 +478,7 @@ export default function IntegracoesPage() {
 
       {/* Modal de configuração */}
       {configModal && cfgInfo && (
-        <Modal onClose={() => setConfigModal(null)} closeOnBackdrop={false} className="p-6 flex flex-col gap-4">
+        <Modal onClose={() => setConfigModal(null)} closeOnBackdrop={false} className="p-4 sm:p-6 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h2 className="font-black text-white">{cfgInfo.icon} {cfgInfo.label}</h2>
               <button onClick={() => setConfigModal(null)} className="text-gray-400 hover:text-white">

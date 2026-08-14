@@ -809,7 +809,7 @@ export default function FinanceiroPage() {
                 ) : tableView === 'simples' ? (
                   <>
                   {/* ── Desktop: tabela ── */}
-                  <div className="hidden sm:block overflow-x-auto">
+                  <div className="hidden sm:block table-scroll">
                   <table className="w-full text-sm">
                     <thead className="bg-surface-800">
                       <tr className="text-left">
@@ -883,7 +883,7 @@ export default function FinanceiroPage() {
                 ) : (
                   <>
                   {/* ── Desktop: tabela ── */}
-                  <div className="hidden sm:block overflow-x-auto">
+                  <div className="hidden sm:block table-scroll">
                   <table className="w-full text-sm">
                     <thead className="bg-surface-800">
                       <tr className="text-left">

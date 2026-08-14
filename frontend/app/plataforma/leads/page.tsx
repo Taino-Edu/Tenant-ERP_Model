@@ -69,7 +69,18 @@ function mapLink(placeId: string): string {
     : `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`
 }
 
-function LeadRow({ lead, onChanged, onConvert, onOpenCrm }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void; onOpenCrm: (lead: LeadDto) => void }) {
+/** Linha de lead — renderiza como `<tr>` (desktop) ou como card (celular).
+ *
+ * Esta tabela não usa o DataTable como as outras porque ela não EXIBE dados:
+ * ela edita. Cada linha tem estado próprio (anotações, placeId, saving,
+ * enriching) e seis campos editáveis inline. As funções `cell` do DataTable são
+ * chamadas durante a renderização dele, então não podem hospedar hooks — o
+ * estado precisa morar num componente por linha, que é este.
+ *
+ * Os dois layouts saem do MESMO componente, com os blocos montados uma vez só
+ * acima do `return`: só a moldura muda. Assim os handlers (updateStatus,
+ * saveNotas, enrichLead…) não têm como divergir entre celular e desktop. */
+function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row' }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void; onOpenCrm: (lead: LeadDto) => void; layout?: 'row' | 'card' }) {
   const [notas, setNotas] = useState(lead.notas ?? '')
   const [placeId, setPlaceId] = useState(lead.placeId ?? '')
   const [saving, setSaving] = useState(false)
@@ -162,113 +173,159 @@ function LeadRow({ lead, onChanged, onConvert, onOpenCrm }: { lead: LeadDto; onC
     }
   }
 
+  // Larguras fixas (w-36 / w-64) existem pra manter as colunas alinhadas entre
+  // as linhas da tabela. No card não há coluna nenhuma pra alinhar, e elas só
+  // deixariam metade da tela vazia — ali tudo ocupa a largura disponível.
+  const card = layout === 'card'
+  const wQualif = card ? 'w-full' : 'w-36'
+  const wNotas  = card ? 'w-full' : 'w-64'
+
+  const contato = (
+    <>
+      <p className="text-white font-medium">{lead.nome}</p>
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-400 mt-0.5">
+        {lead.telefone ? (
+          <a
+            href={whatsAppLink(lead.telefone)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir conversa no WhatsApp"
+            className="flex items-center gap-1 text-accent-green hover:underline"
+          >
+            <MessageCircle className="w-3.5 h-3.5" /> {lead.telefone}
+          </a>
+        ) : (
+          // Leads vindos da Prospecção (OSM) frequentemente não têm telefone
+          // cadastrado no mapa — sem esse fallback, sobrava só o ícone do
+          // WhatsApp com um link quebrado (wa.me/55) e nenhum número visível.
+          <span className="italic text-gray-500">Sem telefone cadastrado</span>
+        )}
+        {lead.email && <span>· {lead.email}</span>}
+      </div>
+      {lead.mensagem && <p className={clsx('text-xs text-gray-500 mt-1', !card && 'max-w-xs')}>{lead.mensagem}</p>}
+    </>
+  )
+
+  const status = (
+    <>
+      <StatusPillSelect value={lead.status} options={STATUS_OPTIONS} styles={STATUS_STYLES} disabled={saving} onChange={updateStatus} />
+      {lead.opportunity && <div className="mt-2 max-w-36 text-[11px] text-gray-500"><p className="font-semibold text-brand-300">{lead.opportunity.stage}</p><p className="truncate">{lead.opportunity.assignedUserName || 'Sem responsável'} · {lead.opportunity.probability}%</p></div>}
+    </>
+  )
+
+  const qualificacao = (
+    <div className={clsx('flex flex-col gap-1.5', wQualif)}>
+      <select
+        className="input text-xs py-1"
+        value={lead.digitalPresence ?? ''}
+        disabled={saving}
+        aria-label="Presença digital"
+        onChange={e => updateDigitalPresence(e.target.value as LeadDigitalPresence | '')}
+      >
+        <option value="">Presença digital…</option>
+        {DIGITAL_PRESENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <div className="flex items-center gap-1.5">
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded border shrink-0 ${scoreColor(lead.opportunityScore)}`}>
+          {lead.opportunityScore ?? '—'}
+        </span>
+        <input
+          type="number" min={0} max={100}
+          className={clsx('input text-xs py-1', card ? 'flex-1 min-w-0' : 'w-16')}
+          placeholder="Score"
+          aria-label="Score de oportunidade"
+          defaultValue={lead.opportunityScore ?? ''}
+          disabled={saving}
+          onBlur={e => updateScore(e.target.value)}
+        />
+      </div>
+      <div className="flex items-center gap-1">
+        <input
+          className="input text-xs py-1 flex-1 min-w-0"
+          placeholder="Place ID"
+          aria-label="Place ID"
+          value={placeId}
+          disabled={saving}
+          onChange={e => setPlaceId(e.target.value)}
+          onBlur={savePlaceId}
+        />
+        {lead.placeId && (
+          <a
+            href={mapLink(lead.placeId)}
+            target="_blank" rel="noopener noreferrer"
+            title="Abrir no mapa"
+            className="text-brand-400 hover:text-brand-300 shrink-0"
+          >
+            <MapPin className="w-3.5 h-3.5" />
+          </a>
+        )}
+      </div>
+      {lead.estimatedRevenueRange && <p className="text-[11px] text-gray-500">{lead.estimatedRevenueRange}</p>}
+    </div>
+  )
+
+  const anotacoes = (
+    <>
+      {lead.abordagemSugerida && (
+        <p className={clsx('mb-2 rounded-lg bg-brand-500/10 p-2 text-[11px] leading-relaxed text-brand-200', wNotas)}>
+          <Sparkles className="mr-1 inline h-3 w-3" />{lead.abordagemSugerida}
+        </p>
+      )}
+      <textarea
+        className={clsx('input text-xs py-1.5 resize-y min-h-[3.5rem]', wNotas)}
+        placeholder="Anotações"
+        aria-label="Anotações do lead"
+        value={notas}
+        onChange={e => setNotas(e.target.value)}
+        onBlur={saveNotas}
+        disabled={saving}
+      />
+    </>
+  )
+
+  const acoes = (
+    <>
+      <button onClick={() => onOpenCrm(lead)} disabled={saving || enriching} className={clsx('btn-primary text-xs py-1 px-2.5', card && 'flex-1 justify-center')}>
+        <Workflow className="h-3.5 w-3.5" /> Abrir CRM
+      </button>
+      <button onClick={enrichLead} disabled={saving || enriching} className={clsx('btn-secondary text-xs py-1 px-2.5', card && 'flex-1 justify-center')}>
+        {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+        Enriquecer
+      </button>
+      {lead.status !== 'Convertido' && (
+        <button onClick={() => onConvert(lead)} disabled={saving || enriching} className={clsx('btn-secondary text-xs py-1 px-2.5', card && 'w-full justify-center')}>
+          Converter em tenant
+        </button>
+      )}
+    </>
+  )
+
+  if (card) {
+    return (
+      <li className="card space-y-3 !p-3">
+        {/* Nome + status no topo: são o par que o operador lê pra decidir se
+            essa linha merece atenção agora. */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">{contato}</div>
+          <div className="shrink-0">{status}</div>
+        </div>
+        <p className="text-[11px] text-gray-500">Recebido em {fmtDateTime(lead.createdAt)}</p>
+        {qualificacao}
+        <div>{anotacoes}</div>
+        <div className="flex flex-wrap gap-2 border-t border-surface-600 pt-3">{acoes}</div>
+      </li>
+    )
+  }
+
   return (
     <tr className="border-b border-surface-700 last:border-0 align-top">
-      <td className="py-3">
-        <p className="text-white font-medium">{lead.nome}</p>
-        <div className="flex items-center gap-1.5 text-xs text-gray-400 mt-0.5">
-          {lead.telefone ? (
-            <a
-              href={whatsAppLink(lead.telefone)}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Abrir conversa no WhatsApp"
-              className="flex items-center gap-1 text-accent-green hover:underline"
-            >
-              <MessageCircle className="w-3.5 h-3.5" /> {lead.telefone}
-            </a>
-          ) : (
-            // Leads vindos da Prospecção (OSM) frequentemente não têm telefone
-            // cadastrado no mapa — sem esse fallback, sobrava só o ícone do
-            // WhatsApp com um link quebrado (wa.me/55) e nenhum número visível.
-            <span className="italic text-gray-500">Sem telefone cadastrado</span>
-          )}
-          {lead.email && <span>· {lead.email}</span>}
-        </div>
-        {lead.mensagem && <p className="text-xs text-gray-500 mt-1 max-w-xs">{lead.mensagem}</p>}
-      </td>
-      <td className="py-3">
-        <StatusPillSelect value={lead.status} options={STATUS_OPTIONS} styles={STATUS_STYLES} disabled={saving} onChange={updateStatus} />
-        {lead.opportunity && <div className="mt-2 max-w-36 text-[11px] text-gray-500"><p className="font-semibold text-brand-300">{lead.opportunity.stage}</p><p className="truncate">{lead.opportunity.assignedUserName || 'Sem responsável'} · {lead.opportunity.probability}%</p></div>}
-      </td>
-      <td className="py-3">
-        <div className="flex flex-col gap-1.5 w-36">
-          <select
-            className="input text-xs py-1"
-            value={lead.digitalPresence ?? ''}
-            disabled={saving}
-            onChange={e => updateDigitalPresence(e.target.value as LeadDigitalPresence | '')}
-          >
-            <option value="">Presença digital…</option>
-            {DIGITAL_PRESENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <div className="flex items-center gap-1.5">
-            <span className={`text-xs font-bold px-1.5 py-0.5 rounded border shrink-0 ${scoreColor(lead.opportunityScore)}`}>
-              {lead.opportunityScore ?? '—'}
-            </span>
-            <input
-              type="number" min={0} max={100}
-              className="input text-xs py-1 w-16"
-              placeholder="Score"
-              defaultValue={lead.opportunityScore ?? ''}
-              disabled={saving}
-              onBlur={e => updateScore(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-1">
-            <input
-              className="input text-xs py-1 flex-1 min-w-0"
-              placeholder="Place ID"
-              value={placeId}
-              disabled={saving}
-              onChange={e => setPlaceId(e.target.value)}
-              onBlur={savePlaceId}
-            />
-            {lead.placeId && (
-              <a
-                href={mapLink(lead.placeId)}
-                target="_blank" rel="noopener noreferrer"
-                title="Abrir no mapa"
-                className="text-brand-400 hover:text-brand-300 shrink-0"
-              >
-                <MapPin className="w-3.5 h-3.5" />
-              </a>
-            )}
-          </div>
-          {lead.estimatedRevenueRange && <p className="text-[11px] text-gray-500">{lead.estimatedRevenueRange}</p>}
-        </div>
-      </td>
-      <td className="py-3">
-        {lead.abordagemSugerida && (
-          <p className="mb-2 w-64 rounded-lg bg-brand-500/10 p-2 text-[11px] leading-relaxed text-brand-200">
-            <Sparkles className="mr-1 inline h-3 w-3" />{lead.abordagemSugerida}
-          </p>
-        )}
-        <textarea
-          className="input text-xs py-1.5 w-64 resize-y min-h-[3.5rem]"
-          placeholder="Anotações"
-          value={notas}
-          onChange={e => setNotas(e.target.value)}
-          onBlur={saveNotas}
-          disabled={saving}
-        />
-      </td>
+      <td className="py-3">{contato}</td>
+      <td className="py-3">{status}</td>
+      <td className="py-3">{qualificacao}</td>
+      <td className="py-3">{anotacoes}</td>
       <td className="py-3 text-gray-400">{fmtDateTime(lead.createdAt)}</td>
       <td className="py-3 text-right">
-        <div className="flex flex-col items-end gap-2">
-          <button onClick={() => onOpenCrm(lead)} disabled={saving || enriching} className="btn-primary text-xs py-1 px-2.5">
-            <Workflow className="h-3.5 w-3.5" /> Abrir CRM
-          </button>
-          <button onClick={enrichLead} disabled={saving || enriching} className="btn-secondary text-xs py-1 px-2.5">
-            {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            Enriquecer
-          </button>
-          {lead.status !== 'Convertido' && (
-            <button onClick={() => onConvert(lead)} disabled={saving || enriching} className="btn-secondary text-xs py-1 px-2.5">
-              Converter em tenant
-            </button>
-          )}
-        </div>
+        <div className="flex flex-col items-end gap-2">{acoes}</div>
       </td>
     </tr>
   )
@@ -448,33 +505,50 @@ export default function PlataformaLeadsPage() {
         <div className="card flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
         </div>
-      ) : view === 'list' ? <div className="card overflow-x-auto">
-        {filteredLeads.length === 0 ? (
-          <p className="text-gray-400 text-center py-16">Nenhum lead encontrado com esses filtros.</p>
+      ) : view === 'list' ? (
+        filteredLeads.length === 0 ? (
+          <div className="card"><p className="text-gray-400 text-center py-16">Nenhum lead encontrado com esses filtros.</p></div>
         ) : (
-          <table className="w-full min-w-[900px] text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b border-surface-600">
-                <th className="py-2 font-medium">Contato</th>
-                <th className="py-2 font-medium">Status</th>
-                <th className="py-2 font-medium">Oportunidade</th>
-                <th className="py-2 font-medium">Anotações</th>
-                <th className="py-2 font-medium">Recebido em</th>
-                <th className="py-2 font-medium text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Desktop: tabela de 900px. Celular: um card por lead — a mesma
+                linha, com os seis campos editáveis empilhados. */}
+            <div className="card table-scroll hidden sm:block">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b border-surface-600">
+                    <th className="py-2 font-medium">Contato</th>
+                    <th className="py-2 font-medium">Status</th>
+                    <th className="py-2 font-medium">Oportunidade</th>
+                    <th className="py-2 font-medium">Anotações</th>
+                    <th className="py-2 font-medium">Recebido em</th>
+                    <th className="py-2 font-medium text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLeads.map(l => (
+                    <LeadRow key={l.id} lead={l} onChanged={refreshAll} onConvert={setConvertingLead} onOpenCrm={setCrmLead} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <ul className="space-y-2 sm:hidden">
               {filteredLeads.map(l => (
-                <LeadRow key={l.id} lead={l} onChanged={refreshAll} onConvert={setConvertingLead} onOpenCrm={setCrmLead} />
+                <LeadRow key={l.id} layout="card" lead={l} onChanged={refreshAll} onConvert={setConvertingLead} onOpenCrm={setCrmLead} />
               ))}
-            </tbody>
-          </table>
-        )}
-      </div> : view === 'kanban' ? <div className="overflow-x-auto pb-2">
-        <div className="grid min-w-[2100px] grid-cols-7 gap-3">{KANBAN_STAGES.map(column => {
+            </ul>
+          </>
+        )
+      ) : view === 'kanban' ? <div className="table-scroll pb-2" style={{ scrollSnapType: 'x mandatory' }}>
+        {/* Kanban rola de lado em qualquer tela — são 7 etapas. O que muda no
+            celular é a largura da coluna: 85vw faz UMA etapa ocupar a tela com
+            uma fresta da seguinte (indicando que há mais), e o snap para o
+            gesto exatamente no início de cada coluna em vez de deixar o
+            usuário no meio de duas. Antes eram 7 colunas de 300px num trilho
+            fixo de 2100px, o que no celular mostrava um terço de coluna. */}
+        <div className="flex gap-3">{KANBAN_STAGES.map(column => {
           const columnLeads = filteredLeads.filter(lead => column.value === null ? !lead.opportunity : lead.opportunity?.stage === column.value)
           const columnValue = columnLeads.reduce((sum, lead) => sum + (lead.opportunity?.value ?? 0), 0)
-          return <section key={column.value ?? 'none'} onDragOver={event => event.preventDefault()} onDrop={event => { const lead = leads.find(item => item.id === event.dataTransfer.getData('text/lead-id')); if (lead && column.value) moveLead(lead, column.value) }} className={clsx('min-h-[420px] rounded-xl border-t-2 bg-surface-800 p-3', column.color)}>
+          return <section key={column.value ?? 'none'} onDragOver={event => event.preventDefault()} onDrop={event => { const lead = leads.find(item => item.id === event.dataTransfer.getData('text/lead-id')); if (lead && column.value) moveLead(lead, column.value) }} style={{ scrollSnapAlign: 'start' }} className={clsx('min-h-[420px] w-[85vw] max-w-[300px] shrink-0 rounded-xl border-t-2 bg-surface-800 p-3 sm:w-[300px]', column.color)}>
             <div className="mb-3 flex items-start justify-between gap-2"><div><h3 className="text-sm font-bold text-white">{column.label}</h3><p className="text-[11px] text-gray-500">{columnLeads.length} · {columnValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p></div><span className="rounded-full bg-surface-700 px-2 py-1 text-xs text-gray-300">{columnLeads.length}</span></div>
             <div className="space-y-2">{columnLeads.map(lead => <article key={lead.id} draggable={movingLeadId !== lead.id} onDragStart={event => event.dataTransfer.setData('text/lead-id', lead.id)} onClick={() => setCrmLead(lead)} className={clsx('cursor-grab rounded-xl border border-surface-600 bg-surface-700 p-3 transition hover:border-brand-500/50', movingLeadId === lead.id && 'opacity-50')}><div className="flex items-start justify-between gap-2"><h4 className="text-sm font-semibold text-white">{lead.nome}</h4>{movingLeadId === lead.id && <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-400" />}</div><p className="mt-1 text-[11px] text-gray-500">{lead.opportunity?.assignedUserName || 'Sem responsável'}</p><div className="mt-2 flex items-center justify-between text-xs"><span className="text-gray-400">{lead.opportunity?.probability ?? 0}%</span><strong className="text-brand-300">{lead.opportunity?.value?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) ?? 'Sem valor'}</strong></div></article>)}</div>
           </section>

@@ -82,7 +82,9 @@ export function AuditLogDetailModal({
         {parsed.alteracoes && parsed.alteracoes.length > 0 && (
           <div className="mb-4">
             <p className="text-xs font-semibold text-gray-300 mb-2">O que mudou</p>
-            <div className="rounded-xl border border-surface-600 overflow-hidden">
+            {/* Desktop: De | Para lado a lado — é uma comparação, e ler os dois
+                valores na mesma linha é o que torna o diff legível. */}
+            <div className="rounded-xl border border-surface-600 overflow-hidden hidden sm:block">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-surface-700/50 text-gray-400">
@@ -102,6 +104,26 @@ export function AuditLogDetailModal({
                 </tbody>
               </table>
             </div>
+
+            {/* Celular: o mesmo diff empilhado. Três colunas dentro de um sheet
+                de 375px dariam ~100px por valor — e valor de auditoria costuma
+                ser texto longo (nome de produto, e-mail, JSON), que ali quebra
+                em cinco linhas e some o alinhamento. Empilhado, cada campo vira
+                um bloco com o valor antigo riscado por cima do novo, que é como
+                se lê uma alteração. */}
+            <ul className="space-y-2 sm:hidden">
+              {parsed.alteracoes.map((c, i) => (
+                <li key={i} className="rounded-xl border border-surface-600 p-3 text-xs">
+                  <p className="font-semibold text-gray-300 mb-1.5">{fieldLabel(c.campo)}</p>
+                  <p className="text-red-300/80 line-through decoration-red-300/40">
+                    {formatAuditValue(c.campo, c.de)}
+                  </p>
+                  <p className="text-green-300/90 font-medium">
+                    {formatAuditValue(c.campo, c.para)}
+                  </p>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

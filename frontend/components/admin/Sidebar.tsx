@@ -6,95 +6,19 @@ import { useState, useEffect } from 'react'
 import { clearAuth, getUserName, getRole, hasPermission } from '@/lib/auth'
 import { authApi, notificationsApi, fiscalApi } from '@/lib/api'
 import {
-  LayoutDashboard, Package, QrCode,
-  LogOut, User, ShoppingBag, Users, Megaphone,
-  Loader2, X, Menu, CreditCard, Store, Shield, TrendingUp, BarChart2, Info, UserCog, Settings, Timer, BookOpen, History,
-  Wallet, Plug, ClipboardList, MessageSquare, Receipt, Palette, LifeBuoy, Mail,
-  ChevronsLeft, ChevronsRight, Rocket, PartyPopper, Sparkles, UtensilsCrossed,
+  LogOut, User, Loader2, X, Menu, Store,
+  ChevronsLeft, ChevronsRight,
 } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
+import MobileTabBar from '@/components/admin/MobileTabBar'
 import { SIDEBAR_SHORTCUT_KEYS } from '@/lib/adminKeyboardShortcuts'
+import { NAV_SECTIONS, isItemVisible, currentNavTitle, type NavItem } from '@/lib/adminNav'
+import { useScrollLock } from '@/hooks/useMediaQuery'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
-const sections = [
-  {
-    label: 'Operacional',
-    items: [
-      { href: '/admin/comanda',      label: 'Comanda',         icon: Users,           badge: 'LIVE', perm: 'dashboard' },
-      { href: '/admin/dashboard',    label: 'Painel Geral',    icon: LayoutDashboard,                perm: 'dashboard' },
-      { href: '/admin/venda-avulsa', label: 'Frente de Caixa', icon: ShoppingBag,                    perm: 'pdv' },
-      { href: '/admin/qrcodes',      label: 'Gatilhos QR Code', icon: QrCode,                         perm: 'qrcodes' },
-    ],
-  },
-  {
-    // Fica logo após Operacional de propósito: Perfis de Acesso precisa
-    // existir ANTES de cadastrar um Operador (em Vendas & Clientes) — quem
-    // configura a loja passa por aqui primeiro.
-    label: 'Administração',
-    adminOnly: true,
-    items: [
-      { href: '/admin/perfis',      label: 'Perfis de Acesso', icon: UserCog, perm: null },
-      { href: '/admin/integracoes', label: 'Integrações',      icon: Plug,    perm: null },
-      { href: '/admin/site',        label: 'Personalizar Site', icon: Palette, perm: null },
-      { href: '/admin/email',      label: 'E-mail',           icon: Mail,    perm: null },
-      { href: '/admin/ia-config',  label: 'Assistente de IA', icon: Sparkles, perm: null },
-    ],
-  },
-  {
-    label: 'Módulos',
-    items: [
-      { href: '/admin/fiscal',      label: 'Fiscal',            icon: Receipt,            perm: 'fiscal' },
-      { href: '/admin/eventos',     label: 'Gestão de Eventos', icon: PartyPopper,       perm: 'eventos' },
-      { href: '/admin/restaurante', label: 'Restaurante',       icon: UtensilsCrossed,     perm: 'restaurante' },
-      { href: '/admin/suporte',     label: 'Suporte',           icon: LifeBuoy,            perm: 'suporte' },
-    ],
-  },
-  {
-    label: 'Vendas & Clientes',
-    items: [
-      { href: '/admin/usuarios',    label: 'Clientes',     icon: Users,       perm: 'usuarios' },
-      { href: '/admin/crediario',   label: 'Crediário',    icon: CreditCard,  perm: 'crediario' },
-      { href: '/admin/reservas',    label: 'Pré-vendas',   icon: ClipboardList, perm: 'estoque' },
-    ],
-  },
-  {
-    label: 'Estoque & Catálogo',
-    items: [
-      { href: '/admin/estoque',     label: 'Estoque',      icon: Package,     perm: 'estoque' },
-    ],
-  },
-  {
-    label: 'Financeiro',
-    items: [
-      { href: '/admin/financeiro',     label: 'Financeiro',        icon: TrendingUp,    perm: 'financeiro' },
-      { href: '/admin/contas-receber', label: 'Contas a Pagar/Rec', icon: Wallet,        perm: 'financeiro' },
-      { href: '/admin/relatorios',     label: 'Relatórios',         icon: BarChart2,     perm: 'relatorios' },
-    ],
-  },
-  {
-    label: 'Comunicação',
-    items: [
-      { href: '/admin/anuncios',    label: 'Anúncios',     icon: Megaphone,     perm: 'anuncios' },
-      { href: '/admin/mensageria', label: 'Mensageria',   icon: MessageSquare,  perm: 'anuncios' },
-      { href: '/admin/timer',        label: 'Timers',       icon: Timer,       perm: 'timers' },
-    ],
-  },
-  {
-    label: 'Compliance',
-    items: [
-      { href: '/admin/lgpd',  label: 'LGPD & Auditoria', icon: Shield, perm: 'lgpd' },
-      { href: '/admin/primeiros-passos', label: 'Primeiros Passos', icon: Rocket, perm: null },
-      { href: '/admin/sobre',     label: 'Sobre o Sistema',  icon: Info,     perm: null },
-    ],
-  },
-  {
-    label: 'Pessoal',
-    items: [
-      { href: '/admin/configuracoes', label: 'Configurações', icon: Settings, perm: null },
-    ],
-  },
-]
+// A lista de seções mora em lib/adminNav.ts — a MobileTabBar precisa das
+// mesmas regras de permissão/módulo e não pode importar de um componente.
 
 function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules, collapsed = false }: { pathname: string; onClose?: () => void; unreadCount: number; fiscalAlerta: boolean; enabledModules: string[]; collapsed?: boolean }) {
   // getRole()/hasPermission() leem cookie — só existe no client. No SSR a role
@@ -113,17 +37,10 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
 
   return (
     <nav className="flex-1 flex flex-col gap-1 px-3 pb-6 overflow-y-auto">
-      {sections.map(({ label, items, adminOnly }) => {
+      {NAV_SECTIONS.map(({ label, items, adminOnly }) => {
         if (adminOnly && !isAdmin) return null
-        const visibleItems = items.filter(({ perm, href }) =>
-          checkPerm(perm)
-          && (href !== '/admin/comanda' || enabledModules.includes('restaurante'))
-          && (href !== '/admin/qrcodes' || enabledModules.includes('restaurante'))
-          && (href !== '/admin/fiscal' || enabledModules.includes('fiscal'))
-          && (href !== '/admin/reservas' || enabledModules.includes('estoque'))
-          && (href !== '/admin/eventos' || enabledModules.includes('eventos'))
-          && (href !== '/admin/ia-config' || enabledModules.includes('ia'))
-          && (href !== '/admin/restaurante' || enabledModules.includes('restaurante'))
+        const visibleItems = items.filter(item =>
+          isItemVisible(item, { isAdmin, enabledModules, hasPerm: checkPerm }),
         )
         if (visibleItems.length === 0) return null
         return (
@@ -137,7 +54,7 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
                 {label}
               </p>
             )}
-            {visibleItems.map(({ href, label: itemLabel, icon: Icon, badge }: { href: string; label: string; icon: React.ElementType; perm: string | null; badge?: string }) => {
+            {visibleItems.map(({ href, label: itemLabel, icon: Icon, badge }: NavItem) => {
               const active   = pathname.startsWith(href)
               const shortcut = SIDEBAR_SHORTCUT_KEYS[href]
               const hasDot   = (href === '/admin/mensageria' && unreadCount > 0)
@@ -210,6 +127,24 @@ export default function Sidebar() {
       if (localStorage.getItem('admin-sidebar-collapsed') === 'true') setCollapsed(true)
     } catch {}
   }, [])
+
+  // Drawer aberto trava o scroll do fundo — sem isso o gesto de rolar dentro do
+  // menu "vaza" para a página atrás dele assim que a lista chega ao fim.
+  useScrollLock(mobileOpen)
+
+  // Esc fecha o drawer (teclado externo em tablet).
+  useEffect(() => {
+    if (!mobileOpen) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mobileOpen])
+
+  // Fecha ao navegar. Cada <Link> do menu já chama onClose, mas o drawer também
+  // precisa sumir quando a navegação parte de outro lugar (botão voltar do
+  // aparelho, redirect de sessão expirada) — senão ele reaparece sobreposto à
+  // tela nova.
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   function toggleCollapsed() {
     setCollapsed(v => {
@@ -331,45 +266,73 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-30 flex items-center justify-between bg-surface-800 border-b border-surface-500 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <img src={logoSrc} alt={site.siteName} className="h-9" />
-          <span className="text-xs text-brand-400 font-bold">Admin</span>
+      {/* ── Mobile: barra superior ──────────────────────────────────────────
+          Mostra o TÍTULO DA TELA ATUAL, não só a marca. Sem sidebar visível, o
+          celular perde a única indicação de "onde estou" — e a marca da loja,
+          que o usuário já conhece, não responde a essa pergunta. A logo fica
+          reduzida a um selo de canto. */}
+      <header className="md:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-3 bg-surface-800 border-b border-surface-500 px-4 h-topbar">
+        <img src={logoSrc} alt={site.siteName} className="h-8 w-8 object-contain shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-white truncate leading-tight">
+            {currentNavTitle(pathname) ?? site.siteName}
+          </p>
+          <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase leading-tight">Admin</p>
         </div>
-        <button onClick={() => setMobileOpen(true)} className="text-gray-400 hover:text-white p-1">
+        <button
+          onClick={() => setMobileOpen(true)}
+          aria-label="Abrir menu"
+          aria-expanded={mobileOpen}
+          className="touch-target -mr-2 flex items-center justify-center text-gray-400 hover:text-white"
+        >
           <Menu className="w-6 h-6" />
         </button>
-      </div>
+      </header>
 
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/70"
+          className="md:hidden fixed inset-0 z-40 bg-black/70 animate-fade-in"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
-      {/* Mobile drawer */}
-      <aside className={clsx(
-        'md:hidden fixed inset-y-0 left-0 z-50 w-[260px] bg-surface-900 border-r border-surface-500 flex flex-col transition-transform duration-300',
-        mobileOpen ? 'translate-x-0' : '-translate-x-full'
-      )}>
-        <div className="flex items-center justify-between px-6 py-6 shrink-0">
-          <div className="flex items-center gap-3">
+      {/* ── Mobile: drawer com o menu completo ──────────────────────────────
+          Largura em `max-w` (e não fixa em 260px) porque em aparelhos de 320px
+          um drawer de 260px deixa só 60px de overlay — alvo pequeno demais pra
+          fechar tocando fora, que é o gesto esperado. */}
+      <aside
+        id="admin-mobile-drawer"
+        aria-hidden={!mobileOpen}
+        className={clsx(
+          'md:hidden fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[300px] bg-surface-900 border-r border-surface-500 flex flex-col transition-transform duration-300 pt-safe',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        <div className="flex items-center justify-between gap-2 px-5 py-5 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             <img src={logoSrc} alt={site.siteName} className="h-10 w-10 object-contain shrink-0" />
-            <div>
-              <p className="text-white text-base leading-tight">{site.siteName}</p>
+            <div className="min-w-0">
+              <p className="text-white text-base leading-tight truncate">{site.siteName}</p>
               <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase">Admin</p>
             </div>
           </div>
-          <button onClick={() => setMobileOpen(false)} className="text-gray-500 hover:text-white">
+          <button
+            onClick={() => setMobileOpen(false)}
+            aria-label="Fechar menu"
+            className="touch-target flex items-center justify-center text-gray-500 hover:text-white shrink-0"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
         <NavItems pathname={pathname} onClose={() => setMobileOpen(false)} unreadCount={unreadCount} fiscalAlerta={fiscalAlerta} enabledModules={site.enabledModules} />
         {renderFooter(false)}
       </aside>
+
+      {/* ── Mobile: barra inferior ──────────────────────────────────────────
+          Fica FORA do drawer de propósito: é a navegação de uso diário, sempre
+          visível, e o drawer passa a ser só o "resto do menu". */}
+      <MobileTabBar onOpenMenu={() => setMobileOpen(true)} hasAlert={unreadCount > 0 || fiscalAlerta} />
 
       {/* Desktop sidebar */}
       <aside className={clsx(

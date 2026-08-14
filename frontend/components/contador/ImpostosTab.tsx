@@ -175,7 +175,7 @@ function Info2({ label, valor, sub, destaque }: { label: string; valor: string; 
 
 function TabelaTributos({ linhas }: { linhas: ApuracaoTributariaDto['simples']['linhas'] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="table-scroll">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-gray-500 border-b border-surface-600">

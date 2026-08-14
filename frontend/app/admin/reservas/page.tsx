@@ -606,7 +606,7 @@ export default function ReservasPage() {
 
       {/* Modal de Homologação — Lista de Espera */}
       {wlModal && (
-        <Modal onClose={() => setWlModal(null)} closeOnBackdrop={false} className="p-6 flex flex-col gap-5">
+        <Modal onClose={() => setWlModal(null)} closeOnBackdrop={false} className="p-4 sm:p-6 flex flex-col gap-5">
             <div>
               <h2 className="text-lg font-black text-white">Vender da fila de espera</h2>
               <p className="text-sm text-gray-400 mt-0.5">
@@ -679,7 +679,7 @@ export default function ReservasPage() {
 
       {/* Modal de Homologação */}
       {homModal && (
-        <Modal onClose={() => setHomModal(null)} closeOnBackdrop={false} className="p-6 flex flex-col gap-5">
+        <Modal onClose={() => setHomModal(null)} closeOnBackdrop={false} className="p-4 sm:p-6 flex flex-col gap-5">
             <div>
               <h2 className="text-lg font-black text-white">Homologar reserva</h2>
               <p className="text-sm text-gray-400 mt-0.5">

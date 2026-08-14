@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { History, Loader2, RefreshCw, Eye } from 'lucide-react'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
+import DataTable from '@/components/admin/ui/DataTable'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
 
 function fmtDateTime(iso: string) {
@@ -48,48 +49,41 @@ export default function PlataformaLogsPage() {
         }
       />
 
-      <div className="card overflow-x-auto">
+      {/* Oito colunas de auditoria não cabem em 375px de jeito nenhum, e rolar
+          820px de lado pra ler CADA linha não é leitura, é garimpo. O DataTable
+          mantém a tabela no desktop e reorganiza as mesmas colunas em cards no
+          celular, a partir de uma definição só — os papéis `title`/`trailing`/
+          `meta` dizem o que vira o quê. */}
+      <>
         {loading ? (
-          <div className="flex items-center justify-center py-16">
+          <div className="card flex items-center justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
           </div>
-        ) : filtered.length === 0 ? (
-          <p className="text-gray-400 text-center py-16">Nenhum registro de auditoria ainda.</p>
         ) : (
-          <table className="w-full min-w-[820px] text-sm">
-            <thead>
-              <tr className="text-left text-gray-500 border-b border-surface-600">
-                <th className="py-2 font-medium">Quando</th>
-                <th className="py-2 font-medium">Loja</th>
-                <th className="py-2 font-medium">Ator</th>
-                <th className="py-2 font-medium">Ação</th>
-                <th className="py-2 font-medium">Entidade</th>
-                <th className="py-2 font-medium">Resumo</th>
-                <th className="py-2 font-medium">Severidade</th>
-                <th className="w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(l => (
-                <tr
-                  key={`${l.tenantSlug}-${l.id}`}
-                  onClick={() => setViewingLog(l)}
-                  className="border-b border-surface-700 last:border-0 hover:bg-surface-700/40 transition-colors cursor-pointer"
-                >
-                  <td className="py-2.5 text-gray-400 whitespace-nowrap">{fmtDateTime(l.createdAt)}</td>
-                  <td className="py-2.5 text-brand-300 font-medium">{l.tenantSlug}</td>
-                  <td className="py-2.5 text-white">{l.actorUserName ?? 'Sistema'}</td>
-                  <td className="py-2.5 text-gray-400">{l.action}</td>
-                  <td className="py-2.5 text-gray-400">{l.entityType}{l.entityId ? ` #${l.entityId.slice(0, 8)}` : ''}</td>
-                  <td className="py-2.5 text-gray-400 max-w-[220px] truncate">{summarizeAuditDetails(l.details)}</td>
-                  <td className="py-2.5"><SeverityBadge severity={l.severity} /></td>
-                  <td className="py-2.5 text-gray-500"><Eye className="w-3.5 h-3.5" /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            rows={filtered}
+            rowKey={l => `${l.tenantSlug}-${l.id}`}
+            onRowClick={setViewingLog}
+            minWidth="820px"
+            // O `.card` que existia aqui em volta só emoldurava a tabela — no
+            // celular virava card dentro de card. Agora ele vale só no desktop.
+            desktopCard
+            empty={<p className="text-gray-400 text-center py-16">Nenhum registro de auditoria ainda.</p>}
+            columns={[
+              { key: 'quando',    header: 'Quando',     mobile: 'meta',     className: 'text-gray-400 whitespace-nowrap', cell: l => fmtDateTime(l.createdAt) },
+              { key: 'loja',      header: 'Loja',       mobile: 'meta',     className: 'text-brand-300 font-medium',      cell: l => <span className="text-brand-300 font-medium">{l.tenantSlug}</span> },
+              { key: 'acao',      header: 'Ação',       mobile: 'title',    className: 'text-gray-400',                   cell: l => l.action },
+              { key: 'severidade', header: 'Severidade', mobile: 'trailing', cell: l => <SeverityBadge severity={l.severity} /> },
+              { key: 'ator',      header: 'Ator',       mobile: 'field',    className: 'text-white',                      cell: l => l.actorUserName ?? 'Sistema' },
+              { key: 'entidade',  header: 'Entidade',   mobile: 'field',    className: 'text-gray-400',                   cell: l => `${l.entityType}${l.entityId ? ` #${l.entityId.slice(0, 8)}` : ''}` },
+              { key: 'resumo',    header: 'Resumo',     mobile: 'field',    className: 'text-gray-400 max-w-[220px] truncate', cell: l => summarizeAuditDetails(l.details) },
+              // Só a tabela precisa do ícone de "abrir": no card o chevron da
+              // linha inteira clicável já cumpre esse papel.
+              { key: 'abrir',     header: '',           mobile: 'hidden',   className: 'text-gray-500', headerClassName: 'w-8', cell: () => <Eye className="w-3.5 h-3.5" /> },
+            ]}
+          />
         )}
-      </div>
+      </>
 
       {viewingLog && (
         <AuditLogDetailModal log={viewingLog} onClose={() => setViewingLog(null)} />

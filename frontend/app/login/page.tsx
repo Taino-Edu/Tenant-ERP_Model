@@ -134,8 +134,11 @@ export default function LoginPage() {
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <KeyRound className="w-5 h-5" />}
             {loading ? 'Entrando...' : 'Entrar no Painel'}
           </button>
+          {/* Padding vertical em vez de texto solto: como link inline a altura
+              de toque era 16px, e é o caminho de recuperação de quem acabou de
+              errar a senha. */}
           <div className="text-center">
-            <Link href="/reset-password?from=admin" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            <Link href="/reset-password?from=admin" className="inline-flex items-center px-3 py-2.5 text-xs text-gray-500 transition-colors hover:text-gray-300">
               Esqueci minha senha
             </Link>
           </div>

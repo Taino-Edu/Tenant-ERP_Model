@@ -80,7 +80,9 @@ export default function AdminSuportePage() {
   useEffect(() => { fetchTickets() }, [fetchTickets])
 
   return (
-    <div className="space-y-5">
+    // Faltava padding: o <main> do admin não aplica nenhum, então o conteúdo
+    // desta tela encostava nas duas bordas do celular.
+    <div className="page-shell">
       <PageHeader
         icon={LifeBuoy}
         title="Suporte"

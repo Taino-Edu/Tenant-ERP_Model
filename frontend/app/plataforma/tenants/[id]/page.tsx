@@ -12,6 +12,7 @@ import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2, 
 import clsx from 'clsx'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
+import DataTable from '@/components/admin/ui/DataTable'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
 
 function fmtDateTime(iso: string | null) {
@@ -123,37 +124,27 @@ function StaffTab({ tenantId }: { tenantId: string }) {
 
   return (
     <>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-gray-500 border-b border-surface-600">
-            <th className="py-2 font-medium">Nome</th>
-            <th className="py-2 font-medium">E-mail</th>
-            <th className="py-2 font-medium">Papel</th>
-            <th className="py-2 font-medium">Perfil</th>
-            <th className="py-2 font-medium">Último login</th>
-            <th className="py-2 font-medium"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {staff.map(u => (
-            <tr key={u.id} className="border-b border-surface-700 last:border-0">
-              <td className="py-2.5 text-white">{u.name} {!u.isActive && <span className="text-xs text-red-400">(inativo)</span>}</td>
-              <td className="py-2.5 text-gray-400">{u.email ?? '—'}</td>
-              <td className="py-2.5 text-gray-400">{u.role}</td>
-              <td className="py-2.5 text-gray-400">{u.perfilNome ?? '—'}</td>
-              <td className="py-2.5 text-gray-400">{fmtDateTime(u.lastLoginAt)}</td>
-              <td className="py-2.5 text-right">
-                <button
-                  onClick={() => setResetTarget(u)}
-                  className="inline-flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300"
-                >
-                  <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataTable
+        rows={staff}
+        rowKey={u => u.id}
+        rowActions={u => (
+          <button
+            onClick={() => setResetTarget(u)}
+            className="inline-flex items-center gap-1 py-2 text-xs text-brand-400 hover:text-brand-300"
+          >
+            <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
+          </button>
+        )}
+        columns={[
+          { key: 'nome', header: 'Nome', mobile: 'title', className: 'text-white',
+            cell: u => <>{u.name} {!u.isActive && <span className="text-xs text-red-400">(inativo)</span>}</> },
+          { key: 'papel', header: 'Papel', mobile: 'trailing', className: 'text-gray-400',
+            cell: u => <span className="text-xs font-normal text-gray-400">{u.role}</span> },
+          { key: 'email', header: 'E-mail', mobile: 'field', className: 'text-gray-400', cell: u => u.email ?? '—' },
+          { key: 'perfil', header: 'Perfil', mobile: 'field', className: 'text-gray-400', cell: u => u.perfilNome ?? '—' },
+          { key: 'login', header: 'Último login', mobile: 'field', className: 'text-gray-400', cell: u => fmtDateTime(u.lastLoginAt) },
+        ]}
+      />
       {resetTarget && (
         <ResetStaffPasswordModal tenantId={tenantId} user={resetTarget} onClose={() => setResetTarget(null)} />
       )}
@@ -176,26 +167,16 @@ function ClientesTab({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="space-y-3">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-gray-500 border-b border-surface-600">
-            <th className="py-2 font-medium">Nome</th>
-            <th className="py-2 font-medium">E-mail</th>
-            <th className="py-2 font-medium">WhatsApp</th>
-            <th className="py-2 font-medium">Cadastrado em</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.items.map(c => (
-            <tr key={c.id} className="border-b border-surface-700 last:border-0">
-              <td className="py-2.5 text-white">{c.name}</td>
-              <td className="py-2.5 text-gray-400">{c.email ?? '—'}</td>
-              <td className="py-2.5 text-gray-400">{c.whatsApp ?? '—'}</td>
-              <td className="py-2.5 text-gray-400">{fmtDateTime(c.createdAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataTable
+        rows={result.items}
+        rowKey={c => c.id}
+        columns={[
+          { key: 'nome', header: 'Nome', mobile: 'title', className: 'text-white', cell: c => c.name },
+          { key: 'email', header: 'E-mail', mobile: 'field', className: 'text-gray-400', cell: c => c.email ?? '—' },
+          { key: 'whats', header: 'WhatsApp', mobile: 'field', className: 'text-gray-400', cell: c => c.whatsApp ?? '—' },
+          { key: 'criado', header: 'Cadastrado em', mobile: 'field', className: 'text-gray-400', cell: c => fmtDateTime(c.createdAt) },
+        ]}
+      />
       {result.totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 text-sm text-gray-400">
           <button className="btn-secondary text-xs py-1 px-2.5" disabled={!result.hasPrev} onClick={() => setPage(p => p - 1)}>Anterior</button>
@@ -222,36 +203,25 @@ function LogsTab({ tenantId }: { tenantId: string }) {
 
   return (
     <>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-gray-500 border-b border-surface-600">
-            <th className="py-2 font-medium">Quando</th>
-            <th className="py-2 font-medium">Ator</th>
-            <th className="py-2 font-medium">Ação</th>
-            <th className="py-2 font-medium">Entidade</th>
-            <th className="py-2 font-medium">Resumo</th>
-            <th className="py-2 font-medium">Severidade</th>
-            <th className="w-8"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.items.map(a => (
-            <tr
-              key={a.id}
-              onClick={() => setViewingLog(a)}
-              className="border-b border-surface-700 last:border-0 hover:bg-surface-700/40 transition-colors cursor-pointer"
-            >
-              <td className="py-2.5 text-gray-400 whitespace-nowrap">{fmtDateTime(a.createdAt)}</td>
-              <td className="py-2.5 text-white">{a.actorUserName ?? 'Sistema'}</td>
-              <td className="py-2.5 text-gray-400">{a.action}</td>
-              <td className="py-2.5 text-gray-400">{a.entityType}{a.entityId ? ` #${a.entityId.slice(0, 8)}` : ''}</td>
-              <td className="py-2.5 text-gray-400 max-w-[220px] truncate">{summarizeAuditDetails(a.details)}</td>
-              <td className="py-2.5"><SeverityBadge severity={a.severity} /></td>
-              <td className="py-2.5 text-gray-500"><Eye className="w-3.5 h-3.5" /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Mesmos papéis do feed de auditoria da plataforma (/plataforma/logs) —
+          as duas telas mostram o mesmo tipo de registro e devem ler igual. */}
+      <DataTable
+        rows={result.items}
+        rowKey={a => a.id}
+        onRowClick={setViewingLog}
+        columns={[
+          { key: 'acao', header: 'Ação', mobile: 'title', className: 'text-gray-400', cell: a => a.action },
+          { key: 'severidade', header: 'Severidade', mobile: 'trailing', cell: a => <SeverityBadge severity={a.severity} /> },
+          { key: 'quando', header: 'Quando', mobile: 'meta', className: 'text-gray-400 whitespace-nowrap', cell: a => fmtDateTime(a.createdAt) },
+          { key: 'ator', header: 'Ator', mobile: 'field', className: 'text-white', cell: a => a.actorUserName ?? 'Sistema' },
+          { key: 'entidade', header: 'Entidade', mobile: 'field', className: 'text-gray-400',
+            cell: a => `${a.entityType}${a.entityId ? ` #${a.entityId.slice(0, 8)}` : ''}` },
+          { key: 'resumo', header: 'Resumo', mobile: 'field', className: 'text-gray-400 max-w-[220px] truncate',
+            cell: a => summarizeAuditDetails(a.details) },
+          { key: 'abrir', header: '', mobile: 'hidden', className: 'text-gray-500', headerClassName: 'w-8',
+            cell: () => <Eye className="w-3.5 h-3.5" /> },
+        ]}
+      />
 
       {viewingLog && (
         <AuditLogDetailModal log={viewingLog} onClose={() => setViewingLog(null)} />
@@ -452,8 +422,11 @@ export default function TenantDetailPage() {
 
       <CustomDomainCard tenant={tenant} onSaved={setTenant} />
 
-      <div className="card">
-        <div className="flex items-center gap-1 border-b border-surface-600 mb-4 overflow-x-auto">
+      {/* `card-sm-up`: as abas Funcionários/Clientes/Logs renderizam listas de
+          cards no celular — com o `.card` aqui elas ficavam card dentro de card
+          (301px úteis de 375px). A barra de abas continua igual. */}
+      <div className="card-sm-up">
+        <div className="chip-row items-center border-b border-surface-600 mb-4 !gap-1">
           {TABS.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
