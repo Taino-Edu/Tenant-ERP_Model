@@ -67,6 +67,28 @@ public class ProductService : IProductService
                 RestaurantProductionAreaId = p.RestaurantProductionAreaId,
                 CreatedAt = p.CreatedAt,
                 UpdatedAt = p.UpdatedAt,
+                // Precisam ser calculados AQUI, na projeção. As propriedades de
+                // mesmo nome em Product são [NotMapped] e só existem em memória
+                // — numa projeção EF elas não são avaliadas, e o inicializador
+                // que omitisse estes três deixava o DTO sair com os defaults do
+                // tipo: PriceInReais = 0.
+                //
+                // O efeito era o pior possível: TODO produto da vitrine pública
+                // aparecia como "R$ 0,00" (o frontend lê priceInReais), enquanto
+                // a página de detalhe do mesmo produto mostrava o preço certo —
+                // ela passa por ProductPublicDto.FromEntity, que copia os
+                // computados da entidade já materializada.
+                //
+                // As expressões abaixo são as mesmas de Product.PriceInReais /
+                // DiscountPriceInReais / IsOnPromo, reescritas de forma que o
+                // provider consiga traduzir para SQL.
+                PriceInReais = p.PriceInCents / 100m,
+                DiscountPriceInReais = p.DiscountPriceInCents.HasValue
+                    ? p.DiscountPriceInCents.Value / 100m
+                    : (decimal?)null,
+                IsOnPromo = p.DiscountPriceInCents.HasValue
+                            && p.DiscountPriceInCents.Value > 0
+                            && p.DiscountPriceInCents.Value < p.PriceInCents,
             });
     }
 

@@ -115,6 +115,67 @@ public class ProductServiceTests
         result.Should().AllBeOfType<ProductPublicDto>();
     }
 
+    [Fact]
+    public async Task StreamPublico_TrazPrecoEmReais()
+    {
+        // Product.PriceInReais é [NotMapped]: numa projeção EF ela não é
+        // avaliada, e o DTO saía com o default do tipo. Como a vitrine pública
+        // lê justamente esse campo, TODO produto aparecia como "R$ 0,00" — e a
+        // página de detalhe do mesmo produto mostrava o preço certo, porque
+        // passa por FromEntity e não pela projeção. O teste que já existia aqui
+        // conferia filtro, ordem e tipo, mas nenhum valor.
+        using var db = CreateDb(nameof(StreamPublico_TrazPrecoEmReais));
+        var service = CreateService(db);
+
+        var comum = MakeProduct("Comum");
+        comum.PriceInCents = 89990;
+
+        var promo = MakeProduct("Promo");
+        promo.PriceInCents = 10000;
+        promo.DiscountPriceInCents = 7550;
+
+        db.Products.AddRange(comum, promo);
+        await db.SaveChangesAsync();
+
+        var result = await MaterializeAsync(service.StreamAllActivePublicAsync());
+
+        var dtoComum = result.Single(p => p.Name == "Comum");
+        dtoComum.PriceInReais.Should().Be(899.90m);
+        dtoComum.DiscountPriceInReais.Should().BeNull();
+        dtoComum.IsOnPromo.Should().BeFalse();
+
+        var dtoPromo = result.Single(p => p.Name == "Promo");
+        dtoPromo.PriceInReais.Should().Be(100m);
+        dtoPromo.DiscountPriceInReais.Should().Be(75.50m);
+        dtoPromo.IsOnPromo.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task StreamPublico_DescontoMaiorQuePreco_NaoContaComoPromocao()
+    {
+        // Espelha Product.IsOnPromo: desconto zerado ou acima do preço não é
+        // promoção. Sem isto a vitrine mostraria um selo de promoção com preço
+        // "promocional" mais caro que o normal.
+        using var db = CreateDb(nameof(StreamPublico_DescontoMaiorQuePreco_NaoContaComoPromocao));
+        var service = CreateService(db);
+
+        var zerado = MakeProduct("Zerado");
+        zerado.PriceInCents = 5000;
+        zerado.DiscountPriceInCents = 0;
+
+        var maior = MakeProduct("Maior");
+        maior.PriceInCents = 5000;
+        maior.DiscountPriceInCents = 9000;
+
+        db.Products.AddRange(zerado, maior);
+        await db.SaveChangesAsync();
+
+        var result = await MaterializeAsync(service.StreamAllActivePublicAsync());
+
+        result.Single(p => p.Name == "Zerado").IsOnPromo.Should().BeFalse();
+        result.Single(p => p.Name == "Maior").IsOnPromo.Should().BeFalse();
+    }
+
     // ── Estoque baixo ─────────────────────────────────────────────────────────
 
     [Fact]
