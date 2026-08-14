@@ -241,6 +241,55 @@ public class PlatformBillingServiceTests
         (await db.TenantCharges.SingleAsync()).PaidAt.Should().BeNull();
     }
 
+    // Os dois testes de baixa acima passavam com o bug em produção porque ambos
+    // entregam a data já como UTC (DateTime.UtcNow). A requisição real manda só
+    // "2026-08-14" no corpo, que o System.Text.Json desserializa com
+    // Kind=Unspecified — e o Npgsql RECUSA gravar isso numa coluna timestamptz,
+    // então toda baixa respondia 500. O InMemory aceita qualquer Kind, então o
+    // teste não pode esperar exceção: tem que afirmar o INVARIANTE que o
+    // Postgres exige (PaidAt sempre em UTC).
+    [Fact]
+    public async Task DefinirPagamento_ComDataSemFuso_GravaEmUtc()
+    {
+        using var db = CreateDb();
+        db.Tenants.Add(NovoTenant());
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        await service.GerarMensalidadesAsync(Competencia(2026, 3));
+        var id = (await db.TenantCharges.SingleAsync()).Id;
+
+        // Exatamente o que chega de `{"pagoEm":"2026-03-10"}`.
+        var semFuso = new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Unspecified);
+
+        await service.DefinirPagamentoAsync(id, semFuso);
+
+        var pago = (await db.TenantCharges.SingleAsync()).PaidAt;
+        pago.Should().NotBeNull();
+        pago!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        pago.Value.Should().Be(new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public async Task DefinirPagamento_ComHora_TruncaParaODia()
+    {
+        using var db = CreateDb();
+        db.Tenants.Add(NovoTenant());
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        await service.GerarMensalidadesAsync(Competencia(2026, 3));
+        var id = (await db.TenantCharges.SingleAsync()).Id;
+
+        // Baixa é um fato do dia: guardar a hora do clique faria a mesma
+        // cobrança "mudar de dia" quando lida de outro fuso.
+        await service.DefinirPagamentoAsync(id, new DateTime(2026, 3, 10, 22, 47, 13, DateTimeKind.Utc));
+
+        var pago = (await db.TenantCharges.SingleAsync()).PaidAt;
+        pago!.Value.Should().Be(new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc));
+        pago.Value.Kind.Should().Be(DateTimeKind.Utc);
+    }
+
     // ── Resumo ───────────────────────────────────────────────────────────────
 
     [Fact]

@@ -49,6 +49,29 @@ public class PlatformBillingService : IPlatformBillingService
         return new DateTime(competencia.Year, competencia.Month, dia, 0, 0, 0, DateTimeKind.Utc);
     }
 
+    /// <summary>Reduz a data de baixa ao dia, 00:00 UTC.
+    ///
+    /// O corpo da requisição traz só a data ("2026-08-14"), que o
+    /// System.Text.Json desserializa como DateTime com Kind=Unspecified — e o
+    /// Npgsql RECUSA gravar Kind=Unspecified numa coluna `timestamp with time
+    /// zone`, derrubando o SaveChanges com DbUpdateException. Era por isso que
+    /// dar baixa em qualquer cobrança respondia 500.
+    ///
+    /// Truncar para o dia é o mesmo tratamento que competência e vencimento já
+    /// recebem (ver NormalizarCompetencia): a baixa é um fato do dia, e guardar
+    /// a hora do clique faria a mesma cobrança "mudar de dia" quando lida de
+    /// outro fuso. Se a data já vier com fuso (Kind=Local/Utc), converte antes
+    /// de truncar, senão uma baixa feita às 22h em São Paulo viraria o dia
+    /// seguinte em UTC.</summary>
+    private static DateTime? NormalizarDataPagamento(DateTime? pagoEm)
+    {
+        if (!pagoEm.HasValue) return null;
+        var data = pagoEm.Value.Kind == DateTimeKind.Unspecified
+            ? pagoEm.Value
+            : pagoEm.Value.ToUniversalTime();
+        return new DateTime(data.Year, data.Month, data.Day, 0, 0, 0, DateTimeKind.Utc);
+    }
+
     public async Task<GerarMensalidadesResultDto> GerarMensalidadesAsync(DateTime competencia)
     {
         var comp = NormalizarCompetencia(competencia);
@@ -183,13 +206,15 @@ public class PlatformBillingService : IPlatformBillingService
         var cobranca = await _catalog.TenantCharges.FirstOrDefaultAsync(c => c.Id == chargeId)
             ?? throw new InvalidOperationException("Cobrança não encontrada.");
 
+        var pagamento = NormalizarDataPagamento(pagoEm);
+
         // Data futura é quase sempre erro de digitação (ano errado), e uma baixa
         // com data futura envenena o relatório de recebidos sem deixar rastro.
-        if (pagoEm.HasValue && pagoEm.Value.Date > DateTime.UtcNow.Date)
+        if (pagamento.HasValue && pagamento.Value.Date > DateTime.UtcNow.Date)
             throw new InvalidOperationException("A data de pagamento não pode ser futura.");
 
         var pagamentoAnterior = cobranca.PaidAt;
-        cobranca.PaidAt = pagoEm;
+        cobranca.PaidAt = pagamento;
         if (_referrals is not null)
             await _referrals.SynchronizeChargeAsync(cobranca, pagamentoAnterior);
         await _catalog.SaveChangesAsync();
