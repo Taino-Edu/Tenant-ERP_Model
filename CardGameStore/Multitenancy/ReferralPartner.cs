@@ -29,7 +29,7 @@ public class ReferralPartner
     public string PersonType { get; set; } = "PF";
 
     [MaxLength(30), Column("partner_kind")]
-    public string PartnerKind { get; set; } = "Vendedor";
+    public string PartnerKind { get; set; } = "Parceiro de indicação";
 
     [MaxLength(50), Column("professional_registration")]
     public string? ProfessionalRegistration { get; set; }
@@ -64,6 +64,21 @@ public class ReferralPartner
 
     [MaxLength(500), Column("contract_accepted_user_agent")]
     public string? ContractAcceptedUserAgent { get; set; }
+
+    [MaxLength(36), Column("contract_evidence_id")]
+    public string? ContractEvidenceId { get; set; }
+
+    [MaxLength(64), Column("contract_evidence_sha256")]
+    public string? ContractEvidenceSha256 { get; set; }
+
+    [MaxLength(64), Column("contract_pdf_sha256")]
+    public string? ContractPdfSha256 { get; set; }
+
+    [Column("contract_pdf", TypeName = "bytea")]
+    public byte[]? ContractPdf { get; set; }
+
+    [Column("contract_email_verified_at")]
+    public DateTime? ContractEmailVerifiedAt { get; set; }
 
     [Column("active")]
     public bool Active { get; set; } = true;

@@ -28,6 +28,9 @@ public interface IEmailService
     /// <summary>Convida um parceiro comercial para ler e aceitar o regulamento.</summary>
     Task SendReferralPartnerInviteAsync(string toEmail, string toName, string inviteUrl, DateTime expiresAt);
 
+    /// <summary>Envia o código de uso único que confirma o aceite do regulamento.</summary>
+    Task SendReferralSignatureCodeAsync(string toEmail, string toName, string code, DateTime expiresAt);
+
     /// <summary>Envia email de boas-vindas após primeiro login via QR Code.</summary>
     Task SendWelcomeAsync(string toEmail, string toName);
 

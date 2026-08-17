@@ -71,6 +71,7 @@ public class ReferralManagementController : ControllerBase
                 ProfessionalRegistration = p.ProfessionalRegistration,
                 FiscalDocumentType = p.FiscalDocumentType, PaymentGraceDays = p.PaymentGraceDays,
                 ContractVersion = p.ContractVersion, ContractAcceptedAt = p.ContractAcceptedAt,
+                ContractDocumentAvailable = p.ContractPdf != null,
                 Active = p.Active, ReferredClients = referrals.Count(r => r.PartnerId == p.Id && r.Active),
                 PendingAmount = own.Where(c => c.PaidAt == null).Sum(c => c.Amount),
                 PaidAmount = own.Where(c => c.PaidAt != null).Sum(c => c.Amount),
@@ -78,6 +79,15 @@ public class ReferralManagementController : ControllerBase
                     .Select(c => (DateTime?)c.DueDate).FirstOrDefault(),
             };
         }).ToList());
+    }
+
+    [HttpGet("partners/{id:guid}/signed-document")]
+    public async Task<IActionResult> DownloadSignedDocument(Guid id)
+    {
+        var partner = await _catalog.ReferralPartners.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id);
+        if (partner?.ContractPdf is null)
+            return NotFound(new { Message = "Este parceiro não possui documento eletrônico assinado." });
+        return File(partner.ContractPdf, "application/pdf", $"termo-parceria-{partner.Id:N}.pdf");
     }
 
     [HttpPost("partners")]
@@ -189,7 +199,7 @@ public class ReferralManagementController : ControllerBase
         var partner = await _catalog.ReferralPartners.FindAsync(request.PartnerId);
         var tenant = await _catalog.Tenants.FindAsync(request.TenantId);
         if (partner is null || tenant is null)
-            return BadRequest(new { Message = "Vendedor ou cliente não encontrado." });
+            return BadRequest(new { Message = "Parceiro de indicação ou cliente não encontrado." });
         if (request.SourceLeadId.HasValue && !await _catalog.Leads.AnyAsync(l => l.Id == request.SourceLeadId))
             return BadRequest(new { Message = "Lead de origem não encontrado." });
 
@@ -307,5 +317,7 @@ public class ReferralManagementController : ControllerBase
         PaymentGraceDays = i.PaymentGraceDays, ContractVersion = i.ContractVersion,
         ExpiresAt = i.ExpiresAt, SentAt = i.SentAt, AcceptedAt = i.AcceptedAt, RevokedAt = i.RevokedAt,
         Status = i.AcceptedAt.HasValue ? "Aceito" : i.RevokedAt.HasValue ? "Revogado" : i.ExpiresAt <= now ? "Expirado" : "Pendente",
+        SignatureCodeSentAt = i.SignatureCodeSentAt,
+        SignedDocumentAvailable = i.AcceptedAt.HasValue && i.AcceptedPartnerId.HasValue,
     };
 }

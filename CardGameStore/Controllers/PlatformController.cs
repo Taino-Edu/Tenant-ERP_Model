@@ -992,7 +992,7 @@ public class PlatformController : ControllerBase
         if (request.ReferralPartnerId.HasValue)
         {
             if (!await _catalog.ReferralPartners.AnyAsync(p => p.Id == request.ReferralPartnerId && p.Active))
-                return BadRequest(new { Message = "Vendedor de indicação não encontrado ou inativo." });
+                return BadRequest(new { Message = "Parceiro de indicação não encontrado ou inativo." });
             lead.ReferralPartnerId = request.ReferralPartnerId;
         }
 

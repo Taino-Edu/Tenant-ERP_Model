@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { CalendarDays, Check, Copy, HandCoins, Link2, Mail, Pencil, RefreshCw, Undo2, UserPlus, Users, X } from 'lucide-react'
+import { CalendarDays, Check, Copy, Download, HandCoins, Link2, Mail, Pencil, RefreshCw, Undo2, UserPlus, Users, X } from 'lucide-react'
 import Button from '@/components/admin/ui/Button'
 import DataTable from '@/components/admin/ui/DataTable'
 import Spinner from '@/components/admin/ui/Spinner'
@@ -18,7 +18,7 @@ const input = 'w-full rounded-lg border border-surface-500 bg-surface-700 px-3 p
 
 const emptyPartner: SaveReferralPartnerRequest = {
   name: '', document: '', phone: '', email: '', pixKey: '',
-  personType: 'PF', partnerKind: 'Vendedor', professionalRegistration: '',
+  personType: 'PF', partnerKind: 'Parceiro de indicação', professionalRegistration: '',
   setupCommissionPercent: 30, monthlyCommissionPercent: 5, paymentDay: 10, paymentGraceDays: 5, active: true,
 }
 
@@ -39,7 +39,7 @@ export default function IndicacoesPage() {
   const [assignment, setAssignment] = useState({
     partnerId: '', tenantId: '', setupPercent: '', monthlyPercent: '', cycles: '', notes: '',
   })
-  const [invite, setInvite] = useState({ name: '', email: '', partnerKind: 'Vendedor', setupCommissionPercent: 30, monthlyCommissionPercent: 5, paymentGraceDays: 5 })
+  const [invite, setInvite] = useState({ name: '', email: '', partnerKind: 'Parceiro de indicação', setupCommissionPercent: 30, monthlyCommissionPercent: 5, paymentGraceDays: 5 })
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -63,7 +63,7 @@ export default function IndicacoesPage() {
     try {
       if (editingId) await referralApi.updatePartner(editingId, partnerForm)
       else await referralApi.createPartner(partnerForm)
-      toast.success(editingId ? 'Vendedor atualizado.' : 'Vendedor cadastrado.')
+      toast.success(editingId ? 'Parceiro atualizado.' : 'Parceiro cadastrado.')
       setEditingId(null); setPartnerForm(emptyPartner); await load()
     } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível salvar o vendedor.')) }
     finally { setSaving(false) }
@@ -95,7 +95,7 @@ export default function IndicacoesPage() {
           toast.success(sendEmail ? 'Convite enviado por e-mail.' : 'Convite gerado; a cópia automática foi bloqueada pelo navegador.')
         }
       }
-      setInvite({ name: '', email: '', partnerKind: 'Vendedor', setupCommissionPercent: 30, monthlyCommissionPercent: 5, paymentGraceDays: 5 })
+      setInvite({ name: '', email: '', partnerKind: 'Parceiro de indicação', setupCommissionPercent: 30, monthlyCommissionPercent: 5, paymentGraceDays: 5 })
       await load()
     } catch (error) { toast.error(getErrorMessage(error, 'Não foi possível gerar o convite.')) }
     finally { setSaving(false) }
@@ -150,7 +150,7 @@ export default function IndicacoesPage() {
 
       {loading ? <div className="flex justify-center py-20"><Spinner /></div> : <>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <Metric title="Vendedores ativos" value={String(summary?.activePartners ?? 0)} />
+          <Metric title="Parceiros ativos" value={String(summary?.activePartners ?? 0)} />
           <Metric title="Clientes indicados" value={String(summary?.referredClients ?? 0)} />
           <Metric title="MRR indicado" value={money(summary?.referredMrr ?? 0)} />
           <Metric title="A pagar" value={money(summary?.pendingAmount ?? 0)} />
@@ -163,7 +163,7 @@ export default function IndicacoesPage() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <Field label="Nome"><input className={input} value={invite.name} onChange={e => setInvite(v => ({ ...v, name: e.target.value }))} /></Field>
             <Field label="E-mail"><input type="email" className={input} value={invite.email} onChange={e => setInvite(v => ({ ...v, email: e.target.value }))} /></Field>
-            <Field label="Tipo"><select className={input} value={invite.partnerKind} onChange={e => setInvite(v => ({ ...v, partnerKind: e.target.value }))}><option>Vendedor</option><option>Indicador</option><option>Contador</option></select></Field>
+            <Field label="Tipo"><select className={input} value={invite.partnerKind} onChange={e => setInvite(v => ({ ...v, partnerKind: e.target.value }))}><option>Parceiro de indicação</option><option>Contador indicador</option></select></Field>
             <Field label="% implantação"><input type="number" min={0} max={100} className={input} value={invite.setupCommissionPercent} onChange={e => setInvite(v => ({ ...v, setupCommissionPercent: Number(e.target.value) }))} /></Field>
             <Field label="% mensalidade"><input type="number" min={0} max={100} className={input} value={invite.monthlyCommissionPercent} onChange={e => setInvite(v => ({ ...v, monthlyCommissionPercent: Number(e.target.value) }))} /></Field>
             <Field label="Carência (dias)"><input type="number" min={0} max={60} className={input} value={invite.paymentGraceDays} onChange={e => setInvite(v => ({ ...v, paymentGraceDays: Number(e.target.value) }))} /></Field>
@@ -200,14 +200,14 @@ export default function IndicacoesPage() {
               <Field label="% sobre implantação"><input type="number" min={0} max={100} step="0.01" className={input} value={partnerForm.setupCommissionPercent} onChange={e => setPartnerForm(f => ({ ...f, setupCommissionPercent: Number(e.target.value) }))} /></Field>
               <Field label="% sobre mensalidade"><input type="number" min={0} max={100} step="0.01" className={input} value={partnerForm.monthlyCommissionPercent} onChange={e => setPartnerForm(f => ({ ...f, monthlyCommissionPercent: Number(e.target.value) }))} /></Field>
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={partnerForm.active} onChange={e => setPartnerForm(f => ({ ...f, active: e.target.checked }))} /> Vendedor ativo</label>
+            <label className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={partnerForm.active} onChange={e => setPartnerForm(f => ({ ...f, active: e.target.checked }))} /> Parceiro ativo</label>
             <div className="flex gap-2"><Button type="submit" loading={saving}>{editingId ? 'Salvar alterações' : 'Cadastrar'}</Button>{editingId && <Button type="button" variant="secondary" onClick={() => { setEditingId(null); setPartnerForm(emptyPartner) }}>Cancelar</Button>}</div>
           </form>
 
           <form onSubmit={saveAssignment} className="space-y-4 rounded-xl border border-surface-500 bg-surface-800 p-5">
             <h2 className="flex items-center gap-2 font-semibold text-white"><Link2 className="h-4 w-4 text-brand-400" /> Vincular indicação a um cliente</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Vendedor *"><select className={input} value={assignment.partnerId} onChange={e => setAssignment(a => ({ ...a, partnerId: e.target.value }))}><option value="">Selecione</option>{activePartners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
+              <Field label="Parceiro de indicação *"><select className={input} value={assignment.partnerId} onChange={e => setAssignment(a => ({ ...a, partnerId: e.target.value }))}><option value="">Selecione</option>{activePartners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
               <Field label="Cliente / tenant *"><select className={input} value={assignment.tenantId} onChange={e => setAssignment(a => ({ ...a, tenantId: e.target.value }))}><option value="">Selecione</option>{tenants.map(t => <option key={t.id} value={t.id}>{t.slug} · {t.planName}</option>)}</select></Field>
               <Field label="% implantação (vazio = padrão)"><input type="number" min={0} max={100} step="0.01" className={input} value={assignment.setupPercent} onChange={e => setAssignment(a => ({ ...a, setupPercent: e.target.value }))} /></Field>
               <Field label="% mensalidade (vazio = padrão)"><input type="number" min={0} max={100} step="0.01" className={input} value={assignment.monthlyPercent} onChange={e => setAssignment(a => ({ ...a, monthlyPercent: e.target.value }))} /></Field>
@@ -225,18 +225,19 @@ export default function IndicacoesPage() {
             de largura útil numa tela de 375px. O cabeçalho (título da seção)
             continua, que é o que dá sentido ao agrupamento. */}
         <section className="rounded-xl sm:border sm:border-surface-500 sm:bg-surface-800">
-          <div className="border-b border-surface-500 px-0 py-3 sm:px-5 sm:py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-4 w-4" /> Vendedores e próximos pagamentos</h2></div>
+          <div className="border-b border-surface-500 px-0 py-3 sm:px-5 sm:py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-4 w-4" /> Parceiros e próximos pagamentos</h2></div>
           {/* `p-3 sm:p-0`: no celular a lista de cards precisa de respiro dentro
               da seção; no desktop a tabela usa o padding das próprias células. */}
           <DataTable
             className="pt-3 sm:pt-0"
             rows={partners}
             rowKey={p => p.id}
-            rowActions={p => (
+            rowActions={p => <div className="flex gap-1">
+              {p.contractDocumentAvailable && <a href={referralApi.signedDocumentUrl(p.id)} download className="touch-target flex items-center justify-center rounded-lg text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Baixar termo de ${p.name}`}><Download className="h-4 w-4" /></a>}
               <button onClick={() => editPartner(p)} className="touch-target flex items-center justify-center rounded-lg text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Editar ${p.name}`}><Pencil className="h-4 w-4" /></button>
-            )}
+            </div>}
             columns={[
-              { key: 'vendedor', header: 'Vendedor', mobile: 'title',
+              { key: 'vendedor', header: 'Parceiro', mobile: 'title',
                 cell: p => (
                   <>
                     <p className="font-medium text-white">{p.name}</p>
@@ -259,7 +260,7 @@ export default function IndicacoesPage() {
             de largura útil numa tela de 375px. O cabeçalho (título da seção)
             continua, que é o que dá sentido ao agrupamento. */}
         <section className="rounded-xl sm:border sm:border-surface-500 sm:bg-surface-800">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-500 px-0 py-3 sm:px-5 sm:py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> Agenda de comissões</h2><div className="flex gap-2"><select className={input} value={partnerFilter} onChange={e => setPartnerFilter(e.target.value)}><option value="">Todos os vendedores</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><select className={input} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Todos os status</option><option>Carência</option><option>Disponível</option><option>Pago</option></select></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-500 px-0 py-3 sm:px-5 sm:py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><CalendarDays className="h-4 w-4" /> Agenda de comissões</h2><div className="flex gap-2"><select className={input} value={partnerFilter} onChange={e => setPartnerFilter(e.target.value)}><option value="">Todos os parceiros</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select><select className={input} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}><option value="">Todos os status</option><option>Carência</option><option>Disponível</option><option>Pago</option></select></div></div>
           <DataTable
             className="pt-3 sm:pt-0"
             rows={commissions}
@@ -271,7 +272,7 @@ export default function IndicacoesPage() {
               </Button>
             )}
             columns={[
-              { key: 'quem', header: 'Vendedor / cliente', mobile: 'title',
+              { key: 'quem', header: 'Parceiro / cliente', mobile: 'title',
                 cell: c => (
                   <>
                     <p className="font-medium text-white">{c.partnerName}</p>

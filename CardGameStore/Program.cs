@@ -460,6 +460,7 @@ builder.Services.AddScoped<IUserService,         UserService>();
 builder.Services.AddScoped<IVendaAvulsaService,  VendaAvulsaService>();
 builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IEmailService,        EmailService>();
+builder.Services.AddSingleton<IReferralContractPdfService, ReferralContractPdfService>();
 builder.Services.AddScoped<IPushService,         PushService>();
 builder.Services.AddScoped<IAiChatService,       GeminiChatService>();
 builder.Services.AddScoped<IPublicSalesAssistantService, PublicSalesAssistantService>();

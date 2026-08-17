@@ -1205,6 +1205,7 @@ export interface ReferralPartnerDto {
   personType: 'PF' | 'PJ'; partnerKind: string; professionalRegistration: string | null
   fiscalDocumentType: string; monthlyCommissionPercent: number; paymentDay: number
   paymentGraceDays: number; contractVersion: string | null; contractAcceptedAt: string | null; active: boolean
+  contractDocumentAvailable: boolean
   referredClients: number; pendingAmount: number; paidAmount: number
   nextPaymentDate: string | null
 }
@@ -1238,6 +1239,7 @@ export interface ReferralInvitationDto {
   setupCommissionPercent: number; monthlyCommissionPercent: number; paymentGraceDays: number
   contractVersion: string; contractText: string | null; expiresAt: string
   sentAt: string | null; acceptedAt: string | null; revokedAt: string | null
+  signatureCodeSentAt: string | null; signedDocumentAvailable: boolean
   status: 'Pendente' | 'Aceito' | 'Expirado' | 'Revogado'; inviteUrl: string | null
 }
 export interface CreateReferralInvitationRequest {
@@ -1250,6 +1252,7 @@ export const referralApi = {
   partners: () => api.get<ReferralPartnerDto[]>('/api/platform/referrals/partners'),
   createPartner: (request: SaveReferralPartnerRequest) => api.post('/api/platform/referrals/partners', request),
   updatePartner: (id: string, request: SaveReferralPartnerRequest) => api.put(`/api/platform/referrals/partners/${id}`, request),
+  signedDocumentUrl: (id: string) => `/api/platform/referrals/partners/${encodeURIComponent(id)}/signed-document`,
   invitations: () => api.get<ReferralInvitationDto[]>('/api/platform/referrals/invitations'),
   createInvitation: (request: CreateReferralInvitationRequest) =>
     api.post<ReferralInvitationDto>('/api/platform/referrals/invitations', request),
@@ -1266,10 +1269,13 @@ export const referralApi = {
 
 export const publicReferralApi = {
   invitation: (token: string) => api.get<ReferralInvitationDto>(`/api/public/referral-invitations/${encodeURIComponent(token)}`),
-  accept: (token: string, request: {
+  requestSignature: (token: string, request: {
     name: string; email: string; document: string; phone?: string | null; pixKey?: string | null
     personType: 'PF' | 'PJ'; professionalRegistration?: string | null; acceptedTerms: boolean
-  }) => api.post(`/api/public/referral-invitations/${encodeURIComponent(token)}/accept`, request),
+  }) => api.post<{ message: string; email: string; expiresAt: string }>(`/api/public/referral-invitations/${encodeURIComponent(token)}/request-signature`, request),
+  confirmSignature: (token: string, code: string) =>
+    api.post(`/api/public/referral-invitations/${encodeURIComponent(token)}/confirm-signature`, { code }),
+  signedDocumentUrl: (token: string) => `/api/public/referral-invitations/${encodeURIComponent(token)}/signed-document`,
 }
 
 export const prospectingApi = {

@@ -161,6 +161,21 @@ public class EmailService : IEmailService
         await SendAsync(toEmail, toName, "Convite para o Programa de Parcerias 3ESYSTEN", body);
     }
 
+    public async Task SendReferralSignatureCodeAsync(string toEmail, string toName, string code, DateTime expiresAt)
+    {
+        var safeName = WebUtility.HtmlEncode(toName);
+        var safeCode = WebUtility.HtmlEncode(code);
+        var body = $"""
+            <div style="font-family:sans-serif;max-width:560px">
+              <h2 style="margin:0 0 16px">Confirme o aceite da parceria</h2>
+              <p>Olá, {safeName}. Use o código abaixo para confirmar sua identidade e assinar eletronicamente o regulamento.</p>
+              <p style="margin:24px 0;font-size:32px;font-weight:700;letter-spacing:8px;color:#2563eb">{safeCode}</p>
+              <p style="color:#64748b;font-size:13px">O código expira em 10 minutos, às {expiresAt.ToLocalTime():HH:mm}. Não compartilhe este código.</p>
+            </div>
+            """;
+        await SendAsync(toEmail, toName, "Código de confirmação da parceria", body);
+    }
+
     public async Task SendCrediarioAbertoAsync(string toEmail, string toName, decimal valor, DateTime vencimento)
     {
         var cfg  = await GetSiteConfigAsync();

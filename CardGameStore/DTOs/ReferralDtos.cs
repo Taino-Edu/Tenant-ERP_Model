@@ -10,7 +10,7 @@ public class SaveReferralPartnerRequest
     [EmailAddress, MaxLength(255)] public string? Email { get; set; }
     [MaxLength(255)] public string? PixKey { get; set; }
     [RegularExpression("PF|PJ")] public string PersonType { get; set; } = "PF";
-    [MaxLength(30)] public string PartnerKind { get; set; } = "Vendedor";
+    [MaxLength(30)] public string PartnerKind { get; set; } = "Parceiro de indicação";
     [MaxLength(50)] public string? ProfessionalRegistration { get; set; }
     [Range(0, 100)] public decimal SetupCommissionPercent { get; set; }
     [Range(0, 100)] public decimal MonthlyCommissionPercent { get; set; }
@@ -28,7 +28,7 @@ public class ReferralPartnerDto
     public string? Email { get; set; }
     public string? PixKey { get; set; }
     public string PersonType { get; set; } = "PF";
-    public string PartnerKind { get; set; } = "Vendedor";
+    public string PartnerKind { get; set; } = "Parceiro de indicação";
     public string? ProfessionalRegistration { get; set; }
     public string FiscalDocumentType { get; set; } = "RPA";
     public decimal SetupCommissionPercent { get; set; }
@@ -37,6 +37,7 @@ public class ReferralPartnerDto
     public int PaymentGraceDays { get; set; }
     public string? ContractVersion { get; set; }
     public DateTime? ContractAcceptedAt { get; set; }
+    public bool ContractDocumentAvailable { get; set; }
     public bool Active { get; set; }
     public int ReferredClients { get; set; }
     public decimal PendingAmount { get; set; }
@@ -113,7 +114,7 @@ public class CreateReferralInvitationRequest
 {
     [MaxLength(150)] public string? Name { get; set; }
     [EmailAddress, MaxLength(255)] public string? Email { get; set; }
-    [MaxLength(30)] public string PartnerKind { get; set; } = "Vendedor";
+    [MaxLength(30)] public string PartnerKind { get; set; } = "Parceiro de indicação";
     [Range(0, 100)] public decimal SetupCommissionPercent { get; set; } = 30m;
     [Range(0, 100)] public decimal MonthlyCommissionPercent { get; set; } = 5m;
     [Range(0, 60)] public int PaymentGraceDays { get; set; } = 5;
@@ -126,7 +127,7 @@ public class ReferralInvitationDto
     public Guid Id { get; set; }
     public string? Name { get; set; }
     public string? Email { get; set; }
-    public string PartnerKind { get; set; } = "Vendedor";
+    public string PartnerKind { get; set; } = "Parceiro de indicação";
     public decimal SetupCommissionPercent { get; set; }
     public decimal MonthlyCommissionPercent { get; set; }
     public int PaymentGraceDays { get; set; }
@@ -138,6 +139,8 @@ public class ReferralInvitationDto
     public DateTime? RevokedAt { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? InviteUrl { get; set; }
+    public DateTime? SignatureCodeSentAt { get; set; }
+    public bool SignedDocumentAvailable { get; set; }
 }
 
 public class AcceptReferralInvitationRequest
@@ -150,4 +153,10 @@ public class AcceptReferralInvitationRequest
     [RegularExpression("PF|PJ")] public string PersonType { get; set; } = "PF";
     [MaxLength(50)] public string? ProfessionalRegistration { get; set; }
     public bool AcceptedTerms { get; set; }
+}
+
+public class ConfirmReferralSignatureRequest
+{
+    [Required, RegularExpression("^[0-9]{6}$", ErrorMessage = "Informe o código de 6 dígitos.")]
+    public string Code { get; set; } = string.Empty;
 }
