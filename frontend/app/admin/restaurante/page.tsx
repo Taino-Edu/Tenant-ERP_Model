@@ -22,7 +22,7 @@ import { ArrowRight, ChefHat, Clock3, ExternalLink, Flame, Loader2, MessageSquar
 import Link from 'next/link'
 import { startHub, stopHub } from '@/lib/signalr'
 
-const DEFAULT_COLOR = '#3EC2F2'
+const DEFAULT_COLOR = '#28b0d6'
 const PRODUCTION_STATUSES: RestaurantProductionStatus[] = ['Recebido', 'Preparando', 'Pronto']
 const NEXT_STATUS: Record<Exclude<RestaurantProductionStatus, 'Servido'>, RestaurantProductionStatus> = {
   Recebido: 'Preparando',
@@ -346,7 +346,7 @@ export default function RestaurantePage() {
                               <p className="text-sm font-semibold text-white truncate">{item.quantity}× {item.itemName}</p>
                               <p className="text-[11px] text-gray-500">{item.tableIdentifier || 'Balcão'} · {item.userName} · {elapsedLabel(item.addedAt)}</p>
                             </div>
-                            <span className="text-[10px] font-bold rounded-full px-2 py-1 shrink-0" style={{ color: area?.color ?? '#3EC2F2', backgroundColor: `${area?.color ?? '#3EC2F2'}18` }}>
+                            <span className="text-[10px] font-bold rounded-full px-2 py-1 shrink-0" style={{ color: area?.color ?? '#28b0d6', backgroundColor: `${area?.color ?? '#28b0d6'}18` }}>
                               {item.productionAreaName}
                             </span>
                           </div>

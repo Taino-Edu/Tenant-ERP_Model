@@ -6,10 +6,11 @@ import toast, { Toaster } from 'react-hot-toast'
 import Link from 'next/link'
 import { UserPreferences } from '@/lib/api'
 
+// Mesma paleta de app/cliente/page.tsx — blue2/border derivam do blue.
 const C = {
-  navy: '#0C3D5A', blue: '#3EC2F2', blue2: '#1A9DD4',
+  navy: '#0C3D5A', blue: '#28b0d6', blue2: '#2190af',
   yellow: '#FFE45E', bg: '#EBF7FD', white: '#FFFFFF',
-  muted: '#4D8FAC', border: 'rgba(62,194,242,0.18)',
+  muted: '#4D8FAC', border: 'rgba(40,176,214,0.18)',
 }
 
 const CORNERS = [

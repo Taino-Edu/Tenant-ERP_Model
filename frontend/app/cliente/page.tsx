@@ -14,15 +14,19 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 
+// `blue` é o azul da marca (#28b0d6). `blue2` e `border` DERIVAM dele — o tom
+// escuro pela mesma fórmula de lib/colors.ts (18% preto) e a borda pelo mesmo
+// RGB a 18% de alpha. Trocar só o `blue` deixaria os três desalinhados, que é
+// o tipo de detalhe que aparece como "azul sujo" na borda de um card.
 const C = {
   navy:   '#0C3D5A',
-  blue:   '#3EC2F2',
-  blue2:  '#1A9DD4',
+  blue:   '#28b0d6',
+  blue2:  '#2190af',
   yellow: '#FFE45E',
   bg:     '#EBF7FD',
   white:  '#FFFFFF',
   muted:  '#4D8FAC',
-  border: 'rgba(62,194,242,0.18)',
+  border: 'rgba(40,176,214,0.18)',
 }
 
 function ProductCard({ p, adding, onAdd }: {

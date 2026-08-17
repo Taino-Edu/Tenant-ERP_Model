@@ -73,10 +73,10 @@ export default function ProdutosPage() {
 
   const C: Theme = isDark ? {
     bg: '#121215', card: '#1A1A1F', border: 'rgba(255,255,255,0.07)',
-    blue: '#3EC2F2', yellow: '#FFE45E', text: 'rgba(255,255,255,0.60)', navy: '#FFFFFF', muted: 'rgba(255,255,255,0.35)',
+    blue: '#28b0d6', yellow: '#FFE45E', text: 'rgba(255,255,255,0.60)', navy: '#FFFFFF', muted: 'rgba(255,255,255,0.35)',
   } : {
     bg: '#EBF7FD', card: '#FFFFFF', border: 'rgba(12,61,90,0.10)',
-    blue: '#3EC2F2', yellow: '#FFE45E', text: '#4D8FAC', navy: '#0C3D5A', muted: '#9CA3AF',
+    blue: '#28b0d6', yellow: '#FFE45E', text: '#4D8FAC', navy: '#0C3D5A', muted: '#9CA3AF',
   }
 
   useEffect(() => {

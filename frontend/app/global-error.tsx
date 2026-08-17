@@ -70,7 +70,7 @@ export default function GlobalError({
               alignItems: 'center',
               gap: '0.5rem',
               padding: '0.5rem 1rem',
-              backgroundColor: '#3EC2F2',
+              backgroundColor: '#28b0d6',
               color: '#FFFFFF',
               fontWeight: 600,
               border: 'none',

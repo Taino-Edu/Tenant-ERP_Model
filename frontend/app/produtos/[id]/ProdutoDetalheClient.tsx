@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { ChevronLeft, Package, ShoppingBag, MessageCircle, Sun, Moon, Share2, Tag, CheckCircle, Clock, LogIn, X, Loader2, Mail, KeyRound, User as UserIcon } from 'lucide-react'
 
 const NAVY = '#0C3D5A'
-const BLUE = '#3EC2F2'
+const BLUE = '#28b0d6'
 const WA_NUM = '5517997633103'
 
 function fmt(v: number) { return `R$ ${v.toFixed(2).replace('.', ',')}` }
@@ -175,7 +175,7 @@ export default function ProdutoDetalheClient() {
                 className="w-8 h-8 rounded-full object-cover border-2 border-white/30 hover:border-white/70 transition-all" />
             ) : (
               <div className="w-8 h-8 rounded-full flex items-center justify-center border-2 border-white/30 hover:border-white/70 transition-all text-xs font-black"
-                style={{ backgroundColor: '#3EC2F2', color: '#0C3D5A' }}>
+                style={{ backgroundColor: '#28b0d6', color: '#0C3D5A' }}>
                 {userName.charAt(0).toUpperCase() || <UserIcon className="w-4 h-4" />}
               </div>
             )}
@@ -347,7 +347,7 @@ export default function ProdutoDetalheClient() {
             {/* Cabeçalho */}
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#3EC2F2' }}>{site.siteName}</p>
+                <p className="text-[10px] font-black uppercase tracking-widest" style={{ color: '#28b0d6' }}>{site.siteName}</p>
                 <h2 className="text-xl font-black mt-0.5" style={{ color: '#0C3D5A' }}>Entre na sua conta</h2>
               </div>
               <button onClick={() => setShowLogin(false)}
@@ -400,7 +400,7 @@ export default function ProdutoDetalheClient() {
             </form>
 
             <div className="flex items-center justify-between text-xs" style={{ color: '#9CA3AF' }}>
-              <Link href="/primeiro-acesso" className="hover:underline" style={{ color: '#3EC2F2' }}>
+              <Link href="/primeiro-acesso" className="hover:underline" style={{ color: '#28b0d6' }}>
                 Criar conta grátis
               </Link>
               <Link href="/reset-password" className="hover:underline">

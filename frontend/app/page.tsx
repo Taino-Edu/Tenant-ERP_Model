@@ -542,7 +542,7 @@ export default function LandingPage() {
                 <Link
                   href="/produtos"
                   className="flex items-center gap-2 text-sm font-black px-6 py-2.5 rounded-xl transition-all active:scale-95"
-                  style={{ backgroundColor: C.blue, color: '#fff', boxShadow: `0 4px 16px rgba(62,194,242,0.25)` }}>
+                  style={{ backgroundColor: C.blue, color: '#fff', boxShadow: `0 4px 16px rgba(40,176,214,0.25)` }}>
                   Ver todos os {products.length} produtos <ChevronRight className="w-4 h-4" />
                 </Link>
               </div>

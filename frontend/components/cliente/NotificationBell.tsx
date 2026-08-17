@@ -5,7 +5,7 @@ import { Bell, X, CheckCheck, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
 const NAVY   = '#0C3D5A'
-const BLUE   = '#3EC2F2'
+const BLUE   = '#28b0d6'
 const MUTED  = '#4D8FAC'
 const BORDER = 'rgba(12,61,90,0.12)'
 
@@ -183,7 +183,7 @@ export default function NotificationBell() {
                   className="flex gap-3 px-4 py-3 border-b transition-colors"
                   style={{
                     borderColor: BORDER,
-                    backgroundColor: !n.isRead ? `rgba(62,194,242,0.06)` : 'transparent',
+                    backgroundColor: !n.isRead ? `rgba(40,176,214,0.06)` : 'transparent',
                   }}
                 >
                   {/* Indicador não lida */}

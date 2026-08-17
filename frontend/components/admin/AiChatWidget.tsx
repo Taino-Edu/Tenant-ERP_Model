@@ -104,7 +104,7 @@ export default function AiChatWidget() {
   // completamente o branding do tenant (site.colorPrimary/colorNavy já
   // existem e são usados no resto do sistema, só não aqui).
   const C = useMemo(() => {
-    const primary     = site.colorPrimary || '#3EC2F2'
+    const primary     = site.colorPrimary || '#28b0d6'
     const primaryDark = mixHex(primary, '#000000', 0.25)
     const onPrimary   = getContrastText(primary)
     const rgb         = hexToRgbTriplet(primary)

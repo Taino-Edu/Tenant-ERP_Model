@@ -19,7 +19,10 @@ export function mixHex(a: string, b: string, ratio: number): string {
  * `rgb(var(--x) / <alpha-value>)` do Tailwind pra cor dinâmica com suporte a opacidade. */
 export function hexToRgbTriplet(hex: string): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim())
-  if (!m) return '62 194 242' // fallback = brand-500 padrão (#3EC2F2)
+  // Fallback = o MESMO --brand-500 default de globals.css (#28b0d6, o azul da
+  // marca). Precisa concordar com o CSS: se divergir, um tenant com
+  // ColorPrimary inválido renderiza num azul que não existe em lugar nenhum.
+  if (!m) return '40 176 214'
   const n = parseInt(m[1], 16)
   return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
 }

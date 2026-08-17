@@ -23,13 +23,19 @@
 
     /* Cor de marca do tenant — "R G B" espaço-separado (não hex), consumido pelo
        token brand-400/500/600 do Tailwind via rgb(var(--brand-500) / <alpha-value>).
-       Valores default = paleta estática original (#5BBDE8/#3EC2F2/#1AAFD9).
        Sobrescrito em runtime por TenantColorInjector (app/admin/layout.tsx) a
        partir de SiteConfig.ColorPrimary — mesma cor em todos os temas, não
-       varia entre dark/light. */
-    --brand-400: 91 189 232;
-    --brand-500: 62 194 242;
-    --brand-600: 26 175 217;
+       varia entre dark/light.
+
+       O default é o azul da marca da plataforma (#28b0d6), com 400/600 derivados
+       pela MESMA fórmula que deriveBrandRamp() aplica à cor de qualquer tenant
+       (lib/colors.ts: 28% branco pro 400, 18% preto pro 600). Antes eram três
+       tons escolhidos à mão (#5BBDE8/#3EC2F2/#1AAFD9), que não seguiam relação
+       nenhuma entre si — usar a fórmula faz o default e os tenants se
+       comportarem igual, e o tom novo bater com o logo. */
+    --brand-400: 100 198 225;  /* #64c6e1 */
+    --brand-500: 40 176 214;   /* #28b0d6 */
+    --brand-600: 33 144 175;   /* #2190af */
 
     /* Paleta surface — mesmo formato "R G B" do brand acima, consumida pelo
        token surface-400..900 do Tailwind. Any-opacity variants (bg-surface-700/50

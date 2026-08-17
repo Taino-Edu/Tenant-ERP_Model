@@ -7,6 +7,7 @@ import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import toast, { Toaster } from 'react-hot-toast'
 import { KeyRound, Mail, Loader2, Eye, EyeOff, SearchCheck, Building2 } from 'lucide-react'
 import Link from 'next/link'
+import Logo from '@/components/Logo'
 
 export default function LoginPage() {
   const router  = useRouter()
@@ -88,9 +89,21 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-brand-600/10 border border-brand-500/20 rounded-full mb-4">
-            <img src={site.logoUrl || '/logo-placeholder.svg'} alt={site.siteName} className="w-14 h-14 object-contain" />
-          </div>
+          {/* Logo do lojista quando existe; a marca da plataforma quando não —
+              "Octus é a identidade padrão da plataforma" (FAQ da institucional).
+              O <Logo /> é pintado por máscara CSS, então acompanha o tema
+              claro/escuro sem precisar de duas artes.
+              A moldura é retangular no caso da marca da plataforma porque ela é
+              um wordmark (~1.9:1): num círculo de 80px ela sairia minúscula. */}
+          {site.logoUrl ? (
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-brand-600/10 border border-brand-500/20 rounded-full mb-4">
+              <img src={site.logoUrl} alt={site.siteName} className="w-14 h-14 object-contain" />
+            </div>
+          ) : (
+            <div className="inline-flex items-center justify-center px-6 py-4 bg-brand-600/10 border border-brand-500/20 rounded-2xl mb-4">
+              <Logo tone="brand" className="h-10 w-[74px]" />
+            </div>
+          )}
           <h1 className="text-3xl font-bold text-white">{site.siteName}</h1>
           <p className="text-gray-400 mt-1 text-sm">Painel de Gestão</p>
         </div>

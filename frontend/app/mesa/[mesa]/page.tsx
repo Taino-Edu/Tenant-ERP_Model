@@ -26,7 +26,7 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
       <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <Shield className="w-5 h-5 text-[#3EC2F2]" />
+            <Shield className="w-5 h-5 text-[#28b0d6]" />
             <h2 className="text-gray-900 font-bold text-sm">Privacidade & Dados</h2>
           </div>
           <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-700 transition-colors rounded-full hover:bg-gray-100">
@@ -152,7 +152,7 @@ export default function MesaPage() {
 
   return (
     <div className="min-h-screen flex flex-col"
-      style={{ background: 'linear-gradient(160deg, #3EC2F2 0%, #1A6DB5 60%, #1352A2 100%)' }}>
+      style={{ background: 'linear-gradient(160deg, #28b0d6 0%, #1A6DB5 60%, #1352A2 100%)' }}>
 
       <Toaster position="top-center" toastOptions={{ style: { background: '#fff', color: '#1a1a2e', border: '1px solid #e5e7eb' } }} />
 
@@ -189,7 +189,7 @@ export default function MesaPage() {
         {/* Loading */}
         {step === 'loading' && (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <Loader2 className="w-10 h-10 animate-spin text-[#3EC2F2]" />
+            <Loader2 className="w-10 h-10 animate-spin text-[#28b0d6]" />
             <p className="text-sm text-gray-500 font-semibold">Verificando dados...</p>
           </div>
         )}
@@ -201,13 +201,13 @@ export default function MesaPage() {
               <h2 className="text-xl font-black text-gray-900">Identificação do Cliente</h2>
               <p className="text-gray-400 text-sm mt-1">
                 Bem-vindo de volta,{' '}
-                <span className="text-[#3EC2F2] font-bold">{savedUser.name.split(' ')[0]}</span>!
+                <span className="text-[#28b0d6] font-bold">{savedUser.name.split(' ')[0]}</span>!
               </p>
             </div>
 
             <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[#3EC2F2]/15 flex items-center justify-center shrink-0">
-                <User className="w-5 h-5 text-[#3EC2F2]" />
+              <div className="w-10 h-10 rounded-full bg-[#28b0d6]/15 flex items-center justify-center shrink-0">
+                <User className="w-5 h-5 text-[#28b0d6]" />
               </div>
               <div className="min-w-0">
                 <p className="font-bold text-gray-900 text-sm truncate">{savedUser.name}</p>
@@ -250,7 +250,7 @@ export default function MesaPage() {
                   <input
                     type="text" value={name} onChange={e => setName(e.target.value)}
                     placeholder="Seu nome completo"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#3EC2F2] focus:ring-2 focus:ring-[#3EC2F2]/20 transition-all"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#28b0d6] focus:ring-2 focus:ring-[#28b0d6]/20 transition-all"
                   />
                 </div>
               </div>
@@ -264,7 +264,7 @@ export default function MesaPage() {
                   <input
                     type="tel" value={cpf} onChange={e => setCpf(formatCpf(e.target.value))}
                     placeholder="000.000.000-00"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 font-mono placeholder-gray-400 outline-none focus:border-[#3EC2F2] focus:ring-2 focus:ring-[#3EC2F2]/20 transition-all"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 font-mono placeholder-gray-400 outline-none focus:border-[#28b0d6] focus:ring-2 focus:ring-[#28b0d6]/20 transition-all"
                   />
                 </div>
               </div>
@@ -278,7 +278,7 @@ export default function MesaPage() {
                   <input
                     type="tel" value={whatsApp} onChange={e => setWhatsApp(formatPhone(e.target.value))}
                     placeholder="(00) 00000-0000"
-                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#3EC2F2] focus:ring-2 focus:ring-[#3EC2F2]/20 transition-all"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3.5 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-[#28b0d6] focus:ring-2 focus:ring-[#28b0d6]/20 transition-all"
                   />
                 </div>
               </div>
@@ -292,15 +292,15 @@ export default function MesaPage() {
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)}
-                  className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4 rounded border-gray-300 text-[#3EC2F2] focus:ring-[#3EC2F2] shrink-0"
+                  className="mt-0.5 h-5 w-5 sm:h-4 sm:w-4 rounded border-gray-300 text-[#28b0d6] focus:ring-[#28b0d6] shrink-0"
                 />
                 <span className="text-xs text-gray-500 leading-relaxed">
                   Li e concordo com os{' '}
-                  <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#3EC2F2] font-semibold underline underline-offset-2">
+                  <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#28b0d6] font-semibold underline underline-offset-2">
                     Termos de Uso
                   </button>
                   {' '}e a{' '}
-                  <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#3EC2F2] font-semibold underline underline-offset-2">
+                  <button type="button" onClick={() => setShowPrivacy(true)} className="text-[#28b0d6] font-semibold underline underline-offset-2">
                     Política de Privacidade
                   </button>
                   {' '}do {site.siteName}, conforme a{' '}

@@ -31,7 +31,7 @@ export const MANUAL_SECOES: ManualSectionData[] = [
   {
     num: '02',
     titulo: 'Comandas (Mesa / QR Code)',
-    cor: '#3EC2F2',
+    cor: '#28b0d6',
     itens: [
       { t: 'Como funciona', d: 'O cliente escaneia o QR Code da mesa e abre a própria comanda. O sistema identifica o cliente automaticamente pelo CPF ou WhatsApp.' },
       { t: 'Adicionar itens', d: 'No painel admin, clique na comanda aberta e pesquise o produto. Você também pode adicionar itens manualmente com nome e preço.' },
