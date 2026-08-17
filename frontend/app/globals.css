@@ -160,6 +160,45 @@
   .max-h-\[92vh\] { max-height: 92dvh; }
 }
 
+/* ── Rodapé global ────────────────────────────────────────────────────────── */
+/* As cores saíram do componente para cá porque ele aparece em DOIS mundos com
+   esquemas de cor diferentes, e uma cor fixa só podia servir a um:
+
+   1. Vitrine, área do cliente, páginas legais — têm paleta clara própria
+      (#EBF7FD e afins). Ali o rodapé branco está certo e continua branco.
+   2. Login, cadastro, entrar, reset-password, primeiro-acesso — usam os tokens
+      do admin e seguem o tema claro/escuro. Ali o rodapé branco fixo virava uma
+      faixa branca colada no fim de uma página escura.
+
+   O seletor `.admin-shell .js-global-footer` cobre exatamente o segundo caso:
+   dentro do escopo do tema, o rodapé passa a usar as mesmas variáveis do resto
+   da página; fora dele, nada muda. */
+.js-global-footer {
+  background-color: #ffffff;
+  border-color: rgb(12 61 90 / 0.10);
+  color: #6B8598;
+}
+.js-global-footer .js-footer-sep  { color: rgb(12 61 90 / 0.15); }
+.js-global-footer .js-footer-copy { color: #8FA6B5; }
+.js-global-footer .js-footer-brand { color: #3E5A6E; }
+
+/* Os dois seletores: o rodapé pode estar DENTRO de um .admin-shell (se algum dia
+   for renderizado junto do conteúdo) ou SER ele próprio o .admin-shell — que é o
+   caso hoje, já que o layout raiz o renderiza como irmão do conteúdo da página,
+   fora do escopo dela. */
+.admin-shell .js-global-footer,
+.admin-shell.js-global-footer {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-muted);
+}
+.admin-shell .js-global-footer .js-footer-sep,
+.admin-shell.js-global-footer .js-footer-sep   { color: var(--border-color); }
+.admin-shell .js-global-footer .js-footer-copy,
+.admin-shell.js-global-footer .js-footer-copy  { color: var(--text-faint); }
+.admin-shell .js-global-footer .js-footer-brand,
+.admin-shell.js-global-footer .js-footer-brand { color: var(--text-primary); }
+
 /* Página institucional tem footer próprio e não é o app instalável — esconde
    os widgets globais da loja (a classe é aplicada pelo useEffect da página). */
 body.institucional-page .js-global-footer,

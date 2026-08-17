@@ -8,10 +8,10 @@ import { siteConfigApi, SiteConfigDto } from '@/lib/api'
 export const DEFAULT_SITE_CONFIG: SiteConfigDto = {
   siteName: 'Octus',
   heroSubtitle: 'Produtos e a melhor experiência de atendimento da região. Acumule pontos e compre direto na mesa.',
-  addressLine: 'Sua Cidade — UF',
+  addressLine: 'Brasil — SP',
   contactPersonName: 'Atendimento',
   whatsappNumber: '',
-  contactEmail: 'contato@tenant-erp.local',
+  contactEmail: '3esysten@gmail.com',
   logoUrl: null,
   faviconUrl: null,
   pwaIconUrl: null,

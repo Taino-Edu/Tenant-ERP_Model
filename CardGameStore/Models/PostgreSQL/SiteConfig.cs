@@ -37,9 +37,13 @@ public class SiteConfig
     public string HeroSubtitle { get; set; } =
         "Produtos e a melhor experiência de atendimento da região. Acumule pontos e compre direto na mesa.";
 
+    /// <summary>Aparece no rodapé como "{SiteName} — {AddressLine}". O default
+    /// vale para quem ainda não preencheu o endereço: "Sua Cidade — UF" era um
+    /// placeholder de formulário e ia PUBLICADO no rodapé da vitrine, como se
+    /// fosse o endereço da loja.</summary>
     [MaxLength(150)]
     [Column("address_line")]
-    public string AddressLine { get; set; } = "Sua Cidade — UF";
+    public string AddressLine { get; set; } = "Brasil — SP";
 
     /// <summary>Nome da pessoa de contato (ex: dono da loja) — usado em textos tipo "Falar com o
     /// {nome}" ou "{nome} vai confirmar...". Separado do nome do site de propósito: um é a marca,
@@ -53,9 +57,14 @@ public class SiteConfig
     [Column("whatsapp_number")]
     public string WhatsappNumber { get; set; } = "";
 
+    /// <summary>E-mail de contato exibido no rodapé de toda página pública.
+    /// O default anterior (contato@tenant-erp.local) era um domínio inexistente
+    /// publicado como se fosse endereço real — quem clicasse abriria o cliente
+    /// de e-mail para lugar nenhum. Usa o mesmo endereço com que a plataforma já
+    /// envia e-mail (SMTP_FROM_EMAIL / "3E Systen").</summary>
     [MaxLength(150)]
     [Column("contact_email")]
-    public string ContactEmail { get; set; } = "contato@tenant-erp.local";
+    public string ContactEmail { get; set; } = "3esysten@gmail.com";
 
     /// <summary>URL do logo (upload via /api/upload/image). Vazio = usa o ícone genérico padrão.</summary>
     [MaxLength(300)]
