@@ -5,6 +5,7 @@ import { api, getErrorMessage } from '@/lib/api'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import Modal from '@/components/admin/ui/Modal'
+import SefazHealthCard from '@/components/admin/SefazHealthCard'
 import { formatCountdown, secondsUntil } from '@/lib/sefaz'
 import {
   Plug, CheckCircle, XCircle, Settings, Loader2, RefreshCw,
@@ -29,17 +30,8 @@ type SefazStatus = {
   syncLockAte?: string
 }
 
-type SefazHealth = {
-  configured: boolean
-  online: boolean
-  cStat?: number
-  message: string
-  checkedAt: string
-  latencyMs: number
-  ambiente?: string
-  uf?: string
-  sefazReceivedAt?: string
-}
+// O tipo SefazHealth e a busca do indicador saíram daqui: vivem no
+// SefazHealthCard, que é autossuficiente e usado também no painel Fiscal.
 
 type ConfigModal = {
   source: string
@@ -86,8 +78,6 @@ export default function IntegracoesPage() {
   const [loading,     setLoading]     = useState(true)
   const [sefazOk,     setSefazOk]     = useState(false)
   const [sefazStatus, setSefazStatus] = useState<SefazStatus | null>(null)
-  const [sefazHealth, setSefazHealth] = useState<SefazHealth | null>(null)
-  const [testingSefaz, setTestingSefaz] = useState(false)
   const [clock, setClock] = useState(() => Date.now())
   const [configModal, setConfigModal] = useState<ConfigModal | null>(null)
   const [saving,      setSaving]      = useState(false)
@@ -98,15 +88,13 @@ export default function IntegracoesPage() {
   async function load() {
     setLoading(true)
     try {
-      const [{ data: ints }, { data: sefaz }, healthResponse] = await Promise.all([
+      const [{ data: ints }, { data: sefaz }] = await Promise.all([
         api.get('/api/contas-receber/integracoes'),
         api.get('/api/contas-receber/sefaz-status'),
-        api.get('/api/contas-receber/sefaz/health').catch(() => null),
       ])
       setIntegracoes(ints)
       setSefazOk(sefaz.configured)
       setSefazStatus(sefaz)
-      if (healthResponse) setSefazHealth(healthResponse.data)
     } catch (err) { toast.error(getErrorMessage(err, 'Erro ao carregar integrações')) }
     finally  { setLoading(false) }
   }
@@ -233,23 +221,6 @@ export default function IntegracoesPage() {
     }
   }
 
-  async function testSefazAgora() {
-    setTestingSefaz(true)
-    try {
-      const { data } = await api.post('/api/contas-receber/sefaz/test')
-      setSefazHealth(data)
-      if (data.online) {
-        toast.success(`SEFAZ ${data.uf} online — resposta em ${data.latencyMs} ms.`)
-      } else {
-        toast.error(data.message || 'A SEFAZ não está respondendo como operacional.')
-      }
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Não foi possível testar a SEFAZ.'))
-    } finally {
-      setTestingSefaz(false)
-    }
-  }
-
   async function handleOfxUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -342,35 +313,11 @@ export default function IntegracoesPage() {
                       <p className="text-xs text-gray-500 mt-1">
                         Usa automaticamente o CNPJ, a UF, o ambiente e o certificado configurados em Fiscal.
                       </p>
-                      <div className={clsx(
-                        'flex items-start gap-2 mt-2 text-xs rounded-lg p-2 border',
-                        !sefazHealth && 'text-gray-400 bg-surface-700/40 border-surface-600',
-                        sefazHealth?.online && 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
-                        sefazHealth && !sefazHealth.online && 'text-red-300 bg-red-500/10 border-red-500/20',
-                      )}>
-                        <span className={clsx(
-                          'w-2.5 h-2.5 rounded-full mt-0.5 flex-shrink-0',
-                          !sefazHealth && 'bg-gray-500',
-                          sefazHealth?.online && 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]',
-                          sefazHealth && !sefazHealth.online && 'bg-red-400',
-                        )} />
-                        <div>
-                          <p className="font-semibold">
-                            {!sefazHealth
-                              ? 'Saúde da SEFAZ ainda não verificada'
-                              : sefazHealth.online
-                                ? `SEFAZ ${sefazHealth.uf ?? ''} online`
-                                : `SEFAZ ${sefazHealth.uf ?? ''} indisponível`}
-                          </p>
-                          {sefazHealth && (
-                            <p className="opacity-80 mt-0.5">
-                              {sefazHealth.message}
-                              {sefazHealth.cStat ? ` · cStat ${sefazHealth.cStat}` : ''}
-                              {` · ${sefazHealth.latencyMs} ms · ${fmtDate(sefazHealth.checkedAt)}`}
-                            </p>
-                          )}
-                        </div>
-                      </div>
+                      {/* Indicador + botão de teste vêm do componente compartilhado
+                          com o painel Fiscal. Antes esta tela tinha a própria cópia
+                          da marcação e do handler; duas implementações do mesmo
+                          widget divergem na primeira vez que alguém ajusta uma. */}
+                      <SefazHealthCard className="mt-2" />
                     </>
                   )}
                   {int.source === 'sefaz' && sefazOk && !int.isActive && (
@@ -404,16 +351,6 @@ export default function IntegracoesPage() {
                                    border border-brand-500/30 text-sm text-brand-300 transition-colors disabled:opacity-50">
                         {syncingInter ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                         {syncingInter ? 'Sincronizando…' : 'Sincronizar agora'}
-                      </button>
-                    )}
-                    {int.source === 'sefaz' && sefazOk && (
-                      <button
-                        onClick={testSefazAgora}
-                        disabled={testingSefaz}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-500
-                                   border border-surface-600 text-sm text-gray-300 transition-colors disabled:opacity-50">
-                        {testingSefaz ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Activity className="w-3.5 h-3.5" />}
-                        {testingSefaz ? 'Testando…' : 'Testar SEFAZ'}
                       </button>
                     )}
                     {int.source === 'sefaz' && sefazOk && (

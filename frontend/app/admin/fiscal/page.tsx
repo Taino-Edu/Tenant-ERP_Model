@@ -11,6 +11,7 @@ import Modal from '@/components/admin/ui/Modal'
 import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
 import NumberInput from '@/components/admin/ui/NumberInput'
 import AlertasFiscaisCard from '@/components/admin/fiscal/AlertasFiscaisCard'
+import SefazHealthCard from '@/components/admin/SefazHealthCard'
 import {
   Receipt, Upload, Save, Loader2, AlertTriangle, CheckCircle,
   Plus, Trash2, Download, ShieldCheck, Star, RefreshCw, Ban, ScrollText, Printer,
@@ -716,6 +717,12 @@ export default function FiscalPage() {
           <p className="text-sm text-gray-400">Certificado digital, dados da empresa e naturezas de operação</p>
         </div>
       </div>
+
+      {/* Saúde da SEFAZ logo no topo: é a primeira pergunta de quem abre esta
+          tela para emitir. Antes só existia em Admin → Integrações, junto do
+          cadastro do certificado, e quem estava emitindo descobria que a SEFAZ
+          estava fora pela nota rejeitada. */}
+      <SefazHealthCard className="card p-4" />
 
       {/* Visão geral — status fiscal, checklist e próxima ação, em poucos segundos */}
       {loadingSaude ? (
