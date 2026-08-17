@@ -350,11 +350,6 @@ public sealed class IbptTaxService
 
         var leitura = IbptTabelaCsvImporter.Ler(conteudo);
 
-        // Fora do change tracker: são ~24 mil linhas (dois registros por NCM), e
-        // rastrear cada uma multiplicaria o tempo por nada.
-        await using var transacao = await _catalog.Database.BeginTransactionAsync(ct);
-        await _catalog.IbptTabela.Where(e => e.Uf == uf).ExecuteDeleteAsync(ct);
-
         var agora = DateTime.UtcNow;
         var entradas = new List<IbptTabelaEntry>(leitura.Linhas.Count * 2);
         foreach (var linha in leitura.Linhas)
@@ -377,25 +372,53 @@ public sealed class IbptTaxService
                 });
         }
 
-        var rastreamento = _catalog.ChangeTracker.AutoDetectChangesEnabled;
-        _catalog.ChangeTracker.AutoDetectChangesEnabled = false;
-        try
+        // A troca da tabela precisa ser atômica: o DELETE apaga a carga da UF
+        // inteira, e se o INSERT falhar no meio a loja fica SEM tabela nenhuma —
+        // emitindo sem transparência tributária até alguém reimportar.
+        //
+        // Mas o CatalogDbContext é registrado com EnableRetryOnFailure, e uma
+        // execution strategy que faz retry PROÍBE transação aberta na mão: o EF
+        // lança InvalidOperationException ("does not support user-initiated
+        // transactions"), porque num retry ele não teria como repetir a
+        // transação inteira. O bloco todo tem que passar por
+        // CreateExecutionStrategy() — mesmo padrão já usado em
+        // FiscalController.SalvarNatureza e ComandaService.
+        //
+        // Sem isto, toda importação de CSV do IBPT respondia 500. O mesmo
+        // descuido está hoje em produção no aceite de convite de parceiro
+        // (ReferralInvitationController), que é como este bug foi descoberto.
+        var estrategia = _catalog.Database.CreateExecutionStrategy();
+        await estrategia.ExecuteAsync(async () =>
         {
-            await _catalog.IbptTabela.AddRangeAsync(entradas, ct);
-            cfg.IbptUltimaSincronizacao = agora;
-            cfg.IbptUltimaVersao        = leitura.Versao;
-            cfg.IbptVigenciaInicio      = leitura.VigenciaInicio;
-            cfg.IbptVigenciaFim         = leitura.VigenciaFim;
-            cfg.IbptUltimoErro          = null;
-            cfg.UpdatedAt               = agora;
-            await _catalog.SaveChangesAsync(ct);
-            await _db.SaveChangesAsync(ct);
-            await transacao.CommitAsync(ct);
-        }
-        finally
-        {
-            _catalog.ChangeTracker.AutoDetectChangesEnabled = rastreamento;
-        }
+            await using var transacao = await _catalog.Database.BeginTransactionAsync(ct);
+            await _catalog.IbptTabela.Where(e => e.Uf == uf).ExecuteDeleteAsync(ct);
+
+            // Fora do change tracker: são ~24 mil linhas (dois registros por
+            // NCM), e rastrear cada uma multiplicaria o tempo por nada.
+            var rastreamento = _catalog.ChangeTracker.AutoDetectChangesEnabled;
+            _catalog.ChangeTracker.AutoDetectChangesEnabled = false;
+            try
+            {
+                await _catalog.IbptTabela.AddRangeAsync(entradas, ct);
+                cfg.IbptUltimaSincronizacao = agora;
+                cfg.IbptUltimaVersao        = leitura.Versao;
+                cfg.IbptVigenciaInicio      = leitura.VigenciaInicio;
+                cfg.IbptVigenciaFim         = leitura.VigenciaFim;
+                cfg.IbptUltimoErro          = null;
+                cfg.UpdatedAt               = agora;
+                await _catalog.SaveChangesAsync(ct);
+                await _db.SaveChangesAsync(ct);
+                await transacao.CommitAsync(ct);
+            }
+            finally
+            {
+                _catalog.ChangeTracker.AutoDetectChangesEnabled = rastreamento;
+                // Um retry reexecuta o delegate com as MESMAS entradas já no
+                // change tracker do contexto. Limpar evita que a segunda
+                // tentativa tente inserir tudo duas vezes.
+                _catalog.ChangeTracker.Clear();
+            }
+        });
 
         _logger.LogInformation(
             "Tabela IBPT importada por arquivo: {Ncms} NCM(s), versão {Versao}, UF {Uf}.",
