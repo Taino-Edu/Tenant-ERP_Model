@@ -138,12 +138,13 @@ public class IbptTaxServiceTests
     });
 
     private static IbptTaxService CreateService(
-        AppDbContext db, HttpMessageHandler handler, CatalogDbContext? catalog = null)
+        AppDbContext db, HttpMessageHandler handler, CatalogDbContext? catalog = null,
+        string? apiKey = "token-global-de-teste", string? cnpj = "12345678000195")
     {
         var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["IbptSettings:ApiKey"] = "token-global-de-teste",
-            ["IbptSettings:Cnpj"] = "12345678000195",
+            ["IbptSettings:ApiKey"] = apiKey,
+            ["IbptSettings:Cnpj"] = cnpj,
         }).Build();
         return new IbptTaxService(db, catalog ?? CatalogFor(db), new FabricaDeCliente(handler), config,
             NullLogger<IbptTaxService>.Instance);
@@ -336,6 +337,63 @@ public class IbptTaxServiceTests
         var produto = await segunda.Products.FirstAsync();
         (await segunda.Products.FindAsync(produto.Id))!
             .PercentualTributosFederais.Should().Be(12.5m);
+    }
+
+    [Theory]
+    [InlineData(null, "12345678000195")]                    // token ausente
+    [InlineData("", "12345678000195")]                      // token vazio
+    [InlineData("token-ok", "SEU_CNPJ_14_DIGITOS")]         // placeholder do .env.example
+    [InlineData("token-ok", "123")]                         // CNPJ incompleto
+    public async Task CredencialGlobalInvalida_EncerraOCicloSemConsultarNada(string? apiKey, string cnpj)
+    {
+        // Observado em produção: com a credencial ausente, o painel do lojista
+        // exibia a MESMA mensagem repetida uma vez por NCM ("NCM 61099000: ... |
+        // NCM 85129000: ... | NCM 22021000: ..."). Credencial é condição do
+        // ambiente, não do NCM — o primeiro produto já disse tudo.
+        //
+        // O caso do placeholder não é hipotético: colar o valor de exemplo do
+        // .env.example passa por "não vazio", e só a contagem de dígitos do CNPJ
+        // separa configurado de aparentemente-configurado.
+        using var db = CreateDb($"{apiKey}-{cnpj}");
+        await SeedLojaAsync(db, produtos: 3);
+        using var handler = new HandlerQueResponde();
+
+        var r = await CreateService(db, handler, apiKey: apiKey, cnpj: cnpj).AtualizarTabelaLocalAsync();
+
+        handler.Chamadas.Should().Be(0, "sem credencial não se toca a rede");
+        r.Atualizados.Should().Be(0);
+        r.Erros.Should().HaveCount(1, "uma mensagem, não uma por produto");
+        r.Erros.Single().Should().Contain("credencial global");
+    }
+
+    [Fact]
+    public async Task CredencialGlobalAusente_NaoApagaATabelaJaCarregada()
+    {
+        // A saída antecipada não pode custar o que já funciona: a tabela
+        // compartilhada continua servindo, que é a degradação graciosa prometida
+        // na mensagem de erro.
+        using var catalog = CreateCatalog();
+        using var db = CreateDb();
+        await SeedLojaAsync(db);
+
+        catalog.IbptTabela.Add(new IbptTabelaEntry
+        {
+            Ncm = "95044000", Uf = "SP", Importado = false,
+            PercentualFederal = 12.5m, PercentualEstadual = 18m, PercentualMunicipal = 0m,
+            AtualizadoEm = DateTime.UtcNow.AddDays(-3), Versao = "26.1.L",
+        });
+        await catalog.SaveChangesAsync();
+
+        using var handler = new HandlerQueResponde();
+        var servico = CreateService(db, handler, catalog, apiKey: null);
+
+        await servico.AtualizarTabelaLocalAsync();
+        await servico.AplicarTabelaLocalAsync();
+
+        catalog.IbptTabela.Should().ContainSingle("a linha existente é preservada");
+        var produto = await db.Products.FirstAsync();
+        (await db.Products.FindAsync(produto.Id))!
+            .PercentualTributosFederais.Should().Be(12.5m, "o produto é preenchido pela tabela antiga");
     }
 
     [Fact]

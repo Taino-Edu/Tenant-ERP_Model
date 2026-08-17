@@ -187,6 +187,33 @@ public sealed class IbptTaxService
         var atualizados = 0;
         var reaproveitados = 0;
 
+        // Credencial ausente é condição do AMBIENTE, não do NCM: se ela não
+        // existe, o primeiro produto já disse tudo o que havia para saber — os
+        // demais falhariam de forma idêntica. Sem esta saída, um catálogo de 500
+        // produtos gerava 500 iterações inúteis e 500 vezes a MESMA mensagem
+        // empilhada em IbptUltimoErro, que é o que o lojista lê na tela.
+        //
+        // É o mesmo raciocínio que o laço abaixo já aplica a timeout, só que
+        // aquele caso precisa de uma tentativa para ser descoberto e este é
+        // verificável antes de tocar a rede.
+        //
+        // Sai sem erro fatal de propósito: a tabela compartilhada que já está no
+        // catálogo continua valendo, e AplicarTabelaLocalAsync — chamado logo
+        // depois pelo job — segue preenchendo produto a partir dela.
+        if (ObterCredencialGlobal() is null)
+        {
+            erros.Add(MensagemCredencialAusente);
+            AtualizarStatusConfiguracao(cfg, produtos.Where(p => p.TributosPreenchidosAutomaticamente), erros);
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogWarning(
+                "Credencial global do IBPT não configurada: ciclo encerrado sem consultar nenhum " +
+                "dos {Total} NCM(s). A tabela compartilhada existente continua em uso.",
+                combinacoes.Count);
+
+            return new IbptSyncResult(combinacoes.Count, 0, 0, erros.Count, erros.Take(20).ToList());
+        }
+
         foreach (var grupo in combinacoes)
         {
             ct.ThrowIfCancellationRequested();
@@ -568,6 +595,25 @@ public sealed class IbptTaxService
         return cfg;
     }
 
+    internal const string MensagemCredencialAusente =
+        "A credencial global do IBPT ainda não foi configurada pela plataforma; " +
+        "a última tabela compartilhada continua disponível.";
+
+    /// <summary>Credencial da plataforma, ou null se não estiver utilizável.
+    ///
+    /// O CNPJ precisa ter 14 dígitos porque é assim que o IBPT identifica o
+    /// assinante — um valor pela metade é recusado do outro lado, então vale
+    /// como "não configurado". Isso também protege contra o caso real de alguém
+    /// colar o placeholder do .env.example no lugar do valor: o texto passa por
+    /// "não vazio", mas não sobrevive à contagem de dígitos.</summary>
+    private (string Token, string Cnpj)? ObterCredencialGlobal()
+    {
+        var token = _configuration["IbptSettings:ApiKey"]?.Trim();
+        var cnpj = SomenteDigitos(_configuration["IbptSettings:Cnpj"] ?? "");
+        if (string.IsNullOrWhiteSpace(token) || cnpj.Length != 14) return null;
+        return (token, cnpj);
+    }
+
     /// <summary>Janela em que uma linha já baixada dispensa nova consulta.
     ///
     /// 24h é o mesmo intervalo que o job já usava para não repetir o ciclo de um
@@ -604,12 +650,8 @@ public sealed class IbptTaxService
         if (ncm.Length != 8)
             throw new IbptIntegrationException("NCM deve conter 8 dígitos.");
 
-        var token = _configuration["IbptSettings:ApiKey"]?.Trim();
-        var cnpjGlobal = SomenteDigitos(_configuration["IbptSettings:Cnpj"] ?? "");
-        if (string.IsNullOrWhiteSpace(token) || cnpjGlobal.Length != 14)
-            throw new IbptIntegrationException(
-                "A credencial global do IBPT ainda não foi configurada pela plataforma; " +
-                "a última tabela compartilhada continua disponível.");
+        var (token, cnpjGlobal) = ObterCredencialGlobal()
+            ?? throw new IbptIntegrationException(MensagemCredencialAusente);
 
         var parametros = new Dictionary<string, string?>
         {
