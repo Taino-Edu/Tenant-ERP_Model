@@ -9,7 +9,7 @@ import Link from 'next/link'
 
 export default function EntrarPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-surface-900" />}>
+    <Suspense fallback={<div className="admin-shell min-h-screen bg-surface-900" />}>
       <EntrarForm />
     </Suspense>
   )
@@ -65,7 +65,7 @@ function EntrarForm() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4">
+    <div className="admin-shell min-h-screen bg-surface-900 flex items-center justify-center p-4">
       <Toaster position="top-center" toastOptions={{ style: { background: '#1e1e28', color: '#fff', border: '1px solid #32323f' }}} />
 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

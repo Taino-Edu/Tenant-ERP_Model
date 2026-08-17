@@ -70,7 +70,8 @@ export default function PrimeiroAcessoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4">
+    // Ver comentário em app/login/page.tsx: "admin-shell" é o escopo do tema claro.
+    <div className="admin-shell min-h-screen bg-surface-900 flex items-center justify-center p-4">
       <Toaster position="top-center" toastOptions={{ style: { background: '#1e1e28', color: '#fff', border: '1px solid #32323f' }}} />
 
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

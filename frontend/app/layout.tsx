@@ -76,10 +76,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-touch-fullscreen" content="yes" />
         {/* apple-touch-icon já vem de generateMetadata (icons.apple) — link estático
             removido daqui pra não duplicar/entrar em conflito com o dinâmico. */}
-        {/* Aplica o tema salvo antes do primeiro render para evitar flash */}
-        <Script id="initial-theme" strategy="beforeInteractive">
-          {`(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.remove('light')}else{document.documentElement.classList.add('light');if(!t)localStorage.setItem('theme','light')}}catch(e){document.documentElement.classList.add('light')}})();`}
-        </Script>
+        {/* Aplica o tema salvo antes do primeiro render.
+            <script dangerouslySetInnerHTML> e NÃO <Script strategy="beforeInteractive">:
+            no App Router, o next/script com conteúdo inline é serializado no
+            payload do React Flight (`self.__next_f.push([1,{"children":"…"}])`),
+            ou seja, viaja como DADO e nunca executa como script bloqueante. O
+            efeito era o tema claro simplesmente não ser aplicado no load: dentro
+            do /admin ele voltava só quando o ThemeToggle montava (daí o flash
+            escuro), e nas telas sem ThemeToggle — login, entrar, cadastro,
+            reset-password, primeiro-acesso — nunca era aplicado.
+            Este é o mesmo padrão que app/admin/layout.tsx já usa para o FOUC da
+            cor de marca, e que funciona. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.remove('light')}else{document.documentElement.classList.add('light');if(!t)localStorage.setItem('theme','light')}}catch(e){document.documentElement.classList.add('light')}})();` }} />
       </head>
       <body>
         <ClientProviders>

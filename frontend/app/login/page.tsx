@@ -77,7 +77,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4">
+    // "admin-shell" é o escopo em que o tema claro do globals.css tem efeito.
+    // Sem ele esta tela recebia a classe "light" no <html> e a ignorava: as
+    // variáveis --surface-*/--text-* do tema claro só são redefinidas dentro
+    // deste seletor, então bg-surface-900 continuava resolvendo pro valor
+    // escuro. O escopo existe para o tema não vazar pras páginas com esquema de
+    // cor próprio (institucional, vitrine, área do cliente) — o login usa os
+    // mesmos tokens do admin, então pertence ao escopo.
+    <div className="admin-shell min-h-screen bg-surface-900 flex items-center justify-center p-4">
       <Toaster position="top-right" toastOptions={{ style: { background: '#1e1e28', color: '#fff', border: '1px solid #32323f' }}} />
 
       {/* Background decorativo */}
@@ -93,16 +100,16 @@ export default function LoginPage() {
               "Octus é a identidade padrão da plataforma" (FAQ da institucional).
               O <Logo /> é pintado por máscara CSS, então acompanha o tema
               claro/escuro sem precisar de duas artes.
-              A moldura é retangular no caso da marca da plataforma porque ela é
-              um wordmark (~1.9:1): num círculo de 80px ela sairia minúscula. */}
+              A marca da plataforma vai SEM moldura: ela já é uma forma fechada,
+              e a caixa em volta competia com ela em vez de destacá-la. O logo do
+              lojista mantém o círculo porque costuma ser um ícone recortado, que
+              sem moldura fica solto no meio do vazio. */}
           {site.logoUrl ? (
             <div className="inline-flex items-center justify-center w-20 h-20 bg-brand-600/10 border border-brand-500/20 rounded-full mb-4">
               <img src={site.logoUrl} alt={site.siteName} className="w-14 h-14 object-contain" />
             </div>
           ) : (
-            <div className="inline-flex items-center justify-center px-6 py-4 bg-brand-600/10 border border-brand-500/20 rounded-2xl mb-4">
-              <Logo tone="brand" className="h-10 w-[74px]" />
-            </div>
+            <Logo tone="brand" className="mb-5 h-[68px] w-[126px]" />
           )}
           <h1 className="text-3xl font-bold text-white">{site.siteName}</h1>
           <p className="text-gray-400 mt-1 text-sm">Painel de Gestão</p>

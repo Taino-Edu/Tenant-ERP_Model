@@ -61,7 +61,8 @@ function ResetPasswordForm() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4">
+    // Ver comentário em app/login/page.tsx: "admin-shell" é o escopo do tema claro.
+    <div className="admin-shell min-h-screen bg-surface-900 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-8 justify-center">
