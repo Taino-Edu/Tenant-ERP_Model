@@ -103,13 +103,16 @@ export default function LoginPage() {
               A marca da plataforma vai SEM moldura: ela já é uma forma fechada,
               e a caixa em volta competia com ela em vez de destacá-la. O logo do
               lojista mantém o círculo porque costuma ser um ícone recortado, que
-              sem moldura fica solto no meio do vazio. */}
+              sem moldura fica solto no meio do vazio.
+              O <Logo /> vai no tom `cyan` (padrão) e NÃO em `brand`: aqui a
+              marca é da PLATAFORMA, e --brand-500 é sobrescrito pela cor da
+              loja em runtime — numa loja roxa o Octus sairia roxo. */}
           {site.logoUrl ? (
             <div className="inline-flex items-center justify-center w-20 h-20 bg-brand-600/10 border border-brand-500/20 rounded-full mb-4">
               <img src={site.logoUrl} alt={site.siteName} className="w-14 h-14 object-contain" />
             </div>
           ) : (
-            <Logo tone="brand" className="mb-5 h-[68px] w-[126px]" />
+            <Logo className="mb-5 h-[68px] w-[126px]" />
           )}
           <h1 className="text-3xl font-bold text-white">{site.siteName}</h1>
           <p className="text-gray-400 mt-1 text-sm">Painel de Gestão</p>

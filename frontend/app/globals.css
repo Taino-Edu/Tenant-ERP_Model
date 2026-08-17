@@ -37,6 +37,15 @@
     --brand-500: 40 176 214;   /* #28b0d6 */
     --brand-600: 33 144 175;   /* #2190af */
 
+    /* Ciano da PLATAFORMA — fixo, e é justamente por isso que existe separado
+       de --brand-500 apesar de nascerem com o mesmo valor.
+       O TenantColorInjector sobrescreve --brand-400/500/600 em runtime com a
+       ColorPrimary da loja. Uma marca da plataforma pintada com --brand-500
+       assumiria a cor do lojista: numa loja que escolhesse roxo, o logo do
+       Octus sairia roxo. Este token o injector não toca, então a identidade da
+       plataforma continua a mesma em qualquer tenant e em qualquer tema. */
+    --brand-cyan: 40 176 214;  /* #28b0d6 */
+
     /* Paleta surface — mesmo formato "R G B" do brand acima, consumida pelo
        token surface-400..900 do Tailwind. Any-opacity variants (bg-surface-700/50
        etc.) resolvem sozinhas em cima disso, então o tema claro só precisa

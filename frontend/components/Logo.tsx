@@ -14,17 +14,23 @@ import clsx from 'clsx'
  * exigiriam alguém lembrar de trocar os dois a cada ajuste de arte, e de
  * escolher qual carregar em cada tela.
  *
- * `tone="brand"` usa a cor de marca do tenant (--brand-500, injetada em runtime
- * por TenantColorInjector), para quando a marca deve aparecer colorida e não
- * na cor do texto.
+ * Os três tons, e quando usar cada um:
+ *
+ * - `cyan` (padrão) — o ciano fixo da plataforma (#28b0d6). É o correto para a
+ *   marca do Octus: `--brand-cyan` não é tocado pelo TenantColorInjector, então
+ *   a identidade da plataforma não vira roxa numa loja que escolheu roxo.
+ * - `current` — herda `currentColor`. Para quando a marca deve ler como texto e
+ *   acompanhar o tema claro/escuro do contexto.
+ * - `brand` — a cor de marca DO TENANT (--brand-500). Só faz sentido quando a
+ *   marca representa a loja, não a plataforma.
  */
 export default function Logo({
   className,
-  tone = 'current',
+  tone = 'cyan',
   title = 'Octus',
 }: {
   className?: string
-  tone?: 'current' | 'brand'
+  tone?: 'cyan' | 'current' | 'brand'
   title?: string
 }) {
   return (
@@ -44,7 +50,10 @@ export default function Logo({
         // proporção de caixa que o chamador use.
         WebkitMaskSize: 'contain',
         maskSize: 'contain',
-        backgroundColor: tone === 'brand' ? 'rgb(var(--brand-500))' : 'currentColor',
+        backgroundColor:
+          tone === 'cyan'  ? 'rgb(var(--brand-cyan))'
+          : tone === 'brand' ? 'rgb(var(--brand-500))'
+          : 'currentColor',
       }}
     />
   )
