@@ -51,7 +51,7 @@ O sistema foi desenhado para escalabilidade horizontal no Frontend e vertical no
                      |
         (HTTPS - TLS Terminado pela Cloudflare)
                      |
-[ Cloudflare (DNS *.3esysten.com.br / santuarionerd.tech) ]
+[ Cloudflare (DNS *.3esysten.com.br + domínios próprios dos lojistas) ]
                      |
                      V
          [ VPS Ubuntu 24.04 (Hostinger) ]

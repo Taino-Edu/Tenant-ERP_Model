@@ -3,7 +3,7 @@
 > **Plataforma SaaS Multi-tenant de Gestão para Lojas e Varejo**
 > Plataforma white-label completa para gerenciamento de lojas — nasceu como sistema local de uma loja de card games e virou genérica para qualquer varejo. Oferece isolamento físico de dados por schema no PostgreSQL, painel administrativo personalizado por loja, frente de caixa (PDV), comandas por QR Code com SignalR, crediário, portal do contador cross-tenant, super-admin do dono da plataforma, assistente IA com Gemini e conformidade com a LGPD.
 
-**Produção:** [3esysten.com.br](https://3esysten.com.br) / Domínios dos lojistas (ex: [santuarionerd.tech](https://santuarionerd.tech))
+**Produção:** [3esysten.com.br](https://3esysten.com.br) — cada loja é atendida em `<slug>.3esysten.com.br` ou no domínio próprio dela (`Tenant.CustomDomain`), resolvidos pelo `TenantResolutionMiddleware` a partir do Host da requisição.
 
 ---
 
