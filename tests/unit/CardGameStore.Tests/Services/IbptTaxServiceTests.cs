@@ -23,6 +23,7 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +34,8 @@ namespace CardGameStore.Tests.Services;
 
 public class IbptTaxServiceTests
 {
+    private static readonly ConditionalWeakTable<AppDbContext, CatalogDbContext> Catalogs = new();
+
     private static AppDbContext CreateDb([CallerMemberName] string testName = "") =>
         TestDbFactory.Create($"{nameof(IbptTaxServiceTests)}_{testName}");
 
@@ -104,23 +107,16 @@ public class IbptTaxServiceTests
             new(handler, disposeHandler: false) { BaseAddress = new Uri("https://apidoni.ibpt.org.br/") };
     }
 
-    private static EncryptionService CreateEncryptionService()
+    /// <summary>Loja apta a usar o IBPT. O único requisito é a UF: o token
+    /// deixou de ser por loja (é credencial da plataforma, em
+    /// IbptSettings:ApiKey) e não há mais interruptor de auto-sync por
+    /// tenant.</summary>
+    private static async Task SeedLojaAsync(AppDbContext db, int produtos = 1)
     {
-        var config = new ConfigurationBuilder().Build();
-        var env = new Mock<IWebHostEnvironment>();
-        env.Setup(e => e.EnvironmentName).Returns("Development");
-        return new EncryptionService(config, env.Object);
-    }
-
-    private static async Task SeedLojaComTokenAsync(AppDbContext db, int produtos = 1)
-    {
-        var enc = CreateEncryptionService();
         db.FiscalConfigs.Add(new FiscalConfig
         {
-            Cnpj                = "12345678000195",
-            Uf                  = "SP",
-            IbptTokenEncrypted  = enc.Encrypt("token-de-teste"),
-            IbptAutoSyncEnabled = true,
+            Cnpj = "12345678000195",
+            Uf   = "SP",
         });
         for (var i = 0; i < produtos; i++)
             db.Products.Add(new Product
@@ -131,9 +127,27 @@ public class IbptTaxServiceTests
         await db.SaveChangesAsync();
     }
 
-    private static IbptTaxService CreateService(AppDbContext db, HttpMessageHandler handler) =>
-        new(db, new FabricaDeCliente(handler), CreateEncryptionService(),
+    private static CatalogDbContext CreateCatalog() =>
+        new(new DbContextOptionsBuilder<CatalogDbContext>()
+            .UseInMemoryDatabase($"ibpt-global-{Guid.NewGuid():N}")
+            .Options);
+
+    private static CatalogDbContext CatalogFor(AppDbContext db) => Catalogs.GetValue(db, _ =>
+    {
+        return CreateCatalog();
+    });
+
+    private static IbptTaxService CreateService(
+        AppDbContext db, HttpMessageHandler handler, CatalogDbContext? catalog = null)
+    {
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["IbptSettings:ApiKey"] = "token-global-de-teste",
+            ["IbptSettings:Cnpj"] = "12345678000195",
+        }).Build();
+        return new IbptTaxService(db, catalog ?? CatalogFor(db), new FabricaDeCliente(handler), config,
             NullLogger<IbptTaxService>.Instance);
+    }
 
     [Fact]
     public async Task SincronizarTodos_IbptEstourandoTimeout_NaoPropagaExcecao()
@@ -141,7 +155,7 @@ public class IbptTaxServiceTests
         // O cerne: antes isto lançava TaskCanceledException para fora e o
         // endpoint devolvia 500.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db);
+        await SeedLojaAsync(db);
         using var handler = new HandlerQueEstouraTimeout();
 
         var act = async () => await CreateService(db, handler).SincronizarTodosAsync();
@@ -154,7 +168,7 @@ public class IbptTaxServiceTests
     public async Task SincronizarTodos_IbptEstourandoTimeout_RelataFalhaPorProduto()
     {
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db, produtos: 3);
+        await SeedLojaAsync(db, produtos: 3);
         using var handler = new HandlerQueEstouraTimeout();
 
         var resultado = await CreateService(db, handler).SincronizarTodosAsync();
@@ -172,7 +186,7 @@ public class IbptTaxServiceTests
         // Prova que o laço não para no primeiro erro: com 3 produtos, o handler
         // precisa ter sido chamado 3 vezes.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db, produtos: 3);
+        await SeedLojaAsync(db, produtos: 3);
         using var handler = new HandlerQueEstouraTimeout();
 
         await CreateService(db, handler).SincronizarTodosAsync();
@@ -187,7 +201,7 @@ public class IbptTaxServiceTests
         // derrubando o processo), continuar consumindo a API de terceiro seria
         // errado. O filtro precisa distinguir os dois, e não achatar ambos.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db, produtos: 3);
+        await SeedLojaAsync(db, produtos: 3);
         using var handler = new HandlerQueEstouraTimeout();
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -206,13 +220,13 @@ public class IbptTaxServiceTests
         // O ganho que motiva o cartão: dez produtos do mesmo NCM custam UMA
         // consulta. Antes, o custo crescia com o catálogo.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db, produtos: 10);
+        await SeedLojaAsync(db, produtos: 10);
         using var handler = new HandlerQueResponde();
 
         await CreateService(db, handler).AtualizarTabelaLocalAsync();
 
         handler.Chamadas.Should().Be(1, "os 10 produtos compartilham o mesmo NCM");
-        db.IbptTabela.Should().ContainSingle();
+        CatalogFor(db).IbptTabela.Should().ContainSingle();
     }
 
     [Fact]
@@ -221,14 +235,14 @@ public class IbptTaxServiceTests
         // O job roda todo dia; sem upsert, a tabela cresceria sem limite e o
         // lookup passaria a depender de qual linha vem primeiro.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db, produtos: 2);
+        await SeedLojaAsync(db, produtos: 2);
         using var handler = new HandlerQueResponde();
         var service = CreateService(db, handler);
 
         await service.AtualizarTabelaLocalAsync();
         await service.AtualizarTabelaLocalAsync();
 
-        db.IbptTabela.Should().ContainSingle("a chave é (NCM, UF, origem), não a execução");
+        CatalogFor(db).IbptTabela.Should().ContainSingle("a chave é (NCM, UF, origem), não a execução");
     }
 
     [Fact]
@@ -237,7 +251,7 @@ public class IbptTaxServiceTests
         // O coração do cartão. Se este teste falhar, a rede voltou para dentro
         // da requisição e o 500 de produção volta com ela.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db);
+        await SeedLojaAsync(db);
         using var handlerDaCarga = new HandlerQueResponde();
         await CreateService(db, handlerDaCarga).AtualizarTabelaLocalAsync();
 
@@ -258,12 +272,42 @@ public class IbptTaxServiceTests
     }
 
     [Fact]
+    public async Task TabelaGlobal_CarregadaPorUmaLoja_AtendeOutraSemNovaConsulta()
+    {
+        // O ponto da tabela compartilhada: quem carregou paga a consulta; as
+        // outras lojas leem do catálogo. Duas lojas, dois AppDbContext (schemas
+        // distintos), UM CatalogDbContext — que é a topologia real.
+        //
+        // A prova é `Chamadas == 0` na segunda loja: ela preenche o produto sem
+        // tocar na rede. Um handler que estoura timeout garante que qualquer
+        // tentativa de consulta apareceria como falha, não como sucesso mudo.
+        using var catalog = CreateCatalog();
+        using var lojaQueCarrega = CreateDb();
+        using var lojaQueConsome = CreateDb();
+        await SeedLojaAsync(lojaQueCarrega);
+        await SeedLojaAsync(lojaQueConsome);
+
+        using var handlerCarga = new HandlerQueResponde();
+        await CreateService(lojaQueCarrega, handlerCarga, catalog).AtualizarTabelaLocalAsync();
+
+        using var handlerProibido = new HandlerQueEstouraTimeout();
+        var produtoConsumidor = await lojaQueConsome.Products.FirstAsync();
+        var preencheu = await CreateService(lojaQueConsome, handlerProibido, catalog)
+            .PreencherProdutoDaTabelaLocalAsync(produtoConsumidor.Id);
+
+        preencheu.Should().BeTrue();
+        handlerProibido.Chamadas.Should().Be(0);
+        (await lojaQueConsome.Products.FindAsync(produtoConsumidor.Id))!
+            .PercentualTributosFederais.Should().Be(12.5m);
+    }
+
+    [Fact]
     public async Task PreencherProdutoDaTabelaLocal_NcmForaDaTabela_NaoInventaValor()
     {
         // NCM novo é situação normal — o job resolve no próximo ciclo. O que não
         // pode é preencher com valor de outro NCM nem com zero.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db);
+        await SeedLojaAsync(db);
         var produto = await db.Products.FirstAsync();
 
         using var handler = new HandlerQueEstouraTimeout();
@@ -281,7 +325,7 @@ public class IbptTaxServiceTests
         // A consequência prática: o IBPT cair não impede mais o lojista de
         // trabalhar. A última tabela conhecida continua valendo.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db, produtos: 3);
+        await SeedLojaAsync(db, produtos: 3);
         using var handlerDaCarga = new HandlerQueResponde();
         await CreateService(db, handlerDaCarga).AtualizarTabelaLocalAsync();
 
@@ -297,7 +341,7 @@ public class IbptTaxServiceTests
     {
         // Regra que já valia no modelo antigo e não pode se perder na mudança.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db);
+        await SeedLojaAsync(db);
         using var handler = new HandlerQueResponde();
         await CreateService(db, handler).AtualizarTabelaLocalAsync();
 
@@ -325,7 +369,7 @@ public class IbptTaxServiceTests
         // explicando por quê. O produto ficava sem transparência tributária e a
         // NFC-e dele nunca era emitida.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db);
+        await SeedLojaAsync(db);
         var produto = await db.Products.FirstAsync();
         produto.Ncm = "6109100";   // 7 dígitos
         await db.SaveChangesAsync();
@@ -352,7 +396,7 @@ public class IbptTaxServiceTests
         // Se a causa for bloqueio por excesso de requisição, isto também é o que
         // impede a reincidência.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db, produtos: 4);
+        await SeedLojaAsync(db, produtos: 4);
         var produtos = await db.Products.ToListAsync();
         for (var i = 0; i < produtos.Count; i++) produtos[i].Ncm = $"9504400{i}";
         await db.SaveChangesAsync();
@@ -372,7 +416,7 @@ public class IbptTaxServiceTests
         // diz nada sobre os outros. Achatar os dois casos faria uma classificação
         // errada de um produto travar a tabela inteira.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db, produtos: 3);
+        await SeedLojaAsync(db, produtos: 3);
         var produtos = await db.Products.ToListAsync();
         for (var i = 0; i < produtos.Count; i++) produtos[i].Ncm = $"9504400{i}";
         await db.SaveChangesAsync();
@@ -393,7 +437,7 @@ public class IbptTaxServiceTests
         // um produto com NCM novo ficava sem transparência tributária até o job do
         // dia seguinte — e sem ela a NFC-e daquele produto não é emitida.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db);
+        await SeedLojaAsync(db);
         var produto = await db.Products.FirstAsync();
         using var handler = new HandlerQueResponde();
 
@@ -410,7 +454,7 @@ public class IbptTaxServiceTests
     {
         // Segunda edição do mesmo produto não repete a consulta.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db);
+        await SeedLojaAsync(db);
         using var handlerCarga = new HandlerQueResponde();
         await CreateService(db, handlerCarga).AtualizarTabelaLocalAsync();
 
@@ -433,7 +477,7 @@ public class IbptTaxServiceTests
         // A tarefa roda fora da requisição: se a falha só for para o log, o
         // lojista vê o produto sem tributos e não tem como descobrir por quê.
         using var db = CreateDb();
-        await SeedLojaComTokenAsync(db);
+        await SeedLojaAsync(db);
         var produto = await db.Products.FirstAsync();
         using var handler = new HandlerQueEstouraTimeout();
 

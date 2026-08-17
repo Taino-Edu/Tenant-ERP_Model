@@ -103,26 +103,23 @@ public class FiscalConfigService
         if (excedido is not null) return FiscalConfigResultado.Falha(excedido);
 
         if (req.CscId               is not null) cfg.CscId               = req.CscId.Trim();
-        // CSC e IBPT são segredos independentes, ambos criptografados por tenant.
+        // O CSC continua sendo segredo POR TENANT (é credencial da loja na SEFAZ).
+        // O token do IBPT não: virou credencial única da plataforma, lida de
+        // IbptSettings:ApiKey — ver IbptTaxService.ConsultarApiAsync.
         if (req.CscToken            is not null) cfg.CscTokenEncrypted   = _enc.Encrypt(req.CscToken);
 
-        if (req.RemoverIbptToken == true)
-        {
-            cfg.IbptTokenEncrypted = null;
-            cfg.IbptAutoSyncEnabled = false;
-            cfg.IbptUltimoErro = null;
-        }
-        else if (!string.IsNullOrWhiteSpace(req.IbptToken))
-        {
-            cfg.IbptTokenEncrypted = _enc.Encrypt(req.IbptToken.Trim());
-            cfg.IbptUltimoErro = null;
-        }
-        if (req.IbptAutoSyncEnabled.HasValue)
-        {
-            if (req.IbptAutoSyncEnabled.Value && string.IsNullOrWhiteSpace(cfg.IbptTokenEncrypted))
-                return FiscalConfigResultado.Falha("Configure o token IBPT antes de ativar o preenchimento automático.");
-            cfg.IbptAutoSyncEnabled = req.IbptAutoSyncEnabled.Value;
-        }
+        // A tabela IBPT passou a ser compartilhada entre todos os tenants (uma
+        // carga por UF no catálogo global) e a consulta usa a credencial da
+        // plataforma. Não existe mais token por loja para gravar, nem chave a
+        // ativar/desativar: por isso a escrita saiu daqui.
+        //
+        // Não é só limpeza de código morto — era uma armadilha. O lojista
+        // digitava um token, recebia "salvo com sucesso", o valor era
+        // criptografado no banco e NUNCA lido por ninguém. Pior: ativar o
+        // preenchimento automático exigia esse token, então a loja era obrigada
+        // a fornecer uma credencial inútil para liberar um recurso que hoje já
+        // está sempre ligado (ver IbptSyncBackgroundService, que agora só exige
+        // UF configurada).
 
         if (req.RegimeTributario is not null)
         {
@@ -380,8 +377,10 @@ public class FiscalConfigService
                     .Split(',', StringSplitOptions.RemoveEmptyEntries)
                     .Where(f => f is not PaymentMethod.Pontos and not PaymentMethod.Cashback)
                     .ToArray(),
-            IbptConfigurado = cfg.IbptConfigurado,
-            cfg.IbptAutoSyncEnabled,
+            // IbptConfigurado/IbptAutoSyncEnabled saíram da resposta: descreviam
+            // um token e um interruptor por loja que não existem mais. Quem
+            // informa se há tabela disponível é GET /api/fiscal/ibpt/status,
+            // que olha o catálogo compartilhado e não esta configuração.
             cfg.IbptUltimaSincronizacao,
             cfg.IbptUltimaVersao,
             cfg.IbptVigenciaInicio,

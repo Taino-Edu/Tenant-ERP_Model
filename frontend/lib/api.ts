@@ -1656,8 +1656,6 @@ export interface FiscalConfigDto {
   certificadoValidade?: string
   diasParaVencer?: number
   formasPagamentoAutoEmissao: string[]
-  ibptConfigurado: boolean
-  ibptAutoSyncEnabled: boolean
   ibptUltimaSincronizacao?: string
   ibptUltimaVersao?: string
   ibptVigenciaInicio?: string
@@ -1680,7 +1678,9 @@ export interface FiscalSaudeDto {
 }
 
 export interface IbptStatusDto {
-  configurado: boolean; autoSyncAtivo: boolean
+  /** Existe tabela IBPT carregada para a UF desta loja. A tabela é global da
+   *  plataforma — nenhuma loja cadastra token. */
+  configurado: boolean
   ultimaSincronizacao?: string; ultimaVersao?: string
   vigenciaInicio?: string; vigenciaFim?: string; ultimoErro?: string
   produtosAtivos: number; produtosAutomaticos: number; produtosPendentes: number; produtosVencidos: number
@@ -1842,7 +1842,6 @@ export const fiscalApi = {
     regimeTributario: string; ambiente: string; serieNfce: number; emailContador: string
     excedeuSublimiteSimples: boolean; optouRegimeRegularIbsCbs: boolean
     formasPagamentoAutoEmissao: string[]
-    ibptToken: string; ibptAutoSyncEnabled: boolean; removerIbptToken: boolean
   }>) => api.put<FiscalConfigDto>('/api/fiscal/config', body),
 
   getIbptStatus: () => api.get<IbptStatusDto>('/api/fiscal/ibpt/status'),
@@ -1973,7 +1972,6 @@ export interface ContadorConfigDto {
   cscConfigurado: boolean; cscId?: string
   certificadoConfigurado: boolean; certificadoValidade?: string; diasParaVencer?: number
   formasPagamentoAutoEmissao: string[]
-  ibptConfigurado: boolean; ibptAutoSyncEnabled: boolean
   ibptUltimaSincronizacao?: string; ibptUltimaVersao?: string; ibptUltimoErro?: string
   // Parâmetros de apuração (comparativo Simples x Presumido)
   anexoSimples: string

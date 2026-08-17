@@ -37,9 +37,10 @@ public class SaveFiscalConfigRequest
     public string? Ambiente          { get; init; }
     public int?    SerieNfce         { get; init; }
     public string? EmailContador     { get; init; }
-    public string? IbptToken         { get; init; }
-    public bool? IbptAutoSyncEnabled { get; init; }
-    public bool? RemoverIbptToken    { get; init; }
+    // IbptToken / IbptAutoSyncEnabled / RemoverIbptToken foram removidos: a
+    // tabela IBPT é compartilhada por todos os tenants e a consulta usa a
+    // credencial da plataforma (IbptSettings:ApiKey). Manter os campos aqui
+    // aceitaria um token da loja e o descartaria silenciosamente.
 
     /// <summary>Formas de pagamento que emitem NFC-e automaticamente ao fechar a venda, sem perguntar. Null = não altera.</summary>
     public string[]? FormasPagamentoAutoEmissao { get; init; }

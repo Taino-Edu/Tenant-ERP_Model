@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,17 +16,20 @@ public sealed class IbptTaxService
 {
     private const string ClientName = "ibpt";
     private readonly AppDbContext _db;
+    private readonly CatalogDbContext _catalog;
     private readonly IHttpClientFactory _httpFactory;
-    private readonly EncryptionService _encryption;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<IbptTaxService> _logger;
 
     public IbptTaxService(
-        AppDbContext db, IHttpClientFactory httpFactory, EncryptionService encryption,
+        AppDbContext db, CatalogDbContext catalog, IHttpClientFactory httpFactory,
+        IConfiguration configuration,
         ILogger<IbptTaxService> logger)
     {
         _db = db;
+        _catalog = catalog;
         _httpFactory = httpFactory;
-        _encryption = encryption;
+        _configuration = configuration;
         _logger = logger;
     }
 
@@ -34,14 +38,31 @@ public sealed class IbptTaxService
         var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct);
         var hoje = BrazilTime.NowBr().Date;
         var produtos = await _db.Products.AsNoTracking().Where(p => p.IsActive).ToListAsync(ct);
+        var uf = cfg?.Uf?.Trim().ToUpperInvariant();
+        var tabelaUf = _catalog.IbptTabela.AsNoTracking().Where(e => e.Uf == uf);
+        var resumo = string.IsNullOrWhiteSpace(uf) ? null : await tabelaUf
+            .GroupBy(e => e.Uf)
+            .Select(g => new
+            {
+                UltimaAtualizacao = (DateTime?)g.Max(e => e.AtualizadoEm),
+                VigenciaInicio = g.Min(e => e.VigenciaInicio),
+                VigenciaFim = g.Min(e => e.VigenciaFim),
+            })
+            .FirstOrDefaultAsync(ct);
+        var ultimaVersao = resumo is null ? null : await tabelaUf
+            .Where(e => e.Versao != null && e.Versao != "")
+            .OrderByDescending(e => e.AtualizadoEm)
+            .Select(e => e.Versao)
+            .FirstOrDefaultAsync(ct);
 
         return new IbptStatusDto(
-            Configurado: cfg?.IbptConfigurado == true,
-            AutoSyncAtivo: cfg?.IbptAutoSyncEnabled == true,
-            UltimaSincronizacao: cfg?.IbptUltimaSincronizacao,
-            UltimaVersao: cfg?.IbptUltimaVersao,
-            VigenciaInicio: cfg?.IbptVigenciaInicio,
-            VigenciaFim: cfg?.IbptVigenciaFim,
+            // "Configurado" agora significa "existe tabela carregada para a UF
+            // desta loja" — não mais "esta loja cadastrou um token".
+            Configurado: resumo is not null,
+            UltimaSincronizacao: resumo?.UltimaAtualizacao,
+            UltimaVersao: ultimaVersao,
+            VigenciaInicio: resumo?.VigenciaInicio,
+            VigenciaFim: resumo?.VigenciaFim,
             UltimoErro: cfg?.IbptUltimoErro,
             ProdutosAtivos: produtos.Count,
             ProdutosAutomaticos: produtos.Count(p => p.TributosPreenchidosAutomaticamente),
@@ -106,6 +127,7 @@ public sealed class IbptTaxService
         }
 
         AtualizarStatusConfiguracao(cfg, produtos.Where(p => p.TributosPreenchidosAutomaticamente), erros);
+        await _catalog.SaveChangesAsync(ct);
         await _db.SaveChangesAsync(ct);
 
         return new IbptSyncResult(produtos.Count, atualizados, ignoradosManuais, erros.Count, erros.Take(20).ToList());
@@ -158,7 +180,7 @@ public sealed class IbptTaxService
             .GroupBy(c => new { c.Ncm, c.Importado })
             .ToList();
 
-        var existentes = await _db.IbptTabela
+        var existentes = await _catalog.IbptTabela
             .Where(e => e.Uf == uf)
             .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
 
@@ -205,6 +227,7 @@ public sealed class IbptTaxService
         }
 
         AtualizarStatusConfiguracao(cfg, produtos.Where(p => p.TributosPreenchidosAutomaticamente), erros);
+        await _catalog.SaveChangesAsync(ct);
         await _db.SaveChangesAsync(ct);
 
         _logger.LogInformation(
@@ -228,7 +251,7 @@ public sealed class IbptTaxService
         if (!existentes.TryGetValue(chave, out var entrada))
         {
             entrada = new IbptTabelaEntry { Ncm = ncm, Uf = uf, Importado = importado };
-            _db.IbptTabela.Add(entrada);
+            _catalog.IbptTabela.Add(entrada);
             existentes[chave] = entrada;
         }
 
@@ -278,7 +301,8 @@ public sealed class IbptTaxService
 
         // Fora do change tracker: são ~24 mil linhas (dois registros por NCM), e
         // rastrear cada uma multiplicaria o tempo por nada.
-        await _db.IbptTabela.Where(e => e.Uf == uf).ExecuteDeleteAsync(ct);
+        await using var transacao = await _catalog.Database.BeginTransactionAsync(ct);
+        await _catalog.IbptTabela.Where(e => e.Uf == uf).ExecuteDeleteAsync(ct);
 
         var agora = DateTime.UtcNow;
         var entradas = new List<IbptTabelaEntry>(leitura.Linhas.Count * 2);
@@ -302,22 +326,24 @@ public sealed class IbptTaxService
                 });
         }
 
-        var rastreamento = _db.ChangeTracker.AutoDetectChangesEnabled;
-        _db.ChangeTracker.AutoDetectChangesEnabled = false;
+        var rastreamento = _catalog.ChangeTracker.AutoDetectChangesEnabled;
+        _catalog.ChangeTracker.AutoDetectChangesEnabled = false;
         try
         {
-            await _db.IbptTabela.AddRangeAsync(entradas, ct);
+            await _catalog.IbptTabela.AddRangeAsync(entradas, ct);
             cfg.IbptUltimaSincronizacao = agora;
             cfg.IbptUltimaVersao        = leitura.Versao;
             cfg.IbptVigenciaInicio      = leitura.VigenciaInicio;
             cfg.IbptVigenciaFim         = leitura.VigenciaFim;
             cfg.IbptUltimoErro          = null;
             cfg.UpdatedAt               = agora;
+            await _catalog.SaveChangesAsync(ct);
             await _db.SaveChangesAsync(ct);
+            await transacao.CommitAsync(ct);
         }
         finally
         {
-            _db.ChangeTracker.AutoDetectChangesEnabled = rastreamento;
+            _catalog.ChangeTracker.AutoDetectChangesEnabled = rastreamento;
         }
 
         _logger.LogInformation(
@@ -352,7 +378,7 @@ public sealed class IbptTaxService
     public async Task<bool> PreencherProdutoDaTabelaLocalAsync(Guid productId, CancellationToken ct = default)
     {
         var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct);
-        if (cfg is null || !cfg.IbptAutoSyncEnabled || string.IsNullOrWhiteSpace(cfg.Uf)) return false;
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.Uf)) return false;
 
         var produto = await _db.Products.Include(p => p.NaturezaOperacao)
             .FirstOrDefaultAsync(p => p.Id == productId, ct);
@@ -367,7 +393,7 @@ public sealed class IbptTaxService
         var ncm = SomenteDigitos(produto.Ncm);
         var uf = cfg.Uf!.ToUpperInvariant();
 
-        var entrada = await _db.IbptTabela.AsNoTracking().FirstOrDefaultAsync(
+        var entrada = await _catalog.IbptTabela.AsNoTracking().FirstOrDefaultAsync(
             e => e.Ncm == ncm && e.Uf == uf && e.Importado == importado, ct);
         if (entrada is null) return false;
 
@@ -399,7 +425,7 @@ public sealed class IbptTaxService
         if (await PreencherProdutoDaTabelaLocalAsync(productId, ct)) return true;
 
         var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct);
-        if (cfg is null || !cfg.IbptAutoSyncEnabled || !cfg.IbptConfigurado) return false;
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.Uf)) return false;
 
         var produto = await _db.Products.Include(p => p.NaturezaOperacao)
             .FirstOrDefaultAsync(p => p.Id == productId, ct);
@@ -408,7 +434,7 @@ public sealed class IbptTaxService
 
         try
         {
-            ValidarConfiguracao(cfg);
+            ValidarConfiguracaoFiscal(cfg);
             var padrao = await _db.NaturezasOperacao.AsNoTracking()
                 .FirstOrDefaultAsync(n => n.IsPadrao, ct);
             var importado = OrigemUsaAliquotaImportada(
@@ -416,13 +442,14 @@ public sealed class IbptTaxService
             var ncm = SomenteDigitos(produto.Ncm);
             var uf = cfg.Uf!.ToUpperInvariant();
 
-            var existentes = await _db.IbptTabela
+            var existentes = await _catalog.IbptTabela
                 .Where(e => e.Uf == uf && e.Ncm == ncm)
                 .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
 
             var resposta = await ConsultarApiAsync(cfg, produto, ncm, ct);
             UpsertEntrada(existentes, uf, ncm, importado, resposta);
             cfg.IbptUltimoErro = null;
+            await _catalog.SaveChangesAsync(ct);
             await _db.SaveChangesAsync(ct);
 
             return await PreencherProdutoDaTabelaLocalAsync(productId, ct);
@@ -464,7 +491,7 @@ public sealed class IbptTaxService
         var uf = cfg.Uf!.ToUpperInvariant();
         var padrao = await _db.NaturezasOperacao.AsNoTracking().FirstOrDefaultAsync(n => n.IsPadrao, ct);
 
-        var tabela = await _db.IbptTabela.AsNoTracking()
+        var tabela = await _catalog.IbptTabela.AsNoTracking()
             .Where(e => e.Uf == uf)
             .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
 
@@ -506,55 +533,19 @@ public sealed class IbptTaxService
     /// <summary>Preenche um produto apenas se estiver incompleto ou já for gerenciado pelo IBPT.</summary>
     public async Task<bool> TentarSincronizarProdutoAsync(Guid productId, CancellationToken ct = default)
     {
-        var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct);
-        if (cfg is null || !cfg.IbptAutoSyncEnabled || !cfg.IbptConfigurado) return false;
-
-        var produto = await _db.Products.Include(p => p.NaturezaOperacao)
-            .FirstOrDefaultAsync(p => p.Id == productId, ct);
-        if (produto is null || string.IsNullOrWhiteSpace(produto.Ncm)) return false;
-        if (TemTransparenciaCompleta(produto) && !produto.TributosPreenchidosAutomaticamente) return false;
-        if (TemTransparenciaCompleta(produto) && produto.TributosPreenchidosAutomaticamente &&
-            produto.TributosVigenciaFim is { } fim && fim.Date >= BrazilTime.NowBr().Date)
-            return false;
-
-        try
-        {
-            ValidarConfiguracao(cfg);
-            var origem = produto.NaturezaOperacao?.OrigemMercadoria ??
-                (await _db.NaturezasOperacao.AsNoTracking().FirstOrDefaultAsync(n => n.IsPadrao, ct))?.OrigemMercadoria ?? 0;
-            var resposta = await ConsultarApiAsync(cfg, produto, SomenteDigitos(produto.Ncm), ct);
-            AplicarResposta(produto, resposta, OrigemUsaAliquotaImportada(origem));
-            AtualizarStatusConfiguracao(cfg, [produto], []);
-            await _db.SaveChangesAsync(ct);
-            return true;
-        }
-        // Mesma armadilha do laço acima: timeout do HttpClient chega como
-        // OperationCanceledException e não pode ser confundido com cancelamento.
-        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
-        {
-            cfg.IbptUltimoErro = MensagemSegura(ex);
-            cfg.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-            _logger.LogWarning("Preenchimento automático IBPT falhou no produto {ProductId}: {Message}",
-                productId, cfg.IbptUltimoErro);
-            return false;
-        }
+        return await GarantirNcmNaTabelaEPreencherAsync(productId, ct);
     }
 
     private async Task<FiscalConfig> ObterConfiguracaoValidaAsync(CancellationToken ct)
     {
         var cfg = await _db.FiscalConfigs.FindAsync([FiscalConfig.SingletonId], ct)
             ?? throw new IbptIntegrationException("Configure os dados fiscais da loja antes de usar o IBPT.");
-        ValidarConfiguracao(cfg);
+        ValidarConfiguracaoFiscal(cfg);
         return cfg;
     }
 
-    private static void ValidarConfiguracao(FiscalConfig cfg)
+    private static void ValidarConfiguracaoFiscal(FiscalConfig cfg)
     {
-        if (!cfg.IbptConfigurado)
-            throw new IbptIntegrationException("Token IBPT não configurado.");
-        if (SomenteDigitos(cfg.Cnpj).Length != 14)
-            throw new IbptIntegrationException("CNPJ da loja deve conter 14 dígitos para consultar o IBPT.");
         if (string.IsNullOrWhiteSpace(cfg.Uf) || cfg.Uf.Length != 2)
             throw new IbptIntegrationException("UF da loja não configurada.");
     }
@@ -565,14 +556,17 @@ public sealed class IbptTaxService
         if (ncm.Length != 8)
             throw new IbptIntegrationException("NCM deve conter 8 dígitos.");
 
-        string token;
-        try { token = _encryption.Decrypt(cfg.IbptTokenEncrypted!); }
-        catch (Exception) { throw new IbptIntegrationException("Token IBPT armazenado não pôde ser descriptografado."); }
+        var token = _configuration["IbptSettings:ApiKey"]?.Trim();
+        var cnpjGlobal = SomenteDigitos(_configuration["IbptSettings:Cnpj"] ?? "");
+        if (string.IsNullOrWhiteSpace(token) || cnpjGlobal.Length != 14)
+            throw new IbptIntegrationException(
+                "A credencial global do IBPT ainda não foi configurada pela plataforma; " +
+                "a última tabela compartilhada continua disponível.");
 
         var parametros = new Dictionary<string, string?>
         {
             ["token"] = token,
-            ["cnpj"] = SomenteDigitos(cfg.Cnpj),
+            ["cnpj"] = cnpjGlobal,
             ["codigo"] = ncm,
             ["uf"] = cfg.Uf!.ToUpperInvariant(),
             ["ex"] = "0",
@@ -588,7 +582,7 @@ public sealed class IbptTaxService
         if (!respostaHttp.IsSuccessStatusCode)
             throw new IbptIntegrationException(respostaHttp.StatusCode switch
             {
-                HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "Token IBPT recusado para o CNPJ da loja.",
+                HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "Credencial global do IBPT recusada.",
                 HttpStatusCode.TooManyRequests => "Limite de consultas do IBPT atingido; tente novamente mais tarde.",
                 _ => $"IBPT indisponível (HTTP {(int)respostaHttp.StatusCode}).",
             });
@@ -738,8 +732,14 @@ public sealed class IbptTaxService
 
 public sealed class IbptIntegrationException(string message) : Exception(message);
 
+/// <remarks>
+/// `AutoSyncAtivo` saiu: com a tabela compartilhada não há mais o que uma loja
+/// ligue ou desligue — a sincronização vale para todas e o único requisito é a
+/// UF estar configurada. O campo estava sendo devolvido fixo em `true`, o que é
+/// pior que não existir: sugere um controle que não existe mais.
+/// </remarks>
 public sealed record IbptStatusDto(
-    bool Configurado, bool AutoSyncAtivo, DateTime? UltimaSincronizacao, string? UltimaVersao,
+    bool Configurado, DateTime? UltimaSincronizacao, string? UltimaVersao,
     DateTime? VigenciaInicio, DateTime? VigenciaFim, string? UltimoErro,
     int ProdutosAtivos, int ProdutosAutomaticos, int ProdutosPendentes, int ProdutosVencidos);
 

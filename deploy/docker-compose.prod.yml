@@ -130,6 +130,10 @@ services:
       Vapid__Subject: "${VAPID_SUBJECT:-mailto:contato@tenant-erp.local}"
       # Integrações
       GeminiSettings__ApiKey: "${GEMINI_API_KEY}"
+      # IBPT compartilhado: uma credencial da plataforma alimenta a tabela
+      # global; nenhuma loja precisa fornecer token próprio.
+      IbptSettings__ApiKey: "${IBPT_API_KEY}"
+      IbptSettings__Cnpj: "${IBPT_CNPJ}"
       # Prospecção de leads (/plataforma/prospeccao) — chave dedicada e opcional,
       # separada da GEMINI_API_KEY acima; sem ela, a busca funciona normalmente
       # e só o botão "Enriquecer com IA" fica indisponível.

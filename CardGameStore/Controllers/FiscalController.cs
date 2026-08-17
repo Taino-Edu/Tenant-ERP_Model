@@ -837,6 +837,11 @@ public class FiscalController : ControllerBase
     [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<IActionResult> ImportarTabelaIbpt(IFormFile arquivo, CancellationToken ct)
     {
+        // Uma carga substitui a tabela GLOBAL da UF. Só o dono da plataforma,
+        // durante a simulação de uma loja, pode publicar essa atualização.
+        if (!User.HasClaim(c => c.Type == "imp_owner"))
+            return Forbid();
+
         if (arquivo is null || arquivo.Length == 0)
             return BadRequest(new { Message = "Selecione o arquivo TabelaIBPTax<UF><versão>.csv." });
 
@@ -957,7 +962,7 @@ public class FiscalController : ControllerBase
     private bool AtualizarTabelaIbptEmSegundoPlano()
     {
         var cfg = _db.FiscalConfigs.Find(FiscalConfig.SingletonId);
-        if (cfg is null || !cfg.IbptConfigurado) return false;
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.Uf)) return false;
         if (cfg.IbptUltimaSincronizacao is { } ultima &&
             DateTime.UtcNow - ultima < IntervaloMinimoAtualizacaoIbpt) return false;
 

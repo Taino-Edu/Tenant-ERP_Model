@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { fiscalApi, FiscalConfigDto, FiscalSaudeDto, IbptStatusDto, NaturezaOperacaoDto, NotaFiscalDto, SolicitacaoContadorDto, AvisoContadorDto, COMANDA_PAYMENT_METHODS, getErrorMessage } from '@/lib/api'
+import { getImpersonatingOwnerName } from '@/lib/auth'
 import toast, { Toaster } from 'react-hot-toast'
 import clsx from 'clsx'
 import Modal from '@/components/admin/ui/Modal'
@@ -180,13 +181,12 @@ export default function FiscalPage() {
   const [cscId, setCscId]       = useState('')
   const [cscToken, setCscToken] = useState('')
 
-  // IBPT / De Olho no Imposto — token nunca volta da API.
-  const [ibptToken, setIbptToken] = useState('')
-  const [ibptAutoSync, setIbptAutoSync] = useState(false)
+  // IBPT / De Olho no Imposto — carga compartilhada da plataforma.
   const [ibptStatus, setIbptStatus] = useState<IbptStatusDto | null>(null)
-  const [savingIbpt, setSavingIbpt] = useState(false)
   const [syncingIbpt, setSyncingIbpt] = useState(false)
   const [importandoIbpt, setImportandoIbpt] = useState(false)
+  const [donoPlataforma, setDonoPlataforma] = useState(false)
+  useEffect(() => setDonoPlataforma(Boolean(getImpersonatingOwnerName())), [])
   // Mostrar a UF no texto de ajuda evita o erro mais caro da importação: pegar a
   // tabela do estado errado, que muda a alíquota estadual sem nada denunciar.
   const ufDaLoja = uf || '<UF>'
@@ -511,7 +511,6 @@ export default function FiscalPage() {
       setAutoEmit((cfg.formasPagamentoAutoEmissao ?? []).filter(
         forma => forma !== 'Pontos' && forma !== 'Cashback',
       ))
-      setIbptAutoSync(cfg.ibptAutoSyncEnabled ?? false)
       setIbptStatus(statusIbpt)
       setNaturezas(nats)
     } catch (err) {
@@ -535,8 +534,6 @@ export default function FiscalPage() {
         codigoMunicipioIbge, municipio, uf, cep,
         cscId, ...(cscToken ? { cscToken } : {}),
         formasPagamentoAutoEmissao: autoEmit,
-        ibptAutoSyncEnabled: ibptAutoSync,
-        ...(ibptToken ? { ibptToken } : {}),
       })
       setConfig(data)
       toast.success('Configuração fiscal salva!')
@@ -547,42 +544,20 @@ export default function FiscalPage() {
     }
   }
 
-  async function saveIbptConfig() {
-    setSavingIbpt(true)
-    try {
-      await fiscalApi.saveConfig({
-        ibptAutoSyncEnabled: ibptAutoSync,
-        ...(ibptToken ? { ibptToken } : {}),
-      })
-      setIbptToken('')
-      const { data } = await fiscalApi.getIbptStatus()
-      setIbptStatus(data)
-      toast.success('Integração IBPT salva com segurança.')
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao salvar integração IBPT'))
-    } finally {
-      setSavingIbpt(false)
-    }
-  }
-
   async function syncIbpt() {
     setSyncingIbpt(true)
     try {
-      if (ibptToken) {
-        await fiscalApi.saveConfig({ ibptToken, ibptAutoSyncEnabled: ibptAutoSync })
-        setIbptToken('')
-      }
       const { data } = await fiscalApi.sincronizarIbpt()
       const { data: status } = await fiscalApi.getIbptStatus()
       setIbptStatus(status)
       toast.success(
-        `${data.atualizados} produto(s) atualizado(s) pela tabela local; ` +
+        `${data.atualizados} produto(s) atualizado(s) pela tabela global; ` +
         `${data.ignoradosManuais} override(s) preservado(s).`)
       // A busca de dado novo no IBPT roda fora da requisição — dizer isso evita a
       // leitura errada de que o botão não fez nada quando a tabela já estava em dia.
       if (data.buscandoAtualizacao)
-        toast.success('Buscando atualização no IBPT em segundo plano — recarregue em alguns minutos.')
-      if (data.falhas > 0) toast.error(`${data.falhas} produto(s) sem NCM na tabela local ainda.`)
+        toast.success('Buscando atualização da tabela global em segundo plano — recarregue em alguns minutos.')
+      if (data.falhas > 0) toast.error(`${data.falhas} produto(s) sem NCM na tabela global ainda.`)
     } catch (err) {
       toast.error(getErrorMessage(err, 'Erro ao sincronizar tabela IBPT'))
     } finally {
@@ -1013,7 +988,7 @@ export default function FiscalPage() {
           <div>
             <h3 className="font-bold text-white">Preenchimento automático — IBPT</h3>
             <p className="text-xs text-gray-400 mt-1">
-              Consulta a API oficial por NCM, UF e origem da mercadoria. Produtos preenchidos manualmente pelo contador são preservados.
+              Usa a tabela oficial compartilhada da plataforma por NCM, UF e origem. Nenhuma loja precisa cadastrar token.
             </p>
           </div>
           <span className={clsx(
@@ -1022,24 +997,15 @@ export default function FiscalPage() {
               ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
               : 'text-amber-400 bg-amber-500/10 border-amber-500/30',
           )}>
-            {ibptStatus?.configurado ? 'Token configurado' : 'Token pendente'}
+            {ibptStatus?.configurado ? 'Tabela global disponível' : 'Tabela global pendente'}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-gray-400 font-semibold mb-1 block">Token da empresa no IBPT</label>
-            <input type="password" value={ibptToken} onChange={e => setIbptToken(e.target.value)}
-              placeholder={ibptStatus?.configurado ? '•••••••• (deixe vazio para manter)' : 'Cole o token do De Olho no Imposto'}
-              className="input w-full" autoComplete="new-password" />
-          </div>
-          <label className="flex items-center gap-3 rounded-lg border border-surface-600 bg-surface-700/50 px-3 py-2 cursor-pointer">
-            <input type="checkbox" checked={ibptAutoSync} onChange={e => setIbptAutoSync(e.target.checked)} />
-            <span>
-              <span className="block text-sm text-white font-medium">Preencher automaticamente</span>
-              <span className="block text-xs text-gray-400">Ao criar/alterar produto com NCM e quando a tabela vencer.</span>
-            </span>
-          </label>
+        <div className="rounded-lg border border-surface-600 bg-surface-700/50 px-3 py-2">
+          <span className="block text-sm text-white font-medium">Preenchimento automático para todos os tenants</span>
+          <span className="block text-xs text-gray-400">
+            Ao criar ou alterar um produto com NCM, o sistema consulta a carga global da UF e preserva valores manuais do contador.
+          </span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 text-center">
@@ -1060,35 +1026,31 @@ export default function FiscalPage() {
         )}
 
         <div className="flex flex-wrap gap-2 mt-4">
-          <button onClick={saveIbptConfig} disabled={savingIbpt} className="btn-secondary">
-            {savingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Salvar integração
-          </button>
-          <button onClick={syncIbpt} disabled={syncingIbpt || (!ibptStatus?.configurado && !ibptToken)} className="btn-primary">
+          <button onClick={syncIbpt} disabled={syncingIbpt || !uf} className="btn-primary">
             {syncingIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Aplicar tabela e buscar atualização
+            Aplicar tabela global
           </button>
 
-          {/* Caminho que não depende da API: o mesmo dado, do arquivo que o IBPT
-              entrega no pacote por CNPJ. Existe porque a API sai do ar — e
-              quando sai, sem isto a loja fica sem emitir. */}
-          <label className={`btn-secondary cursor-pointer ${importandoIbpt ? 'opacity-60 pointer-events-none' : ''}`}>
-            {importandoIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-            {importandoIbpt ? 'Importando…' : 'Importar tabela (.csv)'}
-            <input
-              type="file" accept=".csv,text/csv" className="hidden"
-              disabled={importandoIbpt}
-              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importarTabelaIbpt(f) }}
-            />
-          </label>
+          {donoPlataforma && (
+            <label className={`btn-secondary cursor-pointer ${importandoIbpt ? 'opacity-60 pointer-events-none' : ''}`}>
+              {importandoIbpt ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {importandoIbpt ? 'Publicando…' : 'Atualizar tabela global (.csv)'}
+              <input
+                type="file" accept=".csv,text/csv" className="hidden"
+                disabled={importandoIbpt}
+                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) importarTabelaIbpt(f) }}
+              />
+            </label>
+          )}
         </div>
-        <p className="text-[11px] text-gray-500 mt-2">
-          Sem internet até o IBPT? Baixe o pacote no site deles e importe o
-          <strong> TabelaIBPTax{ufDaLoja}&lt;versão&gt;.csv</strong> — o arquivo traz os ~12 mil NCMs de
-          uma vez, e vale para todos os produtos, inclusive os que você cadastrar depois.
-        </p>
+        {donoPlataforma && (
+          <p className="text-[11px] text-gray-500 mt-2">
+            Como dono da plataforma, você pode publicar o
+            <strong> TabelaIBPTax{ufDaLoja}&lt;versão&gt;.csv</strong>. A carga passa a valer para todas as lojas dessa UF.
+          </p>
+        )}
         <p className="text-[11px] text-gray-500 mt-3">
-          O token é criptografado e nunca é exibido novamente. A fonte, versão, chave e vigência ficam registradas por produto.
+          Fonte, versão, chave e vigência permanecem registradas em cada produto para auditoria fiscal.
         </p>
       </div>
 

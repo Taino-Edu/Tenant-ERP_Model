@@ -5,6 +5,7 @@
 // schema ainda não resolvido (chicken-and-egg).
 // =============================================================================
 
+using CardGameStore.Models.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Multitenancy;
@@ -37,10 +38,19 @@ public class CatalogDbContext : DbContext
     public DbSet<ReferralPartnerInvitation> ReferralPartnerInvitations { get; set; }
     public DbSet<TenantReferral> TenantReferrals { get; set; }
     public DbSet<ReferralCommission> ReferralCommissions { get; set; }
+    /// <summary>Tabela IBPT compartilhada por todos os tenants.</summary>
+    public DbSet<IbptTabelaEntry> IbptTabela { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<IbptTabelaEntry>(entity =>
+        {
+            entity.HasIndex(e => new { e.Ncm, e.Uf, e.Importado })
+                  .IsUnique()
+                  .HasDatabaseName("ix_ibpt_tabela_ncm_uf_origem");
+        });
 
         modelBuilder.Entity<Tenant>(entity =>
         {

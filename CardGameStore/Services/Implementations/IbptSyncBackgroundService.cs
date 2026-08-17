@@ -57,7 +57,7 @@ public sealed class IbptSyncBackgroundService : BackgroundService
         var db = sp.GetRequiredService<AppDbContext>();
         var cfg = await db.FiscalConfigs.AsNoTracking()
             .FirstOrDefaultAsync(f => f.Id == FiscalConfig.SingletonId, ct);
-        if (cfg is null || !cfg.IbptAutoSyncEnabled || !cfg.IbptConfigurado) return;
+        if (cfg is null || string.IsNullOrWhiteSpace(cfg.Uf)) return;
         if (cfg.IbptUltimaSincronizacao is { } ultima && ultima > DateTime.UtcNow.AddHours(-24)) return;
 
         var ibpt = sp.GetRequiredService<IbptTaxService>();
