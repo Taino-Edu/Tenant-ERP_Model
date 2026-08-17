@@ -185,10 +185,27 @@ public sealed class IbptTaxService
             .ToDictionaryAsync(e => new EntradaChave(e.Ncm, e.Importado), ct);
 
         var atualizados = 0;
+        var reaproveitados = 0;
 
         foreach (var grupo in combinacoes)
         {
             ct.ThrowIfCancellationRequested();
+
+            // A tabela é COMPARTILHADA, então uma linha fresca de (NCM, UF,
+            // origem) já é a resposta — não importa qual loja a trouxe. Sem esta
+            // checagem, o job consultava a API para todo NCM de todo tenant: dez
+            // lojas em SP vendendo o mesmo NCM geravam dez chamadas idênticas por
+            // ciclo, gravando a mesma linha por cima de si mesma. Compartilhar o
+            // armazenamento sem compartilhar a BUSCA deixava de pé justamente o
+            // desperdício que motivou a mudança — e multiplicava por N a chance
+            // de bater no limite de consultas do IBPT.
+            if (existentes.TryGetValue(new EntradaChave(grupo.Key.Ncm, grupo.Key.Importado), out var linha)
+                && EstaFresca(linha))
+            {
+                reaproveitados++;
+                continue;
+            }
+
             try
             {
                 // Qualquer produto do grupo serve de amostra: a consulta leva
@@ -230,11 +247,18 @@ public sealed class IbptTaxService
         await _catalog.SaveChangesAsync(ct);
         await _db.SaveChangesAsync(ct);
 
+        // `Reaproveitados` no log é o que separa "não fez nada" de "não precisou
+        // fazer": num ciclo saudável, da segunda loja em diante o esperado é
+        // 0 consultado / N reaproveitado. Sem esse número, um job que funciona
+        // perfeitamente parece um job inerte.
         _logger.LogInformation(
-            "Tabela IBPT local atualizada: {Ok}/{Total} NCM(s), {Falhas} falha(s).",
-            atualizados, combinacoes.Count, erros.Count);
+            "Tabela IBPT compartilhada: {Ok} consultado(s), {Reaproveitados} já em cache, " +
+            "{Total} NCM(s) no catálogo da loja, {Falhas} falha(s).",
+            atualizados, reaproveitados, combinacoes.Count, erros.Count);
 
-        return new IbptSyncResult(combinacoes.Count, atualizados, 0, erros.Count, erros.Take(20).ToList());
+        // IgnoradosManuais carrega os reaproveitados: o campo já significa "não
+        // mexemos nisto e não é erro", que é exatamente o caso.
+        return new IbptSyncResult(combinacoes.Count, atualizados, reaproveitados, erros.Count, erros.Take(20).ToList());
     }
 
     private readonly record struct EntradaChave(string Ncm, bool Importado);
@@ -542,6 +566,30 @@ public sealed class IbptTaxService
             ?? throw new IbptIntegrationException("Configure os dados fiscais da loja antes de usar o IBPT.");
         ValidarConfiguracaoFiscal(cfg);
         return cfg;
+    }
+
+    /// <summary>Janela em que uma linha já baixada dispensa nova consulta.
+    ///
+    /// 24h é o mesmo intervalo que o job já usava para não repetir o ciclo de um
+    /// tenant (ver IbptSyncBackgroundService) — a diferença é que agora a janela
+    /// vale por LINHA, e não por loja, que é o que torna a busca compartilhada de
+    /// fato. Efeito: cada (NCM, UF, origem) é consultado no máximo uma vez por
+    /// dia no sistema inteiro, em vez de uma vez por dia por loja.
+    ///
+    /// Não mexe na política de atualização — só deixa de repetir o que já foi
+    /// feito hoje.</summary>
+    private static readonly TimeSpan ValidadeDaLinha = TimeSpan.FromHours(24);
+
+    /// <summary>Linha recente E ainda dentro da vigência publicada.
+    ///
+    /// A vigência entra na conta porque uma linha pode ter sido baixada há uma
+    /// hora e já estar vencida: o IBPT publica versões com prazo, e servir
+    /// alíquota expirada num documento fiscal é pior que consultar de novo.</summary>
+    private static bool EstaFresca(IbptTabelaEntry linha)
+    {
+        var agora = DateTime.UtcNow;
+        if (agora - linha.AtualizadoEm > ValidadeDaLinha) return false;
+        return linha.VigenciaFim is null || linha.VigenciaFim.Value.Date >= BrazilTime.NowBr().Date;
     }
 
     private static void ValidarConfiguracaoFiscal(FiscalConfig cfg)

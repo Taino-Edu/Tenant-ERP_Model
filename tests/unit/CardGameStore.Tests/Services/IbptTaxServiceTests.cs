@@ -302,6 +302,70 @@ public class IbptTaxServiceTests
     }
 
     [Fact]
+    public async Task TabelaGlobal_SegundaLojaNoCicloDiario_NaoReconsultaOMesmoNcm()
+    {
+        // Compartilhar o armazenamento sem compartilhar a BUSCA deixava de pé o
+        // desperdício que motivou a mudança: o job varre tenant por tenant, e
+        // cada um consultava a API para todo NCM do próprio catálogo. Dez lojas
+        // em SP com o mesmo NCM = dez chamadas idênticas por ciclo, gravando a
+        // mesma linha por cima de si mesma — e dez vezes mais chance de bater no
+        // limite de consultas do IBPT.
+        using var catalog = CreateCatalog();
+        using var primeira = CreateDb();
+        using var segunda = CreateDb();
+        await SeedLojaAsync(primeira);
+        await SeedLojaAsync(segunda);
+
+        using var handlerPrimeira = new HandlerQueResponde();
+        var r1 = await CreateService(primeira, handlerPrimeira, catalog).AtualizarTabelaLocalAsync();
+
+        r1.Atualizados.Should().Be(1, "a primeira loja é quem paga a consulta");
+        handlerPrimeira.Chamadas.Should().Be(1);
+
+        using var handlerSegunda = new HandlerQueResponde();
+        var r2 = await CreateService(segunda, handlerSegunda, catalog).AtualizarTabelaLocalAsync();
+
+        handlerSegunda.Chamadas.Should().Be(0, "a linha fresca no catálogo já é a resposta");
+        r2.Atualizados.Should().Be(0);
+        r2.IgnoradosManuais.Should().Be(1, "reaproveitado, não é falha nem trabalho novo");
+        r2.Falhas.Should().Be(0);
+
+        // E o produto da segunda loja fica preenchido do mesmo jeito — economizar
+        // a consulta não pode custar o resultado.
+        await CreateService(segunda, handlerSegunda, catalog).AplicarTabelaLocalAsync();
+        var produto = await segunda.Products.FirstAsync();
+        (await segunda.Products.FindAsync(produto.Id))!
+            .PercentualTributosFederais.Should().Be(12.5m);
+    }
+
+    [Fact]
+    public async Task TabelaGlobal_LinhaVencida_EhConsultadaDeNovo()
+    {
+        // Recente não basta: o IBPT publica versões com prazo, e servir alíquota
+        // expirada num documento fiscal é pior que gastar uma consulta.
+        using var catalog = CreateCatalog();
+        using var db = CreateDb();
+        await SeedLojaAsync(db);
+
+        catalog.IbptTabela.Add(new IbptTabelaEntry
+        {
+            Ncm = "95044000", Uf = "SP", Importado = false,
+            PercentualFederal = 9.9m, PercentualEstadual = 9.9m, PercentualMunicipal = 0m,
+            AtualizadoEm = DateTime.UtcNow,                       // baixada agora…
+            VigenciaFim = DateTime.UtcNow.AddDays(-1),            // …mas já vencida
+        });
+        await catalog.SaveChangesAsync();
+
+        using var handler = new HandlerQueResponde();
+        var r = await CreateService(db, handler, catalog).AtualizarTabelaLocalAsync();
+
+        handler.Chamadas.Should().Be(1, "vigência expirada obriga nova consulta");
+        r.Atualizados.Should().Be(1);
+        catalog.IbptTabela.Single(e => e.Ncm == "95044000")
+            .PercentualFederal.Should().Be(12.5m, "a linha vencida foi substituída");
+    }
+
+    [Fact]
     public async Task PreencherProdutoDaTabelaLocal_NcmForaDaTabela_NaoInventaValor()
     {
         // NCM novo é situação normal — o job resolve no próximo ciclo. O que não
