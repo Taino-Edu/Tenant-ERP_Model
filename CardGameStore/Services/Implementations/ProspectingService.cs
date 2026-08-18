@@ -38,14 +38,14 @@ public class ProspectingService : IProspectingService
     // IA" que o usuário reportava. Com a cadeia, aposentar um modelo degrada a
     // qualidade da análise em vez de derrubar a feature.
     //
-    // Pro primeiro de propósito: o enriquecimento roda só sob clique explícito
-    // (volume baixo), então vale pagar mais por uma análise melhor do lead.
-    // Flash é a rede de segurança — é o alias já comprovado em produção pelo
-    // GeminiChatService.
+    // O primeiro favorece qualidade; os seguintes são modelos GA mais leves.
+    // Nomes fixos evitam que uma troca silenciosa de alias altere o contrato da
+    // API sem que o aplicativo tenha sido atualizado.
     private static readonly string[] GeminiModels =
     [
-        "gemini-pro-latest",
-        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-3.1-flash-lite",
     ];
 
     private static string GeminiUrlFor(string model) =>

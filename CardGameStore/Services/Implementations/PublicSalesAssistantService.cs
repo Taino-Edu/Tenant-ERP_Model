@@ -12,7 +12,7 @@ namespace CardGameStore.Services.Implementations;
 public sealed class PublicSalesAssistantService : IPublicSalesAssistantService
 {
     private const string GeminiUrl =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
 
     private const string MarketingUrl = "https://wa.me/5517997455482";
 
@@ -83,7 +83,7 @@ public sealed class PublicSalesAssistantService : IPublicSalesAssistantService
                 },
                 // 320 cortava a resposta no meio da palavra na página de vendas —
                 // ver GeminiLimits, que é onde este número mora agora.
-                generationConfig = new { temperature = 0.2, maxOutputTokens = GeminiLimits.MaxOutputTokens }
+                generationConfig = new { maxOutputTokens = GeminiLimits.MaxOutputTokens }
             };
 
             var client = _httpClientFactory.CreateClient("gemini");

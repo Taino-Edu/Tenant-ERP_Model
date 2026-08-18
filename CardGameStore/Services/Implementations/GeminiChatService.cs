@@ -1,5 +1,5 @@
 // =============================================================================
-// GeminiChatService.cs — Assistente IA usando Gemini 2.0 Flash (Google)
+// GeminiChatService.cs — Assistente IA usando Gemini Flash (Google)
 //
 // Configuração:
 //   GeminiSettings:ApiKey → chave global da plataforma (aistudio.google.com/apikey)
@@ -26,16 +26,13 @@ namespace CardGameStore.Services.Implementations;
 
 public class GeminiChatService : IAiChatService
 {
-    // Alias "-latest" em vez de um modelo fixo (ex: gemini-2.5-flash): o Google
-    // aposenta versões específicas sem aviso e a API passa a responder 404
-    // ("no longer available to new users"), derrubando o assistente inteiro —
-    // foi exatamente o que aconteceu com gemini-2.5-flash. O alias acompanha a
-    // geração atual da linha Flash (rápida/barata, adequada ao volume do chat).
-    // Contrapartida: a resposta pode mudar quando o Google promove um modelo novo.
+    // Modelo GA fixo: o alias gemini-flash-latest muda de geração sem deploy e
+    // já passou a exigir um contrato de request diferente, derrubando os dois
+    // chats ao mesmo tempo. A versão estável torna mudanças deliberadas.
     private const string GEMINI_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent";
     private const string GEMINI_STREAM_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:streamGenerateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:streamGenerateContent";
 
     // 600 cortava respostas um pouco mais longas no meio da frase (PT-BR com
     // acento gasta mais tokens por caractere que inglês) — achado ao vivo numa
@@ -107,7 +104,6 @@ public class GeminiChatService : IAiChatService
                 },
                 generationConfig = new
                 {
-                    temperature     = 0.3,
                     maxOutputTokens = MAX_OUTPUT_TOKENS,
                 }
             };
@@ -189,7 +185,6 @@ public class GeminiChatService : IAiChatService
             },
             generationConfig = new
             {
-                temperature     = 0.3,
                 maxOutputTokens = MAX_OUTPUT_TOKENS,
             }
         };

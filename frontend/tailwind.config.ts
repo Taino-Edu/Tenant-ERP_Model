@@ -47,6 +47,30 @@ const config: Config = {
           800: '#186288',
           900: '#1A5170',
         },
+        // Identidade FIXA da plataforma, derivada do ciano da logo (#28b0d6 =
+        // octus-500, o mesmo valor de --brand-cyan). Existe separada de `brand`
+        // porque `brand` é dinâmica: o TenantColorInjector troca --brand-400/500/600
+        // pela cor da loja, e o site institucional — que fala da 3E Systen, não
+        // de um tenant — não pode mudar de cor conforme quem visitou por último.
+        //
+        // A escala não é decorativa, é de contraste. O 500 é a cor da marca e
+        // rende só 2,5:1 sobre branco: serve para preenchimento e ícone grande,
+        // NUNCA para texto sobre fundo claro. Por isso:
+        //   600 (4,9:1) — texto, link e botão primário sobre fundo claro
+        //   700 (6,2:1) — hover do botão e texto pequeno sobre fundo claro
+        //   400 (8,4:1 sobre o navy #08192d) — texto e ícone sobre fundo escuro
+        octus: {
+          50:  '#EEF8FC',
+          100: '#D6EFF8',
+          200: '#A9DFF0',
+          300: '#6FCAE5',
+          400: '#53C0DE',
+          500: '#28B0D6', // a cor da logo
+          600: '#1C7B96',
+          700: '#186A80',
+          800: '#14586B',
+          900: '#0F4351',
+        },
         // Ligado a --surface-XXX (globals.css), mesmo padrão do brand acima —
         // resolve nativamente qualquer variante de opacidade (bg-surface-700/50,
         // hover:bg-surface-500/30, from-surface-900 etc.) em vez de precisar de
