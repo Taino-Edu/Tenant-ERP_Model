@@ -14,66 +14,71 @@ Os dois bancos são separados de propósito: o `pg_dump` do ERP **não** cobre o
 Evolution. Perder aquele banco significa pedir a cada cliente com WhatsApp que
 leia o QR Code de novo.
 
-## Cópia off-site no Drive da empresa
+## Cópia off-site no Cloudflare R2
 
 Sem isto o backup mora no mesmo disco do banco, e uma falha de disco leva os dois
-juntos. A configuração abaixo usa **conta de serviço + Drive Compartilhado**, que
-não depende da conta de nenhuma pessoa: ninguém sai da empresa e derruba o backup.
+juntos.
 
-### 1. Conta de serviço no Google Cloud
+O destino é R2 porque a Cloudflare já está na frente da aplicação (o rate limiter
+lê `CF-Connecting-IP`), então não entra fornecedor novo. O dump comprimido tem
+~2 MB; a faixa gratuita de 10 GB cobre anos disso.
 
-1. [console.cloud.google.com](https://console.cloud.google.com) → crie (ou escolha) um projeto
-2. **APIs e serviços → Biblioteca** → ative a **Google Drive API**
-3. **APIs e serviços → Credenciais → Criar credenciais → Conta de serviço**
-4. Na conta criada: **Chaves → Adicionar chave → Criar nova chave → JSON**. Baixa um arquivo
-5. Anote o **e-mail** da conta de serviço (algo como `backup-vps@projeto.iam.gserviceaccount.com`)
+### 1. Bucket e credenciais
 
-### 2. Dar acesso ao Drive Compartilhado
+1. Painel da Cloudflare → **R2** → ative o serviço (exige forma de pagamento
+   cadastrada; nada é cobrado dentro da faixa gratuita)
+2. **Create bucket** → nome `octus-backups`
+3. Em **R2 → Manage R2 API Tokens → Create Account API token**
+4. Permissão **Object Read and Write**, com escopo limitado ao bucket `octus-backups`
+5. Guarde o **Access Key ID** e o **Secret Access Key** — o segredo só aparece uma vez
+6. Anote também o **Account ID** ([onde encontrar](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/))
 
-1. Abra o **Drive Compartilhado** da empresa → **Gerenciar membros**
-2. Adicione o e-mail da conta de serviço como **Gerenciador de conteúdo**
-3. Crie uma pasta, ex. `Backups/Octus`
-4. Copie o **ID do Drive Compartilhado** da URL: `drive.google.com/drive/folders/`**`0AB...`**
+> Token de conta, não de usuário: token de usuário herda as permissões da pessoa
+> e morre junto se ela sair da conta da Cloudflare — o mesmo problema que faria o
+> backup depender de um indivíduo.
 
-> Conta de serviço não tem cota de armazenamento própria. Em Drive Compartilhado
-> isso não importa (a cota é do Drive), mas é por isso que **não** funciona
-> apontando para o "Meu Drive" de alguém.
+### 2. rclone no VPS
 
-### 3. rclone no VPS
-
-```bash
-sudo apt-get update && sudo apt-get install -y rclone gnupg
-sudo mkdir -p /etc/rclone && sudo chmod 700 /etc/rclone
-```
-
-Copie o JSON da conta de serviço para `/etc/rclone/octus-backup.json` e feche o acesso:
+**Não instale pelo `apt`.** O Ubuntu 22.04 empacota o rclone 1.53, e a
+documentação da Cloudflare exige **1.59 ou superior** — abaixo disso o R2
+responde HTTP 401 e o envio falha sem motivo aparente. Use o instalador oficial:
 
 ```bash
-sudo chmod 600 /etc/rclone/octus-backup.json
+curl https://rclone.org/install.sh | sudo bash
+sudo apt-get update && sudo apt-get install -y gnupg
+rclone version   # confirme >= 1.59
 ```
 
-Crie `/root/.config/rclone/rclone.conf` (troque o `team_drive`):
+Crie `/root/.config/rclone/rclone.conf`:
 
 ```ini
-[drive]
-type = drive
-scope = drive
-service_account_file = /etc/rclone/octus-backup.json
-team_drive = 0ABxxxxxxxxxxxxUk9PVA
+[r2]
+type = s3
+provider = Cloudflare
+access_key_id = <ACCESS_KEY_ID>
+secret_access_key = <SECRET_ACCESS_KEY>
+endpoint = https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+region = auto
+acl = private
+no_check_bucket = true
 ```
 
-Teste antes de confiar:
+`no_check_bucket = true` porque o token está limitado a um bucket: sem isso o
+rclone tenta verificar/criar o bucket na primeira escrita e leva 403.
+
+Feche o arquivo e teste:
 
 ```bash
-sudo rclone lsd drive:
+sudo chmod 600 /root/.config/rclone/rclone.conf
+sudo rclone ls r2:octus-backups
 ```
 
-### 4. Ligar no backup
+### 3. Ligar no backup
 
 No `/opt/tenant-erp/.env` (o mesmo do docker-compose):
 
 ```bash
-BACKUP_REMOTE_CMD=rclone copy --config /root/.config/rclone/rclone.conf --drive-chunk-size 32M drive:Backups/Octus
+BACKUP_REMOTE_CMD=rclone copy --config /root/.config/rclone/rclone.conf r2:octus-backups
 BACKUP_ENCRYPT_PASSPHRASE=<frase longa e aleatória>
 ```
 
@@ -83,15 +88,26 @@ nada e sem reclamar.
 
 Gere a frase com `openssl rand -base64 32`.
 
-> **Guarde a frase-secreta fora do Drive.** No mesmo lugar do backup ela não
-> protege de nada, e sem ela os arquivos enviados são irrecuperáveis. Gerenciador
-> de senhas da empresa ou cofre físico.
+> **Guarde a frase-secreta fora do R2.** No mesmo lugar do backup ela não protege
+> de nada, e sem ela os arquivos enviados são irrecuperáveis. Gerenciador de
+> senhas da empresa ou cofre físico.
 
-Rode uma vez na mão e confira que os **dois** arquivos aparecem no Drive:
+Rode uma vez na mão e confira que os **dois** arquivos aparecem no bucket:
 
 ```bash
 cd /opt/tenant-erp && bash deploy/backup.sh
+sudo rclone ls r2:octus-backups
 ```
+
+### 4. Retenção no bucket
+
+O script só limpa a cópia local; sem uma regra no bucket os dumps acumulam para
+sempre. No painel: **R2 → octus-backups → Settings → Object lifecycle rules** →
+regra de expiração (30 ou 90 dias, conforme por quanto tempo você quer poder
+voltar no tempo).
+
+Isso é separado do `BACKUP_RETAIN_DAYS`, que vale só para o disco do VPS — e é
+proposital: o local existe para restauração rápida, o remoto para histórico.
 
 ## Restaurar
 
@@ -104,14 +120,19 @@ gunzip -c /opt/tenant-erp/backups/postgres_<TS>.sql.gz \
   | docker exec -i cardgamestore_postgres psql -U <POSTGRES_USER> <POSTGRES_DB>
 ```
 
-**Do Drive (VPS perdido — o caso que justifica tudo isto):**
+**Do R2 (VPS perdido — o caso que justifica tudo isto):**
 
 ```bash
-rclone copy drive:Backups/Octus/postgres_<TS>.sql.gz.gpg .
+rclone copy r2:octus-backups/postgres_<TS>.sql.gz.gpg .
 gpg --decrypt postgres_<TS>.sql.gz.gpg > postgres_<TS>.sql.gz
 gunzip -c postgres_<TS>.sql.gz \
   | docker exec -i cardgamestore_postgres psql -U <POSTGRES_USER> <POSTGRES_DB>
 ```
+
+Numa máquina nova você precisa de três coisas para isso funcionar: o `rclone`
+com as credenciais do R2, o `gpg` e a **frase-secreta**. Se as três estiverem
+guardadas só no VPS que se perdeu, o backup não serve para nada — é por isso que
+a frase mora no gerenciador de senhas da empresa.
 
 O `evolution_<TS>.sql.gz.gpg` restaura igual, no banco `evolution`.
 
@@ -133,7 +154,7 @@ isso, o jeito é conferir o log de vez em quando:
 
 ```bash
 tail -20 /var/log/tenant-erp-backup.log
-rclone lsl drive:Backups/Octus | tail -5   # a data do último arquivo diz tudo
+rclone lsl r2:octus-backups | tail -5   # a data do último arquivo diz tudo
 ```
 
 ## Limites conhecidos
@@ -141,8 +162,20 @@ rclone lsl drive:Backups/Octus | tail -5   # a data do último arquivo diz tudo
 - **O rollback do `update.sh` reverte código, não schema.** As migrations rodam no
   boot da API e não são desfeitas. Se uma migration destrutiva corromper dados, a
   saída é restaurar o dump — por isso ele é tirado *antes* de qualquer mudança.
-- **A cifra protege o backup no Drive, não o servidor.** Quem tiver acesso de root
-  ao VPS alcança o `.env` com a frase-secreta e o banco em si. A ameaça coberta
-  aqui é "alguém com acesso à pasta do Drive não deve ler dado de cliente".
-- **Retenção no Drive é manual.** O script só limpa a cópia local. Defina uma
-  regra de retenção na pasta do Drive, ou os dumps acumulam para sempre.
+- **A cifra protege o backup no R2, não o servidor.** Quem tiver acesso de root ao
+  VPS alcança o `.env` com a frase-secreta e o banco em si. A ameaça coberta aqui
+  é "alguém com acesso ao bucket não deve ler dado de cliente".
+
+## Custo
+
+Nada, com folga larga. O dump comprimido tem ~2 MB e sobem dois por dia.
+
+| | Uso | Faixa gratuita |
+|---|---|---|
+| Armazenamento | ~120 MB (com expiração em 30 dias) | 10 GB-mês |
+| Operações Classe A (escrita) | ~60 por mês | 1 milhão por mês |
+| Egress | só numa restauração | sempre gratuito |
+
+Fonte: [preços do R2](https://developers.cloudflare.com/r2/pricing/). A Cloudflare
+exige forma de pagamento cadastrada para ativar o R2, mas dentro desses limites
+não há cobrança.
