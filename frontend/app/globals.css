@@ -206,6 +206,24 @@ body.institucional-page .js-pwa-install {
   display: none;
 }
 
+/* Ciano da marca aplicado a TEXTO e ÍCONE sobre o fundo da página, no site
+   público. Dois valores porque o fundo troca: o #28B0D6 da logo rende só 2,5:1
+   sobre branco (reprovado para texto) e o octus-600 que resolve isso no claro
+   fica apagado sobre o navy do tema escuro. `.octus-accent` é o token único
+   dessa intenção — quem precisa de preenchimento continua usando bg-octus-*. */
+.octus-accent { color: #1C7B96; }
+body.institucional-dark .octus-accent { color: #53C0DE; }
+.octus-accent-hover:hover { color: #1C7B96; }
+body.institucional-dark .octus-accent-hover:hover { color: #53C0DE; }
+
+/* Na vitrine o atalho de WhatsApp ocupa o canto inferior direito. O botão de
+   instalar o PWA é renderizado pelo RootLayout e ancora no MESMO canto por
+   style inline, então os dois se sobrepunham. Sobe o PWA para acima do atalho
+   (56px do círculo + respiro), preservando a safe-area do iOS. */
+body.storefront-page .js-pwa-install {
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px) + 1rem) !important;
+}
+
 /* No admin em celular existe uma barra de navegação fixa no rodapé. Os widgets
    flutuantes globais são renderizados no RootLayout (fora do .admin-shell) e
    ancoram em `bottom: ~20px` por style inline — ou seja, exatamente em cima

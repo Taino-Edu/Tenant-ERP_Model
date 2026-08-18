@@ -5,6 +5,7 @@ import { getRole } from '@/lib/auth'
 import { productApi, announcementApi, Product, AnnouncementDto } from '@/lib/api'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 import { mixHex, getContrastText, isDark as checkIsDark } from '@/lib/colors'
+import WhatsappFab from '@/components/WhatsappFab'
 import Link from 'next/link'
 import {
   ShoppingBag, Star,
@@ -119,6 +120,15 @@ export default function LandingPage() {
     }, 4000)
     return () => clearInterval(interval)
   }, [visibleAnnouncements.length])
+
+  // Marca a vitrine no <body> para que o CSS global consiga desempilhar os
+  // widgets flutuantes: o botão "Instalar App" mora no RootLayout e ancora no
+  // mesmo canto do atalho de WhatsApp, então os dois se sobrepunham aqui.
+  // Mesmo mecanismo já usado por `body.institucional-page` e `body.admin-route`.
+  useEffect(() => {
+    document.body.classList.add('storefront-page')
+    return () => document.body.classList.remove('storefront-page')
+  }, [])
 
   useEffect(() => {
     const saved = localStorage.getItem('landing-theme')
@@ -668,16 +678,19 @@ export default function LandingPage() {
       </footer>
 
       {/* ── WHATSAPP FLUTUANTE ──────────────────────────────────────────── */}
-      <a
-        href={`https://wa.me/${site.whatsappNumber}`}
-        target="_blank"
-        rel="noreferrer"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 font-black text-sm px-4 py-3 rounded-2xl shadow-xl transition-all hover:scale-105 active:scale-95"
-        style={{ backgroundColor: '#25D366', color: '#fff', boxShadow: '0 8px 24px rgba(37,211,102,0.4)' }}
-      >
-        <MessageCircle className="w-5 h-5" />
-        Falar com {site.contactPersonName}
-      </a>
+      {/* `suppressed` enquanto há modal aberto: o botão flutuava por cima do
+          card do produto e do anúncio, justamente onde está a informação que o
+          visitante abriu para ler. */}
+      <WhatsappFab
+        number={site.whatsappNumber}
+        personName={site.contactPersonName}
+        storeName={site.siteName}
+        suppressed={Boolean(productModal || annModal)}
+        card={C.card}
+        cardText={C.cardText}
+        cardNavy={C.cardNavy}
+        border={C.border}
+      />
 
       {/* ── MODAIS ──────────────────────────────────────────────────────── */}
       {annModal      && <AnnouncementModal ann={annModal}               onClose={() => setAnnModal(null)}      C={C} />}

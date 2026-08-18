@@ -104,3 +104,12 @@ export const acharPlano = (nome: string | null | undefined) =>
 
 export const formatarReais = (valor: number) =>
   valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0, maximumFractionDigits: 2 })
+
+/** Igual ao acima, mas sempre com os centavos.
+ *
+ *  `formatarReais` omite as casas decimais para que a tabela de planos mostre
+ *  "R$ 129" e não "R$ 129,00" — o que é certo para preço redondo de tabela e
+ *  errado para valor calculado: 30% de R$ 538 saía como "R$ 484,2", que não é
+ *  como se escreve dinheiro em lugar nenhum. Use este nas contas. */
+export const formatarReaisExato = (valor: number) =>
+  valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })
