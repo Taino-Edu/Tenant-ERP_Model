@@ -54,9 +54,9 @@ test.describe('Programa de Afiliados', () => {
 
   test('a candidatura identifica a origem do lead', async ({ page }) => {
     await abrirParceiros(page)
-    let corpo: Record<string, unknown> | null = null
+    const enviados: Record<string, unknown>[] = []
     await page.route('**/api/leads', async route => {
-      corpo = route.request().postDataJSON()
+      enviados.push(route.request().postDataJSON())
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"message":"ok"}' })
     })
 
@@ -66,8 +66,11 @@ test.describe('Programa de Afiliados', () => {
     await page.getByRole('button', { name: /Pedir meu convite/ }).click()
 
     await expect(page.locator('#candidatura')).toContainText('Candidatura recebida')
-    // Sem o carimbo a candidatura cai na mesma fila dos pedidos de teste grátis.
-    expect(corpo).toMatchObject({ campaign: 'afiliados' })
-    expect(String((corpo as Record<string, string>).mensagem)).toContain('Programa de Afiliados')
+    expect(enviados).toHaveLength(1)
+    // `campaign` separa a fila do CRM; `kind` é o que faz o backend gravar a
+    // finalidade certa no registro de privacidade — candidato a parceiro não é
+    // possível cliente da plataforma.
+    expect(enviados[0]).toMatchObject({ campaign: 'afiliados', kind: 'Afiliados' })
+    expect(String(enviados[0].mensagem)).toContain('Programa de Afiliados')
   })
 })

@@ -4,6 +4,15 @@ const config: Config = {
   content: [
     './app/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
+    // `lib` também: o Tailwind só gera a classe que ele ENXERGA no texto dos
+    // arquivos varridos aqui. Quando o tema do site público saiu de dentro de
+    // app/institucional/page.tsx para lib/institucional.ts, todo className que
+    // só existia lá parou de ser gerado — e as seções perderam o fundo colorido
+    // sem nenhum erro de build, de lint ou de teste para acusar. Qualquer
+    // arquivo que monte string de classe precisa estar nesta lista.
+    './lib/**/*.{js,ts,jsx,tsx,mdx}',
+    './hooks/**/*.{js,ts,jsx,tsx,mdx}',
+    './contexts/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: {
     extend: {
