@@ -38,6 +38,19 @@ public class LeadsController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
+        // Derivado no servidor a partir de um enum validado — não do `Campaign`,
+        // que é texto livre enviado pelo cliente. Quem manda a requisição não
+        // escolhe como o próprio tratamento é descrito no registro de privacidade.
+        var (origem, finalidade) = request.Kind switch
+        {
+            LeadKind.Afiliados => (
+                "Candidatura enviada pelo próprio titular no formulário do Programa de Afiliados",
+                "Avaliar a candidatura e realizar procedimentos para possível contrato de parceria de indicação"),
+            _ => (
+                "Contato enviado pelo próprio titular no formulário institucional",
+                "Responder ao contato e realizar procedimentos para possível contratação da plataforma"),
+        };
+
         var lead = new Lead
         {
             Nome     = request.Nome.Trim(),
@@ -52,8 +65,11 @@ public class LeadsController : ControllerBase
             UtmContent = Clean(request.UtmContent),
             ReferrerUrl = Clean(request.ReferrerUrl),
             LandingPage = Clean(request.LandingPage),
-            DataOriginDetails = "Contato enviado pelo próprio titular no formulário institucional",
-            ProcessingPurpose = "Responder ao contato e realizar procedimentos para possível contratação da plataforma",
+            DataOriginDetails = origem,
+            ProcessingPurpose = finalidade,
+            // Pré-contratual nos dois casos: num, o contrato possível é o da
+            // plataforma; no outro, o de parceria. O que muda é a DESCRIÇÃO de
+            // qual procedimento é, e é ela que a trilha de auditoria guarda.
             LegalBasis = LeadLegalBasis.ProcedimentosPreContratuais,
             PrivacyNoticeVersion = request.PrivacyNoticeVersion.Trim(),
             PrivacyNoticeAcknowledgedAt = DateTime.UtcNow,

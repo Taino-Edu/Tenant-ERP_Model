@@ -349,10 +349,15 @@ export default function InstitucionalPage() {
                   <th scope="col" className={`border-b px-4 py-4 text-center text-xs font-extrabold uppercase tracking-wide sm:px-6 ${theme.border} ${theme.muted}`}>Ferramentas separadas</th>
                 </tr>
               </thead>
-              <tbody>
+              {/* Ao virar <table>, o `last:border-0` da versão em <div> deixou de
+                  funcionar: ele passou a morar na primeira célula da linha, que
+                  nunca é a última filha do <tr>. Resultado — uma linha sobrando
+                  no rodapé da tabela, que não existia antes. Zerar pelo tbody
+                  acerta a linha inteira de uma vez. */}
+              <tbody className="[&>tr:last-child>*]:border-b-0">
                 {COMPARATIVO.map(([label, octus, generico, separadas]) => (
                   <tr key={label}>
-                    <th scope="row" className={`border-b px-4 py-4 text-left text-sm font-semibold last:border-0 sm:px-6 ${theme.border} ${theme.heading}`}>{label}</th>
+                    <th scope="row" className={`border-b px-4 py-4 text-left text-sm font-semibold sm:px-6 ${theme.border} ${theme.heading}`}>{label}</th>
                     {[octus, generico, separadas].map((value, index) => (
                       <td key={index} className={`border-b px-4 py-4 text-center text-sm sm:px-6 ${theme.border}`}>
                         <span className="flex justify-center">

@@ -7,10 +7,34 @@ using System.ComponentModel.DataAnnotations;
 
 namespace CardGameStore.DTOs;
 
+/// <summary>
+/// De qual formulário público o lead veio.
+///
+/// Existe por causa do registro de privacidade, não de relatório: o controller
+/// grava finalidade e origem do tratamento no lead E numa trilha de auditoria
+/// (LeadPrivacyAudit), e esses textos precisam descrever o que a pessoa de fato
+/// pediu. Quem se candidata ao programa de afiliados não está contratando a
+/// plataforma — registrá-lo como possível cliente é um registro impreciso
+/// justamente no campo que existe para ser preciso.
+///
+/// É um enum e não o `Campaign` (texto livre vindo do cliente) porque o texto
+/// jurídico é derivado no servidor: campanha serve para marketing, não para
+/// escolher a descrição da base legal.
+/// </summary>
+public enum LeadKind
+{
+    Institucional,
+    Afiliados,
+}
+
 public class CreateLeadRequest
 {
     [Required, MaxLength(150)]
     public string Nome { get; set; } = string.Empty;
+
+    /// <summary>Formulário de origem. O padrão mantém o comportamento de quem
+    /// já chama este endpoint sem informar nada.</summary>
+    public LeadKind Kind { get; set; } = LeadKind.Institucional;
 
     [Required, MaxLength(30)]
     public string Telefone { get; set; } = string.Empty;

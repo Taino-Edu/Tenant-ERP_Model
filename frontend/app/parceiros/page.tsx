@@ -172,7 +172,9 @@ export default function ParceirosPage() {
           mensagem: `Candidatura ao Programa de Afiliados.${perfil.trim() ? ` Perfil: ${perfil.trim()}` : ''}`,
           privacyNoticeAcknowledged: privacyAcknowledged,
         },
-        'afiliados',
+        // `kind` governa o registro de privacidade; `defaultCampaign` só a fila
+        // do CRM. Ver submitLead.
+        { kind: 'Afiliados', defaultCampaign: 'afiliados' },
       )
       setSubmitted(true)
     } catch (submitError) {
@@ -486,7 +488,9 @@ export default function ParceirosPage() {
                   <th scope="col" className={`border-b px-5 py-4 text-left text-xs font-extrabold uppercase tracking-wide sm:px-6 ${theme.border} ${theme.muted}`}>Clientes Fundadores</th>
                 </tr>
               </thead>
-              <tbody>
+              {/* Mesmo motivo do comparativo da institucional: sem isto sobra
+                  uma linha no rodapé da tabela. */}
+              <tbody className="[&>tr:last-child>*]:border-b-0">
                 {COMPARATIVO.map(([label, afiliado, fundador]) => (
                   <tr key={label}>
                     <th scope="row" className={`border-b px-5 py-4 text-left align-top font-bold sm:px-6 ${theme.border} ${theme.heading}`}>{label}</th>

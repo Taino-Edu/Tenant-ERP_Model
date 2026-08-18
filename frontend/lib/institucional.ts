@@ -13,7 +13,7 @@
 // =============================================================================
 
 import { useEffect, useState } from 'react'
-import { leadsApi } from '@/lib/api'
+import { leadsApi, type LeadKind } from '@/lib/api'
 
 export const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
 
@@ -129,13 +129,22 @@ export interface LeadFields {
  * `campaign` recebe um padrão por formulário: o link de afiliados quase nunca
  * vem com `?campaign=` na URL, e sem isso as candidaturas a parceiro cairiam na
  * mesma fila indistinta dos pedidos de teste grátis.
+ *
+ * `kind` é outra coisa e por isso é outro parâmetro: campanha é rótulo de
+ * marketing e pode ser sobrescrita pela URL; `kind` diz QUAL formulário é, e o
+ * backend deriva dele a finalidade do tratamento gravada no registro de
+ * privacidade. Um não pode mandar no outro.
  */
-export async function submitLead(fields: LeadFields, defaultCampaign?: string) {
+export async function submitLead(
+  fields: LeadFields,
+  { kind = 'Institucional', defaultCampaign }: { kind?: LeadKind; defaultCampaign?: string } = {},
+) {
   const query = new URLSearchParams(window.location.search)
   const trim = (value: string | null) => value?.slice(0, 120) || undefined
 
   await leadsApi.create({
     ...fields,
+    kind,
     privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
     campaign: trim(query.get('campaign')) ?? defaultCampaign,
     utmSource: trim(query.get('utm_source')),

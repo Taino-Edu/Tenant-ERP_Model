@@ -1058,8 +1058,14 @@ export interface SaveCrmOpportunityRequest {
   expectedCloseDate?: string | null; assignedUserId?: string | null; lostReason?: string | null
 }
 
+/** Formulário público de origem. O backend usa isto — e NÃO o `campaign`, que é
+ *  texto livre — para escrever a finalidade e a origem do tratamento no registro
+ *  de privacidade do lead e na trilha de auditoria. */
+export type LeadKind = 'Institucional' | 'Afiliados'
+
 export interface CreateLeadRequest {
   nome: string; telefone: string; email?: string; mensagem?: string
+  kind?: LeadKind
   privacyNoticeAcknowledged: boolean; privacyNoticeVersion: string
   campaign?: string; utmSource?: string; utmMedium?: string; utmCampaign?: string
   utmTerm?: string; utmContent?: string; referrerUrl?: string; landingPage?: string
