@@ -28,7 +28,11 @@ public sealed class ReferralInvitationControllerTests
         var schema = TestDbFactory.IsolatedSchemaName(nameof(ConfirmSignature_ValidaEmailCriaParceiroEGeraPdfComEvidencias));
         TestDbFactory.ResetSchema(schema);
         var connection = new NpgsqlConnectionStringBuilder(TestDbFactory.ConnectionString) { SearchPath = schema }.ConnectionString;
-        var options = new DbContextOptionsBuilder<CatalogDbContext>().UseNpgsql(connection).Options;
+        // Espelha produção: uma transação manual fora da execution strategy
+        // passa no Npgsql simples, mas explode quando retry está habilitado.
+        var options = new DbContextOptionsBuilder<CatalogDbContext>()
+            .UseNpgsql(connection, npgsql => npgsql.EnableRetryOnFailure(maxRetryCount: 5))
+            .Options;
 
         try
         {
@@ -79,6 +83,8 @@ public sealed class ReferralInvitationControllerTests
 
             var confirmed = await controller.ConfirmSignature(token, new ConfirmReferralSignatureRequest { Code = deliveredCode! });
             confirmed.Should().BeOfType<OkObjectResult>();
+            var repeated = await controller.ConfirmSignature(token, new ConfirmReferralSignatureRequest { Code = deliveredCode! });
+            repeated.Should().BeOfType<OkObjectResult>("repetir após um commit incerto deve devolver o aceite já concluído");
             var partner = await db.ReferralPartners.SingleAsync();
             partner.Document.Should().Be("12345678901");
             partner.ContractEmailVerifiedAt.Should().NotBeNull();
@@ -87,10 +93,11 @@ public sealed class ReferralInvitationControllerTests
             partner.ContractPdf.Should().StartWith(Encoding.ASCII.GetBytes("%PDF-1.4"));
             partner.ContractPdfSha256.Should().Be(Convert.ToHexString(SHA256.HashData(partner.ContractPdf!)));
 
-            await db.Entry(invitation).ReloadAsync();
-            invitation.AcceptedPartnerId.Should().Be(partner.Id);
-            invitation.SignatureCodeHash.Should().BeNull();
-            invitation.PendingAcceptanceJson.Should().BeNull();
+            var acceptedInvitation = await db.ReferralPartnerInvitations.AsNoTracking()
+                .SingleAsync(i => i.Id == invitation.Id);
+            acceptedInvitation.AcceptedPartnerId.Should().Be(partner.Id);
+            acceptedInvitation.SignatureCodeHash.Should().BeNull();
+            acceptedInvitation.PendingAcceptanceJson.Should().BeNull();
 
             var download = await controller.DownloadSignedDocument(token);
             download.Should().BeOfType<FileContentResult>();

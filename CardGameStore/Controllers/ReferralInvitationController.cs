@@ -98,9 +98,29 @@ public class ReferralInvitationController : ControllerBase
     public async Task<IActionResult> ConfirmSignature(string token, [FromBody] ConfirmReferralSignatureRequest request)
     {
         if (!ModelState.IsValid) return ValidationProblem(ModelState);
+
+        // CatalogDbContext usa EnableRetryOnFailure em produção. O Npgsql não
+        // permite uma transação manual "solta" nesse modo: todo o bloco precisa
+        // ser executado pela strategy para que consulta, gravação e commit sejam
+        // repetidos como uma unidade em falhas transitórias.
+        var strategy = _catalog.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            // Em eventual retry, não reutiliza entidades Added/Modified da
+            // tentativa anterior. O token é relido e o aceite é idempotente.
+            _catalog.ChangeTracker.Clear();
+            return await ConfirmSignatureTransaction(token, request);
+        });
+    }
+
+    private async Task<IActionResult> ConfirmSignatureTransaction(string token, ConfirmReferralSignatureRequest request)
+    {
         await using var transaction = await _catalog.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var invitation = await FindPending(token);
-        if (invitation is null) return NotFound(new { Message = "Convite inválido, expirado, revogado ou já utilizado." });
+        var invitation = await FindByToken(token, tracking: true);
+        if (invitation?.AcceptedAt.HasValue == true && invitation.AcceptedPartnerId.HasValue)
+            return Ok(new { Id = invitation.AcceptedPartnerId.Value, Message = "Parceria já assinada.", SignedDocumentAvailable = true });
+        if (invitation is null || invitation.RevokedAt.HasValue || invitation.ExpiresAt <= DateTime.UtcNow)
+            return NotFound(new { Message = "Convite inválido, expirado ou revogado." });
         var now = DateTime.UtcNow;
         if (invitation.SignatureCodeHash is null || invitation.SignatureCodeExpiresAt <= now || invitation.PendingAcceptanceJson is null)
             return BadRequest(new { Message = "O código expirou. Solicite um novo código." });
