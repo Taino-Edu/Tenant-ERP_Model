@@ -20,13 +20,16 @@
 #                       disco/instância. Configure isto (ou uma cópia off-site
 #                       equivalente) assim que houver dado de loja que doa perder.
 #                       Se definido e o envio falhar, este script FALHA (exit 1) —
-#                       ver comentário na seção de envio.
+#                       ver comentário na seção de envio. Exige
+#                       BACKUP_ENCRYPT_PASSPHRASE junto: nada sai daqui sem cifra.
 #   BACKUP_ENCRYPT_PASSPHRASE
-#                       (opcional, recomendado) cifra cada dump com GPG/AES-256
-#                       ANTES de sair do servidor. Só o arquivo cifrado é enviado;
-#                       a cópia local segue em texto puro para restauração rápida.
+#                       OBRIGATÓRIA quando BACKUP_REMOTE_CMD está definido — sem
+#                       ela o script FALHA (exit 1) em vez de enviar em texto
+#                       puro. Cifra cada dump com GPG/AES-256 ANTES de sair do
+#                       servidor; só o arquivo cifrado é enviado, e a cópia local
+#                       segue em texto puro para restauração rápida.
 #                       ⚠️  Guarde a frase-secreta FORA do destino off-site. Ela no
-#                       mesmo Drive do backup não protege de nada, e perdê-la
+#                       mesmo bucket do backup não protege de nada, e perdê-la
 #                       significa perder todos os backups enviados.
 #   POSTGRES_DB / POSTGRES_USER — lidos do .env
 #
@@ -163,27 +166,47 @@ fi
 if [ -n "${BACKUP_REMOTE_CMD:-}" ]; then
   CIFRAR="${BACKUP_ENCRYPT_PASSPHRASE:-}"
 
-  if [ -n "$CIFRAR" ] && ! command -v gpg >/dev/null 2>&1; then
+  # Destino configurado sem frase-secreta derruba o script, em vez de subir o
+  # dump em texto puro.
+  #
+  # A cifra era opcional e o silêncio era o problema: quem configurasse o envio
+  # e esquecesse a senha veria "Enviado OK" todas as noites, sem nada indicando
+  # que o dump — CPF, e-mail, telefone e endereço dos clientes das lojas, num
+  # produto que vende módulo de LGPD, mais as credenciais de sessão do WhatsApp
+  # no dump do Evolution — estava saindo legível para dentro de um bucket. O
+  # esquecimento não dava sinal nenhum, e o sinal só apareceria num vazamento.
+  #
+  # Recusar aqui, e não lá em cima, é de propósito: os dumps locais já foram
+  # escritos e continuam válidos para restaurar. O que falha é só a redundância
+  # off-site, que é exatamente o que está mal configurado — e o exit 1 faz o
+  # cron mandar e-mail, mesmo padrão já usado quando o envio quebra.
+  if [ -z "$CIFRAR" ]; then
+    echo "[$(date '+%H:%M:%S')] ❌ ERRO: BACKUP_REMOTE_CMD está definido mas BACKUP_ENCRYPT_PASSPHRASE não." >&2
+    echo "                 O dump carrega dados pessoais dos clientes das lojas e não sai daqui sem cifra." >&2
+    echo "                 Defina BACKUP_ENCRYPT_PASSPHRASE no .env (guarde a frase FORA do destino off-site)" >&2
+    echo "                 ou remova BACKUP_REMOTE_CMD para ficar só com o backup local." >&2
+    exit 1
+  fi
+
+  if ! command -v gpg >/dev/null 2>&1; then
     echo "[$(date '+%H:%M:%S')] ❌ ERRO: BACKUP_ENCRYPT_PASSPHRASE definido mas 'gpg' não está instalado. Instale (apt-get install -y gnupg) ou remova a variável." >&2
     exit 1
   fi
 
+  # Sem ramo "sem cifra": chegar aqui já garante frase-secreta e gpg presentes.
   ENVIO_FALHOU=0
   for DUMP in "${DUMPS[@]}"; do
-    ARQUIVO="$DUMP"
+    ARQUIVO="${DUMP}.gpg"
 
-    if [ -n "$CIFRAR" ]; then
-      ARQUIVO="${DUMP}.gpg"
-      echo "[$(date '+%H:%M:%S')] Cifrando $(basename "$DUMP") ..."
-      # --passphrase-fd 3 em vez de --passphrase: o valor não aparece na linha de
-      # comando, que qualquer usuário do host lê via `ps`.
-      if ! gpg --batch --yes --quiet --symmetric --cipher-algo AES256 \
-               --passphrase-fd 3 --output "$ARQUIVO" "$DUMP" 3<<<"$CIFRAR"; then
-        echo "[$(date '+%H:%M:%S')] ❌ ERRO: falha ao cifrar $DUMP — NÃO enviando em texto puro." >&2
-        rm -f "$ARQUIVO"
-        ENVIO_FALHOU=1
-        continue
-      fi
+    echo "[$(date '+%H:%M:%S')] Cifrando $(basename "$DUMP") ..."
+    # --passphrase-fd 3 em vez de --passphrase: o valor não aparece na linha de
+    # comando, que qualquer usuário do host lê via `ps`.
+    if ! gpg --batch --yes --quiet --symmetric --cipher-algo AES256 \
+             --passphrase-fd 3 --output "$ARQUIVO" "$DUMP" 3<<<"$CIFRAR"; then
+      echo "[$(date '+%H:%M:%S')] ❌ ERRO: falha ao cifrar $DUMP — NÃO enviando em texto puro." >&2
+      rm -f "$ARQUIVO"
+      ENVIO_FALHOU=1
+      continue
     fi
 
     echo "[$(date '+%H:%M:%S')] Enviando off-site: $(basename "$ARQUIVO")"
@@ -198,7 +221,7 @@ if [ -n "${BACKUP_REMOTE_CMD:-}" ]; then
     # O cifrado é material de trânsito: o que fica no VPS é o .sql.gz em texto
     # puro, que torna a restauração local imediata. Manter os dois dobraria o
     # espaço ocupado sem proteger nada — quem alcança este disco alcança o banco.
-    [ -n "$CIFRAR" ] && rm -f "$ARQUIVO"
+    rm -f "$ARQUIVO"
   done
 
   if [ "$ENVIO_FALHOU" -ne 0 ]; then

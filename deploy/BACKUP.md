@@ -88,6 +88,20 @@ nada e sem reclamar.
 
 Gere a frase com `openssl rand -base64 32`.
 
+**As duas variáveis andam juntas.** Com `BACKUP_REMOTE_CMD` definido e
+`BACKUP_ENCRYPT_PASSPHRASE` vazio, o script para com erro em vez de enviar o dump
+legível. O dump carrega CPF, e-mail, telefone e endereço dos clientes das lojas —
+num produto que vende módulo de LGPD — mais as credenciais de sessão do WhatsApp
+no dump do Evolution. Antes a cifra era opcional e o esquecimento era silencioso:
+o log dizia "Enviado OK" todas as noites e nada indicava que o arquivo tinha
+saído em texto puro. Se você quiser mesmo ficar só com o backup local, tire o
+`BACKUP_REMOTE_CMD` — é uma decisão que precisa estar escrita no `.env`, não um
+efeito colateral de uma linha esquecida.
+
+Os dumps locais são escritos antes dessa checagem, então mesmo quando ela falha
+você continua com backup em disco. O que falta é a redundância off-site, que é
+exatamente o que está mal configurado.
+
 > **Guarde a frase-secreta fora do R2.** No mesmo lugar do backup ela não protege
 > de nada, e sem ela os arquivos enviados são irrecuperáveis. Gerenciador de
 > senhas da empresa ou cofre físico.
