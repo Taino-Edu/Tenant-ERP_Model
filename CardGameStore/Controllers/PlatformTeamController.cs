@@ -129,6 +129,17 @@ public sealed class PlatformTeamController : ControllerBase
         try { profile = PlatformAccessProfiles.GetRequired(request.ProfileKey); }
         catch (ArgumentException exception) { return BadRequest(new { Message = exception.Message }); }
 
+        // Mesma ideia de não deixar alguém desativar a própria conta, um passo
+        // adiante: trocar o próprio perfil para um mais restrito tranca a pessoa
+        // para fora da tela que faria a correção. Um sócio que virasse Auditoria
+        // por engano dependeria do proprietário principal para voltar — e se ele
+        // estivesse de férias, a plataforma ficaria sem ninguém para administrar.
+        if (owner.Id == CurrentUserId() &&
+            !string.Equals(owner.PlatformAccessProfile, profile.Key, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { Message = "Você não pode alterar o próprio perfil de acesso. Peça a outro integrante da equipe." });
+        }
+
         owner.Name = request.Name.Trim();
         owner.PlatformAccessProfile = profile.Key;
         owner.PlatformPermissionsJson = PlatformAccessProfiles.Serialize(profile.Permissions);

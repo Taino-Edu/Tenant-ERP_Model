@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { platformApi, PlatformAccessProfileDto, PlatformTeamMemberDto } from '@/lib/api'
 import { getErrorMessage } from '@/lib/api'
+import { getUserId } from '@/lib/auth'
 import toast from 'react-hot-toast'
 import { Check, Clock3, Crown, Loader2, MailPlus, RefreshCw, ShieldCheck, UserRound, Users } from 'lucide-react'
 
@@ -14,6 +15,11 @@ export default function EquipePlataformaPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [profileKey, setProfileKey] = useState('partner_admin')
+  // Cookie: só existe no client, então é lido no efeito, não no render. A lista
+  // de integrantes só aparece depois do fetch, que resolve bem depois disso —
+  // as linhas nunca chegam a ser desenhadas sem saber qual delas é a sua.
+  const [meuId, setMeuId] = useState('')
+  useEffect(() => { setMeuId(getUserId()) }, [])
 
   const load = useCallback(async () => {
     try {
@@ -111,8 +117,11 @@ export default function EquipePlataformaPage() {
                 <div className="flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm font-semibold text-amber-200"><ShieldCheck className="h-4 w-4" /> Acesso total protegido</div>
               ) : (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <select value={member.profileKey} onChange={event => updateMember(member, { profileKey: event.target.value })} className="input min-w-52">{profiles.map(profile => <option key={profile.key} value={profile.key}>{profile.name}</option>)}</select>
-                  <button type="button" onClick={() => updateMember(member, { isActive: !member.isActive })} className={member.isActive ? 'btn-secondary whitespace-nowrap' : 'btn-primary whitespace-nowrap'}>{member.isActive ? 'Desativar acesso' : <><Check className="h-4 w-4" /> Reativar</>}</button>
+                  {/* A própria conta: trocar de perfil e desativar são recusados
+                      pela API (ninguém se tranca do lado de fora sozinho), então
+                      os dois controles ficam travados em vez de dar erro. */}
+                  <select disabled={member.id === meuId} title={member.id === meuId ? 'Você não pode alterar o próprio perfil. Peça a outro integrante.' : undefined} value={member.profileKey} onChange={event => updateMember(member, { profileKey: event.target.value })} className="input min-w-52 disabled:opacity-60">{profiles.map(profile => <option key={profile.key} value={profile.key}>{profile.name}</option>)}</select>
+                  {member.id !== meuId && <button type="button" onClick={() => updateMember(member, { isActive: !member.isActive })} className={member.isActive ? 'btn-secondary whitespace-nowrap' : 'btn-primary whitespace-nowrap'}>{member.isActive ? 'Desativar acesso' : <><Check className="h-4 w-4" /> Reativar</>}</button>}
                   {member.invitationPending && <button type="button" onClick={() => resend(member)} className="btn-secondary whitespace-nowrap"><RefreshCw className="h-4 w-4" /> Reenviar</button>}
                 </div>
               )}
