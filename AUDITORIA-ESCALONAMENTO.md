@@ -116,6 +116,7 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 
 - **Onde:** `deploy/setup.sh` (versão commitada: nenhum cron), `deploy/backup.sh` (destino `/opt/tenant-erp/backups` na mesma máquina, retenção 7 dias, sem verificação de integridade).
 - **Status no working copy:** setup agenda cron diário (03:00) + backup inicial; `backup.sh` valida integridade (`gzip -t` + tamanho mínimo) e oferece `BACKUP_REMOTE_CMD` para cópia off-site (ainda opcional — default continua local).
+- **Evolução (2026-08-19):** o envio off-site cobre os dois dumps (ERP + Evolution), falha com `exit 1` quando o destino não aceita — antes era só um aviso e o cron não avisava ninguém —, e agora **exige** `BACKUP_ENCRYPT_PASSPHRASE`: destino configurado sem frase-secreta derruba o script em vez de subir dado pessoal legível. Cifra GPG/AES-256 com a senha por descritor de arquivo, nunca na linha de comando. Destino documentado é o Cloudflare R2 (`deploy/BACKUP.md`).
 - **Persistem:** retenção curta (7 dias), sem teste de restore automatizado, dump full único sem restore por tenant (ver M20). **Revisar e commitar.**
 
 ---
@@ -343,6 +344,8 @@ Chave de 44 dígitos pela lib com cDV em `ide.cDV` · cNF aleatório de 8 dígit
 - Rate limiting particionado por `CF-Connecting-IP` (não pelo IP do nó Cloudflare), com políticas global/auth/locate-account/comanda-hub.
 - CORS por config + liberação de subdomínios do `RootDomain`; headers de segurança + CSP diferenciado para `/swagger`; Swagger só em Development.
 - Plataforma: policy `PlatformOwnerOnly`, tickets de impersonação de uso único/90 s/vinculados ao tenant; suporte cross-tenant responde 404 (não 403) para não confirmar existência (`SupportController.cs:129-131`).
+- Permissão granular da plataforma por rota (`[RequirePlatformPermission]` + `PlatformAccessMiddleware`), resolvida pela chave do perfil e não pelo retrato gravado na conta; `SessionVersion` encerra sessões antigas ao editar um integrante. Conta raiz não é editável nem desativável, e ninguém troca o próprio perfil de acesso (`PlatformTeamController.cs`).
+- Cobertura de autorização validada no boot dos **dois** lados — `ValidateOperatorPermissionCoverage` e `ValidatePlatformPermissionCoverage` (`Program.cs`, logo após `MapControllers`). Rota autenticada sem classificação derruba a aplicação: os middlewares só agem onde acham o atributo, então esquecer de declarar abriria a rota em vez de fechá-la.
 - Upload validado: whitelist de MIME + extensão, 5 MB, `[RequestSizeLimit]`, policy AdminOnly.
 - Auditoria: `AuditSaveChangesInterceptor` com redaction de `PasswordHash`/`RefreshToken`/`PasswordResetToken`, IP via HMAC-SHA256, nunca aborta o `SaveChanges` do usuário.
 

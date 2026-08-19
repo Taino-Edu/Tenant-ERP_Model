@@ -253,6 +253,36 @@ erDiagram
 - **Audit Logs e IPs (LGPD):** Registros críticos salvam o IP do ator. Mas, para cumprir a LGPD, usamos **Anonimização via SHA-256**. O IP `192.168.0.1` + `SALT` vira um hash. Não sabemos de quem é o IP, mas se um ataque vier da mesma fonte, os hashes baterão para bloqueio.
 - **Direitos do Titular:** Endpoint e painel que permitem extrair (portabilidade) e mascarar os dados pessoais de clientes que exercerem o direito ao esquecimento, mantendo a integridade fiscal (comandas fechadas não são apagadas, apenas o nome vira "Usuário Deletado").
 
+### RBAC em três camadas (e por que ele falha alto)
+
+O sistema tem três populações com regras próprias, cada uma com o seu ponto de decisão:
+
+| Camada | Onde é decidida | Como a rota declara |
+|---|---|---|
+| Equipe da plataforma (`PlatformOwner`) | `PlatformAccessMiddleware` | `[RequirePlatformPermission("platform.*")]` |
+| Funcionário da loja (`Operator`) | `OperatorPermissionMiddleware` | `[RequireOperatorPermission]` / `[OperatorSelfService]` / `[OperatorForbidden]` |
+| Cliente (`Customer`) | Escopo por `userId` dentro do próprio endpoint | policy `CustomerOrAdmin` |
+
+Duas decisões de projeto sustentam isso:
+
+- **Nenhum middleware confia no JWT.** As permissões vão no token para a UI usar, mas
+  a autorização relê o banco a cada requisição. Tirar um acesso vale já na próxima
+  chamada, sem esperar o token expirar. Na plataforma há ainda o `SessionVersion`:
+  editar um integrante encerra as sessões antigas dele.
+- **Rota sem declaração não sobe.** Os dois validadores rodam depois do
+  `MapControllers` e lançam exceção no boot se uma rota autenticada não disser como
+  se autoriza. Sem isso a falha seria a pior possível — os middlewares só agem onde
+  encontram o atributo, então o esquecimento não fecharia a porta, abriria. Uma
+  exceção no primeiro deploy é barata; uma rota da plataforma aberta à auditoria por
+  meses, não.
+
+Do lado da plataforma, as permissões efetivas são resolvidas **pela chave do perfil**
+(`PlatformAccessProfiles.EffectivePermissions`), não pela cópia gravada na conta no
+momento do convite. Já foi o contrário, e o resultado é o esperado de qualquer
+retrato que ninguém atualiza: mudar a definição de um perfil não alcançava quem já
+estava cadastrado, e o sócio ficou sem enxergar parte do painel até alguém reabrir a
+conta e salvar de novo.
+
 ---
 
 ## 10. Análise Crítica (Escalabilidade, Otimizações e Débitos Técnicos)
