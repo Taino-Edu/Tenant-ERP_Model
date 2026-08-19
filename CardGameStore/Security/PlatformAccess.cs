@@ -93,7 +93,14 @@ public static class PlatformAccessProfiles
     {
         if (isPrimaryOwner) return [PlatformPermission.All];
 
-        if (!string.IsNullOrWhiteSpace(profileKey) && All.TryGetValue(profileKey, out var profile))
+        // `Selectable` entra aqui e não só no GetRequired: uma conta comum com a
+        // chave "primary_owner" gravada resolveria pro curinga. Hoje isso é
+        // inalcançável — os dois caminhos de escrita passam pelo GetRequired, que
+        // recusa perfis não selecionáveis —, mas depender de um invariante em
+        // outro arquivo é frágil demais pra uma decisão de permissão.
+        if (!string.IsNullOrWhiteSpace(profileKey) &&
+            All.TryGetValue(profileKey, out var profile) &&
+            profile.Selectable)
             return [.. profile.Permissions];
 
         return Deserialize(permissionsJson);

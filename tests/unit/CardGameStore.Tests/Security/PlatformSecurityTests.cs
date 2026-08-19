@@ -62,6 +62,19 @@ public sealed class PlatformSecurityTests
     }
 
     [Fact]
+    public void EffectivePermissions_IgnoreANonSelectableProfileOnAnOrdinaryAccount()
+    {
+        var stored = PlatformAccessProfiles.Serialize([PlatformPermission.Dashboard]);
+
+        // Conta comum carregando a chave da conta raiz: não pode virar curinga.
+        var granted = PlatformAccessProfiles.EffectivePermissions(
+            isPrimaryOwner: false, PlatformAccessProfiles.Primary, stored);
+
+        Assert.DoesNotContain(PlatformPermission.All, granted);
+        Assert.Equal(new[] { PlatformPermission.Dashboard }, granted);
+    }
+
+    [Fact]
     public void EffectivePermissions_GiveThePrimaryOwnerTheWildcard()
     {
         var granted = PlatformAccessProfiles.EffectivePermissions(isPrimaryOwner: true, null, null);
