@@ -31,6 +31,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setCanUseAi(getRole() === 'Admin' || hasPermission('ia'))
   }, [])
 
+  // O painel da loja é de Admin e Operator. Cliente ou dono da plataforma que
+  // digitasse /admin carregava a casca inteira e só via as chamadas de API
+  // falhando uma a uma — o /plataforma já tinha essa trava, aqui faltava.
+  // Não é segurança (quem barra de verdade são as políticas do backend), é não
+  // deixar a pessoa numa tela que nunca vai funcionar pra ela.
+  useEffect(() => {
+    const role = getRole()
+    if (role && role !== 'Admin' && role !== 'Operator') router.replace('/login')
+  }, [router])
+
   // Marca o <body> enquanto o painel admin está montado. Os widgets flutuantes
   // globais (banner de cookies, botão de instalar PWA, lançador da IA) vivem no
   // RootLayout, FORA do .admin-shell — então não têm como saber que existe uma

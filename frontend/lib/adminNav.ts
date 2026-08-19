@@ -35,7 +35,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Operacional',
     items: [
-      { href: '/admin/comanda',      label: 'Comanda',          icon: Users,           badge: 'LIVE', perm: 'dashboard', module: 'restaurante', short: 'Comanda' },
+      // ComandaController exige a permissão `comandas`. Enquanto o menu pedia
+      // `dashboard`, quem tinha só comandas não achava a tela, e quem tinha só
+      // dashboard entrava pra tomar 403 na primeira chamada.
+      { href: '/admin/comanda',      label: 'Comanda',          icon: Users,           badge: 'LIVE', perm: 'comandas', module: 'restaurante', short: 'Comanda' },
       { href: '/admin/dashboard',    label: 'Painel Geral',     icon: LayoutDashboard,                perm: 'dashboard', short: 'Painel' },
       { href: '/admin/venda-avulsa', label: 'Frente de Caixa',  icon: ShoppingBag,                    perm: 'pdv', short: 'Caixa' },
       { href: '/admin/qrcodes',      label: 'Gatilhos QR Code', icon: QrCode,                         perm: 'qrcodes', module: 'restaurante', short: 'QR Code' },

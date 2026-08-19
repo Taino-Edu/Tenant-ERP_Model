@@ -14,7 +14,7 @@ export interface AdminKeyboardShortcut {
 
 export const ADMIN_KEYBOARD_SHORTCUTS: AdminKeyboardShortcut[] = [
   { key: 'g', label: 'G', description: 'Painel Geral', category: 'Operação', route: '/admin/dashboard', permission: 'dashboard', sidebar: true },
-  { key: 'd', label: 'D', description: 'Comanda (ao vivo)', category: 'Operação', route: '/admin/comanda', permission: 'dashboard', module: 'restaurante', sidebar: true },
+  { key: 'd', label: 'D', description: 'Comanda (ao vivo)', category: 'Operação', route: '/admin/comanda', permission: 'comandas', module: 'restaurante', sidebar: true },
   { key: 'p', label: 'P', description: 'Frente de Caixa (PDV)', category: 'Operação', route: '/admin/venda-avulsa', permission: 'pdv', sidebar: true },
   { key: 'e', label: 'E', description: 'Estoque', category: 'Operação', route: '/admin/estoque', permission: 'estoque', module: 'estoque', sidebar: true },
   { key: 'q', label: 'Q', description: 'Gatilhos QR Code', category: 'Operação', route: '/admin/qrcodes', permission: 'qrcodes', sidebar: true },
