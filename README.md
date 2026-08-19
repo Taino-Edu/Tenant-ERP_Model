@@ -124,6 +124,19 @@ Tenant-ERP/
 
 ---
 
+## Documentação
+
+| Documento | O que cobre |
+|---|---|
+| [DOCUMENTACAO-COMPLETA.md](./DOCUMENTACAO-COMPLETA.md) | Arquitetura, fluxos, DER resumido, análise crítica |
+| [docs/MODELAGEM-DE-DADOS.md](./docs/MODELAGEM-DE-DADOS.md) | Modelo conceitual, lógico e físico; convenções do schema; modelagem da DRE, do fechamento de período e do razão de estoque |
+| [AUDITORIA-ESCALONAMENTO.md](./AUDITORIA-ESCALONAMENTO.md) | Auditoria de escalonamento e consistência, com o estado de cada correção |
+| [GUIA-DE-TESTES.md](./GUIA-DE-TESTES.md) | Como subir a stack e os roteiros de teste manual |
+| [deploy/BACKUP.md](./deploy/BACKUP.md) | Backup off-site cifrado, restauração e limites |
+| [BACKLOG.md](./BACKLOG.md) | O que está planejado |
+
+---
+
 ## Perfis e Permissões
 
 Três camadas independentes, cada uma com o seu ponto de decisão no backend. O

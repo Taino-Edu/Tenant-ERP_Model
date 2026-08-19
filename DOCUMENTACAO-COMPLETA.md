@@ -177,6 +177,12 @@ O sistema é suportado exclusivamente pelo **PostgreSQL 16**. O MongoDB foi remo
 
 - **Venda Avulsa (Por que JSONB?):** Uma Venda no balcão é um cupom. Se eu deleto o Produto X, a venda de ontem não pode quebrar. Em vez de criar infinitas tabelas de associação temporais, a `VendaAvulsa` possui uma coluna `ItensJson` de tipo genuníno `JSONB`. O Snapshot (Nome, Preço na época, Quantidade) é imutável.
 
+> 📐 **Modelagem completa:** o DER abaixo é o mapa de bolso — as ~43 tabelas do
+> tenant (42) e as do catálogo (25), o modelo conceitual/lógico/físico, as convenções que
+> atravessam o schema (dinheiro em centavos, snapshot, UTC vs dia brasileiro,
+> índices parciais) e a modelagem da DRE estão em
+> **[docs/MODELAGEM-DE-DADOS.md](./docs/MODELAGEM-DE-DADOS.md)**.
+
 ### Diagrama Entidade-Relacionamento (DER Mermaid)
 
 ```mermaid
@@ -244,6 +250,34 @@ erDiagram
     COMANDA ||--o{ COMANDA_ITEM : ""
     PRODUCT ||--o{ COMANDA_ITEM : ""
 ```
+
+### A DRE em uma tela
+
+A DRE não é tabela: é projeção calculada em `FinanceiroCalculoService` sobre as
+vendas (comandas + avulsas) e os lançamentos de `external_transactions`.
+
+```
+  Receita Bruta
+− Deduções (descontos)          = Receita Líquida
+− Impostos sobre vendas         (dre_group = sales_tax)
+− CMV (custo no momento da venda)  = Lucro Bruto
+− Despesas operacionais         (dre_group = operating_expense)
+                                = Resultado Operacional
++ Resultado financeiro          (dre_group = financial)
+− Impostos sobre o lucro        (dre_group = income_tax)
+                                = Resultado Líquido
+```
+
+O que **não** entra: `inventory_purchase` e `fixed_asset` (compra de mercadoria é
+estoque e vira CMV na venda; imobilizado é patrimônio — contabilizar os dois como
+despesa cobraria o mesmo custo duas vezes) e `unclassified`, que é somado à parte
+como pendência em vez de ser presumido despesa.
+
+Repare que `external_transactions` carrega **duas** colunas de classificação:
+`category` é o rótulo livre da tela, `dre_group` é a classificação contábil
+fechada que dirige o cálculo. O lojista renomeia categorias sem mexer na
+contabilidade. Detalhamento em
+[docs/MODELAGEM-DE-DADOS.md](./docs/MODELAGEM-DE-DADOS.md#6-modelagem-da-dre).
 
 ---
 
