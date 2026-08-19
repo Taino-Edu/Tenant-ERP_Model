@@ -11,7 +11,7 @@ import NumberInput from '@/components/admin/ui/NumberInput'
 import FilterBar from '@/components/admin/ui/FilterBar'
 import { gerarRelatorioOperacional, gerarRelatorioGerencial } from '@/lib/relatorio-estoque'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
-import { hasPermission } from '@/lib/auth'
+import { useAdminPermissions } from '@/hooks/useAdminPermissions'
 import CameraScanner from '@/components/CameraScanner'
 
 // ── Drawer de detalhe do produto ─────────────────────────────────────────────
@@ -996,7 +996,10 @@ function EstoqueContent() {
   const { site } = useSiteConfig()
   const params = useSearchParams()
   const router = useRouter()
-  const podeVerCategorias = hasPermission('categorias')
+  // Via `hasPermission` direto, isto divergia entre o SSR (cookie ausente, aba
+  // some) e o primeiro render do client (cookie presente, aba aparece).
+  const { can } = useAdminPermissions()
+  const podeVerCategorias = can('categorias')
   const [tabSection, setTabSection] = useState<'produtos' | 'categorias'>(
     params.get('tab') === 'categorias' ? 'categorias' : 'produtos'
   )
