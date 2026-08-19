@@ -1013,6 +1013,7 @@ app.UseOperatorPermissions();
 
 app.MapControllers();
 app.ValidateOperatorPermissionCoverage();
+app.ValidatePlatformPermissionCoverage();
 app.MapHub<ComandaHub>("/hubs/comanda").RequireRateLimiting("comanda-hub");
 
 // MCP — o tenant pluga a IA dele aqui (ver CardGameStore/Mcp/ErpTools.cs).

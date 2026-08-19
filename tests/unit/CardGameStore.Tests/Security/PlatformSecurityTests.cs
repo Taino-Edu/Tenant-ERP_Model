@@ -3,9 +3,13 @@ using CardGameStore.Security;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Controllers;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CardGameStore.Tests.Security;
 
@@ -114,6 +118,40 @@ public sealed class PlatformSecurityTests
         return data;
     }
 
+    [Fact]
+    public void CoverageValidator_ReportsAPlatformRouteWithoutAPermission()
+    {
+        var endpoint = RouteEndpoint("api/platform/nova-area",
+            new AuthorizeAttribute { Policy = "PlatformOwnerOnly" });
+
+        Assert.Contains(
+            PlatformPermissionEndpointValidator.FindUnclassified([endpoint]),
+            value => value.Contains("api/platform/nova-area"));
+    }
+
+    [Fact]
+    public void CoverageValidator_AcceptsAPlatformRouteThatDeclaresOne()
+    {
+        var endpoint = RouteEndpoint("api/platform/nova-area",
+            new AuthorizeAttribute { Policy = "PlatformOwnerOnly" },
+            new RequirePlatformPermissionAttribute(PlatformPermission.Dashboard));
+
+        Assert.Empty(PlatformPermissionEndpointValidator.FindUnclassified([endpoint]));
+    }
+
+    [Fact]
+    public async Task EveryMappedPlatformRoute_IsClassified()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Services.AddControllers().AddApplicationPart(typeof(PlatformController).Assembly);
+        await using var app = builder.Build();
+        app.MapControllers();
+
+        var endpoints = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints);
+
+        Assert.Empty(PlatformPermissionEndpointValidator.FindUnclassified(endpoints));
+    }
+
     [Theory]
     [MemberData(nameof(PlatformOwnerControllers))]
     public void PlatformEndpoints_DeclareGranularPermission(Type controllerType)
@@ -154,6 +192,16 @@ public sealed class PlatformSecurityTests
         await middleware.InvokeAsync(context);
 
         Assert.True(nextCalled);
+    }
+
+    private static RouteEndpoint RouteEndpoint(string route, params object[] metadata)
+    {
+        var builder = new RouteEndpointBuilder(
+            _ => Task.CompletedTask,
+            RoutePatternFactory.Parse(route),
+            0) { DisplayName = route };
+        foreach (var item in metadata) builder.Metadata.Add(item);
+        return (RouteEndpoint)builder.Build();
     }
 
     private static DefaultHttpContext AuthenticatedPost(string fetchSite)
