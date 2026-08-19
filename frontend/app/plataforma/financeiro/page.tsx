@@ -18,6 +18,7 @@ import {
   platformBillingApi, getErrorMessage,
   type BillingResumoDto, type TenantChargeDto,
 } from '@/lib/api'
+import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import Button from '@/components/admin/ui/Button'
 import DataTable from '@/components/admin/ui/DataTable'
 import EmptyState from '@/components/admin/ui/EmptyState'
@@ -48,6 +49,10 @@ export default function FinanceiroPlataformaPage() {
   const [loading, setLoading]         = useState(true)
   const [gerando, setGerando]         = useState(false)
   const [salvandoId, setSalvandoId]   = useState<string | null>(null)
+  // A aba abre com `platform.finance.read`; gerar mensalidades e dar baixa
+  // exigem `platform.finance.manage`. Sem essa distinção, o perfil de auditoria
+  // via os dois botões e só descobria o limite depois do 403.
+  const podeLancar = usePlatformPermissions()('platform.finance.manage')
 
   const carregar = useCallback(async (comp: string) => {
     setLoading(true)
@@ -131,10 +136,12 @@ export default function FinanceiroPlataformaPage() {
               className="bg-transparent text-sm text-white outline-none"
             />
           </div>
-          <Button onClick={gerarMensalidades} loading={gerando}>
-            <RefreshCw className="w-4 h-4" />
-            Gerar mensalidades
-          </Button>
+          {podeLancar && (
+            <Button onClick={gerarMensalidades} loading={gerando}>
+              <RefreshCw className="w-4 h-4" />
+              Gerar mensalidades
+            </Button>
+          )}
         </div>
       </div>
 
@@ -185,7 +192,9 @@ export default function FinanceiroPlataformaPage() {
             {cobrancas.length === 0 ? (
               <EmptyState
                 icon={Store}
-                message="Nenhuma cobrança gerada para este mês. Use “Gerar mensalidades” para criá-las."
+                message={podeLancar
+                  ? 'Nenhuma cobrança gerada para este mês. Use “Gerar mensalidades” para criá-las.'
+                  : 'Nenhuma cobrança gerada para este mês.'}
               />
             ) : (
               /* Esta tela já tinha tabela e cards, mas escritos à mão em
@@ -196,13 +205,15 @@ export default function FinanceiroPlataformaPage() {
                 className="pt-3 sm:pt-0"
                 rows={cobrancas}
                 rowKey={c => c.id}
-                rowActions={c => (
+                // `undefined` e não uma função que devolve null: é assim que o
+                // DataTable deixa de reservar a coluna de ações inteira.
+                rowActions={podeLancar ? c => (
                   <AcaoPagamento
                     c={c}
                     salvando={salvandoId === c.id}
                     onClick={() => alternarPagamento(c)}
                   />
-                )}
+                ) : undefined}
                 columns={[
                   { key: 'loja', header: 'Loja', mobile: 'title',
                     cell: c => (

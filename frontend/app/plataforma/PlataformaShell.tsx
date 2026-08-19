@@ -1,8 +1,10 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { isPlatformOwner, clearAuth, hasPlatformPermission } from '@/lib/auth'
+import { isPlatformOwner, clearAuth, saveAuth, hasPlatformPermission } from '@/lib/auth'
+import { api } from '@/lib/api'
+import { PLATFORM_PERMISSIONS_EVENT } from '@/hooks/usePlatformPermissions'
 import { Toaster } from 'react-hot-toast'
 import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet, Users, HandCoins } from 'lucide-react'
 import clsx from 'clsx'
@@ -20,10 +22,18 @@ const NAV_ITEMS = [
   { href: '/plataforma/equipe',     label: 'Equipe',       icon: Users, permission: 'platform.team' },
 ]
 
+// Mesma cadência do painel da loja: renova o token antes que a inatividade
+// derrube a sessão.
+const REFRESH_INTERVAL_MS = 45 * 60 * 1000
+
 export default function PlataformaShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const [checked, setChecked] = useState(false)
+  // As abas saem do cookie de permissões, gravado no login. Sem isso, quem tem
+  // o perfil alterado (ou pega uma mudança na definição do perfil) continua
+  // vendo o menu antigo até deslogar e logar de novo.
+  const [permissionsVersion, setPermissionsVersion] = useState(0)
 
   useEffect(() => {
     if (!isPlatformOwner()) {
@@ -32,6 +42,36 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
     }
     setChecked(true)
   }, [router])
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await api.post('/api/auth/refresh', {})
+        if (res.data) {
+          saveAuth(res.data)
+          setPermissionsVersion(current => current + 1)
+          // As telas de dentro escondem botões pelas mesmas permissões e não
+          // re-renderizam junto com o shell (`children` mantém a identidade do
+          // elemento). O evento é o que faz elas relerem o cookie novo.
+          window.dispatchEvent(new Event(PLATFORM_PERMISSIONS_EVENT))
+        }
+      } catch {
+        // Falhou: o interceptor de /lib/api manda pro login na próxima chamada.
+      }
+    }
+
+    refresh()
+    const id = setInterval(refresh, REFRESH_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  // `checked` e `permissionsVersion` entram nas dependências de propósito: o
+  // cookie não notifica ninguém quando muda, então recalcular junto com eles é
+  // o que mantém as abas coerentes com o perfil vigente.
+  const visibleItems = useMemo(
+    () => (checked ? NAV_ITEMS.filter(item => hasPlatformPermission(item.permission)) : []),
+    [checked, permissionsVersion],
+  )
 
   function handleLogout() {
     clearAuth()
@@ -72,7 +112,7 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
           </div>
         </div>
         <nav className="chip-row max-w-7xl mx-auto px-4 sm:px-6 items-center !gap-1">
-          {NAV_ITEMS.filter(item => hasPlatformPermission(item.permission)).map(({ href, label, icon: Icon }) => {
+          {visibleItems.map(({ href, label, icon: Icon }) => {
             const active = href === '/plataforma' ? pathname === href : pathname.startsWith(href)
             return (
               <Link

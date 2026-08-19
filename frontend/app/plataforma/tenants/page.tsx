@@ -11,6 +11,7 @@ import EmptyState from '@/components/admin/ui/EmptyState'
 import Modal from '@/components/admin/ui/Modal'
 import Spinner from '@/components/admin/ui/Spinner'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
+import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import toast from 'react-hot-toast'
 import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle } from 'lucide-react'
 import clsx from 'clsx'
@@ -51,6 +52,24 @@ const PAYMENT_STYLES: Record<TenantPaymentStatus, string> = {
 const PAYMENT_OPTIONS = ['Pago', 'Atrasado', 'Isento'] as const
 
 type TenantFiltro = 'todos' | 'ativos' | 'suspensos' | 'atrasados'
+
+/** O que o perfil de quem está logado libera nesta tela.
+ *
+ * Cada campo espelha a permissão que o endpoint correspondente exige — repare
+ * que editar billing NÃO é `tenants.manage`, e sim `finance.manage`: um perfil
+ * Comercial administra a loja mas não mexe no que ela paga. Sem esse recorte a
+ * tela oferecia as quatro ações a todo mundo e o backend devolvia 403 depois do
+ * clique. */
+interface TenantAcoes {
+  /** POST /tenants, PATCH status, GET backup */
+  gerenciar: boolean
+  /** PATCH billing — plano, mensalidade, status de pagamento e módulos */
+  billing: boolean
+  /** DELETE /tenants/{id} */
+  apagar: boolean
+  /** POST /tenants/{id}/impersonate */
+  simular: boolean
+}
 
 // ── Modal: Apagar Tenant (irreversível — exige digitar o slug de volta) ───────
 function DeleteTenantModal({ tenant, onClose, onDeleted }: { tenant: TenantSummary; onClose: () => void; onDeleted: () => void }) {
@@ -155,7 +174,7 @@ const BTN_ACAO = 'w-8 h-8 max-md:w-11 max-md:h-11 rounded-lg flex items-center j
  * por linha e não dá pra usar o DataTable. Os blocos são montados uma vez só e
  * as duas molduras consomem os mesmos — nenhuma ação existe num layout e falta
  * no outro. */
-function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tenant: TenantSummary; lastActivityAt: string | null | undefined; onChanged: () => void; layout?: 'row' | 'card' }) {
+function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout = 'row' }: { tenant: TenantSummary; lastActivityAt: string | null | undefined; onChanged: () => void; acoesPermitidas: TenantAcoes; layout?: 'row' | 'card' }) {
   const [planName, setPlanName]   = useState(tenant.planName)
   const [savingBilling, setSavingBilling] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
@@ -275,6 +294,11 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
   const card = layout === 'card'
   const activity = fmtRelative(lastActivityAt ?? null)
 
+  // Campos de cobrança viram somente leitura em vez de sumir: o plano e a
+  // mensalidade são justamente o que um perfil de leitura vem conferir.
+  const billingTravado = !acoesPermitidas.billing
+  const tituloBilling  = billingTravado ? 'Seu perfil não permite alterar a cobrança desta loja.' : undefined
+
   const slugLink = (
     // `py-1.5` no celular: é o link que abre o detalhe da loja, o destino mais
     // usado do card, e como texto puro tinha 24px de alvo.
@@ -297,7 +321,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
     <select
       className={clsx('input text-xs py-1', card ? 'w-full' : 'w-32')}
       value={planoSelecionado}
-      disabled={savingBilling}
+      disabled={savingBilling || billingTravado}
+      title={tituloBilling}
       aria-label="Plano contratado"
       onChange={e => aplicarPlano(e.target.value)}
     >
@@ -316,9 +341,9 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
           value={mensalidade}
           onChange={e => setMensalidade(e.target.value)}
           onBlur={salvarMensalidade}
-          disabled={savingBilling}
+          disabled={savingBilling || billingTravado}
           aria-label="Mensalidade cobrada desta loja"
-          title="Mensalidade cobrada desta loja"
+          title={tituloBilling ?? 'Mensalidade cobrada desta loja'}
         />
       </div>
       <p className="text-[10px] text-gray-500 mt-0.5">
@@ -332,7 +357,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
       value={tenant.paymentStatus}
       options={PAYMENT_OPTIONS}
       styles={PAYMENT_STYLES}
-      disabled={savingBilling}
+      disabled={savingBilling || billingTravado}
       onChange={paymentStatus => saveBilling({ paymentStatus })}
     />
   )
@@ -344,8 +369,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
     <button
       type="button"
       onClick={() => setShowModules(true)}
-      disabled={savingBilling}
-      title="Editar módulos contratados"
+      disabled={savingBilling || billingTravado}
+      title={tituloBilling ?? 'Editar módulos contratados'}
       className={clsx(
         // `py-2.5` no celular: como `py-1` o botão ficava com 24px de altura, e
         // ele é a única porta de entrada pra edição dos módulos contratados.
@@ -368,9 +393,12 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
     </button>
   )
 
+  // Aqui é o contrário dos campos de cobrança: uma fileira de ícones que só
+  // servem pra tomar 403 não informa nada, então o que o perfil não faz nem
+  // chega a ser desenhado.
   const acoes = (
     <>
-      <button
+      {acoesPermitidas.simular && <button
         onClick={acessarAdmin}
         disabled={impersonating || tenant.status !== 'Active'}
         title={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
@@ -378,8 +406,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
         className={clsx(BTN_ACAO, 'border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed')}
       >
         {impersonating ? <Spinner size="sm" /> : <LogIn className="w-3.5 h-3.5" />}
-      </button>
-      <button
+      </button>}
+      {acoesPermitidas.gerenciar && <button
         onClick={toggleStatus}
         disabled={updatingStatus}
         title={tenant.status === 'Active' ? 'Suspender' : 'Reativar'}
@@ -390,8 +418,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
         {updatingStatus
           ? <Spinner size="sm" />
           : tenant.status === 'Active' ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
-      </button>
-      <button
+      </button>}
+      {acoesPermitidas.gerenciar && <button
         onClick={baixarBackup}
         disabled={backingUp}
         title="Baixar backup (.sql) desta loja"
@@ -399,17 +427,21 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
         className={clsx(BTN_ACAO, 'border-surface-500 text-gray-300 hover:border-surface-400 hover:text-white')}
       >
         {backingUp ? <Spinner size="sm" /> : <Download className="w-3.5 h-3.5" />}
-      </button>
-      <button
+      </button>}
+      {acoesPermitidas.apagar && <button
         onClick={() => setShowDelete(true)}
         title="Apagar esta loja permanentemente"
         aria-label="Apagar esta loja permanentemente"
         className={clsx(BTN_ACAO, 'border-red-500/30 text-red-400 hover:bg-red-500/10')}
       >
         <Trash2 className="w-3.5 h-3.5" />
-      </button>
+      </button>}
     </>
   )
+
+  /** Nenhuma ação liberada: a barra inteira sai, senão sobra uma borda
+   *  separando um espaço vazio no card do celular. */
+  const temAcoes = acoesPermitidas.simular || acoesPermitidas.gerenciar || acoesPermitidas.apagar
 
   const modais = (
     <>
@@ -463,7 +495,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
             <dd><span className={clsx('text-xs font-medium', ACTIVITY_TONE[activity.tone])}>{activity.text}</span></dd>
           </div>
         </dl>
-        <div className="flex items-center gap-1.5 border-t border-surface-600 pt-3">{acoes}</div>
+        {temAcoes && <div className="flex items-center gap-1.5 border-t border-surface-600 pt-3">{acoes}</div>}
         {modais}
       </li>
     )
@@ -481,9 +513,11 @@ function TenantRow({ tenant, lastActivityAt, onChanged, layout = 'row' }: { tena
       <td className="py-3">
         <span className={clsx('text-xs font-medium', ACTIVITY_TONE[activity.tone])}>{activity.text}</span>
       </td>
-      <td className="py-3 text-right">
-        <div className="flex items-center justify-end gap-1.5">{acoes}</div>
-      </td>
+      {temAcoes && (
+        <td className="py-3 text-right">
+          <div className="flex items-center justify-end gap-1.5">{acoes}</div>
+        </td>
+      )}
       {modais}
     </tr>
   )
@@ -496,6 +530,15 @@ export default function PlataformaTenantsPage() {
   const [overview, setOverview] = useState<PlatformOverviewDto | null>(null)
   const [filtro, setFiltro] = useState<TenantFiltro>('todos')
   const [filtroTexto, setFiltroTexto] = useState('')
+  const pode = usePlatformPermissions()
+
+  const acoesPermitidas: TenantAcoes = {
+    gerenciar: pode('platform.tenants.manage'),
+    billing:   pode('platform.finance.manage'),
+    apagar:    pode('platform.tenants.delete'),
+    simular:   pode('platform.impersonate'),
+  }
+  const temAcoes = acoesPermitidas.gerenciar || acoesPermitidas.apagar || acoesPermitidas.simular
 
   /// `loading` só vale pra primeira carga. Recarregar depois de uma edição
   /// inline tem que ser silencioso: com KPIs, busca e tabela atrás de
@@ -544,11 +587,11 @@ export default function PlataformaTenantsPage() {
         icon={Building2}
         title="Tenants"
         description={loading ? 'Lojas cadastradas na plataforma' : `${tenants.length} loja${tenants.length === 1 ? '' : 's'} na plataforma`}
-        actions={
+        actions={acoesPermitidas.gerenciar && (
           <button onClick={() => setShowCreate(true)} className="btn-primary text-sm py-1.5">
             <Plus className="w-4 h-4" /> Cadastrar Tenant
           </button>
-        }
+        )}
       />
 
       {/* KPIs que também são filtro — mesmo padrão do Estoque, em vez de
@@ -597,11 +640,11 @@ export default function PlataformaTenantsPage() {
           <EmptyState
             icon={Building2}
             message="Nenhum tenant cadastrado ainda."
-            action={
+            action={acoesPermitidas.gerenciar && (
               <button onClick={() => setShowCreate(true)} className="btn-primary text-sm py-1.5 mt-3">
                 <Plus className="w-4 h-4" /> Cadastrar o primeiro
               </button>
-            }
+            )}
           />
         </div>
       ) : tenantsVisiveis.length === 0 ? (
@@ -622,19 +665,21 @@ export default function PlataformaTenantsPage() {
                     <th className="py-2 font-medium">Módulos</th>
                     <th className="py-2 font-medium">Criado em</th>
                     <th className="py-2 font-medium">Última atividade</th>
-                    <th className="py-2 font-medium text-right">Ações</th>
+                    {/* Cabeçalho e célula andam juntos: esconder só um deles
+                        desalinharia a tabela inteira. */}
+                    {temAcoes && <th className="py-2 font-medium text-right">Ações</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {tenantsVisiveis.map(t => (
-                    <TenantRow key={t.id} tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={recarregarSilencioso} />
+                    <TenantRow key={t.id} tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={recarregarSilencioso} acoesPermitidas={acoesPermitidas} />
                   ))}
                 </tbody>
               </table>
             </div>
             <ul className="space-y-2 sm:hidden">
               {tenantsVisiveis.map(t => (
-                <TenantRow key={t.id} layout="card" tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={recarregarSilencioso} />
+                <TenantRow key={t.id} layout="card" tenant={t} lastActivityAt={activityByTenant.get(t.id)} onChanged={recarregarSilencioso} acoesPermitidas={acoesPermitidas} />
               ))}
             </ul>
           </>
