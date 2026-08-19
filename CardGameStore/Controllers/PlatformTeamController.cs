@@ -155,7 +155,8 @@ public sealed class PlatformTeamController : ControllerBase
         {
             Id = owner.Id, Name = owner.Name, Email = owner.Email ?? string.Empty,
             ProfileKey = profileKey, ProfileName = profile?.Name ?? profileKey,
-            Permissions = owner.IsPlatformPrimaryOwner ? [PlatformPermission.All] : PlatformAccessProfiles.Deserialize(owner.PlatformPermissionsJson),
+            Permissions = PlatformAccessProfiles.EffectivePermissions(
+                owner.IsPlatformPrimaryOwner, profileKey, owner.PlatformPermissionsJson),
             IsPrimaryOwner = owner.IsPlatformPrimaryOwner, IsActive = owner.IsActive,
             InvitationPending = owner.PasswordHash is null, LastLoginAt = owner.LastLoginAt, CreatedAt = owner.CreatedAt,
         };

@@ -846,6 +846,33 @@ using (var scope = app.Services.CreateScope())
                 await db.SaveChangesAsync();
             }
         }
+
+        // Realinha o retrato de permissões da equipe com a definição atual dos
+        // perfis. Quem autoriza de fato é PlatformAccessProfiles.EffectivePermissions
+        // (lê pelo perfil, não por esta coluna) — isto existe só para a coluna não
+        // continuar contando uma história diferente da que o sistema aplica.
+        var teamMembers = await db.Users
+            .Where(u => u.Role == CardGameStore.Models.PostgreSQL.UserRole.PlatformOwner && !u.IsPlatformPrimaryOwner)
+            .ToListAsync();
+        var resynced = 0;
+        foreach (var member in teamMembers)
+        {
+            if (member.PlatformAccessProfile is null ||
+                !PlatformAccessProfiles.All.TryGetValue(member.PlatformAccessProfile, out var profile))
+                continue;
+
+            var current = PlatformAccessProfiles.Serialize(profile.Permissions);
+            if (current == member.PlatformPermissionsJson) continue;
+
+            member.PlatformPermissionsJson = current;
+            member.UpdatedAt = DateTime.UtcNow;
+            resynced++;
+        }
+        if (resynced > 0)
+        {
+            await db.SaveChangesAsync();
+            logger.LogInformation("Permissões da equipe da plataforma realinhadas em {Count} conta(s).", resynced);
+        }
     }
     catch (Exception ex)
     {

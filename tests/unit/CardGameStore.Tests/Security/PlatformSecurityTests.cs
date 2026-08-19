@@ -2,7 +2,9 @@ using System.Security.Claims;
 using CardGameStore.Security;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Controllers;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 
 namespace CardGameStore.Tests.Security;
@@ -10,16 +12,61 @@ namespace CardGameStore.Tests.Security;
 public sealed class PlatformSecurityTests
 {
     [Fact]
-    public void SelectableProfiles_NeverGrantTeamOrWildcard()
+    public void PartnerProfile_GrantsEveryArea()
     {
-        var selectable = PlatformAccessProfiles.All.Values.Where(profile => profile.Selectable).ToArray();
+        var partner = PlatformAccessProfiles.All[PlatformAccessProfiles.Partner];
 
-        Assert.NotEmpty(selectable);
-        Assert.All(selectable, profile =>
+        Assert.True(partner.Selectable);
+        Assert.Contains(PlatformPermission.All, partner.Permissions);
+    }
+
+    [Fact]
+    public void OperationalProfiles_NeverGrantTeamOrWildcard()
+    {
+        // Sócio à parte: comercial, financeiro, suporte e auditoria continuam
+        // sendo recortes do painel — se um deles ganhar o curinga ou a gestão da
+        // equipe, o recorte deixou de existir na prática.
+        var restricted = PlatformAccessProfiles.All.Values
+            .Where(profile => profile.Selectable && profile.Key != PlatformAccessProfiles.Partner)
+            .ToArray();
+
+        Assert.NotEmpty(restricted);
+        Assert.All(restricted, profile =>
         {
             Assert.DoesNotContain(PlatformPermission.Team, profile.Permissions);
             Assert.DoesNotContain(PlatformPermission.All, profile.Permissions);
         });
+    }
+
+    [Fact]
+    public void EffectivePermissions_FollowTheProfile_NotTheStoredSnapshot()
+    {
+        // Conta antiga: o JSON gravado no convite não tem a gestão de equipe.
+        var stale = PlatformAccessProfiles.Serialize([PlatformPermission.Dashboard]);
+
+        var granted = PlatformAccessProfiles.EffectivePermissions(
+            isPrimaryOwner: false, PlatformAccessProfiles.Partner, stale);
+
+        Assert.Contains(PlatformPermission.All, granted);
+    }
+
+    [Fact]
+    public void EffectivePermissions_FallBackToSnapshot_WhenProfileKeyIsUnknown()
+    {
+        var stored = PlatformAccessProfiles.Serialize([PlatformPermission.Dashboard, PlatformPermission.Logs]);
+
+        var granted = PlatformAccessProfiles.EffectivePermissions(
+            isPrimaryOwner: false, "perfil_que_nao_existe_mais", stored);
+
+        Assert.Equal(new[] { PlatformPermission.Dashboard, PlatformPermission.Logs }, granted);
+    }
+
+    [Fact]
+    public void EffectivePermissions_GiveThePrimaryOwnerTheWildcard()
+    {
+        var granted = PlatformAccessProfiles.EffectivePermissions(isPrimaryOwner: true, null, null);
+
+        Assert.Equal(new[] { PlatformPermission.All }, granted);
     }
 
     [Fact]
@@ -33,11 +80,29 @@ public sealed class PlatformSecurityTests
         Assert.Equal(hash, AuthService.HashOpaqueToken(token));
     }
 
+    /// <summary>
+    /// Todo controller PlatformOwnerOnly do assembly, e não uma lista escrita à
+    /// mão: um controller novo que esquecesse a permissão granular ficaria aberto
+    /// a qualquer integrante da equipe — auditoria inclusive — porque
+    /// PlatformAccessMiddleware só age onde existe o atributo.
+    /// </summary>
+    public static TheoryData<Type> PlatformOwnerControllers()
+    {
+        var data = new TheoryData<Type>();
+        var controllers = typeof(PlatformController).Assembly.GetTypes()
+            .Where(type => type.IsClass && !type.IsAbstract && typeof(ControllerBase).IsAssignableFrom(type))
+            .Where(type => type.GetCustomAttributes(typeof(AuthorizeAttribute), true)
+                .Cast<AuthorizeAttribute>()
+                .Any(attribute => attribute.Policy == "PlatformOwnerOnly"))
+            .OrderBy(type => type.FullName, StringComparer.Ordinal);
+
+        foreach (var controller in controllers) data.Add(controller);
+        Assert.NotEmpty(data);
+        return data;
+    }
+
     [Theory]
-    [InlineData(typeof(PlatformController))]
-    [InlineData(typeof(PlatformBillingController))]
-    [InlineData(typeof(ProspectingController))]
-    [InlineData(typeof(PlatformTeamController))]
+    [MemberData(nameof(PlatformOwnerControllers))]
     public void PlatformEndpoints_DeclareGranularPermission(Type controllerType)
     {
         var classRequirement = controllerType.GetCustomAttributes(typeof(RequirePlatformPermissionAttribute), true).Any();

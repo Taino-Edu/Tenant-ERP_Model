@@ -286,7 +286,8 @@ public sealed class PlatformCrmController : ControllerBase
     private static bool CanManageLeads(User user)
     {
         if (user.IsPlatformPrimaryOwner) return true;
-        var permissions = PlatformAccessProfiles.Deserialize(user.PlatformPermissionsJson);
+        var permissions = PlatformAccessProfiles.EffectivePermissions(
+            user.IsPlatformPrimaryOwner, user.PlatformAccessProfile, user.PlatformPermissionsJson);
         return permissions.Contains(PlatformPermission.All, StringComparer.OrdinalIgnoreCase) ||
                permissions.Contains(PlatformPermission.Leads, StringComparer.OrdinalIgnoreCase);
     }

@@ -40,11 +40,14 @@ public static class PlatformAccessProfiles
         new Dictionary<string, PlatformProfileDefinition>(StringComparer.OrdinalIgnoreCase)
         {
             [Primary] = new(Primary, "Proprietário principal", "Acesso total e gestão da equipe.", [PlatformPermission.All], false),
-            [Partner] = new(Partner, "Sócio administrador", "Opera toda a plataforma, sem gerenciar o proprietário principal.",
-                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.TenantsManage,
-                 PlatformPermission.TenantsDelete, PlatformPermission.FinanceRead, PlatformPermission.FinanceManage,
-                 PlatformPermission.Leads, PlatformPermission.Support, PlatformPermission.Logs, PlatformPermission.Impersonate,
-                 PlatformPermission.ReferralsRead, PlatformPermission.ReferralsManage]),
+            // Sócio enxerga o painel inteiro, equipe inclusive. É curinga de
+            // propósito: uma área nova da plataforma passa a valer pra ele no
+            // mesmo deploy, sem depender de alguém lembrar de somar a permissão
+            // aqui. O que continua fora do alcance dele não é permissão e sim a
+            // conta raiz — PlatformTeamController barra editar/desativar o
+            // proprietário principal olhando IsPlatformPrimaryOwner.
+            [Partner] = new(Partner, "Sócio administrador", "Acesso total à plataforma, equipe incluída. Só não altera a conta do proprietário principal.",
+                [PlatformPermission.All]),
             [Commercial] = new(Commercial, "Comercial", "Cuida de leads, prospecção e implantação de clientes.",
                 [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.TenantsManage, PlatformPermission.Leads,
                  PlatformPermission.ReferralsRead, PlatformPermission.ReferralsManage]),
@@ -74,6 +77,26 @@ public static class PlatformAccessProfiles
         if (string.IsNullOrWhiteSpace(json)) return [];
         try { return JsonSerializer.Deserialize<string[]>(json) ?? []; }
         catch (JsonException) { return []; }
+    }
+
+    /// <summary>
+    /// Permissões que valem AGORA para um integrante da equipe da plataforma.
+    ///
+    /// A coluna platform_permissions_json é só o retrato do perfil no momento em
+    /// que a conta foi convidada ou editada. Quando a definição de um perfil muda
+    /// aqui no código, quem já estava cadastrado continuaria com a lista velha até
+    /// alguém reabrir a conta e salvar de novo — foi exatamente assim que o sócio
+    /// ficou sem enxergar parte do painel. Ler pelo perfil elimina esse
+    /// descompasso; o JSON só é usado como reserva, se a chave sumir do código.
+    /// </summary>
+    public static string[] EffectivePermissions(bool isPrimaryOwner, string? profileKey, string? permissionsJson)
+    {
+        if (isPrimaryOwner) return [PlatformPermission.All];
+
+        if (!string.IsNullOrWhiteSpace(profileKey) && All.TryGetValue(profileKey, out var profile))
+            return [.. profile.Permissions];
+
+        return Deserialize(permissionsJson);
     }
 }
 
