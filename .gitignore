@@ -127,3 +127,10 @@ CONTEXTO-SESSAO.md
 
 # Certificados/chaves de integrações (Inter, SEFAZ, etc.) — nunca versionar
 deploy/certs/
+
+# Artefatos de execução local — apareciam em todo `git status` depois de rodar
+# a suíte, competindo com as mudanças de verdade pela atenção de quem lê.
+# `test-results/` é do Playwright; `output/` guarda PDFs gerados em teste
+# (ex: termo de parceria de exemplo).
+/test-results/
+/output/
