@@ -82,12 +82,30 @@ step 2 "Credenciais do R2"
 if [ -f "$RCLONE_CONF" ] && grep -q '^\[r2\]' "$RCLONE_CONF"; then
     ok "rclone.conf já tem o remote [r2] — mantendo"
 else
+    echo "  Na tela do token, use a seção \"Use the S3 API\" — o \"Token value\""
+    echo "  longo do topo é da API da Cloudflare e NÃO serve aqui."
     echo "  (nada é exibido na tela enquanto você digita ou cola)"
-    read -rsp "  Account ID: "        ACCOUNT_ID; echo
-    read -rsp "  Access Key ID: "     ACCESS_KEY; echo
-    read -rsp "  Secret Access Key: " SECRET_KEY; echo
+    read -rsp "  Endpoint S3 (ou só o Account ID): " ENDPOINT_RAW; echo
+    read -rsp "  Access Key ID: "                   ACCESS_KEY;   echo
+    read -rsp "  Secret Access Key: "               SECRET_KEY;   echo
 
-    [ -n "$ACCOUNT_ID" ] && [ -n "$ACCESS_KEY" ] && [ -n "$SECRET_KEY" ] || die "Credencial vazia — nada foi gravado."
+    [ -n "$ENDPOINT_RAW" ] && [ -n "$ACCESS_KEY" ] && [ -n "$SECRET_KEY" ] || die "Credencial vazia — nada foi gravado."
+
+    # Aceita as duas formas porque a Cloudflare mostra o endpoint pronto e pede
+    # trabalho extrair o Account ID dele. E colar o endpoint é mais seguro do que
+    # remontá-lo: uma conta com jurisdição (UE, por exemplo) tem host diferente
+    # — `<id>.eu.r2.cloudflarestorage.com` — e remontar como `<id>.r2...`
+    # produziria uma URL que não existe, falhando como se fosse credencial.
+    ENDPOINT_RAW="${ENDPOINT_RAW%/}"
+    case "$ENDPOINT_RAW" in
+        *r2.cloudflarestorage.com*)
+            ENDPOINT="https://${ENDPOINT_RAW#https://}" ;;
+        *.*|*/*)
+            die "Não reconheci \"${ENDPOINT_RAW:0:12}...\" como endpoint do R2 nem como Account ID.
+   Esperado: https://<id>.r2.cloudflarestorage.com  ou só o <id>." ;;
+        *)
+            ENDPOINT="https://$ENDPOINT_RAW.r2.cloudflarestorage.com" ;;
+    esac
 
     mkdir -p "$(dirname "$RCLONE_CONF")"
     # umask antes de escrever: o arquivo não pode existir nem por um instante
@@ -98,13 +116,13 @@ type = s3
 provider = Cloudflare
 access_key_id = $ACCESS_KEY
 secret_access_key = $SECRET_KEY
-endpoint = https://$ACCOUNT_ID.r2.cloudflarestorage.com
+endpoint = $ENDPOINT
 region = auto
 acl = private
 no_check_bucket = true
 EOF
     )
-    unset ACCOUNT_ID ACCESS_KEY SECRET_KEY
+    unset ENDPOINT_RAW ENDPOINT ACCESS_KEY SECRET_KEY
     ok "rclone.conf gravado com permissão 600"
 fi
 
