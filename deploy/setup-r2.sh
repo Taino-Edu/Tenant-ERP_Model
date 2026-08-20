@@ -89,26 +89,21 @@ else
     read -rsp "  Access Key ID (32 caracteres): "   ACCESS_KEY;   echo
     read -rsp "  Secret Access Key: "               SECRET_KEY;   echo
 
-    # Confere o tamanho aqui, e não lá na frente: o R2 só reclama disso na
-    # primeira chamada, dentro de um 400 genérico, e sem esta checagem o
-    # operador já teria gravado a config e testado antes de descobrir que colou
-    # o campo errado. 32 é o tamanho fixo do Access Key ID do R2.
+    # Vazio primeiro: com o terminal não ecoando nada, dar Enter sem colar é
+    # fácil, e "0 caracteres" precisa de uma mensagem própria — não da explicação
+    # sobre o Token value, que não tem nada a ver.
+    [ -n "$ENDPOINT_RAW" ] || die "Endpoint vazio. Nada foi gravado — rode de novo e cole o valor."
+    [ -n "$ACCESS_KEY" ]   || die "Access Key ID vazio. O terminal não mostra o que você cola, mas precisa colar."
+    [ -n "$SECRET_KEY" ]   || die "Secret Access Key vazio. Nada foi gravado — rode de novo."
+
+    # 32 é o tamanho fixo do Access Key ID do R2. Conferir aqui, e não lá na
+    # frente: o R2 só reclama disso na primeira chamada, dentro de um 400
+    # genérico, e sem esta checagem a config já teria sido gravada.
     if [ "${#ACCESS_KEY}" -ne 32 ]; then
         die "O Access Key ID tem ${#ACCESS_KEY} caracteres — o do R2 tem exatamente 32.
    Com ~53 é o \"Token value\" do topo da tela, que não serve aqui.
    Volte na tela do token e pegue o campo \"Access Key ID\"."
     fi
-
-    # O Account ID também tem 32 caracteres hex, então passaria pela checagem
-    # acima — e ele está bem à mão, dentro do endpoint que acabou de ser
-    # digitado. Comparar os dois custa nada e evita mais uma volta ao terminal.
-    if [ "$ACCESS_KEY" = "${ENDPOINT#https://}" ] || [ "${ENDPOINT}" = "https://$ACCESS_KEY.r2.cloudflarestorage.com" ]; then
-        die "Esse Access Key ID é igual ao Account ID do endpoint.
-   São coisas diferentes: o Account ID identifica a conta e aparece na URL do
-   painel; o Access Key ID vem da tela do token, logo abaixo do \"Token value\"."
-    fi
-
-    [ -n "$ENDPOINT_RAW" ] && [ -n "$ACCESS_KEY" ] && [ -n "$SECRET_KEY" ] || die "Credencial vazia — nada foi gravado."
 
     # Aceita as duas formas porque a Cloudflare mostra o endpoint pronto e pede
     # trabalho extrair o Account ID dele. E colar o endpoint é mais seguro do que
@@ -132,6 +127,15 @@ else
         *)
             ENDPOINT="https://$ENDPOINT_RAW.r2.cloudflarestorage.com" ;;
     esac
+
+    # Só agora, porque depende do $ENDPOINT já resolvido: o Account ID também
+    # tem 32 caracteres hex e passaria pela checagem de tamanho — e está bem à
+    # mão, dentro do endpoint digitado um prompt antes.
+    if [ "$ENDPOINT" = "https://$ACCESS_KEY.r2.cloudflarestorage.com" ]; then
+        die "Esse Access Key ID é igual ao Account ID do endpoint.
+   São coisas diferentes: o Account ID identifica a conta e aparece na URL do
+   painel; o Access Key ID vem da tela do token, logo abaixo do \"Token value\"."
+    fi
 
     mkdir -p "$(dirname "$RCLONE_CONF")"
     # umask antes de escrever: o arquivo não pode existir nem por um instante
