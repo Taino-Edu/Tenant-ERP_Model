@@ -99,7 +99,14 @@ else
     ENDPOINT_RAW="${ENDPOINT_RAW%/}"
     case "$ENDPOINT_RAW" in
         *r2.cloudflarestorage.com*)
-            ENDPOINT="https://${ENDPOINT_RAW#https://}" ;;
+            # Fica SÓ o host. A tela de Settings do bucket mostra o endpoint com
+            # o bucket no fim (".../octus-backup"), e gravar isso faz o rclone
+            # acrescentar o bucket outra vez: a requisição vira
+            # ".../octus-backup/octus-backup/arquivo" e o R2 responde 400
+            # Bad Request no HeadObject — que não se parece nem com credencial
+            # nem com permissão, e foi exatamente onde isto travou na prática.
+            host="${ENDPOINT_RAW#http://}"; host="${host#https://}"; host="${host%%/*}"
+            ENDPOINT="https://$host" ;;
         *.*|*/*)
             die "Não reconheci \"${ENDPOINT_RAW:0:12}...\" como endpoint do R2 nem como Account ID.
    Esperado: https://<id>.r2.cloudflarestorage.com  ou só o <id>." ;;
@@ -172,6 +179,7 @@ if ! ERRO=$(rclone copy -v --config "$RCLONE_CONF" "$TMP_DIR/$CANARIO" "r2:$BUCK
         *403*|*AccessDenied*)      causa="o token é somente leitura. Crie outro com 'Object Read and Write' e rode de novo." ;;
         *401*|*InvalidAccessKey*)  causa="Access Key ID ou Secret Access Key incorretos. Apague $RCLONE_CONF e rode de novo." ;;
         *NoSuchBucket*)            causa="não existe bucket '$BUCKET' neste endpoint. Confira o nome e o Account ID." ;;
+        *400*|*BadRequest*)        causa="o endpoint provavelmente tem o bucket no fim. Deve terminar em .r2.cloudflarestorage.com, sem caminho. Confira: grep ^endpoint $RCLONE_CONF" ;;
         *SignatureDoesNotMatch*)   causa="o Secret Access Key não confere com o Access Key ID." ;;
         *imeout*|*o\ such\ host*|*dial\ tcp*) causa="não alcancei o endpoint. O Account ID nele provavelmente está errado." ;;
     esac
