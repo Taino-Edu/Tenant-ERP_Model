@@ -136,6 +136,28 @@ grep -q '^no_check_bucket' "$RCLONE_CONF" || {
 # ── 3. Round-trip de verdade ─────────────────────────────────────────────────
 step 3 "Testando escrita, leitura e remoção no bucket..."
 
+# Confere que o bucket existe ANTES de tentar escrever. Com `no_check_bucket`
+# ligado o rclone não valida nada, então um nome errado — plural a mais, hífen
+# no lugar de underscore — viraria um erro de escrita genérico, do mesmo formato
+# de credencial inválida. Listar primeiro transforma isso em "não achei X, mas
+# existe Y", que é a diferença entre corrigir em dez segundos e perder a tarde.
+if BUCKETS=$(rclone lsd --config "$RCLONE_CONF" r2: 2>/dev/null); then
+    if echo "$BUCKETS" | awk '{print $NF}' | grep -qx "$BUCKET"; then
+        ok "bucket r2:$BUCKET encontrado"
+    else
+        echo -e "\n  ${RED}Não existe um bucket chamado \"$BUCKET\" nesta conta.${NC}"
+        echo -e "  Buckets disponíveis:"
+        echo "$BUCKETS" | awk '{print "    - " $NF}'
+        die "Rode de novo apontando para o nome certo, por exemplo:
+   BUCKET=$(echo "$BUCKETS" | awk '{print $NF}' | head -1) bash deploy/setup-r2.sh"
+    fi
+else
+    # Token com escopo de bucket não tem permissão para listar a conta inteira,
+    # e isso é o esperado — não é erro. Segue para a escrita, que é o teste que
+    # realmente importa.
+    warn "não consegui listar os buckets (normal em token com escopo de bucket) — indo direto ao teste de escrita"
+fi
+
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 CANARIO="setup-r2-$(date +%s).txt"
