@@ -163,11 +163,25 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 CANARIO="setup-r2-$(date +%s).txt"
 echo "teste de escrita $(date -Iseconds)" > "$TMP_DIR/$CANARIO"
 
-rclone copy --config "$RCLONE_CONF" "$TMP_DIR/$CANARIO" "r2:$BUCKET" 2>/dev/null \
-    || die "Não consegui ESCREVER em r2:$BUCKET.
-   401 → credencial errada, ou rclone < 1.59
-   403 → o token não tem 'Object Read and Write', ou falta no_check_bucket
-   Sem resposta → confira o Account ID no endpoint de $RCLONE_CONF"
+# Guarda a saída do rclone em vez de descartar: listar três causas possíveis
+# quando o próprio rclone já disse qual foi é o oposto do que este script se
+# propõe a fazer. O `-v` traz o status HTTP e o código de erro do S3.
+if ! ERRO=$(rclone copy -v --config "$RCLONE_CONF" "$TMP_DIR/$CANARIO" "r2:$BUCKET" 2>&1); then
+    causa="não identifiquei o motivo — a saída do rclone está abaixo"
+    case "$ERRO" in
+        *403*|*AccessDenied*)      causa="o token é somente leitura. Crie outro com 'Object Read and Write' e rode de novo." ;;
+        *401*|*InvalidAccessKey*)  causa="Access Key ID ou Secret Access Key incorretos. Apague $RCLONE_CONF e rode de novo." ;;
+        *NoSuchBucket*)            causa="não existe bucket '$BUCKET' neste endpoint. Confira o nome e o Account ID." ;;
+        *SignatureDoesNotMatch*)   causa="o Secret Access Key não confere com o Access Key ID." ;;
+        *imeout*|*o\ such\ host*|*dial\ tcp*) causa="não alcancei o endpoint. O Account ID nele provavelmente está errado." ;;
+    esac
+    die "Não consegui ESCREVER em r2:$BUCKET.
+
+   ➜ $causa
+
+   Saída do rclone:
+$(echo "$ERRO" | tail -8 | sed 's/^/     /')"
+fi
 ok "escrita"
 
 rclone cat --config "$RCLONE_CONF" "r2:$BUCKET/$CANARIO" >/dev/null 2>&1 \
