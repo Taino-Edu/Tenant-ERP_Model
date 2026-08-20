@@ -71,46 +71,64 @@ public class ReservationController : ControllerBase
 
         var qty = req.Quantity < 1 ? 1 : req.Quantity;
 
-        // Calcula estoque disponível descontando reservas ativas
-        int stockBase;
-        if (req.VariantId.HasValue)
+        if (req.VariantId.HasValue && product.Variants.All(v => v.Id != req.VariantId.Value))
+            return BadRequest(new { Message = "Variante não encontrada." });
+
+        // Conferir o estoque e inserir a reserva precisa ser uma coisa só. Solto,
+        // era check-then-act: duas reservas simultâneas do último item somavam as
+        // mesmas reservas ativas, as duas achavam que cabia, e a loja prometia
+        // estoque que não tinha — a segunda só descobria na homologação, na frente
+        // do cliente.
+        //
+        // O `FOR UPDATE` na linha do produto é o ponto de serialização: qualquer
+        // reserva do MESMO produto espera aqui, inclusive as de variante (todas
+        // travam pela mesma linha de `products`). Reservas de produtos diferentes
+        // não se esperam — a trava é por linha, não por tabela.
+        var strategy = _db.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync<IActionResult>(async () =>
         {
-            var variant = product.Variants.FirstOrDefault(v => v.Id == req.VariantId.Value);
-            if (variant is null) return BadRequest(new { Message = "Variante não encontrada." });
-            stockBase = variant.StockQuantity;
-        }
-        else
-        {
-            stockBase = product.StockQuantity;
-        }
+            await using var transaction = await _db.Database.BeginTransactionAsync();
 
-        var activeReservedQty = await _db.ProductReservations
-            .Where(r => r.ProductId == req.ProductId
-                     && r.VariantId == req.VariantId
-                     && r.Status == "active"
-                     && r.ExpiresAt > DateTime.UtcNow)
-            .SumAsync(r => r.Quantity);
+            await _db.Database.ExecuteSqlAsync(
+                $"SELECT 1 FROM products WHERE id = {req.ProductId} FOR UPDATE");
 
-        if (stockBase - activeReservedQty < qty)
-            return BadRequest(new { Message = $"Estoque insuficiente. Disponível para reserva: {Math.Max(0, stockBase - activeReservedQty)}." });
+            // Releitura DENTRO da trava: o valor carregado antes dela pode ser de
+            // um instante em que outra reserva ainda não tinha sido gravada.
+            var stockBase = req.VariantId.HasValue
+                ? await _db.ProductVariants.AsNoTracking()
+                    .Where(v => v.Id == req.VariantId.Value).Select(v => v.StockQuantity).FirstAsync()
+                : await _db.Products.AsNoTracking()
+                    .Where(p => p.Id == req.ProductId).Select(p => p.StockQuantity).FirstAsync();
 
-        var reservation = new ProductReservation
-        {
-            UserId    = userId,
-            ProductId = req.ProductId,
-            VariantId = req.VariantId,
-            Quantity  = qty,
-            Notes     = req.Notes,
-            ExpiresAt = DateTime.UtcNow.AddHours(48),
-        };
+            var activeReservedQty = await _db.ProductReservations.AsNoTracking()
+                .Where(r => r.ProductId == req.ProductId
+                         && r.VariantId == req.VariantId
+                         && r.Status == "active"
+                         && r.ExpiresAt > DateTime.UtcNow)
+                .SumAsync(r => r.Quantity);
 
-        _db.ProductReservations.Add(reservation);
-        await _db.SaveChangesAsync();
+            if (stockBase - activeReservedQty < qty)
+                return BadRequest(new { Message = $"Estoque insuficiente. Disponível para reserva: {Math.Max(0, stockBase - activeReservedQty)}." });
 
-        await _db.Entry(reservation).Reference(r => r.Product).LoadAsync();
-        await _db.Entry(reservation).Reference(r => r.Variant).LoadAsync();
+            var reservation = new ProductReservation
+            {
+                UserId    = userId,
+                ProductId = req.ProductId,
+                VariantId = req.VariantId,
+                Quantity  = qty,
+                Notes     = req.Notes,
+                ExpiresAt = DateTime.UtcNow.AddHours(48),
+            };
 
-        return Ok(ToDto(reservation));
+            _db.ProductReservations.Add(reservation);
+            await _db.SaveChangesAsync();
+            await transaction.CommitAsync();
+
+            await _db.Entry(reservation).Reference(r => r.Product).LoadAsync();
+            await _db.Entry(reservation).Reference(r => r.Variant).LoadAsync();
+
+            return Ok(ToDto(reservation));
+        });
     }
 
     /// <summary>Cancela uma reserva ativa — o próprio dono ou um Admin.</summary>

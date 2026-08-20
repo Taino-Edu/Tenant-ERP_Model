@@ -86,7 +86,76 @@ public sealed class ReservationConcurrencyTests
         vendas.Chamadas.Should().Be(0);
     }
 
+    [Fact]
+    public async Task Create_VariasReservasSimultaneasDoUltimoItem_SoUmaEntra()
+    {
+        const int concorrentes = 8;
+
+        await using var dbA = TestDbFactory.Create($"{nameof(ReservationConcurrencyTests)}_create");
+        var (produtoId, clienteId) = await SeedProdutoComEstoqueAsync(dbA, estoque: 1);
+
+        // Oito, e não duas. Com duas chamadas o teste passava mesmo SEM o
+        // `FOR UPDATE`: elas são async no mesmo thread e acabavam serializando
+        // por acaso, o que dava confiança falsa. Oito racers em threads de
+        // verdade, sincronizados numa barreira, fecham a janela em que o acaso
+        // salva o código.
+        var contextos = new List<AppDbContext>();
+        try
+        {
+            for (var i = 0; i < concorrentes; i++) contextos.Add(TestDbFactory.CreateSharingSchemaOf(dbA));
+
+            var pedido = new CreateReservationRequest { ProductId = produtoId, Quantity = 1 };
+            using var largada = new Barrier(concorrentes);
+
+            var resultados = await Task.WhenAll(contextos.Select(ctx => Task.Run(async () =>
+            {
+                largada.SignalAndWait();
+                return await ControllerComoCliente(ctx, clienteId).Create(pedido);
+            })));
+
+            // Uma unidade em estoque não pode virar duas promessas de reserva.
+            resultados.OfType<OkObjectResult>().Should().HaveCount(1);
+            resultados.OfType<BadRequestObjectResult>().Should().HaveCount(concorrentes - 1);
+
+            var reservas = await dbA.ProductReservations.AsNoTracking()
+                .Where(r => r.ProductId == produtoId && r.Status == "active").CountAsync();
+            reservas.Should().Be(1);
+        }
+        finally
+        {
+            foreach (var ctx in contextos) await ctx.DisposeAsync();
+        }
+    }
+
     // -------------------------------------------------------------------------
+
+    private static async Task<(Guid ProdutoId, Guid ClienteId)> SeedProdutoComEstoqueAsync(AppDbContext db, int estoque)
+    {
+        var user = new User { Name = "Cliente", Role = UserRole.Customer, IsActive = true };
+        var product = new Product { Name = "Último item", Category = "Geral", PriceInCents = 1000, StockQuantity = estoque };
+
+        db.AddRange(user, product);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        return (product.Id, user.Id);
+    }
+
+    private static ReservationController ControllerComoCliente(AppDbContext db, Guid clienteId)
+    {
+        var controller = new ReservationController(db, new Mock<IVendaAvulsaService>().Object, new Mock<IComandaService>().Object)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity(
+                        [new Claim(ClaimTypes.NameIdentifier, clienteId.ToString())], "test")),
+                },
+            },
+        };
+        return controller;
+    }
 
     private static async Task<Guid> SeedReservaAtivaAsync(AppDbContext db, string status = "active")
     {
