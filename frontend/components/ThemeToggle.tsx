@@ -6,11 +6,30 @@ export default function ThemeToggle({ compact = false }: { compact?: boolean }) 
   const [light, setLight] = useState(false)
 
   useEffect(() => {
-    // Lê preferência salva ou usa escuro por padrão
-    const saved = localStorage.getItem('theme')
-    const isLight = saved === 'light'
-    setLight(isLight)
-    document.documentElement.classList.toggle('light', isLight)
+    // MESMA regra do script anti-FOUC em app/layout.tsx: preferência salva, e
+    // na falta dela o tema do sistema. As duas leituras precisam bater — se
+    // divergirem, a tela pisca de um tema pro outro quando este efeito monta,
+    // que era o que acontecia enquanto o comentário aqui prometia "escuro por
+    // padrão" e o layout já tinha gravado 'light' antes de alguém ler.
+    const consultaSistema = window.matchMedia('(prefers-color-scheme: dark)')
+    const resolver = () => {
+      const salvo = localStorage.getItem('theme')
+      return salvo ? salvo === 'light' : !consultaSistema.matches
+    }
+
+    const aplicar = () => {
+      const isLight = resolver()
+      setLight(isLight)
+      document.documentElement.classList.toggle('light', isLight)
+    }
+    aplicar()
+
+    // Sem escolha explícita, acompanhar o sistema significa acompanhar também
+    // quando ele muda — é o que o usuário espera de quem deixou no automático
+    // e vê o computador virar pro escuro à noite. Quem já clicou no botão tem
+    // `theme` salvo, e o `resolver()` ignora o sistema nesse caso.
+    consultaSistema.addEventListener('change', aplicar)
+    return () => consultaSistema.removeEventListener('change', aplicar)
   }, [])
 
   function toggle() {
