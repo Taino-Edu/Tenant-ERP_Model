@@ -55,20 +55,29 @@ step 1 "Verificando o rclone..."
 # O apt do Ubuntu 22.04 traz o 1.53. O R2 exige 1.59+, e abaixo disso a falha é
 # um HTTP 401 — indistinguível de credencial errada, que é onde se perde a tarde.
 precisa_instalar=1
+# Mesmo cuidado do env_get com o `|| true`: sob pipefail, um grep sem resultado
+# derruba o script sem imprimir nada. Aqui isso só aconteceria se o rclone
+# mudasse o formato da versão, mas o modo de falha seria idêntico — silêncio.
+versao_rclone() { rclone version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1 || true; }
+
 if command -v rclone >/dev/null 2>&1; then
-    versao=$(rclone version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1)
-    maior=${versao%%.*}; menor=${versao##*.}
-    if [ "$maior" -gt 1 ] || { [ "$maior" -eq 1 ] && [ "$menor" -ge 59 ]; }; then
-        ok "rclone $versao (>= 1.59)"
-        precisa_instalar=0
+    versao=$(versao_rclone)
+    if [ -z "$versao" ]; then
+        warn "não consegui ler a versão do rclone — reinstalando por segurança"
     else
-        warn "rclone $versao é antigo demais para o R2 (mínimo 1.59) — reinstalando"
+        maior=${versao%%.*}; menor=${versao##*.}
+        if [ "$maior" -gt 1 ] || { [ "$maior" -eq 1 ] && [ "$menor" -ge 59 ]; }; then
+            ok "rclone $versao (>= 1.59)"
+            precisa_instalar=0
+        else
+            warn "rclone $versao é antigo demais para o R2 (mínimo 1.59) — reinstalando"
+        fi
     fi
 fi
 
 if [ "$precisa_instalar" -eq 1 ]; then
     curl -fsSL https://rclone.org/install.sh | bash >/dev/null 2>&1 || die "Falha ao instalar o rclone."
-    ok "rclone $(rclone version | head -1 | grep -oE '[0-9]+\.[0-9]+' | head -1) instalado"
+    ok "rclone $(versao_rclone) instalado"
 fi
 
 command -v gpg >/dev/null 2>&1 || {
@@ -233,7 +242,11 @@ rclone delete --config "$RCLONE_CONF" "r2:$BUCKET/$CANARIO" 2>/dev/null \
 # ── 4. Frase-secreta ─────────────────────────────────────────────────────────
 step 4 "Frase-secreta da cifra"
 
-env_get() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2-; }
+# O `|| true` não é decoração: com `set -euo pipefail`, um grep que não acha nada
+# sai com 1, o pipefail propaga e o set -e derruba o script SEM imprimir nada.
+# Aqui "não achou" é o caso normal — é a primeira vez que a chave é gravada —
+# então a ausência não pode ser tratada como erro.
+env_get() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- || true; }
 env_set() {
     # Substitui a linha existente ou acrescenta — nunca duplica a chave, porque
     # o backup.sh lê a ÚLTIMA ocorrência e duas linhas divergentes seriam um
