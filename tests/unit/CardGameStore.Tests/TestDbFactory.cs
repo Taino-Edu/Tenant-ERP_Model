@@ -176,6 +176,34 @@ public static class TestDbFactory
     }
 
     /// <summary>
+    /// Um segundo <see cref="AppDbContext"/> sobre o schema de um contexto já
+    /// criado por <see cref="Create"/>.
+    ///
+    /// Existe para teste de concorrência: simular duas requisições exige dois
+    /// DbContext independentes — com change tracker e conexão próprios —
+    /// enxergando a MESMA linha. Chamar <see cref="Create"/> de novo não serve,
+    /// porque ele dropa e recria o schema, apagando o que o primeiro acabou de
+    /// gravar.
+    ///
+    /// Devolve um <see cref="AppDbContext"/> puro, não um <c>TestAppDbContext</c>:
+    /// o schema pertence a quem o criou, e só esse contexto deve devolvê-lo para
+    /// a limpeza ao ser descartado. Dois donos do mesmo schema fariam o primeiro
+    /// Dispose enfileirar um DROP no schema que o outro ainda está usando.
+    /// </summary>
+    public static AppDbContext CreateSharingSchemaOf(AppDbContext owner)
+    {
+        if (owner is not TestAppDbContext test)
+            throw new ArgumentException("O contexto precisa ter vindo de TestDbFactory.Create.", nameof(owner));
+
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(PgConnString)
+            .AddInterceptors(new TestSchemaInterceptor(test.Schema))
+            .Options;
+
+        return new AppDbContext(options);
+    }
+
+    /// <summary>
     /// O contexto de cada teste entrega seu schema aqui ao ser descartado. A fila
     /// amortiza o custo: em vez de um DROP por teste, remove até 20 schemas por
     /// comando. O restante é drenado no ProcessExit; se a execução for abortada,
@@ -443,6 +471,11 @@ internal sealed class TestAppDbContext(
     string schema) : AppDbContext(options)
 {
     private int _released;
+
+    /// <summary>Schema isolado deste contexto — usado por
+    /// <see cref="TestDbFactory.CreateSharingSchemaOf"/> para abrir um segundo
+    /// contexto sobre a mesma base.</summary>
+    internal string Schema => schema;
 
     public override void Dispose()
     {
