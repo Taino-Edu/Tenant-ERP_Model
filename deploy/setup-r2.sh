@@ -86,8 +86,18 @@ else
     echo "  longo do topo é da API da Cloudflare e NÃO serve aqui."
     echo "  (nada é exibido na tela enquanto você digita ou cola)"
     read -rsp "  Endpoint S3 (ou só o Account ID): " ENDPOINT_RAW; echo
-    read -rsp "  Access Key ID: "                   ACCESS_KEY;   echo
+    read -rsp "  Access Key ID (32 caracteres): "   ACCESS_KEY;   echo
     read -rsp "  Secret Access Key: "               SECRET_KEY;   echo
+
+    # Confere o tamanho aqui, e não lá na frente: o R2 só reclama disso na
+    # primeira chamada, dentro de um 400 genérico, e sem esta checagem o
+    # operador já teria gravado a config e testado antes de descobrir que colou
+    # o campo errado. 32 é o tamanho fixo do Access Key ID do R2.
+    if [ "${#ACCESS_KEY}" -ne 32 ]; then
+        die "O Access Key ID tem ${#ACCESS_KEY} caracteres — o do R2 tem exatamente 32.
+   Com ~53 é o \"Token value\" do topo da tela, que não serve aqui.
+   Volte na tela do token e pegue o campo \"Access Key ID\"."
+    fi
 
     [ -n "$ENDPOINT_RAW" ] && [ -n "$ACCESS_KEY" ] && [ -n "$SECRET_KEY" ] || die "Credencial vazia — nada foi gravado."
 
@@ -176,6 +186,13 @@ echo "teste de escrita $(date -Iseconds)" > "$TMP_DIR/$CANARIO"
 if ! ERRO=$(rclone copy -v --config "$RCLONE_CONF" "$TMP_DIR/$CANARIO" "r2:$BUCKET" 2>&1); then
     causa="não identifiquei o motivo — a saída do rclone está abaixo"
     case "$ERRO" in
+        # Antes do 400 genérico: este É um 400, mas com causa exata. A tela da
+        # Cloudflare mostra o "Token value" (~53 caracteres) em cima e mais
+        # destacado que o Access Key ID (32), e colar o de cima é o erro natural.
+        *"access key has length"*|*InvalidArgument*Credential*)
+            causa="você colou o \"Token value\" no lugar do Access Key ID.
+     O Access Key ID tem 32 caracteres; o Token value tem ~53.
+     Pegue o campo certo na tela do token, apague $RCLONE_CONF e rode de novo." ;;
         *403*|*AccessDenied*)      causa="o token é somente leitura. Crie outro com 'Object Read and Write' e rode de novo." ;;
         *401*|*InvalidAccessKey*)  causa="Access Key ID ou Secret Access Key incorretos. Apague $RCLONE_CONF e rode de novo." ;;
         *NoSuchBucket*)            causa="não existe bucket '$BUCKET' neste endpoint. Confira o nome e o Account ID." ;;
