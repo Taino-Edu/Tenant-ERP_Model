@@ -13,13 +13,69 @@ O projeto está mais maduro do que o `STATUS.md` sugere: MongoDB eliminado, squa
 
 O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria abaixo): o núcleo é funcional de verdade, e **14 dos 15 achados (F1–F15) já foram corrigidos** — só F7 ficou parcial (mensagem enganosa corrigida, mas o fluxo de estorno automático em si é feature nova, não bug pontual, e fica documentado como gap real). F1, F4, F5 não são testáveis neste ambiente (exigem SEFAZ de homologação real) — verificar manualmente antes de produção. Restam as 2 lacunas de escopo (L1-L5, decisões a tomar com o contador, não bugs).
 
-| Severidade | Quantidade | Corrigido |
+> ⚠️ A tabela abaixo é de 17/07 e **está desatualizada** — a contagem correta está na
+> reverificação de 20/08, logo adiante. Mantida como registro do que se sabia então.
+
+| Severidade | Quantidade | Corrigido (contagem de 17/07) |
 |---|---|---|
 | 🔴 Crítico | 12 | 10 (+1 parcial) |
 | 🟠 Bloqueio multi-instância | 4 | 0 |
 | 🟡 Médio | 27 | 7 (M1,M2,M6,M7,M8,M13,M14) + 4 parciais (M12,M15,M17,M26) + 1 parcial (M18) |
 | 🔵 Baixo | 13 | 4 (B3,B4,B5,B6) |
 | 🧾 Fiscal (seção dedicada) | 15 (4 🔴 / 8 🟡 / 3 🔵) + 2 lacunas | 14 (+1 parcial) |
+
+**Contagem em 20/08**, depois da reverificação: 🔴 11 de 12 corrigidos (só C5 aberto,
+C4 parcial); 🟠 4 abertos, todos inertes com uma instância; 🟡 13 corrigidos + 6
+parciais; 🔵 6 corrigidos. Um único item é **bug em produção hoje**: nenhum — o M4,
+que era, foi corrigido nesta sessão na parte que debitava estoque em dobro.
+
+---
+
+## 🔁 Reverificação contra o código — 2026-08-20
+
+Este documento registra o estado de **17/07** com remendos de sessões posteriores, e
+envelheceu em silêncio: uma verificação pontual encontrou três entradas
+desatualizadas seguidas. Os ~30 itens marcados como abertos ou parciais foram
+reconferidos linha a linha contra o código.
+
+**Oito estavam corrigidos e continuavam marcados como pendentes:**
+
+| Item | Onde se confirma |
+|---|---|
+| C3 | `TenantConnectionInterceptor.cs:124` — `if (!_tenantContext.IsExplicitlySet) throw`. O "Ainda abertos" abaixo estava errado. |
+| M5 | `CrediariosController.cs:422` — valida `totalRegistrado > saldoAtual` |
+| M19 | `next.config.js` sem `ignoreDuringBuilds`/`ignoreBuildErrors`; CI roda `npm run lint` (`ci.yml:84`) |
+| M23 | 14 specs, `webServer` ativo (`playwright.config.ts:78`), `test:e2e` no `package.json` |
+| M27 | API 2 CPU/2 GB, Postgres 2 CPU/4 GB, frontend 1 CPU/1 GB (era 1 CPU/512 MB) |
+| B10 | `run-tests.ps1` reescrito, sem path de outra máquina |
+| B8 | `TestDbFactory.CheckDatabaseAvailable()` (`:279`) dá mensagem clara em vez de erro cru |
+| M16 | `GeminiChatService.cs:288` resolve chave **por tenant**, criptografada, com a global só de fallback — parcial, não aberto |
+
+**M24** também é parcial e não aberto: o domínio saiu do hardcode (`middleware.ts` lê
+`NEXT_PUBLIC_ROOT_DOMAIN`), o IP `179.197.67.64` continua em
+`plataforma/tenants/[id]/page.tsx:381`.
+
+**Descoberta útil para C5/H2:** o Redis **já está** no `docker-compose.prod.yml:324`,
+atrás do profile `whatsapp`, servindo a Evolution API. Resolver o backplane do
+SignalR e o cache distribuído não exige infraestrutura nova — exige tirar o Redis do
+profile e apontar a API para ele.
+
+**Confirmados abertos, com a linha conferida:** C5 (sem Redis no `AddSignalR`,
+`Program.cs:370`), H1 (`UploadController.cs:129`, `WebRootPath`), H2
+(`TenantResolutionMiddleware.cs:30`, TTL 30s sem invalidação), H3 (nenhum
+`advisory_lock`/leader election em `Services/`), H4
+(`TenantConnectionInterceptor.cs:72,76` — `SET search_path` + `SELECT current_schema()`),
+M9 (`RelatoriosController.cs` — 2 `Include` + `ToListAsync`), M10
+(`AccountLocatorService.cs:65` — `foreach` com `BCrypt.Verify` dentro), M11
+(`PlatformController.cs:362` — `foreach (var tenant in active)`), M12 parcial
+(`ProductController.cs:175,195` — bind de `Product` em `Create`/`Update`), M22
+(`signalr.ts:27` — `withAutomaticReconnect` sem `accessTokenFactory`), M26 parcial
+(`Program.cs:802,828` — fallback `SenhaForte@123`), B9 (3 `remotePatterns` de TCG),
+B11 (2 menções a mongo em `cleanup.sh`).
+
+> **Como manter isto honesto:** um item só deve mudar de status junto com o arquivo
+> e a linha onde a mudança se verifica. Status sem referência verificável é o que
+> produziu as oito entradas acima.
 
 ---
 
@@ -40,7 +96,7 @@ O **módulo fiscal (NFC-e/SEFAZ)** recebeu auditoria dedicada (seção própria 
 
 **Nota sobre C9:** a correção original (commit `fbce607`) mudou o model `IntegrationConfig` mas não veio com a migration EF correspondente — as colunas novas não existiam no banco. Migration `AddInterCertificateFields` gerada e aplicada em 2026-07-18 pra fechar o gap. Suite completa (257 testes) passando após o fix.
 
-**Ainda abertos:** C3 (fail-fast do `ITenantContext` fora de request), C4 (migrations no boot sem lock) e C5 (SignalR sem backplane Redis) — são decisões de arquitetura, não correções pontuais; ver Plano de ação (P1/P2). Nota: o rollback do `update.sh` reverte **código** (imagens), não **schema** — o próprio script documenta o limite.
+**Ainda abertos:** C4 (migrations no boot sem lock) e C5 (SignalR sem backplane Redis) — ~~C3~~ foi corrigido, ver a reverificação de 20/08 acima — são decisões de arquitetura, não correções pontuais; ver Plano de ação (P1/P2). Nota: o rollback do `update.sh` reverte **código** (imagens), não **schema** — o próprio script documenta o limite.
 
 ---
 
@@ -147,9 +203,13 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 **M3. Idempotência existe apenas no pagamento de crediário** — bem implementada (`CrediariosController.cs:381-466`, índice único `idempotency_key`, `AppDbContext.cs:283-286`). Venda avulsa, fechamento de comanda e criação de cobrança Pix não têm chave nem constraint — retries de rede geram duplicidades reais. **Parcialmente mitigado**: C6 (guarda de status) e C7 (transação) já bloqueiam os cenários mais graves de dupla-cobrança por duplo clique/retry nesses dois fluxos — a idempotência explícita (chave gerada pelo front, enviada no request) fica como melhoria adicional, não implementada nesta sessão: exige coordenação com o frontend (gerar e persistir a chave do lado do cliente), não é só backend.
 
-**M4. Reservas com corridas** — `ReservationController.cs`: `Homologar` (`:235-288`) sem transação e sem checagem atômica de status (duas homologações concorrentes debitam estoque duas vezes); `Create` (`:85-93`) com checagem de estoque TOCTOU. **Não corrigido nesta sessão** — módulo de reservas tem menor volume de uso que comanda/venda avulsa; mesmo padrão de fix de M1 se aplicaria (transação + `ExecuteUpdateAsync` com predicado de status/estoque).
+**M4. Reservas com corridas**  `🩹 metade corrigida (20/08)` — `ReservationController.cs`
+  - **`Homologar` — corrigido.** Era check-then-act: lia `Status != "active"`, e só depois registrava a venda. Duas homologações simultâneas passavam as duas e o estoque era debitado em dobro. Agora a reserva é **reivindicada antes da venda** com um `UPDATE` condicional (`Where(r => r.Id == id && r.Status == "active").ExecuteUpdateAsync(...)`): quem perde a corrida recebe 0 linhas afetadas e para. Se a venda falhar depois, um `ExecuteUpdateAsync` de compensação devolve a reserva para `active` — sem isso, a proteção criaria um problema pior que o original (estoque preso numa reserva que ninguém mais consegue homologar). Não dá para envolver tudo numa transação: `VendaAvulsaService.RegisterAsync` abre a própria (`CreateExecutionStrategy`, do C7) e o EF recusa estratégia aninhada. Validação de modo movida para antes da reivindicação, para não ter que compensar erro de entrada.
+  - **`Create` (`:87-95`) — não corrigido.** Continua TOCTOU: soma as reservas ativas, compara com o estoque e insere, sem lock nem isolamento serializável. Severidade menor — reserva não debita estoque, então o resultado é uma promessa que o `Homologar` depois recusa, não estoque corrompido. O fix muda semântica de isolamento (`FOR UPDATE` ou `Serializable` + retry) e **não é verificável sem o Postgres de teste**, que estava fora do ar nesta sessão.
 
-**M5. Crediário: split não validado e reconciliação Pix com corrida** — `CrediariosController.cs`: `RegistrarPagamento` (`:390-424`) não valida o split contra o saldo; reconciliação Pix tem corrida em `pix.PagoEm is null` (`:560`). **Não corrigido nesta sessão.**
+**M5. Crediário: split não validado e reconciliação Pix com corrida**  `🩹 parcial (verificado 20/08)`
+  - **Split — corrigido.** `CrediariosController.cs:422`: `if (totalRegistrado > saldoAtual) return BadRequest(...)`, além da validação do valor principal contra o saldo (`:412`). O documento marcava como não corrigido.
+  - **Reconciliação Pix — não reverificada** nesta passada.
 
 **M6. Edição de comanda fechada aceita preço do request**  `✅ corrigido` — `ComandaService.cs`: `EditarComandaFechadaAsync` agora bloqueia Operator (só Admin — a policy `AdminOnly` do controller aceitava os dois, mesma raiz do C8) e loga explicitamente qualquer mudança de preço de item (antes/depois), já que isso segue sendo uma correção retroativa deliberada (preço do request é intencional aqui, ao contrário de `ResolveItemAsync`) mas agora com trilha visível e restrita a quem devia poder fazer isso.
 
@@ -180,7 +240,7 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 **M15. Erros internos vazam ao cliente e padrão de erro é inconsistente**  `🩹 parcial` — `AiChatController.cs`, `ComandaController.cs`
   - **Status:** os 2 exemplos citados corrigidos (loga o erro completo, devolve mensagem genérica). **Não corrigido:** padronização sistêmica pra `ProblemDetails`/versionamento de rota em todos os controllers — refactor bem maior, fora do escopo de um fix pontual.
 
-**M16. Gemini: chave global, sem quota por tenant** — `GeminiChatService.cs:55` lê `GeminiSettings:ApiKey` do processo, rate-limitada só por IP: um único tenant pode esgotar a quota de todos. **Não corrigido nesta sessão** — só é um problema real com múltiplos tenants pagantes simultâneos disputando a mesma quota; mesmo raciocínio de adiamento de M9-M11 (sem isso ainda ser realidade).
+**M16. Gemini: chave global, sem quota por tenant**  `🩹 parcial (verificado 20/08)` — `ResolveApiKeyAsync` (`GeminiChatService.cs:288`) lê primeiro a chave **do tenant**, criptografada em `AiConfigs`, e só cai na global como fallback: quem configura a própria chave gasta a própria quota. Segue aberto para quem não configurar. Diagnóstico original: `GeminiChatService.cs:55` lia `GeminiSettings:ApiKey` do processo, rate-limitada só por IP — um único tenant podia esgotar a quota de todos. **Não corrigido nesta sessão** — só é um problema real com múltiplos tenants pagantes simultâneos disputando a mesma quota; mesmo raciocínio de adiamento de M9-M11 (sem isso ainda ser realidade).
 
 **M17. DTOs sem validação + sequestro de subscrição push**  `🩹 parcial` — `PushController.cs`
   - **Status:** `Subscribe` loga toda reassociação de `Endpoint` pra outro usuário — mantive o comportamento de reassociar (é o caso legítimo de dispositivo compartilhado, ex: tablet do caixa entre turnos; bloquear quebraria esse fluxo) mas agora com rastro. **Não corrigido:** `SiteConfigController` retornando entidade EF (avaliado — `SiteConfig` não tem nenhum campo sensível, é puramente branding/contato já pensado pra ser público; risco real é zero) e `SaveSiteConfigRequest` sem `[MaxLength]` (endpoint Admin-only, só afeta a própria configuração do tenant que já tem esse acesso — severidade baixa).
@@ -189,7 +249,7 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 **M18. Resíduos de Campeonatos/TCG — feature removida do backend, presente na UI** `🛠 limpeza parcial no working copy` — o backend não tem mais nada de campeonato, mas restam: manual in-app ensinando a feature inexistente (`admin/manual/page.tsx:123-136,:224,:251`), labels de permissões mortas (`admin/perfis/page.tsx:15,19` — parcialmente limpo), textos legais (`termos/page.tsx:24,118,178`, `privacidade/page.tsx:104,123,141-158`, `cadastro/page.tsx:67` — parcialmente limpos), tipagem morta (`api.ts:618-630` — removida no working copy), `tests/api/04-championship.http` inteiro contra endpoints 404, e `tests/README.md:16,31,141` citando `ChampionshipServiceTests.cs` inexistente.
 
-**M19. Build do frontend passa com erros de TypeScript e ESLint** — `frontend/next.config.js:8-13` (`ignoreDuringBuilds` + `ignoreBuildErrors`); o CI roda só `npm run build` → **nada no pipeline valida tipagem/lint**; com deploy automático, erro de tipo vai direto para produção.
+**M19. ~~Build do frontend passa com erros de TypeScript e ESLint~~**  `✅ corrigido (verificado 20/08)` — `ignoreDuringBuilds`/`ignoreBuildErrors` não existem mais no `next.config.js`, e o CI roda `npm run lint` (`ci.yml:84`). Diagnóstico original: as duas flags estavam ligadas e o CI rodava só `npm run build`, então nada no pipeline validava tipagem ou lint — com deploy automático, erro de tipo ia direto para produção.
 
 **M20. Smoke test pós-deploy é raso** — `.github/workflows/ci.yml` (último step): `curl http://$HOST/` só prova nginx+frontend; não bate `/health` nem `/api/...`. API morta no boot = deploy declarado sucesso. (O `update.sh` novo faz health check real — cobre parcialmente.)
 
@@ -197,7 +257,7 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 
 **M22. SignalR não trata token expirado na reconexão** — `frontend/lib/signalr.ts:27-35`: `withAutomaticReconnect` sem `accessTokenFactory`/refresh → token de 60 min expira, negotiate leva 401 e o cliente tenta em loop para sempre. O admin tem refresh proativo (`admin/layout.tsx:20,40`), mas `/cliente` e `/mesa` não — comanda aberta >60 min perde o realtime silenciosamente. Bônus: `startHub()` sem `.catch` em `cliente/page.tsx:295` (unhandled rejection).
 
-**M23. Suíte E2E Playwright é fachada** — `playwright.config.ts:74-78` (`webServer` comentado), nenhum script de teste no `package.json`, CI não roda, `example.spec.ts` é o template intocado (testa `playwright.dev`), `cliente.spec.ts:13` hardcoded `localhost:3000`. `README.md:204-208` manda rodar como se houvesse suíte real.
+**M23. ~~Suíte E2E Playwright é fachada~~**  `✅ corrigido (verificado 20/08)` — 14 specs reais, `webServer` ativo (`playwright.config.ts:78`), `test:e2e` e `test:e2e:smoke` no `package.json`, e uma segunda config (`playwright.unit.config.ts`) para os testes de helper que não precisam subir servidor. Diagnóstico original: `webServer` comentado, nenhum script no `package.json`, CI não rodava, `example.spec.ts` era o template intocado testando `playwright.dev`.
 
 ### Operação e documentação
 
@@ -209,7 +269,7 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
   - **Status:** `deploy/setup.sh` já gera `ADMIN_SEED_PASSWORD`/`PLATFORM_OWNER_SEED_PASSWORD` automaticamente pra deploys **novos** (mesmo padrão de `POSTGRES_PASSWORD`/`JWT_SECRET`) — isso fica. O fail-fast no boot (abortar em Production sem essas env vars) foi implementado e depois **revertido**: a VPS já em produção não tem essas variáveis no `.env` ainda, e o fail-fast quebraria o próximo deploy via CI/CD antes de alguém ajustar isso manualmente. Continua warning-only por enquanto.
   - **Pendente:** adicionar `ADMIN_SEED_PASSWORD` (e `PLATFORM_OWNER_SEED_PASSWORD` se usar dono de plataforma) no `.env` da VPS em produção — depois disso, reativar o fail-fast é seguro.
 
-**M27. Limites de recursos do compose subdimensionados para o boot O(N)** — `docker-compose.prod.yml`: API 1 CPU/512 MB, Postgres 512 MB, frontend 512 MB, nginx 128 MB. Com o loop de migrations por tenant crescendo (C4), o boot da API estoura memória antes de o Postgres virar gargalo.
+**M27. ~~Limites de recursos do compose subdimensionados~~**  `✅ corrigido (verificado 20/08)` — hoje API 2 CPU/2 GB, Postgres 2 CPU/4 GB, frontend 1 CPU/1 GB, nginx 0,5 CPU/256 MB. Diagnóstico original: API 1 CPU/512 MB, Postgres 512 MB, frontend 512 MB, nginx 128 MB — com o loop de migrations por tenant crescendo (C4), o boot da API estouraria memória antes de o Postgres virar gargalo.
 
 ---
 
@@ -225,9 +285,9 @@ Os 6 `BackgroundService` executam em toda instância. `FechamentoBackgroundServi
 - **B7.** `UserController.cs:119-122,:191-194` devolvem 404 para `InvalidOperationException` — verificado: os dois métodos citados (`UpdateMeAsync`, `AddPointsAsync`) só lançam essa exceção pra "usuário não encontrado" de verdade, 404 está correto nesses dois pontos específicos. Talvez os números de linha tenham desatualizado desde a auditoria original; não achei um conflito de negócio real recebendo 404 nesses dois métodos.
 
 **Frontend/Testes/Deploy**
-- **B8.** `TestDbFactory.cs:37-43` — porta fixa 5433 sem preflight: se ocupada, os ~224 testes falham em massa com erro cru de conexão.
+- [x] **B8.**  `✅ corrigido (verificado na prática 20/08)` — `TestDbFactory.CheckDatabaseAvailable()` (`:279`) faz o preflight e devolve *"O PostgreSQL de testes não está acessível. Execute 'docker compose -f tests/docker-compose.yml up -d --wait'"*. Confirmado ao vivo nesta sessão: com o Docker fora do ar, a suíte falhou dizendo exatamente isso, em vez do erro cru do Npgsql que o diagnóstico original descrevia.
 - **B9.** `next.config.js:17-25` — `remotePatterns` legados de TCG (`pokemontcg.io`, `scryfall.io`, `tcgplayer.com`) e `http://localhost` permitido na config que vai para produção.
-- **B10.** `run-tests.ps1:1` — path absoluto de outra máquina (repo antigo); roda só `CreditarioServiceTests`.
+- [x] **B10.**  `✅ corrigido (verificado 20/08)` — `run-tests.ps1` foi reescrito: sobe o PostgreSQL de testes e roda a suíte, sem path absoluto de outra máquina e sem filtro para um único teste.
 - **B11.** `deploy/cleanup.sh:14-15` — comentários prometendo não tocar em `mongo_data`/container `mongo`, que não existem mais.
 - **B12.** `deploy/promote-tenant-schema.sh` — script one-shot órfão (não chamado por setup/update/CI); lista `TABLES` (`:87-94`) sincronizada manualmente com as migrations — reutilização futura pode mover dados parcialmente (o próprio script avisa, `:84-86`).
 - **B13.** Fetch cru fora do cliente centralizado em 3 chamadas LGPD públicas (`CookieBanner.tsx:36`, `app/lgpd/page.tsx:76,103`) apesar de `lgpdApi` existir em `api.ts:911-927` — sem impacto funcional.
