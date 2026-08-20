@@ -246,54 +246,94 @@ public class ReservationController : ControllerBase
             .FirstOrDefaultAsync(r => r.Id == id);
 
         if (res is null) return NotFound();
-        if (res.Status != "active") return BadRequest(new { Message = "Reserva não está ativa." });
+
+        // Validação de entrada ANTES de reivindicar: recusar o modo aqui evita
+        // ter que desfazer uma reivindicação por um erro que nem chegou a tocar
+        // estoque.
+        if (req.Mode is not ("pdv" or "comanda"))
+            return BadRequest(new { Message = "Mode inválido. Use 'pdv' ou 'comanda'." });
+        if (req.Mode == "comanda" && !req.ComandaId.HasValue)
+            return BadRequest(new { Message = "ComandaId é obrigatório no modo comanda." });
+
+        // Reivindica a reserva ANTES de vender, num UPDATE condicional que o
+        // Postgres resolve sozinho: `WHERE id = @id AND status = 'active'`.
+        //
+        // O `if (res.Status != "active")` que existia aqui era um check-then-act
+        // clássico. Duas homologações simultâneas liam "active" as duas, passavam
+        // as duas, e cada uma registrava a venda — uma reserva virava duas vendas
+        // e o estoque era debitado em dobro. É o que o M4 da auditoria descreve.
+        //
+        // Não dá pra envolver isto numa transação junto com a venda:
+        // VendaAvulsaService.RegisterAsync abre a própria (CreateExecutionStrategy
+        // + BeginTransactionAsync, do C7), e o EF recusa estratégia de execução
+        // aninhada. Então o padrão aqui é reivindicar primeiro e compensar se a
+        // venda falhar — quem perde a corrida recebe 0 linhas afetadas e para.
+        var claimedAt = DateTime.UtcNow;
+        var claimed = await _db.ProductReservations
+            .Where(r => r.Id == id && r.Status == "active")
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(r => r.Status, "fulfilled")
+                .SetProperty(r => r.FulfilledAt, claimedAt));
+
+        if (claimed == 0)
+            return BadRequest(new { Message = "Reserva não está ativa." });
 
         var adminId   = GetUserId();
         var adminName = User.FindFirst(ClaimTypes.Name)?.Value
                      ?? User.FindFirst("name")?.Value
                      ?? "Admin";
 
-        if (req.Mode == "pdv")
+        try
         {
-            var vendaReq = new VendaAvulsaRequest
+            if (req.Mode == "pdv")
             {
-                ClientName    = res.User?.Name,
-                UserId        = res.UserId,
-                PaymentMethod = req.PaymentMethod ?? PaymentMethod.Dinheiro,
-                DiscountInCents = req.CashRoundingDiscountInCents,
-                CashRoundingDiscountInCents = req.CashRoundingDiscountInCents,
-                CashReceivedInCents = req.CashReceivedInCents,
-                Items         = [new VendaAvulsaItemRequest
+                var vendaReq = new VendaAvulsaRequest
                 {
-                    ProductId = res.ProductId,
-                    VariantId = res.VariantId,
-                    Quantity = res.Quantity,
-                }],
-            };
-            try { await _vendaService.RegisterAsync(vendaReq, adminId, adminName); }
-            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
-        }
-        else if (req.Mode == "comanda")
-        {
-            if (!req.ComandaId.HasValue)
-                return BadRequest(new { Message = "ComandaId é obrigatório no modo comanda." });
-
-            try
+                    ClientName    = res.User?.Name,
+                    UserId        = res.UserId,
+                    PaymentMethod = req.PaymentMethod ?? PaymentMethod.Dinheiro,
+                    DiscountInCents = req.CashRoundingDiscountInCents,
+                    CashRoundingDiscountInCents = req.CashRoundingDiscountInCents,
+                    CashReceivedInCents = req.CashReceivedInCents,
+                    Items         = [new VendaAvulsaItemRequest
+                    {
+                        ProductId = res.ProductId,
+                        VariantId = res.VariantId,
+                        Quantity = res.Quantity,
+                    }],
+                };
+                await _vendaService.RegisterAsync(vendaReq, adminId, adminName);
+            }
+            else
             {
-                await _comandaService.AdminAddItemAsync(req.ComandaId.Value, adminId,
+                await _comandaService.AdminAddItemAsync(req.ComandaId!.Value, adminId,
                     new AddItemToComandaRequest { ProductId = res.ProductId, Quantity = res.Quantity });
             }
-            catch (InvalidOperationException ex) { return BadRequest(new { Message = ex.Message }); }
         }
-        else
+        catch (Exception ex)
         {
-            return BadRequest(new { Message = "Mode inválido. Use 'pdv' ou 'comanda'." });
+            // A venda não aconteceu, então a reserva não foi cumprida — devolve
+            // ela para "active" em vez de deixá-la marcada como atendida sem
+            // venda nenhuma por trás. Sem esta compensação, a proteção contra a
+            // corrida teria criado um problema pior que o original: estoque
+            // preso numa reserva que ninguém consegue mais homologar.
+            //
+            // O `Where` repete o status esperado: se outra requisição já mexeu
+            // no registro nesse intervalo, quem manda é ela, não este rollback.
+            await _db.ProductReservations
+                .Where(r => r.Id == id && r.Status == "fulfilled" && r.FulfilledAt == claimedAt)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(r => r.Status, "active")
+                    .SetProperty(r => r.FulfilledAt, (DateTime?)null));
+
+            if (ex is InvalidOperationException)
+                return BadRequest(new { Message = ex.Message });
+            throw;
         }
 
-        res.Status      = "fulfilled";
-        res.FulfilledAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync();
-
+        // Sem `res.Status = ...` aqui: o ExecuteUpdateAsync lá em cima já gravou,
+        // e o `res` rastreado ainda carrega o estado antigo em memória. Reatribuir
+        // e salvar seria escrever duas vezes o que já está no banco.
         return Ok(new { message = "Reserva homologada com sucesso.", reservationId = id, mode = req.Mode });
     }
 
