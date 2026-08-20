@@ -23,6 +23,19 @@ O destino é R2 porque a Cloudflare já está na frente da aplicação (o rate l
 lê `CF-Connecting-IP`), então não entra fornecedor novo. O dump comprimido tem
 ~2 MB; a faixa gratuita de 10 GB cobre anos disso.
 
+> **Atalho:** o passo 1 (painel da Cloudflare) é manual e só você pode fazer.
+> Os passos 2 a 4 estão automatizados em `deploy/setup-r2.sh` — ele instala o
+> rclone na versão certa, grava as credenciais sem exibi-las, testa escrita,
+> leitura e remoção no bucket, gera a frase-secreta, liga tudo no `.env` e roda
+> um backup real:
+>
+> ```bash
+> cd /opt/tenant-erp && bash deploy/setup-r2.sh
+> ```
+>
+> O passo a passo abaixo continua valendo para conferir o que o script faz, ou
+> para configurar na mão.
+
 ### 1. Bucket e credenciais
 
 1. Painel da Cloudflare → **R2** → ative o serviço (exige forma de pagamento
