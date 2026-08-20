@@ -99,6 +99,15 @@ else
    Volte na tela do token e pegue o campo \"Access Key ID\"."
     fi
 
+    # O Account ID também tem 32 caracteres hex, então passaria pela checagem
+    # acima — e ele está bem à mão, dentro do endpoint que acabou de ser
+    # digitado. Comparar os dois custa nada e evita mais uma volta ao terminal.
+    if [ "$ACCESS_KEY" = "${ENDPOINT#https://}" ] || [ "${ENDPOINT}" = "https://$ACCESS_KEY.r2.cloudflarestorage.com" ]; then
+        die "Esse Access Key ID é igual ao Account ID do endpoint.
+   São coisas diferentes: o Account ID identifica a conta e aparece na URL do
+   painel; o Access Key ID vem da tela do token, logo abaixo do \"Token value\"."
+    fi
+
     [ -n "$ENDPOINT_RAW" ] && [ -n "$ACCESS_KEY" ] && [ -n "$SECRET_KEY" ] || die "Credencial vazia — nada foi gravado."
 
     # Aceita as duas formas porque a Cloudflare mostra o endpoint pronto e pede
