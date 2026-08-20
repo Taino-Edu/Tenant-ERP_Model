@@ -44,6 +44,7 @@ die()  { echo -e "\n${RED}${BOLD}❌ $1${NC}\n" >&2; exit 1; }
 APP_DIR="${APP_DIR:-/opt/tenant-erp}"
 ENV_FILE="$APP_DIR/.env"
 RCLONE_CONF="/root/.config/rclone/rclone.conf"
+UPLOAD_WRAPPER="/usr/local/bin/octus-r2-upload"
 BUCKET="${BUCKET:-octus-backups}"
 
 [ "$(id -u)" -eq 0 ] || die "Rode como root: o rclone.conf vive em /root e o cron do backup é do root."
@@ -282,7 +283,25 @@ fi
 # ── 5. Ligar o envio ─────────────────────────────────────────────────────────
 step 5 "Ligando o envio off-site no .env..."
 
-env_set BACKUP_REMOTE_CMD "rclone copy --config $RCLONE_CONF r2:$BUCKET"
+# O contrato do backup.sh é "comando que recebe o arquivo como ÚLTIMO argumento",
+# e o rclone quer `copy ORIGEM DESTINO` — nessa ordem. Passar o comando direto
+# produzia `rclone copy r2:bucket /caminho/arquivo.gpg`, com origem e destino
+# trocados: o rclone tentava usar o .gpg como pasta de destino e recusava com
+# "is a file not a directory". A linha do BACKUP.md tinha esse defeito desde que
+# o destino virou R2, e sobreviveu porque a mudança foi só de documentação.
+#
+# Um wrapper resolve sem alterar o contrato (que serve pra qualquer backend) e
+# sem depender de aspas dentro do .env — `$BACKUP_REMOTE_CMD` é expandido sem
+# quote removal, então aspas ali viram caractere literal e quebram.
+cat > "$UPLOAD_WRAPPER" <<EOF
+#!/bin/sh
+# Gerado por deploy/setup-r2.sh. Recebe UM arquivo e o envia ao R2.
+exec rclone copy --config "$RCLONE_CONF" "\$1" "r2:$BUCKET"
+EOF
+chmod 755 "$UPLOAD_WRAPPER"
+ok "wrapper de envio criado em $UPLOAD_WRAPPER"
+
+env_set BACKUP_REMOTE_CMD "$UPLOAD_WRAPPER"
 ok "BACKUP_REMOTE_CMD configurado"
 
 if crontab -l 2>/dev/null | grep -Fq "deploy/backup.sh"; then

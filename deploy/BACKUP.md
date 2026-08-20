@@ -91,9 +91,24 @@ sudo rclone ls r2:octus-backups
 No `/opt/tenant-erp/.env` (o mesmo do docker-compose):
 
 ```bash
-BACKUP_REMOTE_CMD=rclone copy --config /root/.config/rclone/rclone.conf r2:octus-backups
+BACKUP_REMOTE_CMD=/usr/local/bin/octus-r2-upload
 BACKUP_ENCRYPT_PASSPHRASE=<frase longa e aleatória>
 ```
+
+O `BACKUP_REMOTE_CMD` aponta para um wrapper de duas linhas (criado pelo
+`setup-r2.sh`), e não direto para o `rclone`, por causa da ordem dos argumentos:
+
+```sh
+#!/bin/sh
+exec rclone copy --config /root/.config/rclone/rclone.conf "$1" "r2:octus-backup"
+```
+
+O `backup.sh` acrescenta o arquivo como **último** argumento, e o rclone quer
+`copy ORIGEM DESTINO`. Chamando o rclone direto, a linha viraria
+`rclone copy r2:bucket /caminho/arquivo.gpg` — origem e destino trocados —, e ele
+recusa com *"is a file not a directory"*. Este documento trazia essa linha errada
+desde que o destino passou a ser o R2: a mudança foi só de texto, e o comando
+nunca chegou a rodar até 20/08/2026.
 
 O `backup.sh` lê as duas do `.env`, e não só do ambiente — o cron roda com
 ambiente vazio, e se dependesse de `export` o backup rodaria todo dia sem enviar
