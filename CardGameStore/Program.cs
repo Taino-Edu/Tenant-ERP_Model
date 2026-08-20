@@ -415,7 +415,23 @@ builder.Services.AddHttpClient("ibpt", client =>
     // do que ficar sem transparência tributária e sem poder emitir.
     client.Timeout = TimeSpan.FromSeconds(60);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
-}).RemoveAllLoggers();
+})
+// O minuto acima vale para uma resposta LENTA. Não vale para um host que não
+// atende: em 20/08/2026 o `apidoni` resolvia o DNS em 0,7ms e o handshake TCP
+// nunca completava — pacote descartado em silêncio, não recusado. Nesse estado
+// cada tentativa custava o minuto inteiro para descobrir o que o SYN sem
+// resposta já dizia nos primeiros segundos.
+//
+// ConnectTimeout separa as duas coisas: cinco segundos para ABRIR a conexão,
+// sessenta para o serviço responder depois de aberta. Assim "você está lento"
+// continua tolerado e "você não está aí" é detectado rápido — que é justamente
+// o gatilho de EhServicoIndisponivel, o qual encerra o ciclo inteiro (ver
+// IbptTaxService, catch com break).
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    ConnectTimeout = TimeSpan.FromSeconds(5),
+})
+.RemoveAllLoggers();
 
 // OpenStreetMap (Nominatim + Overpass API) — busca de possíveis clientes
 // (prospecção). Gratuito e sem chave, mas a política de uso deles exige um
