@@ -63,9 +63,29 @@ curl -s https://3esysten.com.br/sitemap.xml
 ```
 
 **Ele responde por host.** Na plataforma lista as páginas comerciais; num
-subdomínio de loja lista as páginas *daquela* loja. Antes era fixo no domínio da
-plataforma — o `robots.txt` de cada vitrine apontava o buscador para um sitemap
-que não falava de nenhuma página existente naquele host.
+subdomínio de loja lista a home, o catálogo e **cada produto público daquela
+loja**, com a data real da última alteração — é o `lastmod` que faz o Google
+voltar depois de uma mudança de preço em vez de reindexar no ritmo dele.
+
+Antes era fixo no domínio da plataforma: o `robots.txt` de cada vitrine apontava
+o buscador para um sitemap que não falava de nenhuma página existente naquele
+host.
+
+> **Domínio próprio ainda não entra.** A loja que usa `suamarca.com.br` recebe
+> um sitemap com home e catálogo, sem a lista de produtos. O tenant é resolvido
+> pelo subdomínio (`extractSlug`), e num domínio próprio não há subdomínio para
+> extrair. Os produtos continuam sendo alcançados pelos links do catálogo — é
+> mais lento, não é invisível.
+
+### 3.1 Redes sociais
+
+O rodapé e o JSON-LD saem da mesma lista (`frontend/lib/contatos.ts`), então um
+perfil novo aparece no site e é declarado ao Google de uma vez só. Perfil com
+URL vazia não vira ícone nem entra no `sameAs` — declarar ao Google um perfil
+que não existe é pior que não declarar nada.
+
+Hoje estão preenchidos Instagram e LinkedIn. TikTok, YouTube e Facebook estão
+prontos e vazios: basta a URL do perfil no mesmo arquivo.
 
 ### 4. O que olhar depois (e o que ignorar)
 
@@ -154,10 +174,6 @@ página fora do ar, não performance).
 
 ## O que ficou de fora (e por quê)
 
-- **Sitemap com os produtos de cada loja.** Hoje o sitemap de uma vitrine lista
-  `/` e `/produtos`; as páginas de produto o rastreador alcança pelos links. O
-  sitemap completo exige um endpoint público novo devolvendo os produtos com
-  `ShowOnSite` de cada tenant — item 1 do [PLANO-SEO](PLANO-SEO-2026-08-03.md).
 - **Google Analytics / Tag Manager.** O banner de cookies já separa "Análise e
   desempenho" como categoria que exige consentimento; ligar GA sem respeitar
   essa escolha contradiz a própria política e o módulo de LGPD que o produto

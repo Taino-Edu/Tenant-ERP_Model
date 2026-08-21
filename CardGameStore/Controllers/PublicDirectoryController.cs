@@ -143,6 +143,63 @@ public class PublicDirectoryController : ControllerBase
 
         return product is null ? NotFound() : Ok(ProductPublicDto.FromEntity(product));
     }
+
+    // ── GET /api/public/sitemap?slug=loja-final ───────────────────────────────
+    // Alimenta o app/sitemap.ts do Next.js. Sem ele, o sitemap de uma vitrine
+    // só conseguia listar "/" e "/produtos": as páginas de produto existiam,
+    // mas o buscador só chegava nelas seguindo link, o que na prática significa
+    // catálogo indexado devagar e de forma incompleta.
+    //
+    // Devolve APENAS id e data de atualização — nada de nome, preço ou estoque.
+    // Um sitemap não precisa de mais que isso, e este endpoint é anônimo e
+    // enumerável por natureza (é a lista completa do catálogo público de uma
+    // loja): quanto menos campo ele projeta, menos serve para raspagem.
+    /// <summary>
+    /// Ids e datas dos produtos públicos da loja, para montar o sitemap.xml.
+    /// Só produtos ativos e marcados para aparecer no site.
+    /// </summary>
+    /// <param name="slug">Slug da loja (mesmo valor usado no subdomínio).</param>
+    [HttpGet("sitemap")]
+    [ProducesResponseType(typeof(IEnumerable<PublicSitemapEntryDto>), 200)]
+    [ProducesResponseType(404)]
+    public async Task<IActionResult> GetPublicSitemap([FromQuery] string slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug)) return BadRequest();
+
+        var tenant = await _catalog.Tenants
+            .Where(t => t.Slug == slug.Trim().ToLowerInvariant() && t.Status == TenantStatus.Active)
+            .Select(t => new { t.Id, t.SchemaName, t.EnabledModules })
+            .FirstOrDefaultAsync();
+
+        if (tenant is null) return NotFound();
+
+        using var scope = _scopeFactory.CreateScope();
+        var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        tenantContext.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        // O teto de 5.000 não é sobre o buscador (o limite do protocolo é
+        // 50.000 por arquivo): é sobre esta resposta, que é anônima e sem
+        // paginação. Catálogo maior que isso precisa de sitemap index, e aí a
+        // conversa é outra — melhor cortar do que servir um JSON de vários MB
+        // para quem pedir.
+        var produtos = await db.Products
+            .AsNoTracking()
+            .Where(p => p.IsActive && p.ShowOnSite)
+            .OrderByDescending(p => p.UpdatedAt)
+            .Take(5000)
+            .Select(p => new PublicSitemapEntryDto { Id = p.Id, UpdatedAt = p.UpdatedAt })
+            .ToListAsync();
+
+        return Ok(produtos);
+    }
+}
+
+public class PublicSitemapEntryDto
+{
+    public Guid     Id        { get; init; }
+    public DateTime UpdatedAt { get; init; }
 }
 
 public class PublicTenantDto

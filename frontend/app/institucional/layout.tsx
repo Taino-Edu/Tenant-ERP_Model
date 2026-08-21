@@ -1,6 +1,11 @@
 import type { Metadata } from 'next'
+import { CONTACTS, SOCIAL_PROFILES } from '@/lib/contatos'
 
 const SITE_URL = 'https://3esysten.com.br'
+
+/** Endereços dos perfis sociais, na mesma lista que o rodapé renderiza. É o que
+ *  o Google usa para ligar o site à marca nas redes. */
+const SAME_AS = SOCIAL_PROFILES.map(p => p.url)
 const TITLE = 'Octus ERP para varejo e restaurantes | 3E Systen'
 const DESCRIPTION =
   'Conheça o Octus: ERP personalizável com PDV, estoque, fiscal, financeiro, crediário, portal do contador e módulo opcional para restaurantes. Teste grátis por 15 dias.'
@@ -27,6 +32,49 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION, images: ['/institutional/octus-hero-waves.png'] },
 }
 
+// A empresa, declarada uma vez e referenciada por `@id` pelos outros blocos.
+// Antes o único Organization era um objeto solto dentro de `provider`, sem
+// identidade própria: o Google via o dado, mas não tinha como saber que aquele
+// fornecedor é a mesma entidade dona do site. É esse nó que sustenta resultado
+// de marca e painel de conhecimento, e é aqui que os perfis sociais entram.
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  '@id': `${SITE_URL}/#organization`,
+  name: '3E Systen',
+  alternateName: 'Octus',
+  url: SITE_URL,
+  logo: `${SITE_URL}/logo-octus.png`,
+  email: CONTACTS.email,
+  telephone: CONTACTS.marketingPhone,
+  sameAs: SAME_AS,
+  areaServed: { '@type': 'Country', name: 'Brasil' },
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'São José do Rio Preto',
+    addressRegion: 'SP',
+    addressCountry: 'BR',
+  },
+  contactPoint: [{
+    '@type': 'ContactPoint',
+    contactType: 'sales',
+    telephone: CONTACTS.marketingPhone,
+    email: CONTACTS.email,
+    areaServed: 'BR',
+    availableLanguage: ['pt-BR'],
+  }],
+}
+
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  '@id': `${SITE_URL}/#website`,
+  url: SITE_URL,
+  name: '3E Systen',
+  inLanguage: 'pt-BR',
+  publisher: { '@id': `${SITE_URL}/#organization` },
+}
+
 const softwareApplicationSchema = {
   '@context': 'https://schema.org',
   '@type': 'SoftwareApplication',
@@ -35,16 +83,7 @@ const softwareApplicationSchema = {
   operatingSystem: 'Web, Android, iOS',
   description: DESCRIPTION,
   url: SITE_URL,
-  provider: {
-    '@type': 'Organization',
-    name: '3E Systen',
-    url: SITE_URL,
-    email: '3esysten@gmail.com',
-    sameAs: [
-      'https://www.instagram.com/3e.systen/',
-      'https://www.linkedin.com/company/3e-systen/',
-    ],
-  },
+  provider: { '@id': `${SITE_URL}/#organization` },
   // `price` sozinho é lido como preço à vista: o resultado de busca mostraria
   // "R$ 129" para um plano que custa R$ 129 POR MÊS. O `priceSpecification`
   // com `unitCode: 'MON'` (mês, código UN/CEFACT) é o que diz a recorrência.
@@ -84,6 +123,8 @@ const faqSchema = {
 export default function InstitucionalLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplicationSchema) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
       {children}

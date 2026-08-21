@@ -7,7 +7,7 @@ import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
 import VLibrasController from '@/components/VLibrasController'
 import ClientProviders from '@/components/ClientProviders'
-import { getTenantIconsForHost, withCacheBust } from '@/lib/serverSiteConfig'
+import { getTenantIconsForHost, resolveShareImage, withCacheBust } from '@/lib/serverSiteConfig'
 
 export const viewport: Viewport = {
   themeColor: '#42B6EE',
@@ -34,6 +34,11 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = hostname === 'localhost' ? 'http' : 'https'
   const metadataBase = new URL(`${protocol}://${host || hostname}`)
 
+  // Imagem de compartilhamento. Sem ela, o link da loja colado no WhatsApp, no
+  // Instagram ou na bio do TikTok aparecia como uma linha de texto sem cartão —
+  // e cartão sem imagem é o que separa um link clicado de um link ignorado.
+  const shareImage = resolveShareImage(icons)
+
   return {
     metadataBase,
     title: { default: siteName, template: `%s — ${siteName}` },
@@ -56,11 +61,13 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName,
       locale: 'pt_BR',
       type: 'website',
+      images: [{ url: shareImage, alt: siteName }],
     },
     twitter: {
       card: 'summary_large_image',
       title: siteName,
       description,
+      images: [shareImage],
     },
     manifest: '/manifest.webmanifest',
     formatDetection: { telephone: false },

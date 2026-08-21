@@ -14,7 +14,16 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       // `/parceiros` (a landing do programa) fica indexável; só a tela de aceite
       // do convite nominal sai do índice — ela só faz sentido com um token válido.
-      disallow: ['/admin/', '/plataforma/', '/contador/', '/cliente/', '/login', '/api/', '/parceiros/convite'],
+      //
+      // `/perfil/` traz nome, histórico e pontos de uma pessoa; `/mesa/` é
+      // entrada de sessão por QR Code dentro do restaurante. Nenhuma das duas
+      // tem público vindo da busca, e a primeira é dado pessoal de cliente de
+      // loja. As duas também declaram `noindex` na própria página — ver o
+      // comentário em app/perfil/[id]/layout.tsx para por que os dois.
+      disallow: [
+        '/admin/', '/plataforma/', '/contador/', '/cliente/', '/login', '/api/',
+        '/parceiros/convite', '/perfil/', '/mesa/',
+      ],
     },
     sitemap: `${siteUrl}/sitemap.xml`,
     host: siteUrl,
