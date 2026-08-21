@@ -6,7 +6,7 @@ import { isPlatformOwner, clearAuth, saveAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { PLATFORM_PERMISSIONS_EVENT, usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import { Toaster } from 'react-hot-toast'
-import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet, Users, HandCoins } from 'lucide-react'
+import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet, Users, HandCoins, FileSpreadsheet } from 'lucide-react'
 import clsx from 'clsx'
 import ThemeToggle from '@/components/ThemeToggle'
 
@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   // os botões de ação dentro de cada página, presos na permissão de escrita.
   { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus, permission: 'platform.leads.read' },
   { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search, permission: 'platform.leads.read' },
+  { href: '/plataforma/ibpt',       label: 'Tabela IBPT',  icon: FileSpreadsheet, permission: 'platform.tenants.read' },
   { href: '/plataforma/indicacoes', label: 'Indicações',    icon: HandCoins, permission: 'platform.referrals.read' },
   { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy, permission: 'platform.support.read' },
   { href: '/plataforma/logs',       label: 'Logs',         icon: History, permission: 'platform.logs' },

@@ -1314,6 +1314,35 @@ export const prospectingApi = {
     api.post<LeadDto>('/api/platform/leads/prospeccao', req),
 }
 
+export interface PlatformIbptStatusDto {
+  uf: string
+  ncms: number
+  versao: string | null
+  vigenciaInicio: string | null
+  vigenciaFim: string | null
+  atualizadoEm: string
+}
+
+export interface PlatformIbptImportResult {
+  uf: string
+  ncmsImportados: number
+  linhasIgnoradas: number
+  versao: string | null
+  vigenciaInicio: string | null
+  vigenciaFim: string | null
+}
+
+export const platformIbptApi = {
+  list: () => api.get<PlatformIbptStatusDto[]>('/api/platform/ibpt'),
+  importar: (file: File) => {
+    const form = new FormData()
+    form.append('arquivo', file)
+    return api.post<PlatformIbptImportResult>('/api/platform/ibpt/importar', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+
 // ── Suporte (chamados entre lojista e plataforma) ──────────────────────────────
 
 export type SupportTicketStatus = 'Aberto' | 'EmAndamento' | 'Resolvido' | 'Fechado'
