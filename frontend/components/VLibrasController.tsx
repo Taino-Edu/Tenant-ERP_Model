@@ -15,7 +15,7 @@ export default function VLibrasController() {
     }
     // Oculta no mobile (janelas menores que 768px) porque o plugin
     // oficial não é usável e atrapalha a tela inteira.
-    const mobileHide = '@media (max-width: 768px) { [vw] { display: none !important; } }'
+    const mobileHide = '@media (max-width: 768px) { body:not(.institucional-page) [vw] { display: none !important; } }'
     
     let css = ''
     if (!prefs.vlibras.enabled) {

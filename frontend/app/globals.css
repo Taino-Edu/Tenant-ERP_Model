@@ -628,6 +628,6 @@ html.light .admin-portal .text-accent-gold { color: #1e293b !important; }
    ajuda. Esconde só em mobile; desktop continua controlado pelo toggle de
    preferências em VLibrasController.tsx. */
 @media (max-width: 640px) {
-  [vw] { display: none !important; }
+  body:not(.institucional-page) [vw] { display: none !important; }
 }
 

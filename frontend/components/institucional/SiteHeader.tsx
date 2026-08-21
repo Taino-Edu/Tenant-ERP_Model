@@ -11,7 +11,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import { Menu, Moon, Sun, X } from 'lucide-react'
+import { Accessibility, Menu, Moon, Sun, X } from 'lucide-react'
 import Logo from '@/components/Logo'
 import { NAV_LINKS, type InstitucionalTheme } from '@/lib/institucional'
 
@@ -31,9 +31,15 @@ export default function SiteHeader({
   // eles precisam navegar para /institucional antes de rolar. Guardar o
   // pathname aqui evita que o menu de afiliados aponte para âncoras que não
   // existem naquela tela.
-  const isHome = pathname === '/institucional'
+  const isInstitutional = pathname === '/institucional'
   const hrefFor = (href: string) =>
-    isHome && href.startsWith('/institucional#') ? href.slice('/institucional'.length) : href
+    isInstitutional && href.startsWith('/institucional#') ? href.slice('/institucional'.length) : href
+
+  const openVlibras = () => {
+    const accessButton = document.querySelector('[vw-access-button]') as HTMLElement | null
+    const pluginButton = document.querySelector('[vw] button, [vw] [role="button"]') as HTMLElement | null
+    ;(accessButton ?? pluginButton)?.click()
+  }
 
   return (
     <>
@@ -61,7 +67,7 @@ export default function SiteHeader({
           <Logo className="h-12 w-[89px]" title="3E Systen" />
         </Link>
 
-        <nav className="hidden items-center gap-7 lg:flex" aria-label="Navegação principal">
+        <nav className="hidden items-center gap-5 xl:gap-7 lg:flex" aria-label="Navegação principal">
           {NAV_LINKS.map(link => {
             const active = link.href === pathname
             return (
@@ -80,6 +86,15 @@ export default function SiteHeader({
         </nav>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openVlibras}
+            title="Acessibilidade em Libras"
+            aria-label="Abrir acessibilidade em Libras"
+            className={`rounded-xl border p-2.5 outline-none transition focus-visible:ring-2 focus-visible:ring-octus-500 ${theme.outline}`}
+          >
+            <Accessibility size={18} />
+          </button>
           <button
             type="button"
             onClick={onToggleTheme}
@@ -123,6 +138,9 @@ export default function SiteHeader({
               </Link>
             ))}
             <Link href="/login" onClick={() => setMenuOpen(false)} className="font-semibold octus-accent">Entrar</Link>
+            <button type="button" onClick={() => { openVlibras(); setMenuOpen(false) }} className="text-left font-semibold octus-accent">
+              Libras
+            </button>
             <Link href="/institucional#contato" onClick={() => setMenuOpen(false)} className="font-semibold octus-accent">
               Começar teste grátis
             </Link>

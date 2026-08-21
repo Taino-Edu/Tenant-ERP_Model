@@ -1,10 +1,11 @@
 'use client'
 
 import Image from 'next/image'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { FormEvent, useEffect, useRef, useState } from 'react'
 import {
-  ArrowRight, BarChart3, Bot, Boxes, Building2, Calculator, Check,
+  ArrowRight, BarChart3, Boxes, Building2, Calculator, Check,
   CheckCircle2, ChevronDown, ExternalLink, FileCheck2, HandCoins, Headphones,
   Layers3, Loader2, Mail, MessageCircle, ReceiptText, Send, Smartphone,
   UtensilsCrossed, X,
@@ -16,17 +17,21 @@ import {
 import { PLANOS } from '@/lib/planos'
 import SiteFooter from '@/components/institucional/SiteFooter'
 import SiteHeader from '@/components/institucional/SiteHeader'
+import SystemShowcase from '@/components/institucional/SystemShowcase'
+import Logo from '@/components/Logo'
 import { CONTACTS, ROOT_DOMAIN, submitLead, telHref, useInstitucionalTheme } from '@/lib/institucional'
+import type { ModuleDemoId } from '@/components/institucional/PlatformModuleDemo'
 
 const MARKETING_WHATSAPP = CONTACTS.marketingWhatsapp
+const PlatformModuleDemo = dynamic(() => import('@/components/institucional/PlatformModuleDemo'), { ssr: false })
 
 const RECURSOS = [
-  { icon: ReceiptText, title: 'PDV e fiscal', desc: 'Venda, caixa e emissão de NFC-e no mesmo fluxo, sem redigitar informações.' },
-  { icon: Boxes, title: 'Estoque organizado', desc: 'Produtos, variantes, movimentações, alertas e cadastro fiscal em um só lugar.' },
-  { icon: Calculator, title: 'Financeiro claro', desc: 'Crediário, contas a receber, fechamento de caixa e visão real da operação.' },
-  { icon: BarChart3, title: 'Decisões com dados', desc: 'Relatórios e indicadores que mostram o que vende, o que gira e o que precisa de atenção.' },
-  { icon: Smartphone, title: 'Experiência própria', desc: 'Site e app instalável com nome, cores, logo e domínio da sua empresa.' },
-  { icon: UtensilsCrossed, title: 'Módulo restaurante', desc: 'Comandas e operação de restaurante como adicional opcional, ativado apenas para quem precisa.' },
+  { id: 'pdv', icon: ReceiptText, title: 'PDV e fiscal', desc: 'Venda, caixa e emissão de NFC-e no mesmo fluxo, sem redigitar informações.' },
+  { id: 'estoque', icon: Boxes, title: 'Estoque organizado', desc: 'Produtos, variantes, movimentações, alertas e cadastro fiscal em um só lugar.' },
+  { id: 'financeiro', icon: Calculator, title: 'Financeiro claro', desc: 'Crediário, contas a receber, fechamento de caixa e visão real da operação.' },
+  { id: 'relatorios', icon: BarChart3, title: 'Decisões com dados', desc: 'Relatórios e indicadores que mostram o que vende, o que gira e o que precisa de atenção.' },
+  { id: 'experiencia', icon: Smartphone, title: 'Experiência própria', desc: 'Site e app instalável com nome, cores, logo e domínio da sua empresa.' },
+  { id: 'restaurante', icon: UtensilsCrossed, title: 'Módulo restaurante', desc: 'Comandas e operação de restaurante como adicional opcional, ativado apenas para quem precisa.' },
 ]
 
 const COMPARATIVO = [
@@ -67,6 +72,7 @@ export default function InstitucionalPage() {
   const [leadSubmitted, setLeadSubmitted] = useState(false)
   const [leadError, setLeadError] = useState<string | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
+  const [activeModuleDemo, setActiveModuleDemo] = useState<ModuleDemoId | null>(null)
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -185,7 +191,7 @@ export default function InstitucionalPage() {
               </a>
             </div>
             <div className={`mt-9 hidden flex-wrap gap-x-6 gap-y-3 text-sm font-semibold sm:flex ${theme.body}`}>
-              {['Sem cartão no teste', 'Configuração acompanhada', 'Sua marca em primeiro lugar'].map(item => (
+              {['Sem cartão no teste', 'Configuração acompanhada', 'Sua marca em primeiro lugar', 'Fiscal e venda conectados'].map(item => (
                 <span key={item} className="inline-flex items-center gap-2"><CheckCircle2 size={17} className="octus-accent" />{item}</span>
               ))}
             </div>
@@ -203,6 +209,23 @@ export default function InstitucionalPage() {
         </div>
       </section>
 
+      <section id="plataforma" className={`scroll-mt-24 border-b px-5 py-24 lg:px-8 ${theme.border} ${theme.surface}`}>
+        <div className="mx-auto max-w-7xl">
+          <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:items-end">
+            <div>
+              <p className="text-sm font-extrabold uppercase tracking-[0.2em] octus-accent">A plataforma por dentro</p>
+              <h2 className={`mt-4 text-3xl font-black tracking-[-0.03em] sm:text-5xl ${theme.heading}`}>
+                Mostre para o cliente uma operação pronta, não só uma promessa.
+              </h2>
+            </div>
+            <p className={`text-lg leading-8 ${theme.body}`}>
+              A página institucional agora apresenta telas do sistema com contexto: PDV, estoque, relatórios e loja do cliente. Assim quem visita entende rápido o que existe, onde ganha tempo e por que a identidade da empresa continua preservada.
+            </p>
+          </div>
+          <SystemShowcase theme={theme} />
+        </div>
+      </section>
+
       <section id="recursos" className="scroll-mt-24 px-5 py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
@@ -211,12 +234,13 @@ export default function InstitucionalPage() {
             <p className={`mt-5 text-lg leading-8 ${theme.body}`}>O Octus conecta a rotina da venda à gestão, sem tirar da sua empresa a identidade que o cliente já conhece.</p>
           </div>
           <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {RECURSOS.map(({ icon: Icon, title, desc }) => (
-              <article key={title} className={`rounded-2xl border p-7 transition ${theme.card}`}>
+            {RECURSOS.map(({ id, icon: Icon, title, desc }) => (
+              <button key={id} type="button" onClick={() => setActiveModuleDemo(id as ModuleDemoId)} className={`group rounded-2xl border p-7 text-left transition hover:-translate-y-1 ${theme.card}`} aria-haspopup="dialog">
                 <span className={`inline-flex rounded-xl border p-3 octus-accent ${theme.border} ${theme.soft}`}><Icon size={23} /></span>
                 <h3 className={`mt-5 text-lg font-extrabold ${theme.heading}`}>{title}</h3>
                 <p className={`mt-2 leading-7 ${theme.body}`}>{desc}</p>
-              </article>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-extrabold octus-accent">Ver o fluxo funcionando <ArrowRight size={16} /></span>
+              </button>
             ))}
           </div>
         </div>
@@ -438,10 +462,12 @@ export default function InstitucionalPage() {
 
       <SiteFooter theme={theme} />
 
+      {activeModuleDemo ? <PlatformModuleDemo moduleId={activeModuleDemo} onClose={() => setActiveModuleDemo(null)} theme={theme} /> : null}
+
       <div className="fixed bottom-5 right-5 z-50">
         {chatOpen && (
           <section aria-label="Assistente Octus" className={`mb-3 flex h-[480px] w-[calc(100vw-40px)] max-w-[380px] flex-col overflow-hidden rounded-2xl border shadow-2xl ${theme.border} ${theme.surface}`}>
-            <header className="flex items-center gap-3 bg-[#071f3d] px-4 py-4 text-white"><span className="rounded-xl bg-octus-600 p-2"><Bot size={20} /></span><span className="min-w-0 flex-1"><strong className="block text-sm">Assistente Octus</strong><span className="block text-xs text-slate-300">Dúvidas rápidas sobre o sistema</span></span><button type="button" onClick={() => setChatOpen(false)} aria-label="Fechar assistente"><X size={18} /></button></header>
+            <header className="flex items-center gap-3 bg-[#071f3d] px-4 py-4 text-white"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white"><Logo className="h-7 w-7" title="Octus" /></span><span className="min-w-0 flex-1"><strong className="block text-sm">Assistente Octus</strong><span className="block text-xs text-slate-300">Dúvidas rápidas sobre o sistema</span></span><button type="button" onClick={() => setChatOpen(false)} aria-label="Fechar assistente"><X size={18} /></button></header>
             <div className={`flex-1 space-y-3 overflow-y-auto p-4 ${theme.soft}`}>
               {messages.map((message, index) => <p key={`${message.role}-${index}`} className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === 'user' ? 'ml-auto bg-octus-600 text-white' : `${theme.surface} ${theme.body}`}`}>{message.text}</p>)}
               {chatLoading && <p className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm ${theme.surface} ${theme.body}`}><Loader2 size={15} className="animate-spin" />Pensando...</p>}
@@ -450,7 +476,7 @@ export default function InstitucionalPage() {
             <form onSubmit={handleChatSubmit} className={`border-t p-3 ${theme.border}`}><div className="flex gap-2"><input value={chatInput} onChange={event => setChatInput(event.target.value)} maxLength={500} placeholder="Ex.: qual plano atende um restaurante?" className={`min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-octus-500 ${theme.input}`} /><button type="submit" disabled={chatLoading || chatInput.trim().length < 2} aria-label="Enviar pergunta" className="rounded-xl bg-octus-600 p-3 text-white disabled:opacity-50"><Send size={18} /></button></div><p className={`mt-2 text-center text-[10px] ${theme.muted}`}>Sem acesso a dados de lojas. Para contratar, fale com o <a href={MARKETING_WHATSAPP} target="_blank" rel="noreferrer" className="font-bold octus-accent">Marketing</a>.</p></form>
           </section>
         )}
-        <button type="button" onClick={() => setChatOpen(open => !open)} aria-label={chatOpen ? 'Fechar Assistente Octus' : 'Abrir Assistente Octus'} className="ml-auto flex items-center gap-2 rounded-full bg-octus-600 px-5 py-3.5 font-extrabold text-white shadow-xl shadow-octus-800/25 transition hover:bg-octus-700"><Bot size={20} /><span className="hidden sm:inline">Pergunte ao Octus</span></button>
+        <button type="button" onClick={() => setChatOpen(open => !open)} aria-label={chatOpen ? 'Fechar Assistente Octus' : 'Abrir Assistente Octus'} className="ml-auto flex items-center gap-2 rounded-full bg-octus-600 px-4 py-3 font-extrabold text-white shadow-xl shadow-octus-800/25 transition hover:bg-octus-700"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white"><Logo className="h-5 w-5" title="Octus" /></span><span className="hidden sm:inline">Pergunte ao Octus</span></button>
       </div>
     </main>
   )
