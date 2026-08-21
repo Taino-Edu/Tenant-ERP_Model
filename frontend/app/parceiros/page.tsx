@@ -408,11 +408,12 @@ export default function ParceirosPage() {
                   <p className={`mt-1 text-3xl font-black tabular-nums ${theme.heading}`}>{formatarReaisExato(totalImplantacao)}</p>
                   <p className={`mt-1 text-xs ${theme.muted}`}>
                     {plano.taxaImplantacao === 0
-                      // Regra do regulamento, não arredondamento: sem taxa de
-                      // implantação não há base de cálculo, e o plano Mar é
-                      // justamente o que tem implantação gratuita.
-                      ? 'O plano Mar tem implantação gratuita — sem taxa, não há comissão de implantação.'
-                      : `${COMISSAO.implantacaoPercent}% de ${formatarReais(plano.taxaImplantacao)}, uma vez por indicação`}
+                      // Regra do regulamento, não arredondamento: sem taxa não
+                      // há base de cálculo. Nenhum plano de tabela está assim
+                      // hoje, mas a implantação é negociável por loja (pode ser
+                      // zerada no painel), então o caso continua existindo.
+                      ? 'Sem taxa de implantação não há base de cálculo — a comissão recorrente segue normalmente.'
+                      : `${COMISSAO.implantacaoPercent}% de ${formatarReais(plano.taxaImplantacao)}, valor de tabela, uma vez por indicação`}
                   </p>
                 </div>
                 <div>

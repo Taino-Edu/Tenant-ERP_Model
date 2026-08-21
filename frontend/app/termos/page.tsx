@@ -1,11 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalActions } from '@/components/LegalActions'
+import { PLATFORM_URL } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Termos de Uso',
   description: 'Termos de uso da plataforma multiempresa Octus para estabelecimentos, equipes e clientes finais.',
-  alternates: { canonical: '/termos' },
+  // Absoluto pelo mesmo motivo de /privacidade: texto único da 3E Systen
+  // servido em todo host de loja.
+  alternates: { canonical: `${PLATFORM_URL}/termos` },
 }
 
 const updated = '12 de agosto de 2026'

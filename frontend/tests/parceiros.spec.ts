@@ -26,13 +26,20 @@ test.describe('Programa de Afiliados', () => {
     await expect(painel).not.toContainText(/R\$ \d+,\d(?!\d)/)
   })
 
-  test('o plano sem taxa de implantação não promete comissão de implantação', async ({ page }) => {
+  // O Mar tinha implantação gratuita e servia de caso-limite aqui. Deixou de
+  // ter em 20/08/2026 (R$ 974, duas mensalidades como os demais), então o que
+  // este teste protege agora é o oposto: que o simulador acompanhe a tabela
+  // quando ela muda, em vez de continuar prometendo comissão zero.
+  test('o simulador acompanha a tabela ao trocar de plano', async ({ page }) => {
     await abrirParceiros(page)
     await page.locator('#simulador').getByText('Mar', { exact: true }).click()
 
     const painel = page.locator('#simulador')
-    await expect(painel).toContainText('R$ 0,00')
-    await expect(painel).toContainText('implantação gratuita')
+    // Mar: R$ 487/mês e R$ 974 de implantação.
+    // 3 indicações → 30% de 974 x3 = 876,60 e 5% de 487 x3 = 73,05/mês.
+    await expect(painel).toContainText('R$ 876,60')
+    await expect(painel).toContainText('R$ 73,05')
+    await expect(painel).not.toContainText('implantação gratuita')
   })
 
   test('as telas do sistema trocam pelas abas e o gráfico tem barras', async ({ page }) => {

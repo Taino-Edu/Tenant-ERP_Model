@@ -274,7 +274,7 @@ else
     warn "Backup inicial falhou — rode manualmente e verifique: bash $APP_DIR/deploy/backup.sh"
 fi
 warn "Backup fica na PRÓPRIA VPS. Para proteção real contra perda do disco,"
-warn "configure BACKUP_REMOTE_CMD (cópia off-site) — ver deploy/backup.sh."
+warn "configure a cópia off-site (BACKUP_REMOTE_CMD + BACKUP_ENCRYPT_PASSPHRASE no .env) — passo a passo em deploy/BACKUP.md."
 
 APP_URL_LINE=$(grep '^APP_URL=' "$APP_DIR/.env" | cut -d= -f2-)
 echo ""

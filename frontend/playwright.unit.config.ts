@@ -5,7 +5,7 @@ import { defineConfig } from '@playwright/test'
 // das regras de sanitização e cooldown.
 export default defineConfig({
   testDir: './tests',
-  testMatch: /(?:html-escape|sefaz-cooldown|cookie-consent)\.spec\.ts/,
+  testMatch: /(?:html-escape|sefaz-cooldown|cookie-consent|admin-nav-permissions)\.spec\.ts/,
   fullyParallel: true,
   reporter: 'line',
 })

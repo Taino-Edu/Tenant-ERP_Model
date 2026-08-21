@@ -6,6 +6,8 @@ import { platformApi, SupportTicketDetailDto, SupportTicketStatus, getErrorMessa
 import PageHeader from '@/components/admin/PageHeader'
 import AttachImageButton from '@/components/support/AttachImageButton'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
+import SomenteLeitura from '@/components/plataforma/SomenteLeitura'
+import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import toast from 'react-hot-toast'
 import { ArrowLeft, LifeBuoy, Loader2, Send } from 'lucide-react'
 import clsx from 'clsx'
@@ -26,6 +28,11 @@ function fmtDateTime(iso: string) {
 export default function PlataformaSupportTicketPage() {
   const params = useParams<{ id: string }>()
   const ticketId = params.id
+  // `platform.support.read` abre o chamado inteiro, com todas as mensagens —
+  // é o histórico do atendimento que a auditoria vem conferir. Responder e
+  // mudar status exigem `platform.support`.
+  const can = usePlatformPermissions()
+  const podeEditar = can('platform.support')
 
   const [ticket, setTicket] = useState<SupportTicketDetailDto | null>(null)
   const [reply, setReply] = useState('')
@@ -86,7 +93,7 @@ export default function PlataformaSupportTicketPage() {
             value={ticket.status}
             options={STATUS_OPTIONS}
             styles={STATUS_STYLES}
-            disabled={updatingStatus}
+            disabled={updatingStatus || !podeEditar}
             onChange={handleStatusChange}
           />
         }
@@ -106,7 +113,9 @@ export default function PlataformaSupportTicketPage() {
         ))}
       </div>
 
-      <form onSubmit={handleReply} className="card flex items-end gap-3">
+      {!podeEditar && <SomenteLeitura>Você lê o chamado e todas as mensagens. Responder ao lojista e mudar o status ficam com o suporte.</SomenteLeitura>}
+
+      {podeEditar && <form onSubmit={handleReply} className="card flex items-end gap-3">
         <AttachImageButton value={replyImage} onChange={setReplyImage} />
         <textarea
           className="input flex-1 resize-none"
@@ -118,7 +127,7 @@ export default function PlataformaSupportTicketPage() {
         <button type="submit" disabled={sending || (!reply.trim() && !replyImage)} className="btn-primary py-2.5">
           {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
         </button>
-      </form>
+      </form>}
     </div>
   )
 }

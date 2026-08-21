@@ -9,7 +9,8 @@ import { Toaster } from 'react-hot-toast'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
-import { saveAuth, clearAuth, getImpersonatingOwnerName, getRole, hasPermission } from '@/lib/auth'
+import { saveAuth, clearAuth, getImpersonatingOwnerName, getRole } from '@/lib/auth'
+import { ADMIN_PERMISSIONS_EVENT, useAdminPermissions } from '@/hooks/useAdminPermissions'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 // Aplica o último ramp de cor de marca cacheado ANTES da hidratação — evita
@@ -24,12 +25,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   const { site } = useSiteConfig()
   const [impersonatingOwner, setImpersonatingOwner] = useState<string | null>(null)
-  const [canUseAi, setCanUseAi] = useState(false)
+  const { isAdmin, can } = useAdminPermissions()
+  const canUseAi = isAdmin || can('ia')
 
   useEffect(() => {
     setImpersonatingOwner(getImpersonatingOwnerName())
-    setCanUseAi(getRole() === 'Admin' || hasPermission('ia'))
   }, [])
+
+  // O painel da loja é de Admin e Operator. Cliente ou dono da plataforma que
+  // digitasse /admin carregava a casca inteira e só via as chamadas de API
+  // falhando uma a uma — o /plataforma já tinha essa trava, aqui faltava.
+  // Não é segurança (quem barra de verdade são as políticas do backend), é não
+  // deixar a pessoa numa tela que nunca vai funcionar pra ela.
+  useEffect(() => {
+    const role = getRole()
+    if (role && role !== 'Admin' && role !== 'Operator') router.replace('/login')
+  }, [router])
 
   // Marca o <body> enquanto o painel admin está montado. Os widgets flutuantes
   // globais (banner de cookies, botão de instalar PWA, lançador da IA) vivem no
@@ -45,7 +56,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const refresh = async () => {
       try {
         const res = await api.post('/api/auth/refresh', {})
-        if (res.data) saveAuth(res.data)
+        if (res.data) {
+          saveAuth(res.data)
+          // A sidebar, a barra do celular e os atalhos montam o menu a partir
+          // do cookie. Sem este aviso, um perfil alterado só chegaria na tela
+          // depois de recarregar a página.
+          window.dispatchEvent(new Event(ADMIN_PERMISSIONS_EVENT))
+        }
       } catch {
         // Se falhar, o interceptor cuida do redirect para /login na próxima chamada
       }

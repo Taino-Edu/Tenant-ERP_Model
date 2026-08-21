@@ -6,6 +6,7 @@ import { CalendarDays, Check, Copy, Download, HandCoins, Link2, Mail, Pencil, Re
 import Button from '@/components/admin/ui/Button'
 import DataTable from '@/components/admin/ui/DataTable'
 import Spinner from '@/components/admin/ui/Spinner'
+import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import {
   getErrorMessage, platformApi, referralApi,
   type ReferralCommissionDto, type ReferralInvitationDto, type ReferralPartnerDto, type ReferralSummaryDto,
@@ -33,6 +34,10 @@ export default function IndicacoesPage() {
   const [saving, setSaving] = useState(false)
   const [partnerFilter, setPartnerFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  // `platform.referrals.read` abre a aba; convidar, cadastrar, vincular e dar
+  // baixa em comissão exigem `platform.referrals.manage`. Quem só lê fica com a
+  // tela de consulta — sem formulários que o backend recusaria no submit.
+  const podeGerir = usePlatformPermissions()('platform.referrals.manage')
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [partnerForm, setPartnerForm] = useState<SaveReferralPartnerRequest>(emptyPartner)
@@ -158,9 +163,12 @@ export default function IndicacoesPage() {
           <Metric title="Já pago" value={money(summary?.paidAmount ?? 0)} />
         </div>
 
-        <section className="space-y-4 rounded-xl border border-brand-500/40 bg-surface-800 p-5">
-          <div><h2 className="flex items-center gap-2 font-semibold text-white"><Mail className="h-4 w-4 text-brand-400" /> Convidar parceiro comercial</h2><p className="mt-1 text-xs text-gray-400">Envie por e-mail ou gere um link. O regulamento e as regras ficam congelados na versão aceita.</p></div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        {/* Sem permissão de gestão a seção vira só o acompanhamento dos convites
+            já enviados — e some de vez se não houver nenhum, pra não sobrar uma
+            moldura com um título dentro. */}
+        {(podeGerir || invitations.length > 0) && <section className="space-y-4 rounded-xl border border-brand-500/40 bg-surface-800 p-5">
+          <div><h2 className="flex items-center gap-2 font-semibold text-white"><Mail className="h-4 w-4 text-brand-400" /> {podeGerir ? 'Convidar parceiro comercial' : 'Convites enviados'}</h2>{podeGerir && <p className="mt-1 text-xs text-gray-400">Envie por e-mail ou gere um link. O regulamento e as regras ficam congelados na versão aceita.</p>}</div>
+          {podeGerir && <><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <Field label="Nome"><input className={input} value={invite.name} onChange={e => setInvite(v => ({ ...v, name: e.target.value }))} /></Field>
             <Field label="E-mail"><input type="email" className={input} value={invite.email} onChange={e => setInvite(v => ({ ...v, email: e.target.value }))} /></Field>
             <Field label="Tipo"><select className={input} value={invite.partnerKind} onChange={e => setInvite(v => ({ ...v, partnerKind: e.target.value }))}><option>Parceiro de indicação</option><option>Contador indicador</option></select></Field>
@@ -168,14 +176,14 @@ export default function IndicacoesPage() {
             <Field label="% mensalidade"><input type="number" min={0} max={100} className={input} value={invite.monthlyCommissionPercent} onChange={e => setInvite(v => ({ ...v, monthlyCommissionPercent: Number(e.target.value) }))} /></Field>
             <Field label="Carência (dias)"><input type="number" min={0} max={60} className={input} value={invite.paymentGraceDays} onChange={e => setInvite(v => ({ ...v, paymentGraceDays: Number(e.target.value) }))} /></Field>
           </div>
-          <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => createInvitation(true)} loading={saving}><Mail className="h-4 w-4" /> Enviar por e-mail</Button><Button type="button" variant="secondary" onClick={() => createInvitation(false)} disabled={saving}><Copy className="h-4 w-4" /> Gerar e copiar link</Button></div>
+          <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => createInvitation(true)} loading={saving}><Mail className="h-4 w-4" /> Enviar por e-mail</Button><Button type="button" variant="secondary" onClick={() => createInvitation(false)} disabled={saving}><Copy className="h-4 w-4" /> Gerar e copiar link</Button></div></>}
           {invitations.length > 0 && (
             <DataTable
               rows={invitations.slice(0, 10)}
               rowKey={i => i.id}
-              rowActions={i => i.status === 'Pendente'
+              rowActions={podeGerir ? i => i.status === 'Pendente'
                 ? <button onClick={() => revokeInvitation(i.id)} aria-label="Revogar convite" className="touch-target flex items-center justify-center rounded-lg text-gray-400 hover:text-red-400"><X className="h-4 w-4" /></button>
-                : null}
+                : null : undefined}
               columns={[
                 { key: 'parceiro', header: 'Parceiro', mobile: 'title', className: 'text-white', cell: i => i.name || i.email || 'Link aberto' },
                 { key: 'status', header: 'Status', mobile: 'trailing', cell: i => <InviteStatus value={i.status} /> },
@@ -184,9 +192,11 @@ export default function IndicacoesPage() {
               ]}
             />
           )}
-        </section>
+        </section>}
 
-        <div className="grid gap-6 xl:grid-cols-2">
+        {/* Os dois formulários de escrita: cadastrar vendedor e vincular
+            indicação. Ambos batem em rotas de `referrals.manage`. */}
+        {podeGerir && <div className="grid gap-6 xl:grid-cols-2">
           <form onSubmit={savePartner} className="space-y-4 rounded-xl border border-surface-500 bg-surface-800 p-5">
             <h2 className="flex items-center gap-2 font-semibold text-white"><UserPlus className="h-4 w-4 text-brand-400" /> {editingId ? 'Editar vendedor' : 'Cadastrar vendedor autônomo'}</h2>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -217,7 +227,7 @@ export default function IndicacoesPage() {
             <p className="text-xs text-gray-500">A comissão só é liberada quando o pagamento do cliente recebe baixa no Financeiro.</p>
             <Button type="submit" loading={saving}><Link2 className="h-4 w-4" /> Salvar vínculo</Button>
           </form>
-        </div>
+        </div>}
 
         {/* No celular a seção abre mão da própria moldura: os cards da lista já
             têm fundo e borda, e `bg-surface-800` é exatamente a cor deles — as
@@ -228,13 +238,15 @@ export default function IndicacoesPage() {
           <div className="border-b border-surface-500 px-0 py-3 sm:px-5 sm:py-4"><h2 className="flex items-center gap-2 font-semibold text-white"><Users className="h-4 w-4" /> Parceiros e próximos pagamentos</h2></div>
           {/* `p-3 sm:p-0`: no celular a lista de cards precisa de respiro dentro
               da seção; no desktop a tabela usa o padding das próprias células. */}
+          {/* Baixar o termo assinado é leitura (`referrals.read`); editar o
+              parceiro não. */}
           <DataTable
             className="pt-3 sm:pt-0"
             rows={partners}
             rowKey={p => p.id}
             rowActions={p => <div className="flex gap-1">
               {p.contractDocumentAvailable && <a href={referralApi.signedDocumentUrl(p.id)} download className="touch-target flex items-center justify-center rounded-lg text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Baixar termo de ${p.name}`}><Download className="h-4 w-4" /></a>}
-              <button onClick={() => editPartner(p)} className="touch-target flex items-center justify-center rounded-lg text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Editar ${p.name}`}><Pencil className="h-4 w-4" /></button>
+              {podeGerir && <button onClick={() => editPartner(p)} className="touch-target flex items-center justify-center rounded-lg text-gray-400 hover:bg-surface-600 hover:text-white" aria-label={`Editar ${p.name}`}><Pencil className="h-4 w-4" /></button>}
             </div>}
             columns={[
               { key: 'vendedor', header: 'Parceiro', mobile: 'title',
@@ -266,11 +278,11 @@ export default function IndicacoesPage() {
             rows={commissions}
             rowKey={c => c.id}
             empty={<p className="p-8 text-center text-sm text-gray-500">Nenhuma comissão encontrada. Ela será criada quando uma cobrança de cliente indicado for paga.</p>}
-            rowActions={c => (
+            rowActions={podeGerir ? c => (
               <Button size="sm" variant={c.paidAt ? 'secondary' : 'success'} disabled={c.status === 'Carência'} onClick={() => togglePayment(c)}>
                 {c.paidAt ? <Undo2 className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}{c.paidAt ? 'Reabrir' : 'Pagar'}
               </Button>
-            )}
+            ) : undefined}
             columns={[
               { key: 'quem', header: 'Parceiro / cliente', mobile: 'title',
                 cell: c => (

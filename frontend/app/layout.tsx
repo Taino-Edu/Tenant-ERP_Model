@@ -7,7 +7,7 @@ import CookieBanner from '@/components/CookieBanner'
 import Footer from '@/components/Footer'
 import VLibrasController from '@/components/VLibrasController'
 import ClientProviders from '@/components/ClientProviders'
-import { getTenantIconsForHost, withCacheBust } from '@/lib/serverSiteConfig'
+import { getTenantIconsForHost, resolveShareImage, withCacheBust } from '@/lib/serverSiteConfig'
 
 export const viewport: Viewport = {
   themeColor: '#42B6EE',
@@ -34,6 +34,11 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = hostname === 'localhost' ? 'http' : 'https'
   const metadataBase = new URL(`${protocol}://${host || hostname}`)
 
+  // Imagem de compartilhamento. Sem ela, o link da loja colado no WhatsApp, no
+  // Instagram ou na bio do TikTok aparecia como uma linha de texto sem cartão —
+  // e cartão sem imagem é o que separa um link clicado de um link ignorado.
+  const shareImage = resolveShareImage(icons)
+
   return {
     metadataBase,
     title: { default: siteName, template: `%s — ${siteName}` },
@@ -56,11 +61,13 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName,
       locale: 'pt_BR',
       type: 'website',
+      images: [{ url: shareImage, alt: siteName }],
     },
     twitter: {
       card: 'summary_large_image',
       title: siteName,
       description,
+      images: [shareImage],
     },
     manifest: '/manifest.webmanifest',
     formatDetection: { telephone: false },
@@ -87,7 +94,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             reset-password, primeiro-acesso — nunca era aplicado.
             Este é o mesmo padrão que app/admin/layout.tsx já usa para o FOUC da
             cor de marca, e que funciona. */}
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.remove('light')}else{document.documentElement.classList.add('light');if(!t)localStorage.setItem('theme','light')}}catch(e){document.documentElement.classList.add('light')}})();` }} />
+        {/* Sem preferência salva, segue o tema do SISTEMA (prefers-color-scheme),
+            como o Chrome e os produtos do Google fazem.
+            A versão anterior assumia claro e — o problema de verdade — GRAVAVA
+            'light' no localStorage. Isso apagava a diferença entre "nunca
+            escolhi" e "escolhi claro": depois da primeira visita não havia mais
+            como voltar a seguir o sistema, e quem perdesse o localStorage
+            (janela anônima, outro perfil, limpeza de dados, ou a troca de origem
+            2esysten→3esysten, que são dois storages distintos) via a escolha
+            trocar sozinha.
+            Agora só escreve quando alguém clica no ThemeToggle — que é o único
+            momento em que existe escolha de fato. A leitura aqui e a do
+            ThemeToggle têm que continuar idênticas: se divergirem, a tela pisca
+            de um tema pro outro na hidratação.
+            O listener de `change` fica AQUI, e não só no ThemeToggle, porque
+            login/entrar/cadastro/reset-password não têm toggle nenhum: com o
+            listener só lá, o sistema virava pro escuro e essas telas seguiam
+            claras até alguém recarregar. Este script roda em toda página. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var q=window.matchMedia('(prefers-color-scheme: dark)');function ap(){var t=localStorage.getItem('theme');document.documentElement.classList.toggle('light',t?t==='light':!q.matches)}ap();q.addEventListener('change',ap)}catch(e){document.documentElement.classList.add('light')}})();` }} />
       </head>
       <body>
         <ClientProviders>

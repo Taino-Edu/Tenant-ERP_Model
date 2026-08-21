@@ -14,6 +14,7 @@ import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
 import DataTable from '@/components/admin/ui/DataTable'
 import { AuditLogDetailModal } from '@/components/admin/AuditLogDetailModal'
+import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 
 function fmtDateTime(iso: string | null) {
   if (!iso) return '—'
@@ -22,12 +23,15 @@ function fmtDateTime(iso: string | null) {
 
 type Tab = 'staff' | 'clientes' | 'logs' | 'suporte' | 'uso'
 
-const TABS: { key: Tab; label: string; icon: typeof Users }[] = [
-  { key: 'staff',    label: 'Funcionários & Admins', icon: UserCog },
-  { key: 'clientes', label: 'Clientes',               icon: Users },
-  { key: 'logs',     label: 'Logs',                   icon: History },
-  { key: 'suporte',  label: 'Suporte',                icon: LifeBuoy },
-  { key: 'uso',      label: 'Uso',                     icon: BarChart2 },
+// Cada aba carrega de um endpoint diferente, com permissão própria: logs e
+// suporte não vêm junto com `tenants.read`. Sem esse recorte, um perfil
+// Comercial abria as duas abas só pra ver o erro de carregamento.
+const TABS: { key: Tab; label: string; icon: typeof Users; permission: string }[] = [
+  { key: 'staff',    label: 'Funcionários & Admins', icon: UserCog,   permission: 'platform.tenants.read' },
+  { key: 'clientes', label: 'Clientes',               icon: Users,     permission: 'platform.tenants.read' },
+  { key: 'logs',     label: 'Logs',                   icon: History,   permission: 'platform.logs' },
+  { key: 'suporte',  label: 'Suporte',                icon: LifeBuoy,  permission: 'platform.support.read' },
+  { key: 'uso',      label: 'Uso',                     icon: BarChart2, permission: 'platform.tenants.read' },
 ]
 
 const PATH_LABELS: Record<string, string> = {
@@ -109,7 +113,7 @@ function ResetStaffPasswordModal({ tenantId, user, onClose }: { tenantId: string
   )
 }
 
-function StaffTab({ tenantId }: { tenantId: string }) {
+function StaffTab({ tenantId, podeRedefinirSenha }: { tenantId: string; podeRedefinirSenha: boolean }) {
   const [staff, setStaff] = useState<TenantStaffDto[] | null>(null)
   const [resetTarget, setResetTarget] = useState<TenantStaffDto | null>(null)
 
@@ -127,14 +131,14 @@ function StaffTab({ tenantId }: { tenantId: string }) {
       <DataTable
         rows={staff}
         rowKey={u => u.id}
-        rowActions={u => (
+        rowActions={podeRedefinirSenha ? u => (
           <button
             onClick={() => setResetTarget(u)}
             className="inline-flex items-center gap-1 py-2 text-xs text-brand-400 hover:text-brand-300"
           >
             <KeyRound className="w-3.5 h-3.5" /> Redefinir Senha
           </button>
-        )}
+        ) : undefined}
         columns={[
           { key: 'nome', header: 'Nome', mobile: 'title', className: 'text-white',
             cell: u => <>{u.name} {!u.isActive && <span className="text-xs text-red-400">(inativo)</span>}</> },
@@ -324,7 +328,7 @@ function UsoTab({ tenantId }: { tenantId: string }) {
   )
 }
 
-function CustomDomainCard({ tenant, onSaved }: { tenant: TenantSummary; onSaved: (t: TenantSummary) => void }) {
+function CustomDomainCard({ tenant, onSaved, podeEditar }: { tenant: TenantSummary; onSaved: (t: TenantSummary) => void; podeEditar: boolean }) {
   const [editing, setEditing] = useState(false)
   const [value, setValue]     = useState(tenant.customDomain ?? '')
   const [saving, setSaving]   = useState(false)
@@ -357,9 +361,13 @@ function CustomDomainCard({ tenant, onSaved }: { tenant: TenantSummary; onSaved:
               ? <>Ativo em <span className="font-mono text-white">{tenant.customDomain}</span> (além de <span className="font-mono">{tenant.slug}.2esysten.com.br</span>)</>
               : <>Nenhum — só <span className="font-mono">{tenant.slug}.2esysten.com.br</span> funciona hoje.</>}
           </p>
-          <button onClick={() => setEditing(true)} className="btn-secondary shrink-0 text-xs px-3 py-1.5">
-            {tenant.customDomain ? 'Editar' : 'Configurar'}
-          </button>
+          {/* O domínio em si continua visível — só a edição depende de
+              `tenants.manage`, que é o que PATCH /tenants/{id}/domain exige. */}
+          {podeEditar && (
+            <button onClick={() => setEditing(true)} className="btn-secondary shrink-0 text-xs px-3 py-1.5">
+              {tenant.customDomain ? 'Editar' : 'Configurar'}
+            </button>
+          )}
         </div>
       ) : (
         <div className="mt-2 space-y-3">
@@ -396,6 +404,12 @@ export default function TenantDetailPage() {
 
   const [tenant, setTenant] = useState<TenantSummary | null | undefined>(undefined)
   const [tab, setTab] = useState<Tab>('staff')
+  const pode = usePlatformPermissions()
+  const podeGerenciar = pode('platform.tenants.manage')
+  const abasVisiveis = TABS.filter(({ permission }) => pode(permission))
+  // A aba escolhida pode não existir pro perfil (o estado inicial é 'staff', e
+  // a lista chega um render depois). Cai na primeira liberada, ou em nenhuma.
+  const abaAtiva = abasVisiveis.some(({ key }) => key === tab) ? tab : abasVisiveis[0]?.key
 
   const fetchTenant = useCallback(() => {
     platformApi.listTenants()
@@ -420,20 +434,20 @@ export default function TenantDetailPage() {
         description={`${tenant.planName} · ${tenant.paymentStatus} · ${tenant.status === 'Active' ? 'Ativo' : 'Suspenso'}`}
       />
 
-      <CustomDomainCard tenant={tenant} onSaved={setTenant} />
+      <CustomDomainCard tenant={tenant} onSaved={setTenant} podeEditar={podeGerenciar} />
 
       {/* `card-sm-up`: as abas Funcionários/Clientes/Logs renderizam listas de
           cards no celular — com o `.card` aqui elas ficavam card dentro de card
           (301px úteis de 375px). A barra de abas continua igual. */}
       <div className="card-sm-up">
         <div className="chip-row items-center border-b border-surface-600 mb-4 !gap-1">
-          {TABS.map(({ key, label, icon: Icon }) => (
+          {abasVisiveis.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
               className={clsx(
                 'flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors',
-                tab === key ? 'border-brand-400 text-white' : 'border-transparent text-gray-400 hover:text-white',
+                abaAtiva === key ? 'border-brand-400 text-white' : 'border-transparent text-gray-400 hover:text-white',
               )}
             >
               <Icon className="w-4 h-4" /> {label}
@@ -441,11 +455,15 @@ export default function TenantDetailPage() {
           ))}
         </div>
 
-        {tab === 'staff'    && <StaffTab tenantId={tenantId} />}
-        {tab === 'clientes' && <ClientesTab tenantId={tenantId} />}
-        {tab === 'logs'     && <LogsTab tenantId={tenantId} />}
-        {tab === 'suporte'  && <SuporteTab tenantId={tenantId} />}
-        {tab === 'uso'      && <UsoTab tenantId={tenantId} />}
+        {/* `abaAtiva` e não `tab`: enquanto o cookie de permissões não é lido
+            (primeiro render, antes do efeito) nenhuma aba está liberada, e
+            renderizar o conteúdo de staff ali dispararia uma chamada que o
+            perfil talvez nem possa fazer. */}
+        {abaAtiva === 'staff'    && <StaffTab tenantId={tenantId} podeRedefinirSenha={podeGerenciar} />}
+        {abaAtiva === 'clientes' && <ClientesTab tenantId={tenantId} />}
+        {abaAtiva === 'logs'     && <LogsTab tenantId={tenantId} />}
+        {abaAtiva === 'suporte'  && <SuporteTab tenantId={tenantId} />}
+        {abaAtiva === 'uso'      && <UsoTab tenantId={tenantId} />}
       </div>
     </div>
   )

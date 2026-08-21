@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import { getPublicProductForHost } from '@/lib/serverProduct'
+import { getTenantIconsForHost, resolveShareImage } from '@/lib/serverSiteConfig'
 import ProdutoDetalheClient from './ProdutoDetalheClient'
 
 function formatPriceBRL(cents: number): string {
@@ -16,7 +17,20 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   const host = headers().get('host')
   const product = await getPublicProductForHost(host, params.id)
 
-  if (!product) return { title: 'Produto' }
+  // O canônico é declarado nos DOIS caminhos, e não por acaso: metadados no
+  // App Router são herdados campo a campo do layout acima. O layout de
+  // /produtos define `canonical: '/produtos'`, então uma página de produto que
+  // não declarasse o próprio herdaria a da listagem — ou seja, diria ao Google
+  // "não me indexe, indexe a listagem". Todo o catálogo sumiria da busca.
+  const canonical = `/produtos/${params.id}`
+
+  if (!product) return { title: 'Produto', alternates: { canonical } }
+
+  // Produto sem foto cadastrada não fica sem cartão: cai na imagem da loja.
+  // Antes, `images: undefined` aqui apagava também a do layout raiz (metadados
+  // substituem o objeto `openGraph` inteiro), e o link ia para o WhatsApp sem
+  // imagem nenhuma — justamente o produto que o lojista está divulgando.
+  const shareImage = product.imageUrl || resolveShareImage(await getTenantIconsForHost(host))
 
   const price = formatPriceBRL(product.priceInCents)
   const description = product.description
@@ -26,17 +40,18 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
   return {
     title: product.name,
     description,
+    alternates: { canonical },
     openGraph: {
       title: product.name,
       description,
       type: 'website',
-      images: product.imageUrl ? [{ url: product.imageUrl }] : undefined,
+      images: [{ url: shareImage, alt: product.name }],
     },
     twitter: {
-      card: product.imageUrl ? 'summary_large_image' : 'summary',
+      card: 'summary_large_image',
       title: product.name,
       description,
-      images: product.imageUrl ? [product.imageUrl] : undefined,
+      images: [shareImage],
     },
   }
 }

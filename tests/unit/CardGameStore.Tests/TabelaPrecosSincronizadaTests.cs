@@ -38,22 +38,28 @@ public class TabelaPrecosSincronizadaTests
         return dir!.FullName;
     }
 
-    private static Dictionary<string, decimal> LerCatalogoDoFrontend()
+    /// <summary>Nome do plano → (mensalidade, taxa de implantação) lidos do
+    /// catálogo do frontend.</summary>
+    private static Dictionary<string, (decimal Preco, decimal Implantacao)> LerCatalogoDoFrontend()
     {
         var caminho = Path.Combine(AcharRaizDoRepo(), "frontend", "lib", "planos.ts");
         File.Exists(caminho).Should().BeTrue($"o catálogo do frontend deveria estar em {caminho}");
 
         var conteudo = File.ReadAllText(caminho);
 
-        // Casa os pares `nome: 'X',` ... `preco: N,` de cada item do array.
+        // Casa `nome: 'X',` ... `preco: N,` ... `taxaImplantacao: N,` de cada
+        // item do array. `Singleline` faz `.` atravessar linha; o `[^}]*?`
+        // impede que um item vaze pro seguinte.
         var matches = Regex.Matches(
             conteudo,
-            @"nome:\s*'(?<nome>[^']+)'.*?preco:\s*(?<preco>\d+(?:\.\d+)?)",
+            @"nome:\s*'(?<nome>[^']+)'[^}]*?preco:\s*(?<preco>\d+(?:\.\d+)?)[^}]*?taxaImplantacao:\s*(?<implantacao>\d+(?:\.\d+)?)",
             RegexOptions.Singleline);
 
         return matches.ToDictionary(
             m => m.Groups["nome"].Value,
-            m => decimal.Parse(m.Groups["preco"].Value, CultureInfo.InvariantCulture),
+            m => (
+                decimal.Parse(m.Groups["preco"].Value, CultureInfo.InvariantCulture),
+                decimal.Parse(m.Groups["implantacao"].Value, CultureInfo.InvariantCulture)),
             StringComparer.OrdinalIgnoreCase);
     }
 
@@ -74,7 +80,27 @@ public class TabelaPrecosSincronizadaTests
         var frontend = LerCatalogoDoFrontend();
 
         foreach (var (plano, precoBackend) in TenantProvisioningService.TabelaPrecos)
-            frontend[plano].Should().Be(precoBackend,
+            frontend[plano].Preco.Should().Be(precoBackend,
                 $"o site anuncia o preço de \"{plano}\" e o backend cobra por ele — os dois têm que dizer o mesmo");
+    }
+
+    /// <summary>A implantação não tem tabela própria no backend: ela é derivada
+    /// em ApplyCommercialTerms. O buraco que este teste tapa é justamente esse
+    /// — a regra do Mar ("gratuita") vivia só no C#, então quando o catálogo do
+    /// frontend passou a cobrar R$974 nenhum teste reclamou, e toda loja Mar
+    /// continuou nascendo com implantação zero.</summary>
+    [Fact]
+    public void CatalogoDoFrontend_DeveTerAMesmaTaxaDeImplantacaoQueOBackendProvisiona()
+    {
+        var frontend = LerCatalogoDoFrontend();
+
+        foreach (var plano in TenantProvisioningService.TabelaPrecos.Keys)
+        {
+            var tenant = new Tenant { PlanName = plano, CreatedAt = DateTime.UtcNow };
+            TenantProvisioningService.ApplyCommercialTerms(tenant);
+
+            tenant.SetupFee.Should().Be(frontend[plano].Implantacao,
+                $"o site anuncia a implantação de \"{plano}\" e o provisionamento é quem gera a cobrança");
+        }
     }
 }

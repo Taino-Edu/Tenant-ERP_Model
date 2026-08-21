@@ -1,29 +1,31 @@
 # CardGameStore — Guia de Testes
 
-## Pré-requisito único: Docker Desktop
+## Pré-requisitos
 
-Instale em: https://www.docker.com/products/docker-desktop  
-Após instalar, certifique-se de que o ícone do Docker está rodando na bandeja do sistema.
+Docker (só pro PostgreSQL), .NET 8 SDK e Node.js 20+.
+Docker Desktop: https://www.docker.com/products/docker-desktop
 
 ---
 
-## Como subir a stack (1 comando)
+## Como subir a stack
 
-Abra o **PowerShell** na pasta `vendasMTG` e execute:
+Três terminais, na raiz do repositório:
 
-```powershell
-.\start.ps1
+```bash
+# 1. Banco — o mesmo container que a suíte de testes usa
+docker compose -f tests/docker-compose.yml up -d
+
+# 2. API (aplica as migrations e roda os seeds no boot)
+cd CardGameStore && dotnet run
+
+# 3. Frontend
+cd frontend && npm install && npm run dev
 ```
 
-O script irá:
-1. Fazer o build da imagem .NET 8
-2. Subir PostgreSQL 16 + MongoDB 7 + API + Frontend Next.js
-3. Aplicar as migrations automaticamente
-4. Criar o usuário Admin via seed
-5. Abrir o Swagger no seu navegador
-
-**Primeira execução:** ~3-5 minutos (baixa as imagens Docker)  
-**Execuções seguintes:** ~30 segundos
+Não existe mais `start.ps1` nem MongoDB: o banco é só PostgreSQL, e o
+`appsettings.Development.json` já aponta pro container (porta 5433). Também não
+há fallback pra SQLite — o multi-tenant inteiro é schema + `search_path`, que o
+SQLite não tem.
 
 ---
 
@@ -32,10 +34,9 @@ O script irá:
 | Serviço | URL | Login |
 |---------|-----|-------|
 | **Frontend** | http://localhost:3000 | admin@cardgamestore.com.br / SenhaForte@123 |
-| **Swagger / API** | http://localhost:5000 | — |
+| **Swagger / API** | http://localhost:5000/swagger | — |
 | **Health Check** | http://localhost:5000/health | — |
-| **PostgreSQL** | localhost:5432 | cardgame_user / CardGame@2025 |
-| **MongoDB** | localhost:27017 | sem auth (dev) |
+| **PostgreSQL** | localhost:5433 | ver `appsettings.Development.json` |
 
 ---
 
@@ -199,27 +200,59 @@ await conn.start();
 
 ---
 
+## Fluxo de teste dos perfis de acesso
+
+O que quebrou aqui no passado não foi a autorização e sim a interface: o painel
+oferecia ações que a API recusava, e o menu pedia uma permissão diferente da que a
+rota exigia. Os dois roteiros abaixo cobrem exatamente isso.
+
+### Equipe da plataforma
+
+1. Entre como dono da plataforma e vá em **Equipe** (`/plataforma/equipe`).
+2. Convide um integrante com perfil **Auditoria**. Abra o convite em uma janela
+   anônima e defina a senha.
+3. Logado como a auditoria, confira que:
+   - As abas **Leads**, **Prospecção** e **Equipe** não aparecem.
+   - Em **Tenants**, plano e mensalidade aparecem preenchidos mas travados, e não
+     existem os botões de suspender, backup, apagar nem simular loja.
+   - Em **Financeiro**, não existem "Gerar mensalidades" nem "Dar baixa".
+   - Em **Indicações**, não existem os formulários de cadastro e vínculo.
+4. Volte ao dono, mude o perfil dessa conta para **Sócio administrador**.
+5. Na janela da outra conta, espere a renovação de sessão (ou recarregue): o menu
+   e os botões passam a aparecer sem precisar deslogar.
+6. Como sócio, tente mudar o **próprio** perfil: o campo está travado. E o
+   proprietário principal aparece como "Acesso total protegido", sem controles.
+
+### Perfis de operador (dentro da loja)
+
+1. Como Admin da loja, crie um perfil em **Perfis de Acesso** com apenas `comandas`.
+2. Crie um operador com esse perfil e entre com ele.
+3. Confira que **Comanda** aparece no menu e abre — antes o item pedia `dashboard`,
+   então quem tinha só `comandas` não achava a tela e quem tinha só `dashboard`
+   entrava para tomar 403.
+4. Pressione `?` para abrir os atalhos: só devem aparecer os que o perfil alcança.
+5. Com a sessão do operador aberta, remova a permissão pelo Admin. A próxima ação
+   dele já é recusada — a autorização relê o banco, não o token.
+
+---
+
 ## Comandos úteis
 
-```powershell
-# Parar os containers
-.\start.ps1 -Stop
+```bash
+# Parar o banco
+docker compose -f tests/docker-compose.yml down
 
-# Resetar banco do zero (apaga todos os dados)
-.\start.ps1 -Reset
-
-# Subir com pgAdmin (interface visual do PostgreSQL)
-.\start.ps1 -WithAdmin
-# pgAdmin: http://localhost:5050 (admin@cardgame.com / admin)
-
-# Ver logs da API
-docker logs cardgamestore_api -f
-
-# Ver logs do frontend
-docker logs cardgamestore_frontend -f
+# Resetar do zero (apaga todos os dados)
+docker compose -f tests/docker-compose.yml down -v
 
 # Ver logs do banco
-docker logs cardgamestore_postgres -f
+docker compose -f tests/docker-compose.yml logs -f
+
+# Suíte do backend
+dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
+
+# Testes de unidade do frontend (não precisam de servidor)
+cd frontend && npx playwright test --config=playwright.unit.config.ts
 ```
 
 ---
@@ -228,6 +261,6 @@ docker logs cardgamestore_postgres -f
 
 | Perfil | Email | Senha |
 |--------|-------|-------|
-| Admin | admin@cardgamestore.com.br | SenhaForte@123 |
-| PostgreSQL | cardgame_user | CardGame@2025 |
-| pgAdmin | admin@cardgame.com | admin |
+| Admin da loja | admin@cardgamestore.com.br | `ADMIN_SEED_PASSWORD` (default `SenhaForte@123`) |
+| Dono da plataforma | `PLATFORM_OWNER_EMAIL` | `PLATFORM_OWNER_SEED_PASSWORD` |
+| PostgreSQL | ver `appsettings.Development.json` | idem |

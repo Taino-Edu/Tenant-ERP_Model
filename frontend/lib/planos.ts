@@ -19,7 +19,10 @@ export interface Plano {
   preco: number
   publico: string
   destaque: boolean
-  /** Valor único da implantação; zero significa implantação gratuita. */
+  /** Valor de tabela da implantação, cobrado uma vez. É ponto de partida, não
+   *  regra: a taxa é moeda de negociação e o painel da plataforma permite
+   *  ajustá-la por loja, inclusive zerar. Zero aqui significaria implantação
+   *  gratuita anunciada no site — hoje nenhum plano está assim. */
   taxaImplantacao: number
   /** Texto do limite de usuários, pro site. */
   usuarios: string
@@ -30,8 +33,10 @@ export interface Plano {
   inclui: string[]
 }
 
-/** Planos personalizados continuam partindo de duas mensalidades; nos planos
- * de tabela o valor vem do próprio catálogo porque o Mar é gratuito. */
+/** Duas mensalidades, em tabela e no personalizado — os três planos seguem a
+ * mesma conta desde que o Mar deixou de ter implantação gratuita. O catálogo
+ * continua sendo a fonte para os planos de tabela, pra que um valor negociado
+ * possa divergir do dobro sem que este helper o sobrescreva. */
 export const taxaImplantacao = (planoOuPreco: Plano | number) =>
   typeof planoOuPreco === 'number' ? planoOuPreco * 2 : planoOuPreco.taxaImplantacao
 
@@ -78,7 +83,7 @@ export const PLANOS: Plano[] = [
     preco: 487,
     publico: 'Pra quem tem mais de um ponto ou quer automatizar.',
     destaque: false,
-    taxaImplantacao: 0,
+    taxaImplantacao: 974,
     usuarios: 'Usuários ilimitados',
     maxUsers: null,
     // Restaurante é adicional opt-in: nem o plano mais alto o liga sozinho.

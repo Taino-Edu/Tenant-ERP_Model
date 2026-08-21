@@ -1,8 +1,10 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { isPlatformOwner, clearAuth, hasPlatformPermission } from '@/lib/auth'
+import { isPlatformOwner, clearAuth, saveAuth } from '@/lib/auth'
+import { api } from '@/lib/api'
+import { PLATFORM_PERMISSIONS_EVENT, usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import { Toaster } from 'react-hot-toast'
 import { LogOut, ShieldCheck, LayoutDashboard, Building2, UserPlus, LifeBuoy, History, Search, Wallet, Users, HandCoins } from 'lucide-react'
 import clsx from 'clsx'
@@ -12,18 +14,30 @@ const NAV_ITEMS = [
   { href: '/plataforma',            label: 'Visão Geral', icon: LayoutDashboard, permission: 'platform.dashboard' },
   { href: '/plataforma/tenants',    label: 'Tenants',      icon: Building2, permission: 'platform.tenants.read' },
   { href: '/plataforma/financeiro', label: 'Financeiro',   icon: Wallet, permission: 'platform.finance.read' },
-  { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus, permission: 'platform.leads' },
-  { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search, permission: 'platform.leads' },
+  // O menu abre pela permissão de LEITURA — é ela que decide se a tela carrega.
+  // Quem só tem `.read` (Auditoria) vê a tela inteira; o que fecha para ela são
+  // os botões de ação dentro de cada página, presos na permissão de escrita.
+  { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus, permission: 'platform.leads.read' },
+  { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search, permission: 'platform.leads.read' },
   { href: '/plataforma/indicacoes', label: 'Indicações',    icon: HandCoins, permission: 'platform.referrals.read' },
-  { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy, permission: 'platform.support' },
+  { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy, permission: 'platform.support.read' },
   { href: '/plataforma/logs',       label: 'Logs',         icon: History, permission: 'platform.logs' },
-  { href: '/plataforma/equipe',     label: 'Equipe',       icon: Users, permission: 'platform.team' },
+  { href: '/plataforma/equipe',     label: 'Equipe',       icon: Users, permission: 'platform.team.read' },
 ]
+
+// Mesma cadência do painel da loja: renova o token antes que a inatividade
+// derrube a sessão.
+const REFRESH_INTERVAL_MS = 45 * 60 * 1000
 
 export default function PlataformaShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const [checked, setChecked] = useState(false)
+  // As abas saem do cookie de permissões, gravado no login. O hook é o mesmo
+  // que as telas de dentro usam, e reage ao evento disparado no refresh abaixo:
+  // sem isso, quem tem o perfil alterado continuaria vendo o menu antigo até
+  // deslogar e logar de novo.
+  const pode = usePlatformPermissions()
 
   useEffect(() => {
     if (!isPlatformOwner()) {
@@ -32,6 +46,35 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
     }
     setChecked(true)
   }, [router])
+
+  useEffect(() => {
+    const refresh = async () => {
+      try {
+        const res = await api.post('/api/auth/refresh', {})
+        if (res.data) {
+          saveAuth(res.data)
+          // Avisa a si mesmo e às telas de dentro, que escondem botões pelas
+          // mesmas permissões e não re-renderizam junto com o shell (`children`
+          // mantém a identidade do elemento). O evento é o que faz todo mundo
+          // reler o cookie novo.
+          window.dispatchEvent(new Event(PLATFORM_PERMISSIONS_EVENT))
+        }
+      } catch {
+        // Falhou: o interceptor de /lib/api manda pro login na próxima chamada.
+      }
+    }
+
+    refresh()
+    const id = setInterval(refresh, REFRESH_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  // `pode` troca de identidade a cada renovação de permissões — é o que faz as
+  // abas serem recalculadas sem depender de recarregar a página.
+  const visibleItems = useMemo(
+    () => (checked ? NAV_ITEMS.filter(item => pode(item.permission)) : []),
+    [checked, pode],
+  )
 
   function handleLogout() {
     clearAuth()
@@ -72,7 +115,7 @@ export default function PlataformaShell({ children }: { children: React.ReactNod
           </div>
         </div>
         <nav className="chip-row max-w-7xl mx-auto px-4 sm:px-6 items-center !gap-1">
-          {NAV_ITEMS.filter(item => hasPlatformPermission(item.permission)).map(({ href, label, icon: Icon }) => {
+          {visibleItems.map(({ href, label, icon: Icon }) => {
             const active = href === '/plataforma' ? pathname === href : pathname.startsWith(href)
             return (
               <Link

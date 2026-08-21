@@ -13,13 +13,27 @@
 # VARIÁVEIS DE AMBIENTE (lidas do .env ou exportadas antes de chamar):
 #   BACKUP_DIR          Diretório de destino (default: /opt/tenant-erp/backups)
 #   BACKUP_RETAIN_DAYS  Dias de retenção (default: 7)
-#   BACKUP_REMOTE_CMD   (opcional) comando de cópia off-site. O caminho do dump é
-#                       passado como último argumento. Ex.:
-#                         BACKUP_REMOTE_CMD="rclone copy"        → rclone copy <arquivo> ...
+#   BACKUP_REMOTE_CMD   (opcional) comando de cópia off-site. O caminho do arquivo
+#                       é passado como último argumento, uma vez por dump. Ex.:
+#                         BACKUP_REMOTE_CMD="rclone copy --drive-shared-with-me"
 #                       ⚠️  Backup só na própria VPS não protege contra perda do
 #                       disco/instância. Configure isto (ou uma cópia off-site
 #                       equivalente) assim que houver dado de loja que doa perder.
+#                       Se definido e o envio falhar, este script FALHA (exit 1) —
+#                       ver comentário na seção de envio. Exige
+#                       BACKUP_ENCRYPT_PASSPHRASE junto: nada sai daqui sem cifra.
+#   BACKUP_ENCRYPT_PASSPHRASE
+#                       OBRIGATÓRIA quando BACKUP_REMOTE_CMD está definido — sem
+#                       ela o script FALHA (exit 1) em vez de enviar em texto
+#                       puro. Cifra cada dump com GPG/AES-256 ANTES de sair do
+#                       servidor; só o arquivo cifrado é enviado, e a cópia local
+#                       segue em texto puro para restauração rápida.
+#                       ⚠️  Guarde a frase-secreta FORA do destino off-site. Ela no
+#                       mesmo bucket do backup não protege de nada, e perdê-la
+#                       significa perder todos os backups enviados.
 #   POSTGRES_DB / POSTGRES_USER — lidos do .env
+#
+# RESTAURAÇÃO: ver deploy/BACKUP.md
 # =============================================================================
 
 set -euo pipefail
@@ -46,6 +60,24 @@ env_get() {
 
 if [ -z "${POSTGRES_DB:-}" ];   then POSTGRES_DB=$(env_get POSTGRES_DB "$PROJECT_DIR/.env"); fi
 if [ -z "${POSTGRES_USER:-}" ]; then POSTGRES_USER=$(env_get POSTGRES_USER "$PROJECT_DIR/.env"); fi
+
+# Configuração do off-site também sai do .env, e não só do ambiente.
+#
+# O cron instalado pelo setup.sh é `cd /opt/tenant-erp && bash deploy/backup.sh`,
+# sem `export` nenhum: cron roda com ambiente praticamente vazio. Se estas duas
+# só viessem do ambiente, o cenário seria — configura, testa na mão com as
+# variáveis exportadas, funciona, e às 03:00 o backup roda todo dia SEM enviar
+# nada, sem erro, porque o `if` de envio simplesmente não dispara. Silencioso é
+# o pior modo de falhar num backup.
+#
+# Guardar no .env também evita a frase-secreta no crontab, que é legível por
+# `crontab -l` e fica em texto puro em /var/spool/cron.
+if [ -z "${BACKUP_REMOTE_CMD:-}" ]; then
+  BACKUP_REMOTE_CMD=$(env_get BACKUP_REMOTE_CMD "$PROJECT_DIR/.env")
+fi
+if [ -z "${BACKUP_ENCRYPT_PASSPHRASE:-}" ]; then
+  BACKUP_ENCRYPT_PASSPHRASE=$(env_get BACKUP_ENCRYPT_PASSPHRASE "$PROJECT_DIR/.env")
+fi
 
 POSTGRES_DB="${POSTGRES_DB:-cardgamestore}"
 POSTGRES_USER="${POSTGRES_USER:-cardgame_user}"
@@ -83,6 +115,11 @@ fi
 PG_SIZE=$(du -sh "$PG_FILE" | cut -f1)
 echo "[$(date '+%H:%M:%S')] PostgreSQL OK ($PG_SIZE, integridade verificada)"
 
+# Tudo que precisa sair daqui. A lista existe porque o envio off-site mandava
+# só o dump do ERP: o banco da Evolution ficava exclusivamente no disco do VPS,
+# que é justamente o disco do qual o off-site deveria proteger.
+DUMPS=("$PG_FILE")
+
 # ── Banco da Evolution API (WhatsApp), se existir ──────────────────────────────
 # Fica num banco separado do ERP, então o pg_dump acima NÃO o cobre. É aqui que
 # moram as credenciais de sessão do WhatsApp de cada tenant: perder este banco
@@ -111,6 +148,7 @@ if docker exec cardgamestore_postgres \
 
   EVO_SIZE=$(du -sh "$EVO_FILE" | cut -f1)
   echo "[$(date '+%H:%M:%S')] Evolution OK ($EVO_SIZE, integridade verificada)"
+  DUMPS+=("$EVO_FILE")
 else
   echo "[$(date '+%H:%M:%S')] Evolution: banco '$EVOLUTION_DB' não existe — pulando (feature desligada)"
 fi
@@ -118,18 +156,86 @@ fi
 # ── Cópia off-site (opcional) ──────────────────────────────────────────────────
 # Sem isto, o backup vive no MESMO disco do banco — uma falha de VPS/disco leva
 # banco e backup juntos. Só roda se BACKUP_REMOTE_CMD estiver definido.
+#
+# Uma falha aqui derruba o script inteiro (exit 1), e isso é deliberado. Antes
+# era só um aviso: como este script roda por cron às 03:00 escrevendo num log
+# que ninguém abre, um envio quebrado ficava meses invisível e só aparecia no
+# dia em que o backup off-site fosse necessário — o pior momento possível para
+# descobrir que ele não existe. Falhando, o cron passa a mandar e-mail de erro e
+# o `setup.sh`/execução manual devolvem status diferente de zero.
 if [ -n "${BACKUP_REMOTE_CMD:-}" ]; then
-  echo "[$(date '+%H:%M:%S')] Enviando off-site: $BACKUP_REMOTE_CMD ... $PG_FILE"
-  # shellcheck disable=SC2086
-  if $BACKUP_REMOTE_CMD "$PG_FILE"; then
-    echo "[$(date '+%H:%M:%S')] Cópia off-site OK"
-  else
-    echo "[$(date '+%H:%M:%S')] ⚠️  Cópia off-site FALHOU — backup local existe, mas sem redundância off-site." >&2
+  CIFRAR="${BACKUP_ENCRYPT_PASSPHRASE:-}"
+
+  # Destino configurado sem frase-secreta derruba o script, em vez de subir o
+  # dump em texto puro.
+  #
+  # A cifra era opcional e o silêncio era o problema: quem configurasse o envio
+  # e esquecesse a senha veria "Enviado OK" todas as noites, sem nada indicando
+  # que o dump — CPF, e-mail, telefone e endereço dos clientes das lojas, num
+  # produto que vende módulo de LGPD, mais as credenciais de sessão do WhatsApp
+  # no dump do Evolution — estava saindo legível para dentro de um bucket. O
+  # esquecimento não dava sinal nenhum, e o sinal só apareceria num vazamento.
+  #
+  # Recusar aqui, e não lá em cima, é de propósito: os dumps locais já foram
+  # escritos e continuam válidos para restaurar. O que falha é só a redundância
+  # off-site, que é exatamente o que está mal configurado — e o exit 1 faz o
+  # cron mandar e-mail, mesmo padrão já usado quando o envio quebra.
+  if [ -z "$CIFRAR" ]; then
+    echo "[$(date '+%H:%M:%S')] ❌ ERRO: BACKUP_REMOTE_CMD está definido mas BACKUP_ENCRYPT_PASSPHRASE não." >&2
+    echo "                 O dump carrega dados pessoais dos clientes das lojas e não sai daqui sem cifra." >&2
+    echo "                 Defina BACKUP_ENCRYPT_PASSPHRASE no .env (guarde a frase FORA do destino off-site)" >&2
+    echo "                 ou remova BACKUP_REMOTE_CMD para ficar só com o backup local." >&2
+    exit 1
   fi
+
+  if ! command -v gpg >/dev/null 2>&1; then
+    echo "[$(date '+%H:%M:%S')] ❌ ERRO: BACKUP_ENCRYPT_PASSPHRASE definido mas 'gpg' não está instalado. Instale (apt-get install -y gnupg) ou remova a variável." >&2
+    exit 1
+  fi
+
+  # Sem ramo "sem cifra": chegar aqui já garante frase-secreta e gpg presentes.
+  ENVIO_FALHOU=0
+  for DUMP in "${DUMPS[@]}"; do
+    ARQUIVO="${DUMP}.gpg"
+
+    echo "[$(date '+%H:%M:%S')] Cifrando $(basename "$DUMP") ..."
+    # --passphrase-fd 3 em vez de --passphrase: o valor não aparece na linha de
+    # comando, que qualquer usuário do host lê via `ps`.
+    if ! gpg --batch --yes --quiet --symmetric --cipher-algo AES256 \
+             --passphrase-fd 3 --output "$ARQUIVO" "$DUMP" 3<<<"$CIFRAR"; then
+      echo "[$(date '+%H:%M:%S')] ❌ ERRO: falha ao cifrar $DUMP — NÃO enviando em texto puro." >&2
+      rm -f "$ARQUIVO"
+      ENVIO_FALHOU=1
+      continue
+    fi
+
+    echo "[$(date '+%H:%M:%S')] Enviando off-site: $(basename "$ARQUIVO")"
+    # shellcheck disable=SC2086
+    if $BACKUP_REMOTE_CMD "$ARQUIVO"; then
+      echo "[$(date '+%H:%M:%S')] Enviado OK: $(basename "$ARQUIVO")"
+    else
+      echo "[$(date '+%H:%M:%S')] ❌ ERRO: envio off-site falhou para $(basename "$ARQUIVO")." >&2
+      ENVIO_FALHOU=1
+    fi
+
+    # O cifrado é material de trânsito: o que fica no VPS é o .sql.gz em texto
+    # puro, que torna a restauração local imediata. Manter os dois dobraria o
+    # espaço ocupado sem proteger nada — quem alcança este disco alcança o banco.
+    rm -f "$ARQUIVO"
+  done
+
+  if [ "$ENVIO_FALHOU" -ne 0 ]; then
+    echo "[$(date '+%H:%M:%S')] ❌ Backup local existe, mas SEM redundância off-site. Verifique o destino." >&2
+    exit 1
+  fi
+  echo "[$(date '+%H:%M:%S')] Cópia off-site OK (${#DUMPS[@]} arquivo(s))"
 fi
 
 # ── Limpeza de backups antigos ─────────────────────────────────────────────────
-REMOVED=$(find "$BACKUP_DIR" -name "*.sql.gz" \
+# `.gpg` também: o fluxo normal apaga o cifrado logo após o envio, mas uma queda
+# no meio do laço (ou um `kill`) deixa o arquivo para trás. Sem esta extensão na
+# busca, esse resto acumularia para sempre no disco.
+REMOVED=$(find "$BACKUP_DIR" \( -name "*.sql.gz" -o -name "*.sql.gz.gpg" \) \
   -mtime +"$MAX_DAYS" -print -delete | wc -l)
 echo "[$(date '+%H:%M:%S')] $REMOVED arquivo(s) com mais de $MAX_DAYS dias removidos"
 

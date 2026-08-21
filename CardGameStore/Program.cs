@@ -415,7 +415,23 @@ builder.Services.AddHttpClient("ibpt", client =>
     // do que ficar sem transparência tributária e sem poder emitir.
     client.Timeout = TimeSpan.FromSeconds(60);
     client.DefaultRequestHeaders.Add("Accept", "application/json");
-}).RemoveAllLoggers();
+})
+// O minuto acima vale para uma resposta LENTA. Não vale para um host que não
+// atende: em 20/08/2026 o `apidoni` resolvia o DNS em 0,7ms e o handshake TCP
+// nunca completava — pacote descartado em silêncio, não recusado. Nesse estado
+// cada tentativa custava o minuto inteiro para descobrir o que o SYN sem
+// resposta já dizia nos primeiros segundos.
+//
+// ConnectTimeout separa as duas coisas: cinco segundos para ABRIR a conexão,
+// sessenta para o serviço responder depois de aberta. Assim "você está lento"
+// continua tolerado e "você não está aí" é detectado rápido — que é justamente
+// o gatilho de EhServicoIndisponivel, o qual encerra o ciclo inteiro (ver
+// IbptTaxService, catch com break).
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    ConnectTimeout = TimeSpan.FromSeconds(5),
+})
+.RemoveAllLoggers();
 
 // OpenStreetMap (Nominatim + Overpass API) — busca de possíveis clientes
 // (prospecção). Gratuito e sem chave, mas a política de uso deles exige um
@@ -846,6 +862,33 @@ using (var scope = app.Services.CreateScope())
                 await db.SaveChangesAsync();
             }
         }
+
+        // Realinha o retrato de permissões da equipe com a definição atual dos
+        // perfis. Quem autoriza de fato é PlatformAccessProfiles.EffectivePermissions
+        // (lê pelo perfil, não por esta coluna) — isto existe só para a coluna não
+        // continuar contando uma história diferente da que o sistema aplica.
+        var teamMembers = await db.Users
+            .Where(u => u.Role == CardGameStore.Models.PostgreSQL.UserRole.PlatformOwner && !u.IsPlatformPrimaryOwner)
+            .ToListAsync();
+        var resynced = 0;
+        foreach (var member in teamMembers)
+        {
+            if (member.PlatformAccessProfile is null ||
+                !PlatformAccessProfiles.All.TryGetValue(member.PlatformAccessProfile, out var profile))
+                continue;
+
+            var current = PlatformAccessProfiles.Serialize(profile.Permissions);
+            if (current == member.PlatformPermissionsJson) continue;
+
+            member.PlatformPermissionsJson = current;
+            member.UpdatedAt = DateTime.UtcNow;
+            resynced++;
+        }
+        if (resynced > 0)
+        {
+            await db.SaveChangesAsync();
+            logger.LogInformation("Permissões da equipe da plataforma realinhadas em {Count} conta(s).", resynced);
+        }
     }
     catch (Exception ex)
     {
@@ -986,6 +1029,7 @@ app.UseOperatorPermissions();
 
 app.MapControllers();
 app.ValidateOperatorPermissionCoverage();
+app.ValidatePlatformPermissionCoverage();
 app.MapHub<ComandaHub>("/hubs/comanda").RequireRateLimiting("comanda-hub");
 
 // MCP — o tenant pluga a IA dele aqui (ver CardGameStore/Mcp/ErpTools.cs).

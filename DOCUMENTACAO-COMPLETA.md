@@ -177,6 +177,12 @@ O sistema é suportado exclusivamente pelo **PostgreSQL 16**. O MongoDB foi remo
 
 - **Venda Avulsa (Por que JSONB?):** Uma Venda no balcão é um cupom. Se eu deleto o Produto X, a venda de ontem não pode quebrar. Em vez de criar infinitas tabelas de associação temporais, a `VendaAvulsa` possui uma coluna `ItensJson` de tipo genuníno `JSONB`. O Snapshot (Nome, Preço na época, Quantidade) é imutável.
 
+> 📐 **Modelagem completa:** o DER abaixo é o mapa de bolso — as ~43 tabelas do
+> tenant (42) e as do catálogo (25), o modelo conceitual/lógico/físico, as convenções que
+> atravessam o schema (dinheiro em centavos, snapshot, UTC vs dia brasileiro,
+> índices parciais) e a modelagem da DRE estão em
+> **[docs/MODELAGEM-DE-DADOS.md](./docs/MODELAGEM-DE-DADOS.md)**.
+
 ### Diagrama Entidade-Relacionamento (DER Mermaid)
 
 ```mermaid
@@ -245,6 +251,34 @@ erDiagram
     PRODUCT ||--o{ COMANDA_ITEM : ""
 ```
 
+### A DRE em uma tela
+
+A DRE não é tabela: é projeção calculada em `FinanceiroCalculoService` sobre as
+vendas (comandas + avulsas) e os lançamentos de `external_transactions`.
+
+```
+  Receita Bruta
+− Deduções (descontos)          = Receita Líquida
+− Impostos sobre vendas         (dre_group = sales_tax)
+− CMV (custo no momento da venda)  = Lucro Bruto
+− Despesas operacionais         (dre_group = operating_expense)
+                                = Resultado Operacional
++ Resultado financeiro          (dre_group = financial)
+− Impostos sobre o lucro        (dre_group = income_tax)
+                                = Resultado Líquido
+```
+
+O que **não** entra: `inventory_purchase` e `fixed_asset` (compra de mercadoria é
+estoque e vira CMV na venda; imobilizado é patrimônio — contabilizar os dois como
+despesa cobraria o mesmo custo duas vezes) e `unclassified`, que é somado à parte
+como pendência em vez de ser presumido despesa.
+
+Repare que `external_transactions` carrega **duas** colunas de classificação:
+`category` é o rótulo livre da tela, `dre_group` é a classificação contábil
+fechada que dirige o cálculo. O lojista renomeia categorias sem mexer na
+contabilidade. Detalhamento em
+[docs/MODELAGEM-DE-DADOS.md](./docs/MODELAGEM-DE-DADOS.md#6-modelagem-da-dre).
+
 ---
 
 ## 9. Segurança, LGPD e Anonimização
@@ -252,6 +286,36 @@ erDiagram
 - **Módulo 11 (CPF):** Todo CPF é validado matematicamente pela Receita Federal (`CpfValidAttribute`), impossibilitando CPFs falsos (como 111.111.111-11) entrarem no CRM.
 - **Audit Logs e IPs (LGPD):** Registros críticos salvam o IP do ator. Mas, para cumprir a LGPD, usamos **Anonimização via SHA-256**. O IP `192.168.0.1` + `SALT` vira um hash. Não sabemos de quem é o IP, mas se um ataque vier da mesma fonte, os hashes baterão para bloqueio.
 - **Direitos do Titular:** Endpoint e painel que permitem extrair (portabilidade) e mascarar os dados pessoais de clientes que exercerem o direito ao esquecimento, mantendo a integridade fiscal (comandas fechadas não são apagadas, apenas o nome vira "Usuário Deletado").
+
+### RBAC em três camadas (e por que ele falha alto)
+
+O sistema tem três populações com regras próprias, cada uma com o seu ponto de decisão:
+
+| Camada | Onde é decidida | Como a rota declara |
+|---|---|---|
+| Equipe da plataforma (`PlatformOwner`) | `PlatformAccessMiddleware` | `[RequirePlatformPermission("platform.*")]` |
+| Funcionário da loja (`Operator`) | `OperatorPermissionMiddleware` | `[RequireOperatorPermission]` / `[OperatorSelfService]` / `[OperatorForbidden]` |
+| Cliente (`Customer`) | Escopo por `userId` dentro do próprio endpoint | policy `CustomerOrAdmin` |
+
+Duas decisões de projeto sustentam isso:
+
+- **Nenhum middleware confia no JWT.** As permissões vão no token para a UI usar, mas
+  a autorização relê o banco a cada requisição. Tirar um acesso vale já na próxima
+  chamada, sem esperar o token expirar. Na plataforma há ainda o `SessionVersion`:
+  editar um integrante encerra as sessões antigas dele.
+- **Rota sem declaração não sobe.** Os dois validadores rodam depois do
+  `MapControllers` e lançam exceção no boot se uma rota autenticada não disser como
+  se autoriza. Sem isso a falha seria a pior possível — os middlewares só agem onde
+  encontram o atributo, então o esquecimento não fecharia a porta, abriria. Uma
+  exceção no primeiro deploy é barata; uma rota da plataforma aberta à auditoria por
+  meses, não.
+
+Do lado da plataforma, as permissões efetivas são resolvidas **pela chave do perfil**
+(`PlatformAccessProfiles.EffectivePermissions`), não pela cópia gravada na conta no
+momento do convite. Já foi o contrário, e o resultado é o esperado de qualquer
+retrato que ninguém atualiza: mudar a definição de um perfil não alcançava quem já
+estava cadastrado, e o sócio ficou sem enxergar parte do painel até alguém reabrir a
+conta e salvar de novo.
 
 ---
 
@@ -265,8 +329,8 @@ Como em toda plataforma viva, existem decisões brilhantes e compromissos assumi
 3. **Remoção do MongoDB:** Cortou o custo da fatura da Cloud pela metade e permitiu usar os superpoderes do JSONB do Postgres.
 
 ### 📈 Otimizações Planejadas e Escalabilidade
-- **Gargalo no Entity Framework:** Conforme lojas emitirem 10.000 comandas/mês, o painel financeiro (`AnalyticsController`) vai sofrer lentidão se continuar mapeando os objetos (Tracking). **Mandatório usar `.AsNoTracking()`** nessas rotas de leitura maciça para evitar estourar a RAM do ASP.NET.
-- **Cache de Configurações (Redis):** A tabela genérica `SiteConfig` é lida a cada load. Quando escalarmos, o Postgres vai fritar para ler a cor do botão da loja. Um cache L1 ou Redis será necessário para desafogar o banco.
+- **~~Gargalo no Entity Framework~~ — resolvido, e não como estava escrito aqui.** A recomendação antiga era espalhar `.AsNoTracking()` pelo `AnalyticsController`. Conferido em 20/08/2026: das 14 consultas, 11 projetam para tipo anônimo e 6 são agregações (`CountAsync`/`SumAsync`) — **o EF não rastreia nem um nem outro**, então `AsNoTracking()` ali seria literalmente um no-op. O problema real era outro e já foi corrigido: o dashboard materializava até 60 dias de `VendaAvulsaDto` inteiros, com o JSON de itens junto, a cada requisição. A correção foi projetar só as colunas usadas, não desligar o tracking. Fica o registro porque a recomendação errada sobreviveu à correção certa por meses.
+- **Cache de Configurações:** a `SiteConfig` era lida do Postgres a cada carregamento de página — a leitura mais repetida do sistema, para uma linha que muda quando o lojista edita a personalização. Desde 20/08/2026 passa por `IMemoryCache` com TTL de 30s por schema, invalidado no `Save` (mesmo padrão do `TenantResolutionMiddleware`). Redis continua sendo o passo seguinte, mas só quando houver mais de uma instância: com uma só, o cache em memória já tira a leitura do banco.
 
 ### ⚠️ Débitos Técnicos (Atenção Dev!)
 1. **A Bomba-Relógio do Gemini (IA):** Existe apenas 1 API Key Global. Um lojista estressando o chat estourará o limite gratuito da API do Google, derrubando a funcionalidade para TODAS as outras dezenas de lojas. Solução urgente: Rate Limit no `AiChatController` *segmentado por tenant_id*.

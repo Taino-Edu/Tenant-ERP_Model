@@ -46,6 +46,16 @@
 - **Chat no Admin:** Widget de chat flutuante alimentado pelo **Google Gemini 2.5 Flash** integrado diretamente via HTTP (sem SDK).
 - **IA Contextual:** O assistente tem acesso dinâmico aos dados da loja (estoque atual, comandas abertas, crediários) para responder a perguntas operacionais e sugerir melhorias.
 
+### 🔑 Perfis e Permissões
+- **Equipe da plataforma (`/plataforma/equipe`):** o proprietário principal convida sócios, comercial, financeiro, suporte e auditoria. Cada perfil abre um recorte do painel; o sócio administrador enxerga tudo.
+  - Cada área tem o par `platform.x.read` (abre a tela) e `platform.x` (grava). Quem grava precisa dos **dois** na lista do perfil — as permissões não se implicam, e há teste travando isso.
+  - **Auditoria** é o perfil que enxerga o painel inteiro sem escrever em lugar nenhum: só permissões `.read`. Ela **não** tem impersonação de propósito — essa permissão não mostra informação da plataforma, ela assume a identidade de alguém dentro da loja do cliente, e daria ao auditor poder de agir como o auditado.
+  - Vale saber, para o mapeamento de LGPD: `platform.tenants.read` inclui a lista de clientes de cada loja, com nome, e-mail e WhatsApp. "Somente leitura" limita o estrago, não a exposição.
+- **Perfis de operador (`/admin/perfis`):** o lojista monta conjuntos de permissões nomeados ("Caixa", "Estoquista") e atribui a cada funcionário.
+- **Revogação imediata:** tirar uma permissão vale já na requisição seguinte — nenhum dos dois middlewares confia no que está escrito no JWT, ambos releem o banco.
+
+Detalhes de cada camada e como somar uma rota nova sem furar o modelo: **[Perfis e Permissões](#perfis-e-permissões)**, mais abaixo.
+
 ### 🛡️ Conformidade LGPD
 - **Painel de Direitos do Titular:** Página pública `/lgpd` para consulta de dados cadastrais e solicitação de exclusão ou portabilidade.
 - **Segurança de Logs:** Logs de auditoria imutáveis com anonimização de IP utilizando hash SHA-256 com salt configurável.
@@ -114,6 +124,83 @@ Tenant-ERP/
     ├── setup.sh                    # Setup automático da VPS (instala Docker, clona e gera envs)
     └── update.sh                   # Script de deploy automatizado via git pull e docker rebuild
 ```
+
+---
+
+## Documentação
+
+| Documento | O que cobre |
+|---|---|
+| [DOCUMENTACAO-COMPLETA.md](./DOCUMENTACAO-COMPLETA.md) | Arquitetura, fluxos, DER resumido, análise crítica |
+| [docs/MODELAGEM-DE-DADOS.md](./docs/MODELAGEM-DE-DADOS.md) | Modelo conceitual, lógico e físico; convenções do schema; modelagem da DRE, do fechamento de período e do razão de estoque |
+| [AUDITORIA-ESCALONAMENTO.md](./AUDITORIA-ESCALONAMENTO.md) | Auditoria de escalonamento e consistência, com o estado de cada correção |
+| [GUIA-DE-TESTES.md](./GUIA-DE-TESTES.md) | Como subir a stack e os roteiros de teste manual |
+| [deploy/BACKUP.md](./deploy/BACKUP.md) | Backup off-site cifrado, restauração e limites |
+| [BACKLOG.md](./BACKLOG.md) | O que está planejado |
+
+---
+
+## Perfis e Permissões
+
+Três camadas independentes, cada uma com o seu ponto de decisão no backend. O
+frontend esconde o que o perfil não faz, mas **quem autoriza é sempre o servidor** —
+a interface existe só pra não oferecer o botão que voltaria 403.
+
+### 1. Equipe da plataforma (`PlatformOwner`)
+
+Definida em `CardGameStore/Security/PlatformAccess.cs` e aplicada pelo
+`PlatformAccessMiddleware`, que lê o atributo `[RequirePlatformPermission]` da rota.
+
+| Perfil | Alcance |
+|---|---|
+| Proprietário principal | Tudo. Conta raiz, criada pelo seed (`PLATFORM_OWNER_EMAIL`). |
+| Sócio administrador | Tudo, equipe inclusive. Não altera a conta do proprietário principal. |
+| Comercial | Visão geral, tenants (ler e administrar), leads, indicações. |
+| Financeiro | Visão geral, tenants (ler), cobranças, indicações. |
+| Suporte e desenvolvimento | Visão geral, tenants (ler), chamados, logs, simulação de loja. |
+| Auditoria | Só leitura: indicadores, tenants, financeiro, logs, indicações. |
+
+Duas travas que não são permissão e sim regra de negócio, ambas no
+`PlatformTeamController`: a conta raiz não pode ser editada nem desativada por
+ninguém, e nenhum integrante troca o próprio perfil de acesso — quem se rebaixasse
+por engano ficaria sem a tela que desfaz o engano.
+
+As permissões são resolvidas **pela chave do perfil**, não pela cópia gravada na
+conta. Mudar um perfil aqui vale para quem já estava cadastrado, sem precisar
+reabrir cada conta. A coluna `platform_permissions_json` é só um retrato, mantido
+em dia no boot, e serve de reserva caso uma chave suma do código.
+
+### 2. Perfis de operador (dentro da loja)
+
+O lojista cria perfis nomeados em `/admin/perfis` combinando as permissões de
+`Permissao.Todos` (`Models/PostgreSQL/Perfil.cs`): `dashboard`, `pdv`, `comandas`,
+`estoque`, `categorias`, `usuarios`, `crediario`, `financeiro`, `relatorios`,
+`anuncios`, `qrcodes`, `lgpd`, `fiscal`, `eventos`, `timers`, `suporte`, `ia`,
+`restaurante`.
+
+`Admin` é o dono da loja e passa por tudo. `Operator` passa pelo
+`OperatorPermissionMiddleware`, que exige `[RequireOperatorPermission]`,
+`[OperatorSelfService]` ou `[OperatorForbidden]` em cada rota.
+
+### 3. Cliente (`Customer`)
+
+Acessa só o que é dele — `/api/users/me`, `/api/minhas-notas`, a própria comanda.
+Todo endpoint escopa pelo id do usuário logado.
+
+### Somando uma rota nova
+
+Os dois lados **derrubam a aplicação no boot** se uma rota autenticada não disser
+como deve ser autorizada (`ValidateOperatorPermissionCoverage` e
+`ValidatePlatformPermissionCoverage`, chamados em `Program.cs` logo após o
+`MapControllers`). É de propósito: sem o atributo, o middleware deixaria passar, e
+a rota nasceria aberta a qualquer integrante da equipe — falha silenciosa, do tipo
+que só aparece num incidente. Uma exceção no boot aparece no primeiro deploy.
+
+No frontend, a permissão de uma rota do painel da loja mora num lugar só,
+`lib/adminNav.ts` — os atalhos de teclado herdam de lá, e um teste garante que não
+divirjam. Para esconder um controle, use `useAdminPermissions()` (loja) ou
+`usePlatformPermissions()` (plataforma): os dois já tratam o guard de hidratação
+(cookie não existe no SSR) e reagem à renovação de sessão.
 
 ---
 
@@ -220,6 +307,10 @@ bash /opt/tenant-erp/deploy/update.sh
 ```bash
 bash /opt/tenant-erp/deploy/backup.sh   # manual, ou agendado via cron (instruções no próprio script)
 ```
+A cópia off-site é opcional, mas **cifrada obrigatoriamente**: com
+`BACKUP_REMOTE_CMD` definido e `BACKUP_ENCRYPT_PASSPHRASE` vazio o script falha em
+vez de subir o dump legível. Configuração, restauração e limites em
+[deploy/BACKUP.md](./deploy/BACKUP.md).
 
 ### Referência da API (Swagger)
 Publicada num host dedicado: **`dev-swagger.3esysten.com.br`** — já coberto pelo
@@ -257,6 +348,15 @@ dotnet test tests/unit/CardGameStore.Tests/CardGameStore.Tests.csproj
 cd frontend
 npx playwright test
 ```
+
+### Testes de unidade do frontend (sem subir servidor)
+```bash
+cd frontend
+npx playwright test --config=playwright.unit.config.ts
+```
+Cobre helpers puros e as regras de navegação/permissão do painel
+(`tests/admin-nav-permissions.spec.ts`). Ficam separados de propósito: uma falha
+operacional ao subir o Next.js não pode esconder o resultado dessas regras.
 
 ---
 

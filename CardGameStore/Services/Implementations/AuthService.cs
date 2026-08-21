@@ -260,9 +260,8 @@ public class AuthService : IAuthService
         }
         else if (user.Role == UserRole.PlatformOwner)
         {
-            permissions = user.IsPlatformPrimaryOwner
-                ? [PlatformPermission.All]
-                : PlatformAccessProfiles.Deserialize(user.PlatformPermissionsJson);
+            permissions = PlatformAccessProfiles.EffectivePermissions(
+                user.IsPlatformPrimaryOwner, user.PlatformAccessProfile, user.PlatformPermissionsJson);
         }
 
         var accessToken  = GenerateJwt(user, permissions);

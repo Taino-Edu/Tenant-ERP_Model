@@ -16,7 +16,14 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/platform/team")]
 [Authorize(Policy = "PlatformOwnerOnly")]
-[RequirePlatformPermission(PlatformPermission.Team)]
+// Piso de leitura na classe, escrita somada método a método — ver o comentário
+// equivalente em PlatformCrmController.
+//
+// Ler a equipe é ver quem tem qual acesso, o que é exatamente o que uma
+// auditoria precisa conferir. Convidar, reenviar convite e editar continuam
+// exigindo `platform.team`: quem fiscaliza a lista de acessos não deve poder
+// se incluir nela.
+[RequirePlatformPermission(PlatformPermission.TeamRead)]
 public sealed class PlatformTeamController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -54,6 +61,7 @@ public sealed class PlatformTeamController : ControllerBase
             }));
 
     [HttpPost("invitations")]
+    [RequirePlatformPermission(PlatformPermission.Team)]
     public async Task<IActionResult> Invite([FromBody] InvitePlatformOwnerRequest request, CancellationToken cancellationToken)
     {
         PlatformProfileDefinition profile;
@@ -95,6 +103,7 @@ public sealed class PlatformTeamController : ControllerBase
     }
 
     [HttpPost("{id:guid}/resend-invite")]
+    [RequirePlatformPermission(PlatformPermission.Team)]
     public async Task<IActionResult> ResendInvite(Guid id, CancellationToken cancellationToken)
     {
         var owner = await _db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Role == UserRole.PlatformOwner, cancellationToken);
@@ -116,6 +125,7 @@ public sealed class PlatformTeamController : ControllerBase
     }
 
     [HttpPatch("{id:guid}")]
+    [RequirePlatformPermission(PlatformPermission.Team)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdatePlatformOwnerRequest request, CancellationToken cancellationToken)
     {
         var owner = await _db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Role == UserRole.PlatformOwner, cancellationToken);
@@ -128,6 +138,17 @@ public sealed class PlatformTeamController : ControllerBase
         PlatformProfileDefinition profile;
         try { profile = PlatformAccessProfiles.GetRequired(request.ProfileKey); }
         catch (ArgumentException exception) { return BadRequest(new { Message = exception.Message }); }
+
+        // Mesma ideia de não deixar alguém desativar a própria conta, um passo
+        // adiante: trocar o próprio perfil para um mais restrito tranca a pessoa
+        // para fora da tela que faria a correção. Um sócio que virasse Auditoria
+        // por engano dependeria do proprietário principal para voltar — e se ele
+        // estivesse de férias, a plataforma ficaria sem ninguém para administrar.
+        if (owner.Id == CurrentUserId() &&
+            !string.Equals(owner.PlatformAccessProfile, profile.Key, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { Message = "Você não pode alterar o próprio perfil de acesso. Peça a outro integrante da equipe." });
+        }
 
         owner.Name = request.Name.Trim();
         owner.PlatformAccessProfile = profile.Key;
@@ -155,7 +176,8 @@ public sealed class PlatformTeamController : ControllerBase
         {
             Id = owner.Id, Name = owner.Name, Email = owner.Email ?? string.Empty,
             ProfileKey = profileKey, ProfileName = profile?.Name ?? profileKey,
-            Permissions = owner.IsPlatformPrimaryOwner ? [PlatformPermission.All] : PlatformAccessProfiles.Deserialize(owner.PlatformPermissionsJson),
+            Permissions = PlatformAccessProfiles.EffectivePermissions(
+                owner.IsPlatformPrimaryOwner, profileKey, owner.PlatformPermissionsJson),
             IsPrimaryOwner = owner.IsPlatformPrimaryOwner, IsActive = owner.IsActive,
             InvitationPending = owner.PasswordHash is null, LastLoginAt = owner.LastLoginAt, CreatedAt = owner.CreatedAt,
         };

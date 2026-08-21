@@ -13,7 +13,7 @@ import {
   getErrorMessage, publicAssistantApi, publicDirectoryApi,
   type PublicTenantDto,
 } from '@/lib/api'
-import { PLANOS, formatarReais, taxaImplantacao } from '@/lib/planos'
+import { PLANOS } from '@/lib/planos'
 import SiteFooter from '@/components/institucional/SiteFooter'
 import SiteHeader from '@/components/institucional/SiteHeader'
 import { CONTACTS, ROOT_DOMAIN, submitLead, telHref, useInstitucionalTheme } from '@/lib/institucional'
@@ -308,8 +308,13 @@ export default function InstitucionalPage() {
                 <h3 className={`text-2xl font-black ${plano.destaque ? 'text-white' : theme.heading}`}>{plano.nome}</h3>
                 <p className={`mt-2 min-h-12 text-sm leading-6 ${plano.destaque ? 'text-slate-300' : theme.muted}`}>{plano.publico}</p>
                 <p className="mt-7"><span className={`text-sm font-bold ${plano.destaque ? 'text-slate-300' : theme.muted}`}>R$ </span><span className={`text-5xl font-black tracking-tight ${plano.destaque ? 'text-white' : theme.heading}`}>{plano.preco}</span><span className={plano.destaque ? 'text-slate-300' : theme.muted}>/mês</span></p>
-                <p className={`mt-2 text-sm font-bold ${plano.taxaImplantacao === 0 ? 'text-emerald-400' : plano.destaque ? 'text-slate-300' : theme.muted}`}>
-                  {plano.taxaImplantacao === 0 ? 'Implantação gratuita' : `${formatarReais(taxaImplantacao(plano))} de implantação`}
+                {/* Só a existência da taxa, sem o valor: ele passou a ser
+                    definido na contratação, e publicá-lo por plano tirava essa
+                    margem. Aparece em TODOS os planos — antes o Mar anunciava
+                    "Implantação gratuita", o que virou promessa a menos para
+                    honrar. */}
+                <p className={`mt-2 text-sm font-bold ${plano.destaque ? 'text-slate-300' : theme.muted}`}>
+                  + taxa de implantação
                 </p>
                 <p className={`mt-4 text-sm font-bold ${plano.destaque ? 'text-slate-200' : theme.body}`}>{plano.usuarios}</p>
                 <ul className="mt-7 flex-1 space-y-3">
@@ -323,7 +328,7 @@ export default function InstitucionalPage() {
               </article>
             ))}
           </div>
-          <p className={`mx-auto mt-8 max-w-4xl text-center text-sm leading-6 ${theme.muted}`}>Lagoa e Rio têm implantação equivalente a duas mensalidades. O plano Mar tem implantação gratuita. O módulo restaurante é opcional e sua ativação é alinhada conforme a operação.</p>
+          <p className={`mx-auto mt-8 max-w-4xl text-center text-sm leading-6 ${theme.muted}`}>Todos os planos têm taxa de implantação, cobrada uma única vez, com valor definido na contratação conforme o porte da operação. O módulo restaurante é opcional e sua ativação é alinhada conforme a operação.</p>
         </div>
       </section>
 
@@ -442,7 +447,7 @@ export default function InstitucionalPage() {
               {chatLoading && <p className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm ${theme.surface} ${theme.body}`}><Loader2 size={15} className="animate-spin" />Pensando...</p>}
               <div ref={chatEndRef} />
             </div>
-            <form onSubmit={handleChatSubmit} className={`border-t p-3 ${theme.border}`}><div className="flex gap-2"><input value={chatInput} onChange={event => setChatInput(event.target.value)} maxLength={500} placeholder="Ex.: qual plano tem implantação grátis?" className={`min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-octus-500 ${theme.input}`} /><button type="submit" disabled={chatLoading || chatInput.trim().length < 2} aria-label="Enviar pergunta" className="rounded-xl bg-octus-600 p-3 text-white disabled:opacity-50"><Send size={18} /></button></div><p className={`mt-2 text-center text-[10px] ${theme.muted}`}>Sem acesso a dados de lojas. Para contratar, fale com o <a href={MARKETING_WHATSAPP} target="_blank" rel="noreferrer" className="font-bold octus-accent">Marketing</a>.</p></form>
+            <form onSubmit={handleChatSubmit} className={`border-t p-3 ${theme.border}`}><div className="flex gap-2"><input value={chatInput} onChange={event => setChatInput(event.target.value)} maxLength={500} placeholder="Ex.: qual plano atende um restaurante?" className={`min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-octus-500 ${theme.input}`} /><button type="submit" disabled={chatLoading || chatInput.trim().length < 2} aria-label="Enviar pergunta" className="rounded-xl bg-octus-600 p-3 text-white disabled:opacity-50"><Send size={18} /></button></div><p className={`mt-2 text-center text-[10px] ${theme.muted}`}>Sem acesso a dados de lojas. Para contratar, fale com o <a href={MARKETING_WHATSAPP} target="_blank" rel="noreferrer" className="font-bold octus-accent">Marketing</a>.</p></form>
           </section>
         )}
         <button type="button" onClick={() => setChatOpen(open => !open)} aria-label={chatOpen ? 'Fechar Assistente Octus' : 'Abrir Assistente Octus'} className="ml-auto flex items-center gap-2 rounded-full bg-octus-600 px-5 py-3.5 font-extrabold text-white shadow-xl shadow-octus-800/25 transition hover:bg-octus-700"><Bot size={20} /><span className="hidden sm:inline">Pergunte ao Octus</span></button>

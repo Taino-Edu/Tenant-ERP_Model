@@ -39,8 +39,13 @@ function localDateTime(value: string) {
   })
 }
 
-export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
+export default function CrmWorkspaceModal({ lead, onClose, onChanged, podeEditar = true }: {
   lead: LeadDto; onClose: () => void; onChanged: () => void
+  /** false = perfil só tem `platform.leads.read`. Os campos continuam VISÍVEIS,
+   *  desabilitados: etapa, valor, responsável e base legal são a informação que
+   *  a auditoria vem conferir. Esconder os formulários esconderia o dado
+   *  junto. O que sai são os botões que gravam. */
+  podeEditar?: boolean
 }) {
   const [workspace, setWorkspace] = useState<CrmWorkspaceDto | null>(null)
   const [assignees, setAssignees] = useState<CrmAssigneeDto[]>([])
@@ -176,7 +181,10 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
   return <Modal onClose={onClose} maxWidth="2xl" title={`CRM · ${lead.nome}`} icon={Target} closeOnBackdrop={false}>
     {loading && !workspace ? <div className="flex justify-center p-12"><Loader2 className="h-6 w-6 animate-spin text-brand-400" /></div> :
       <div className="grid gap-5 p-4 lg:grid-cols-2">
-        <div className="space-y-4">
+        {/* `fieldset disabled` desabilita todo controle descendente de uma vez —
+            inclusive os que forem adicionados depois, que é o ponto. Marcar
+            campo a campo é o tipo de lista que fica desatualizada em silêncio. */}
+        <fieldset disabled={!podeEditar} className="space-y-4 min-w-0">
           <form onSubmit={saveGovernance} className="space-y-3 rounded-xl border border-surface-600 p-4">
             <div className="flex items-center justify-between gap-2"><div><h4 className="text-sm font-bold text-white">Origem, indicação e LGPD</h4><p className="text-[11px] text-gray-500">Atribuição comercial e registro da operação de tratamento</p></div><span className={clsx('rounded-full px-2 py-1 text-[10px] font-bold', currentLead.canContact ? 'bg-accent-green/10 text-accent-green' : 'bg-amber-500/10 text-amber-300')}>{currentLead.canContact ? 'Contato liberado' : 'Contato bloqueado'}</span></div>
             <div className="grid grid-cols-2 gap-3">
@@ -221,7 +229,7 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
             {activityType === 'Tarefa' && <label><span className="label">Vencimento</span><input required className="input w-full" type="datetime-local" value={activityDueAt} onChange={event => setActivityDueAt(event.target.value)} /></label>}
             <button disabled={saving} className="btn-secondary w-full justify-center">Registrar</button>
           </form>
-        </div>
+        </fieldset>
 
         <section className="min-w-0">
           <div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-brand-400" /><h4 className="text-sm font-bold text-white">Linha do tempo</h4></div><span className="text-xs text-gray-500">{workspace?.activities.length ?? 0} eventos</span></div>
@@ -233,7 +241,7 @@ export default function CrmWorkspaceModal({ lead, onClose, onChanged }: {
                 <div className="flex items-start justify-between gap-2"><div><span className="text-[10px] font-bold uppercase tracking-wide text-brand-300">{ACTIVITY_LABEL[activity.type]}</span><h5 className="text-sm font-semibold text-white">{activity.title}</h5></div><span className="shrink-0 text-[10px] text-gray-500">{localDateTime(activity.createdAt)}</span></div>
                 {activity.description && <p className="mt-1 text-xs leading-relaxed text-gray-400">{activity.description}</p>}
                 {activity.outcome && <p className="mt-2 rounded-lg bg-accent-green/5 p-2 text-xs text-accent-green">Resultado: {activity.outcome}</p>}
-                <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500"><span>{activity.createdByUserName}{activity.dueAt ? ` · vence ${localDateTime(activity.dueAt)}` : ''}</span>{activity.type === 'Tarefa' && (activity.completedAt ? <span className="flex items-center gap-1 text-accent-green"><Check className="h-3 w-3" /> Concluída</span> : <button onClick={() => completeActivity(activity)} className="text-brand-300 hover:underline">Concluir</button>)}</div>
+                <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500"><span>{activity.createdByUserName}{activity.dueAt ? ` · vence ${localDateTime(activity.dueAt)}` : ''}</span>{activity.type === 'Tarefa' && (activity.completedAt ? <span className="flex items-center gap-1 text-accent-green"><Check className="h-3 w-3" /> Concluída</span> : podeEditar ? <button onClick={() => completeActivity(activity)} className="text-brand-300 hover:underline">Concluir</button> : <span className="text-amber-300">Pendente</span>)}</div>
               </article>
             })}
           </div>

@@ -12,6 +12,7 @@ using CardGameStore.Multitenancy;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace CardGameStore.Controllers;
 
@@ -23,13 +24,25 @@ public class SiteConfigController : ControllerBase
     private readonly AppDbContext _db;
     private readonly ITenantContext _tenant;
     private readonly CatalogDbContext _catalog;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<SiteConfigController> _logger;
 
-    public SiteConfigController(AppDbContext db, ITenantContext tenant, CatalogDbContext catalog, ILogger<SiteConfigController> logger)
+    /// <summary>
+    /// Mesma janela do cache de resolução de tenant (TenantResolutionMiddleware):
+    /// curta o bastante para uma alteração aparecer sozinha em segundos, longa o
+    /// bastante para tirar do banco a leitura mais repetida do sistema.
+    /// </summary>
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromSeconds(30);
+
+    /// <summary>Por schema — a config é de UMA loja, e o processo atende todas.</summary>
+    private string CacheKey => $"site-config:{_tenant.SchemaName}";
+
+    public SiteConfigController(AppDbContext db, ITenantContext tenant, CatalogDbContext catalog, IMemoryCache cache, ILogger<SiteConfigController> logger)
     {
         _db      = db;
         _tenant  = tenant;
         _catalog = catalog;
+        _cache   = cache;
         _logger  = logger;
     }
 
@@ -42,17 +55,40 @@ public class SiteConfigController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Get()
     {
-        var cfg = await _db.SiteConfigs.FindAsync(SiteConfig.SingletonId) ?? new SiteConfig();
-        // Converte somente o placeholder histórico. Qualquer nome escolhido pelo
-        // tenant continua tendo prioridade absoluta sobre a marca padrão Octus.
-        cfg.SiteName = SiteConfig.ResolveSiteName(cfg.SiteName);
-        // Programa preservado apenas como histórico; novas operações foram
-        // desativadas por decisão fiscal/contábil em todos os tenants.
-        cfg.PontosFidelidadeAtivo = false;
-        // Inofensivo expor via endpoint público: só diz quais módulos pagos a loja
-        // habilitou, não vaza dado sensível nenhum (mesmo espírito de expor a cor/nome
-        // da loja aqui, que já é público).
-        cfg.EnabledModules = _tenant.EnabledModules;
+        // Esta é a leitura mais repetida do sistema: toda página do site e do
+        // painel carrega a cor, o nome e o logo da loja. Ia ao Postgres a cada
+        // uma, para buscar uma linha que muda quando o lojista edita a
+        // personalização — ou seja, quase nunca.
+        //
+        // `AsNoTracking` não é detalhe aqui: o objeto abaixo é ajustado em
+        // memória (SiteName, PontosFidelidadeAtivo, EnabledModules) e passa a
+        // viver no cache, compartilhado entre requisições. Rastreado, essas
+        // três atribuições virariam alterações pendentes na entidade real, e o
+        // primeiro SaveChanges que passasse pelo mesmo contexto as gravaria.
+        //
+        // O ajuste acontece ANTES de entrar no cache, e ninguém escreve nele
+        // depois — então a instância compartilhada é só de leitura na prática.
+        var cfg = await _cache.GetOrCreateAsync(CacheKey, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheTtl;
+
+            var stored = await _db.SiteConfigs.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == SiteConfig.SingletonId) ?? new SiteConfig();
+
+            // Converte somente o placeholder histórico. Qualquer nome escolhido pelo
+            // tenant continua tendo prioridade absoluta sobre a marca padrão Octus.
+            stored.SiteName = SiteConfig.ResolveSiteName(stored.SiteName);
+            // Programa preservado apenas como histórico; novas operações foram
+            // desativadas por decisão fiscal/contábil em todos os tenants.
+            stored.PontosFidelidadeAtivo = false;
+            // Inofensivo expor via endpoint público: só diz quais módulos pagos a loja
+            // habilitou, não vaza dado sensível nenhum (mesmo espírito de expor a cor/nome
+            // da loja aqui, que já é público). Cabe no cache porque a chave é por
+            // schema: o valor é o mesmo para toda requisição da mesma loja.
+            stored.EnabledModules = _tenant.EnabledModules;
+            return stored;
+        });
+
         return Ok(cfg);
     }
 
@@ -95,6 +131,11 @@ public class SiteConfigController : ControllerBase
 
         cfg.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        // Sem isto o lojista salvaria a cor nova e continuaria vendo a antiga
+        // por até 30 segundos, sem entender por quê. Descartar aqui é o que
+        // permite a janela de cache ser generosa: quem edita não espera nada.
+        _cache.Remove(CacheKey);
 
         await SyncCatalogDirectoryAsync(cfg);
 

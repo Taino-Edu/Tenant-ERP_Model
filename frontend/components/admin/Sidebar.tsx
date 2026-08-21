@@ -3,7 +3,7 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { clearAuth, getUserName, getRole, hasPermission } from '@/lib/auth'
+import { clearAuth, getUserName, getRole } from '@/lib/auth'
 import { authApi, notificationsApi, fiscalApi } from '@/lib/api'
 import {
   LogOut, User, Loader2, X, Menu, Store,
@@ -15,25 +15,17 @@ import MobileTabBar from '@/components/admin/MobileTabBar'
 import { SIDEBAR_SHORTCUT_KEYS } from '@/lib/adminKeyboardShortcuts'
 import { NAV_SECTIONS, isItemVisible, currentNavTitle, type NavItem } from '@/lib/adminNav'
 import { useScrollLock } from '@/hooks/useMediaQuery'
+import { useAdminPermissions } from '@/hooks/useAdminPermissions'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 // A lista de seções mora em lib/adminNav.ts — a MobileTabBar precisa das
 // mesmas regras de permissão/módulo e não pode importar de um componente.
 
 function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules, collapsed = false }: { pathname: string; onClose?: () => void; unreadCount: number; fiscalAlerta: boolean; enabledModules: string[]; collapsed?: boolean }) {
-  // getRole()/hasPermission() leem cookie — só existe no client. No SSR a role
-  // vem sempre vazia, o que filtra as seções adminOnly fora; no client ela já
-  // chega preenchida no primeiro paint, e o React acusava mismatch de
-  // hidratação (forçando remount da árvore inteira = flash em toda navegação).
-  // Mesmo cuidado que já existia pro `collapsed` logo abaixo, só que faltava
-  // aqui: força o primeiro render do client a bater com o do server.
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
-  const role = mounted ? getRole() : ''
-  const isAdmin = role === 'Admin'
-  // hasPermission() importado também lê cookie direto — mesmo problema do
-  // isAdmin acima, então passa pelo mesmo guard de `mounted`.
-  const checkPerm = (perm: string | null) => perm === null || (mounted && hasPermission(perm))
+  // O guard de hidratação (cookie não existe no SSR) mora no hook, junto com a
+  // escuta da renovação de sessão — ver hooks/useAdminPermissions.ts.
+  const { isAdmin, can } = useAdminPermissions()
+  const checkPerm = (perm: string | null) => perm === null || can(perm)
 
   return (
     <nav className="flex-1 flex flex-col gap-1 px-3 pb-6 overflow-y-auto">
@@ -112,15 +104,14 @@ export default function Sidebar() {
   const [unreadCount,  setUnreadCount]  = useState(0)
   const [fiscalAlerta, setFiscalAlerta] = useState(false)
   // Cookies de metadados só existem no navegador. O primeiro render precisa
-  // repetir o SSR; nome/role reais entram depois da hidratação.
-  const [mounted, setMounted] = useState(false)
+  // repetir o SSR; nome/role reais entram depois da hidratação — mesmo guard
+  // que o hook já aplica às permissões.
+  const { mounted } = useAdminPermissions()
   // Sempre começa expandida (igual no server e no primeiro render do client) —
   // ler localStorage direto no initializer causaria mismatch de hidratação
   // sempre que o valor salvo fosse "recolhida". O valor real só é aplicado
   // depois, via useEffect (client-only) — mesmo padrão de usePersistentPanel.
   const [collapsed,    setCollapsed]    = useState(false)
-
-  useEffect(() => { setMounted(true) }, [])
 
   useEffect(() => {
     try {

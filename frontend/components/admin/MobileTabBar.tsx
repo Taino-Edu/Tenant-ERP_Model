@@ -1,12 +1,11 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
 import { Menu } from 'lucide-react'
 import clsx from 'clsx'
-import { getRole, hasPermission } from '@/lib/auth'
 import { tabBarItems } from '@/lib/adminNav'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
+import { useAdminPermissions } from '@/hooks/useAdminPermissions'
 
 interface Props {
   /** Abre o drawer com o menu completo — o 5º slot da barra. */
@@ -33,16 +32,15 @@ export default function MobileTabBar({ onOpenMenu, hasAlert }: Props) {
   const pathname = usePathname()
   const { site } = useSiteConfig()
 
-  // Role e permissões vêm de cookie — inexistentes no SSR. Mesmo padrão de
-  // `mounted` que a Sidebar usa: o primeiro render do client precisa bater com
-  // o HTML do servidor, senão o React remonta a árvore e a barra pisca.
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
+  // Role e permissões vêm de cookie — inexistentes no SSR. O guard vive no
+  // hook, que é o mesmo usado pela Sidebar: as duas mostram a mesma navegação e
+  // não podem divergir na hidratação.
+  const { isAdmin, can } = useAdminPermissions()
 
   const items = tabBarItems({
-    isAdmin: mounted && getRole() === 'Admin',
+    isAdmin,
     enabledModules: site.enabledModules,
-    hasPerm: (p: string) => mounted && hasPermission(p),
+    hasPerm: can,
   })
 
   return (

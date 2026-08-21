@@ -39,6 +39,7 @@ public sealed class PlatformAccessMiddleware
             {
                 u.IsActive,
                 u.IsPlatformPrimaryOwner,
+                u.PlatformAccessProfile,
                 u.PlatformPermissionsJson,
                 u.SessionVersion,
             })
@@ -55,7 +56,8 @@ public sealed class PlatformAccessMiddleware
 
         if (!owner.IsPlatformPrimaryOwner)
         {
-            var granted = PlatformAccessProfiles.Deserialize(owner.PlatformPermissionsJson);
+            var granted = PlatformAccessProfiles.EffectivePermissions(
+                owner.IsPlatformPrimaryOwner, owner.PlatformAccessProfile, owner.PlatformPermissionsJson);
             var allowed = requirements.All(requirement =>
                 granted.Contains(PlatformPermission.All, StringComparer.OrdinalIgnoreCase) ||
                 granted.Contains(requirement.Permission, StringComparer.OrdinalIgnoreCase));

@@ -101,3 +101,19 @@ export function withCacheBust(url: string, updatedAt?: string): string {
   const v = encodeURIComponent(updatedAt)
   return url.includes('?') ? `${url}&v=${v}` : `${url}?v=${v}`
 }
+
+/** Imagem de compartilhamento (og:image) da loja resolvida pelo Host.
+ *
+ *  Centralizada porque metadados no App Router NÃO mesclam campo a campo: um
+ *  `openGraph` declarado numa página SUBSTITUI o do layout inteiro. Quando o
+ *  og:image morava só no layout raiz, bastava a página de catálogo declarar um
+ *  og:title próprio para o cartão de compartilhamento perder a imagem — e
+ *  ninguém percebe, porque a página continua funcionando; só o link colado no
+ *  WhatsApp fica sem foto.
+ *
+ *  Toda página que declarar `openGraph` precisa chamar isto. */
+export function resolveShareImage(icons: TenantSiteIcons | null): string {
+  return icons?.pwaIconUrl
+    ? withCacheBust(icons.pwaIconUrl, icons.updatedAt)
+    : '/institutional/octus-hero-waves.png'
+}

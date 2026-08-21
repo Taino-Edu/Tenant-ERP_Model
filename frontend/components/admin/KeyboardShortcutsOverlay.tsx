@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Keyboard, X } from 'lucide-react'
 import { useSiteConfig } from '@/contexts/SiteConfigContext'
-import { hasPermission } from '@/lib/auth'
+import { useAdminPermissions } from '@/hooks/useAdminPermissions'
 import {
   ADMIN_KEYBOARD_SHORTCUTS,
   isEditableShortcutTarget,
@@ -20,13 +20,18 @@ export default function KeyboardShortcutsOverlay() {
   const { site } = useSiteConfig()
   const [open, setOpen] = useState(false)
 
+  const { can } = useAdminPermissions()
+
+  // `can` entra nas dependências e não é decoração: sem ele o filtro rodaria
+  // uma vez só, com o cookie ainda não lido, e a lista de atalhos ficaria vazia
+  // de tudo que exige permissão — inclusive as teclas, que saem daqui.
   const shortcuts = useMemo(() => {
     return ADMIN_KEYBOARD_SHORTCUTS.filter(shortcut => {
       if (shortcut.module && !site.enabledModules?.includes(shortcut.module)) return false
-      if (shortcut.permission && !hasPermission(shortcut.permission)) return false
+      if (shortcut.permission && !can(shortcut.permission)) return false
       return true
     })
-  }, [site.enabledModules])
+  }, [site.enabledModules, can])
 
   const handleKey = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Escape') {

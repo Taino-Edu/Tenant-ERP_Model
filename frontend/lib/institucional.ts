@@ -22,19 +22,12 @@ export const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
  *  texto a pessoa viu no dia do aceite. */
 export const PRIVACY_NOTICE_VERSION = '2.2'
 
-export const CONTACTS = {
-  marketingWhatsapp: 'https://wa.me/5517997455482',
-  marketingPhone: '+55 17 99745-5482',
-  supportPhone: '+55 17 99756-3555',
-  devPhone: '+55 17 99745-5282',
-  email: '3esysten@gmail.com',
-  instagram: 'https://www.instagram.com/3e.systen/',
-  linkedin: 'https://www.linkedin.com/company/3e-systen/',
-} as const
+// Contatos e perfis sociais moraram aqui até 21/08/2026. Foram para
+// lib/contatos.ts porque o JSON-LD da landing (servidor) precisa deles, e este
+// arquivo é client-only por causa dos hooks abaixo. Reexportados para não
+// quebrar os imports que já apontavam para cá.
+export { CONTACTS, SOCIAL_PROFILES, telHref } from './contatos'
 
-/** `tel:` a partir do número exibido. O `+` precisa sobreviver ao corte dos
- *  separadores: sem ele o discador trata "5517..." como número local. */
-export const telHref = (display: string) => `tel:+${display.replace(/\D/g, '')}`
 
 export const NAV_LINKS = [
   { href: '/institucional#recursos', label: 'Recursos' },
