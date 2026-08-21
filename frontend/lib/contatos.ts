@@ -18,8 +18,11 @@ export const CONTACTS = {
   email: '3esysten@gmail.com',
   instagram: 'https://www.instagram.com/3e.systen/',
   linkedin: 'https://www.linkedin.com/company/3e-systen/',
+  // Sem os parâmetros de compartilhamento (`?_r=`, `?_t=`): eles são um token
+  // da sessão de quem copiou o link, não fazem parte do endereço do perfil, e
+  // entrariam no `sameAs` declarado ao Google como se fizessem.
+  tiktok: 'https://www.tiktok.com/@3esysten',
   /** Vazio = perfil ainda não existe/não informado. Ver SOCIAL_PROFILES. */
-  tiktok: '',
   youtube: '',
   facebook: '',
 } as const

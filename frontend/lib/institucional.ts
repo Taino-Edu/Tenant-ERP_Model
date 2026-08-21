@@ -30,10 +30,12 @@ export { CONTACTS, SOCIAL_PROFILES, telHref } from './contatos'
 
 
 export const NAV_LINKS = [
+  { href: '/institucional#plataforma', label: 'Plataforma' },
   { href: '/institucional#recursos', label: 'Recursos' },
-  { href: '/institucional#planos', label: 'Planos' },
-  { href: '/institucional#fundadores', label: 'Clientes Fundadores' },
   { href: '/institucional#contador', label: 'Portal do Contador' },
+  { href: '/institucional#planos', label: 'Planos' },
+  { href: '/institucional#clientes', label: 'Clientes' },
+  { href: '/institucional#fundadores', label: 'Fundadores' },
   { href: '/parceiros', label: 'Afiliados' },
 ]
 
@@ -42,9 +44,9 @@ export type InstitucionalTheme = ReturnType<typeof themeFor>
 export function themeFor(isDark: boolean) {
   return isDark
     ? {
-        page: 'bg-[#08192d] text-white', surface: 'bg-[#0d223b]', soft: 'bg-[#102a48]',
+        page: 'bg-[#020914] text-white', surface: 'bg-[#061426]', soft: 'bg-[#091b31]',
         border: 'border-white/10', heading: 'text-white', body: 'text-slate-300', muted: 'text-slate-400',
-        card: 'bg-[#0d223b] border-white/10 hover:border-octus-400/50', header: 'bg-[#08192d]/90 border-white/10',
+        card: 'bg-[#061426] border-white/10 hover:border-octus-400/50', header: 'bg-[#020914]/92 border-white/10',
         outline: 'border-white/20 text-white hover:bg-white/5',
         input: 'bg-white/5 border-white/15 text-white placeholder:text-slate-500',
       }
