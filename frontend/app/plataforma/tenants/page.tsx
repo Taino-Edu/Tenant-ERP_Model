@@ -15,7 +15,7 @@ import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import toast from 'react-hot-toast'
 import { Building2, Plus, Power, PowerOff, Check, LogIn, ChevronRight, Download, Trash2, AlertTriangle, Search, CheckCircle2, PauseCircle, AlertCircle } from 'lucide-react'
 import clsx from 'clsx'
-import { PLANOS, PLANO_PERSONALIZADO, acharPlano, taxaImplantacao, formatarReais } from '@/lib/planos'
+import { PLANOS, PLANO_PERSONALIZADO, acharPlano, taxaImplantacao } from '@/lib/planos'
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -183,6 +183,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
   const [showDelete, setShowDelete] = useState(false)
   const [showModules, setShowModules] = useState(false)
   const [mensalidade, setMensalidade] = useState(String(tenant.monthlyPrice ?? 0))
+  const [implantacao, setImplantacao] = useState(String(tenant.setupFee ?? 0))
 
   /** Trocar de plano aplica o preço de tabela junto — era exatamente isso que
    *  faltava: o nome mudava e o valor ficava para trás. Personalizado preserva
@@ -205,15 +206,28 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
     if (valor === tenant.monthlyPrice) return
     // Mexer no valor à mão descola da tabela — o plano vira Personalizado pra
     // não ficar escrito "Rio" numa loja que paga outro preço.
+    //
+    // A implantação NÃO é recalculada aqui, de propósito. Ela é moeda de
+    // negociação e tem campo próprio: recalcular como o dobro da mensalidade
+    // apagaria, sem aviso, um desconto que alguém acabou de fechar com o
+    // cliente. Trocar de PLANO ainda aplica o valor de tabela, porque ali a
+    // escolha é do pacote inteiro.
     saveBilling({
       planName:     acharPlano(planName) && valor !== acharPlano(planName)!.preco ? PLANO_PERSONALIZADO : planName,
       monthlyPrice: valor,
-      setupFee:     taxaImplantacao(valor),
     })
+  }
+
+  function salvarImplantacao() {
+    const valor = Number(implantacao)
+    if (!Number.isFinite(valor) || valor < 0) { setImplantacao(String(tenant.setupFee)); return }
+    if (valor === tenant.setupFee) return
+    saveBilling({ setupFee: valor })
   }
 
   useEffect(() => { setPlanName(tenant.planName) }, [tenant.planName])
   useEffect(() => { setMensalidade(String(tenant.monthlyPrice ?? 0)) }, [tenant.monthlyPrice])
+  useEffect(() => { setImplantacao(String(tenant.setupFee ?? 0)) }, [tenant.setupFee])
 
   // Plano que não está na tabela (cortesia, piloto, legado como "Mar"/"Lagoa")
   // aparece como Personalizado em vez de sumir do select.
@@ -346,9 +360,24 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
           title={tituloBilling ?? 'Mensalidade cobrada desta loja'}
         />
       </div>
-      <p className="text-[10px] text-gray-500 mt-0.5">
-        implantação {formatarReais(tenant.setupFee)}
-      </p>
+      {/* Editável, e não mais um rótulo: a implantação é moeda de troca no
+          fechamento — precisa dar pra baixar, subir e zerar por loja. Zero é
+          um valor legítimo aqui: o backend só gera a cobrança de implantação
+          quando o valor é maior que zero (PlatformController, geração de
+          mensalidades), então zerar equivale a "sem taxa". */}
+      <div className="flex items-center gap-1 mt-0.5">
+        <span className="text-[10px] text-gray-500 shrink-0">implantação R$</span>
+        <input
+          className={clsx('input text-xs py-0.5 tabular-nums', card ? 'w-full' : 'w-20')}
+          type="number" min="0" step="0.01"
+          value={implantacao}
+          onChange={e => setImplantacao(e.target.value)}
+          onBlur={salvarImplantacao}
+          disabled={savingBilling || billingTravado}
+          aria-label="Taxa de implantação desta loja"
+          title={tituloBilling ?? 'Taxa de implantação — cobrada uma vez. Zero = sem cobrança.'}
+        />
+      </div>
     </>
   )
 
