@@ -1,11 +1,17 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalActions } from '@/components/LegalActions'
+import { PLATFORM_URL } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Política de Privacidade',
   description: 'Como a plataforma multiempresa Octus trata e protege dados pessoais conforme a LGPD.',
-  alternates: { canonical: '/privacidade' },
+  // Canônico ABSOLUTO, não `/privacidade`: este texto é o mesmo em todo host
+  // onde o app responde (plataforma, subdomínio de cada loja e domínio próprio
+  // de quem tem). Relativo, ele resolvia contra o host da requisição e cada
+  // loja publicava a sua cópia — conteúdo duplicado com uma URL por cliente,
+  // e o Google escolhendo sozinho qual sobrevive.
+  alternates: { canonical: `${PLATFORM_URL}/privacidade` },
 }
 
 export default function PrivacidadePage() {

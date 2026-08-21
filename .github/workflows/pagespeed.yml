@@ -1,0 +1,137 @@
+# =============================================================================
+# PageSpeed Insights — mede o site em produção, no laboratório do Google.
+#
+# Por que não roda em todo push: a PSI mede a URL PÚBLICA, não o código do PR.
+# Rodar no PR daria a nota do site que já está no ar — número verdadeiro,
+# resposta errada para a pergunta "esse PR piorou alguma coisa?". Então roda
+# depois do deploy na main (quando a mudança já é o que está no ar) e uma vez
+# por dia, que é onde a série temporal aparece.
+#
+# EXIGE o secret PAGESPEED_API_KEY. A documentação da PSI diz que a chave é
+# opcional, e isso não vale mais: chamada anônima em 21/08/2026 respondeu
+# HTTP 429 com `quota_limit_value: "0"` — a cota sem chave é zero, não é o
+# runner do GitHub sendo penalizado por IP compartilhado. A chave é gratuita
+# (https://developers.google.com/speed/docs/insights/v5/get-started) e o passo
+# a passo está em docs/GOOGLE-SEARCH-CONSOLE.md.
+#
+# Sem o secret o job registra um aviso e sai verde, no mesmo desenho do job de
+# deploy no ci.yml: workflow que nasce vermelho por configuração ausente é
+# workflow que todo mundo aprende a ignorar.
+#
+# O job NÃO quebra o CI por nota baixa. Performance de campo oscila com a rede
+# do datacenter que mediu, e um gate vermelho intermitente é ignorado em duas
+# semanas. O que ele faz é publicar o número no resumo da execução — e falhar
+# só quando a página não responde, que é problema de verdade.
+# =============================================================================
+name: PageSpeed Insights
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 06:00 UTC = 03:00 em Brasília, fora do horário comercial das lojas.
+    - cron: '0 6 * * *'
+  workflow_run:
+    workflows: ['CI/CD']
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  medir:
+    name: Mede as páginas públicas
+    runs-on: ubuntu-latest
+    # No gatilho workflow_run, só mede se o deploy passou — medir depois de um
+    # CI vermelho é medir a versão anterior e atribuir a nota à nova.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Consulta a API e monta o resumo
+        env:
+          PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
+        shell: bash
+        run: |
+          # `set +e` de propósito: o shell padrão do Actions é `bash -e`, e aqui
+          # cada falha tem tratamento próprio — medição perdida vira aviso, não
+          # aborto. Sem isto, a linha que anexa a chave à URL derrubaria o job
+          # justamente quando o secret NÃO existe (um teste falso encerra a
+          # lista `&&` com status 1, e o `-e` lê isso como erro).
+          set +e
+          set -uo pipefail
+
+          if [ -z "${PAGESPEED_API_KEY:-}" ]; then
+            echo "::notice::Secret PAGESPEED_API_KEY ausente — medição pulada. Veja docs/GOOGLE-SEARCH-CONSOLE.md."
+            echo "## PageSpeed Insights" >> "$GITHUB_STEP_SUMMARY"
+            echo "Não medido: falta o secret \`PAGESPEED_API_KEY\`." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          URLS="https://3esysten.com.br/ https://3esysten.com.br/parceiros"
+          MEDIDAS_OK=0
+          MEDIDAS_FALHAS=0
+
+          {
+            echo "## PageSpeed Insights"
+            echo
+            echo "| Página | Estratégia | Performance | SEO | Acessibilidade | LCP | CLS |"
+            echo "|---|---|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for url in $URLS; do
+            for estrategia in mobile desktop; do
+              api="https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
+              api="$api?url=$url&strategy=$estrategia"
+              api="$api&category=performance&category=seo&category=accessibility"
+              # Chave por cabeçalho, não em `&key=` na URL: a URL aparece
+              # inteira em `ps`, em redirect e em mensagem de erro da própria
+              # API. O Actions mascara secrets no log, mas mascarar é o segundo
+              # nível de defesa — o primeiro é não colocar lá.
+              #
+              # A PSI leva 20–40s por página; 120s de teto e 2 tentativas cobrem
+              # a lentidão normal sem mascarar página fora do ar.
+              resposta="$(curl -sS --max-time 120 --retry 2 --retry-delay 15 \
+                -H "X-goog-api-key: $PAGESPEED_API_KEY" "$api")" || resposta=''
+
+              erro="$(printf '%s' "$resposta" | jq -r '.error.message // empty')"
+              if [ -z "$resposta" ] || [ -n "$erro" ]; then
+                echo "::warning::PSI não respondeu para $url ($estrategia): ${erro:-sem resposta}"
+                echo "| $url | $estrategia | ❌ ${erro:-sem resposta} | | | | |" >> "$GITHUB_STEP_SUMMARY"
+                MEDIDAS_FALHAS=$((MEDIDAS_FALHAS + 1))
+                continue
+              fi
+
+              # `* 100 | round` porque a API devolve 0–1; jq trunca sem o round.
+              linha="$(printf '%s' "$resposta" | jq -r '
+                .lighthouseResult as $lr
+                | [ (.id),
+                    ($lr.categories.performance.score   // 0 | . * 100 | round),
+                    ($lr.categories.seo.score           // 0 | . * 100 | round),
+                    ($lr.categories.accessibility.score // 0 | . * 100 | round),
+                    ($lr.audits."largest-contentful-paint".displayValue // "—"),
+                    ($lr.audits."cumulative-layout-shift".displayValue  // "—") ]
+                | @tsv')"
+
+              IFS=$'\t' read -r id perf seo a11y lcp cls <<< "$linha"
+              echo "| $id | $estrategia | $perf | $seo | $a11y | $lcp | $cls |" >> "$GITHUB_STEP_SUMMARY"
+              echo "$id ($estrategia): performance=$perf seo=$seo a11y=$a11y lcp=$lcp cls=$cls"
+              MEDIDAS_OK=$((MEDIDAS_OK + 1))
+            done
+          done
+
+          {
+            echo
+            echo "Nota baixa aqui não quebra o build de propósito — a medição varia com a"
+            echo "rede do datacenter. O que interessa é a tendência entre execuções."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Falha só quando NENHUMA medição saiu: aí não é performance, é a
+          # página (ou a API) fora do ar, e isso merece um e-mail. Uma medição
+          # perdida entre quatro é a cota da PSI reclamando, não o site.
+          if [ "$MEDIDAS_OK" = 0 ]; then
+            echo "::error::Nenhuma medição saiu ($MEDIDAS_FALHAS tentativas). Site fora do ar ou API bloqueando o runner."
+            exit 1
+          fi
+          if [ "$MEDIDAS_FALHAS" != 0 ]; then
+            echo "::warning::$MEDIDAS_FALHAS de $((MEDIDAS_OK + MEDIDAS_FALHAS)) medições não saíram."
+          fi

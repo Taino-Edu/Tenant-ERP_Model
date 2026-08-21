@@ -92,9 +92,10 @@ public class Tenant
     public string? CustomDomain { get; set; }
 
     // ── Billing da plataforma ────────────────────────────────────────────────
-    // Tabela vigente: Lagoa R$129, Rio R$269 e Mar R$487. Lagoa/Rio têm
-    // implantação de 2 mensalidades; Mar tem implantação gratuita; todos têm
-    // 15 dias sem mensalidade.
+    // Tabela vigente: Lagoa R$129, Rio R$269 e Mar R$487. Todos têm implantação
+    // de 2 mensalidades e 15 dias sem mensalidade. A implantação é moeda de
+    // negociação: o painel da plataforma edita o valor por loja, inclusive
+    // zerando — a tabela é ponto de partida.
     //
     // O valor fica NO TENANT, não numa tabela de planos, de propósito: PlanName
     // já é texto livre e desconto negociado caso a caso é regra, não exceção

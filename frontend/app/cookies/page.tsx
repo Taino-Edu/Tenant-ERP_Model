@@ -1,11 +1,14 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import CookieSettingsButton from '@/components/CookieSettingsButton'
+import { PLATFORM_URL } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Política de Cookies',
   description: 'Entenda quais tecnologias de armazenamento a plataforma Octus utiliza e gerencie suas preferências.',
-  alternates: { canonical: '/cookies' },
+  // Absoluto pelo mesmo motivo de /privacidade: texto único da 3E Systen
+  // servido em todo host de loja.
+  alternates: { canonical: `${PLATFORM_URL}/cookies` },
 }
 
 const categories = [

@@ -132,6 +132,13 @@ export default function ProdutosPage() {
 
       <div className="max-w-6xl mx-auto px-5 pt-20 pb-16">
 
+        {/* A página de descoberta não tinha heading principal — só um <h2> por
+            categoria. Para o buscador, uma página sem <h1> não declara sobre o
+            que ela é; para leitor de tela, a navegação por títulos começa no
+            meio da hierarquia. É o único <h1> da tela, e vem antes da busca
+            porque é ele que nomeia o que está sendo buscado. */}
+        <h1 className="text-2xl font-black mb-5" style={{ color: C.navy }}>Produtos</h1>
+
         {/* Busca */}
         <div className="relative mb-6">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: C.muted }} />

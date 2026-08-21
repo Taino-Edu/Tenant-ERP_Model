@@ -51,9 +51,15 @@ public class TenantProvisioningService : ITenantProvisioningService
     internal static void ApplyCommercialTerms(Tenant tenant)
     {
         tenant.MonthlyPrice = PrecoMensalDoPlano(tenant.PlanName);
-        tenant.SetupFee = tenant.PlanName.Equals("Mar", StringComparison.OrdinalIgnoreCase)
-            ? 0m
-            : tenant.MonthlyPrice * 2;
+        // Duas mensalidades para todo plano de tabela. O Mar tinha exceção
+        // (implantação gratuita) até 20/08/2026; a exceção morava só aqui,
+        // então quando o site passou a anunciar a taxa em todos os planos, toda
+        // loja Mar continuava nascendo com SetupFee 0 — cobrança que o
+        // comercial fechou e o sistema não gerava.
+        //
+        // Plano fora da tabela cai em MonthlyPrice 0, e 0 × 2 = 0: implantação
+        // zerada é o resultado certo pra cortesia/piloto.
+        tenant.SetupFee = tenant.MonthlyPrice * 2;
         tenant.BillingStartsOn = tenant.CreatedAt.AddDays(15);
     }
 
@@ -149,7 +155,7 @@ public class TenantProvisioningService : ITenantProvisioningService
             tenant.MaxUsers = maxUsers.Value;
 
         // Billing: preenche a partir da tabela vigente e das regras comerciais
-        // (Lagoa/Rio: implantação = 2 mensalidades; Mar: gratuita; 15 dias grátis).
+        // (implantação = 2 mensalidades em todos os planos; 15 dias grátis).
         // Fica editável depois no painel — a tabela é o ponto de partida, não uma
         // amarra: cliente que fechar por valor negociado tem o campo ajustado.
         //

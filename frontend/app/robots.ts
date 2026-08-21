@@ -1,8 +1,13 @@
 import type { MetadataRoute } from 'next'
-
-const SITE_URL = 'https://3esysten.com.br'
+import { headers } from 'next/headers'
+import { canonicalBaseForHost } from '@/lib/seo'
 
 export default function robots(): MetadataRoute.Robots {
+  // Resolvido por host: cada loja tem o SEU sitemap. Fixo no domínio da
+  // plataforma, o `robots.txt` de toda vitrine mandava o buscador para um
+  // sitemap que não fala das páginas daquela loja.
+  const siteUrl = canonicalBaseForHost(headers().get('host'))
+
   return {
     rules: {
       userAgent: '*',
@@ -11,7 +16,7 @@ export default function robots(): MetadataRoute.Robots {
       // do convite nominal sai do índice — ela só faz sentido com um token válido.
       disallow: ['/admin/', '/plataforma/', '/contador/', '/cliente/', '/login', '/api/', '/parceiros/convite'],
     },
-    sitemap: `${SITE_URL}/sitemap.xml`,
-    host: SITE_URL,
+    sitemap: `${siteUrl}/sitemap.xml`,
+    host: siteUrl,
   }
 }

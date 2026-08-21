@@ -10,7 +10,11 @@ public class CommercialTermsTests
     [Theory]
     [InlineData("Lagoa", 129, 258)]
     [InlineData("Rio", 269, 538)]
-    [InlineData("Mar", 487, 0)]
+    [InlineData("Mar", 487, 974)]
+    // Nome fora da tabela (cortesia, piloto, typo): mensalidade zero, e por
+    // consequência implantação zero. Chutar valor infla o MRR com número que
+    // parece certo.
+    [InlineData("Piloto interno", 0, 0)]
     public void ApplyCommercialTerms_UsesCatalogAndFifteenDayTrial(
         string planName, decimal monthlyPrice, decimal setupFee)
     {
