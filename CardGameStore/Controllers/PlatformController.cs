@@ -864,7 +864,7 @@ public class PlatformController : ControllerBase
     /// Somente o dono da plataforma.</summary>
     /// <param name="status">Filtro opcional por status ("Novo", "Contatado", "Convertido", "Perdido").</param>
     [HttpGet("leads")]
-    [RequirePlatformPermission(PlatformPermission.Leads)]
+    [RequirePlatformPermission(PlatformPermission.LeadsRead)]
     public async Task<IActionResult> ListLeads([FromQuery] string? status = null)
     {
         var query = _catalog.Leads.Include(l => l.Opportunity).AsQueryable();
@@ -1139,7 +1139,7 @@ public class PlatformController : ControllerBase
     /// <param name="status">Filtro opcional por status.</param>
     /// <param name="tenantId">Filtro opcional por tenant.</param>
     [HttpGet("support-tickets")]
-    [RequirePlatformPermission(PlatformPermission.Support)]
+    [RequirePlatformPermission(PlatformPermission.SupportRead)]
     public async Task<IActionResult> ListSupportTickets([FromQuery] string? status = null, [FromQuery] Guid? tenantId = null)
     {
         var query = _catalog.SupportTickets.Include(t => t.Messages).AsQueryable();
@@ -1163,7 +1163,7 @@ public class PlatformController : ControllerBase
     /// <summary>Detalha um chamado de qualquer loja, com todas as mensagens.</summary>
     /// <param name="id">Id do chamado.</param>
     [HttpGet("support-tickets/{id:guid}")]
-    [RequirePlatformPermission(PlatformPermission.Support)]
+    [RequirePlatformPermission(PlatformPermission.SupportRead)]
     public async Task<IActionResult> GetSupportTicket(Guid id)
     {
         var ticket = await _catalog.SupportTickets.Include(t => t.Messages).FirstOrDefaultAsync(t => t.Id == id);

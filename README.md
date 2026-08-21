@@ -48,6 +48,9 @@
 
 ### 🔑 Perfis e Permissões
 - **Equipe da plataforma (`/plataforma/equipe`):** o proprietário principal convida sócios, comercial, financeiro, suporte e auditoria. Cada perfil abre um recorte do painel; o sócio administrador enxerga tudo.
+  - Cada área tem o par `platform.x.read` (abre a tela) e `platform.x` (grava). Quem grava precisa dos **dois** na lista do perfil — as permissões não se implicam, e há teste travando isso.
+  - **Auditoria** é o perfil que enxerga o painel inteiro sem escrever em lugar nenhum: só permissões `.read`. Ela **não** tem impersonação de propósito — essa permissão não mostra informação da plataforma, ela assume a identidade de alguém dentro da loja do cliente, e daria ao auditor poder de agir como o auditado.
+  - Vale saber, para o mapeamento de LGPD: `platform.tenants.read` inclui a lista de clientes de cada loja, com nome, e-mail e WhatsApp. "Somente leitura" limita o estrago, não a exposição.
 - **Perfis de operador (`/admin/perfis`):** o lojista monta conjuntos de permissões nomeados ("Caixa", "Estoquista") e atribui a cada funcionário.
 - **Revogação imediata:** tirar uma permissão vale já na requisição seguinte — nenhum dos dois middlewares confia no que está escrito no JWT, ambos releem o banco.
 

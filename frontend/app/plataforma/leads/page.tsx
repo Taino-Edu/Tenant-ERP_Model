@@ -5,6 +5,8 @@ import PageHeader from '@/components/admin/PageHeader'
 import CreateTenantModal from '@/components/plataforma/CreateTenantModal'
 import CrmWorkspaceModal from '@/components/plataforma/CrmWorkspaceModal'
 import StatusPillSelect from '@/components/admin/StatusPillSelect'
+import SomenteLeitura from '@/components/plataforma/SomenteLeitura'
+import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import toast from 'react-hot-toast'
 import clsx from 'clsx'
 import { UserPlus, Loader2, MessageCircle, MapPin, Search, Sparkles, Target, UserCheck, Users, Workflow, Columns3, List, CalendarCheck, Check, Clock3, AlertTriangle, ChartNoAxesCombined, ShieldCheck } from 'lucide-react'
@@ -80,7 +82,7 @@ function mapLink(placeId: string): string {
  * Os dois layouts saem do MESMO componente, com os blocos montados uma vez só
  * acima do `return`: só a moldura muda. Assim os handlers (updateStatus,
  * saveNotas, enrichLead…) não têm como divergir entre celular e desktop. */
-function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row' }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void; onOpenCrm: (lead: LeadDto) => void; layout?: 'row' | 'card' }) {
+function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row', podeEditar = true }: { lead: LeadDto; onChanged: () => void; onConvert: (lead: LeadDto) => void; onOpenCrm: (lead: LeadDto) => void; layout?: 'row' | 'card'; podeEditar?: boolean }) {
   const [notas, setNotas] = useState(lead.notas ?? '')
   const [placeId, setPlaceId] = useState(lead.placeId ?? '')
   const [saving, setSaving] = useState(false)
@@ -208,7 +210,7 @@ function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row' }: { le
 
   const status = (
     <>
-      <StatusPillSelect value={lead.status} options={STATUS_OPTIONS} styles={STATUS_STYLES} disabled={saving} onChange={updateStatus} />
+      <StatusPillSelect value={lead.status} options={STATUS_OPTIONS} styles={STATUS_STYLES} disabled={saving || !podeEditar} onChange={updateStatus} />
       {lead.opportunity && <div className="mt-2 max-w-36 text-[11px] text-gray-500"><p className="font-semibold text-brand-300">{lead.opportunity.stage}</p><p className="truncate">{lead.opportunity.assignedUserName || 'Sem responsável'} · {lead.opportunity.probability}%</p></div>}
     </>
   )
@@ -218,7 +220,7 @@ function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row' }: { le
       <select
         className="input text-xs py-1"
         value={lead.digitalPresence ?? ''}
-        disabled={saving}
+        disabled={saving || !podeEditar}
         aria-label="Presença digital"
         onChange={e => updateDigitalPresence(e.target.value as LeadDigitalPresence | '')}
       >
@@ -235,7 +237,7 @@ function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row' }: { le
           placeholder="Score"
           aria-label="Score de oportunidade"
           defaultValue={lead.opportunityScore ?? ''}
-          disabled={saving}
+          disabled={saving || !podeEditar}
           onBlur={e => updateScore(e.target.value)}
         />
       </div>
@@ -245,7 +247,7 @@ function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row' }: { le
           placeholder="Place ID"
           aria-label="Place ID"
           value={placeId}
-          disabled={saving}
+          disabled={saving || !podeEditar}
           onChange={e => setPlaceId(e.target.value)}
           onBlur={savePlaceId}
         />
@@ -278,21 +280,25 @@ function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row' }: { le
         value={notas}
         onChange={e => setNotas(e.target.value)}
         onBlur={saveNotas}
-        disabled={saving}
+        disabled={saving || !podeEditar}
       />
     </>
   )
 
   const acoes = (
     <>
+      {/* "Abrir CRM" continua valendo em consulta: o modal mostra oportunidade,
+          base legal e linha do tempo — informação, não ação. Ele recebe a mesma
+          flag e desabilita os próprios campos. */}
       <button onClick={() => onOpenCrm(lead)} disabled={saving || enriching} className={clsx('btn-primary text-xs py-1 px-2.5', card && 'flex-1 justify-center')}>
         <Workflow className="h-3.5 w-3.5" /> Abrir CRM
       </button>
-      <button onClick={enrichLead} disabled={saving || enriching} className={clsx('btn-secondary text-xs py-1 px-2.5', card && 'flex-1 justify-center')}>
+      {/* Enriquecer gasta cota de serviço externo; converter cria tenant. */}
+      {podeEditar && <button onClick={enrichLead} disabled={saving || enriching} className={clsx('btn-secondary text-xs py-1 px-2.5', card && 'flex-1 justify-center')}>
         {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
         Enriquecer
-      </button>
-      {lead.status !== 'Convertido' && (
+      </button>}
+      {podeEditar && lead.status !== 'Convertido' && (
         <button onClick={() => onConvert(lead)} disabled={saving || enriching} className={clsx('btn-secondary text-xs py-1 px-2.5', card && 'w-full justify-center')}>
           Converter em tenant
         </button>
@@ -332,6 +338,9 @@ function LeadRow({ lead, onChanged, onConvert, onOpenCrm, layout = 'row' }: { le
 }
 
 export default function PlataformaLeadsPage() {
+  // `platform.leads.read` abre a tela (Auditoria); `platform.leads` é que grava.
+  const can = usePlatformPermissions()
+  const podeEditar = can('platform.leads')
   const [leads, setLeads] = useState<LeadDto[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<LeadStatus | ''>('')
@@ -449,6 +458,8 @@ export default function PlataformaLeadsPage() {
         description="Captação, qualificação, contato e conversão de futuros clientes"
       />
 
+      {!podeEditar && <SomenteLeitura>Você acompanha o funil, a base legal de cada lead e a linha do tempo. Editar, enriquecer, converter e as ações de LGPD ficam com o comercial.</SomenteLeitura>}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Leads captados', value: leads.length, icon: Users, color: 'text-brand-300' },
@@ -526,14 +537,14 @@ export default function PlataformaLeadsPage() {
                 </thead>
                 <tbody>
                   {filteredLeads.map(l => (
-                    <LeadRow key={l.id} lead={l} onChanged={refreshAll} onConvert={setConvertingLead} onOpenCrm={setCrmLead} />
+                    <LeadRow key={l.id} lead={l} onChanged={refreshAll} onConvert={setConvertingLead} onOpenCrm={setCrmLead} podeEditar={podeEditar} />
                   ))}
                 </tbody>
               </table>
             </div>
             <ul className="space-y-2 sm:hidden">
               {filteredLeads.map(l => (
-                <LeadRow key={l.id} layout="card" lead={l} onChanged={refreshAll} onConvert={setConvertingLead} onOpenCrm={setCrmLead} />
+                <LeadRow key={l.id} layout="card" lead={l} onChanged={refreshAll} onConvert={setConvertingLead} onOpenCrm={setCrmLead} podeEditar={podeEditar} />
               ))}
             </ul>
           </>
@@ -562,7 +573,7 @@ export default function PlataformaLeadsPage() {
         {filteredTasks.length === 0 ? <div className="card py-16 text-center text-sm text-gray-400">Nenhuma tarefa neste filtro.</div> : <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">{filteredTasks.map(task => {
           const overdue = task.dueAt && new Date(task.dueAt) < todayStart
           const lead = leads.find(item => item.id === task.leadId)
-          return <article key={task.id} className={clsx('card border p-4', overdue ? 'border-red-500/40' : 'border-surface-600')}><div className="flex items-start justify-between gap-3"><div><span className={clsx('text-[10px] font-bold uppercase', overdue ? 'text-red-400' : 'text-brand-300')}>{overdue ? 'Atrasada' : 'Tarefa'}</span><h3 className="text-sm font-semibold text-white">{task.title}</h3><button onClick={() => lead && setCrmLead(lead)} className="text-xs text-brand-400 hover:underline">{task.leadName}</button></div><button onClick={() => completeTask(task)} className="btn-secondary p-2" title="Concluir"><Check className="h-3.5 w-3.5" /></button></div>{task.description && <p className="mt-2 text-xs text-gray-400">{task.description}</p>}<div className="mt-3 flex items-center justify-between text-[11px] text-gray-500"><span>{task.assignedUserName || 'Sem responsável'}</span><span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{task.dueAt ? fmtDateTime(task.dueAt) : 'Sem prazo'}</span></div></article>
+          return <article key={task.id} className={clsx('card border p-4', overdue ? 'border-red-500/40' : 'border-surface-600')}><div className="flex items-start justify-between gap-3"><div><span className={clsx('text-[10px] font-bold uppercase', overdue ? 'text-red-400' : 'text-brand-300')}>{overdue ? 'Atrasada' : 'Tarefa'}</span><h3 className="text-sm font-semibold text-white">{task.title}</h3><button onClick={() => lead && setCrmLead(lead)} className="text-xs text-brand-400 hover:underline">{task.leadName}</button></div>{podeEditar && <button onClick={() => completeTask(task)} className="btn-secondary p-2" title="Concluir"><Check className="h-3.5 w-3.5" /></button>}</div>{task.description && <p className="mt-2 text-xs text-gray-400">{task.description}</p>}<div className="mt-3 flex items-center justify-between text-[11px] text-gray-500"><span>{task.assignedUserName || 'Sem responsável'}</span><span className="flex items-center gap-1"><Clock3 className="h-3 w-3" />{task.dueAt ? fmtDateTime(task.dueAt) : 'Sem prazo'}</span></div></article>
         })}</div>}
       </section> : <section className="space-y-4">
         {!analytics ? <div className="card flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-brand-400" /></div> : <>
@@ -575,7 +586,7 @@ export default function PlataformaLeadsPage() {
           <div className="grid gap-4 xl:grid-cols-2"><AnalyticsTable title="Funil e aging" rows={analytics.byStage} showAge /><AnalyticsTable title="Origem dos leads" rows={analytics.bySource} /></div>
           <div className="grid gap-4 xl:grid-cols-2"><AnalyticsTable title="Carteira por responsável" rows={analytics.byOwner} /><AnalyticsTable title="Motivos de perda" rows={analytics.lostReasons} hideValue /></div>
           <div className="card p-4"><h3 className="font-bold text-white">Movimento nos últimos 6 meses</h3><div className="mt-4 grid grid-cols-6 gap-2">{analytics.monthlyTrend.map(item => { const max = Math.max(1, ...analytics.monthlyTrend.map(point => point.created)); return <div key={item.month} className="text-center"><div className="flex h-32 items-end justify-center gap-1"><div className="w-4 rounded-t bg-brand-500" style={{ height: `${Math.max(4, item.created / max * 100)}%` }} title={`${item.created} captados`} /><div className="w-4 rounded-t bg-accent-green" style={{ height: `${Math.max(4, item.converted / max * 100)}%` }} title={`${item.converted} convertidos`} /></div><p className="mt-2 text-[10px] text-gray-500">{item.month.slice(5)}/{item.month.slice(2, 4)}</p><p className="text-[10px] text-gray-600">{item.created}/{item.converted}</p></div>})}</div><p className="mt-3 text-[11px] text-gray-500"><span className="text-brand-400">■ captados</span> · <span className="text-accent-green">■ convertidos</span></p></div>
-          <div className="card p-4"><div className="flex items-center justify-between"><div><h3 className="flex items-center gap-2 font-bold text-white"><ShieldCheck className="h-4 w-4 text-brand-400" />Revisão de retenção</h3><p className="text-xs text-gray-500">{analytics.retentionReviewsDue} vencidas · {analytics.contactBlocked} contatos bloqueados</p></div></div><div className="mt-3 space-y-2">{retentionDueIds.length === 0 ? <p className="rounded-lg border border-dashed border-surface-600 p-6 text-center text-sm text-gray-500">Nenhuma revisão pendente.</p> : retentionDueIds.map(id => { const lead = leads.find(item => item.id === id); return lead ? <div key={id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-700 p-3"><div><p className="text-sm font-semibold text-white">{lead.nome}</p><p className="text-xs text-gray-500">Revisão vencida em {lead.retentionReviewAt ? new Date(lead.retentionReviewAt).toLocaleDateString('pt-BR') : '-'}</p></div><div className="flex gap-2"><button onClick={() => reviewRetention(lead, 'Extend')} className="btn-secondary text-xs">Prorrogar 180 dias</button><button onClick={() => reviewRetention(lead, 'Anonymize')} className="text-xs font-bold text-red-300">Anonimizar</button></div></div> : null })}</div></div>
+          <div className="card p-4"><div className="flex items-center justify-between"><div><h3 className="flex items-center gap-2 font-bold text-white"><ShieldCheck className="h-4 w-4 text-brand-400" />Revisão de retenção</h3><p className="text-xs text-gray-500">{analytics.retentionReviewsDue} vencidas · {analytics.contactBlocked} contatos bloqueados</p></div></div><div className="mt-3 space-y-2">{retentionDueIds.length === 0 ? <p className="rounded-lg border border-dashed border-surface-600 p-6 text-center text-sm text-gray-500">Nenhuma revisão pendente.</p> : retentionDueIds.map(id => { const lead = leads.find(item => item.id === id); return lead ? <div key={id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-700 p-3"><div><p className="text-sm font-semibold text-white">{lead.nome}</p><p className="text-xs text-gray-500">Revisão vencida em {lead.retentionReviewAt ? new Date(lead.retentionReviewAt).toLocaleDateString('pt-BR') : '-'}</p></div>{podeEditar && <div className="flex gap-2"><button onClick={() => reviewRetention(lead, 'Extend')} className="btn-secondary text-xs">Prorrogar 180 dias</button><button onClick={() => reviewRetention(lead, 'Anonymize')} className="text-xs font-bold text-red-300">Anonimizar</button></div>}</div> : null })}</div></div>
         </>}
       </section>}
 
@@ -587,7 +598,7 @@ export default function PlataformaLeadsPage() {
         />
       )}
 
-      {crmLead && <CrmWorkspaceModal lead={crmLead} onClose={() => setCrmLead(null)} onChanged={fetchLeads} />}
+      {crmLead && <CrmWorkspaceModal lead={crmLead} onClose={() => setCrmLead(null)} onChanged={fetchLeads} podeEditar={podeEditar} />}
     </div>
   )
 }

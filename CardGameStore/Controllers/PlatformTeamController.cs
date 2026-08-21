@@ -16,7 +16,14 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/platform/team")]
 [Authorize(Policy = "PlatformOwnerOnly")]
-[RequirePlatformPermission(PlatformPermission.Team)]
+// Piso de leitura na classe, escrita somada método a método — ver o comentário
+// equivalente em PlatformCrmController.
+//
+// Ler a equipe é ver quem tem qual acesso, o que é exatamente o que uma
+// auditoria precisa conferir. Convidar, reenviar convite e editar continuam
+// exigindo `platform.team`: quem fiscaliza a lista de acessos não deve poder
+// se incluir nela.
+[RequirePlatformPermission(PlatformPermission.TeamRead)]
 public sealed class PlatformTeamController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -54,6 +61,7 @@ public sealed class PlatformTeamController : ControllerBase
             }));
 
     [HttpPost("invitations")]
+    [RequirePlatformPermission(PlatformPermission.Team)]
     public async Task<IActionResult> Invite([FromBody] InvitePlatformOwnerRequest request, CancellationToken cancellationToken)
     {
         PlatformProfileDefinition profile;
@@ -95,6 +103,7 @@ public sealed class PlatformTeamController : ControllerBase
     }
 
     [HttpPost("{id:guid}/resend-invite")]
+    [RequirePlatformPermission(PlatformPermission.Team)]
     public async Task<IActionResult> ResendInvite(Guid id, CancellationToken cancellationToken)
     {
         var owner = await _db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Role == UserRole.PlatformOwner, cancellationToken);
@@ -116,6 +125,7 @@ public sealed class PlatformTeamController : ControllerBase
     }
 
     [HttpPatch("{id:guid}")]
+    [RequirePlatformPermission(PlatformPermission.Team)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdatePlatformOwnerRequest request, CancellationToken cancellationToken)
     {
         var owner = await _db.Users.SingleOrDefaultAsync(u => u.Id == id && u.Role == UserRole.PlatformOwner, cancellationToken);

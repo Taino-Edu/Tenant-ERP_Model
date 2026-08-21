@@ -14,12 +14,15 @@ const NAV_ITEMS = [
   { href: '/plataforma',            label: 'Visão Geral', icon: LayoutDashboard, permission: 'platform.dashboard' },
   { href: '/plataforma/tenants',    label: 'Tenants',      icon: Building2, permission: 'platform.tenants.read' },
   { href: '/plataforma/financeiro', label: 'Financeiro',   icon: Wallet, permission: 'platform.finance.read' },
-  { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus, permission: 'platform.leads' },
-  { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search, permission: 'platform.leads' },
+  // O menu abre pela permissão de LEITURA — é ela que decide se a tela carrega.
+  // Quem só tem `.read` (Auditoria) vê a tela inteira; o que fecha para ela são
+  // os botões de ação dentro de cada página, presos na permissão de escrita.
+  { href: '/plataforma/leads',      label: 'Leads',        icon: UserPlus, permission: 'platform.leads.read' },
+  { href: '/plataforma/prospeccao', label: 'Prospecção',   icon: Search, permission: 'platform.leads.read' },
   { href: '/plataforma/indicacoes', label: 'Indicações',    icon: HandCoins, permission: 'platform.referrals.read' },
-  { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy, permission: 'platform.support' },
+  { href: '/plataforma/suporte',    label: 'Suporte',      icon: LifeBuoy, permission: 'platform.support.read' },
   { href: '/plataforma/logs',       label: 'Logs',         icon: History, permission: 'platform.logs' },
-  { href: '/plataforma/equipe',     label: 'Equipe',       icon: Users, permission: 'platform.team' },
+  { href: '/plataforma/equipe',     label: 'Equipe',       icon: Users, permission: 'platform.team.read' },
 ]
 
 // Mesma cadência do painel da loja: renova o token antes que a inatividade

@@ -30,7 +30,7 @@ const TABS: { key: Tab; label: string; icon: typeof Users; permission: string }[
   { key: 'staff',    label: 'Funcionários & Admins', icon: UserCog,   permission: 'platform.tenants.read' },
   { key: 'clientes', label: 'Clientes',               icon: Users,     permission: 'platform.tenants.read' },
   { key: 'logs',     label: 'Logs',                   icon: History,   permission: 'platform.logs' },
-  { key: 'suporte',  label: 'Suporte',                icon: LifeBuoy,  permission: 'platform.support' },
+  { key: 'suporte',  label: 'Suporte',                icon: LifeBuoy,  permission: 'platform.support.read' },
   { key: 'uso',      label: 'Uso',                     icon: BarChart2, permission: 'platform.tenants.read' },
 ]
 

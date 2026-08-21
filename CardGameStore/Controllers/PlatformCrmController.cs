@@ -14,7 +14,12 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/platform/crm")]
 [Authorize(Policy = "PlatformOwnerOnly")]
-[RequirePlatformPermission(PlatformPermission.Leads)]
+// Piso de leitura na classe, escrita somada método a método. O middleware exige
+// TODAS as declarações do endpoint (GetOrderedMetadata + requirements.All), então
+// um método com as duas exige as duas — e quem só tem `.read` não passa dos GETs.
+// Assim um endpoint novo nasce, no pior caso, somente-leitura: esquecer o
+// atributo de escrita bloqueia demais, nunca de menos.
+[RequirePlatformPermission(PlatformPermission.LeadsRead)]
 public sealed class PlatformCrmController : ControllerBase
 {
     private readonly CatalogDbContext _catalog;
@@ -86,6 +91,7 @@ public sealed class PlatformCrmController : ControllerBase
     }
 
     [HttpPut("leads/{leadId:guid}/opportunity")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<ActionResult<CrmOpportunityDto>> SaveOpportunity(
         Guid leadId, [FromBody] SaveCrmOpportunityRequest request, CancellationToken ct)
     {
@@ -138,6 +144,7 @@ public sealed class PlatformCrmController : ControllerBase
     }
 
     [HttpPost("leads/{leadId:guid}/activities")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<ActionResult<CrmActivityDto>> CreateActivity(
         Guid leadId, [FromBody] CreateCrmActivityRequest request, CancellationToken ct)
     {
@@ -173,6 +180,7 @@ public sealed class PlatformCrmController : ControllerBase
     }
 
     [HttpPatch("activities/{id:guid}/complete")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<ActionResult<CrmActivityDto>> CompleteActivity(
         Guid id, [FromBody] CompleteCrmActivityRequest request, CancellationToken ct)
     {
@@ -245,6 +253,7 @@ public sealed class PlatformCrmController : ControllerBase
         .Take(200).ToListAsync(ct));
 
     [HttpPost("leads/{leadId:guid}/privacy/retention-review")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> ReviewRetention(Guid leadId, [FromBody] ReviewLeadRetentionRequest request, CancellationToken ct)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);

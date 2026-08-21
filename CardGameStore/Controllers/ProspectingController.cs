@@ -16,7 +16,13 @@ namespace CardGameStore.Controllers;
 [ApiController]
 [Route("api/platform/prospecting")]
 [Authorize(Policy = "PlatformOwnerOnly")]
-[RequirePlatformPermission(PlatformPermission.Leads)]
+// Piso de leitura na classe, escrita somada método a método — ver o comentário
+// equivalente em PlatformCrmController.
+//
+// Aqui `POST /search` e `POST /enrich` contam como ESCRITA mesmo parecendo
+// consulta: os dois gastam cota de serviço externo e gravam o resultado. Uma
+// conta de auditoria disparando busca paga seria surpresa cara.
+[RequirePlatformPermission(PlatformPermission.LeadsRead)]
 public class ProspectingController : ControllerBase
 {
     private readonly IProspectingService _prospecting;
@@ -35,6 +41,7 @@ public class ProspectingController : ControllerBase
     /// classificados e persistidos. A mesma consulta dentro do prazo retorna
     /// o snapshot salvo, salvo quando ForceRefresh=true.</summary>
     [HttpPost("search")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> Search([FromBody] ProspectingSearchRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -72,6 +79,7 @@ public class ProspectingController : ControllerBase
         Ok(await _campaigns.ListAsync(ct));
 
     [HttpPost("campaigns")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> CreateCampaign(
         [FromBody] CreateProspectingCampaignRequest request, CancellationToken ct)
     {
@@ -81,6 +89,7 @@ public class ProspectingController : ControllerBase
     }
 
     [HttpPost("campaigns/{id:guid}/run")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> RunCampaign(Guid id, CancellationToken ct)
     {
         try
@@ -95,6 +104,7 @@ public class ProspectingController : ControllerBase
     }
 
     [HttpPatch("campaigns/{id:guid}/status")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> SetCampaignStatus(Guid id,
         [FromBody] SetProspectingCampaignStatusRequest request, CancellationToken ct) =>
         await _campaigns.SetActiveAsync(id, request.Active, ct) ? NoContent() : NotFound();
@@ -104,6 +114,7 @@ public class ProspectingController : ControllerBase
         Ok(await _campaigns.ListReviewQueueAsync(Math.Clamp(limit, 1, 500), ct));
 
     [HttpPost("candidates/{id:guid}/suppress")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> SuppressCandidate(Guid id,
         [FromBody] SuppressProspectRequest request, CancellationToken ct)
     {
@@ -117,6 +128,7 @@ public class ProspectingController : ControllerBase
     /// persiste no candidato. A IA não cria nem altera dados empresariais ou
     /// financeiros observados.</summary>
     [HttpPost("enrich")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> Enrich([FromBody] ProspectingEnrichRequest request)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -135,6 +147,7 @@ public class ProspectingController : ControllerBase
 
     /// <summary>Gera e salva uma abordagem para um lead que já está no CRM.</summary>
     [HttpPost("leads/{id:guid}/enrich")]
+    [RequirePlatformPermission(PlatformPermission.Leads)]
     public async Task<IActionResult> EnrichLead(Guid id)
     {
         try

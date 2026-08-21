@@ -4,10 +4,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { platformApi, PlatformAccessProfileDto, PlatformTeamMemberDto } from '@/lib/api'
 import { getErrorMessage } from '@/lib/api'
 import { getUserId } from '@/lib/auth'
+import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
+import SomenteLeitura from '@/components/plataforma/SomenteLeitura'
 import toast from 'react-hot-toast'
 import { Check, Clock3, Crown, Loader2, MailPlus, RefreshCw, ShieldCheck, UserRound, Users } from 'lucide-react'
 
 export default function EquipePlataformaPage() {
+  // `platform.team.read` abre a tela; `platform.team` é que deixa mexer. Quem
+  // fiscaliza a lista de acessos precisa vê-la — e não deve poder se incluir.
+  const can = usePlatformPermissions()
+  const podeEditar = can('platform.team')
   const [members, setMembers] = useState<PlatformTeamMemberDto[]>([])
   const [profiles, setProfiles] = useState<PlatformAccessProfileDto[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,7 +100,9 @@ export default function EquipePlataformaPage() {
         </div>
       </div>
 
-      <section className="rounded-2xl border border-surface-500 bg-surface-800 p-6">
+      {!podeEditar && <SomenteLeitura>Você enxerga a equipe e o perfil de cada pessoa, mas convidar, reativar e trocar acesso ficam com quem administra a plataforma.</SomenteLeitura>}
+
+      {podeEditar && <section className="rounded-2xl border border-surface-500 bg-surface-800 p-6">
         <div className="flex items-center gap-3"><span className="rounded-xl bg-brand-500/10 p-2.5 text-brand-400"><MailPlus className="h-5 w-5" /></span><div><h2 className="font-bold text-white">Convidar integrante</h2><p className="text-xs text-gray-400">Nenhuma senha é compartilhada pelo painel.</p></div></div>
         <form onSubmit={invite} className="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
           <label className="text-sm font-medium text-gray-300">Nome<input required maxLength={150} value={name} onChange={event => setName(event.target.value)} className="input mt-2" placeholder="Nome completo" /></label>
@@ -102,7 +110,7 @@ export default function EquipePlataformaPage() {
           <label className="text-sm font-medium text-gray-300">Perfil<select required value={profileKey} onChange={event => setProfileKey(event.target.value)} className="input mt-2"><option value="" disabled>Selecione</option>{profiles.map(profile => <option key={profile.key} value={profile.key}>{profile.name}</option>)}</select></label>
           <button disabled={submitting} className="btn-primary h-[46px] whitespace-nowrap">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <MailPlus className="h-4 w-4" />} Criar convite</button>
         </form>
-      </section>
+      </section>}
 
       <section className="grid gap-4">
         {members.map(member => (
@@ -115,6 +123,14 @@ export default function EquipePlataformaPage() {
 
               {member.isPrimaryOwner ? (
                 <div className="flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm font-semibold text-amber-200"><ShieldCheck className="h-4 w-4" /> Acesso total protegido</div>
+              ) : !podeEditar ? (
+                // Consulta: o perfil vira texto. É a informação que a auditoria
+                // vem conferir — quem tem qual acesso —, sem o controle que a
+                // API recusaria.
+                <div className="rounded-xl border border-surface-500 bg-surface-900 px-4 py-3 text-sm text-gray-300">
+                  {profiles.find(profile => profile.key === member.profileKey)?.name ?? member.profileKey}
+                  {!member.isActive && <span className="ml-2 rounded-full bg-red-500/10 px-2 py-1 text-[10px] font-bold uppercase text-red-300">Inativo</span>}
+                </div>
               ) : (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   {/* A própria conta: trocar de perfil e desativar são recusados

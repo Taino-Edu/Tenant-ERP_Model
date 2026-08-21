@@ -11,11 +11,26 @@ public static class PlatformPermission
     public const string TenantsDelete  = "platform.tenants.delete";
     public const string FinanceRead    = "platform.finance.read";
     public const string FinanceManage  = "platform.finance.manage";
+    // Leads, Support e Team nasceram como permissão única, cobrindo ler e
+    // escrever no mesmo token — diferente de Tenants/Finance/Referrals, que já
+    // separavam. O efeito era não existir "ver sem poder mexer": dar visão de
+    // Leads dava junto editar lead e executar as ações de privacidade da LGPD;
+    // dar Suporte dava responder chamado e mudar status. Auditoria, então, era
+    // cega justamente nas três áreas, porque a alternativa era pior.
+    //
+    // O par `.read` é o piso; a permissão sem sufixo continua sendo a de
+    // escrita. Elas NÃO se implicam: quem escreve precisa das duas na lista do
+    // perfil, do mesmo jeito que TenantsManage sempre andou com TenantsRead.
+    // PerfisDePlataformaTests trava isso pra ninguém montar perfil com escrita
+    // e sem leitura.
     public const string Leads          = "platform.leads";
+    public const string LeadsRead      = "platform.leads.read";
     public const string Support        = "platform.support";
+    public const string SupportRead    = "platform.support.read";
     public const string Logs           = "platform.logs";
     public const string Impersonate    = "platform.impersonate";
     public const string Team           = "platform.team";
+    public const string TeamRead       = "platform.team.read";
     public const string ReferralsRead  = "platform.referrals.read";
     public const string ReferralsManage = "platform.referrals.manage";
 }
@@ -49,17 +64,30 @@ public static class PlatformAccessProfiles
             [Partner] = new(Partner, "Sócio administrador", "Acesso total à plataforma, equipe incluída. Só não altera a conta do proprietário principal.",
                 [PlatformPermission.All]),
             [Commercial] = new(Commercial, "Comercial", "Cuida de leads, prospecção e implantação de clientes.",
-                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.TenantsManage, PlatformPermission.Leads,
+                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.TenantsManage,
+                 PlatformPermission.LeadsRead, PlatformPermission.Leads,
                  PlatformPermission.ReferralsRead, PlatformPermission.ReferralsManage]),
             [Finance] = new(Finance, "Financeiro", "Consulta tenants e administra cobranças da plataforma.",
                 [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.FinanceRead, PlatformPermission.FinanceManage,
                  PlatformPermission.ReferralsRead, PlatformPermission.ReferralsManage]),
             [SupportDev] = new(SupportDev, "Suporte e desenvolvimento", "Atende chamados, consulta logs e acessa lojas de forma temporária.",
-                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.Support,
+                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead,
+                 PlatformPermission.SupportRead, PlatformPermission.Support,
                  PlatformPermission.Logs, PlatformPermission.Impersonate]),
-            [Auditor] = new(Auditor, "Auditoria", "Acesso somente de leitura a indicadores, tenants, financeiro e logs.",
-                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.FinanceRead, PlatformPermission.Logs,
-                 PlatformPermission.ReferralsRead]),
+            // Auditoria vê o painel inteiro e não escreve em lugar nenhum: só
+            // permissões `.read`, nenhuma `manage`/`delete`.
+            //
+            // Impersonate fica DE FORA de propósito, e não por esquecimento.
+            // Ela não mostra informação da plataforma — ela assume a identidade
+            // de outra pessoa dentro da loja do cliente. É a permissão mais
+            // perigosa do sistema, e dá-la a uma conta cuja razão de existir é
+            // fiscalizar inverteria o papel: o auditor passaria a poder agir
+            // como auditado. Auditoria enxerga a loja de fora (cadastro,
+            // clientes, uso, financeiro, logs), não de dentro.
+            [Auditor] = new(Auditor, "Auditoria", "Somente leitura, em tudo: indicadores, tenants, financeiro, leads, suporte, indicações, equipe e logs.",
+                [PlatformPermission.Dashboard, PlatformPermission.TenantsRead, PlatformPermission.FinanceRead,
+                 PlatformPermission.LeadsRead, PlatformPermission.SupportRead, PlatformPermission.TeamRead,
+                 PlatformPermission.Logs, PlatformPermission.ReferralsRead]),
         };
 
     public static PlatformProfileDefinition GetRequired(string key)
