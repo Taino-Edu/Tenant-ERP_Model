@@ -76,7 +76,10 @@ export async function getTenantIconsForHost(host: string | null): Promise<Tenant
       next: { revalidate: 300 },
     })
 
-    if (!res.ok) return null
+    if (!res.ok) {
+      avisarFalha(slug, `HTTP ${res.status}`)
+      return null
+    }
 
     const data = await res.json()
     if (!data || typeof data !== 'object') return null
@@ -89,9 +92,31 @@ export async function getTenantIconsForHost(host: string | null): Promise<Tenant
       addressLine:  typeof data.addressLine   === 'string' ? data.addressLine  : undefined,
       updatedAt:    typeof data.updatedAt      === 'string' ? data.updatedAt    : undefined,
     }
-  } catch {
+  } catch (erro) {
+    avisarFalha(slug, erro instanceof Error ? erro.message : String(erro))
     return null
   }
+}
+
+/**
+ * Registra que a resolução do tenant falhou — no log do servidor, não na tela.
+ *
+ * O `catch { return null }` acima é a rede de segurança certa: uma falha aqui
+ * NUNCA pode derrubar o carregamento da página. Mas ele também tornava a falha
+ * invisível, e o custo disso apareceu em 21/08/2026: toda vitrine estava
+ * publicando `<title>Octus</title>` e um manifest genérico em vez do nome da
+ * loja, porque o fetch para a API interna não completava. Nada no log, nada na
+ * tela quebrada — só o Google indexando dezenas de lojas com o mesmo título.
+ *
+ * "Cai no fallback em silêncio" e "cai no fallback e conta" são coisas
+ * diferentes. Host sem tenant (domínio raiz) sai antes daqui, então tudo que
+ * chega nesta função é falha de verdade.
+ */
+function avisarFalha(slug: string, motivo: string) {
+  console.warn(
+    `[tenant-seo] não resolvi o tenant "${slug}" em ${INTERNAL_API_URL} (${motivo}). ` +
+    'A página cai no título/ícone genéricos "Octus" — confira se o container do frontend alcança a API.',
+  )
 }
 
 /** Adiciona um query param de cache-busting (?v=timestamp) numa URL de ícone,
