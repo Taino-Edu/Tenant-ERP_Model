@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { CONTACTS, SOCIAL_PROFILES } from '@/lib/contatos'
+import { CNPJ_DIGITOS, CONTACTS, SOCIAL_PROFILES } from '@/lib/contatos'
 
 const SITE_URL = 'https://3esysten.com.br'
 
@@ -45,6 +45,11 @@ const organizationSchema = {
   alternateName: 'Octus',
   url: SITE_URL,
   logo: `${SITE_URL}/logo-octus.png`,
+  // `taxID` só com dígitos, que é o formato esperado. É o campo que permite ao
+  // Google amarrar este site a uma pessoa jurídica real em vez de a um nome —
+  // e é o que separa "existe um site chamado 3E Systen" de "existe a empresa
+  // 3E Systen, e este é o site dela".
+  taxID: CNPJ_DIGITOS,
   email: CONTACTS.email,
   telephone: CONTACTS.marketingPhone,
   sameAs: SAME_AS,

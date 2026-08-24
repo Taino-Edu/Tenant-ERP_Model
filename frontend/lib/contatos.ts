@@ -10,6 +10,18 @@
 // Aqui só existe dado. Serve os dois lados.
 // =============================================================================
 
+/** CNPJ da 3E Systen, já formatado para leitura.
+ *
+ *  Fica aqui, e não escrito à mão em cada tela, pelo mesmo motivo dos telefones:
+ *  ele aparece no rodapé, nos Termos, na Política de Privacidade e no JSON-LD
+ *  declarado ao Google. Número de inscrição divergente entre o contrato e o site
+ *  é o tipo de erro que ninguém percebe e que enfraquece justamente os
+ *  documentos que existem para identificar a empresa. */
+export const CNPJ = '68.381.935/0001-07'
+
+/** Só os dígitos — é o formato que `schema.org/taxID` e integrações esperam. */
+export const CNPJ_DIGITOS = CNPJ.replace(/\D/g, '')
+
 export const CONTACTS = {
   marketingWhatsapp: 'https://wa.me/5517997455482',
   marketingPhone: '+55 17 99745-5482',

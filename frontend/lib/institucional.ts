@@ -26,7 +26,7 @@ export const PRIVACY_NOTICE_VERSION = '2.2'
 // lib/contatos.ts porque o JSON-LD da landing (servidor) precisa deles, e este
 // arquivo é client-only por causa dos hooks abaixo. Reexportados para não
 // quebrar os imports que já apontavam para cá.
-export { CONTACTS, SOCIAL_PROFILES, telHref } from './contatos'
+export { CNPJ, CNPJ_DIGITOS, CONTACTS, SOCIAL_PROFILES, telHref } from './contatos'
 
 
 export const NAV_LINKS = [

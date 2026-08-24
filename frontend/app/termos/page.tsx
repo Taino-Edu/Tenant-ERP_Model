@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { LegalActions } from '@/components/LegalActions'
 import { PLATFORM_URL } from '@/lib/seo'
+import { CNPJ } from '@/lib/contatos'
 
 export const metadata: Metadata = {
   title: 'Termos de Uso',
@@ -19,7 +20,7 @@ export default function TermosPage() {
       <Notice>Estes Termos regulam o uso do Octus por empresas contratantes, seus usuários autorizados e clientes finais. A proposta comercial, o plano contratado e políticas específicas do estabelecimento complementam este documento. Em caso de relação de consumo, os direitos legais do consumidor prevalecem.</Notice>
 
       <Section title="1. Quem presta cada serviço">
-        <p>A <strong>3E Systen</strong> fornece a plataforma tecnológica Octus. A empresa identificada pela marca, domínio ou unidade acessada — o <strong>Estabelecimento</strong> — é responsável pelas vendas, preços, produtos, atendimento, comandas, crédito concedido, documentos fiscais e demais relações com seus clientes.</p>
+        <p>A <strong>3E Systen</strong>, inscrita no CNPJ sob o nº <strong>{CNPJ}</strong>, fornece a plataforma tecnológica Octus. A empresa identificada pela marca, domínio ou unidade acessada — o <strong>Estabelecimento</strong> — é responsável pelas vendas, preços, produtos, atendimento, comandas, crédito concedido, documentos fiscais e demais relações com seus clientes.</p>
         <p>O Octus não se torna vendedor dos produtos do Estabelecimento nem substitui suas obrigações comerciais, fiscais, trabalhistas, contábeis ou regulatórias.</p>
       </Section>
 
