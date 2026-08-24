@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using CardGameStore.Data;
 using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
+using CardGameStore.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,7 @@ public class FinancialConfigController : ControllerBase
     public FinancialConfigController(AppDbContext db) => _db = db;
 
     [HttpGet]
+    [RequireIntegrationScope(IntegrationScope.FinanceRead)]
     public async Task<ActionResult<FinancialConfigDto>> Get()
     {
         var config = await _db.FinancialConfigs.FindAsync(FinancialConfig.SingletonId);
@@ -27,6 +29,7 @@ public class FinancialConfigController : ControllerBase
     }
 
     [HttpPut]
+    [RequireIntegrationScope(IntegrationScope.FinanceWrite)]
     public async Task<ActionResult<FinancialConfigDto>> Save([FromBody] SaveFinancialConfigRequest request)
     {
         var config = await GetOrCreateAsync();

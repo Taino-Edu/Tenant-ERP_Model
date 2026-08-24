@@ -11,6 +11,7 @@ using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
+using CardGameStore.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -70,6 +71,7 @@ public class FiscalController : ControllerBase
     /// segundos se o fiscal está pronto pra emitir e qual é a próxima ação.</summary>
     // ── GET /api/fiscal/saude ──────────────────────────────────────────────────
     [HttpGet("saude")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> GetSaude(CancellationToken ct)
     {
         var cfg = await _db.FiscalConfigs.FindAsync(new object?[] { FiscalConfig.SingletonId }, ct);
@@ -203,6 +205,7 @@ public class FiscalController : ControllerBase
     /// certificado, CSC). Nunca inclui a senha do certificado nem o CSC token.</summary>
     // ── GET /api/fiscal/config ────────────────────────────────────────────────
     [HttpGet("config")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> GetConfig()
     {
         var cfg = await _db.FiscalConfigs.FindAsync(FiscalConfig.SingletonId);
@@ -214,6 +217,7 @@ public class FiscalController : ControllerBase
     /// <param name="req">Campos a atualizar; qualquer campo null/omitido mantém o valor atual.</param>
     // ── PUT /api/fiscal/config ────────────────────────────────────────────────
     [HttpPut("config")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> SaveConfig([FromBody] SaveFiscalConfigRequest req)
     {
         // Mesma escrita que o portal do contador usa — regras de regime, CSC,
@@ -225,11 +229,13 @@ public class FiscalController : ControllerBase
     }
 
     [HttpGet("ibpt/status")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> GetIbptStatus(CancellationToken ct) =>
         Ok(await _ibpt.ObterStatusAsync(ct));
 
     /// <summary>Atualiza produtos incompletos ou já gerenciados pelo IBPT. Overrides manuais são preservados.</summary>
     [HttpPost("ibpt/sincronizar")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> SincronizarIbpt(CancellationToken ct)
     {
         try
@@ -280,6 +286,7 @@ public class FiscalController : ControllerBase
     /// <param name="senha">Senha do certificado.</param>
     // ── POST /api/fiscal/certificado — upload do .pfx + senha ────────────────
     [HttpPost("certificado")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     [RequestSizeLimit(2 * 1024 * 1024)] // 2 MB — certificados .pfx são pequenos
     public async Task<IActionResult> UploadCertificado(IFormFile file, [FromForm] string senha)
     {
@@ -303,6 +310,7 @@ public class FiscalController : ControllerBase
     /// <summary>Lista as naturezas de operação (CFOP/CSOSN) cadastradas, com a padrão primeiro.</summary>
     // ── GET /api/fiscal/naturezas-operacao ────────────────────────────────────
     [HttpGet("naturezas-operacao")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> ListNaturezas()
     {
         var naturezas = await _db.NaturezasOperacao
@@ -435,6 +443,7 @@ public class FiscalController : ControllerBase
     /// <param name="req">CFOP, CSOSN (só os suportados pelo motor de emissão) e se é a padrão.</param>
     // ── POST /api/fiscal/naturezas-operacao ───────────────────────────────────
     [HttpPost("naturezas-operacao")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> CreateNatureza([FromBody] SaveNaturezaRequest req)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -488,6 +497,7 @@ public class FiscalController : ControllerBase
     /// <param name="req">Novos valores de CFOP, CSOSN e se é a padrão.</param>
     // ── PUT /api/fiscal/naturezas-operacao/{id} ───────────────────────────────
     [HttpPut("naturezas-operacao/{id:guid}")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> UpdateNatureza(Guid id, [FromBody] SaveNaturezaRequest req)
     {
         if (ValidarRegraFiscal(req) is BadRequestObjectResult erro) return erro;
@@ -532,6 +542,7 @@ public class FiscalController : ControllerBase
     /// <param name="id">Id da natureza de operação.</param>
     // ── DELETE /api/fiscal/naturezas-operacao/{id} ────────────────────────────
     [HttpDelete("naturezas-operacao/{id:guid}")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> DeleteNatureza(Guid id)
     {
         var natureza = await _db.NaturezasOperacao.FindAsync(id);
@@ -550,6 +561,7 @@ public class FiscalController : ControllerBase
     /// <param name="pageSize">Registros por página (padrão 30).</param>
     // ── GET /api/fiscal/notas?status=&page=&pageSize= ─────────────────────────
     [HttpGet("notas")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> ListNotas(
         [FromQuery] string? status = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 30)
     {
@@ -611,6 +623,7 @@ public class FiscalController : ControllerBase
     // Emissão manual tardia — usada quando o admin optou por NÃO emitir no fechamento
     // (checkbox desmarcado) e decidiu emitir depois pelo histórico.
     [HttpPost("emitir/comanda/{id:guid}")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> EmitirNotaComanda(Guid id)
     {
         var jaExiste = await _db.NotasFiscaisEmitidas.AnyAsync(n => n.Origem == NotaFiscalOrigem.Comanda && n.ComandaId == id);
@@ -626,6 +639,7 @@ public class FiscalController : ControllerBase
     /// <param name="id">Id da venda avulsa.</param>
     // ── POST /api/fiscal/emitir/venda-avulsa/{id} ─────────────────────────────
     [HttpPost("emitir/venda-avulsa/{id:guid}")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> EmitirNotaVendaAvulsa(Guid id)
     {
         var jaExiste = await _db.NotasFiscaisEmitidas.AnyAsync(n => n.Origem == NotaFiscalOrigem.VendaAvulsa && n.VendaAvulsaId == id);
@@ -642,6 +656,7 @@ public class FiscalController : ControllerBase
     /// <param name="id">Id da nota fiscal.</param>
     // ── POST /api/fiscal/notas/{id}/reprocessar ───────────────────────────────
     [HttpPost("notas/{id:guid}/reprocessar")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> ReprocessarNota(Guid id)
     {
         var nota = await _emissao.ReprocessarAsync(id);
@@ -654,6 +669,7 @@ public class FiscalController : ControllerBase
     /// <param name="req">Justificativa do cancelamento (mín. 15 caracteres).</param>
     // ── POST /api/fiscal/notas/{id}/cancelar ──────────────────────────────────
     [HttpPost("notas/{id:guid}/cancelar")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> CancelarNota(Guid id, [FromBody] CancelarNotaRequest req)
     {
         try
@@ -684,6 +700,7 @@ public class FiscalController : ControllerBase
     /// <summary>Inutiliza na SEFAZ uma faixa de numeração que foi abandonada e não
     /// contém documento autorizado. A operação é fiscalmente irreversível.</summary>
     [HttpPost("inutilizacoes")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> InutilizarFaixa([FromBody] InutilizarFaixaRequest req)
     {
         try
@@ -712,6 +729,7 @@ public class FiscalController : ControllerBase
     }
 
     [HttpPost("notas/{id:guid}/reprocessar-estorno-erp")]
+    [RequireIntegrationScope(IntegrationScope.FiscalWrite)]
     public async Task<IActionResult> ReprocessarEstornoErp(Guid id)
     {
         try
@@ -730,6 +748,7 @@ public class FiscalController : ControllerBase
     /// <param name="id">Id da nota fiscal.</param>
     // ── GET /api/fiscal/notas/{id}/cupom ──────────────────────────────────────
     [HttpGet("notas/{id:guid}/cupom")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> ObterCupom(Guid id)
     {
         var cupom = await _emissao.ObterCupomAsync(id);
@@ -746,6 +765,7 @@ public class FiscalController : ControllerBase
     /// <param name="fim">Data final do período (inclusive).</param>
     // ── GET /api/fiscal/conciliacao?inicio=&fim= ──────────────────────────────
     [HttpGet("conciliacao")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> GetConciliacao(
         [FromQuery] DateTime inicio, [FromQuery] DateTime fim)
     {
@@ -767,6 +787,7 @@ public class FiscalController : ControllerBase
     /// <param name="incluirResolvidos">Traz também o histórico já resolvido.</param>
     // ── GET /api/fiscal/alertas?incluirResolvidos= ────────────────────────────
     [HttpGet("alertas")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> GetAlertas([FromQuery] bool incluirResolvidos = false) =>
         Ok(await _alertas.ListarAsync(incluirResolvidos));
 
@@ -779,6 +800,7 @@ public class FiscalController : ControllerBase
     /// </summary>
     // ── GET /api/fiscal/regras-ibs-cbs ────────────────────────────────────────
     [HttpGet("regras-ibs-cbs")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> GetRegrasIbsCbs(CancellationToken ct)
     {
         var cfg = await _db.FiscalConfigs.FindAsync(new object?[] { FiscalConfig.SingletonId }, ct);
@@ -1026,6 +1048,7 @@ public class FiscalController : ControllerBase
     /// <param name="fim">Data final do período (inclusive).</param>
     // ── GET /api/fiscal/exportar-xmls?inicio=&fim= ────────────────────────────
     [HttpGet("exportar-xmls")]
+    [RequireIntegrationScope(IntegrationScope.FiscalRead)]
     public async Task<IActionResult> ExportarXmls([FromQuery] DateTime inicio, [FromQuery] DateTime fim)
     {
         if (fim.Date < inicio.Date)

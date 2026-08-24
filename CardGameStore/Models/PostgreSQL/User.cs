@@ -66,7 +66,8 @@ public class User
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Perfil RBAC. Valores válidos: "Admin" | "Operator" | "Customer" | "PlatformOwner" | "Contador"
+    /// Perfil RBAC. Valores válidos: "Admin" | "Operator" | "Customer" | "PlatformOwner" | "Contador".
+    /// "Integration" e reservado a JWTs tecnicos e nao e persistido em usuarios.
     /// Use a enum UserRole para evitar strings mágicas no código.
     /// </summary>
     [Required, MaxLength(20)]
@@ -227,4 +228,5 @@ public static class UserRole
     public const string Customer      = "Customer";
     public const string PlatformOwner = "PlatformOwner";
     public const string Contador      = "Contador";
+    public const string Integration   = "Integration";
 }

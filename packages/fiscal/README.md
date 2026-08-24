@@ -12,6 +12,8 @@ alertas, apuracao e portal do contador.
 
 O Swagger da aplicacao e os atributos dos controllers sao a fonte do contrato
 HTTP completo. Segredos, certificados e tokens nunca devem ser incluidos no ZIP.
+Sistemas externos usam `client_credentials` por loja, com os escopos `fiscal.read`
+e `fiscal.write`, conforme `docs/arquitetura/INTEGRACAO-API-MULTITENANT.md`.
 
 ## Como gerar
 

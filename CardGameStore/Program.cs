@@ -223,8 +223,10 @@ builder.Services
 // ---------------------------------------------------------------------------
 builder.Services.AddAuthorization(options =>
 {
-    // AdminOnly: Admin e Operator passam — OperatorPermissionMiddleware cuida do controle granular por rota.
-    options.AddPolicy("AdminOnly",         policy => policy.RequireRole("Admin", "Operator"));
+    // Integration passa pela policy apenas para reutilizar controllers existentes;
+    // IntegrationAccessMiddleware nega por padrao e exige escopo em cada rota.
+    // OperatorPermissionMiddleware continua cuidando do controle granular humano.
+    options.AddPolicy("AdminOnly",         policy => policy.RequireRole("Admin", "Operator", "Integration"));
     options.AddPolicy("CustomerOrAdmin",   policy => policy.RequireRole("Admin", "Customer", "Operator"));
     options.AddPolicy("PlatformOwnerOnly", policy => policy.RequireRole("PlatformOwner"));
     options.AddPolicy("ContadorOnly",      policy => policy.RequireRole("Contador"));
@@ -299,6 +301,19 @@ builder.Services.AddRateLimiter(options =>
         opt.QueueProcessingOrder     = QueueProcessingOrder.OldestFirst;
         opt.QueueLimit               = 0; // sem fila — rejeita imediatamente
     });
+
+    options.AddPolicy("integration-token", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
 
     options.AddFixedWindowLimiter("api", opt =>
     {
@@ -507,6 +522,7 @@ builder.Services.AddScoped<IPlatformBillingService, PlatformBillingService>();
 builder.Services.AddScoped<IReferralCommissionService, ReferralCommissionService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
 builder.Services.AddScoped<IFinanceiroCalculoService, FinanceiroCalculoService>();
+builder.Services.AddScoped<IntegrationTokenService>();
 builder.Services.AddHostedService<FechamentoBackgroundService>();
 builder.Services.AddHostedService<ProspectingBotBackgroundService>();
 builder.Services.AddHostedService<LeadRetentionBackgroundService>();
@@ -1045,6 +1061,7 @@ app.UseAuthentication();
 app.UseRateLimiter();
 app.UseBrowserRequestGuard();
 app.UseTenantClaimGuard();
+app.UseIntegrationAccess();
 app.UseAuthorization();
 app.UsePlatformAccess();
 app.UseOperatorPermissions();
@@ -1052,6 +1069,7 @@ app.UseOperatorPermissions();
 app.MapControllers();
 app.ValidateOperatorPermissionCoverage();
 app.ValidatePlatformPermissionCoverage();
+app.ValidateIntegrationScopeCoverage();
 app.MapHub<ComandaHub>("/hubs/comanda").RequireRateLimiting("comanda-hub");
 
 // MCP — o tenant pluga a IA dele aqui (ver CardGameStore/Mcp/ErpTools.cs).

@@ -3,6 +3,7 @@ using CardGameStore.Middleware;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
 using CardGameStore.Services.Implementations;
+using CardGameStore.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +52,7 @@ public class ContasReceberController : ControllerBase
     /// <param name="page">Número da página (base 1, padrão 1).</param>
     /// <param name="pageSize">Registros por página (padrão 50).</param>
     [HttpGet]
+    [RequireIntegrationScope(IntegrationScope.FinanceRead)]
     public async Task<IActionResult> List(
         [FromQuery] string? type     = null,   // "income" | "expense"
         [FromQuery] string? status   = null,   // "pending" | "paid" | "overdue" | "cancelled"
@@ -92,6 +94,7 @@ public class ContasReceberController : ControllerBase
     /// a receber, e saldo líquido pago no mês corrente.
     /// </summary>
     [HttpGet("summary")]
+    [RequireIntegrationScope(IntegrationScope.FinanceRead)]
     public async Task<IActionResult> Summary()
     {
         var today   = DateTime.UtcNow.Date;
@@ -125,6 +128,7 @@ public class ContasReceberController : ControllerBase
 
     /// <summary>Cria um lançamento financeiro manual (a pagar ou a receber).</summary>
     [HttpPost]
+    [RequireIntegrationScope(IntegrationScope.FinanceWrite)]
     public async Task<IActionResult> Create([FromBody] CreateTransactionRequest req)
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -154,6 +158,7 @@ public class ContasReceberController : ControllerBase
     /// ou reverter isso ao mudar o status pra algo diferente de "paid".
     /// </summary>
     [HttpPut("{id:guid}")]
+    [RequireIntegrationScope(IntegrationScope.FinanceWrite)]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdateTransactionRequest req)
     {
         var tx = await _db.ExternalTransactions.FindAsync(id);
@@ -188,6 +193,7 @@ public class ContasReceberController : ControllerBase
 
     /// <summary>Remove permanentemente um lançamento financeiro.</summary>
     [HttpDelete("{id:guid}")]
+    [RequireIntegrationScope(IntegrationScope.FinanceWrite)]
     public async Task<IActionResult> Delete(Guid id)
     {
         var tx = await _db.ExternalTransactions.FindAsync(id);

@@ -13,6 +13,10 @@ os pontos de integracao.
 - `GET|PUT /api/financial-config`: metas, custos fixos e parametros gerenciais.
 - `/api/contas-receber`: lancamentos, conciliacao e integracoes financeiras.
 
+O pacote inclui autenticacao servidor-a-servidor por `client_credentials`. Consulte
+`docs/arquitetura/INTEGRACAO-API-MULTITENANT.md` para criar credenciais por loja e
+limitar o acesso com `financeiro.read` e `financeiro.write`.
+
 ## Como gerar
 
 Na raiz do repositorio:

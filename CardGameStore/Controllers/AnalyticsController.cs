@@ -8,6 +8,7 @@ using CardGameStore.DTOs;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Middleware;
 using CardGameStore.Services.Interfaces;
+using CardGameStore.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -265,6 +266,7 @@ public class AnalyticsController : ControllerBase
     /// <param name="fim">Fim do período, inclusive (data local, padrão: hoje).</param>
     /// <param name="filterPaymentMethod">Filtra o cálculo por uma forma de pagamento específica (ex: "Pix").</param>
     [HttpGet("financeiro")]
+    [RequireIntegrationScope(IntegrationScope.FinanceRead)]
     [RequireOperatorPermission(Permissao.Financeiro)]
     public async Task<ActionResult<FinanceiroDto>> GetFinanceiro(
         [FromQuery] DateTime? inicio,
@@ -287,6 +289,7 @@ public class AnalyticsController : ControllerBase
     /// financeiro para o período selecionado.
     /// </summary>
     [HttpGet("financeiro/capital-giro")]
+    [RequireIntegrationScope(IntegrationScope.FinanceRead)]
     [RequireOperatorPermission(Permissao.Financeiro)]
     public async Task<ActionResult<CapitalGiroDto>> GetCapitalGiro(
         [FromQuery] DateTime? inicio,
@@ -305,6 +308,7 @@ public class AnalyticsController : ControllerBase
 
     /// <summary>Agenda de entradas e saídas abertas pelos próximos 7 a 90 dias.</summary>
     [HttpGet("financeiro/agenda-caixa")]
+    [RequireIntegrationScope(IntegrationScope.FinanceRead)]
     [RequireOperatorPermission(Permissao.Financeiro)]
     public async Task<ActionResult<AgendaCaixaDto>> GetAgendaCaixa([FromQuery] int dias = 30)
     {
@@ -316,6 +320,7 @@ public class AnalyticsController : ControllerBase
 
     /// <summary>Estoque atual cruzado com vendas, margem e cobertura do período.</summary>
     [HttpGet("financeiro/estoque-inteligente")]
+    [RequireIntegrationScope(IntegrationScope.FinanceRead)]
     [RequireOperatorPermission(Permissao.Financeiro)]
     public async Task<ActionResult<EstoqueInteligenteDto>> GetEstoqueInteligente(
         [FromQuery] DateTime? inicio,

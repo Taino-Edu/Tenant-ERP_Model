@@ -8,6 +8,7 @@ continuam em seus respectivos diretorios.
 
 - [Arquitetura e fluxos](arquitetura/DOCUMENTACAO-COMPLETA.md)
 - [Modelagem de dados](arquitetura/MODELAGEM-DE-DADOS.md)
+- [Integracao REST multi-tenant](arquitetura/INTEGRACAO-API-MULTITENANT.md)
 - [Casos de uso](produto/CASOS-DE-USO.md)
 - [Guia de testes](testes/GUIA-DE-TESTES.md)
 - [Status executivo](planejamento/STATUS.md)

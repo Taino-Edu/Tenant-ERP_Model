@@ -10,17 +10,20 @@
   ],
   "includePatterns": [
     "^packages/financeiro/",
-    "^CardGameStore/Controllers/(AnalyticsController|FinancialConfigController|ContasReceberController)\\.cs$",
-    "^CardGameStore/DTOs/(AnalyticsDtos|CreditarioDtos)\\.cs$",
+    "^CardGameStore/Controllers/(AnalyticsController|FinancialConfigController|ContasReceberController|IntegrationClientsController)\\.cs$",
+    "^CardGameStore/DTOs/(AnalyticsDtos|CreditarioDtos|IntegrationAccessDtos)\\.cs$",
+    "^CardGameStore/Multitenancy/(ApiIntegrationClient|CatalogDbContext)\\.cs$",
+    "^CardGameStore/Security/Integration.*\\.cs$",
+    "^CardGameStore/Services/Implementations/IntegrationTokenService\\.cs$",
     "^CardGameStore/Models/PostgreSQL/(FinancialConfig|ExternalTransaction|Crediario|PagamentoCrediario|StockLedger)\\.cs$",
     "^CardGameStore/Services/(Implementations|Interfaces)/.*(Financeiro|Crediario|ExternalTransaction).*\\.cs$",
-    "^CardGameStore/Data/Migrations/.*(Financial|ExternalTransaction|NfeReceivingAndProfessionalDre|StockLedger).*\\.cs$",
+    "^CardGameStore/Data/Migrations/.*(Financial|ExternalTransaction|NfeReceivingAndProfessionalDre|StockLedger|AddApiIntegrationClients).*\\.cs$",
     "^CardGameStore/(Program|Data/AppDbContext)\\.cs$",
     "^frontend/app/admin/(financeiro|contas-receber)(/|$)",
     "^frontend/components/admin/financeiro/",
     "^frontend/lib/(api|manualContent)\\.ts$",
     "^frontend/tests/financeiro-.*\\.spec\\.ts$",
     "^tests/unit/CardGameStore\\.Tests/.*(Financeiro|FinancialConfig|ContasReceber|Crediario).*\\.cs$",
-    "^docs/arquitetura/(DOCUMENTACAO-COMPLETA|MODELAGEM-DE-DADOS)\\.md$"
+    "^docs/arquitetura/(DOCUMENTACAO-COMPLETA|MODELAGEM-DE-DADOS|INTEGRACAO-API-MULTITENANT)\\.md$"
   ]
 }

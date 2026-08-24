@@ -15,6 +15,7 @@ public class CatalogDbContext : DbContext
     public CatalogDbContext(DbContextOptions<CatalogDbContext> options) : base(options) { }
 
     public DbSet<Tenant> Tenants { get; set; }
+    public DbSet<ApiIntegrationClient> ApiIntegrationClients { get; set; }
     public DbSet<ContadorAccount> ContadorAccounts { get; set; }
     public DbSet<ContadorTenantLink> ContadorTenantLinks { get; set; }
     public DbSet<ContadorAviso> ContadorAvisos { get; set; }
@@ -220,6 +221,21 @@ public class CatalogDbContext : DbContext
 
             entity.HasIndex(c => c.DueDate)
                   .HasDatabaseName("ix_tenant_charges_due_date");
+        });
+
+        modelBuilder.Entity<ApiIntegrationClient>(entity =>
+        {
+            entity.HasOne<Tenant>()
+                  .WithMany()
+                  .HasForeignKey(item => item.TenantId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(item => item.ClientId)
+                  .IsUnique()
+                  .HasDatabaseName("ix_api_integration_clients_client_id");
+
+            entity.HasIndex(item => new { item.TenantId, item.IsActive })
+                  .HasDatabaseName("ix_api_integration_clients_tenant_active");
         });
 
         modelBuilder.Entity<LeadPrivacyEvent>(entity =>
