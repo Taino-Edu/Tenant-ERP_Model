@@ -249,4 +249,103 @@ public class PlatformBillingService : IPlatformBillingService
                   })
             .ToListAsync();
     }
+
+    // ── Lançamentos manuais ─────────────────────────────────────────────────
+
+    public async Task<TenantChargeDto> CriarCobrancaAsync(CriarCobrancaRequest request)
+    {
+        if (!Enum.TryParse<TenantChargeKind>(request.Tipo, ignoreCase: true, out var tipo))
+            throw new InvalidOperationException("Tipo de cobrança inválido: use Implantacao ou Mensalidade.");
+
+        if (!await _catalog.Tenants.AnyAsync(t => t.Id == request.TenantId))
+            throw new InvalidOperationException("Loja não encontrada.");
+
+        var competencia = NormalizarCompetencia(request.Competencia);
+        var vencimento  = NormalizarData(request.Vencimento);
+
+        // Checagem antes do INSERT só para dar uma mensagem que explica o
+        // problema. O índice único é quem garante de fato — entre esta consulta
+        // e o SaveChanges cabe outra requisição, e é ele que resolve a corrida.
+        if (await _catalog.TenantCharges.AnyAsync(c =>
+                c.TenantId == request.TenantId && c.Kind == tipo && c.ReferenceMonth == competencia))
+            throw new InvalidOperationException(
+                $"Já existe uma cobrança de {tipo} para esta loja em {competencia:MM/yyyy}. Edite a existente em vez de criar outra.");
+
+        var cobranca = new TenantCharge
+        {
+            TenantId       = request.TenantId,
+            Kind           = tipo,
+            Amount         = request.Valor,
+            ReferenceMonth = competencia,
+            DueDate        = vencimento,
+            Notes          = string.IsNullOrWhiteSpace(request.Observacao) ? null : request.Observacao.Trim(),
+        };
+
+        _catalog.TenantCharges.Add(cobranca);
+        try
+        {
+            await _catalog.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // `when (await ...)` não compila em filtro de catch, então a
+            // checagem vem aqui dentro. A entidade recusada precisa sair do
+            // rastreamento antes da consulta: senão o EF tenta reenviar o mesmo
+            // INSERT e a segunda falha esconde a primeira.
+            _catalog.Entry(cobranca).State = EntityState.Detached;
+
+            if (await ExisteAsync(request.TenantId, tipo, competencia))
+                throw new InvalidOperationException(
+                    $"Já existe uma cobrança de {tipo} para esta loja em {competencia:MM/yyyy}.");
+            throw;
+        }
+
+        var lista = await MapearAsync(_catalog.TenantCharges.AsNoTracking().Where(c => c.Id == cobranca.Id));
+        return lista[0];
+    }
+
+    public async Task<TenantChargeDto> AtualizarCobrancaAsync(Guid chargeId, AtualizarCobrancaRequest request)
+    {
+        var cobranca = await _catalog.TenantCharges.FirstOrDefaultAsync(c => c.Id == chargeId)
+            ?? throw new InvalidOperationException("Cobrança não encontrada.");
+
+        if (cobranca.PaidAt.HasValue)
+            throw new InvalidOperationException(
+                "Cobrança paga não pode ser alterada. Reabra a cobrança, altere e dê baixa de novo — assim a comissão do parceiro é refeita junto.");
+
+        cobranca.Amount  = request.Valor;
+        cobranca.DueDate = NormalizarData(request.Vencimento);
+        cobranca.Notes   = string.IsNullOrWhiteSpace(request.Observacao) ? null : request.Observacao.Trim();
+
+        await _catalog.SaveChangesAsync();
+
+        var lista = await MapearAsync(_catalog.TenantCharges.AsNoTracking().Where(c => c.Id == chargeId));
+        return lista[0];
+    }
+
+    public async Task ExcluirCobrancaAsync(Guid chargeId)
+    {
+        var cobranca = await _catalog.TenantCharges.FirstOrDefaultAsync(c => c.Id == chargeId)
+            ?? throw new InvalidOperationException("Cobrança não encontrada.");
+
+        if (cobranca.PaidAt.HasValue)
+            throw new InvalidOperationException(
+                "Cobrança paga não pode ser excluída. Reabra antes — e considere que reabrir também desfaz a comissão gerada por ela.");
+
+        _catalog.TenantCharges.Remove(cobranca);
+        await _catalog.SaveChangesAsync();
+    }
+
+    private Task<bool> ExisteAsync(Guid tenantId, TenantChargeKind tipo, DateTime competencia) =>
+        _catalog.TenantCharges.AnyAsync(c =>
+            c.TenantId == tenantId && c.Kind == tipo && c.ReferenceMonth == competencia);
+
+    /// <summary>Trunca para meia-noite UTC, mesmo tratamento de
+    /// NormalizarDataPagamento: vencimento é um dia, não um instante, e guardar
+    /// a hora do clique faria a data "mudar de dia" lida de outro fuso.</summary>
+    private static DateTime NormalizarData(DateTime data)
+    {
+        var utc = data.Kind == DateTimeKind.Unspecified ? data : data.ToUniversalTime();
+        return new DateTime(utc.Year, utc.Month, utc.Day, 0, 0, 0, DateTimeKind.Utc);
+    }
 }

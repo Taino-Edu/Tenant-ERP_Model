@@ -93,3 +93,52 @@ public class GerarMensalidadesRequest
     [Required]
     public DateTime Competencia { get; set; }
 }
+
+// ── Lançamentos manuais ──────────────────────────────────────────────────────
+// O gerador de mensalidades cobre o caso repetitivo; a vida real tem o resto:
+// implantação negociada, mês de cortesia, ajuste de valor combinado por
+// telefone, cobrança emitida com o valor errado. Sem estes três verbos, a saída
+// era mexer no banco na mão — que não deixa rastro e não valida nada.
+
+public class CriarCobrancaRequest
+{
+    [Required]
+    public Guid TenantId { get; set; }
+
+    /// <summary>"Implantacao" ou "Mensalidade".</summary>
+    [Required]
+    public string Tipo { get; set; } = string.Empty;
+
+    /// <summary>Valor em reais. Zero é aceito de propósito: cortesia registrada
+    /// vale mais que cobrança ausente — ela aparece no histórico do cliente.</summary>
+    [Range(0, 9_999_999)]
+    public decimal Valor { get; set; }
+
+    /// <summary>Qualquer data dentro do mês; o serviço normaliza pro dia 1.</summary>
+    [Required]
+    public DateTime Competencia { get; set; }
+
+    [Required]
+    public DateTime Vencimento { get; set; }
+
+    [MaxLength(500)]
+    public string? Observacao { get; set; }
+}
+
+/// <summary>Alteração de uma cobrança em aberto.
+///
+/// Tipo e competência ficam de fora de propósito: os dois compõem o índice
+/// único que impede cobrar o mesmo mês duas vezes, e permitir editá-los
+/// transformaria um ajuste de valor numa colisão de chave a ser descoberta no
+/// meio do fluxo. Cobrança emitida no mês errado se exclui e se refaz.</summary>
+public class AtualizarCobrancaRequest
+{
+    [Range(0, 9_999_999)]
+    public decimal Valor { get; set; }
+
+    [Required]
+    public DateTime Vencimento { get; set; }
+
+    [MaxLength(500)]
+    public string? Observacao { get; set; }
+}

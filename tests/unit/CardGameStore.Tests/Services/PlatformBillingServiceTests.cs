@@ -344,4 +344,154 @@ public class PlatformBillingServiceTests
         resumo.Recebido.Should().Be(269m);
         resumo.EmAberto.Should().Be(120m);
     }
+
+    // ── Lançamentos manuais ──────────────────────────────────────────────────
+    //
+    // O que estes testes protegem não é o caminho feliz (criar cobrança é um
+    // INSERT), é a fronteira do que NÃO pode acontecer: alterar ou apagar
+    // cobrança já paga. A baixa é o evento que libera comissão de parceiro —
+    // mexer no valor por baixo dela deixa os dois números divergentes sem nada
+    // registrando isso, e apagar deixa a comissão apontando para o vazio.
+
+    private static async Task<TenantCharge> CobrancaEmAberto(CatalogDbContext db, Guid tenantId, decimal valor = 269m)
+    {
+        var cobranca = new TenantCharge
+        {
+            TenantId       = tenantId,
+            Kind           = TenantChargeKind.Mensalidade,
+            Amount         = valor,
+            ReferenceMonth = Competencia(2026, 3),
+            DueDate        = new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc),
+        };
+        db.TenantCharges.Add(cobranca);
+        await db.SaveChangesAsync();
+        return cobranca;
+    }
+
+    [Fact]
+    public async Task CriarCobranca_Avulsa_EntraNaCompetenciaNormalizada()
+    {
+        using var db = CreateDb();
+        var tenant = NovoTenant();
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+
+        var dto = await CreateService(db).CriarCobrancaAsync(new()
+        {
+            TenantId    = tenant.Id,
+            Tipo        = "Implantacao",
+            Valor       = 974m,
+            // Dia 17 de propósito: a competência tem que virar dia 1, senão a
+            // unique index nunca casaria com a cobrança gerada pelo automático.
+            Competencia = new DateTime(2026, 3, 17, 14, 30, 0, DateTimeKind.Utc),
+            Vencimento  = new DateTime(2026, 4, 5, 22, 0, 0, DateTimeKind.Utc),
+            Observacao  = "  implantação negociada  ",
+        });
+
+        dto.Valor.Should().Be(974m);
+        dto.Tipo.Should().Be("Implantacao");
+        dto.Competencia.Should().Be(Competencia(2026, 3));
+        dto.Vencimento.Should().Be(new DateTime(2026, 4, 5, 0, 0, 0, DateTimeKind.Utc));
+        dto.Observacao.Should().Be("implantação negociada");
+        dto.PagoEm.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CriarCobranca_RepetindoTipoECompetencia_ERecusada()
+    {
+        using var db = CreateDb();
+        var tenant = NovoTenant();
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+        await CobrancaEmAberto(db, tenant.Id);
+
+        var criar = async () => await CreateService(db).CriarCobrancaAsync(new()
+        {
+            TenantId    = tenant.Id,
+            Tipo        = "Mensalidade",
+            Valor       = 100m,
+            Competencia = Competencia(2026, 3),
+            Vencimento  = new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc),
+        });
+
+        await criar.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Já existe uma cobrança*");
+    }
+
+    [Fact]
+    public async Task AtualizarCobranca_EmAberto_TrocaValorEVencimento()
+    {
+        using var db = CreateDb();
+        var tenant = NovoTenant();
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+        var cobranca = await CobrancaEmAberto(db, tenant.Id);
+
+        var dto = await CreateService(db).AtualizarCobrancaAsync(cobranca.Id, new()
+        {
+            Valor      = 199m,
+            Vencimento = new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Utc),
+            Observacao = "desconto combinado",
+        });
+
+        dto.Valor.Should().Be(199m);
+        dto.Vencimento.Should().Be(new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Utc));
+        dto.Observacao.Should().Be("desconto combinado");
+    }
+
+    [Fact]
+    public async Task AtualizarCobranca_JaPaga_ERecusada()
+    {
+        using var db = CreateDb();
+        var tenant = NovoTenant();
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+        var cobranca = await CobrancaEmAberto(db, tenant.Id);
+        cobranca.PaidAt = new DateTime(2026, 3, 11, 0, 0, 0, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+
+        var alterar = async () => await CreateService(db).AtualizarCobrancaAsync(cobranca.Id, new()
+        {
+            Valor = 1m, Vencimento = new DateTime(2026, 3, 25, 0, 0, 0, DateTimeKind.Utc),
+        });
+
+        await alterar.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*Reabra a cobrança*");
+
+        // E o valor original continua lá: a recusa não pode ter aplicado nada
+        // pela metade.
+        (await db.TenantCharges.FindAsync(cobranca.Id))!.Amount.Should().Be(269m);
+    }
+
+    [Fact]
+    public async Task ExcluirCobranca_EmAberto_Remove()
+    {
+        using var db = CreateDb();
+        var tenant = NovoTenant();
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+        var cobranca = await CobrancaEmAberto(db, tenant.Id);
+
+        await CreateService(db).ExcluirCobrancaAsync(cobranca.Id);
+
+        (await db.TenantCharges.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ExcluirCobranca_JaPaga_ERecusada()
+    {
+        using var db = CreateDb();
+        var tenant = NovoTenant();
+        db.Tenants.Add(tenant);
+        await db.SaveChangesAsync();
+        var cobranca = await CobrancaEmAberto(db, tenant.Id);
+        cobranca.PaidAt = new DateTime(2026, 3, 11, 0, 0, 0, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+
+        var excluir = async () => await CreateService(db).ExcluirCobrancaAsync(cobranca.Id);
+
+        await excluir.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*não pode ser excluída*");
+        (await db.TenantCharges.CountAsync()).Should().Be(1);
+    }
 }
