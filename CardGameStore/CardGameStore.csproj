@@ -47,7 +47,7 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
 
     <!-- SignalR (built into ASP.NET Core, but included for clarity) -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.11" />
 
     <!-- Health Checks -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="8.0.10" />
