@@ -181,7 +181,7 @@ O sistema é suportado exclusivamente pelo **PostgreSQL 16**. O MongoDB foi remo
 > tenant (42) e as do catálogo (25), o modelo conceitual/lógico/físico, as convenções que
 > atravessam o schema (dinheiro em centavos, snapshot, UTC vs dia brasileiro,
 > índices parciais) e a modelagem da DRE estão em
-> **[docs/MODELAGEM-DE-DADOS.md](./docs/MODELAGEM-DE-DADOS.md)**.
+> **[MODELAGEM-DE-DADOS.md](./MODELAGEM-DE-DADOS.md)**.
 
 ### Diagrama Entidade-Relacionamento (DER Mermaid)
 
@@ -277,7 +277,7 @@ Repare que `external_transactions` carrega **duas** colunas de classificação:
 `category` é o rótulo livre da tela, `dre_group` é a classificação contábil
 fechada que dirige o cálculo. O lojista renomeia categorias sem mexer na
 contabilidade. Detalhamento em
-[docs/MODELAGEM-DE-DADOS.md](./docs/MODELAGEM-DE-DADOS.md#6-modelagem-da-dre).
+[MODELAGEM-DE-DADOS.md](./MODELAGEM-DE-DADOS.md#6-modelagem-da-dre).
 
 ---
 

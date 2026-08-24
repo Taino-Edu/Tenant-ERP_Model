@@ -107,7 +107,7 @@ Dê ao Google alguns dias antes de esperar dado. Quando aparecer:
 
 ## Parte 2 — PageSpeed Insights no CI
 
-O workflow [`pagespeed.yml`](../.github/workflows/pagespeed.yml) mede a home e a
+O workflow [`pagespeed.yml`](../../.github/workflows/pagespeed.yml) mede a home e a
 `/parceiros`, em mobile e desktop, e escreve as notas no resumo da execução.
 
 Roda depois de cada deploy na `main` e uma vez por dia às 03:00 (Brasília). No

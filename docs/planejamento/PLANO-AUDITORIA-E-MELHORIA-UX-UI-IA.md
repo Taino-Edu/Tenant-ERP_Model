@@ -64,8 +64,8 @@
 ### 3.3 Infraestrutura & Documentação
 - `deploy/nginx/nginx.conf`
 - `README.md`
-- `DOCUMENTACAO-COMPLETA.md`
-- `STATUS.md`
+- `docs/arquitetura/DOCUMENTACAO-COMPLETA.md`
+- `docs/planejamento/STATUS.md`
 
 ---
 

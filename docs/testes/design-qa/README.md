@@ -1,6 +1,7 @@
 # Design QA — contraste do pagamento em dinheiro
 
-- Source visual truth: `C:\Users\TI06\AppData\Local\Temp\codex-clipboard-99e88c2b-e247-45f8-b705-9207a93420bd.png`
+- Evidencias versionadas: [tema claro](light-final.png), [tema escuro](dark-final.png)
+  e [viewport mobile](mobile-final.png).
 - Source pixels: 2048 × 864
 - Implementation screenshot: indisponível
 - Intended viewport/state: desktop, tema claro, `/admin/comanda`, modal “Fechar comanda”, pagamento Dinheiro

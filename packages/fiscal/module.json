@@ -1,0 +1,30 @@
+{
+  "name": "TenantERP.FiscalApi",
+  "version": "1.0.0",
+  "kind": "source-bundle",
+  "requiredEntrypoints": [
+    "CardGameStore/Controllers/FiscalController.cs",
+    "CardGameStore/Services/Implementations/NfceEmissionService.cs",
+    "CardGameStore/Services/Implementations/IbptTaxService.cs",
+    "frontend/app/admin/fiscal/page.tsx"
+  ],
+  "includePatterns": [
+    "^packages/fiscal/",
+    "^CardGameStore/Controllers/(FiscalController|PlatformIbptController|ContadorPortalController)\\.cs$",
+    "^CardGameStore/DTOs/.*(Fiscal|Tributaria|Conciliacao|Fechamento|Danfe|Alerta).*\\.cs$",
+    "^CardGameStore/Models/PostgreSQL/.*(Fiscal|Nota|Nfe|Ibpt|Alerta|Fechamento|Sefaz|NaturezaOperacao|ExternalTransaction).*\\.cs$",
+    "^CardGameStore/Multitenancy/Contador.*\\.cs$",
+    "^CardGameStore/Services/(Implementations|Interfaces)/.*(Fiscal|Nfc|Nfe|Sefaz|Ibpt|Tribut|Conciliacao|Alerta).*\\.cs$",
+    "^CardGameStore/Data/Migrations/.*(Fiscal|Nfc|Nfe|Ibpt|Tribut|Sefaz|XmlContingencia|ResultadoIncerto|NcmTraceability|CstRegime|IbsCbs|CashTender).*\\.cs$",
+    "^CardGameStore/Data/Migrations/Catalog/.*(Contador|Ibpt).*\\.cs$",
+    "^CardGameStore/Schemas/",
+    "^CardGameStore/(Program|Data/AppDbContext)\\.cs$",
+    "^frontend/app/(admin/fiscal|contador)(/|$)",
+    "^frontend/components/(admin/fiscal|fiscal|contador)/",
+    "^frontend/lib/(api|manualContent|sefaz)\\.ts$",
+    "^frontend/tests/.*(fiscal|contador).*\\.spec\\.ts$",
+    "^tests/unit/CardGameStore\\.Tests/.*(Fiscal|Nfc|Nfe|Sefaz|Ibpt|Tribut|Conciliacao|Contador|Alerta).*",
+    "^docs/fiscal/",
+    "^docs/planejamento/PLANO-APLICACAO-MOTOR-FISCAL.*\\.md$"
+  ]
+}

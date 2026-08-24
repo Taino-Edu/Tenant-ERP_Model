@@ -2,7 +2,8 @@
 
 > Documento de referência pra QA, onboarding e planejamento de testes. Descreve
 > os fluxos principais do sistema do ponto de vista de quem usa — não de como o
-> código é organizado (isso está em `DOCUMENTACAO-COMPLETA.md`). Cada caso lista
+> código é organizado (isso está em
+> [`DOCUMENTACAO-COMPLETA.md`](../arquitetura/DOCUMENTACAO-COMPLETA.md)). Cada caso lista
 > ator, pré-condição, passos, resultado esperado e os pontos que mais quebram
 > (onde vale focar teste manual/automatizado).
 
