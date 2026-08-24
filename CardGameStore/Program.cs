@@ -518,6 +518,7 @@ builder.Services.AddScoped<IAlertaFiscalService>(sp => new AlertaFiscalService(
 // o leiaute 4.00 a cada venda custaria caro à toa.
 builder.Services.AddSingleton<INfceSchemaValidator, NfceSchemaValidator>();
 builder.Services.AddScoped<IbptTaxService>();
+builder.Services.AddScoped<PlatformIbptService>();
 builder.Services.AddHostedService<IbptSyncBackgroundService>();
 builder.Services.AddScoped<IFiscalTaxEngine, ConfigurableFiscalTaxEngine>();
 builder.Services.AddScoped<INfceEmissionService>(sp => new NfceEmissionService(

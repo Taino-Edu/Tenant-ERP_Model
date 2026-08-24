@@ -10,10 +10,9 @@
 // Text Search, só o Place ID é livre pra guardar pra sempre). Bônus: OSM é de
 // graça, sem chave de API nenhuma.
 //
-// Chave de API distinta só pra IA (nunca a mesma variável do resto do sistema):
-//   - ProspectingSettings:GeminiApiKey → enriquecimento por IA, separada da
-//     GeminiSettings:ApiKey usada pelo Assistente de IA de cada loja, pra não
-//     misturar custo/cota de uma feature com a outra.
+// ProspectingSettings:GeminiApiKey continua sendo a chave preferida. Quando ela
+// não existe, a instalação usa GeminiSettings:ApiKey, que já abastece os outros
+// recursos de IA. Assim uma variável opcional ausente não derruba a prospecção.
 // =============================================================================
 
 using System.Text;
@@ -43,9 +42,9 @@ public class ProspectingService : IProspectingService
     // API sem que o aplicativo tenha sido atualizado.
     private static readonly string[] GeminiModels =
     [
-        "gemini-3.5-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
         "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
     ];
 
     private static string GeminiUrlFor(string model) =>
@@ -684,9 +683,9 @@ public class ProspectingService : IProspectingService
 
     public async Task<ProspectingEnrichResponse> EnrichWithAiAsync(ProspectingEnrichRequest request)
     {
-        var apiKey = _config["ProspectingSettings:GeminiApiKey"];
+        var apiKey = ResolveGeminiApiKey();
         if (string.IsNullOrWhiteSpace(apiKey))
-            throw new InvalidOperationException("ProspectingSettings:GeminiApiKey não configurada.");
+            throw new InvalidOperationException("Chave do Gemini não configurada na plataforma.");
 
         var persistedCandidate = request.CandidateId is Guid candidateId
             ? await _catalog.ProspectCandidates.FirstOrDefaultAsync(c => c.Id == candidateId)
@@ -725,9 +724,9 @@ public class ProspectingService : IProspectingService
 
     public async Task<ProspectingEnrichResponse?> EnrichLeadWithAiAsync(Guid leadId)
     {
-        var apiKey = _config["ProspectingSettings:GeminiApiKey"];
+        var apiKey = ResolveGeminiApiKey();
         if (string.IsNullOrWhiteSpace(apiKey))
-            throw new InvalidOperationException("ProspectingSettings:GeminiApiKey não configurada.");
+            throw new InvalidOperationException("Chave do Gemini não configurada na plataforma.");
 
         var lead = await _catalog.Leads.FirstOrDefaultAsync(l => l.Id == leadId);
         if (lead is null) return null;
@@ -785,25 +784,37 @@ public class ProspectingService : IProspectingService
 
     private async Task<string> GenerateSuggestedApproachAsync(string prompt, string apiKey)
     {
-        var rawJson = await CallGeminiWithFallbackAsync(prompt, apiKey);
-        using var doc = JsonDocument.Parse(rawJson);
-        var text = doc.RootElement.GetProperty("candidates")[0]
-            .GetProperty("content").GetProperty("parts")[0]
-            .GetProperty("text").GetString() ?? "{}";
-
-        // Gemini às vezes envolve o JSON em ```json ... ``` mesmo pedindo pra não fazer isso.
-        text = text.Trim().Trim('`').Replace("json\n", "").Trim();
         try
         {
+            var rawJson = await CallGeminiWithFallbackAsync(prompt, apiKey);
+            using var doc = JsonDocument.Parse(rawJson);
+            var candidates = doc.RootElement.GetProperty("candidates");
+            if (candidates.GetArrayLength() == 0)
+                throw new JsonException("Resposta sem candidatos.");
+
+            var text = candidates[0].GetProperty("content").GetProperty("parts")[0]
+                .GetProperty("text").GetString() ?? "{}";
+
+            // Gemini ainda pode envolver JSON em markdown apesar do MIME solicitado.
+            text = text.Trim().Trim('`').Replace("json\n", "").Trim();
             using var parsed = JsonDocument.Parse(text);
-            return parsed.RootElement.GetProperty("abordagemSugerida").GetString() ?? string.Empty;
+            var abordagem = parsed.RootElement.GetProperty("abordagemSugerida").GetString()?.Trim();
+            if (string.IsNullOrWhiteSpace(abordagem))
+                throw new JsonException("Resposta sem abordagem sugerida.");
+            return abordagem;
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or IndexOutOfRangeException)
         {
-            _logger.LogWarning(ex, "Resposta do Gemini fora do formato esperado: {Text}", text);
-            throw new InvalidOperationException("A IA retornou uma resposta em formato inesperado — tenta de novo.");
+            _logger.LogWarning(ex, "Resposta do Gemini fora do formato esperado na prospecção.");
+            throw new InvalidOperationException(
+                "A IA respondeu fora do formato esperado. Tente novamente em alguns instantes.", ex);
         }
     }
+
+    private string? ResolveGeminiApiKey() =>
+        _config["ProspectingSettings:GeminiApiKey"]?.Trim() is { Length: > 0 } dedicated
+            ? dedicated
+            : _config["GeminiSettings:ApiKey"]?.Trim();
 
     /// <summary>
     /// Chama o Gemini percorrendo <see cref="GeminiModels"/> até um responder, e
@@ -824,6 +835,7 @@ public class ProspectingService : IProspectingService
         var body = JsonSerializer.Serialize(new
         {
             contents = new[] { new { parts = new[] { new { text = prompt } } } },
+            generationConfig = new { responseMimeType = "application/json" },
         });
 
         var falhas = new List<string>();
@@ -836,25 +848,37 @@ public class ProspectingService : IProspectingService
             };
             requestMessage.Headers.Add("x-goog-api-key", apiKey);
 
-            var response = await client.SendAsync(requestMessage);
-            var conteudo = await response.Content.ReadAsStringAsync();
-
-            if (response.IsSuccessStatusCode)
+            HttpResponseMessage response;
+            string conteudo;
+            try
             {
-                // Só registra quando NÃO foi o preferido: o log serve pra
-                // perceber que o modelo de cima morreu, sem ruído no caso normal.
-                if (model != GeminiModels[0])
-                    _logger.LogWarning(
-                        "Enriquecimento de lead caiu no modelo de fallback {Model} — o preferido falhou.", model);
-
-                return conteudo;
+                response = await client.SendAsync(requestMessage);
+                conteudo = await response.Content.ReadAsStringAsync();
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                _logger.LogWarning(ex, "Falha de rede ao chamar Gemini com o modelo {Model}.", model);
+                falhas.Add($"{model}: rede");
+                continue;
             }
 
-            _logger.LogError(
-                "Gemini (prospecção) recusou o modelo {Model}: {Status} — {Corpo}",
-                model, (int)response.StatusCode, Truncar(conteudo, 500));
+            using (response)
+            {
+                if (response.IsSuccessStatusCode)
+                {
+                    if (model != GeminiModels[0])
+                        _logger.LogWarning(
+                            "Enriquecimento de lead caiu no modelo de fallback {Model} — o preferido falhou.", model);
 
-            falhas.Add($"{model}: {(int)response.StatusCode}");
+                    return conteudo;
+                }
+
+                _logger.LogError(
+                    "Gemini (prospecção) recusou o modelo {Model}: {Status} — {Corpo}",
+                    model, (int)response.StatusCode, Truncar(conteudo, 500));
+
+                falhas.Add($"{model}: {(int)response.StatusCode}");
+            }
         }
 
         // Mensagem com os status por modelo: o dono da plataforma é quem usa esta

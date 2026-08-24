@@ -139,6 +139,33 @@ public class ProspectingServiceTests
         lead.EstimatedRevenueRange.Should().BeNull();
     }
 
+    [Fact]
+    public async Task EnrichLeadWithAiAsync_UsaChaveGlobalQuandoDedicadaNaoFoiConfigurada()
+    {
+        var options = new DbContextOptionsBuilder<CatalogDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new CatalogDbContext(options);
+        var lead = new Lead
+        {
+            Nome = "Loja Exemplo", Telefone = "14999990000", Origem = "prospeccao",
+        };
+        db.Leads.Add(lead);
+        await db.SaveChangesAsync();
+
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["GeminiSettings:ApiKey"] = "global-key",
+        }).Build();
+        var service = new ProspectingService(
+            new FakeHttpClientFactory(new GeminiSuccessHandler()), config,
+            NullLogger<ProspectingService>.Instance, db);
+
+        var result = await service.EnrichLeadWithAiAsync(lead.Id);
+
+        result.Should().NotBeNull();
+        result!.AbordagemSugerida.Should().Contain("estoque integrado");
+    }
+
     private sealed class FakeHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
