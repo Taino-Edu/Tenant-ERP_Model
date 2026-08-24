@@ -1546,6 +1546,75 @@ export interface FinanceiroDto {
   projecao?: ProjecaoDto | null
 }
 
+export interface CapitalGiroDto {
+  estoqueImobilizado: number
+  contasReceber: number
+  receberCrediario: number
+  receberOutros: number
+  contasPagar: number
+  necessidadeCapitalGiro: number
+  vencidoReceber: number
+  vencidoPagar: number
+  vencePagar7Dias: number
+  receitaPeriodo: number
+  cmvPeriodo: number
+  comprasEstoquePeriodo: number
+  diasPeriodo: number
+  coberturaEstoqueDias: number | null
+  prazoMedioRecebimentoDias: number | null
+  prazoMedioPagamentoDias: number | null
+  cicloFinanceiroDias: number | null
+  produtosSemCusto: number
+  atualizadoEm: string
+}
+
+export interface AgendaCaixaDiaDto {
+  data: string
+  receberCrediario: number
+  receberOutros: number
+  pagar: number
+  saldoLiquido: number
+}
+
+export interface AgendaCaixaDto {
+  diasProjetados: number
+  recebimentosVencidos: number
+  pagamentosVencidos: number
+  recebimentosSemData: number
+  pagamentosSemData: number
+  atualizadoEm: string
+  dias: AgendaCaixaDiaDto[]
+}
+
+export interface EstoqueProdutoInsightDto {
+  productId: string
+  nome: string
+  categoria: string
+  estoqueAtual: number
+  estoqueMinimo: number
+  custoUnitario: number
+  valorEstoque: number
+  quantidadeVendida: number
+  receita: number
+  margemBruta: number
+  vendaMediaDiaria: number
+  coberturaDias: number | null
+  gmroiEstimado: number | null
+  situacao: 'sem_custo' | 'ruptura' | 'baixo' | 'sem_movimento' | 'excesso' | 'saudavel'
+}
+
+export interface EstoqueInteligenteDto {
+  valorTotalEstoque: number
+  margemBrutaPeriodo: number
+  gmroiEstimado: number | null
+  produtosSemMovimento: number
+  produtosRiscoRuptura: number
+  produtosExcesso: number
+  produtosSemCusto: number
+  diasPeriodo: number
+  produtos: EstoqueProdutoInsightDto[]
+}
+
 export interface ProjecaoDto {
   valorProjetado: number
   metodo: 'ponderado' | 'flat'
@@ -1575,6 +1644,12 @@ export const analyticsApi = {
     api.get<FinanceiroDto>('/api/analytics/financeiro', {
       params: { inicio, fim, filterPaymentMethod: filterPaymentMethod || undefined },
     }),
+  capitalGiro: (inicio?: string, fim?: string) =>
+    api.get<CapitalGiroDto>('/api/analytics/financeiro/capital-giro', { params: { inicio, fim } }),
+  agendaCaixa: (dias = 30) =>
+    api.get<AgendaCaixaDto>('/api/analytics/financeiro/agenda-caixa', { params: { dias } }),
+  estoqueInteligente: (inicio?: string, fim?: string) =>
+    api.get<EstoqueInteligenteDto>('/api/analytics/financeiro/estoque-inteligente', { params: { inicio, fim } }),
   // Snapshot de um período já fechado (dia/semana/mês) — 404 se ainda não foi fechado.
   getFechamento: (tipo: 'Dia' | 'Semana' | 'Mes', inicio: string, fim: string) =>
     api.get<FechamentoPeriodoDto>('/api/analytics/fechamentos', { params: { tipo, inicio, fim } }),
@@ -2328,6 +2403,24 @@ export interface SaveAiConfigRequest {
 export const aiConfigApi = {
   get:  () => api.get<AiConfigDto>('/api/ai-config'),
   save: (body: SaveAiConfigRequest) => api.put<AiConfigDto>('/api/ai-config', body),
+}
+
+// ── Premissas gerenciais persistentes do financeiro ─────────────────────────
+
+export interface FinancialConfigDto {
+  cardFeePercent: number
+  commissionPercent: number
+  freightPercent: number
+  expectedDailyNetCash: number
+  minimumCashReserve: number
+  updatedAt: string
+}
+
+export type SaveFinancialConfigRequest = Omit<FinancialConfigDto, 'updatedAt'>
+
+export const financialConfigApi = {
+  get: () => api.get<FinancialConfigDto>('/api/financial-config'),
+  save: (body: SaveFinancialConfigRequest) => api.put<FinancialConfigDto>('/api/financial-config', body),
 }
 
 // ── Diretório público de lojas (site institucional) ──────────────────────────

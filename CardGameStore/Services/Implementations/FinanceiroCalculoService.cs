@@ -397,6 +397,320 @@ public class FinanceiroCalculoService : IFinanceiroCalculoService
         };
     }
 
+    public async Task<CapitalGiroDto> CalcularCapitalGiroAsync(
+        DateTime iniUtc, DateTime endUtc,
+        DateTime dataBrIni, DateTime dataBrFim)
+    {
+        var financeiro = await CalcularAsync(iniUtc, endUtc, dataBrIni, dataBrFim);
+        var diasPeriodo = Math.Max(1, (dataBrFim.Date - dataBrIni.Date).Days + 1);
+        var hojeUtc = DateTime.UtcNow.Date;
+        var em7Dias = hojeUtc.AddDays(7);
+
+        var produtos = await _db.Products.AsNoTracking()
+            .Where(p => p.IsActive)
+            .Select(p => new { p.Id, p.CostPriceInCents, p.StockQuantity, p.HasVariants })
+            .ToListAsync();
+        var idsComVariantes = produtos.Where(p => p.HasVariants).Select(p => p.Id).ToList();
+        var estoqueVariantes = idsComVariantes.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await _db.ProductVariants.AsNoTracking()
+                .Where(v => idsComVariantes.Contains(v.ProductId))
+                .GroupBy(v => v.ProductId)
+                .ToDictionaryAsync(g => g.Key, g => g.Sum(v => v.StockQuantity));
+
+        decimal estoqueImobilizado = 0;
+        var produtosSemCusto = 0;
+        foreach (var produto in produtos)
+        {
+            var quantidade = produto.HasVariants
+                ? estoqueVariantes.GetValueOrDefault(produto.Id)
+                : produto.StockQuantity;
+            quantidade = Math.Max(0, quantidade);
+            if (quantidade > 0 && produto.CostPriceInCents <= 0)
+                produtosSemCusto++;
+            estoqueImobilizado += (decimal)quantidade * produto.CostPriceInCents / 100m;
+        }
+
+        var crediariosAbertos = await _db.Crediarios.AsNoTracking()
+            .Where(c => c.Status == CrediariosStatus.Aberto)
+            .Select(c => new
+            {
+                Saldo = Math.Max(0, c.ValorEmCentavos - c.ValorPagoEmCentavos),
+                c.DataVencimento,
+            })
+            .ToListAsync();
+        var receberCrediario = crediariosAbertos.Sum(c => (decimal)c.Saldo) / 100m;
+        var crediarioVencido = crediariosAbertos
+            .Where(c => c.DataVencimento.Date < hojeUtc)
+            .Sum(c => (decimal)c.Saldo) / 100m;
+
+        var lancamentosAbertos = await _db.ExternalTransactions.AsNoTracking()
+            .Where(t => t.Status == "pending" || t.Status == "overdue")
+            .Select(t => new { t.Type, t.Amount, t.Status, t.DueDate })
+            .ToListAsync();
+        var receberOutros = lancamentosAbertos.Where(t => t.Type == "income").Sum(t => t.Amount);
+        var contasPagar = lancamentosAbertos.Where(t => t.Type == "expense").Sum(t => t.Amount);
+        var vencidoReceber = crediarioVencido + lancamentosAbertos
+            .Where(t => t.Type == "income" && (t.Status == "overdue" || t.DueDate < hojeUtc))
+            .Sum(t => t.Amount);
+        var vencidoPagar = lancamentosAbertos
+            .Where(t => t.Type == "expense" && (t.Status == "overdue" || t.DueDate < hojeUtc))
+            .Sum(t => t.Amount);
+        var vencePagar7Dias = lancamentosAbertos
+            .Where(t => t.Type == "expense" && t.Status == "pending" &&
+                        t.DueDate >= hojeUtc && t.DueDate <= em7Dias)
+            .Sum(t => t.Amount);
+
+        var comprasEstoque = await _db.ExternalTransactions.AsNoTracking()
+            .Where(t => t.Status != "cancelled" && t.Type == "expense" &&
+                        t.DreGroup == DreGroups.InventoryPurchase &&
+                        (t.DueDate ?? t.CreatedAt) >= iniUtc && (t.DueDate ?? t.CreatedAt) < endUtc)
+            .SumAsync(t => t.Amount);
+
+        var contasReceber = receberCrediario + receberOutros;
+        var coberturaEstoque = financeiro.Custo > 0
+            ? Math.Round(estoqueImobilizado / (financeiro.Custo / diasPeriodo), 1)
+            : (decimal?)null;
+        var prazoRecebimento = financeiro.Receita > 0
+            ? Math.Round(contasReceber / (financeiro.Receita / diasPeriodo), 1)
+            : (decimal?)null;
+        var prazoPagamento = comprasEstoque > 0
+            ? Math.Round(contasPagar / (comprasEstoque / diasPeriodo), 1)
+            : (decimal?)null;
+        var cicloFinanceiro = coberturaEstoque.HasValue && prazoRecebimento.HasValue && prazoPagamento.HasValue
+            ? Math.Round(coberturaEstoque.Value + prazoRecebimento.Value - prazoPagamento.Value, 1)
+            : (decimal?)null;
+
+        return new CapitalGiroDto
+        {
+            EstoqueImobilizado = Math.Round(estoqueImobilizado, 2),
+            ContasReceber = Math.Round(contasReceber, 2),
+            ReceberCrediario = Math.Round(receberCrediario, 2),
+            ReceberOutros = Math.Round(receberOutros, 2),
+            ContasPagar = Math.Round(contasPagar, 2),
+            NecessidadeCapitalGiro = Math.Round(estoqueImobilizado + contasReceber - contasPagar, 2),
+            VencidoReceber = Math.Round(vencidoReceber, 2),
+            VencidoPagar = Math.Round(vencidoPagar, 2),
+            VencePagar7Dias = Math.Round(vencePagar7Dias, 2),
+            ReceitaPeriodo = financeiro.Receita,
+            CmvPeriodo = financeiro.Custo,
+            ComprasEstoquePeriodo = Math.Round(comprasEstoque, 2),
+            DiasPeriodo = diasPeriodo,
+            CoberturaEstoqueDias = coberturaEstoque,
+            PrazoMedioRecebimentoDias = prazoRecebimento,
+            PrazoMedioPagamentoDias = prazoPagamento,
+            CicloFinanceiroDias = cicloFinanceiro,
+            ProdutosSemCusto = produtosSemCusto,
+            AtualizadoEm = DateTime.UtcNow,
+        };
+    }
+
+    public async Task<AgendaCaixaDto> CalcularAgendaCaixaAsync(int dias)
+    {
+        dias = Math.Clamp(dias, 7, 90);
+        var hojeBr = BrazilTime.NowBr().Date;
+        var fimBr = hojeBr.AddDays(dias - 1);
+        var fimUtcExclusivo = BrazilTime.DateToUtcStart(fimBr.AddDays(1));
+        var agenda = Enumerable.Range(0, dias)
+            .ToDictionary(
+                offset => hojeBr.AddDays(offset),
+                offset => new AgendaCaixaDiaDto { Data = hojeBr.AddDays(offset) });
+
+        var crediarios = await _db.Crediarios.AsNoTracking()
+            .Where(c => c.Status == CrediariosStatus.Aberto &&
+                        c.ValorEmCentavos > c.ValorPagoEmCentavos &&
+                        c.DataVencimento < fimUtcExclusivo)
+            .Select(c => new
+            {
+                c.DataVencimento,
+                Saldo = c.ValorEmCentavos - c.ValorPagoEmCentavos,
+            })
+            .ToListAsync();
+        var lancamentos = await _db.ExternalTransactions.AsNoTracking()
+            .Where(t => (t.Status == "pending" || t.Status == "overdue") &&
+                        (t.Status == "overdue" || t.DueDate == null || t.DueDate < fimUtcExclusivo))
+            .Select(t => new { t.Type, t.Amount, t.Status, t.DueDate })
+            .ToListAsync();
+
+        decimal receberVencido = 0;
+        decimal pagarVencido = 0;
+        decimal receberSemData = 0;
+        decimal pagarSemData = 0;
+
+        static DateTime ToBrazilDate(DateTime value)
+        {
+            var utc = value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);
+            return TimeZoneInfo.ConvertTimeFromUtc(utc, BrazilTime.Zone).Date;
+        }
+
+        foreach (var crediario in crediarios)
+        {
+            var vencimento = ToBrazilDate(crediario.DataVencimento);
+            var valor = crediario.Saldo / 100m;
+            if (vencimento < hojeBr)
+            {
+                receberVencido += valor;
+                vencimento = hojeBr;
+            }
+            if (vencimento <= fimBr)
+                agenda[vencimento].ReceberCrediario += valor;
+        }
+
+        foreach (var lancamento in lancamentos)
+        {
+            var entrada = lancamento.Type == "income";
+            if (!lancamento.DueDate.HasValue && lancamento.Status != "overdue")
+            {
+                if (entrada) receberSemData += lancamento.Amount;
+                else pagarSemData += lancamento.Amount;
+                continue;
+            }
+
+            var vencimento = lancamento.DueDate.HasValue
+                ? ToBrazilDate(lancamento.DueDate.Value)
+                : hojeBr;
+            var vencido = lancamento.Status == "overdue" || vencimento < hojeBr;
+            if (vencido)
+            {
+                if (entrada) receberVencido += lancamento.Amount;
+                else pagarVencido += lancamento.Amount;
+                vencimento = hojeBr;
+            }
+            if (vencimento > fimBr) continue;
+
+            if (entrada) agenda[vencimento].ReceberOutros += lancamento.Amount;
+            else agenda[vencimento].Pagar += lancamento.Amount;
+        }
+
+        foreach (var dia in agenda.Values)
+        {
+            dia.ReceberCrediario = Math.Round(dia.ReceberCrediario, 2);
+            dia.ReceberOutros = Math.Round(dia.ReceberOutros, 2);
+            dia.Pagar = Math.Round(dia.Pagar, 2);
+            dia.SaldoLiquido = Math.Round(dia.ReceberCrediario + dia.ReceberOutros - dia.Pagar, 2);
+        }
+
+        return new AgendaCaixaDto
+        {
+            DiasProjetados = dias,
+            RecebimentosVencidos = Math.Round(receberVencido, 2),
+            PagamentosVencidos = Math.Round(pagarVencido, 2),
+            RecebimentosSemData = Math.Round(receberSemData, 2),
+            PagamentosSemData = Math.Round(pagarSemData, 2),
+            AtualizadoEm = DateTime.UtcNow,
+            Dias = agenda.Values.OrderBy(d => d.Data).ToList(),
+        };
+    }
+
+    public async Task<EstoqueInteligenteDto> CalcularEstoqueInteligenteAsync(
+        DateTime iniUtc, DateTime endUtc,
+        DateTime dataBrIni, DateTime dataBrFim)
+    {
+        var diasPeriodo = Math.Max(1, (dataBrFim.Date - dataBrIni.Date).Days + 1);
+        var produtos = await _db.Products.AsNoTracking()
+            .Where(p => p.IsActive)
+            .Select(p => new
+            {
+                p.Id, p.Name, p.Category, p.CostPriceInCents, p.StockQuantity,
+                p.MinimumStock, p.HasVariants,
+            })
+            .ToListAsync();
+        var idsComVariantes = produtos.Where(p => p.HasVariants).Select(p => p.Id).ToList();
+        var estoqueVariantes = idsComVariantes.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await _db.ProductVariants.AsNoTracking()
+                .Where(v => idsComVariantes.Contains(v.ProductId))
+                .GroupBy(v => v.ProductId)
+                .ToDictionaryAsync(g => g.Key, g => g.Sum(v => v.StockQuantity));
+
+        var vendasComanda = await _db.ComandaItems.AsNoTracking()
+            .Where(i => i.ProductId != null && i.Comanda!.Status == ComandaStatus.Fechada &&
+                        i.Comanda.ClosedAt >= iniUtc && i.Comanda.ClosedAt < endUtc)
+            .GroupBy(i => i.ProductId!.Value)
+            .Select(g => new
+            {
+                ProductId = g.Key,
+                Quantidade = g.Sum(i => i.Quantity),
+                ReceitaCentavos = g.Sum(i => (long)i.UnitPriceInCents * i.Quantity),
+                CustoCentavos = g.Sum(i => (long)i.CostPriceSnapshotInCents * i.Quantity),
+            })
+            .ToDictionaryAsync(x => x.ProductId);
+
+        var vendasAvulsasNoPeriodo = await _db.VendasAvulsas.AsNoTracking()
+            .Where(v => v.SoldAt >= iniUtc && v.SoldAt < endUtc)
+            .ToListAsync();
+        var vendasAvulsas = vendasAvulsasNoPeriodo
+            .SelectMany(v => v.Items)
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => new
+            {
+                Quantidade = g.Sum(i => i.Quantity),
+                ReceitaCentavos = g.Sum(i => (long)i.UnitPriceInCents * i.Quantity),
+                CustoCentavos = g.Sum(i => (long)i.UnitCostInCents * i.Quantity),
+            });
+
+        var insights = new List<EstoqueProdutoInsightDto>(produtos.Count);
+        foreach (var produto in produtos)
+        {
+            vendasComanda.TryGetValue(produto.Id, out var comanda);
+            vendasAvulsas.TryGetValue(produto.Id, out var avulsa);
+            var estoqueAtual = Math.Max(0, produto.HasVariants
+                ? estoqueVariantes.GetValueOrDefault(produto.Id)
+                : produto.StockQuantity);
+            var quantidadeVendida = (comanda?.Quantidade ?? 0) + (avulsa?.Quantidade ?? 0);
+            var receita = ((comanda?.ReceitaCentavos ?? 0) + (avulsa?.ReceitaCentavos ?? 0)) / 100m;
+            var custoVendido = ((comanda?.CustoCentavos ?? 0) + (avulsa?.CustoCentavos ?? 0)) / 100m;
+            var margemBruta = receita - custoVendido;
+            var custoUnitario = produto.CostPriceInCents / 100m;
+            var valorEstoque = estoqueAtual * custoUnitario;
+            var vendaMedia = quantidadeVendida / (decimal)diasPeriodo;
+            var cobertura = vendaMedia > 0 ? Math.Round(estoqueAtual / vendaMedia, 1) : (decimal?)null;
+            var gmroi = valorEstoque > 0 ? Math.Round(margemBruta / valorEstoque, 2) : (decimal?)null;
+            var situacao = estoqueAtual > 0 && produto.CostPriceInCents <= 0 ? "sem_custo"
+                : estoqueAtual <= 0 ? "ruptura"
+                : quantidadeVendida == 0 && estoqueAtual > 0 ? "sem_movimento"
+                : cobertura <= 14 || (estoqueAtual <= produto.MinimumStock && quantidadeVendida > 0) ? "baixo"
+                : cobertura > 90 ? "excesso"
+                : "saudavel";
+
+            insights.Add(new EstoqueProdutoInsightDto
+            {
+                ProductId = produto.Id,
+                Nome = produto.Name,
+                Categoria = produto.Category,
+                EstoqueAtual = estoqueAtual,
+                EstoqueMinimo = produto.MinimumStock,
+                CustoUnitario = custoUnitario,
+                ValorEstoque = Math.Round(valorEstoque, 2),
+                QuantidadeVendida = quantidadeVendida,
+                Receita = Math.Round(receita, 2),
+                MargemBruta = Math.Round(margemBruta, 2),
+                VendaMediaDiaria = Math.Round(vendaMedia, 2),
+                CoberturaDias = cobertura,
+                GmroiEstimado = gmroi,
+                Situacao = situacao,
+            });
+        }
+
+        var valorTotal = insights.Sum(i => i.ValorEstoque);
+        var margemTotal = insights.Sum(i => i.MargemBruta);
+        return new EstoqueInteligenteDto
+        {
+            ValorTotalEstoque = Math.Round(valorTotal, 2),
+            MargemBrutaPeriodo = Math.Round(margemTotal, 2),
+            GmroiEstimado = valorTotal > 0 ? Math.Round(margemTotal / valorTotal, 2) : null,
+            ProdutosSemMovimento = insights.Count(i => i.Situacao == "sem_movimento"),
+            ProdutosRiscoRuptura = insights.Count(i => i.Situacao is "ruptura" or "baixo"),
+            ProdutosExcesso = insights.Count(i => i.Situacao == "excesso"),
+            ProdutosSemCusto = insights.Count(i => i.Situacao == "sem_custo"),
+            DiasPeriodo = diasPeriodo,
+            Produtos = insights
+                .OrderBy(i => i.Situacao switch { "ruptura" => 0, "baixo" => 1, "sem_custo" => 2, "excesso" => 3, "sem_movimento" => 4, _ => 5 })
+                .ThenByDescending(i => i.ValorEstoque)
+                .ToList(),
+        };
+    }
+
     /// <summary>
     /// Projeta o restante do mês corrente: pra cada dia que falta (amanhã até
     /// o fim do mês), usa a média histórica DAQUELE dia da semana nas últimas

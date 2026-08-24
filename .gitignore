@@ -91,6 +91,8 @@ yarn-error.log*
 # Next.js
 .next/
 frontend/.next/
+frontend/.next-dev-*/
+frontend/.next-stale-*/
 frontend/out/
 
 # dotnet build / publish

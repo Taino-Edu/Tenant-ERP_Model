@@ -101,6 +101,80 @@ public class FinanceiroDto
     public ProjecaoDto? Projecao { get; set; }
 }
 
+public class CapitalGiroDto
+{
+    public decimal EstoqueImobilizado { get; set; }
+    public decimal ContasReceber { get; set; }
+    public decimal ReceberCrediario { get; set; }
+    public decimal ReceberOutros { get; set; }
+    public decimal ContasPagar { get; set; }
+    public decimal NecessidadeCapitalGiro { get; set; }
+    public decimal VencidoReceber { get; set; }
+    public decimal VencidoPagar { get; set; }
+    public decimal VencePagar7Dias { get; set; }
+    public decimal ReceitaPeriodo { get; set; }
+    public decimal CmvPeriodo { get; set; }
+    public decimal ComprasEstoquePeriodo { get; set; }
+    public int DiasPeriodo { get; set; }
+    public decimal? CoberturaEstoqueDias { get; set; }
+    public decimal? PrazoMedioRecebimentoDias { get; set; }
+    public decimal? PrazoMedioPagamentoDias { get; set; }
+    public decimal? CicloFinanceiroDias { get; set; }
+    public int ProdutosSemCusto { get; set; }
+    public DateTime AtualizadoEm { get; set; }
+}
+
+public class AgendaCaixaDto
+{
+    public int DiasProjetados { get; set; }
+    public decimal RecebimentosVencidos { get; set; }
+    public decimal PagamentosVencidos { get; set; }
+    public decimal RecebimentosSemData { get; set; }
+    public decimal PagamentosSemData { get; set; }
+    public DateTime AtualizadoEm { get; set; }
+    public List<AgendaCaixaDiaDto> Dias { get; set; } = new();
+}
+
+public class AgendaCaixaDiaDto
+{
+    public DateTime Data { get; set; }
+    public decimal ReceberCrediario { get; set; }
+    public decimal ReceberOutros { get; set; }
+    public decimal Pagar { get; set; }
+    public decimal SaldoLiquido { get; set; }
+}
+
+public class EstoqueInteligenteDto
+{
+    public decimal ValorTotalEstoque { get; set; }
+    public decimal MargemBrutaPeriodo { get; set; }
+    public decimal? GmroiEstimado { get; set; }
+    public int ProdutosSemMovimento { get; set; }
+    public int ProdutosRiscoRuptura { get; set; }
+    public int ProdutosExcesso { get; set; }
+    public int ProdutosSemCusto { get; set; }
+    public int DiasPeriodo { get; set; }
+    public List<EstoqueProdutoInsightDto> Produtos { get; set; } = new();
+}
+
+public class EstoqueProdutoInsightDto
+{
+    public Guid ProductId { get; set; }
+    public string Nome { get; set; } = string.Empty;
+    public string Categoria { get; set; } = string.Empty;
+    public int EstoqueAtual { get; set; }
+    public int EstoqueMinimo { get; set; }
+    public decimal CustoUnitario { get; set; }
+    public decimal ValorEstoque { get; set; }
+    public int QuantidadeVendida { get; set; }
+    public decimal Receita { get; set; }
+    public decimal MargemBruta { get; set; }
+    public decimal VendaMediaDiaria { get; set; }
+    public decimal? CoberturaDias { get; set; }
+    public decimal? GmroiEstimado { get; set; }
+    public string Situacao { get; set; } = string.Empty;
+}
+
 public class DreCategoriaDto
 {
     public string Categoria { get; set; } = string.Empty;

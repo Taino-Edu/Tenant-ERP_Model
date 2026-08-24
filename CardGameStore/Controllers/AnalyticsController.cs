@@ -283,6 +283,56 @@ public class AnalyticsController : ControllerBase
     }
 
     /// <summary>
+    /// Saldos atuais de estoque, contas a receber/pagar e estimativas do ciclo
+    /// financeiro para o período selecionado.
+    /// </summary>
+    [HttpGet("financeiro/capital-giro")]
+    [RequireOperatorPermission(Permissao.Financeiro)]
+    public async Task<ActionResult<CapitalGiroDto>> GetCapitalGiro(
+        [FromQuery] DateTime? inicio,
+        [FromQuery] DateTime? fim)
+    {
+        var agoraBr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone);
+        var dataBrIni = inicio.HasValue ? inicio.Value.Date : new DateTime(agoraBr.Year, agoraBr.Month, 1);
+        var dataBrFim = fim.HasValue ? fim.Value.Date : agoraBr.Date;
+        if (dataBrFim < dataBrIni)
+            return BadRequest(new { Message = "A data final não pode ser anterior à data inicial." });
+
+        var ini = BrazilTime.DateToUtcStart(dataBrIni);
+        var end = BrazilTime.DateToUtcStart(dataBrFim.AddDays(1));
+        return Ok(await _financeiro.CalcularCapitalGiroAsync(ini, end, dataBrIni, dataBrFim));
+    }
+
+    /// <summary>Agenda de entradas e saídas abertas pelos próximos 7 a 90 dias.</summary>
+    [HttpGet("financeiro/agenda-caixa")]
+    [RequireOperatorPermission(Permissao.Financeiro)]
+    public async Task<ActionResult<AgendaCaixaDto>> GetAgendaCaixa([FromQuery] int dias = 30)
+    {
+        if (dias is < 7 or > 90)
+            return BadRequest(new { Message = "O horizonte deve ficar entre 7 e 90 dias." });
+
+        return Ok(await _financeiro.CalcularAgendaCaixaAsync(dias));
+    }
+
+    /// <summary>Estoque atual cruzado com vendas, margem e cobertura do período.</summary>
+    [HttpGet("financeiro/estoque-inteligente")]
+    [RequireOperatorPermission(Permissao.Financeiro)]
+    public async Task<ActionResult<EstoqueInteligenteDto>> GetEstoqueInteligente(
+        [FromQuery] DateTime? inicio,
+        [FromQuery] DateTime? fim)
+    {
+        var agoraBr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, BrazilTime.Zone);
+        var dataBrIni = inicio.HasValue ? inicio.Value.Date : new DateTime(agoraBr.Year, agoraBr.Month, 1);
+        var dataBrFim = fim.HasValue ? fim.Value.Date : agoraBr.Date;
+        if (dataBrFim < dataBrIni)
+            return BadRequest(new { Message = "A data final não pode ser anterior à data inicial." });
+
+        var ini = BrazilTime.DateToUtcStart(dataBrIni);
+        var end = BrazilTime.DateToUtcStart(dataBrFim.AddDays(1));
+        return Ok(await _financeiro.CalcularEstoqueInteligenteAsync(ini, end, dataBrIni, dataBrFim));
+    }
+
+    /// <summary>
     /// Consulta um snapshot de período já fechado (FechamentoPeriodo), se existir —
     /// usado pra preferir o número congelado em vez de recalcular ao vivo. 404 se
     /// essa janela específica nunca foi fechada.

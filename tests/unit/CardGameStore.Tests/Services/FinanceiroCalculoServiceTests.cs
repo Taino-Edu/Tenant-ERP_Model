@@ -6,6 +6,7 @@
 // Executar: dotnet test  (na pasta tests/unit/CardGameStore.Tests)
 // =============================================================================
 
+using CardGameStore.Common;
 using CardGameStore.Data;
 using CardGameStore.Models.PostgreSQL;
 using CardGameStore.Multitenancy;
@@ -328,6 +329,103 @@ public class FinanceiroCalculoServiceTests
         top.QtdComandas.Should().Be(1);
         top.QtdAvulsa.Should().Be(1);
         top.Receita.Should().Be(20.00m); // R$10 comanda + R$10 avulsa
+    }
+
+    [Fact]
+    public async Task CalcularCapitalGiroAsync_ConsolidaSaldosEEstimaCicloSemMisturarPagos()
+    {
+        using var db = CreateDb(nameof(CalcularCapitalGiroAsync_ConsolidaSaldosEEstimaCicloSemMisturarPagos));
+        var product = await SeedProductAsync(db, costCents: 500); // 100 un. = R$ 500 em estoque
+        var service = CreateService(db);
+        var (ini, end, dBrIni, dBrFim) = JanelaHoje();
+        await SeedComandaFechadaAsync(db, product, quantity: 1, unitPriceCents: 1000, closedAt: DateTime.UtcNow);
+        var user = await SeedUserAsync(db, "Capital de giro");
+
+        db.Crediarios.Add(new Crediario
+        {
+            UserId = user.Id, ValorEmCentavos = 10000, ValorPagoEmCentavos = 3000,
+            Status = CrediariosStatus.Aberto, DataAbertura = DateTime.UtcNow,
+            DataVencimento = DateTime.UtcNow.AddDays(-1), AbertoPorAdminId = AdminId,
+        });
+        db.ExternalTransactions.AddRange(
+            new ExternalTransaction { Type = "income", Amount = 30m, Status = "pending", Description = "A receber" },
+            new ExternalTransaction { Type = "expense", Amount = 200m, Status = "pending", Description = "Fornecedor", DreGroup = DreGroups.InventoryPurchase, DueDate = DateTime.UtcNow },
+            new ExternalTransaction { Type = "expense", Amount = 999m, Status = "paid", Description = "Já pago", DreGroup = DreGroups.InventoryPurchase, DueDate = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var dto = await service.CalcularCapitalGiroAsync(ini, end, dBrIni, dBrFim);
+
+        dto.EstoqueImobilizado.Should().Be(500m);
+        dto.ContasReceber.Should().Be(100m);
+        dto.ContasPagar.Should().Be(200m, "lançamento pago não compõe o saldo atual");
+        dto.NecessidadeCapitalGiro.Should().Be(400m);
+        dto.VencidoReceber.Should().Be(70m);
+        dto.CoberturaEstoqueDias.Should().Be(100m);
+        dto.PrazoMedioRecebimentoDias.Should().Be(10m);
+        dto.PrazoMedioPagamentoDias.Should().HaveValue();
+        dto.PrazoMedioPagamentoDias!.Value.Should().BeApproximately(0.2m, 0.01m);
+        dto.CicloFinanceiroDias.Should().HaveValue();
+        dto.CicloFinanceiroDias!.Value.Should().BeApproximately(109.8m, 0.01m);
+    }
+
+    [Fact]
+    public async Task CalcularAgendaCaixaAsync_DistribuiVencimentosESeparaSemData()
+    {
+        using var db = CreateDb(nameof(CalcularAgendaCaixaAsync_DistribuiVencimentosESeparaSemData));
+        var service = CreateService(db);
+        var user = await SeedUserAsync(db, "Agenda de caixa");
+        var hojeBr = BrazilTime.NowBr().Date;
+
+        db.Crediarios.Add(new Crediario
+        {
+            UserId = user.Id, ValorEmCentavos = 10000, ValorPagoEmCentavos = 3000,
+            Status = CrediariosStatus.Aberto, DataAbertura = DateTime.UtcNow,
+            DataVencimento = BrazilTime.DateToUtcStart(hojeBr.AddDays(-1)).AddHours(12),
+            AbertoPorAdminId = AdminId,
+        });
+        db.ExternalTransactions.AddRange(
+            new ExternalTransaction { Type = "expense", Amount = 200m, Status = "pending", Description = "A pagar", DueDate = BrazilTime.DateToUtcStart(hojeBr.AddDays(1)).AddHours(12) },
+            new ExternalTransaction { Type = "income", Amount = 150m, Status = "pending", Description = "A receber", DueDate = BrazilTime.DateToUtcStart(hojeBr.AddDays(2)).AddHours(12) },
+            new ExternalTransaction { Type = "expense", Amount = 777m, Status = "pending", Description = "Fora do horizonte", DueDate = BrazilTime.DateToUtcStart(hojeBr.AddDays(30)).AddHours(12) },
+            new ExternalTransaction { Type = "expense", Amount = 80m, Status = "pending", Description = "Sem vencimento" },
+            new ExternalTransaction { Type = "expense", Amount = 999m, Status = "paid", Description = "Já pago", DueDate = BrazilTime.DateToUtcStart(hojeBr.AddDays(1)).AddHours(12) });
+        await db.SaveChangesAsync();
+
+        var dto = await service.CalcularAgendaCaixaAsync(7);
+
+        dto.Dias.Should().HaveCount(7);
+        dto.RecebimentosVencidos.Should().Be(70m);
+        dto.PagamentosSemData.Should().Be(80m);
+        dto.Dias[0].ReceberCrediario.Should().Be(70m);
+        dto.Dias[1].Pagar.Should().Be(200m);
+        dto.Dias[2].ReceberOutros.Should().Be(150m);
+        dto.Dias.Sum(d => d.Pagar).Should().Be(200m, "pagos, sem data e fora do horizonte não entram em um dia inventado");
+    }
+
+    [Fact]
+    public async Task CalcularEstoqueInteligenteAsync_ClassificaCoberturaEMovimentoPorProduto()
+    {
+        using var db = CreateDb(nameof(CalcularEstoqueInteligenteAsync_ClassificaCoberturaEMovimentoPorProduto));
+        var produtoComVenda = await SeedProductAsync(db, costCents: 500);
+        produtoComVenda.StockQuantity = 10;
+        var produtoParado = await SeedProductAsync(db, costCents: 100);
+        produtoParado.Name = "Sem movimento";
+        produtoParado.StockQuantity = 5;
+        await db.SaveChangesAsync();
+        var service = CreateService(db);
+        var (ini, end, dBrIni, dBrFim) = JanelaHoje();
+        await SeedComandaFechadaAsync(db, produtoComVenda, quantity: 1, unitPriceCents: 1000, closedAt: DateTime.UtcNow);
+
+        var dto = await service.CalcularEstoqueInteligenteAsync(ini, end, dBrIni, dBrFim);
+
+        dto.ValorTotalEstoque.Should().Be(55m);
+        dto.ProdutosRiscoRuptura.Should().Be(1);
+        dto.ProdutosSemMovimento.Should().Be(1);
+        var vendido = dto.Produtos.Single(p => p.ProductId == produtoComVenda.Id);
+        vendido.CoberturaDias.Should().Be(10m);
+        vendido.GmroiEstimado.Should().Be(0.1m);
+        vendido.Situacao.Should().Be("baixo");
+        dto.Produtos.Single(p => p.ProductId == produtoParado.Id).Situacao.Should().Be("sem_movimento");
     }
 
     // ── FecharJanelaAsync (upsert) ──────────────────────────────────────────────

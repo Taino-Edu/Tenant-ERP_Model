@@ -212,7 +212,7 @@ export default function ManualPdfPage() {
 
         {/* Seções */}
         {SECOES.map(s => (
-          <div key={s.num} className="secao">
+          <div key={s.num} id={s.num === '13' ? 'financeiro-rentabilidade' : undefined} className="secao scroll-mt-6">
             <div className="secao-header">
               <span className="secao-num">{s.num}</span>
               <span className="secao-title">{s.titulo}</span>

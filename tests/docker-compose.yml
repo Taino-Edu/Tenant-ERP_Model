@@ -49,6 +49,12 @@ services:
     shm_size: 512mb
     ports:
       - "127.0.0.1:5433:5432"
+    # O postgres:alpine declara /var/lib/postgresql/data como VOLUME. Sem um
+    # mount explícito, o Docker cria um volume anônimo que sobrevive até a uma
+    # limpeza do compose em alguns ambientes. Como este banco é descartável,
+    # mantê-lo em memória evita acumular volumes entre rodadas interrompidas.
+    tmpfs:
+      - /var/lib/postgresql/data
     volumes:
       - ./postgres-init.sql:/docker-entrypoint-initdb.d/01-runtime-role.sql:ro
     healthcheck:

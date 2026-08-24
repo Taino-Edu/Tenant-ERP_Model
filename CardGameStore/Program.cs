@@ -102,7 +102,18 @@ if (string.IsNullOrWhiteSpace(pgAdminConnStr))
     throw new InvalidOperationException(
         "ConnectionStrings:PostgreSQLAdmin é obrigatória. A aplicação não usa mais a credencial administrativa em requests.");
 
-var runtimeUser = new NpgsqlConnectionStringBuilder(pgConnStr!).Username;
+var catalogConnection = new NpgsqlConnectionStringBuilder(pgConnStr!)
+{
+    MinPoolSize = 0,
+    MaxPoolSize = Math.Clamp(builder.Configuration.GetValue("Database:CatalogMaxPoolSize", 15), 2, 50),
+    ConnectionIdleLifetime = Math.Clamp(
+        builder.Configuration.GetValue("Database:ConnectionIdleLifetimeSeconds", 60), 10, 300),
+    ConnectionPruningInterval = 10,
+    Timeout = 10,
+    CommandTimeout = 30,
+}.ConnectionString;
+
+var runtimeUser = new NpgsqlConnectionStringBuilder(catalogConnection).Username;
 var adminUser   = new NpgsqlConnectionStringBuilder(pgAdminConnStr).Username;
 if (string.Equals(runtimeUser, adminUser, StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException(
@@ -153,7 +164,7 @@ builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 builder.Services.AddDbContext<CatalogDbContext>(options =>
 {
     options.UseNpgsql(
-        pgConnStr,
+        catalogConnection,
         npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(maxRetryCount: 5)
     );
 });
@@ -258,11 +269,21 @@ builder.Services.AddRateLimiter(options =>
         ?? ctx.Connection.RemoteIpAddress?.ToString()
         ?? "unknown";
 
+    static string GetGlobalPartition(HttpContext ctx)
+    {
+        var tenantId = ctx.RequestServices.GetRequiredService<ITenantContext>().TenantId;
+        var userId = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? ctx.User.FindFirst("sub")?.Value;
+        return userId is { Length: > 0 }
+            ? $"{tenantId:N}:user:{userId}"
+            : $"{tenantId:N}:ip:{GetClientIp(ctx)}";
+    }
+
     // Política global — protege TODOS os endpoints sem [EnableRateLimiting] explícito
     // 300 req/min por IP é generoso o suficiente para uso legítimo
     options.GlobalLimiter = System.Threading.RateLimiting.PartitionedRateLimiter.Create<HttpContext, string>(
         context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
-            GetClientIp(context),
+            GetGlobalPartition(context),
             _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
             {
                 PermitLimit          = 300,
@@ -1019,9 +1040,9 @@ app.UseTenantResolution();
 app.UseTenantUploadGuard();
 app.UseStaticFiles(); // serve wwwroot/uploads/* como arquivos estáticos
 app.UseCors("FrontendPolicy");
-app.UseRateLimiter();
 app.UseRequestTimeouts();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseBrowserRequestGuard();
 app.UseTenantClaimGuard();
 app.UseAuthorization();

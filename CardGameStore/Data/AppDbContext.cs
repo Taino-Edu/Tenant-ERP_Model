@@ -48,6 +48,7 @@ public class AppDbContext : DbContext
     // ── Financeiro: transações externas e integrações ─────────────────────────
     public DbSet<ExternalTransaction> ExternalTransactions { get; set; }
     public DbSet<IntegrationConfig>   IntegrationConfigs   { get; set; }
+    public DbSet<FinancialConfig>     FinancialConfigs     { get; set; }
 
     // ── Mensageria: notificações in-app por usuário ───────────────────────────
     public DbSet<Notification>     Notifications     { get; set; }
@@ -395,6 +396,9 @@ public class AppDbContext : DbContext
             entity.HasIndex(c => c.Status)
                   .HasDatabaseName("ix_crediarios_status");
 
+            entity.HasIndex(c => new { c.Status, c.DataVencimento })
+                  .HasDatabaseName("ix_crediarios_status_vencimento");
+
             entity.HasOne(c => c.User)
                   .WithMany()
                   .HasForeignKey(c => c.UserId)
@@ -599,6 +603,12 @@ public class AppDbContext : DbContext
                   .IsUnique()
                   .HasFilter("external_id IS NOT NULL")
                   .HasDatabaseName("ix_ext_tx_source_external_id");
+
+            entity.HasIndex(t => new { t.Status, t.DueDate })
+                  .HasDatabaseName("ix_ext_tx_status_due_date");
+
+            entity.HasIndex(t => new { t.DreGroup, t.Type, t.DueDate })
+                  .HasDatabaseName("ix_ext_tx_dre_type_due_date");
         });
 
         modelBuilder.Entity<Notification>(entity =>

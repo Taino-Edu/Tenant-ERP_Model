@@ -3,6 +3,7 @@ using System;
 using CardGameStore.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CardGameStore.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260824163315_AddFinancialConfig")]
+    partial class AddFinancialConfig
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -623,9 +626,6 @@ namespace CardGameStore.Data.Migrations
                     b.HasIndex("Status")
                         .HasDatabaseName("ix_crediarios_status");
 
-                    b.HasIndex("Status", "DataVencimento")
-                        .HasDatabaseName("ix_crediarios_status_vencimento");
-
                     b.HasIndex("UserId", "Status")
                         .HasDatabaseName("ix_crediarios_user_status");
 
@@ -876,12 +876,6 @@ namespace CardGameStore.Data.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_ext_tx_source_external_id")
                         .HasFilter("external_id IS NOT NULL");
-
-                    b.HasIndex("Status", "DueDate")
-                        .HasDatabaseName("ix_ext_tx_status_due_date");
-
-                    b.HasIndex("DreGroup", "Type", "DueDate")
-                        .HasDatabaseName("ix_ext_tx_dre_type_due_date");
 
                     b.ToTable("external_transactions");
                 });

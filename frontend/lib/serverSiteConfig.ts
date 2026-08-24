@@ -24,7 +24,11 @@
 // =============================================================================
 
 export const INTERNAL_API_URL = process.env.INTERNAL_API_URL || 'http://cardgamestore_api:5000'
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || ''
+// NEXT_PUBLIC_* e gravado durante o build, mas o bundle standalone ainda pode
+// ler process.env no container final, onde essa variavel nao era propagada.
+// O fallback precisa ser o mesmo de lib/seo.ts; vazio impediria o SSR de
+// reconhecer qualquer tenant e esconderia do rastreador quem opera o login.
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || '3esysten.com.br'
 
 export interface TenantSiteIcons {
   faviconUrl?: string | null

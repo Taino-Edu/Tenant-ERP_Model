@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Permite que servidores locais paralelos usem caches separados. Sem isso,
+  // um `next build` pode substituir chunks enquanto `next dev` ainda os serve.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+
   // Necessário para o Dockerfile multi-stage copiar .next/standalone
   output: 'standalone',
 

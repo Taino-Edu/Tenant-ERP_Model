@@ -19,6 +19,7 @@ import { KpiChartModal, kpiTrend, prevPeriodLabel, type ChartPoint } from '@/com
 import { FormasPagamentoSection } from '@/components/admin/financeiro/FormasPagamentoSection'
 import { DayDetailModal } from '@/components/admin/financeiro/DayDetailModal'
 import { DateQuickFilter, BarChart, DayPieChart, MargemDonut } from '@/components/admin/financeiro/FinanceiroCharts'
+import { FinanceiroSubnav } from '@/components/admin/financeiro/FinanceiroSubnav'
 
 export default function FinanceiroPage() {
   const { site } = useSiteConfig()
@@ -350,6 +351,8 @@ export default function FinanceiroPage() {
         />
       </div>
 
+      <FinanceiroSubnav />
+
       {/* ── Filtros ── sticky no topo */}
       <div className="sticky top-0 z-10 print:hidden">
         <div className="card flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center border-surface-500 shadow-xl overflow-hidden">
@@ -441,7 +444,7 @@ export default function FinanceiroPage() {
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <StatCard label="Receita total"      value={fmt(d.receita)}     sub={`${d.diaDia.length} dias`}                      tone="success" icon={TrendingUp}   onClick={() => setKpiModal('receita')}    trend={kpiTrend(pctChange(d.receita,    prevData?.receita    ?? 0), prevLabel)} />
                 <StatCard label="Custo estimado"     value={fmt(d.custo)}       sub="Clique para detalhar por produto"               tone="danger"  icon={ShoppingBag}  onClick={() => setKpiModal('custo')}      trend={kpiTrend(pctChange(d.custo,      prevData?.custo      ?? 0), prevLabel)} />
-                <StatCard label="Margem média"        value={`${d.margemPercent.toFixed(1)}%`} sub={`${fmt(d.margem)} sobre custo`} tone={d.margem >= 0 ? 'brand' : 'danger'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} trend={kpiTrend(pctChange(d.margemPercent, prevData?.margemPercent ?? 0), prevLabel)} />
+                <StatCard label="Margem média"        value={`${d.margemPercent.toFixed(1)}%`} sub={`${fmt(d.margem)} sobre a receita`} tone={d.margem >= 0 ? 'brand' : 'danger'} icon={d.margem >= 0 ? TrendingUp : TrendingDown} onClick={() => setKpiModal('margem')} trend={kpiTrend(pctChange(d.margemPercent, prevData?.margemPercent ?? 0), prevLabel)} />
                 <StatCard label="Ticket médio"       value={fmt(ticketMedio)}   sub={`${totalTx} transação${totalTx !== 1 ? 'ões' : ''}`}  tone="brand"  icon={CreditCard}   onClick={() => setKpiModal('ticket')}     trend={kpiTrend(pctChange(ticketMedio,  prevTicket), prevLabel)} />
                 <StatCard label="Crediários abertos" value={fmt(d.crediarios)}  sub={d.recebidoCrediario > 0 ? `Recebido no período: ${fmt(d.recebidoCrediario)}` : 'A receber · clique para detalhar'} tone="warning" icon={AlertCircle}  onClick={() => setKpiModal('crediarios')} trend={kpiTrend(pctChange(d.crediarios, prevData?.crediarios ?? 0), prevLabel)} />
               </div>

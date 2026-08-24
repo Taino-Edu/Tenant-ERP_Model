@@ -21,6 +21,22 @@ public interface IFinanceiroCalculoService
         string? filterPaymentMethod = null);
 
     /// <summary>
+    /// Consolida os saldos operacionais atuais e estima os prazos do ciclo
+    /// financeiro usando receita, CMV e compras do período informado.
+    /// </summary>
+    Task<CapitalGiroDto> CalcularCapitalGiroAsync(
+        DateTime iniUtc, DateTime endUtc,
+        DateTime dataBrIni, DateTime dataBrFim);
+
+    /// <summary>Organiza recebimentos e pagamentos abertos por vencimento futuro.</summary>
+    Task<AgendaCaixaDto> CalcularAgendaCaixaAsync(int dias);
+
+    /// <summary>Relaciona o estoque atual ao ritmo de vendas do período.</summary>
+    Task<EstoqueInteligenteDto> CalcularEstoqueInteligenteAsync(
+        DateTime iniUtc, DateTime endUtc,
+        DateTime dataBrIni, DateTime dataBrFim);
+
+    /// <summary>
     /// Fecha (ou refecha, se já existir) uma janela de período — grava um
     /// snapshot congelado em FechamentoPeriodo. Upsert por (Tipo, DataInicio,
     /// DataFim): rodar de novo sobre uma janela já fechada recalcula e

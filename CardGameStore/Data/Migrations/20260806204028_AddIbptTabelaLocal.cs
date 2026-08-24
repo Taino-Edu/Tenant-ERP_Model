@@ -11,34 +11,30 @@ namespace CardGameStore.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateTable(
-                name: "ibpt_tabela",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ncm = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false),
-                    uf = table.Column<string>(type: "character varying(2)", maxLength: 2, nullable: false),
-                    importado = table.Column<bool>(type: "boolean", nullable: false),
-                    percentual_federal = table.Column<decimal>(type: "numeric", nullable: false),
-                    percentual_estadual = table.Column<decimal>(type: "numeric", nullable: false),
-                    percentual_municipal = table.Column<decimal>(type: "numeric", nullable: false),
-                    fonte = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    versao = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
-                    chave = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
-                    vigencia_inicio = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    vigencia_fim = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    atualizado_em = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ibpt_tabela", x => x.id);
-                });
+            // O catálogo compartilhado é migrado antes do tenant-zero e pode já
+            // ter criado public.ibpt_tabela. A migration precisa continuar criando
+            // a tabela nos schemas dos demais tenants, mas ser segura em public.
+            migrationBuilder.Sql("""
+                CREATE TABLE IF NOT EXISTS ibpt_tabela (
+                    id uuid NOT NULL,
+                    ncm character varying(8) NOT NULL,
+                    uf character varying(2) NOT NULL,
+                    importado boolean NOT NULL,
+                    percentual_federal numeric NOT NULL,
+                    percentual_estadual numeric NOT NULL,
+                    percentual_municipal numeric NOT NULL,
+                    fonte character varying(100),
+                    versao character varying(30),
+                    chave character varying(50),
+                    vigencia_inicio timestamp with time zone,
+                    vigencia_fim timestamp with time zone,
+                    atualizado_em timestamp with time zone NOT NULL,
+                    CONSTRAINT "PK_ibpt_tabela" PRIMARY KEY (id)
+                );
 
-            migrationBuilder.CreateIndex(
-                name: "ix_ibpt_tabela_ncm_uf_origem",
-                table: "ibpt_tabela",
-                columns: new[] { "ncm", "uf", "importado" },
-                unique: true);
+                CREATE UNIQUE INDEX IF NOT EXISTS ix_ibpt_tabela_ncm_uf_origem
+                    ON ibpt_tabela (ncm, uf, importado);
+                """);
         }
 
         /// <inheritdoc />
