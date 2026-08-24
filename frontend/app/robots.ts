@@ -21,7 +21,7 @@ export default function robots(): MetadataRoute.Robots {
       // loja. As duas também declaram `noindex` na própria página — ver o
       // comentário em app/perfil/[id]/layout.tsx para por que os dois.
       disallow: [
-        '/admin/', '/plataforma/', '/contador/', '/cliente/', '/login', '/api/',
+        '/admin/', '/plataforma/', '/contador/', '/cliente/', '/api/',
         '/parceiros/convite', '/perfil/', '/mesa/',
       ],
     },

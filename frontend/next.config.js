@@ -65,7 +65,7 @@ const nextConfig = {
         ],
       },
       {
-        source: '/(admin|plataforma|contador|cliente|login)/:path*',
+        source: '/:path(admin|plataforma|contador|cliente|login|entrar|cadastro|primeiro-acesso|reset-password|loja-nao-encontrada|loja-suspensa)/:rest*',
         headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
       },
     ]

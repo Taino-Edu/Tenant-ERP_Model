@@ -73,4 +73,62 @@ public class PlatformBillingController : ControllerBase
             return BadRequest(new { Message = ex.Message });
         }
     }
+
+    // ── Lançamentos manuais ─────────────────────────────────────────────────
+    // Os três exigem FinanceManage, como gerar mensalidades e dar baixa. Quem
+    // tem só FinanceRead (Auditoria) continua enxergando o financeiro inteiro
+    // sem poder emitir nem apagar cobrança.
+
+    /// <summary>Cria uma cobrança avulsa para uma loja.</summary>
+    [HttpPost("cobrancas")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
+    public async Task<IActionResult> CriarCobranca([FromBody] CriarCobrancaRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        try
+        {
+            return Ok(await _billing.CriarCobrancaAsync(request));
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Falha ao criar cobrança para {TenantId}: {Msg}", request.TenantId, ex.Message);
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>Altera valor, vencimento e observação de uma cobrança em aberto.</summary>
+    [HttpPut("cobrancas/{id:guid}")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
+    public async Task<IActionResult> AtualizarCobranca(Guid id, [FromBody] AtualizarCobrancaRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        try
+        {
+            return Ok(await _billing.AtualizarCobrancaAsync(id, request));
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Falha ao alterar a cobrança {Id}: {Msg}", id, ex.Message);
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
+
+    /// <summary>Exclui uma cobrança em aberto.</summary>
+    [HttpDelete("cobrancas/{id:guid}")]
+    [RequirePlatformPermission(PlatformPermission.FinanceManage)]
+    public async Task<IActionResult> ExcluirCobranca(Guid id)
+    {
+        try
+        {
+            await _billing.ExcluirCobrancaAsync(id);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning("Falha ao excluir a cobrança {Id}: {Msg}", id, ex.Message);
+            return BadRequest(new { Message = ex.Message });
+        }
+    }
 }

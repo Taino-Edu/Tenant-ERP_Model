@@ -1178,6 +1178,16 @@ export const platformBillingApi = {
     api.post<GerarMensalidadesResultDto>('/api/platform/billing/gerar-mensalidades', { competencia }),
   definirPagamento: (id: string, pagoEm: string | null) =>
     api.put<TenantChargeDto>(`/api/platform/billing/cobrancas/${id}/pagamento`, { pagoEm }),
+  // Lançamentos manuais: o gerador cobre o repetitivo, estes cobrem o resto —
+  // implantação negociada, mês de cortesia, valor emitido errado.
+  criarCobranca: (body: {
+    tenantId: string; tipo: 'Implantacao' | 'Mensalidade'
+    valor: number; competencia: string; vencimento: string; observacao?: string
+  }) => api.post<TenantChargeDto>('/api/platform/billing/cobrancas', body),
+  atualizarCobranca: (id: string, body: { valor: number; vencimento: string; observacao?: string }) =>
+    api.put<TenantChargeDto>(`/api/platform/billing/cobrancas/${id}`, body),
+  excluirCobranca: (id: string) =>
+    api.delete<void>(`/api/platform/billing/cobrancas/${id}`),
 }
 
 export interface ProspectingCampaignRunDto {

@@ -12,16 +12,19 @@ import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   Wallet, TrendingUp, AlertTriangle, CircleDollarSign, RefreshCw,
-  Check, Undo2, Calendar, Store,
+  Check, Undo2, Calendar, Store, Plus, Pencil, Trash2,
 } from 'lucide-react'
 import {
-  platformBillingApi, getErrorMessage,
-  type BillingResumoDto, type TenantChargeDto,
+  platformBillingApi, platformApi, getErrorMessage,
+  type BillingResumoDto, type TenantChargeDto, type TenantSummary,
 } from '@/lib/api'
 import { usePlatformPermissions } from '@/hooks/usePlatformPermissions'
 import Button from '@/components/admin/ui/Button'
+import ConfirmDialog from '@/components/admin/ui/ConfirmDialog'
+import CobrancaFormModal from '@/components/plataforma/CobrancaFormModal'
 import DataTable from '@/components/admin/ui/DataTable'
 import EmptyState from '@/components/admin/ui/EmptyState'
+import Modal from '@/components/admin/ui/Modal'
 import Spinner from '@/components/admin/ui/Spinner'
 
 const brl = (v: number) =>
@@ -49,6 +52,14 @@ export default function FinanceiroPlataformaPage() {
   const [loading, setLoading]         = useState(true)
   const [gerando, setGerando]         = useState(false)
   const [salvandoId, setSalvandoId]   = useState<string | null>(null)
+  const [criando, setCriando]         = useState(false)
+  const [editando, setEditando]       = useState<TenantChargeDto | null>(null)
+  const [excluindo, setExcluindo]     = useState<TenantChargeDto | null>(null)
+  const [removendo, setRemovendo]     = useState(false)
+  // Só é buscada quando o formulário de lançamento abre: a tela de financeiro
+  // não precisa da lista de lojas para nada além disso, e carregá-la no load
+  // pagaria a consulta em toda visita para um botão que quase nunca é clicado.
+  const [lojas, setLojas]             = useState<TenantSummary[]>([])
   // A aba abre com `platform.finance.read`; gerar mensalidades e dar baixa
   // exigem `platform.finance.manage`. Sem essa distinção, o perfil de auditoria
   // via os dois botões e só descobria o limite depois do 403.
@@ -96,6 +107,34 @@ export default function FinanceiroPlataformaPage() {
     }
   }
 
+  async function abrirLancamento() {
+    setCriando(true)
+    if (lojas.length === 0) {
+      try {
+        const { data } = await platformApi.listTenants()
+        setLojas(data)
+      } catch {
+        // O formulário abre mesmo assim, mostrando o aviso de lista vazia —
+        // fechar o modal por causa disso deixaria o clique sem resposta.
+      }
+    }
+  }
+
+  async function excluirCobranca() {
+    if (!excluindo) return
+    setRemovendo(true)
+    try {
+      await platformBillingApi.excluirCobranca(excluindo.id)
+      toast.success('Cobrança excluída.')
+      setExcluindo(null)
+      await carregar(competencia)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Não deu pra excluir a cobrança.'))
+    } finally {
+      setRemovendo(false)
+    }
+  }
+
   async function alternarPagamento(c: TenantChargeDto) {
     setSalvandoId(c.id)
     try {
@@ -137,10 +176,16 @@ export default function FinanceiroPlataformaPage() {
             />
           </div>
           {podeLancar && (
-            <Button onClick={gerarMensalidades} loading={gerando}>
-              <RefreshCw className="w-4 h-4" />
-              Gerar mensalidades
-            </Button>
+            <>
+              <Button onClick={gerarMensalidades} loading={gerando}>
+                <RefreshCw className="w-4 h-4" />
+                Gerar mensalidades
+              </Button>
+              <Button variant="secondary" onClick={abrirLancamento}>
+                <Plus className="w-4 h-4" />
+                Nova cobrança
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -208,11 +253,29 @@ export default function FinanceiroPlataformaPage() {
                 // `undefined` e não uma função que devolve null: é assim que o
                 // DataTable deixa de reservar a coluna de ações inteira.
                 rowActions={podeLancar ? c => (
-                  <AcaoPagamento
-                    c={c}
-                    salvando={salvandoId === c.id}
-                    onClick={() => alternarPagamento(c)}
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <AcaoPagamento
+                      c={c}
+                      salvando={salvandoId === c.id}
+                      onClick={() => alternarPagamento(c)}
+                    />
+                    {/* Editar e excluir só aparecem em cobrança EM ABERTO. A API
+                        recusa as duas numa cobrança paga — a baixa já pode ter
+                        liberado comissão de parceiro —, e oferecer o botão para
+                        depois devolver erro é pior que não oferecer. */}
+                    {!c.pagoEm && (
+                      <>
+                        <Button size="sm" variant="secondary" onClick={() => setEditando(c)}
+                          aria-label={`Editar cobrança de ${c.tenantNome}`}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="sm" variant="secondary" onClick={() => setExcluindo(c)}
+                          aria-label={`Excluir cobrança de ${c.tenantNome}`}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 ) : undefined}
                 columns={[
                   { key: 'loja', header: 'Loja', mobile: 'title',
@@ -240,6 +303,33 @@ export default function FinanceiroPlataformaPage() {
             plataforma, que ainda não são registradas aqui.
           </p>
         </>
+      )}
+
+      {(criando || editando) && (
+        <CobrancaFormModal
+          cobranca={editando}
+          lojas={lojas}
+          competencia={competencia}
+          onClose={() => { setCriando(false); setEditando(null) }}
+          onSalvo={() => carregar(competencia)}
+        />
+      )}
+
+      {excluindo && (
+        <ConfirmDialog
+          title="Excluir cobrança"
+          message={
+            <>
+              Excluir a cobrança de <strong>{brl(excluindo.valor)}</strong> de{' '}
+              <strong>{excluindo.tenantNome}</strong>? A cobrança some do histórico da loja
+              e do faturado do mês. Isso não pode ser desfeito.
+            </>
+          }
+          confirmLabel="Excluir"
+          loading={removendo}
+          onConfirm={excluirCobranca}
+          onClose={() => setExcluindo(null)}
+        />
       )}
     </div>
   )

@@ -25,4 +25,19 @@ public interface IPlatformBillingService
 
     /// <summary>Marca como paga (ou reabre, passando null em pagoEm).</summary>
     Task<TenantChargeDto> DefinirPagamentoAsync(Guid chargeId, DateTime? pagoEm);
+
+    /// <summary>Cria uma cobrança avulsa — implantação negociada, mês de
+    /// cortesia, ajuste combinado fora do gerador automático.</summary>
+    Task<TenantChargeDto> CriarCobrancaAsync(CriarCobrancaRequest request);
+
+    /// <summary>Altera valor, vencimento e observação de uma cobrança EM ABERTO.
+    /// Cobrança paga é recusada: a baixa já pode ter liberado comissão, e
+    /// reescrever o valor por baixo dela deixaria os dois números divergentes
+    /// sem nada indicando isso. Para corrigir uma paga: reabrir, editar, dar
+    /// baixa de novo — o caminho que refaz a comissão junto.</summary>
+    Task<TenantChargeDto> AtualizarCobrancaAsync(Guid chargeId, AtualizarCobrancaRequest request);
+
+    /// <summary>Exclui uma cobrança EM ABERTO. Paga não se exclui — nem por
+    /// integridade (comissão aponta para ela) nem por contabilidade.</summary>
+    Task ExcluirCobrancaAsync(Guid chargeId);
 }
