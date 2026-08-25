@@ -9,6 +9,8 @@ alertas, apuracao e portal do contador.
 - `/api/fiscal`: operacao fiscal da loja e emissao de NFC-e.
 - `/api/platform/ibpt`: importacao da tabela IBPT compartilhada.
 - `/api/contador-portal`: acesso cross-tenant autorizado para o contador.
+- `GET /api/integrations/services/fiscal/ibpt/{ncm}?uf=SP&importado=false`:
+  consulta autenticada ao catalogo IBPT global, sem copiar a tabela para cada loja.
 
 O Swagger da aplicacao e os atributos dos controllers sao a fonte do contrato
 HTTP completo. Segredos, certificados e tokens nunca devem ser incluidos no ZIP.

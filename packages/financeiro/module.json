@@ -1,20 +1,21 @@
 {
   "name": "TenantERP.Financeiro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "kind": "source-bundle",
   "requiredEntrypoints": [
     "CardGameStore/Controllers/AnalyticsController.cs",
     "CardGameStore/Controllers/FinancialConfigController.cs",
     "CardGameStore/Services/Implementations/FinanceiroCalculoService.cs",
+    "CardGameStore/Services/Implementations/IntegrationFinancialAnalyzer.cs",
     "frontend/app/admin/financeiro/page.tsx"
   ],
   "includePatterns": [
     "^packages/financeiro/",
-    "^CardGameStore/Controllers/(AnalyticsController|FinancialConfigController|ContasReceberController|IntegrationClientsController|PlatformIntegrationClientsController|IntegrationCapabilitiesController)\\.cs$",
-    "^CardGameStore/DTOs/(AnalyticsDtos|CreditarioDtos|IntegrationAccessDtos)\\.cs$",
+    "^CardGameStore/Controllers/(AnalyticsController|FinancialConfigController|ContasReceberController|IntegrationClientsController|PlatformIntegrationClientsController|IntegrationCapabilitiesController|IntegrationServicesController)\\.cs$",
+    "^CardGameStore/DTOs/(AnalyticsDtos|CreditarioDtos|IntegrationAccessDtos|IntegrationServiceDtos)\\.cs$",
     "^CardGameStore/Multitenancy/(ApiIntegrationClient|CatalogDbContext)\\.cs$",
     "^CardGameStore/Security/Integration.*\\.cs$",
-    "^CardGameStore/Services/Implementations/IntegrationTokenService\\.cs$",
+    "^CardGameStore/Services/Implementations/Integration(TokenService|FinancialAnalyzer)\\.cs$",
     "^CardGameStore/Models/PostgreSQL/(FinancialConfig|ExternalTransaction|Crediario|PagamentoCrediario|StockLedger)\\.cs$",
     "^CardGameStore/Services/(Implementations|Interfaces)/.*(Financeiro|Crediario|ExternalTransaction).*\\.cs$",
     "^CardGameStore/Data/Migrations/.*(Financial|ExternalTransaction|NfeReceivingAndProfessionalDre|StockLedger|AddApiIntegrationClients).*\\.cs$",
@@ -23,7 +24,7 @@
     "^frontend/components/admin/financeiro/",
     "^frontend/lib/(api|manualContent)\\.ts$",
     "^frontend/tests/financeiro-.*\\.spec\\.ts$",
-    "^tests/unit/CardGameStore\\.Tests/.*(Financeiro|FinancialConfig|ContasReceber|Crediario).*\\.cs$",
+    "^tests/unit/CardGameStore\\.Tests/.*(Financeiro|FinancialConfig|ContasReceber|Crediario|IntegrationFinancial).*\\.cs$",
     "^docs/arquitetura/(DOCUMENTACAO-COMPLETA|MODELAGEM-DE-DADOS|INTEGRACAO-API-MULTITENANT)\\.md$"
   ]
 }

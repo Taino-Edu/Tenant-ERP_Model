@@ -81,6 +81,21 @@ nao possuem admin ou painel local na 3ESysten.
 - `GET /api/integrations/capabilities/financeiro` valida `financeiro.read`.
 - `GET /api/integrations/capabilities/fiscal` valida `fiscal.read`.
 
+## Servicos compartilhados para tenants externos
+
+Tenants do tipo `ExternalIntegrated` mantem os dados operacionais no sistema de
+origem. Eles podem usar servicos centrais sem criar uma copia desse banco:
+
+- `POST /api/integrations/services/financeiro/analisar`, com `financeiro.read`,
+  recebe totais do periodo e ate 100 produtos agregados. A requisicao e processada
+  em memoria e nao e persistida.
+- `GET /api/integrations/services/fiscal/ibpt/{ncm}`, com `fiscal.read`, consulta o
+  catalogo global pela combinacao NCM, UF e origem nacional/importada.
+
+Credenciais tecnicas nunca devem ser entregues ao navegador. O backend do sistema
+integrado solicita e renova o token, chama esses endpoints e devolve ao frontend
+somente o resultado necessario.
+
 Essas rotas leem apenas o catalogo central. Elas confirmam tenant, tipo, modulos e
 residencia dos dados sem consultar um schema vazio. Rotas operacionais da loja
 continuam locais no sistema externo; servicos centrais especificos devem ganhar

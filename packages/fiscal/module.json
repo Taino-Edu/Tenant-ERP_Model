@@ -1,17 +1,18 @@
 {
   "name": "TenantERP.FiscalApi",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "kind": "source-bundle",
   "requiredEntrypoints": [
     "CardGameStore/Controllers/FiscalController.cs",
     "CardGameStore/Services/Implementations/NfceEmissionService.cs",
     "CardGameStore/Services/Implementations/IbptTaxService.cs",
+    "CardGameStore/Controllers/IntegrationServicesController.cs",
     "frontend/app/admin/fiscal/page.tsx"
   ],
   "includePatterns": [
     "^packages/fiscal/",
-    "^CardGameStore/Controllers/(FiscalController|PlatformIbptController|ContadorPortalController|IntegrationClientsController|PlatformIntegrationClientsController|IntegrationCapabilitiesController)\\.cs$",
-    "^CardGameStore/DTOs/.*(Fiscal|Tributaria|Conciliacao|Fechamento|Danfe|Alerta|IntegrationAccess).*\\.cs$",
+    "^CardGameStore/Controllers/(FiscalController|PlatformIbptController|ContadorPortalController|IntegrationClientsController|PlatformIntegrationClientsController|IntegrationCapabilitiesController|IntegrationServicesController)\\.cs$",
+    "^CardGameStore/DTOs/.*(Fiscal|Tributaria|Conciliacao|Fechamento|Danfe|Alerta|IntegrationAccess|IntegrationService).*\\.cs$",
     "^CardGameStore/Models/PostgreSQL/.*(Fiscal|Nota|Nfe|Ibpt|Alerta|Fechamento|Sefaz|NaturezaOperacao|ExternalTransaction).*\\.cs$",
     "^CardGameStore/Multitenancy/(Contador.*|ApiIntegrationClient|CatalogDbContext)\\.cs$",
     "^CardGameStore/Security/Integration.*\\.cs$",

@@ -12,10 +12,16 @@ os pontos de integracao.
 - `GET /api/analytics/financeiro/estoque-inteligente`: capital parado e cobertura.
 - `GET|PUT /api/financial-config`: metas, custos fixos e parametros gerenciais.
 - `/api/contas-receber`: lancamentos, conciliacao e integracoes financeiras.
+- `POST /api/integrations/services/financeiro/analisar`: analise stateless de um
+  resumo agregado, com margem, markup, ponto de equilibrio e recomendacoes.
 
 O pacote inclui autenticacao servidor-a-servidor por `client_credentials`. Consulte
 `docs/arquitetura/INTEGRACAO-API-MULTITENANT.md` para criar credenciais por loja e
 limitar o acesso com `financeiro.read` e `financeiro.write`.
+
+O endpoint integrado nao persiste o resumo recebido. O sistema de origem continua
+como dono de vendas, clientes e estoque; somente totais do periodo e produtos
+agregados sao processados durante a requisicao.
 
 ## Como gerar
 
