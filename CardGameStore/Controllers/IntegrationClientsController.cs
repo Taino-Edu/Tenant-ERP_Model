@@ -7,7 +7,6 @@ using CardGameStore.Services.Implementations;
 using CardGameStore.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace CardGameStore.Controllers;
@@ -102,20 +101,6 @@ public sealed class IntegrationClientsController : ControllerBase
         {
             return NotFound(new { Message = ex.Message });
         }
-    }
-
-    [AllowAnonymous]
-    [HttpPost("token")]
-    [EnableRateLimiting("integration-token")]
-    public async Task<ActionResult<IntegrationTokenResponse>> TokenAsync(
-        [FromBody] IntegrationTokenRequest request, CancellationToken ct)
-    {
-        if (_tenant.TenantId == TenantConstants.TenantZeroId)
-            return Unauthorized(new { Message = "Credenciais invalidas para este tenant." });
-        var token = await _tokens.IssueAsync(_tenant.TenantId, request, ct);
-        return token is null
-            ? Unauthorized(new { Message = "Credenciais invalidas para este tenant." })
-            : Ok(token);
     }
 
     private Task AuditAsync(string action, ApiIntegrationClient client) =>
