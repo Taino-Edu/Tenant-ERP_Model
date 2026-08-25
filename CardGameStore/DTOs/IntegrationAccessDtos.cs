@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 namespace CardGameStore.DTOs;
 
 public sealed record CreateIntegrationClientRequest(
-    [property: Required, MaxLength(100)] string Name,
-    [property: Required, MinLength(1)] string[] Scopes);
+    [Required, MaxLength(100)] string Name,
+    [Required, MinLength(1)] string[] Scopes);
 
 public sealed record IntegrationClientDto(
     Guid Id,
@@ -25,9 +25,12 @@ public sealed record IntegrationClientCreatedDto(
     DateTime CreatedAt);
 
 public sealed record IntegrationTokenRequest(
-    [property: JsonPropertyName("grant_type"), Required] string GrantType,
-    [property: JsonPropertyName("client_id"), Required] string ClientId,
-    [property: JsonPropertyName("client_secret"), Required] string ClientSecret);
+    [property: JsonPropertyName("grant_type")]
+    [Required] string GrantType,
+    [property: JsonPropertyName("client_id")]
+    [Required] string ClientId,
+    [property: JsonPropertyName("client_secret")]
+    [Required] string ClientSecret);
 
 public sealed record IntegrationTokenResponse(
     [property: JsonPropertyName("access_token")] string AccessToken,
