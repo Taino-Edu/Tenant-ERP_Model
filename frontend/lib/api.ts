@@ -806,10 +806,11 @@ export async function* streamAiChat(
 
 export type TenantStatus = 'Active' | 'Suspended'
 export type TenantPaymentStatus = 'Pago' | 'Atrasado' | 'Isento'
+export type TenantKind = 'Native' | 'ExternalIntegrated'
 
 export interface TenantSummary {
   id: string; slug: string; schemaName: string
-  status: TenantStatus; createdAt: string
+  status: TenantStatus; kind: TenantKind; createdAt: string
   planName: string; paymentStatus: TenantPaymentStatus; enabledModules: string[]
   customDomain: string | null
   maxUsers: number | null
@@ -820,8 +821,27 @@ export interface TenantSummary {
 }
 
 export interface CreateTenantRequest {
-  slug: string; adminEmail: string; adminPassword: string; enabledModules?: string[]
+  slug: string; kind?: TenantKind; adminEmail?: string; adminPassword?: string; enabledModules?: string[]
   planName?: string; maxUsers?: number | null
+}
+
+export interface IntegrationClientDto {
+  id: string
+  name: string
+  clientId: string
+  scopes: string[]
+  isActive: boolean
+  createdAt: string
+  lastUsedAt: string | null
+}
+
+export interface IntegrationClientCreatedDto {
+  id: string
+  name: string
+  clientId: string
+  clientSecret: string
+  scopes: string[]
+  createdAt: string
 }
 
 /** Catálogo de módulos pagos — mesma lista que o backend aceita
@@ -886,6 +906,16 @@ export const platformApi = {
     api.get<TenantSummary[]>('/api/platform/tenants'),
   createTenant: (req: CreateTenantRequest) =>
     api.post<TenantSummary>('/api/platform/tenants', req),
+  listTenantIntegrationClients: (tenantId: string) =>
+    api.get<IntegrationClientDto[]>(`/api/platform/tenants/${tenantId}/integration-clients`),
+  listTenantIntegrationScopes: (tenantId: string) =>
+    api.get<string[]>(`/api/platform/tenants/${tenantId}/integration-clients/scopes`),
+  createTenantIntegrationClient: (tenantId: string, name: string, scopes: string[]) =>
+    api.post<IntegrationClientCreatedDto>(`/api/platform/tenants/${tenantId}/integration-clients`, { name, scopes }),
+  rotateTenantIntegrationClient: (tenantId: string, id: string) =>
+    api.post<IntegrationClientCreatedDto>(`/api/platform/tenants/${tenantId}/integration-clients/${id}/rotate`),
+  revokeTenantIntegrationClient: (tenantId: string, id: string) =>
+    api.delete(`/api/platform/tenants/${tenantId}/integration-clients/${id}`),
   updateTenantStatus: (id: string, status: TenantStatus) =>
     api.patch<TenantSummary>(`/api/platform/tenants/${id}/status`, { status }),
   updateTenantBilling: (id: string, req: UpdateTenantBillingRequest) =>

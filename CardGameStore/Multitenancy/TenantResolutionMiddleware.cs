@@ -56,7 +56,7 @@ public class TenantResolutionMiddleware
                 entry.AbsoluteExpirationRelativeToNow = CacheTtl;
                 return await catalog.Tenants
                     .Where(t => t.Slug == slug)
-                    .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.EnabledModules))
+                    .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules))
                     .FirstOrDefaultAsync();
             });
 
@@ -89,7 +89,7 @@ public class TenantResolutionMiddleware
                 entry.AbsoluteExpirationRelativeToNow = CacheTtl;
                 return await catalog.Tenants
                     .Where(t => t.CustomDomain == hostLower)
-                    .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.EnabledModules))
+                    .Select(t => new TenantLookup(t.Id, t.SchemaName, t.Status, t.Kind, t.EnabledModules))
                     .FirstOrDefaultAsync();
             });
         }
@@ -100,6 +100,17 @@ public class TenantResolutionMiddleware
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 await context.Response.WriteAsJsonAsync(new { Message = "Esta loja está temporariamente suspensa." });
+                return;
+            }
+
+            if (tenant.Kind == TenantKind.ExternalIntegrated &&
+                !context.Request.Path.StartsWithSegments("/api/integrations"))
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    Message = "Este tenant usa um sistema externo e disponibiliza somente APIs de integração."
+                });
                 return;
             }
 
@@ -177,7 +188,8 @@ public class TenantResolutionMiddleware
         }
     }
 
-    private sealed record TenantLookup(Guid Id, string SchemaName, TenantStatus Status, string[] EnabledModules);
+    private sealed record TenantLookup(
+        Guid Id, string SchemaName, TenantStatus Status, TenantKind Kind, string[] EnabledModules);
 
     /// <summary>
     /// Extrai o primeiro label do host quando ele é exatamente um subdomínio de

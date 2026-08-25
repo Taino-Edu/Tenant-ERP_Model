@@ -97,9 +97,10 @@ function DeleteTenantModal({ tenant, onClose, onDeleted }: { tenant: TenantSumma
     <Modal onClose={onClose} maxWidth="sm" title="Apagar Tenant" icon={AlertTriangle} closeOnBackdrop={false}>
       <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
         <p className="text-sm text-gray-400">
-          Isso apaga <strong className="text-white">{tenant.slug}</strong> e todos os seus dados
-          (produtos, vendas, clientes) <strong className="text-red-400">permanentemente</strong>. Não dá pra desfazer.
-          Considera baixar um backup antes.
+          Isso apaga <strong className="text-white">{tenant.slug}</strong>{tenant.kind === 'Native'
+            ? ' e todos os dados locais (produtos, vendas e clientes)'
+            : ' e todas as credenciais técnicas associadas'}{' '}
+          <strong className="text-red-400">permanentemente</strong>. Não dá pra desfazer.
         </p>
         <div>
           <label className="label">Digite <code className="text-red-400">{tenant.slug}</code> pra confirmar</label>
@@ -317,7 +318,9 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
     // `py-1.5` no celular: é o link que abre o detalhe da loja, o destino mais
     // usado do card, e como texto puro tinha 24px de alvo.
     <Link href={`/plataforma/tenants/${tenant.id}`} className="text-white font-medium hover:text-brand-400 flex items-center gap-1 max-md:py-1.5">
-      {tenant.slug} <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
+      {tenant.slug}
+      {tenant.kind === 'ExternalIntegrated' && <Badge tone="brand">Externo</Badge>}
+      <ChevronRight className="w-3.5 h-3.5 text-gray-500" />
     </Link>
   )
 
@@ -427,7 +430,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
   // chega a ser desenhado.
   const acoes = (
     <>
-      {acoesPermitidas.simular && <button
+      {acoesPermitidas.simular && tenant.kind === 'Native' && <button
         onClick={acessarAdmin}
         disabled={impersonating || tenant.status !== 'Active'}
         title={tenant.status !== 'Active' ? 'Reative o tenant para acessar' : 'Acessar o admin desta loja'}
@@ -448,7 +451,7 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
           ? <Spinner size="sm" />
           : tenant.status === 'Active' ? <PowerOff className="w-3.5 h-3.5" /> : <Power className="w-3.5 h-3.5" />}
       </button>}
-      {acoesPermitidas.gerenciar && <button
+      {acoesPermitidas.gerenciar && tenant.kind === 'Native' && <button
         onClick={baixarBackup}
         disabled={backingUp}
         title="Baixar backup (.sql) desta loja"
@@ -470,7 +473,8 @@ function TenantRow({ tenant, lastActivityAt, onChanged, acoesPermitidas, layout 
 
   /** Nenhuma ação liberada: a barra inteira sai, senão sobra uma borda
    *  separando um espaço vazio no card do celular. */
-  const temAcoes = acoesPermitidas.simular || acoesPermitidas.gerenciar || acoesPermitidas.apagar
+  const temAcoes = acoesPermitidas.gerenciar || acoesPermitidas.apagar ||
+    (acoesPermitidas.simular && tenant.kind === 'Native')
 
   const modais = (
     <>

@@ -232,4 +232,58 @@ public class TenantResolutionMiddlewareTests
         tenantContext.SchemaName.Should().Be(TenantConstants.TenantZeroSchema);
         tenantContext.IsExplicitlySet.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task InvokeAsync_TenantExterno_BloqueiaPainelQueExigiriaSchemaLocal()
+    {
+        await using var catalog = CreateCatalogDb();
+        catalog.Tenants.Add(new Tenant
+        {
+            Id = Guid.NewGuid(), Slug = "santuario-nerd", SchemaName = "external_santuario_nerd",
+            Status = TenantStatus.Active, Kind = TenantKind.ExternalIntegrated,
+        });
+        await catalog.SaveChangesAsync();
+
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("santuario-nerd.3esysten.com.br", services);
+        ctx.Request.Path = "/admin/dashboard";
+        ctx.Response.Body = new MemoryStream();
+        var nextChamado = false;
+
+        var middleware = CreateMiddleware(
+            _ => { nextChamado = true; return Task.CompletedTask; },
+            rootDomain: "3esysten.com.br");
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        ctx.Response.StatusCode.Should().Be(StatusCodes.Status404NotFound);
+        nextChamado.Should().BeFalse();
+        tenantContext.IsExplicitlySet.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_TenantExterno_PermiteSuperficieDeIntegracao()
+    {
+        await using var catalog = CreateCatalogDb();
+        var tenantId = Guid.NewGuid();
+        catalog.Tenants.Add(new Tenant
+        {
+            Id = tenantId, Slug = "santuario-nerd", SchemaName = "external_santuario_nerd",
+            Status = TenantStatus.Active, Kind = TenantKind.ExternalIntegrated,
+        });
+        await catalog.SaveChangesAsync();
+
+        var services = new ServiceCollection().AddSingleton(catalog).BuildServiceProvider();
+        var (ctx, tenantContext) = BuildContext("santuario-nerd.3esysten.com.br", services);
+        ctx.Request.Path = "/api/integrations/token";
+        var nextChamado = false;
+
+        var middleware = CreateMiddleware(
+            _ => { nextChamado = true; return Task.CompletedTask; },
+            rootDomain: "3esysten.com.br");
+        await middleware.InvokeAsync(ctx, tenantContext, catalog);
+
+        nextChamado.Should().BeTrue();
+        tenantContext.TenantId.Should().Be(tenantId);
+        tenantContext.SchemaName.Should().Be("external_santuario_nerd");
+    }
 }

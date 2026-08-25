@@ -41,7 +41,7 @@ public static class TenantIteration
         {
             var catalog = catalogScope.ServiceProvider.GetRequiredService<CatalogDbContext>();
             tenants = await catalog.Tenants
-                .Where(t => t.Status == TenantStatus.Active)
+                .Where(t => t.Status == TenantStatus.Active && t.Kind == TenantKind.Native)
                 .Select(t => new TenantSlot(t.Id, t.Slug, t.SchemaName, t.EnabledModules))
                 .ToListAsync(ct);
         }

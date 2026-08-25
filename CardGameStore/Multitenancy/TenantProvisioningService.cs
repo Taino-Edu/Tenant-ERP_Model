@@ -90,13 +90,13 @@ public class TenantProvisioningService : ITenantProvisioningService
     }
 
     public async Task<Tenant> ProvisionAsync(
-        string slug, string adminEmail, string adminPassword, string[]? enabledModules = null,
-        string? planName = null, int? maxUsers = null)
+        string slug, string? adminEmail, string? adminPassword, string[]? enabledModules = null,
+        string? planName = null, int? maxUsers = null, TenantKind kind = TenantKind.Native)
     {
         await _provisionLock.WaitAsync();
         try
         {
-            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules, planName, maxUsers);
+            return await ProvisionLockedAsync(slug, adminEmail, adminPassword, enabledModules, planName, maxUsers, kind);
         }
         finally
         {
@@ -105,8 +105,8 @@ public class TenantProvisioningService : ITenantProvisioningService
     }
 
     private async Task<Tenant> ProvisionLockedAsync(
-        string slug, string adminEmail, string adminPassword, string[]? enabledModules,
-        string? planName, int? maxUsers)
+        string slug, string? adminEmail, string? adminPassword, string[]? enabledModules,
+        string? planName, int? maxUsers, TenantKind kind)
     {
         slug = slug.Trim().ToLowerInvariant();
 
@@ -115,6 +115,17 @@ public class TenantProvisioningService : ITenantProvisioningService
 
         if (ReservedSlugs.Contains(slug))
             throw new InvalidOperationException($"Slug '{slug}' é reservado e não pode ser usado.");
+
+        if (!Enum.IsDefined(kind))
+            throw new InvalidOperationException("Tipo de tenant inválido.");
+
+        if (kind == TenantKind.Native)
+        {
+            if (string.IsNullOrWhiteSpace(adminEmail))
+                throw new InvalidOperationException("Informe o e-mail do admin da loja.");
+            if (string.IsNullOrWhiteSpace(adminPassword) || adminPassword.Length < 6)
+                throw new InvalidOperationException("A senha inicial deve ter pelo menos 6 caracteres.");
+        }
 
         var slugInUse = await _catalog.Tenants.AnyAsync(t => t.Slug == slug);
         if (slugInUse)
@@ -136,7 +147,10 @@ public class TenantProvisioningService : ITenantProvisioningService
             modulosValidos = enabledModules.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
-        var schemaName = "tenant_" + slug.Replace('-', '_');
+        // Externos não possuem schema físico. O valor continua preenchido porque
+        // schema_name também é a chave lógica única usada pelo contexto do tenant;
+        // todos os caminhos que abrem AppDbContext filtram Kind == Native.
+        var schemaName = (kind == TenantKind.Native ? "tenant_" : "external_") + slug.Replace('-', '_');
         TenantSchemaName.Validate(schemaName);
 
         var tenant = new Tenant
@@ -144,6 +158,7 @@ public class TenantProvisioningService : ITenantProvisioningService
             Slug       = slug,
             SchemaName = schemaName,
             Status     = TenantStatus.Active,
+            Kind       = kind,
         };
         // Só sobrescreve o default (["fiscal"]) se o chamador passou módulos —
         // preserva o comportamento de antes desse parâmetro existir.
@@ -167,6 +182,14 @@ public class TenantProvisioningService : ITenantProvisioningService
         _catalog.Tenants.Add(tenant);
         await _catalog.SaveChangesAsync();
 
+        if (kind == TenantKind.ExternalIntegrated)
+        {
+            _logger.LogInformation(
+                "Tenant externo '{Slug}' registrado sem schema local (identificador '{Schema}').",
+                slug, schemaName);
+            return tenant;
+        }
+
         try
         {
             // O schema físico precisa existir ANTES de qualquer conexão do
@@ -186,9 +209,9 @@ public class TenantProvisioningService : ITenantProvisioningService
 
             db.Users.Add(new User
             {
-                Name         = adminEmail,
-                Email        = adminEmail.Trim().ToLowerInvariant(),
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword),
+                Name         = adminEmail!,
+                Email        = adminEmail!.Trim().ToLowerInvariant(),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword!),
                 Role         = UserRole.Admin,
             });
             await db.SaveChangesAsync();

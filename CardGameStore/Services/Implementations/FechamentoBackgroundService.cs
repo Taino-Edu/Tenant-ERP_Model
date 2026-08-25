@@ -74,7 +74,7 @@ public class FechamentoBackgroundService : BackgroundService
         using var catalogScope = _scopeFactory.CreateScope();
         var catalog = catalogScope.ServiceProvider.GetRequiredService<CatalogDbContext>();
         var tenants = await catalog.Tenants
-            .Where(t => t.Status == TenantStatus.Active)
+            .Where(t => t.Status == TenantStatus.Active && t.Kind == TenantKind.Native)
             .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
             .ToListAsync();
 

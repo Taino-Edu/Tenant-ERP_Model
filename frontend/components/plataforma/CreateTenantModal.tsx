@@ -1,9 +1,9 @@
 'use client'
 import { useState } from 'react'
-import { platformApi, getErrorMessage, TENANT_MODULES } from '@/lib/api'
+import { platformApi, getErrorMessage, TENANT_MODULES, type TenantKind } from '@/lib/api'
 import { PLANOS, PLANO_PERSONALIZADO, taxaImplantacao, formatarReais, type Plano } from '@/lib/planos'
 import toast from 'react-hot-toast'
-import { Building2, Plus, Loader2, X, Check } from 'lucide-react'
+import { Building2, Plus, Loader2, X, Check, Server, Unplug } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function CreateTenantModal({
@@ -17,6 +17,7 @@ export default function CreateTenantModal({
   const [slug, setSlug]         = useState(initialSlug)
   const [email, setEmail]       = useState(initialEmail)
   const [password, setPassword] = useState('')
+  const [kind, setKind]         = useState<TenantKind>('Native')
   // Fiscal vem marcado por padrão — mesmo default que o backend já aplicava
   // antes desse seletor existir (Tenant.EnabledModules = ["fiscal"]).
   const [modules, setModules]   = useState<string[]>(['fiscal'])
@@ -47,7 +48,9 @@ export default function CreateTenantModal({
     setLoading(true)
     try {
       const { data } = await platformApi.createTenant({
-        slug: slug.trim().toLowerCase(), adminEmail: email.trim(), adminPassword: password,
+        slug: slug.trim().toLowerCase(), kind,
+        adminEmail: kind === 'Native' ? email.trim() : undefined,
+        adminPassword: kind === 'Native' ? password : undefined,
         enabledModules: modules, planName,
         maxUsers: maxUsers === '' ? null : maxUsers,
       })
@@ -73,27 +76,54 @@ export default function CreateTenantModal({
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
         <div className="px-6 py-4 space-y-4 overflow-y-auto">
           <div>
-            <label className="label">Slug (subdomínio) *</label>
+            <label className="label">Tipo de tenant</label>
+            <div className="grid grid-cols-2 gap-2 mt-1">
+              <button
+                type="button" onClick={() => setKind('Native')}
+                className={clsx('p-3 border rounded-lg text-left', kind === 'Native' ? 'border-brand-500 bg-brand-600/10' : 'border-surface-500')}
+              >
+                <Server className="w-4 h-4 text-brand-400 mb-1" />
+                <span className="block text-sm font-medium text-white">Hospedado</span>
+                <span className="block text-xs text-gray-400">Banco e painel na 3ESysten</span>
+              </button>
+              <button
+                type="button" onClick={() => setKind('ExternalIntegrated')}
+                className={clsx('p-3 border rounded-lg text-left', kind === 'ExternalIntegrated' ? 'border-brand-500 bg-brand-600/10' : 'border-surface-500')}
+              >
+                <Unplug className="w-4 h-4 text-cyan-400 mb-1" />
+                <span className="block text-sm font-medium text-white">Sistema externo</span>
+                <span className="block text-xs text-gray-400">Banco e usuários próprios</span>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="label">Identificador *</label>
             <input
               className="input" placeholder="loja-exemplo" value={slug}
               onChange={e => setSlug(e.target.value)} required maxLength={20}
             />
-            <p className="text-xs text-gray-400 mt-1">Só letras minúsculas, números e hífen — ficará em &lt;slug&gt;.2esysten.com.br</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {kind === 'Native'
+                ? 'Só letras minúsculas, números e hífen — também será o subdomínio da loja.'
+                : 'Identifica o sistema na API; não cria painel, usuários ou banco operacional.'}
+            </p>
           </div>
-          <div>
-            <label className="label">E-mail do admin da loja *</label>
-            <input
-              type="email" className="input" placeholder="dono@loja.com" value={email}
-              onChange={e => setEmail(e.target.value)} required
-            />
-          </div>
-          <div>
-            <label className="label">Senha inicial *</label>
-            <input
-              type="password" className="input" placeholder="Mínimo 6 caracteres" value={password}
-              onChange={e => setPassword(e.target.value)} required minLength={6}
-            />
-          </div>
+          {kind === 'Native' && <>
+            <div>
+              <label className="label">E-mail do admin da loja *</label>
+              <input
+                type="email" className="input" placeholder="dono@loja.com" value={email}
+                onChange={e => setEmail(e.target.value)} required
+              />
+            </div>
+            <div>
+              <label className="label">Senha inicial *</label>
+              <input
+                type="password" className="input" placeholder="Mínimo 6 caracteres" value={password}
+                onChange={e => setPassword(e.target.value)} required minLength={6}
+              />
+            </div>
+          </>}
           <div>
             <label className="label">Plano</label>
             <div className="flex flex-col sm:flex-row gap-2 mt-1">

@@ -794,7 +794,7 @@ using (var scope = app.Services.CreateScope())
             TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
 
         var tenantsParaMigrar = (await databaseAdmin.ListTenantsAsync())
-            .Where(t => t.Status == TenantStatus.Active)
+            .Where(t => t.Status == TenantStatus.Active && t.Kind == TenantKind.Native)
             .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
             .ToList();
 

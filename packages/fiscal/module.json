@@ -10,7 +10,7 @@
   ],
   "includePatterns": [
     "^packages/fiscal/",
-    "^CardGameStore/Controllers/(FiscalController|PlatformIbptController|ContadorPortalController|IntegrationClientsController)\\.cs$",
+    "^CardGameStore/Controllers/(FiscalController|PlatformIbptController|ContadorPortalController|IntegrationClientsController|PlatformIntegrationClientsController|IntegrationCapabilitiesController)\\.cs$",
     "^CardGameStore/DTOs/.*(Fiscal|Tributaria|Conciliacao|Fechamento|Danfe|Alerta|IntegrationAccess).*\\.cs$",
     "^CardGameStore/Models/PostgreSQL/.*(Fiscal|Nota|Nfe|Ibpt|Alerta|Fechamento|Sefaz|NaturezaOperacao|ExternalTransaction).*\\.cs$",
     "^CardGameStore/Multitenancy/(Contador.*|ApiIntegrationClient|CatalogDbContext)\\.cs$",

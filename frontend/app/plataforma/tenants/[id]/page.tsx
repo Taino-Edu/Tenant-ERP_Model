@@ -5,10 +5,11 @@ import Link from 'next/link'
 import {
   platformApi, TenantSummary, TenantStaffDto, TenantCustomerDto, AuditLogDto,
   SupportTicketDto, PagedResult, TenantUsageDto, getErrorMessage,
+  IntegrationClientDto, IntegrationClientCreatedDto,
 } from '@/lib/api'
 import PageHeader from '@/components/admin/PageHeader'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2, Globe, Check, X, KeyRound } from 'lucide-react'
+import { ArrowLeft, Loader2, Users, UserCog, History, LifeBuoy, Eye, BarChart2, Globe, Check, X, KeyRound, Copy, RotateCw, Trash2, ShieldCheck } from 'lucide-react'
 import clsx from 'clsx'
 import { summarizeAuditDetails } from '@/lib/auditFormat'
 import SeverityBadge from '@/components/admin/SeverityBadge'
@@ -398,6 +399,161 @@ function CustomDomainCard({ tenant, onSaved, podeEditar }: { tenant: TenantSumma
   )
 }
 
+function IntegrationCredentialsCard({ tenant, podeEditar }: { tenant: TenantSummary; podeEditar: boolean }) {
+  const [clients, setClients] = useState<IntegrationClientDto[] | null>(null)
+  const [scopes, setScopes] = useState<string[]>([])
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(['financeiro.read', 'fiscal.read'])
+  const [name, setName] = useState('Soft Nerd')
+  const [generated, setGenerated] = useState<IntegrationClientCreatedDto | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const carregar = useCallback(async () => {
+    try {
+      const [clientsResponse, scopesResponse] = await Promise.all([
+        platformApi.listTenantIntegrationClients(tenant.id),
+        platformApi.listTenantIntegrationScopes(tenant.id),
+      ])
+      setClients(clientsResponse.data)
+      setScopes(scopesResponse.data)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar credenciais técnicas'))
+    }
+  }, [tenant.id])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  async function criar() {
+    setSaving(true)
+    try {
+      const { data } = await platformApi.createTenantIntegrationClient(tenant.id, name.trim(), selectedScopes)
+      setGenerated(data)
+      await carregar()
+      toast.success('Credencial criada. Guarde o segredo agora.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao criar credencial'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function rotacionar(client: IntegrationClientDto) {
+    if (!window.confirm(`Rotacionar a credencial ${client.name}? O segredo atual para imediatamente.`)) return
+    setSaving(true)
+    try {
+      const { data } = await platformApi.rotateTenantIntegrationClient(tenant.id, client.id)
+      setGenerated(data)
+      await carregar()
+      toast.success('Credencial rotacionada. Atualize o servidor externo.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao rotacionar credencial'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function revogar(client: IntegrationClientDto) {
+    if (!window.confirm(`Revogar a credencial ${client.name}? A integração será interrompida.`)) return
+    setSaving(true)
+    try {
+      await platformApi.revokeTenantIntegrationClient(tenant.id, client.id)
+      setGenerated(null)
+      await carregar()
+      toast.success('Credencial revogada.')
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao revogar credencial'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function copiar(value: string, label: string) {
+    await navigator.clipboard.writeText(value)
+    toast.success(`${label} copiado.`)
+  }
+
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN
+  const baseUrl = rootDomain ? `https://${tenant.slug}.${rootDomain}` : `https://${tenant.slug}.3esysten.com.br`
+
+  return (
+    <div className="card space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-cyan-400" />
+            <h2 className="text-sm font-bold text-white">Credenciais da integração</h2>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Base URL: <span className="font-mono text-gray-300">{baseUrl}</span></p>
+        </div>
+      </div>
+
+      {generated && (
+        <div className="border border-amber-500/40 bg-amber-500/10 rounded-lg p-3 space-y-2">
+          <p className="text-xs font-semibold text-amber-300">O segredo aparece somente agora.</p>
+          {[
+            ['Client ID', generated.clientId],
+            ['Client secret', generated.clientSecret],
+          ].map(([label, value]) => (
+            <div key={label} className="flex items-center gap-2">
+              <code className="flex-1 min-w-0 text-xs text-white break-all">{label}: {value}</code>
+              <button type="button" onClick={() => copiar(value, label)} className="btn-secondary p-2" title={`Copiar ${label}`}>
+                <Copy className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {clients === null ? (
+        <div className="flex justify-center py-5"><Loader2 className="w-5 h-5 animate-spin text-brand-400" /></div>
+      ) : clients.length > 0 ? (
+        <div className="divide-y divide-surface-600 border border-surface-600 rounded-lg">
+          {clients.map(client => (
+            <div key={client.id} className="p-3 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white">{client.name}</p>
+                <p className="text-xs font-mono text-gray-400 truncate">{client.clientId}</p>
+                <p className="text-xs text-gray-500 mt-1">{client.scopes.join(' · ')}</p>
+              </div>
+              {podeEditar && client.isActive && (
+                <div className="flex gap-1 shrink-0">
+                  <button type="button" onClick={() => rotacionar(client)} disabled={saving} className="btn-secondary p-2" title="Rotacionar segredo">
+                    <RotateCw className="w-3.5 h-3.5" />
+                  </button>
+                  <button type="button" onClick={() => revogar(client)} disabled={saving} className="btn-secondary p-2 text-red-400" title="Revogar credencial">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-gray-400">Nenhuma credencial criada.</p>
+      )}
+
+      {podeEditar && (
+        <div className="space-y-3 border-t border-surface-600 pt-4">
+          <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="Nome da integração" maxLength={100} />
+          <div className="flex flex-wrap gap-2">
+            {scopes.map(scope => (
+              <label key={scope} className="inline-flex items-center gap-2 text-xs text-gray-300">
+                <input
+                  type="checkbox" checked={selectedScopes.includes(scope)}
+                  onChange={() => setSelectedScopes(current => current.includes(scope) ? current.filter(item => item !== scope) : [...current, scope])}
+                />
+                {scope}
+              </label>
+            ))}
+          </div>
+          <button type="button" onClick={criar} disabled={saving || !name.trim() || selectedScopes.length === 0} className="btn-primary text-sm">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />} Criar credencial
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function TenantDetailPage() {
   const params = useParams<{ id: string }>()
   const tenantId = params.id
@@ -431,15 +587,19 @@ export default function TenantDetailPage() {
       <PageHeader
         icon={UserCog}
         title={tenant.slug}
-        description={`${tenant.planName} · ${tenant.paymentStatus} · ${tenant.status === 'Active' ? 'Ativo' : 'Suspenso'}`}
+        description={`${tenant.kind === 'ExternalIntegrated' ? 'Sistema externo integrado' : tenant.planName} · ${tenant.paymentStatus} · ${tenant.status === 'Active' ? 'Ativo' : 'Suspenso'}`}
       />
 
-      <CustomDomainCard tenant={tenant} onSaved={setTenant} podeEditar={podeGerenciar} />
+      {tenant.kind === 'ExternalIntegrated' ? (
+        <IntegrationCredentialsCard tenant={tenant} podeEditar={podeGerenciar} />
+      ) : (
+        <CustomDomainCard tenant={tenant} onSaved={setTenant} podeEditar={podeGerenciar} />
+      )}
 
       {/* `card-sm-up`: as abas Funcionários/Clientes/Logs renderizam listas de
           cards no celular — com o `.card` aqui elas ficavam card dentro de card
           (301px úteis de 375px). A barra de abas continua igual. */}
-      <div className="card-sm-up">
+      {tenant.kind === 'Native' && <div className="card-sm-up">
         <div className="chip-row items-center border-b border-surface-600 mb-4 !gap-1">
           {abasVisiveis.map(({ key, label, icon: Icon }) => (
             <button
@@ -464,7 +624,7 @@ export default function TenantDetailPage() {
         {abaAtiva === 'logs'     && <LogsTab tenantId={tenantId} />}
         {abaAtiva === 'suporte'  && <SuporteTab tenantId={tenantId} />}
         {abaAtiva === 'uso'      && <UsoTab tenantId={tenantId} />}
-      </div>
+      </div>}
     </div>
   )
 }

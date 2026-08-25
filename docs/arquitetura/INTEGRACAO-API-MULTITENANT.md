@@ -1,13 +1,19 @@
 # Integracao REST multi-tenant
 
-Esta arquitetura permite que sistemas externos, como o Soft Nerd, consumam os
-modulos Financeiro e Fiscal sem usar login de uma pessoa. Cada credencial pertence
-a uma unica loja e recebe apenas os escopos necessarios.
+Esta arquitetura permite que sistemas externos, como o Soft Nerd, usem servicos
+da plataforma sem usar login de uma pessoa. Cada credencial pertence a uma unica
+loja e recebe apenas os escopos necessarios.
+
+Tenants `Native` possuem schema e usuarios na plataforma. Tenants
+`ExternalIntegrated` mantem vendas, estoque, financeiro e usuarios no sistema de
+origem; o catalogo central guarda somente identidade, contratacao e credenciais.
+Registrar um externo nao cria schema fisico nem copia dados operacionais.
 
 ## Fluxo de autenticacao
 
-1. Um administrador acessa o dominio da loja e cria um cliente em
-   `POST /api/integrations/clients`.
+1. Em tenant nativo, um administrador acessa o dominio da loja e cria um cliente
+   em `POST /api/integrations/clients`. Em tenant externo, o dono da plataforma
+   usa `POST /api/platform/tenants/{tenantId}/integration-clients`.
 2. A API devolve `client_id` e `client_secret`. O segredo aparece uma unica vez.
 3. O integrador solicita um token no mesmo dominio da loja:
 
@@ -64,6 +70,21 @@ plataforma e outras areas internas.
 
 Somente administradores humanos podem administrar clientes. Segredos sao
 armazenados como hash BCrypt e nunca entram em Git, logs, ZIPs ou releases.
+
+O painel da plataforma tambem expoe as mesmas operacoes sob
+`/api/platform/tenants/{tenantId}/integration-clients`, protegido pelas permissoes
+de leitura/gestao de tenants. Esse e o caminho usado por sistemas externos, que
+nao possuem admin ou painel local na 3ESysten.
+
+## Verificacao de tenant externo
+
+- `GET /api/integrations/capabilities/financeiro` valida `financeiro.read`.
+- `GET /api/integrations/capabilities/fiscal` valida `fiscal.read`.
+
+Essas rotas leem apenas o catalogo central. Elas confirmam tenant, tipo, modulos e
+residencia dos dados sem consultar um schema vazio. Rotas operacionais da loja
+continuam locais no sistema externo; servicos centrais especificos devem ganhar
+contratos proprios antes de serem consumidos.
 
 ## Controles operacionais
 

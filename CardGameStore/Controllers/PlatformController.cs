@@ -67,6 +67,7 @@ public class PlatformController : ControllerBase
         Slug           = t.Slug,
         SchemaName     = t.SchemaName,
         Status         = t.Status.ToString(),
+        Kind           = t.Kind.ToString(),
         CreatedAt      = t.CreatedAt,
         PlanName       = t.PlanName,
         PaymentStatus  = t.PaymentStatus.ToString(),
@@ -102,9 +103,12 @@ public class PlatformController : ControllerBase
 
         try
         {
+            if (!Enum.TryParse<TenantKind>(request.Kind, ignoreCase: true, out var kind))
+                return BadRequest(new { Message = "Tipo de tenant inválido." });
+
             var tenant = await _provisioning.ProvisionAsync(
                 request.Slug, request.AdminEmail, request.AdminPassword, request.EnabledModules,
-                request.PlanName, request.MaxUsers);
+                request.PlanName, request.MaxUsers, kind);
             return CreatedAtAction(nameof(ListTenants), ToDto(tenant));
         }
         catch (InvalidOperationException ex)
@@ -188,6 +192,9 @@ public class PlatformController : ControllerBase
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
         if (tenant is null) return NotFound();
 
+        if (tenant.Kind != TenantKind.Native)
+            return Conflict(new { Message = "Tenant externo não possui schema local para backup." });
+
         if (string.IsNullOrWhiteSpace(_connectionString))
             return StatusCode(500, new { Message = "Connection string não configurada." });
 
@@ -265,8 +272,11 @@ public class PlatformController : ControllerBase
             if (!string.IsNullOrWhiteSpace(tenant.CustomDomain))
                 _cache.Remove($"tenant-domain:{tenant.CustomDomain.ToLowerInvariant()}");
 
-            var schemaName = TenantSchemaName.Validate(tenant.SchemaName);
-            await _databaseAdmin.DropTenantSchemaAsync(schemaName);
+            if (tenant.Kind == TenantKind.Native)
+            {
+                var schemaName = TenantSchemaName.Validate(tenant.SchemaName);
+                await _databaseAdmin.DropTenantSchemaAsync(schemaName);
+            }
 
             _catalog.Tenants.Remove(tenant);
             await _catalog.SaveChangesAsync();
@@ -348,6 +358,7 @@ public class PlatformController : ControllerBase
     {
         var tenants = await _catalog.Tenants.ToListAsync();
         var active  = tenants.Where(t => t.Status == TenantStatus.Active).ToList();
+        var nativeActive = active.Where(t => t.Kind == TenantKind.Native).ToList();
 
         var dto = new PlatformOverviewDto
         {
@@ -359,7 +370,7 @@ public class PlatformController : ControllerBase
 
         var inicioMes = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        foreach (var tenant in active)
+        foreach (var tenant in nativeActive)
         {
             try
             {
@@ -403,6 +414,9 @@ public class PlatformController : ControllerBase
     /// PlatformOwnerOnly, atende no domínio da própria plataforma).</summary>
     private async Task<T> RunInTenantScopeAsync<T>(Tenant tenant, Func<AppDbContext, Task<T>> query)
     {
+        if (tenant.Kind != TenantKind.Native)
+            throw new InvalidOperationException("Tenant externo não possui banco operacional na plataforma.");
+
         using var scope = _scopeFactory.CreateScope();
         var tc = scope.ServiceProvider.GetRequiredService<ITenantContext>();
         tc.Set(tenant.Id, tenant.SchemaName, tenant.EnabledModules);
@@ -709,7 +723,9 @@ public class PlatformController : ControllerBase
     [RequirePlatformPermission(PlatformPermission.Logs)]
     public async Task<IActionResult> GetAggregatedAuditLogs()
     {
-        var tenants = await _catalog.Tenants.Where(t => t.Status == TenantStatus.Active).ToListAsync();
+        var tenants = await _catalog.Tenants
+            .Where(t => t.Status == TenantStatus.Active && t.Kind == TenantKind.Native)
+            .ToListAsync();
         var feed = new List<PlatformAuditLogDto>();
 
         foreach (var tenant in tenants)
@@ -770,6 +786,9 @@ public class PlatformController : ControllerBase
     {
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
         if (tenant is null) return NotFound();
+
+        if (tenant.Kind != TenantKind.Native)
+            return Conflict(new { Message = "Tenant externo não possui painel local para acesso simulado." });
 
         if (tenant.Status != TenantStatus.Active)
             return Conflict(new { Message = "Não é possível acessar uma loja suspensa. Reative primeiro." });

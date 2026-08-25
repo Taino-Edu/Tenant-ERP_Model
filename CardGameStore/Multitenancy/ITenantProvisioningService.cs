@@ -15,7 +15,8 @@ public interface ITenantProvisioningService
     /// Null ou vazio cai no default do model (["fiscal"]) — mesmo comportamento de antes desse parâmetro existir.</param>
     /// <param name="planName">Nome do plano contratado (ex: "Mar", "Lagoa"). Null cai no default do model ("Rio").</param>
     /// <param name="maxUsers">Limite de usuários com acesso ao painel (Admin+Operator). Null = sem limite.</param>
+    /// <param name="kind">Native cria banco e admin; ExternalIntegrated mantém os dados no sistema de origem.</param>
     Task<Tenant> ProvisionAsync(
-        string slug, string adminEmail, string adminPassword, string[]? enabledModules = null,
-        string? planName = null, int? maxUsers = null);
+        string slug, string? adminEmail, string? adminPassword, string[]? enabledModules = null,
+        string? planName = null, int? maxUsers = null, TenantKind kind = TenantKind.Native);
 }

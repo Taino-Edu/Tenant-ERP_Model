@@ -10,7 +10,7 @@
   ],
   "includePatterns": [
     "^packages/financeiro/",
-    "^CardGameStore/Controllers/(AnalyticsController|FinancialConfigController|ContasReceberController|IntegrationClientsController)\\.cs$",
+    "^CardGameStore/Controllers/(AnalyticsController|FinancialConfigController|ContasReceberController|IntegrationClientsController|PlatformIntegrationClientsController|IntegrationCapabilitiesController)\\.cs$",
     "^CardGameStore/DTOs/(AnalyticsDtos|CreditarioDtos|IntegrationAccessDtos)\\.cs$",
     "^CardGameStore/Multitenancy/(ApiIntegrationClient|CatalogDbContext)\\.cs$",
     "^CardGameStore/Security/Integration.*\\.cs$",

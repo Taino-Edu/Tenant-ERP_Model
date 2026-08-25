@@ -16,6 +16,16 @@ public enum TenantStatus
     Suspended,
 }
 
+/// <summary>Define onde vivem os dados operacionais do tenant.</summary>
+public enum TenantKind
+{
+    /// <summary>Loja hospedada integralmente na plataforma, com schema PostgreSQL próprio.</summary>
+    Native,
+
+    /// <summary>Sistema independente que mantém banco e usuários próprios e consome APIs da plataforma.</summary>
+    ExternalIntegrated,
+}
+
 /// <summary>Status de pagamento do tenant — rastreio manual pelo dono da plataforma
 /// (ciclo 1 de billing, sem gateway de pagamento integrado ainda).</summary>
 public enum TenantPaymentStatus
@@ -44,6 +54,9 @@ public class Tenant
 
     [Column("status")]
     public TenantStatus Status { get; set; } = TenantStatus.Active;
+
+    [Column("kind")]
+    public TenantKind Kind { get; set; } = TenantKind.Native;
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

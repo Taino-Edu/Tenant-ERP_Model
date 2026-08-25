@@ -11,11 +11,14 @@ public class CreateTenantRequest
     [Required, MaxLength(20)]
     public string Slug { get; set; } = string.Empty;
 
-    [Required, EmailAddress, MaxLength(255)]
-    public string AdminEmail { get; set; } = string.Empty;
+    [EmailAddress, MaxLength(255)]
+    public string? AdminEmail { get; set; }
 
-    [Required, MinLength(6)]
-    public string AdminPassword { get; set; } = string.Empty;
+    [MinLength(6)]
+    public string? AdminPassword { get; set; }
+
+    /// <summary>Native cria schema e admin local; ExternalIntegrated registra um sistema independente.</summary>
+    public string Kind { get; set; } = "Native";
 
     /// <summary>Módulos pagos já habilitados na criação (ex: ["fiscal","estoque"]). Vazio/null
     /// cai no default do model (["fiscal"]) — ver TenantProvisioningService.KnownModules pra
@@ -38,6 +41,7 @@ public class TenantSummaryDto
     public string Slug { get; set; } = string.Empty;
     public string SchemaName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public string PlanName { get; set; } = string.Empty;
     public string PaymentStatus { get; set; } = string.Empty;
