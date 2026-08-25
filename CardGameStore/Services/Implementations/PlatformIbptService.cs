@@ -38,17 +38,22 @@ public sealed class PlatformIbptService(
 
     public async Task<IReadOnlyList<PlatformIbptStatusDto>> ListarAsync(CancellationToken ct = default)
     {
-        return await catalog.IbptTabela.AsNoTracking()
+        var grupos = await catalog.IbptTabela.AsNoTracking()
             .GroupBy(e => e.Uf)
-            .Select(g => new PlatformIbptStatusDto(
-                g.Key,
-                g.Select(e => e.Ncm).Distinct().Count(),
-                g.Max(e => e.Versao),
-                g.Min(e => e.VigenciaInicio),
-                g.Min(e => e.VigenciaFim),
-                g.Max(e => e.AtualizadoEm)))
+            .Select(g => new
+            {
+                Uf = g.Key,
+                Ncms = g.Select(e => e.Ncm).Distinct().Count(),
+                Versao = g.Max(e => e.Versao),
+                VigenciaInicio = g.Min(e => e.VigenciaInicio),
+                VigenciaFim = g.Min(e => e.VigenciaFim),
+                AtualizadoEm = g.Max(e => e.AtualizadoEm),
+            })
             .OrderBy(e => e.Uf)
             .ToListAsync(ct);
+
+        return grupos.Select(g => new PlatformIbptStatusDto(
+            g.Uf, g.Ncms, g.Versao, g.VigenciaInicio, g.VigenciaFim, g.AtualizadoEm)).ToList();
     }
 
     public async Task<PlatformIbptImportResult> ImportarAsync(
