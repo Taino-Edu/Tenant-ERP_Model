@@ -138,6 +138,19 @@ services:
       # separada da GEMINI_API_KEY acima; sem ela, a busca funciona normalmente
       # e só o botão "Enriquecer com IA" fica indisponível.
       ProspectingSettings__GeminiApiKey: "${PROSPECTING_GEMINI_API_KEY}"
+      # Cobrança da mensalidade DA PLATAFORMA contra as lojas (RB-01). Uma conta
+      # só, a nossa. Não confundir com o recebimento das vendas do lojista
+      # (Inter/Mercado Pago), que é por tenant e vem do banco.
+      #
+      # Vazio = modo manual: a API sobe, não emite cobrança automática, mas a
+      # régua de suspensão por vencimento continua rodando.
+      Billing__Asaas__ApiKey: "${ASAAS_API_KEY}"
+      Billing__Asaas__WebhookToken: "${ASAAS_WEBHOOK_TOKEN}"
+      # Padrão sandbox: apontar pra produção é ato deliberado, porque cobrança
+      # emitida em produção é cobrança real contra CNPJ real.
+      Billing__Asaas__BaseUrl: "${ASAAS_BASE_URL:-https://api-sandbox.asaas.com/v3/}"
+      Billing__Asaas__BillingType: "${ASAAS_BILLING_TYPE:-PIX}"
+      Billing__DiasDeCarenciaAposVencimento: "${BILLING_DIAS_CARENCIA:-7}"
       # Inter PJ: NÃO há variável de certificado aqui de propósito. O par
       # .crt/.key é enviado por tenant em /admin/integracoes e guardado
       # criptografado no banco (InterSyncService.BuildMtlsClient lê de lá).
