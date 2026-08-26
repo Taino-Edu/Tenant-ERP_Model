@@ -241,6 +241,16 @@ public class AppDbContext : DbContext
                   .HasFilter("venda_avulsa_id IS NOT NULL")
                   .HasDatabaseName("ix_notas_fiscais_venda_avulsa_unica");
 
+            entity.HasIndex(n => n.IdempotencyKey)
+                  .IsUnique()
+                  .HasFilter("idempotency_key IS NOT NULL")
+                  .HasDatabaseName("ix_notas_fiscais_idempotency_key");
+
+            entity.HasIndex(n => new { n.ExternalSource, n.ExternalDocumentId })
+                  .IsUnique()
+                  .HasFilter("external_source IS NOT NULL AND external_document_id IS NOT NULL")
+                  .HasDatabaseName("ix_notas_fiscais_external_document");
+
             entity.HasIndex(n => n.EmitidoEm)
                   .HasDatabaseName("ix_notas_fiscais_emitido_em");
 

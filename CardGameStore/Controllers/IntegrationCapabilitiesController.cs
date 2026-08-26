@@ -56,7 +56,7 @@ public sealed class IntegrationCapabilitiesController : ControllerBase
             tenant.Kind,
             Capability = capability,
             DataResidency = tenant.Kind == nameof(TenantKind.ExternalIntegrated)
-                ? "ExternalSystem"
+                ? capability == "fiscal" ? "HybridFiscalHosted" : "ExternalSystem"
                 : "TenantSchema",
             tenant.EnabledModules,
         });

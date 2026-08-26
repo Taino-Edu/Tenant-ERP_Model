@@ -147,9 +147,10 @@ public class TenantProvisioningService : ITenantProvisioningService
             modulosValidos = enabledModules.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
-        // Externos não possuem schema físico. O valor continua preenchido porque
-        // schema_name também é a chave lógica única usada pelo contexto do tenant;
-        // todos os caminhos que abrem AppDbContext filtram Kind == Native.
+        // Tenants externos mantêm vendas/estoque/financeiro no ERP de origem, mas
+        // possuem schema físico para configuração, certificado e documentos do
+        // motor fiscal hospedado. O prefixo distinto deixa essa residência híbrida
+        // explícita em operações de banco e backup.
         var schemaName = (kind == TenantKind.Native ? "tenant_" : "external_") + slug.Replace('-', '_');
         TenantSchemaName.Validate(schemaName);
 
@@ -182,14 +183,6 @@ public class TenantProvisioningService : ITenantProvisioningService
         _catalog.Tenants.Add(tenant);
         await _catalog.SaveChangesAsync();
 
-        if (kind == TenantKind.ExternalIntegrated)
-        {
-            _logger.LogInformation(
-                "Tenant externo '{Slug}' registrado sem schema local (identificador '{Schema}').",
-                slug, schemaName);
-            return tenant;
-        }
-
         try
         {
             // O schema físico precisa existir ANTES de qualquer conexão do
@@ -207,14 +200,17 @@ public class TenantProvisioningService : ITenantProvisioningService
 
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            db.Users.Add(new User
+            if (kind == TenantKind.Native)
             {
-                Name         = adminEmail!,
-                Email        = adminEmail!.Trim().ToLowerInvariant(),
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword!),
-                Role         = UserRole.Admin,
-            });
-            await db.SaveChangesAsync();
+                db.Users.Add(new User
+                {
+                    Name         = adminEmail!,
+                    Email        = adminEmail!.Trim().ToLowerInvariant(),
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(adminPassword!),
+                    Role         = UserRole.Admin,
+                });
+                await db.SaveChangesAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -224,7 +220,8 @@ public class TenantProvisioningService : ITenantProvisioningService
             throw;
         }
 
-        _logger.LogInformation("Tenant '{Slug}' provisionado (schema '{Schema}').", slug, schemaName);
+        _logger.LogInformation(
+            "Tenant '{Slug}' provisionado (schema '{Schema}', tipo {Kind}).", slug, schemaName, kind);
         return tenant;
     }
 }

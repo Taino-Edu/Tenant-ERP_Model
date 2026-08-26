@@ -23,6 +23,9 @@ public interface INfceEmissionService
     /// </summary>
     Task<NotaFiscalEmitida> EmitirParaVendaAvulsaAsync(Guid vendaAvulsaId);
 
+    /// <summary>Emite a partir de um snapshot vindo de ERP externo, com idempotencia no banco.</summary>
+    Task<NotaFiscalEmitida> EmitirIntegracaoAsync(IntegrationFiscalEmissionRequest request);
+
     /// <summary>
     /// Tenta emitir de novo uma nota PendenteEmissao ou Rejeitada. Nunca lança exceção.
     /// Notas em outros status (Autorizada/Cancelada) são retornadas sem alteração.

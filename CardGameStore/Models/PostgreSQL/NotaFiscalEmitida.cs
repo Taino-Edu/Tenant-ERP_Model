@@ -11,7 +11,8 @@ namespace CardGameStore.Models.PostgreSQL;
 public enum NotaFiscalOrigem
 {
     Comanda,
-    VendaAvulsa
+    VendaAvulsa,
+    IntegracaoExterna,
 }
 
 public enum NotaFiscalStatus
@@ -61,6 +62,22 @@ public class NotaFiscalEmitida
     /// <summary>Id da VendaAvulsa (quando Origem == VendaAvulsa).</summary>
     [Column("venda_avulsa_id")]
     public Guid? VendaAvulsaId { get; set; }
+
+    [MaxLength(50)]
+    [Column("external_source")]
+    public string? ExternalSource { get; set; }
+
+    [MaxLength(100)]
+    [Column("external_document_id")]
+    public string? ExternalDocumentId { get; set; }
+
+    [MaxLength(100)]
+    [Column("idempotency_key")]
+    public string? IdempotencyKey { get; set; }
+
+    /// <summary>Snapshot validado recebido do ERP externo, usado em retries sem reler a origem.</summary>
+    [Column("external_payload_json")]
+    public string? ExternalPayloadJson { get; set; }
 
     [Column("status")]
     public NotaFiscalStatus Status { get; set; } = NotaFiscalStatus.PendenteEmissao;

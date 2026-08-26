@@ -32,7 +32,9 @@ public class FiscalRetryBackgroundService : BackgroundService
         {
             try
             {
-                await _scopeFactory.ForEachActiveTenantAsync(_logger, ReprocessarPendentesAsync, ct, requiredModule: "fiscal");
+                await _scopeFactory.ForEachActiveTenantAsync(
+                    _logger, ReprocessarPendentesAsync, ct,
+                    requiredModule: "fiscal", includeExternal: true);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -794,8 +794,8 @@ using (var scope = app.Services.CreateScope())
             TenantConstants.TenantZeroId, TenantConstants.TenantZeroSchema, new[] { "fiscal" });
 
         var tenantsParaMigrar = (await databaseAdmin.ListTenantsAsync())
-            .Where(t => t.Status == TenantStatus.Active && t.Kind == TenantKind.Native)
-            .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules })
+            .Where(t => t.Status == TenantStatus.Active)
+            .Select(t => new { t.Id, t.Slug, t.SchemaName, t.EnabledModules, t.Kind })
             .ToList();
 
         // C4 (parcial — VPS único por enquanto, sem lock/processo migrador separado):
@@ -810,8 +810,12 @@ using (var scope = app.Services.CreateScope())
         {
             try
             {
-                await databaseAdmin.MigrateTenantAsync(
-                    tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+                if (tenant.Kind == TenantKind.ExternalIntegrated)
+                    await databaseAdmin.CreateAndMigrateTenantAsync(
+                        tenant.Id, tenant.SchemaName, tenant.EnabledModules);
+                else
+                    await databaseAdmin.MigrateTenantAsync(
+                        tenant.Id, tenant.SchemaName, tenant.EnabledModules);
             }
             catch (Exception ex)
             {

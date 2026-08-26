@@ -309,6 +309,49 @@ public class NfceEmissionService : INfceEmissionService
     public async Task<NotaFiscalEmitida> EmitirParaVendaAvulsaAsync(Guid vendaAvulsaId) =>
         await EmitirAsync(NotaFiscalOrigem.VendaAvulsa, null, vendaAvulsaId);
 
+    public async Task<NotaFiscalEmitida> EmitirIntegracaoAsync(IntegrationFiscalEmissionRequest request)
+    {
+        var source = request.Source.Trim().ToLowerInvariant();
+        var externalDocumentId = request.ExternalDocumentId.Trim();
+        var idempotencyKey = request.IdempotencyKey.Trim();
+
+        var existente = await _db.NotasFiscaisEmitidas.FirstOrDefaultAsync(n =>
+            n.IdempotencyKey == idempotencyKey ||
+            (n.ExternalSource == source && n.ExternalDocumentId == externalDocumentId));
+        if (existente is not null) return existente;
+
+        var dados = MapearDadosIntegracao(request);
+        var nota = new NotaFiscalEmitida
+        {
+            Origem = NotaFiscalOrigem.IntegracaoExterna,
+            ExternalSource = source,
+            ExternalDocumentId = externalDocumentId,
+            IdempotencyKey = idempotencyKey,
+            ExternalPayloadJson = JsonSerializer.Serialize(request),
+            ValorTotalEmCentavos = dados.ValorLiquidoCentavos,
+            Status = NotaFiscalStatus.PendenteEmissao,
+        };
+        _db.NotasFiscaisEmitidas.Add(nota);
+
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg &&
+            (pg.ConstraintName == "ix_notas_fiscais_idempotency_key" ||
+             pg.ConstraintName == "ix_notas_fiscais_external_document"))
+        {
+            _db.ChangeTracker.Clear();
+            return await _db.NotasFiscaisEmitidas.FirstAsync(n =>
+                n.IdempotencyKey == idempotencyKey ||
+                (n.ExternalSource == source && n.ExternalDocumentId == externalDocumentId));
+        }
+
+        await ExecutarComTratamentoDeErroAsync(nota, () => TransmitirAsync(nota, dados));
+        return nota;
+    }
+
     public async Task<NotaFiscalEmitida> ReprocessarAsync(Guid notaId)
     {
         var nota = await _db.NotasFiscaisEmitidas.FindAsync(notaId)
@@ -373,9 +416,13 @@ public class NfceEmissionService : INfceEmissionService
                 !await ResolverResultadoIncertoPersistidoAsync(nota))
                 return;
 
-            var dados = nota.Origem == NotaFiscalOrigem.Comanda
-                ? await CarregarDadosComandaAsync(nota.ComandaId!.Value)
-                : await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value);
+            var dados = nota.Origem switch
+            {
+                NotaFiscalOrigem.Comanda => await CarregarDadosComandaAsync(nota.ComandaId!.Value),
+                NotaFiscalOrigem.VendaAvulsa => await CarregarDadosVendaAvulsaAsync(nota.VendaAvulsaId!.Value),
+                NotaFiscalOrigem.IntegracaoExterna => CarregarDadosIntegracao(nota),
+                _ => throw new InvalidOperationException("Origem fiscal desconhecida."),
+            };
 
             nota.ValorTotalEmCentavos = dados.ValorLiquidoCentavos;
             await TransmitirAsync(nota, dados);
@@ -710,6 +757,18 @@ public class NfceEmissionService : INfceEmissionService
                 return;
             }
 
+            // O motor central nao e dono do estoque, caixa ou venda do ERP externo.
+            // O cancelamento fiscal e devolvido pela API para que a origem aplique
+            // seus efeitos locais; aqui apenas encerramos o retry de estorno interno.
+            if (nota.Origem == NotaFiscalOrigem.IntegracaoExterna)
+            {
+                nota.ErpEstornadoEm = DateTime.UtcNow;
+                nota.ErpEstornoErro = null;
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+                return;
+            }
+
             string formaPagamento;
             string? segundaForma;
             if (nota.Origem == NotaFiscalOrigem.Comanda)
@@ -986,7 +1045,7 @@ public class NfceEmissionService : INfceEmissionService
         Guid? ProdutoId = null,
         string? Gtin = null);
 
-    private record DadosEmissao(
+    internal record DadosEmissao(
         List<ItemFiscal> Itens, string FormaPagamento, string? ClienteCpf,
         string? SegundaFormaPagamento, int SegundoValorCentavos, int DescontoTotalCentavos,
         int? DinheiroRecebidoCentavos, int TrocoCentavos)
@@ -1078,6 +1137,70 @@ public class NfceEmissionService : INfceEmissionService
             venda.SecondPaymentMethod, venda.SecondPaymentAmountInCents,
             Math.Clamp(venda.DiscountInCents, 0, itens.Sum(i => i.SubtotalCentavos)),
             venda.CashReceivedInCents, venda.ChangeInCents);
+    }
+
+    private static DadosEmissao CarregarDadosIntegracao(NotaFiscalEmitida nota)
+    {
+        if (string.IsNullOrWhiteSpace(nota.ExternalPayloadJson))
+            throw new InvalidOperationException("Snapshot da integracao fiscal nao foi encontrado.");
+
+        var request = JsonSerializer.Deserialize<IntegrationFiscalEmissionRequest>(nota.ExternalPayloadJson)
+            ?? throw new InvalidOperationException("Snapshot da integracao fiscal e invalido.");
+        return MapearDadosIntegracao(request);
+    }
+
+    internal static DadosEmissao MapearDadosIntegracao(IntegrationFiscalEmissionRequest request)
+    {
+        if (request.Items.Count is < 1 or > 200)
+            throw new FiscalNaoConfiguradoException("A venda externa deve conter entre 1 e 200 itens.");
+
+        var itens = request.Items.Select(item =>
+        {
+            if (item.Quantity <= 0 || item.UnitPriceInCents < 0 || item.SubtotalInCents < 0)
+                throw new FiscalNaoConfiguradoException("Quantidade e valores dos itens devem ser validos.");
+            if (item.SubtotalInCents != checked(item.Quantity * item.UnitPriceInCents))
+                throw new FiscalNaoConfiguradoException(
+                    $"Subtotal do item '{item.Name}' diverge de quantidade x valor unitario.");
+
+            return new ItemFiscal(
+                Nome: item.Name.Trim(),
+                Ncm: SanitizarNcm(item.Ncm),
+                Cfop: item.Cfop.Trim(),
+                Csosn: item.Csosn,
+                PercentualCreditoSn: null,
+                Quantidade: item.Quantity,
+                PrecoUnitarioCentavos: item.UnitPriceInCents,
+                SubtotalCentavos: item.SubtotalInCents,
+                OrigemMercadoria: item.Origin,
+                IbsCbsCst: item.IbsCbsCst,
+                IbsCbsClassTrib: item.IbsCbsClassTrib,
+                Cest: item.Cest,
+                PercentualTributosFederais: item.FederalTaxPercent,
+                PercentualTributosEstaduais: item.StateTaxPercent,
+                PercentualTributosMunicipais: item.MunicipalTaxPercent,
+                FonteTributos: item.TaxSource,
+                TributosPreenchidosAutomaticamente: item.FederalTaxPercent.HasValue ||
+                    item.StateTaxPercent.HasValue || item.MunicipalTaxPercent.HasValue,
+                TributosVigenciaFim: item.TaxValidUntil,
+                Cst: item.Cst,
+                Gtin: item.Gtin);
+        }).ToList();
+
+        var bruto = itens.Sum(i => i.SubtotalCentavos);
+        if (request.DiscountInCents > bruto)
+            throw new FiscalNaoConfiguradoException("O desconto nao pode superar o valor bruto da venda.");
+        if (request.SecondPaymentAmountInCents > bruto - request.DiscountInCents)
+            throw new FiscalNaoConfiguradoException("O segundo pagamento nao pode superar o total da venda.");
+
+        return new DadosEmissao(
+            itens,
+            request.PaymentMethod.Trim(),
+            request.CustomerCpf,
+            request.SecondPaymentMethod,
+            request.SecondPaymentAmountInCents,
+            request.DiscountInCents,
+            request.CashReceivedInCents,
+            request.ChangeInCents);
     }
 
     private static ItemFiscal CriarItemFiscal(

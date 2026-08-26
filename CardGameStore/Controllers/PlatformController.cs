@@ -192,9 +192,6 @@ public class PlatformController : ControllerBase
         var tenant = await _catalog.Tenants.FirstOrDefaultAsync(t => t.Id == id);
         if (tenant is null) return NotFound();
 
-        if (tenant.Kind != TenantKind.Native)
-            return Conflict(new { Message = "Tenant externo não possui schema local para backup." });
-
         if (string.IsNullOrWhiteSpace(_connectionString))
             return StatusCode(500, new { Message = "Connection string não configurada." });
 
@@ -272,11 +269,8 @@ public class PlatformController : ControllerBase
             if (!string.IsNullOrWhiteSpace(tenant.CustomDomain))
                 _cache.Remove($"tenant-domain:{tenant.CustomDomain.ToLowerInvariant()}");
 
-            if (tenant.Kind == TenantKind.Native)
-            {
-                var schemaName = TenantSchemaName.Validate(tenant.SchemaName);
-                await _databaseAdmin.DropTenantSchemaAsync(schemaName);
-            }
+            var schemaName = TenantSchemaName.Validate(tenant.SchemaName);
+            await _databaseAdmin.DropTenantSchemaAsync(schemaName);
 
             _catalog.Tenants.Remove(tenant);
             await _catalog.SaveChangesAsync();

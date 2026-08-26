@@ -33,7 +33,8 @@ public class SefazDistBackgroundService : BackgroundService
         {
             try
             {
-                await _scopeFactory.ForEachActiveTenantAsync(_logger, SincronizarAsync, ct, requiredModule: "fiscal");
+                await _scopeFactory.ForEachActiveTenantAsync(
+                    _logger, SincronizarAsync, ct, requiredModule: "fiscal", includeExternal: true);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -34,14 +34,16 @@ public static class TenantIteration
         ILogger logger,
         Func<IServiceProvider, CancellationToken, Task> perTenant,
         CancellationToken ct = default,
-        string? requiredModule = null)
+        string? requiredModule = null,
+        bool includeExternal = false)
     {
         List<TenantSlot> tenants;
         using (var catalogScope = scopeFactory.CreateScope())
         {
             var catalog = catalogScope.ServiceProvider.GetRequiredService<CatalogDbContext>();
             tenants = await catalog.Tenants
-                .Where(t => t.Status == TenantStatus.Active && t.Kind == TenantKind.Native)
+                .Where(t => t.Status == TenantStatus.Active &&
+                    (includeExternal || t.Kind == TenantKind.Native))
                 .Select(t => new TenantSlot(t.Id, t.Slug, t.SchemaName, t.EnabledModules))
                 .ToListAsync(ct);
         }
