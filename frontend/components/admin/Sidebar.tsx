@@ -2,7 +2,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { clearAuth, getUserName, getRole } from '@/lib/auth'
 import { authApi, notificationsApi, fiscalApi } from '@/lib/api'
 import {
@@ -20,6 +20,12 @@ import { useSiteConfig } from '@/contexts/SiteConfigContext'
 
 // A lista de seções mora em lib/adminNav.ts — a MobileTabBar precisa das
 // mesmas regras de permissão/módulo e não pode importar de um componente.
+
+/** Ordem de tabulação do drawer, em ordem de documento. `:not([disabled])`
+ * importa: o botão "Sair" fica desabilitado durante o logout e sairia da fila,
+ * levando junto a âncora do trap se ele fosse o último. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules, collapsed = false }: { pathname: string; onClose?: () => void; unreadCount: number; fiscalAlerta: boolean; enabledModules: string[]; collapsed?: boolean }) {
   // O guard de hidratação (cookie não existe no SSR) mora no hook, junto com a
@@ -56,6 +62,10 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
                   key={href}
                   href={href}
                   onClick={onClose}
+                  // A MobileTabBar já marcava a tela atual; a sidebar só trocava
+                  // a classe CSS, então quem navega por leitor de tela percorria
+                  // os 27 links sem nenhum deles dizer "você está aqui".
+                  aria-current={active ? 'page' : undefined}
                   title={collapsed ? itemLabel : undefined}
                   className={clsx(
                     'flex items-center w-full py-3 rounded-xl font-medium text-sm transition-all duration-150 group',
@@ -77,8 +87,12 @@ function NavItems({ pathname, onClose, unreadCount, fiscalAlerta, enabledModules
                           {badge}
                         </span>
                       )}
+                      {/* gray-400 e não gray-600: a 9px o atalho é o menor texto
+                          da tela, e no gray-600 saía a 2,8:1 no tema claro e
+                          2,3:1 no escuro. Não é enfeite — é a única pista de que
+                          o atalho existe. */}
                       {shortcut && !active && (
-                        <kbd className="hidden md:inline-block text-[9px] text-gray-600 bg-surface-800 border border-surface-600 rounded px-1.5 py-0.5 font-mono font-bold leading-none opacity-0 group-hover:opacity-100 transition-opacity">
+                        <kbd className="hidden md:inline-block text-[9px] text-gray-400 bg-surface-800 border border-surface-600 rounded px-1.5 py-0.5 font-mono font-bold leading-none opacity-0 group-hover:opacity-100 transition-opacity">
                           {shortcut}
                         </kbd>
                       )}
@@ -112,6 +126,8 @@ export default function Sidebar() {
   // sempre que o valor salvo fosse "recolhida". O valor real só é aplicado
   // depois, via useEffect (client-only) — mesmo padrão de usePersistentPanel.
   const [collapsed,    setCollapsed]    = useState(false)
+  const drawerRef     = useRef<HTMLElement | null>(null)
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     try {
@@ -123,10 +139,66 @@ export default function Sidebar() {
   // menu "vaza" para a página atrás dele assim que a lista chega ao fim.
   useScrollLock(mobileOpen)
 
-  // Esc fecha o drawer (teclado externo em tablet).
+  // Abrir e fechar o drawer é uma transição de FOCO, não só de CSS — e as duas
+  // metades moram neste efeito porque a ordem entre elas importa.
+  //
+  // Fechado: `inert`. Só `aria-hidden` era o pior dos mundos — o leitor de tela
+  // pulava o drawer, mas os links continuavam na ordem de tabulação, e quem
+  // navega por teclado caía dentro de um menu invisível (`aria-hidden` sobre
+  // conteúdo focável já é violação por si só). Vai como atributo no DOM, e não
+  // como prop: o react-dom 18 não conhece `inert` (só o 19 conhece) e descarta
+  // um valor booleano, enquanto o @types/react 18 o tipa como boolean e recusa
+  // a string que o runtime aceitaria — nenhum valor passa nos dois. Com React 19
+  // isto vira `inert={!mobileOpen}` e o efeito guarda só o foco.
+  //
+  // Aberto: o foco entra pelo botão de fechar. Sem isso o teclado continua na
+  // página atrás e o `Tab` percorre o conteúdo de baixo com o menu por cima.
+  useEffect(() => {
+    const el = drawerRef.current
+    if (!el) return
+    if (mobileOpen) {
+      el.removeAttribute('inert')
+      el.querySelector<HTMLElement>(FOCUSABLE)?.focus()
+      return
+    }
+    // A ordem aqui não é estética: `inert` desfoca na hora quem estiver dentro,
+    // então a pergunta "o foco estava no menu?" precisa vir ANTES. Depois de
+    // aplicá-lo, activeElement já é o body e a resposta seria sempre não.
+    const focoEstavaDentro = el.contains(document.activeElement)
+    el.setAttribute('inert', '')
+    // Só devolve o foco se ele estava lá dentro. Na primeira montagem o drawer
+    // já nasce fechado, e sem essa guarda o menu roubaria o foco no load.
+    if (focoEstavaDentro) menuButtonRef.current?.focus()
+  }, [mobileOpen])
+
+  // Esc fecha; Tab circula dentro do drawer. O trap é manual porque o conteúdo
+  // da página não é irmão deste componente — não dá para marcá-lo `inert` daqui
+  // e deixar o navegador resolver, que seria o caminho curto.
   useEffect(() => {
     if (!mobileOpen) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setMobileOpen(false); return }
+      if (e.key !== 'Tab') return
+      const el = drawerRef.current
+      if (!el) return
+      const focusables = Array.from(el.querySelectorAll<HTMLElement>(FOCUSABLE))
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last  = focusables[focusables.length - 1]
+      const atual = document.activeElement
+      // Foco fora do drawer (clique na página atrás, por exemplo): traz de volta
+      // pela ponta certa em vez de deixar seguir para o conteúdo de baixo.
+      if (!el.contains(atual)) {
+        e.preventDefault()
+        ;(e.shiftKey ? last : first).focus()
+      } else if (e.shiftKey && atual === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && atual === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [mobileOpen])
@@ -271,6 +343,7 @@ export default function Sidebar() {
           <p className="text-[10px] text-brand-400 font-semibold tracking-wider uppercase leading-tight">Admin</p>
         </div>
         <button
+          ref={menuButtonRef}
           onClick={() => setMobileOpen(true)}
           aria-label="Abrir menu"
           aria-expanded={mobileOpen}
@@ -294,6 +367,7 @@ export default function Sidebar() {
           fechar tocando fora, que é o gesto esperado. */}
       <aside
         id="admin-mobile-drawer"
+        ref={drawerRef}
         aria-hidden={!mobileOpen}
         className={clsx(
           'md:hidden fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[300px] bg-surface-900 border-r border-surface-500 flex flex-col transition-transform duration-300 pt-safe',

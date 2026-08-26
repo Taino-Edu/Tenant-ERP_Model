@@ -529,10 +529,23 @@ html.light .admin-shell .text-gray-300,
 html.light .admin-portal .text-gray-300 { color: #444455 !important; }
 html.light .admin-shell .text-gray-400,
 html.light .admin-portal .text-gray-400 { color: #555566 !important; }
+/* #777788 dava 4,04:1 sobre --surface-900 (#F5F5F7) e 4,39:1 sobre --surface-800
+   (#FFFFFF) — abaixo do mínimo 4.5:1 da WCAG AA para texto de 14px em peso
+   normal. É o token dos rótulos da sidebar e de quase todo texto auxiliar do
+   painel, então o menu inteiro reprovava. #6A6A79 sobe para 4,88:1 e 5,32:1 sem
+   deixar de ler como "texto muted" ao lado do branco dos títulos. */
 html.light .admin-shell .text-gray-500,
-html.light .admin-portal .text-gray-500 { color: #777788 !important; }
+html.light .admin-portal .text-gray-500 { color: #6A6A79 !important; }
 html.light .admin-shell .text-gray-600,
 html.light .admin-portal .text-gray-600 { color: #999AAA !important; }
+
+/* Mesmo problema no tema escuro, que não tinha override nenhum: o gray-500 cru
+   do Tailwind (#6B7280) rende 3,87:1 sobre --surface-900 e 3,59:1 sobre
+   --surface-800. #808697 passa nos dois (5,14:1 e 4,77:1). O ":not(.light)" torna
+   as duas regras mutuamente exclusivas — sem ele elas empatam em
+   especificidade e a ordem no arquivo decidiria o tema claro. */
+html:not(.light) .admin-shell .text-gray-500,
+html:not(.light) .admin-portal .text-gray-500 { color: #808697 !important; }
 
 /* Cores semânticas e de marca precisam de foreground escuro no tema claro.
    As variantes 300/400 originais foram desenhadas para fundo escuro e perdem
