@@ -38,7 +38,8 @@ export const NAV_SECTIONS: NavSection[] = [
       // ComandaController exige a permissão `comandas`. Enquanto o menu pedia
       // `dashboard`, quem tinha só comandas não achava a tela, e quem tinha só
       // dashboard entrava pra tomar 403 na primeira chamada.
-      { href: '/admin/comanda',      label: 'Comanda',          icon: Users,           badge: 'LIVE', perm: 'comandas', module: 'restaurante', short: 'Comanda' },
+      // Sem `module`: comanda é plano base. Ver o comentário em ComandaController.
+      { href: '/admin/comanda',      label: 'Comanda',          icon: Users,           badge: 'LIVE', perm: 'comandas', short: 'Comanda' },
       { href: '/admin/dashboard',    label: 'Painel Geral',     icon: LayoutDashboard,                perm: 'dashboard', short: 'Painel' },
       { href: '/admin/venda-avulsa', label: 'Frente de Caixa',  icon: ShoppingBag,                    perm: 'pdv', short: 'Caixa' },
       { href: '/admin/qrcodes',      label: 'Gatilhos QR Code', icon: QrCode,                         perm: 'qrcodes', module: 'restaurante', short: 'QR Code' },
@@ -63,7 +64,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: '/admin/fiscal',      label: 'Fiscal',            icon: Receipt,          perm: 'fiscal',     module: 'fiscal' },
       { href: '/admin/eventos',     label: 'Gestão de Eventos', icon: PartyPopper,      perm: 'eventos',    module: 'eventos' },
-      { href: '/admin/restaurante', label: 'Restaurante',       icon: UtensilsCrossed,  perm: 'restaurante', module: 'restaurante' },
+      { href: '/admin/comanda/restaurante', label: 'Restaurante', icon: UtensilsCrossed, perm: 'restaurante', module: 'restaurante' },
       { href: '/admin/suporte',     label: 'Suporte',           icon: LifeBuoy,         perm: 'suporte' },
     ],
   },

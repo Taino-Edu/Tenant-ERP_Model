@@ -70,9 +70,13 @@ public class Tenant
     public TenantPaymentStatus PaymentStatus { get; set; } = TenantPaymentStatus.Pago;
 
     /// <summary>Módulos pagos habilitados pra este tenant — hoje "fiscal", "estoque",
-    /// "restaurante" (comandas), "pontos" (fidelidade), "contador" (portal cross-tenant), "ia" (assistente Gemini)
-    /// e "eventos" (gestão de eventos com cobrança de entrada). Ver RequireModuleAttribute
-    /// e, pro portal do contador, o gate manual em ContadorPortalController.AutorizarEObterTenantAsync.</summary>
+    /// "restaurante" (mesa, QR Code e áreas de produção), "pontos" (fidelidade),
+    /// "contador" (portal cross-tenant), "ia" (assistente Gemini) e "eventos"
+    /// (gestão de eventos com cobrança de entrada). Ver RequireModuleAttribute
+    /// e, pro portal do contador, o gate manual em ContadorPortalController.AutorizarEObterTenantAsync.
+    ///
+    /// Comanda NÃO está nessa lista: é plano base e não depende de módulo nenhum.
+    /// O módulo "restaurante" acrescenta a operação de salão em cima dela.</summary>
     [Column("enabled_modules")]
     public string[] EnabledModules { get; set; } = new[] { "fiscal" };
 
@@ -133,6 +137,33 @@ public class Tenant
     [Precision(10, 2)]
     [Column("setup_fee")]
     public decimal SetupFee { get; set; }
+
+    // ── Dados do sacado, pro gateway de cobrança (RB-01) ─────────────────────
+    // Ficam no catálogo, e não lidos do FiscalConfig do schema do tenant, por
+    // dois motivos: emitir a mensalidade é trabalho da plataforma e não pode
+    // depender de o lojista ter configurado o fiscal dele; e um serviço que roda
+    // no catálogo trocando de schema pra montar cobrança é exatamente o tipo de
+    // acoplamento que o isolamento multi-tenant existe pra evitar.
+
+    /// <summary>CNPJ (ou CPF) de quem paga a mensalidade. Sem isso o gateway não
+    /// cria o cliente e a cobrança não sai — a loja cai na fila de pendências do
+    /// job em vez de quebrar a rodada inteira.</summary>
+    [MaxLength(18)]
+    [Column("billing_cnpj")]
+    public string? BillingCnpj { get; set; }
+
+    /// <summary>E-mail que recebe a cobrança do gateway. Pode ser diferente do
+    /// e-mail do admin da loja: quem opera o sistema raramente é quem paga.</summary>
+    [MaxLength(200)]
+    [Column("billing_email")]
+    public string? BillingEmail { get; set; }
+
+    /// <summary>Id deste tenant como cliente no gateway. Preenchido na primeira
+    /// cobrança emitida e reusado depois — criar cliente a cada mensalidade
+    /// encheria o gateway de duplicatas do mesmo CNPJ.</summary>
+    [MaxLength(100)]
+    [Column("billing_customer_id")]
+    public string? BillingCustomerId { get; set; }
 
     /// <summary>Data da PRIMEIRA mensalidade devida. É assim que o período de
     /// 15 dias grátis fica registrado — na provisão vira CreatedAt + 15 dias, em

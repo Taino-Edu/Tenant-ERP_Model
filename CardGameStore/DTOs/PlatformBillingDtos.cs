@@ -142,3 +142,29 @@ public class AtualizarCobrancaRequest
     [MaxLength(500)]
     public string? Observacao { get; set; }
 }
+
+/// <summary>Resultado de uma rodada de emissão de cobranças no gateway (RB-01).</summary>
+public class EmissaoGatewayResultDto
+{
+    /// <summary>Cobranças registradas no gateway nesta execução.</summary>
+    public int Emitidas { get; set; }
+
+    /// <summary>Cobranças puladas por já terem id externo. É o que torna a
+    /// rodada idempotente: repetir não gera cobrança dobrada pro lojista.</summary>
+    public int JaEmitidas { get; set; }
+
+    /// <summary>Lojas que não puderam ser cobradas (sem CNPJ de faturamento, ou
+    /// o gateway recusou). Uma falha aqui não derruba a rodada — a lista existe
+    /// pro dono da plataforma agir sobre os casos, não pra virar log perdido.</summary>
+    public List<string> Pendencias { get; set; } = new();
+}
+
+/// <summary>Resultado da régua de cobrança: quem foi suspenso e quem voltou.</summary>
+public class ReguaCobrancaResultDto
+{
+    /// <summary>Slugs suspensos nesta execução por inadimplência.</summary>
+    public List<string> Suspensos { get; set; } = new();
+
+    /// <summary>Slugs reativados por terem quitado o que estava vencido.</summary>
+    public List<string> Reativados { get; set; } = new();
+}

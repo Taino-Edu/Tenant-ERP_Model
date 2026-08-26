@@ -57,9 +57,11 @@ public class RestaurantControllerTests
         var moduleField = typeof(RequireModuleAttribute).GetField("_module", BindingFlags.Instance | BindingFlags.NonPublic);
         moduleField!.GetValue(attribute).Should().Be("restaurante");
 
-        var comandaAttribute = typeof(ComandaController).GetCustomAttribute<RequireModuleAttribute>();
-        comandaAttribute.Should().NotBeNull("Comandas são uma capacidade do módulo Restaurante");
-        moduleField.GetValue(comandaAttribute).Should().Be("restaurante");
+        // Comanda é plano base: não pode ganhar gate de módulo de novo. Quando
+        // tinha, a tela sumia pra quem não contratou "restaurante" — inclusive
+        // pro plano Mar, o único que não inclui o módulo.
+        typeof(ComandaController).GetCustomAttribute<RequireModuleAttribute>()
+            .Should().BeNull("comanda faz parte do plano base, não do módulo Restaurante");
     }
 
     [Fact]

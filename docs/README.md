@@ -17,7 +17,7 @@ continuam em seus respectivos diretorios.
 ## Categorias
 
 - `arquitetura/`: arquitetura, modelagem e estudos tecnicos.
-- `auditorias/`: auditorias de carga, escala e seguranca operacional.
+- `auditorias/`: auditorias de carga, escala, seguranca operacional e acessibilidade.
 - `fiscal/`: go-live, porte e operacao de NFC-e/NF-e.
 - `historico/`: devlogs e registros de implementacoes anteriores.
 - `negocio/`: briefings e materiais de produto/marketing.

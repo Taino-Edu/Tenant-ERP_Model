@@ -134,8 +134,11 @@ public class AuthService : IAuthService
     // =========================================================================
     public async Task<AuthResponse> QuickLoginAsync(QuickLoginRequest request)
     {
+        // Continua gateado: esse login é a entrada do cliente pelo QR Code da mesa,
+        // que é operação de salão. A comanda em si é plano base (ver ComandaController),
+        // mas quem abre pela mesa depende do módulo.
         if (!_tenant.EnabledModules.Contains("restaurante", StringComparer.OrdinalIgnoreCase))
-            throw new ArgumentException("O módulo Restaurante e suas comandas não estão habilitados para esta loja.");
+            throw new ArgumentException("O acesso por QR Code de mesa não está habilitado para esta loja.");
 
         var cpf = request.Cpf?.Trim();
         var hasCpf = !string.IsNullOrEmpty(cpf);

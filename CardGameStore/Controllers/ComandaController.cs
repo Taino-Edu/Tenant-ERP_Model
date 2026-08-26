@@ -32,7 +32,15 @@ namespace CardGameStore.Controllers;
 [Route("api/[controller]")]
 [Authorize]
 [RequireOperatorPermission(Permissao.Comandas)]
-[RequireModule("restaurante")]
+// SEM [RequireModule]: comanda é a conta aberta do cliente e faz parte do plano
+// base — vale tanto pra mesa de restaurante quanto pra loja que deixa o cliente
+// acumular consumo. O gate de "restaurante" ficou aqui por um tempo e escondia a
+// tela inteira de quem não contratou o módulo, inclusive do plano Mar, que é o
+// único que não o inclui: o cliente mais caro era o que ficava sem comandas.
+// O que é de restaurante mesmo — mesa, QR Code, áreas de produção — segue
+// gateado em RestaurantController, no fluxo de QR Code do AuthService e nas
+// telas correspondentes. A permissão por operador continua sendo Permissao.Comandas,
+// que já era separada de Permissao.Restaurante.
 [Produces("application/json")]
 public class ComandaController : ControllerBase
 {

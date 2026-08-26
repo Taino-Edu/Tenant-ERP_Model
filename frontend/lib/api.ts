@@ -853,7 +853,7 @@ export const TENANT_MODULES = [
   { value: 'contador', label: 'Portal do Contador',   description: 'Acesso cross-tenant do contador da loja' },
   { value: 'ia',       label: 'Assistente de IA',     description: 'Chat com IA (Gemini) sobre estoque e devedores' },
   { value: 'eventos',  label: 'Gestão de Eventos',    description: 'Cadastro de eventos e cobrança de entrada' },
-  { value: 'restaurante', label: 'Restaurante',        description: 'Comandas, mesas, cozinha, salão e produção' },
+  { value: 'restaurante', label: 'Restaurante',        description: 'Mesas, QR Code, cozinha, salão e produção (comanda é do plano base)' },
 ] as const
 
 /** O catálogo de planos vive em `lib/planos.ts` — um só, compartilhado com o

@@ -7,6 +7,12 @@
     <RootNamespace>CardGameStore</RootNamespace>
     <AssemblyName>CardGameStore</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Segredos de desenvolvimento (chave do Asaas, tokens de webhook) ficam
+         FORA do repositório, no perfil do usuário. Necessário porque o
+         .gitignore versiona tanto appsettings.json quanto
+         appsettings.Development.json — colar chave em qualquer um dos dois a
+         manda pro Git. Uso: dotnet user-secrets set "Chave" "valor" -->
+    <UserSecretsId>tenant-erp-model-dev</UserSecretsId>
     <!-- CS1591: "tipo/membro público sem comentário XML" — não queremos exigir
          doc em TUDO (DTOs internos, etc.), só aproveitar os comentários que
          já existem/forem adicionados nos controllers pro Swagger. -->
