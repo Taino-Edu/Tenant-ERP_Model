@@ -46,15 +46,12 @@ public class ComandaHub : Hub
     // CICLO DE VIDA
     // =========================================================================
 
+    // Sem gate de módulo, pelo mesmo motivo do ComandaController: comanda é plano
+    // base. Recusar a conexão aqui deixaria a tela abrir e nunca atualizar — o
+    // pior dos dois mundos, porque o badge do menu promete LIVE. As mensagens de
+    // produção do restaurante saem por RestaurantController, esse sim gateado.
     public override async Task OnConnectedAsync()
     {
-        if (!_tenant.EnabledModules.Contains("restaurante", StringComparer.OrdinalIgnoreCase))
-        {
-            _logger.LogWarning("Conexão ao ComandaHub recusada: módulo Restaurante desabilitado no tenant {TenantId}", _tenant.TenantId);
-            Context.Abort();
-            return;
-        }
-
         var userId = GetUserId();
         var role   = GetUserRole();
 

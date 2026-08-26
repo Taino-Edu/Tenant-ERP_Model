@@ -152,7 +152,7 @@ public class AuthServiceTests
             Name: "Cliente", Cpf: "52998224725", WhatsApp: "11999990000", TableIdentifier: "Mesa-01"));
 
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*Restaurante*comandas*não estão habilitados*");
+            .WithMessage("*QR Code de mesa*não está habilitado*");
         (await db.Comandas.CountAsync()).Should().Be(0);
     }
 

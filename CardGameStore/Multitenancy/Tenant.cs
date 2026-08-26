@@ -70,9 +70,13 @@ public class Tenant
     public TenantPaymentStatus PaymentStatus { get; set; } = TenantPaymentStatus.Pago;
 
     /// <summary>Módulos pagos habilitados pra este tenant — hoje "fiscal", "estoque",
-    /// "restaurante" (comandas), "pontos" (fidelidade), "contador" (portal cross-tenant), "ia" (assistente Gemini)
-    /// e "eventos" (gestão de eventos com cobrança de entrada). Ver RequireModuleAttribute
-    /// e, pro portal do contador, o gate manual em ContadorPortalController.AutorizarEObterTenantAsync.</summary>
+    /// "restaurante" (mesa, QR Code e áreas de produção), "pontos" (fidelidade),
+    /// "contador" (portal cross-tenant), "ia" (assistente Gemini) e "eventos"
+    /// (gestão de eventos com cobrança de entrada). Ver RequireModuleAttribute
+    /// e, pro portal do contador, o gate manual em ContadorPortalController.AutorizarEObterTenantAsync.
+    ///
+    /// Comanda NÃO está nessa lista: é plano base e não depende de módulo nenhum.
+    /// O módulo "restaurante" acrescenta a operação de salão em cima dela.</summary>
     [Column("enabled_modules")]
     public string[] EnabledModules { get; set; } = new[] { "fiscal" };
 
