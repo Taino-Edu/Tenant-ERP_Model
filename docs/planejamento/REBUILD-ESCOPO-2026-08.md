@@ -138,52 +138,28 @@ nada** e fica fora do arranjo de múltiplos recebedores (Circular BACEN
 **Critério de conclusão:** um lojista conecta recebimento por Inter ou Mercado
 Pago e emite cobrança Pix sem passo técnico fora do painel.
 
-## RB-03 — Módulo de entrega ("estilo iFood", sem motorista)
+## RB-03 — Pedidos Online (ex-"módulo de entrega")
 
 **Estado:** `PRONTO PARA FAZER` · **Prioridade:** média
+**Especificação:** [`PLANO-MVP-PEDIDOS-ONLINE.md`](PLANO-MVP-PEDIDOS-ONLINE.md)
 
-A plataforma **não cobra pela entrega e não terá cadastro de motorista**. A taxa
-de entrega é do lojista, integral. Consequência de arquitetura: não há split de
-três pernas, não há repasse a entregador e não é preciso marketplace de
-pagamento — um recebedor por pedido, que é o cenário mais simples possível.
+Consolidado em 2026-08-26. Este item e o `PLANO-MVP-PEDIDOS-ONLINE.md` estavam
+descrevendo a mesma funcionalidade em paralelo — **a especificação agora vive lá
+e só lá.** Este bloco existe para manter a numeração do rebuild e registrar o
+que mudou na fusão:
 
-Decisão de modelagem: **estender `Comanda` com um campo `Canal`
-(Mesa | Balcao | Entrega | Retirada)** e um objeto 1:1 com endereço, taxa e
-status de entrega — em vez de criar um pipeline `Pedido` paralelo.
-
-Motivo: `NotaFiscalEmitida` e `PixCobranca` já são multi-origem com FK opcional
-para `ComandaId`, e `RestaurantProductionArea` já está ligada a comandas. Um
-`Pedido` novo obrigaria a refazer emissão fiscal, cobrança Pix e produção.
-
-Fluxo de status sem motorista:
-`Recebido → Aceito → EmPreparo → Pronto → Despachado → Entregue | Cancelado`,
-onde *Despachado* é o lojista registrando que saiu com o entregador dele. Campo
-texto opcional de entregador; sem tabela de motorista.
-
-Notificação de pedido novo reusa `PushService` + `PushSubscription`.
-
-### Monetização do módulo
-
-**Decisão: cobrar pelo módulo, não pela venda.** `"entrega"` entra como mais um
-item de `Tenant.EnabledModules`, gateado por `[RequireModule("entrega")]` — o
-mesmo mecanismo já usado por `fiscal`, `estoque`, `pontos` e `ia`. Precificação
-via plano. **Zero infraestrutura nova de pagamento.**
-
-Foi avaliado cobrar 5% sobre o pedido de entrega, retido na venda via split, e
-está descartado pelo motivo registrado no RB-02 (operação de uma pessoa).
-
-**Mas gravar o dado desde o primeiro dia:** com `Canal = Entrega` na `Comanda`,
-o GMV de delivery por tenant fica apurável pelo próprio sistema. Isso mantém a
-porta aberta — se um dia houver equipe para sustentar cobrança variável, ela
-vira mudança de precificação (apura e joga na fatura do `PlatformBillingService`),
-não refatoração. **Não construir a cobrança agora; não perder o dado agora.**
-
-**Ponto aberto (verificar antes de modelar):** taxa de entrega na NFC-e não é
-trivial — frete tem tratamento próprio no layout e afeta base de cálculo.
-Decidir se entra como item ou como frete olhando `NfceEmissionService`.
-
-**Critério de conclusão:** pedido de entrega entra pelo mesmo fechamento da
-comanda, emite NFC-e correta e aparece no financeiro do tenant.
+- **Nome:** "módulo de entrega" → **Pedidos Online**. Melhor porque cobre
+  retirada, que é metade do fluxo; "delivery" descreve só uma das formas de
+  atendimento. Chave técnica do módulo: `pedidos_online`.
+- **Modelo de dados:** a proposta deste RB-03 era estender `Comanda` com um
+  campo `Canal`. **Foi descartada** em favor de uma entidade `PedidoOnline`
+  própria. O reuso de NFC-e e Pix — que era o motivo de querer a `Comanda` — se
+  resolve pelo padrão de **origem múltipla** que `NotaFiscalEmitida` e
+  `PixCobranca` já usam, sem sobrecarregar a comanda com endereço, taxa,
+  idempotência e histórico de transição.
+- **Mantido da versão original:** sem comissão sobre a venda, sem cadastro de
+  motorista, GMV gravado desde o primeiro pedido, e a ressalva fiscal do frete
+  na NFC-e (seções 1.1, 14.1 e 14.2 do plano consolidado).
 
 ## RB-04 — Multi-CNPJ: qual empresa emite a nota
 
@@ -292,13 +268,15 @@ tempo, depois o que gera receita, por último o que é caro e ainda especulativo
 1. **RB-05** — remover um atributo. Destrava comandas no plano base hoje.
 2. **RB-01** — mata a suspensão e a baixa manual. É o item que **compra tempo
    de volta**, e por isso vem antes de qualquer coisa nova.
-3. **RB-03** — módulo de entrega, vendido por `EnabledModules`. Receita nova
-   sem operação financeira nova.
+3. **RB-03** — Pedidos Online, vendido por `EnabledModules`. Receita nova sem
+   operação financeira nova. Ver `PLANO-MVP-PEDIDOS-ONLINE.md`, que já traz o
+   faseamento próprio (Entregas 0 a 6).
 4. **RB-04** — multi-CNPJ. **Sob demanda, não especulativo:** são 59 pontos de
    `SingletonId` para uma pessoa refatorar. Só começar quando houver um cliente
    real com dois CNPJs, e aí valendo dinheiro.
 5. **RB-02** — Mercado Pago OAuth conforme demanda de lojista.
 
-Se RB-04 entrar antes de RB-03, o canal de entrega já nasce sabendo qual CNPJ
-emite. Se entrar depois, o pedido de entrega usa o emitente padrão e ganha a
-escolha na migração — aceitável, e provavelmente o caminho realista.
+Se RB-04 entrar antes de RB-03, o pedido online já nasce sabendo qual CNPJ
+emite. Se entrar depois, ele usa o emitente único do tenant e ganha a escolha na
+migração — aceitável, e provavelmente o caminho realista, **desde que o piloto
+seja feito numa loja com um CNPJ só** (ver seção 14.2 do plano consolidado).
