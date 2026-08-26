@@ -19,16 +19,32 @@ public class PlatformBillingService : IPlatformBillingService
     private readonly CatalogDbContext _catalog;
     private readonly ILogger<PlatformBillingService> _logger;
     private readonly IReferralCommissionService? _referrals;
+    private readonly IPlatformPaymentGateway? _gateway;
+    private readonly IConfiguration? _config;
 
     public PlatformBillingService(
         CatalogDbContext catalog,
         ILogger<PlatformBillingService> logger,
-        IReferralCommissionService? referrals = null)
+        IReferralCommissionService? referrals = null,
+        IPlatformPaymentGateway? gateway = null,
+        IConfiguration? config = null)
     {
         _catalog = catalog;
         _logger  = logger;
         _referrals = referrals;
+        _gateway = gateway;
+        _config  = config;
     }
+
+    /// <summary>Dias de tolerância depois do vencimento antes de suspender.
+    /// Sete por padrão: o Pix cai no mesmo dia, mas boleto compensa em dois dias
+    /// úteis e feriado estica isso — suspender no dia seguinte ao vencimento
+    /// derrubaria loja que já pagou. Configurável porque é regra de negócio, não
+    /// constante técnica.</summary>
+    private int DiasDeCarencia =>
+        int.TryParse(_config?["Billing:DiasDeCarenciaAposVencimento"], out var dias) && dias >= 0
+            ? dias
+            : 7;
 
     /// <summary>Reduz qualquer data ao dia 1 do mês, 00:00 UTC. Toda competência
     /// passa por aqui: sem isso, "março" gravado como dia 3 e como dia 17 viram
@@ -347,5 +363,172 @@ public class PlatformBillingService : IPlatformBillingService
     {
         var utc = data.Kind == DateTimeKind.Unspecified ? data : data.ToUniversalTime();
         return new DateTime(utc.Year, utc.Month, utc.Day, 0, 0, 0, DateTimeKind.Utc);
+    }
+
+    // =========================================================================
+    // AUTOMAÇÃO DA COBRANÇA (RB-01)
+    // =========================================================================
+
+    public async Task<EmissaoGatewayResultDto> EmitirCobrancasPendentesAsync(CancellationToken ct = default)
+    {
+        var resultado = new EmissaoGatewayResultDto();
+
+        if (_gateway is null || !_gateway.IsConfigured)
+        {
+            resultado.Pendencias.Add("Nenhum gateway de cobrança configurado.");
+            return resultado;
+        }
+
+        // Valor zero é cortesia/piloto/tenant-zero: gerar cobrança de R$ 0,00 no
+        // gateway só produziria fatura confusa pro lojista.
+        var pendentes = await _catalog.TenantCharges
+            .Where(c => c.PaidAt == null && c.ExternalChargeId == null && c.Amount > 0)
+            .OrderBy(c => c.DueDate)
+            .ToListAsync(ct);
+
+        if (pendentes.Count == 0) return resultado;
+
+        var tenantIds = pendentes.Select(c => c.TenantId).Distinct().ToList();
+        var tenants = await _catalog.Tenants
+            .Where(t => tenantIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, ct);
+
+        foreach (var cobranca in pendentes)
+        {
+            if (!tenants.TryGetValue(cobranca.TenantId, out var tenant)) continue;
+
+            // Loja suspensa continua sendo cobrada: suspensão é consequência da
+            // inadimplência, não perdão dela. Só o tenant isento sai da régua.
+            if (tenant.PaymentStatus == TenantPaymentStatus.Isento) continue;
+
+            try
+            {
+                var emitida = await _gateway.EmitirCobrancaAsync(cobranca, tenant, ct);
+
+                cobranca.Gateway          = _gateway.Name;
+                cobranca.ExternalChargeId = emitida.ExternalId;
+                cobranca.PaymentUrl       = emitida.PaymentUrl;
+
+                if (!string.IsNullOrWhiteSpace(emitida.CustomerId))
+                    tenant.BillingCustomerId = emitida.CustomerId;
+
+                // Salva a cada cobrança, e não em lote no fim: a chamada ao
+                // gateway já aconteceu e é irreversível. Se a rodada estourar na
+                // décima loja, um SaveChanges único perderia o id externo das
+                // nove primeiras — que já têm cobrança emitida lá — e a próxima
+                // execução cobraria todas de novo.
+                await _catalog.SaveChangesAsync(ct);
+                resultado.Emitidas++;
+            }
+            catch (Exception ex)
+            {
+                // Uma loja sem CNPJ não pode impedir a cobrança das outras.
+                _logger.LogError(ex, "Falha ao emitir cobrança {ChargeId} do tenant {Slug}",
+                    cobranca.Id, tenant.Slug);
+                resultado.Pendencias.Add($"{tenant.Slug}: {ex.Message}");
+                _catalog.Entry(cobranca).State = EntityState.Unchanged;
+            }
+        }
+
+        resultado.JaEmitidas = await _catalog.TenantCharges
+            .CountAsync(c => c.PaidAt == null && c.ExternalChargeId != null, ct);
+
+        return resultado;
+    }
+
+    public async Task<bool> RegistrarPagamentoExternoAsync(
+        string gateway, string externalChargeId, bool paga, DateTime? pagoEm)
+    {
+        var cobranca = await _catalog.TenantCharges
+            .FirstOrDefaultAsync(c => c.Gateway == gateway && c.ExternalChargeId == externalChargeId);
+
+        // Não é erro: o gateway avisa sobre tudo que acontece na conta, e nem
+        // toda cobrança lá é mensalidade nossa.
+        if (cobranca is null) return false;
+
+        var pagamentoAnterior = cobranca.PaidAt;
+
+        if (paga)
+        {
+            // Idempotência: o Asaas reenvia webhook, e PAYMENT_CONFIRMED e
+            // PAYMENT_RECEIVED chegam os dois pro mesmo Pix. Sem esta saída, a
+            // segunda entrega reescreveria a data da baixa e mandaria o
+            // ReferralCommissionService recalcular comissão já apurada.
+            if (pagamentoAnterior is not null) return true;
+
+            cobranca.PaidAt = NormalizarData(pagoEm ?? DateTime.UtcNow);
+        }
+        else
+        {
+            if (pagamentoAnterior is null) return true;
+            cobranca.PaidAt = null;
+        }
+
+        if (_referrals is not null)
+            await _referrals.SynchronizeChargeAsync(cobranca, pagamentoAnterior);
+
+        await _catalog.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "Cobrança {ChargeId} {Acao} por webhook do {Gateway}",
+            cobranca.Id, paga ? "baixada" : "reaberta", gateway);
+
+        return true;
+    }
+
+    public async Task<ReguaCobrancaResultDto> AplicarReguaDeCobrancaAsync(CancellationToken ct = default)
+    {
+        var resultado = new ReguaCobrancaResultDto();
+        var limite = DateTime.UtcNow.Date.AddDays(-DiasDeCarencia);
+
+        // Isento fica fora dos dois lados: nem suspende nem "reativa", porque
+        // nunca deveria ter sido suspenso por dinheiro.
+        var tenants = await _catalog.Tenants
+            .Where(t => t.PaymentStatus != TenantPaymentStatus.Isento)
+            .ToListAsync(ct);
+
+        var inadimplentes = await _catalog.TenantCharges
+            .Where(c => c.PaidAt == null && c.Amount > 0 && c.DueDate < limite)
+            .Select(c => c.TenantId)
+            .Distinct()
+            .ToListAsync(ct);
+
+        var vencidos = inadimplentes.ToHashSet();
+
+        foreach (var tenant in tenants)
+        {
+            var deve = vencidos.Contains(tenant.Id);
+
+            if (deve && tenant.Status == TenantStatus.Active)
+            {
+                tenant.Status = TenantStatus.Suspended;
+                tenant.PaymentStatus = TenantPaymentStatus.Atrasado;
+                resultado.Suspensos.Add(tenant.Slug);
+            }
+            else if (!deve && tenant.Status == TenantStatus.Suspended
+                           && tenant.PaymentStatus == TenantPaymentStatus.Atrasado)
+            {
+                // A dupla condição é o que impede a régua de reabrir uma loja que
+                // o dono da plataforma suspendeu à mão por outro motivo (fim de
+                // contrato, abuso). Só volta quem a própria régua derrubou, e a
+                // marca disso é o PaymentStatus.Atrasado que ela mesma gravou.
+                tenant.Status = TenantStatus.Active;
+                tenant.PaymentStatus = TenantPaymentStatus.Pago;
+                resultado.Reativados.Add(tenant.Slug);
+            }
+            else if (!deve && tenant.PaymentStatus == TenantPaymentStatus.Atrasado)
+            {
+                // Quitou antes de a carência estourar: nunca chegou a ser
+                // suspenso, mas o status precisa voltar pra Pago.
+                tenant.PaymentStatus = TenantPaymentStatus.Pago;
+            }
+        }
+
+        if (resultado.Suspensos.Count > 0 || resultado.Reativados.Count > 0)
+            _logger.LogInformation("Régua de cobrança: {Suspensos} suspensos, {Reativados} reativados",
+                resultado.Suspensos.Count, resultado.Reativados.Count);
+
+        await _catalog.SaveChangesAsync(ct);
+        return resultado;
     }
 }

@@ -519,10 +519,24 @@ builder.Services.AddScoped<IPublicSalesAssistantService, PublicSalesAssistantSer
 builder.Services.AddScoped<IProspectingService,  ProspectingService>();
 builder.Services.AddScoped<IProspectingCampaignService, ProspectingCampaignService>();
 builder.Services.AddScoped<IPlatformBillingService, PlatformBillingService>();
+
+// Gateway da mensalidade da plataforma (RB-01). Registrado sempre: o serviço
+// checa IsConfigured e opera em modo manual quando a chave não está presente, o
+// que mantém a plataforma subindo em dev e em qualquer ambiente sem credencial.
+builder.Services.AddHttpClient(AsaasPlatformGateway.GatewayName, client =>
+{
+    // Sandbox por padrão: apontar pra produção tem que ser um ato deliberado de
+    // configuração, nunca o que acontece porque alguém esqueceu de setar.
+    client.BaseAddress = new Uri(
+        builder.Configuration["Billing:Asaas:BaseUrl"] ?? "https://api-sandbox.asaas.com/v3/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddScoped<IPlatformPaymentGateway, AsaasPlatformGateway>();
 builder.Services.AddScoped<IReferralCommissionService, ReferralCommissionService>();
 builder.Services.AddScoped<ITenantProvisioningService, TenantProvisioningService>();
 builder.Services.AddScoped<IFinanceiroCalculoService, FinanceiroCalculoService>();
 builder.Services.AddScoped<IntegrationTokenService>();
+builder.Services.AddHostedService<PlatformBillingBackgroundService>();
 builder.Services.AddHostedService<FechamentoBackgroundService>();
 builder.Services.AddHostedService<ProspectingBotBackgroundService>();
 builder.Services.AddHostedService<LeadRetentionBackgroundService>();

@@ -7,7 +7,8 @@
 
 ## RB-01 — Cobrança da mensalidade da plataforma (Asaas)
 
-**Estado:** `PRONTO PARA FAZER` · **Prioridade:** alta
+**Estado:** `VALIDAR` (implementado em `codex/atalhos-manual-inteligente`, falta
+smoke test com credencial real) · **Prioridade:** alta · **Executado em:** 2026-08-26
 
 Hoje o Super-admin suspende na mão a loja que não pagou (`PlatformBillingService`
 gera a mensalidade, a baixa é manual). Decisão: **Asaas** como gateway da
@@ -20,6 +21,75 @@ assinatura equivalente.
 
 **Critério de conclusão:** webhook de pagamento confirmado dá baixa em
 `TenantCharge` e reativa/suspende o tenant sem intervenção manual.
+
+### Execução — 2026-08-26
+
+Construído **atrás de `IPlatformPaymentGateway`**, e isso foi decisão, não
+capricho: a dúvida do 1,99% sobre assinatura em Pix continua aberta, e no plano
+Mar ela vale R$ 9,69 contra R$ 1,99 por cobrança. Se a resposta do Asaas for
+ruim, trocar por Woovi ou Efí é escrever uma implementação da interface — o
+webhook, a baixa idempotente e a régua não mudam uma linha.
+
+Peças entregues:
+
+- **`IPlatformPaymentGateway`** + `AsaasPlatformGateway` (cliente + cobrança,
+  `access_token`, sandbox por padrão).
+- **`TenantCharge`**: `Gateway`, `ExternalChargeId`, `PaymentUrl`, com índice
+  único filtrado `(gateway, external_charge_id)`.
+- **`Tenant`**: `BillingCnpj`, `BillingEmail`, `BillingCustomerId`. O catálogo
+  não tinha CNPJ nenhum — sem isso o gateway não cria o cliente.
+- **`POST /api/webhooks/billing`** — anônimo por necessidade (o gateway não
+  carrega JWT nosso), autenticado pelo segredo no header `asaas-access-token`.
+- **`AplicarReguaDeCobrancaAsync`** — suspende vencido além da carência
+  (7 dias, configurável) e reativa quem quitou.
+- **`PlatformBillingBackgroundService`** — roda de 12 em 12 horas.
+
+Decisões que valem registro:
+
+- **`PAYMENT_RECEIVED` e `PAYMENT_CONFIRMED` os dois dão baixa.** Segurar a
+  reativação até a liquidação do cartão deixaria cliente adimplente com a loja
+  suspensa por semanas.
+- **A régua só reativa quem ela mesma suspendeu**, identificado por
+  `PaymentStatus.Atrasado`. Sem isso ela reabriria loja desligada à mão por fim
+  de contrato ou abuso.
+- **Sem gateway configurado, a régua continua rodando.** Suspender inadimplente
+  não depende de emitir cobrança automática, e é metade do trabalho manual.
+- **`SaveChanges` por cobrança, não em lote.** A chamada ao gateway é
+  irreversível: um save único perderia o id externo das cobranças já emitidas se
+  a rodada estourasse no meio, e a execução seguinte cobraria tudo de novo.
+
+Evidência: **893 testes passando, zero falhas** (24 novos), build limpo.
+Migration `AddPlatformBillingGateway` — toda aditiva e nullable.
+
+### Taxa — resolvido em 2026-08-26
+
+**O 1,99% é de cartão, não de Pix.** A tabela do Asaas separa:
+
+- **Pix e boleto:** R$ 1,99 fixo por cobrança recebida (R$ 0,99 nos 3 primeiros
+  meses). **Assinatura em Pix não tem percentual nenhum.**
+- **Cartão:** R$ 0,49 + 2,99% à vista, e é aí que entra o **1,99% adicional
+  sobre o total** em parcelamento ou assinatura.
+- Conta gratuita, sem mensalidade nem taxa de adesão.
+
+Ou seja, a mensalidade do plano Mar cobrada em Pix custa **R$ 1,99, não
+R$ 9,69** — o risco que motivou a interface não existe nessa forma de
+pagamento. **Asaas fica.** A Woovi sairia ~R$ 1,19 mais barata por cobrança
+(R$ 0,80), o que em 100 lojas dá R$ 119/mês — não paga a migração nem a perda
+da régua de cobrança e do painel de assinatura.
+
+A interface `IPlatformPaymentGateway` **permanece**: custou pouco, e a única
+coisa que ela deixou de ser é urgente.
+
+**Falta pra sair de VALIDAR (só você resolve):**
+
+1. Abrir a conta Asaas e preencher `Billing:Asaas:ApiKey` e `WebhookToken`.
+   **Só a plataforma tem conta** — o lojista recebe uma cobrança e paga, sem
+   criar cadastro em lugar nenhum.
+2. Cadastrar a URL do webhook no painel do Asaas com o mesmo segredo.
+3. Preencher `BillingCnpj` e `BillingEmail` dos tenants existentes — sem isso a
+   loja cai na lista de pendências do job em vez de ser cobrada.
+4. Configurar `Billing:Asaas:BillingType` (o padrão `UNDEFINED` deixa o lojista
+   escolher; fixar `PIX` garante a tarifa fixa e evita a de cartão).
 
 ## RB-02 — Recebimento das vendas do lojista (multi-PSP)
 

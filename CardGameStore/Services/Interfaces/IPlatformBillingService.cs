@@ -40,4 +40,22 @@ public interface IPlatformBillingService
     /// <summary>Exclui uma cobrança EM ABERTO. Paga não se exclui — nem por
     /// integridade (comissão aponta para ela) nem por contabilidade.</summary>
     Task ExcluirCobrancaAsync(Guid chargeId);
+
+    // ── Automação da cobrança (RB-01) ────────────────────────────────────────
+
+    /// <summary>Registra no gateway toda cobrança em aberto que ainda não tem id
+    /// externo. Idempotente: rodar duas vezes não emite a mesma cobrança de
+    /// novo.</summary>
+    Task<EmissaoGatewayResultDto> EmitirCobrancasPendentesAsync(CancellationToken ct = default);
+
+    /// <summary>Aplica o pagamento (ou o estorno) que veio do gateway. Devolve
+    /// false quando o id externo não bate com cobrança nenhuma — o que é
+    /// esperado e não é erro: o webhook do gateway também avisa sobre cobranças
+    /// que não são nossas mensalidades.</summary>
+    Task<bool> RegistrarPagamentoExternoAsync(
+        string gateway, string externalChargeId, bool paga, DateTime? pagoEm);
+
+    /// <summary>Régua de cobrança: suspende quem está vencido além da carência e
+    /// reativa quem quitou. É o que substitui a suspensão manual.</summary>
+    Task<ReguaCobrancaResultDto> AplicarReguaDeCobrancaAsync(CancellationToken ct = default);
 }

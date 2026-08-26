@@ -220,6 +220,17 @@ public class CatalogDbContext : DbContext
             entity.HasIndex(c => c.ReferenceMonth)
                   .HasDatabaseName("ix_tenant_charges_reference_month");
 
+            // O webhook chega sabendo só (gateway, id externo) e precisa achar a
+            // cobrança. Única e filtrada: única porque duas linhas apontando pro
+            // mesmo id do gateway fariam a baixa cair na cobrança errada, e
+            // filtrada porque a esmagadora maioria das linhas tem os dois campos
+            // nulos (baixa manual, histórico) — sem o filtro, o segundo null
+            // colidiria com o primeiro.
+            entity.HasIndex(c => new { c.Gateway, c.ExternalChargeId })
+                  .IsUnique()
+                  .HasFilter("external_charge_id IS NOT NULL")
+                  .HasDatabaseName("ix_tenant_charges_gateway_external_id");
+
             entity.HasIndex(c => c.DueDate)
                   .HasDatabaseName("ix_tenant_charges_due_date");
         });

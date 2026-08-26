@@ -70,6 +70,35 @@ public class TenantCharge
     [Column("notes")]
     public string? Notes { get; set; }
 
+    // -------------------------------------------------------------------------
+    // Cobrança no gateway (RB-01)
+    //
+    // Null nos três campos = cobrança que nunca foi registrada em gateway
+    // nenhum: implantação negociada no boleto, mês de cortesia, ou o histórico
+    // inteiro anterior à automação. Baixa manual continua funcionando pra essas,
+    // e é por isso que nada aqui é obrigatório.
+    // -------------------------------------------------------------------------
+
+    /// <summary>Qual gateway emitiu ("asaas", ...). Fica junto do id externo
+    /// porque id de gateway só é único DENTRO do gateway — se um dia rodarmos
+    /// dois em paralelo (a taxa do Asaas em assinatura ainda está em aberto),
+    /// buscar só pelo id casaria a cobrança errada.</summary>
+    [MaxLength(20)]
+    [Column("gateway")]
+    public string? Gateway { get; set; }
+
+    /// <summary>Id da cobrança no gateway. É por ele que o webhook encontra esta
+    /// linha — o payload do gateway não sabe nada de TenantCharge.Id.</summary>
+    [MaxLength(100)]
+    [Column("external_charge_id")]
+    public string? ExternalChargeId { get; set; }
+
+    /// <summary>Link de pagamento (fatura/checkout) devolvido pelo gateway, pra
+    /// mandar ao lojista sem precisar entrar no painel do gateway.</summary>
+    [MaxLength(500)]
+    [Column("payment_url")]
+    public string? PaymentUrl { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
