@@ -284,7 +284,8 @@ public class PlatformBillingAutomationTests
 
 public class AsaasPlatformGatewayTests
 {
-    private static AsaasPlatformGateway CreateGateway(string? apiKey = "chave", string? webhookToken = "segredo")
+    private static AsaasPlatformGateway CreateGateway(
+        string? apiKey = "chave", string? webhookToken = "segredo", HttpMessageHandler? handler = null)
     {
         var config = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -295,7 +296,7 @@ public class AsaasPlatformGatewayTests
             .Build();
 
         return new AsaasPlatformGateway(
-            new StubHttpClientFactory(), config, NullLogger<AsaasPlatformGateway>.Instance);
+            new StubHttpClientFactory(handler), config, NullLogger<AsaasPlatformGateway>.Instance);
     }
 
     private static JsonElement Payload(string json) => JsonDocument.Parse(json).RootElement.Clone();
@@ -358,8 +359,100 @@ public class AsaasPlatformGatewayTests
     public void IsConfigured_SemChave_DeixaAPlataformaSubirEmModoManual() =>
         CreateGateway(apiKey: null).IsConfigured.Should().BeFalse();
 
+    // ── Cabeçalhos da requisição ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task EmitirCobranca_MandaUserAgent_PorqueOAsaasRecusaSemEle()
+    {
+        // Regressão de produção (27/08/2026): o HttpClient do .NET não manda
+        // User-Agent por padrão, e o Asaas responde 400 user_agent_not_informed
+        // antes de olhar o corpo. O cadastro do cliente falhava, então nenhuma
+        // cobrança chegava a existir — e nada nos testes pegava isso, porque
+        // header ausente não quebra nenhuma asserção de payload.
+        var captor = new CapturingHandler("""{"id":"pay_1","invoiceUrl":"https://x/y"}""");
+        var gateway = CreateGateway(handler: captor);
+
+        var tenant = new Tenant
+        {
+            Slug = "loja", SchemaName = "tenant_loja", DisplayName = "Loja",
+            BillingCnpj = "11222333000181",
+            // Já tem cliente no gateway: isola a chamada de cobrança.
+            BillingCustomerId = "cus_1",
+        };
+
+        var charge = new TenantCharge
+        {
+            TenantId = tenant.Id, Kind = TenantChargeKind.Mensalidade, Amount = 269m,
+            ReferenceMonth = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+            DueDate = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc),
+        };
+
+        await gateway.EmitirCobrancaAsync(charge, tenant);
+
+        captor.UltimaRequisicao.Should().NotBeNull();
+        captor.UltimaRequisicao!.Headers.UserAgent.ToString()
+            .Should().NotBeNullOrWhiteSpace("o Asaas recusa a requisição sem User-Agent");
+    }
+
+    [Fact]
+    public async Task EmitirCobranca_MandaAChaveNoHeaderEsperado()
+    {
+        var captor = new CapturingHandler("""{"id":"pay_1","invoiceUrl":"https://x/y"}""");
+        var gateway = CreateGateway(handler: captor);
+
+        var tenant = new Tenant
+        {
+            Slug = "loja", SchemaName = "tenant_loja",
+            BillingCnpj = "11222333000181", BillingCustomerId = "cus_1",
+        };
+
+        await gateway.EmitirCobrancaAsync(new TenantCharge
+        {
+            TenantId = tenant.Id, Kind = TenantChargeKind.Mensalidade, Amount = 1m,
+            ReferenceMonth = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
+            DueDate = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc),
+        }, tenant);
+
+        captor.UltimaRequisicao!.Headers.TryGetValues("access_token", out var valores).Should().BeTrue();
+        valores!.Should().ContainSingle().Which.Should().Be("chave");
+    }
+
+    private sealed class CapturingHandler : HttpMessageHandler
+    {
+        private readonly string _corpo;
+
+        public CapturingHandler(string corpo) => _corpo = corpo;
+
+        public HttpRequestMessage? UltimaRequisicao { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            UltimaRequisicao = request;
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(_corpo, System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
     private sealed class StubHttpClientFactory : IHttpClientFactory
     {
-        public HttpClient CreateClient(string name) => new() { BaseAddress = new Uri("https://exemplo.invalido/") };
+        private readonly HttpMessageHandler? _handler;
+
+        public StubHttpClientFactory(HttpMessageHandler? handler = null) => _handler = handler;
+
+        public HttpClient CreateClient(string name) =>
+            (_handler is null ? new HttpClient() : new HttpClient(_handler))
+                .Tap(c => c.BaseAddress = new Uri("https://exemplo.invalido/"));
+    }
+}
+
+internal static class HttpClientTestExtensions
+{
+    public static HttpClient Tap(this HttpClient client, Action<HttpClient> configure)
+    {
+        configure(client);
+        return client;
     }
 }
