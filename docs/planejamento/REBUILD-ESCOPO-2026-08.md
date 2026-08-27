@@ -7,8 +7,10 @@
 
 ## RB-01 — Cobrança da mensalidade da plataforma (Asaas)
 
-**Estado:** `VALIDAR` (implementado em `codex/atalhos-manual-inteligente`, falta
-smoke test com credencial real) · **Prioridade:** alta · **Executado em:** 2026-08-26
+**Estado:** `VALIDAR` — código na `main` desde 2026-08-26 (PR #95, merge
+`97b52af`), mas **falta o smoke test com credencial real**: nenhuma cobrança foi
+emitida nem nenhum webhook foi recebido ainda. Só sai de `VALIDAR` quando um
+pagamento de verdade der baixa sozinho. · **Prioridade:** alta
 
 Hoje o Super-admin suspende na mão a loja que não pagou (`PlatformBillingService`
 gera a mensalidade, a baixa é manual). Decisão: **Asaas** como gateway da
@@ -197,8 +199,8 @@ com numeração e série independentes, e a apuração separa os dois.
 
 ## RB-05 — Comandas fora do gate do Restaurante
 
-**Estado:** `VALIDAR` (implementado em `codex/atalhos-manual-inteligente`, fora da
-`main`) · **Prioridade:** alta · **Custo:** baixo · **Executado em:** 2026-08-26
+**Estado:** `CONCLUÍDO` — na `main` desde 2026-08-26 (PR #95, merge `97b52af`).
+· **Prioridade:** alta · **Custo:** baixo
 
 Comandas são item de plano base e **não podem sumir porque o módulo Restaurante
 não está contratado**. Hoje somem: `ComandaController.cs:35` carrega

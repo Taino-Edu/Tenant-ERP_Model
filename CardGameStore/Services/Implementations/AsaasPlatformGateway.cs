@@ -20,6 +20,13 @@ public class AsaasPlatformGateway : IPlatformPaymentGateway
 {
     public const string GatewayName = "asaas";
 
+    /// <summary>User-Agent enviado ao Asaas. Não é enfeite: a API RECUSA com 400
+    /// e código `user_agent_not_informed` quando o header não vem, e o
+    /// HttpClient do .NET não manda nenhum por padrão. Descoberto no primeiro
+    /// teste em sandbox — o cadastro do cliente falhava antes mesmo de validar
+    /// CNPJ, então nenhuma cobrança chegava a ser criada.</summary>
+    public const string UserAgent = "Tenant-ERP/1.0 (+https://3esysten.com.br)";
+
     private readonly IHttpClientFactory _http;
     private readonly IConfiguration     _config;
     private readonly ILogger<AsaasPlatformGateway> _logger;
@@ -58,6 +65,10 @@ public class AsaasPlatformGateway : IPlatformPaymentGateway
         client.DefaultRequestHeaders.Remove("access_token");
         client.DefaultRequestHeaders.Add("access_token", ApiKey);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        // Obrigatório — ver o comentário em UserAgent. Sem isso o Asaas devolve
+        // 400 antes de olhar o corpo da requisição.
+        client.DefaultRequestHeaders.UserAgent.Clear();
+        client.DefaultRequestHeaders.Add("User-Agent", UserAgent);
         return client;
     }
 
