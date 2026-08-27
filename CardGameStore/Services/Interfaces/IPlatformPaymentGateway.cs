@@ -20,11 +20,8 @@ using CardGameStore.Multitenancy;
 
 namespace CardGameStore.Services.Interfaces;
 
-/// <summary>O que o gateway devolve ao registrar uma cobrança. CustomerId vem
-/// preenchido quando o gateway precisou criar o cliente agora — cabe a quem
-/// chamou persistir em Tenant.BillingCustomerId, senão a próxima mensalidade
-/// cria um cliente duplicado pro mesmo CNPJ.</summary>
-public record CobrancaGatewayResult(string ExternalId, string? PaymentUrl, string? CustomerId = null);
+/// <summary>O que o gateway devolve ao registrar uma cobrança.</summary>
+public record CobrancaGatewayResult(string ExternalId, string? PaymentUrl);
 
 /// <summary>O que um evento de webhook significa para o nosso financeiro. O
 /// gateway manda dezenas de eventos (visualizou boleto, análise de risco,
@@ -58,8 +55,21 @@ public interface IPlatformPaymentGateway
     /// não pode parar de rodar porque uma chave não foi preenchida.</summary>
     bool IsConfigured { get; }
 
+    /// <summary>Garante que o tenant existe como cliente no gateway e devolve o
+    /// id. Separado da emissão de propósito: quando as duas operações moravam
+    /// no mesmo método, uma cobrança recusada (valor abaixo do mínimo, por
+    /// exemplo) descartava o id do cliente que ACABARA de ser criado, e a
+    /// tentativa seguinte criava outro cliente pro mesmo CNPJ. Cada retentativa
+    /// deixava uma duplicata no gateway.
+    ///
+    /// Quem chama deve persistir o retorno em Tenant.BillingCustomerId ANTES de
+    /// tentar a cobrança — é isso que torna a criação do cliente idempotente na
+    /// prática.</summary>
+    Task<string> GarantirClienteAsync(Tenant tenant, CancellationToken ct = default);
+
     /// <summary>Registra a cobrança no gateway e devolve o id externo e o link
-    /// de pagamento.</summary>
+    /// de pagamento. Exige <see cref="Tenant.BillingCustomerId"/> preenchido —
+    /// chame <see cref="GarantirClienteAsync"/> antes.</summary>
     Task<CobrancaGatewayResult> EmitirCobrancaAsync(TenantCharge charge, Tenant tenant, CancellationToken ct = default);
 
     /// <summary>Valida o segredo que o gateway manda no header. Endpoint de
