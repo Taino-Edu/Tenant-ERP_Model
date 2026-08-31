@@ -91,8 +91,11 @@ yarn-error.log*
 # Next.js
 .next/
 frontend/.next/
-frontend/.next-dev-*/
-frontend/.next-stale-*/
+# Qualquer variante de build do Next posta de lado. O padrão era enumerado
+# (-dev-, -stale-) e não pegava as novas: apareceram .next-build-codex/ e
+# .next-corrupt-<timestamp>/ na árvore, prontas pra entrar num `git add -A`
+# distraído e despejar milhares de arquivos gerados no repositório.
+frontend/.next-*/
 frontend/out/
 
 # dotnet build / publish

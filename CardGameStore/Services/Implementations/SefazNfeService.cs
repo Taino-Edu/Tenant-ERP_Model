@@ -261,24 +261,37 @@ public class SefazNfeService
             if (ret.cStat == 656)
             {
                 var now = DateTime.UtcNow;
-                await _guard.BlockAsync(state.Id, now, ct);
+                var seguidos = await _guard.BlockAsync(state.Id, now, ct);
                 resultado.BloqueadoPorConsumoIndevido = true;
-                resultado.ProximaTentativaEm = now.Add(SefazDistributionGuard.SafetyCooldown);
+                resultado.ProximaTentativaEm = now.Add(SefazDistributionGuard.BackoffPara(seguidos));
                 resultado.Mensagem = "SEFAZ bloqueou temporariamente por consumo indevido (cStat 656).";
+
+                // Ambiente e contagem no log porque o 656 repetido raramente é
+                // ritmo de consulta: com ultNSU parado em 0 e bloqueio em toda
+                // tentativa, a causa costuma ser credenciamento do CNPJ ou
+                // ambiente em que o serviço não responde. Sem esses dois campos
+                // não dava pra distinguir isso de excesso de chamadas.
                 _logger.LogWarning(
-                    "DFe Distribuição: consumo indevido (656). Tenant {TenantId}, CNPJ {Cnpj}, execução {Execucao}, ultNSU {Nsu}, bloqueado até {BloqueadoAte}",
-                    _tenant.TenantId, MascararCnpj(cnpj), leaseId, state.UltimoNsu, resultado.ProximaTentativaEm);
+                    "DFe Distribuição: consumo indevido (656). Tenant {TenantId}, CNPJ {Cnpj}, ambiente {Ambiente}, execução {Execucao}, ultNSU {Nsu}, {Seguidos}º bloqueio seguido, próxima tentativa {ProximaTentativa}",
+                    _tenant.TenantId, MascararCnpj(cnpj), cfg.Ambiente, leaseId,
+                    state.UltimoNsu, seguidos, resultado.ProximaTentativaEm);
                 return;
             }
 
             if (ret.cStat == 137) // nenhum documento novo
             {
+                // Resposta legítima: o acesso está saudável, então o backoff zera.
+                await _guard.ClearBlockStreakAsync(state.Id, DateTime.UtcNow, ct);
                 await _guard.AdvanceNsuAsync(state.Id, ret.ultNSU, DateTime.UtcNow, ct);
                 state.UltimoNsu = Math.Max(state.UltimoNsu, ret.ultNSU);
                 resultado.NenhumDocumentoDisponivel = true;
                 resultado.Mensagem = "Nenhum documento novo. A próxima consulta será liberada após o intervalo da SEFAZ.";
                 return;
             }
+
+            // 138 também é resposta aceita — zera o backoff antes de processar.
+            if (ret.cStat == 138)
+                await _guard.ClearBlockStreakAsync(state.Id, DateTime.UtcNow, ct);
 
             if (ret.cStat != 138) // 138 = documentos localizados
             {
@@ -479,9 +492,9 @@ public class SefazNfeService
             if (ret.cStat == 656)
             {
                 var now = DateTime.UtcNow;
-                await _guard.BlockAsync(state.Id, now, ct);
+                var seguidos = await _guard.BlockAsync(state.Id, now, ct);
                 resultado.BloqueadoPorConsumoIndevido = true;
-                resultado.ProximaTentativaEm = now.Add(SefazDistributionGuard.SafetyCooldown);
+                resultado.ProximaTentativaEm = now.Add(SefazDistributionGuard.BackoffPara(seguidos));
                 resultado.Mensagem = "SEFAZ bloqueou temporariamente por consumo indevido (cStat 656).";
                 return;
             }

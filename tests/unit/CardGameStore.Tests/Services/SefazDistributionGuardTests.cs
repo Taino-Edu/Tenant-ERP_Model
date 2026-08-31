@@ -121,4 +121,57 @@ public class SefazDistributionGuardTests
         (await guard.TryAcquireAsync(state.Id, now.AddMinutes(66), default)).Status
             .Should().Be(SefazLeaseStatus.Acquired);
     }
+
+    // ── Backoff em bloqueio repetido ─────────────────────────────────────────
+
+    [Fact]
+    public async Task Bloqueio656Repetido_AfastaAsTentativas()
+    {
+        // O cooldown fixo não distinguia "barrou uma vez" de "barra sempre". Com
+        // ultNSU parado em 0, o job reentrava no mesmo bloqueio a cada 65 minutos
+        // indefinidamente — foi o que se observou em produção.
+        using var db = CreateDb();
+        var guard = new SefazDistributionGuard(db);
+        var state = await guard.GetOrCreateAsync("12345678000199", AmbienteFiscal.Producao, 0, default);
+        var now = DateTime.UtcNow;
+
+        (await guard.BlockAsync(state.Id, now, default)).Should().Be(1);
+        (await guard.BlockAsync(state.Id, now, default)).Should().Be(2);
+        var terceiro = await guard.BlockAsync(state.Id, now, default);
+
+        terceiro.Should().Be(3);
+        var persisted = await guard.ReloadAsync(state.Id, default);
+        persisted.BloqueadoAte.Should().BeCloseTo(
+            now.Add(SefazDistributionGuard.BackoffPara(3)), TimeSpan.FromMilliseconds(1));
+    }
+
+    [Fact]
+    public async Task ConsultaAceita_ZeraOBackoff()
+    {
+        // 137 e 138 são resposta legítima: provam que o acesso está saudável, e
+        // o próximo tropeço tem que recomeçar dos 65 minutos.
+        using var db = CreateDb();
+        var guard = new SefazDistributionGuard(db);
+        var state = await guard.GetOrCreateAsync("12345678000199", AmbienteFiscal.Producao, 0, default);
+        var now = DateTime.UtcNow;
+
+        await guard.BlockAsync(state.Id, now, default);
+        await guard.BlockAsync(state.Id, now, default);
+        await guard.ClearBlockStreakAsync(state.Id, now, default);
+
+        (await guard.ReloadAsync(state.Id, default)).BloqueiosConsecutivos.Should().Be(0);
+        (await guard.BlockAsync(state.Id, now, default)).Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(0, 65)]
+    [InlineData(1, 65)]
+    [InlineData(2, 130)]
+    [InlineData(3, 260)]
+    [InlineData(4, 520)]
+    [InlineData(20, 24 * 60)]   // teto
+    [InlineData(999, 24 * 60)]  // não estoura com contador alto
+    public void Backoff_DobraAteOTetoDe24h(int bloqueios, int minutosEsperados) =>
+        SefazDistributionGuard.BackoffPara(bloqueios)
+            .Should().Be(TimeSpan.FromMinutes(minutosEsperados));
 }

@@ -63,10 +63,21 @@ public class FiscalRetryBackgroundService : BackgroundService
         // ResultadoIncerto entra aqui porque é o estado que MAIS precisa de novo
         // contato com a SEFAZ: cada ciclo é uma nova chance de consultar a chave e
         // descobrir se aquele documento foi autorizado (RES-001).
+        // O teto de tentativas precisa estar TAMBÉM na consulta, e não só lá
+        // dentro do NfceEmissionService: sem isso, nota que já bateu o limite
+        // continuava sendo selecionada a cada ciclo só pra o serviço responder
+        // "não vou tentar de novo" e voltar. Em produção eram 12 notas exauridas
+        // gerando 24 linhas de warning por rodada, para sempre — ruído que
+        // atrapalhou a depuração de outros problemas no mesmo log.
+        //
+        // ResultadoIncerto fica FORA do teto de propósito: desistir de consultar
+        // deixaria a venda com destino fiscal desconhecido e o número travado
+        // (mesmo motivo documentado em NfceEmissionService).
         var pendentesIds = await db.NotasFiscaisEmitidas
-            .Where(n => n.Status == NotaFiscalStatus.PendenteEmissao ||
-                        n.Status == NotaFiscalStatus.AutorizadaContingencia ||
-                        n.Status == NotaFiscalStatus.ResultadoIncerto)
+            .Where(n => n.Status == NotaFiscalStatus.ResultadoIncerto ||
+                        ((n.Status == NotaFiscalStatus.PendenteEmissao ||
+                          n.Status == NotaFiscalStatus.AutorizadaContingencia) &&
+                         n.TentativasReprocessamento < NfceEmissionService.MaxTentativasReprocessamento))
             .OrderBy(n => n.CreatedAt)
             .Take(50) // não tenta reprocessar milhares de uma vez
             .Select(n => n.Id)

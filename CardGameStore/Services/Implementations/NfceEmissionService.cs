@@ -105,7 +105,10 @@ public class NfceEmissionService : INfceEmissionService
     // PendenteEmissao/Rejeitada. Contingência (AutorizadaContingencia) usa prazo por TEMPO
     // (ver PrazoLegalContingencia): a 10 tentativas em ciclos de 15 min (FiscalRetryBackgroundService)
     // desistiria em ~2,5h, bem antes do prazo legal de 24h da NT 2015.002.
-    private const int MaxTentativasReprocessamento = 10;
+    /// <summary>Público porque o FiscalRetryBackgroundService filtra por ele na
+    /// consulta — sem isso, nota exaurida era reselecionada a cada ciclo só pra
+    /// receber "não vou tentar de novo".</summary>
+    public const int MaxTentativasReprocessamento = 10;
 
     // Prazo legal (NT 2015.002) pra uma NFC-e emitida em contingência offline ser retransmitida
     // e autorizada de verdade pela SEFAZ — passado isso, a venda fica permanentemente sem
