@@ -186,7 +186,7 @@ que mudou na fusão:
   idempotência e histórico de transição.
 - **Mantido da versão original:** sem comissão sobre a venda, sem cadastro de
   motorista, GMV gravado desde o primeiro pedido, e a ressalva fiscal do frete
-  na NFC-e (seções 1.1, 14.1 e 14.2 do plano consolidado).
+  na NFC-e (seções 1.1, 14.1 e 14.3 do plano consolidado).
 
 ## RB-04 — Multi-CNPJ: qual empresa emite a nota
 
@@ -306,4 +306,4 @@ tempo, depois o que gera receita, por último o que é caro e ainda especulativo
 Se RB-04 entrar antes de RB-03, o pedido online já nasce sabendo qual CNPJ
 emite. Se entrar depois, ele usa o emitente único do tenant e ganha a escolha na
 migração — aceitável, e provavelmente o caminho realista, **desde que o piloto
-seja feito numa loja com um CNPJ só** (ver seção 14.2 do plano consolidado).
+seja feito numa loja com um CNPJ só** (ver seção 14.3 do plano consolidado).

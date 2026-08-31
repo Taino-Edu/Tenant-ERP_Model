@@ -544,7 +544,41 @@ cobrança variável, ela vira **mudança de precificação** (apurar e lançar e
 
 Regra prática: **não construir a cobrança agora, não perder o dado agora.**
 
-### 14.2 Dependência não resolvida — qual CNPJ emite
+### 14.2 Verificação de maioridade — opcional, por loja
+
+Venda presencial tem o balconista olhando o cliente. **Venda online não tem
+ninguém** — e é o Pedidos Online que transforma a verificação de maioridade de
+"algum dia" em requisito de quem vende bebida alcoólica pelo canal próprio.
+
+Base legal: menor de 16 é absolutamente incapaz de contratar (Código Civil,
+art. 3º); entre 16 e 18, relativamente incapaz (art. 4º, I). O ECA reforça a
+proteção em transação comercial.
+
+O esqueleto já existe — `KycVerification`, `IKycService` e um controller com as
+rotas definidas. Falta a implementação, as telas e o registro no DI. Ver
+`KYC-PLANNING.md`, que compara autodeclaração, CPF + BrasilAPI e foto de
+documento.
+
+**Decisão: opcional, ligado pelo lojista.** Não é módulo pago nem obrigação da
+plataforma — é uma configuração da loja, ao lado das outras regras de operação
+em `PedidosOnlineConfig`:
+
+- `ExigirVerificacaoDeIdade` (bool, padrão **false**)
+- marcação por produto ou categoria do que é restrito
+
+Desligado, nada muda para quem vende jogo, roupa ou comida. Ligado, o checkout
+exige a verificação antes de fechar pedido que contenha item restrito.
+
+Por que opcional e não sempre ligado: a esmagadora maioria das lojas não vende
+nada com restrição etária, e impor atrito de identificação a todas elas para
+proteger o caso de uma seria pagar caro em conversão pelo problema errado.
+Quem precisa, liga.
+
+**Não bloqueia o MVP.** Entra quando aparecer a primeira loja que venda bebida
+pelo canal — mas o modelo de dados do pedido deve nascer sabendo que um item
+pode ser restrito, senão vira migração no meio de um cliente ativo.
+
+### 14.3 Dependência não resolvida — qual CNPJ emite
 
 Loja com dois CNPJs (salão e delivery, ou regimes diferentes) precisa definir
 qual emite a nota do pedido online. Hoje `FiscalConfig` é singleton lógico, com
@@ -771,7 +805,7 @@ validado, embutir e usar como argumento de upgrade do Lagoa.
 
 **2. Piloto em restaurante.** É onde o fluxo é exercitado mais forte (área de
 produção, pico de horário, cancelamento) e onde o argumento comercial é mais
-afiado. Restrição herdada da seção 14.2: **loja com um CNPJ só.**
+afiado. Restrição herdada da seção 14.3: **loja com um CNPJ só.**
 
 **3. Pix não obrigatório antes do aceite.** A loja aceita enquanto aguarda. Este
 canal atende o cliente que já é da loja e já confia nela — exigir pré-pagamento
