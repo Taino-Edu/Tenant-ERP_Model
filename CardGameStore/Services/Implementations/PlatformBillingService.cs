@@ -403,14 +403,23 @@ public class PlatformBillingService : IPlatformBillingService
 
             try
             {
+                // Cliente primeiro, e persistido NA HORA. Quando isto morava
+                // dentro da emissão, uma cobrança recusada descartava o id do
+                // cliente recém-criado e a rodada seguinte criava outro pro
+                // mesmo CNPJ — uma duplicata no gateway por retentativa. É o
+                // mesmo raciocínio do SaveChanges por cobrança logo abaixo:
+                // efeito que já aconteceu lá fora precisa estar gravado aqui.
+                if (string.IsNullOrWhiteSpace(tenant.BillingCustomerId))
+                {
+                    tenant.BillingCustomerId = await _gateway.GarantirClienteAsync(tenant, ct);
+                    await _catalog.SaveChangesAsync(ct);
+                }
+
                 var emitida = await _gateway.EmitirCobrancaAsync(cobranca, tenant, ct);
 
                 cobranca.Gateway          = _gateway.Name;
                 cobranca.ExternalChargeId = emitida.ExternalId;
                 cobranca.PaymentUrl       = emitida.PaymentUrl;
-
-                if (!string.IsNullOrWhiteSpace(emitida.CustomerId))
-                    tenant.BillingCustomerId = emitida.CustomerId;
 
                 // Salva a cada cobrança, e não em lote no fim: a chamada ao
                 // gateway já aconteceu e é irreversível. Se a rodada estourar na

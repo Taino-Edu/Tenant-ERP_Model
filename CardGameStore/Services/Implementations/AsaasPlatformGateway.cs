@@ -74,28 +74,43 @@ public class AsaasPlatformGateway : IPlatformPaymentGateway
 
     // ── Emissão ──────────────────────────────────────────────────────────────
 
+    /// <summary>Valor mínimo aceito pelo Asaas por cobrança. Checado aqui pra
+    /// virar uma pendência legível em vez de um 400 do gateway — e pra não
+    /// gastar chamada numa cobrança que já se sabe recusada. Plano de tabela
+    /// nenhum chega perto disso; quem esbarra é cortesia ou ajuste manual.</summary>
+    public const decimal ValorMinimo = 5.00m;
+
+    public async Task<string> GarantirClienteAsync(Tenant tenant, CancellationToken ct = default)
+    {
+        if (!string.IsNullOrWhiteSpace(tenant.BillingCustomerId))
+            return tenant.BillingCustomerId;
+
+        if (!IsConfigured)
+            throw new InvalidOperationException("Asaas não configurado (Billing:Asaas:ApiKey ausente).");
+
+        using var client = CreateClient();
+        return await CriarClienteAsync(client, tenant, ct);
+    }
+
     public async Task<CobrancaGatewayResult> EmitirCobrancaAsync(
         TenantCharge charge, Tenant tenant, CancellationToken ct = default)
     {
         if (!IsConfigured)
             throw new InvalidOperationException("Asaas não configurado (Billing:Asaas:ApiKey ausente).");
 
+        if (string.IsNullOrWhiteSpace(tenant.BillingCustomerId))
+            throw new InvalidOperationException(
+                $"Tenant {tenant.Slug} sem cliente no gateway — chame GarantirClienteAsync antes.");
+
+        if (charge.Amount < ValorMinimo)
+            throw new InvalidOperationException(
+                $"Asaas não aceita cobrança abaixo de {ValorMinimo:C} (esta é de {charge.Amount:C}).");
+
         using var client = CreateClient();
-
-        // Cliente novo só quando ainda não existe: reusar o id evita encher o
-        // Asaas de duplicatas do mesmo CNPJ, uma por mensalidade emitida.
-        var customerId = tenant.BillingCustomerId;
-        var customerCriadoAgora = false;
-
-        if (string.IsNullOrWhiteSpace(customerId))
-        {
-            customerId = await CriarClienteAsync(client, tenant, ct);
-            customerCriadoAgora = true;
-        }
 
         var body = new
         {
-            customer          = customerId,
+            customer          = tenant.BillingCustomerId,
             billingType       = BillingType,
             value             = charge.Amount,
             dueDate           = charge.DueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -128,8 +143,7 @@ public class AsaasPlatformGateway : IPlatformPaymentGateway
 
         return new CobrancaGatewayResult(
             ExternalId: externalId,
-            PaymentUrl: LerTexto(raiz, "invoiceUrl") ?? LerTexto(raiz, "bankSlipUrl"),
-            CustomerId: customerCriadoAgora ? customerId : null);
+            PaymentUrl: LerTexto(raiz, "invoiceUrl") ?? LerTexto(raiz, "bankSlipUrl"));
     }
 
     private async Task<string> CriarClienteAsync(HttpClient client, Tenant tenant, CancellationToken ct)

@@ -54,9 +54,23 @@ public class PlatformBillingWebhookController : ControllerBase
 
         if (!_gateway.ValidarAutenticacao(token))
         {
-            // Sem detalhe no corpo: dizer "token errado" a quem está sondando o
-            // endpoint só confirma que ele existe e que o header é o certo.
-            _logger.LogWarning("Webhook de billing rejeitado: autenticação inválida.");
+            // Sem detalhe no CORPO: dizer "token errado" a quem está sondando o
+            // endpoint só confirma que ele existe e qual header ele espera.
+            //
+            // No LOG, porém, o diagnóstico precisa existir. Sem ele, "rejeitado"
+            // cobre dois problemas muito diferentes — header com outro nome, ou
+            // segredo divergente entre o painel do gateway e o nosso .env — e
+            // não há como separá-los sem um deploy só pra investigar. Foi
+            // exatamente o que aconteceu no primeiro webhook real (31/08/2026).
+            //
+            // Só NOMES de header, nunca valores: o payload legítimo carrega o
+            // segredo, e log é lido por mais gente do que produção.
+            _logger.LogWarning(
+                "Webhook de billing rejeitado: autenticação inválida. Header {Header} {Presenca}. Headers recebidos: {Headers}",
+                TokenHeader,
+                Request.Headers.ContainsKey(TokenHeader) ? "presente com valor divergente" : "AUSENTE",
+                string.Join(", ", Request.Headers.Keys));
+
             return Unauthorized();
         }
 

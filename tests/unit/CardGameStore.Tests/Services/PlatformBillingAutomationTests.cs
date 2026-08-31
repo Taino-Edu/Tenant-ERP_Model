@@ -408,13 +408,76 @@ public class AsaasPlatformGatewayTests
 
         await gateway.EmitirCobrancaAsync(new TenantCharge
         {
-            TenantId = tenant.Id, Kind = TenantChargeKind.Mensalidade, Amount = 1m,
+            TenantId = tenant.Id, Kind = TenantChargeKind.Mensalidade, Amount = 129m,
             ReferenceMonth = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
             DueDate = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc),
         }, tenant);
 
         captor.UltimaRequisicao!.Headers.TryGetValues("access_token", out var valores).Should().BeTrue();
         valores!.Should().ContainSingle().Which.Should().Be("chave");
+    }
+
+    // ── Cliente e valor mínimo ───────────────────────────────────────────────
+
+    [Fact]
+    public async Task GarantirCliente_QuandoJaExiste_NaoChamaOGateway()
+    {
+        // Sem isto, cada mensalidade criaria um cliente novo pro mesmo CNPJ.
+        var captor = new CapturingHandler("""{"id":"cus_novo"}""");
+        var gateway = CreateGateway(handler: captor);
+
+        var id = await gateway.GarantirClienteAsync(new Tenant
+        {
+            Slug = "loja", SchemaName = "tenant_loja",
+            BillingCnpj = "11222333000181", BillingCustomerId = "cus_ja_existente",
+        });
+
+        id.Should().Be("cus_ja_existente");
+        captor.UltimaRequisicao.Should().BeNull("não pode haver chamada HTTP quando o cliente já existe");
+    }
+
+    [Fact]
+    public async Task EmitirCobranca_SemClienteNoGateway_FalhaAntesDeChamarAApi()
+    {
+        // Regressão de produção (27/08/2026): criar o cliente DENTRO da emissão
+        // fazia uma cobrança recusada descartar o id do cliente recém-criado, e
+        // a rodada seguinte criava outro pro mesmo CNPJ — uma duplicata por
+        // retentativa. Agora a emissão exige o cliente já resolvido e
+        // persistido.
+        var captor = new CapturingHandler("""{"id":"pay_1"}""");
+        var gateway = CreateGateway(handler: captor);
+
+        var acao = () => gateway.EmitirCobrancaAsync(new TenantCharge
+        {
+            Kind = TenantChargeKind.Mensalidade, Amount = 129m,
+            DueDate = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc),
+        }, new Tenant { Slug = "loja", SchemaName = "tenant_loja", BillingCnpj = "11222333000181" });
+
+        await acao.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*GarantirClienteAsync*");
+        captor.UltimaRequisicao.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task EmitirCobranca_AbaixoDoMinimo_FalhaSemGastarChamada()
+    {
+        // O Asaas recusa cobrança abaixo de R$ 5,00. Barrar aqui vira pendência
+        // legível em vez de um 400 vindo do gateway.
+        var captor = new CapturingHandler("""{"id":"pay_1"}""");
+        var gateway = CreateGateway(handler: captor);
+
+        var acao = () => gateway.EmitirCobrancaAsync(new TenantCharge
+        {
+            Kind = TenantChargeKind.Mensalidade, Amount = 1m,
+            DueDate = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc),
+        }, new Tenant
+        {
+            Slug = "loja", SchemaName = "tenant_loja",
+            BillingCnpj = "11222333000181", BillingCustomerId = "cus_1",
+        });
+
+        await acao.Should().ThrowAsync<InvalidOperationException>();
+        captor.UltimaRequisicao.Should().BeNull();
     }
 
     private sealed class CapturingHandler : HttpMessageHandler
