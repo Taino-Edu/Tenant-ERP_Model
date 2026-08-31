@@ -60,6 +60,10 @@ done
 cd "$APP_DIR"
 DEPLOY_STAGE="git pull"
 git pull origin main
+# O .env canônico é o do diretório PAI; o de deploy/ é cópia descartável, e esta
+# linha a sobrescreve a cada execução. Quem editar deploy/.env perde a alteração
+# aqui, em silêncio — sem erro, sem aviso, e o sintoma aparece só na próxima vez
+# que alguém for procurar por que uma variável "desconfigurou sozinha".
 cp "$APP_DIR/.env" "$APP_DIR/deploy/.env"
 
 cd "$COMPOSE_DIR"

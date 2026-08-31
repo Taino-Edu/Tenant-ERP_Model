@@ -39,11 +39,16 @@ public class SefazDistributionGuard
         if (existing is not null) return existing;
 
         var now = DateTime.UtcNow;
+        // Colunas listadas à mão: toda coluna NOT NULL nova precisa aparecer aqui
+        // também. O default da migration não cobre este caminho — o schema de
+        // teste nasce do modelo, onde não há HasDefaultValue.
         await _db.Database.ExecuteSqlInterpolatedAsync($@"
             INSERT INTO sefaz_distribution_state
-                (id, cnpj, ambiente, ultimo_nsu, consulta_pontual_quantidade, created_at, updated_at)
+                (id, cnpj, ambiente, ultimo_nsu, consulta_pontual_quantidade,
+                 bloqueios_consecutivos, created_at, updated_at)
             VALUES
-                ({Guid.NewGuid()}, {cnpj}, {ambiente.ToString()}, {initialNsu}, 0, {now}, {now})
+                ({Guid.NewGuid()}, {cnpj}, {ambiente.ToString()}, {initialNsu}, 0,
+                 0, {now}, {now})
             ON CONFLICT (cnpj, ambiente) DO NOTHING", ct);
 
         return await _db.SefazDistributionStates
@@ -100,16 +105,55 @@ public class SefazDistributionGuard
                 .SetProperty(s => s.UpdatedAt, now), ct);
     }
 
-    public Task BlockAsync(Guid stateId, DateTime now, CancellationToken ct)
+    /// <summary>Teto do backoff. Um dia: passou disso, o problema não é ritmo de
+    /// consulta — é configuração (CNPJ sem credenciamento, certificado errado,
+    /// ambiente em que o serviço não existe) e não se resolve tentando de novo.</summary>
+    public static readonly TimeSpan MaxBackoff = TimeSpan.FromHours(24);
+
+    /// <summary>Espera até a próxima tentativa depois de N bloqueios seguidos:
+    /// 65min, 2h10, 4h20, 8h40, 17h20, e daí travado em 24h.</summary>
+    public static TimeSpan BackoffPara(int bloqueiosConsecutivos)
     {
-        var until = now.Add(SafetyCooldown);
-        return _db.SefazDistributionStates
+        if (bloqueiosConsecutivos <= 1) return SafetyCooldown;
+
+        var expoente = Math.Min(bloqueiosConsecutivos - 1, 10);
+        var espera = SafetyCooldown * Math.Pow(2, expoente);
+
+        return espera > MaxBackoff ? MaxBackoff : espera;
+    }
+
+    /// <summary>Registra um 656 e agenda a próxima tentativa com backoff.
+    /// Devolve quantos bloqueios consecutivos este CNPJ já acumulou.</summary>
+    public async Task<int> BlockAsync(Guid stateId, DateTime now, CancellationToken ct)
+    {
+        await _db.SefazDistributionStates
+            .Where(s => s.Id == stateId)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(s => s.BloqueiosConsecutivos, s => s.BloqueiosConsecutivos + 1)
+                .SetProperty(s => s.UpdatedAt, now), ct);
+
+        var state = await ReloadAsync(stateId, ct);
+        var until = now.Add(BackoffPara(state.BloqueiosConsecutivos));
+
+        await _db.SefazDistributionStates
             .Where(s => s.Id == stateId)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(s => s.BloqueadoAte, until)
                 .SetProperty(s => s.ProximaConsultaEm, until)
                 .SetProperty(s => s.UpdatedAt, now), ct);
+
+        return state.BloqueiosConsecutivos;
     }
+
+    /// <summary>Consulta aceita pela SEFAZ: zera o backoff. Chamado tanto no 137
+    /// (nenhum documento) quanto no 138 (documentos localizados) — os dois são
+    /// resposta legítima, e é a resposta que prova que o acesso está saudável.</summary>
+    public Task ClearBlockStreakAsync(Guid stateId, DateTime now, CancellationToken ct) =>
+        _db.SefazDistributionStates
+            .Where(s => s.Id == stateId && s.BloqueiosConsecutivos > 0)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(s => s.BloqueiosConsecutivos, 0)
+                .SetProperty(s => s.UpdatedAt, now), ct);
 
     public async Task<(bool Acquired, DateTime? RetryAt)> TryReservePointQueryAsync(
         Guid stateId, DateTime now, CancellationToken ct)

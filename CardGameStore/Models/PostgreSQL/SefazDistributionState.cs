@@ -41,6 +41,18 @@ public class SefazDistributionState
     [Column("consulta_pontual_quantidade")]
     public int ConsultaPontualQuantidade { get; set; }
 
+    /// <summary>Quantos 656 (consumo indevido) consecutivos este CNPJ levou.
+    /// Zera em qualquer consulta aceita pela SEFAZ.
+    ///
+    /// Existe porque o cooldown fixo de 65 minutos não distinguia "a SEFAZ me
+    /// barrou uma vez" de "a SEFAZ me barra sempre". No segundo caso — que é o
+    /// que se observou em produção, com ultNSU parado em 0 — o job reentrava no
+    /// mesmo bloqueio a cada 65 minutos indefinidamente, gerando log e consumo
+    /// sem nunca progredir. Com o contador, o intervalo cresce e o problema para
+    /// de se repetir sozinho enquanto a causa não é resolvida.</summary>
+    [Column("bloqueios_consecutivos")]
+    public int BloqueiosConsecutivos { get; set; }
+
     [Column("created_at")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
